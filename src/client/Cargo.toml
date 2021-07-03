@@ -1,0 +1,18 @@
+[package]
+name = "vtt-authorizer-client"
+version = "0.1.0"
+authors = ["mbround18 <12646562+mbround18@users.noreply.github.com>"]
+edition = "2018"
+description = "Introduce authorization platforms"
+repository = "https://github.com/mbround18/foundryvtt-authorizer"
+license = "BSD 3-Clause License"
+
+[lib]
+crate-type = ["cdylib"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+wasm-bindgen = "*"
+yew-router = "0.15"
+yew = "0.18"

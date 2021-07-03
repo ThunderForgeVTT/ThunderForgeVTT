@@ -1,0 +1,30 @@
+
+[tasks.copy-files]
+script = '''
+cp ../../LICENSE .
+cp ../../README.md .
+'''
+
+[tasks.remove-files]
+script = '''
+rm ./LICENSE
+rm ./README.md
+'''
+
+[tasks.bundle]
+install_crate = "wasm-pack"
+command = "wasm-pack"
+args = ["build", "--target", "web"]
+
+[tasks.compile]
+command = "cargo"
+args = ["build"]
+
+
+[tasks.build]
+dependencies = [
+    "compile",
+    "copy-files",
+    "bundle",
+    "remove-files"
+]

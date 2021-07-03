@@ -1,0 +1,16 @@
+[tasks.build]
+install_crate = "wasm-pack"
+
+[tasks.format]
+install_crate = "rustfmt"
+command = "cargo"
+args = ["fmt", "--", "--emit=files"]
+
+[tasks.clippy]
+install_crate = { rustup_component_name = "clippy" }
+command = "cargo"
+args = ["clippy"]
+
+
+[tasks.live]
+workspace = false

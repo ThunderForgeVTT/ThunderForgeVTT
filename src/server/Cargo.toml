@@ -1,0 +1,16 @@
+[package]
+name = "vtt-interloper"
+version = "0.1.0"
+authors = ["mbround18 <12646562+mbround18@users.noreply.github.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = "1"
+serde = { version = "1.0", features = ["derive"] }
+rocket = { version = "0.5.0-rc.1", features = ["json", "default"] }
+clap = "2"
+serde_derive = "1"
+websocket = "0.24"
+base64 = "0.13"
