@@ -1,6 +1,4 @@
 use reqwest_wasm::{Client, RequestBuilder, Url};
-use std::cell::RefCell;
-use std::rc::Rc;
 
 pub struct HttpClient {
     client: Client,
@@ -32,36 +30,36 @@ impl HttpClient {
         #[cfg(feature = "client")]
         yew::services::ConsoleService::debug(&format!("[core.utils.HttpClient][GET]: {}", &url));
 
-        self.client.clone().get(&self.build_url(&url))
+        self.client.clone().get(&self.build_url(url))
     }
     pub fn post(&self, url: &str) -> RequestBuilder {
         #[cfg(feature = "client")]
         yew::services::ConsoleService::debug(&format!("[core.utils.HttpClient][POST]: {}", &url));
 
-        self.client.clone().post(&self.build_url(&url))
+        self.client.clone().post(&self.build_url(url))
     }
     pub fn delete(&self, url: &str) -> RequestBuilder {
         #[cfg(feature = "client")]
         yew::services::ConsoleService::debug(&format!("[core.utils.HttpClient][DELETE]: {}", &url));
 
-        self.client.clone().delete(&self.build_url(&url))
+        self.client.clone().delete(&self.build_url(url))
     }
     pub fn put(&self, url: &str) -> RequestBuilder {
         #[cfg(feature = "client")]
         yew::services::ConsoleService::debug(&format!("[core.utils.HttpClient][PUT]: {}", &url));
 
-        self.client.clone().put(&self.build_url(&url))
+        self.client.clone().put(&self.build_url(url))
     }
     pub fn patch(&self, url: &str) -> RequestBuilder {
         #[cfg(feature = "client")]
         yew::services::ConsoleService::debug(&format!("[core.utils.HttpClient][PATCH]: {}", &url));
 
-        self.client.clone().patch(&self.build_url(&url))
+        self.client.clone().patch(&self.build_url(url))
     }
     pub fn head(&self, url: &str) -> RequestBuilder {
         #[cfg(feature = "client")]
         yew::services::ConsoleService::debug(&format!("[core.utils.HttpClient][HEAD]: {}", &url));
 
-        self.client.clone().head(&self.build_url(&url))
+        self.client.clone().head(&self.build_url(url))
     }
 }

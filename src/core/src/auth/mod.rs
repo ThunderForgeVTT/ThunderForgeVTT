@@ -15,6 +15,16 @@ pub struct Credentials {
     password: String,
 }
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "server", derive(rocket::form::FromForm))]
+pub struct User {
+    id: String,
+    username: String,
+    password: Option<String>,
+    first_name: String,
+    last_name: String,
+}
+
 impl Credentials {
     #[cfg(feature = "server")]
     pub fn id_to_uuid(&self) -> rocket::serde::uuid::Uuid {
@@ -40,7 +50,7 @@ impl Credentials {
 
     #[cfg(feature = "server")]
     pub async fn authenticate(&self) -> bool {
-        return true;
+        true
     }
 
     #[cfg(feature = "client")]
@@ -95,14 +105,4 @@ impl ToString for Credentials {
 
         encode(components.join(&SEPARATOR).to_string())
     }
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-#[cfg_attr(feature = "server", derive(rocket::form::FromForm))]
-pub struct User {
-    id: String,
-    username: String,
-    password: Option<String>,
-    first_name: String,
-    last_name: String,
 }

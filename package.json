@@ -1,14 +1,15 @@
 {
-  "name": "foundryvtt-authorizer",
+  "name": "thunderforge-vtt",
   "version": "1.0.0",
   "main": "src/loader.js",
   "repository": "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git",
   "author": "mbround18 <12646562+mbround18@users.noreply.github.com>",
-  "license": "MIT",
+  "license": "BSD 3-Clause License",
   "scripts": {
     "serve": "yarn webpack serve",
     "start": "ROCKET_SECRET=\"CHANGME\" cargo run start",
-    "clean": "rimraf ./target ./pkg ./dist"
+    "clean": "rimraf ./target ./pkg ./dist",
+    "lint": "cargo fmt && cargo +nightly clippy"
   },
   "devDependencies": {
     "@wasm-tool/wasm-pack-plugin": "^1.4.0",

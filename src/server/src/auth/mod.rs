@@ -1,7 +1,6 @@
 use crate::config::Config;
 use crate::utils::url_base;
 use rocket::fairing::AdHoc;
-use rocket::form::Form;
 use rocket::http::{Cookie, CookieJar};
 use rocket::response::{Body, Flash, Redirect};
 use rocket::State;

@@ -2100,22 +2100,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"foundryvtt-authorizer@workspace:.":
-  version: 0.0.0-use.local
-  resolution: "foundryvtt-authorizer@workspace:."
-  dependencies:
-    "@wasm-tool/wasm-pack-plugin": ^1.4.0
-    concurrently: ^6.2.0
-    html-webpack-plugin: ^5.3.2
-    nodemon: ^2.0.9
-    rimraf: ^3.0.2
-    webpack: ^5.41.1
-    webpack-cli: ^4.7.2
-    webpack-dev-server: ^3.11.2
-    webpack-manifest-plugin: ^3.1.1
-  languageName: unknown
-  linkType: soft
-
 "fragment-cache@npm:^0.2.1":
   version: 0.2.1
   resolution: "fragment-cache@npm:0.2.1"
@@ -5431,6 +5415,22 @@ fsevents@~2.3.2:
   checksum: 0a1ad5f9be4a2a815f14e85d16437dd73116f5d1b5c0623a292c5bcbdf7dc73c93a966063344678a04891d9433dfda055c1e2ad542e1295ad58837526e9fe848
   languageName: node
   linkType: hard
+
+"thunderforge-vtt@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "thunderforge-vtt@workspace:."
+  dependencies:
+    "@wasm-tool/wasm-pack-plugin": ^1.4.0
+    concurrently: ^6.2.0
+    html-webpack-plugin: ^5.3.2
+    nodemon: ^2.0.9
+    rimraf: ^3.0.2
+    webpack: ^5.41.1
+    webpack-cli: ^4.7.2
+    webpack-dev-server: ^3.11.2
+    webpack-manifest-plugin: ^3.1.1
+  languageName: unknown
+  linkType: soft
 
 "thunky@npm:^1.0.2":
   version: 1.1.0
