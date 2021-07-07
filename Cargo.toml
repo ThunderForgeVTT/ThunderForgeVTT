@@ -2,5 +2,11 @@
 
 members = [
     "src/server",
-    "src/client"
+    "src/client",
+    "src/core",
+    "src/engine"
 ]
+
+[profile.release]
+lto = true
+opt-level = 'z'

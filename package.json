@@ -2,21 +2,23 @@
   "name": "foundryvtt-authorizer",
   "version": "1.0.0",
   "main": "src/loader.js",
-  "repository": "git@github.com:mbround18/foundryvtt-authorizer.git",
+  "repository": "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git",
   "author": "mbround18 <12646562+mbround18@users.noreply.github.com>",
   "license": "MIT",
   "scripts": {
-    "dev": "yarn concurrently --names 'frontend,backend' 'yarn:dev:*'",
-    "dev:frontend": "yarn webpack serve",
-    "dev:backend": "nodemon --exec 'cargo run agent' -w ./src -e rs,yml,json,toml"
+    "serve": "yarn webpack serve",
+    "start": "ROCKET_SECRET=\"CHANGME\" cargo run start",
+    "clean": "rimraf ./target ./pkg ./dist"
   },
   "devDependencies": {
     "@wasm-tool/wasm-pack-plugin": "^1.4.0",
     "html-webpack-plugin": "^5.3.2",
     "nodemon": "^2.0.9",
+    "rimraf": "^3.0.2",
     "webpack": "^5.41.1",
     "webpack-cli": "^4.7.2",
-    "webpack-dev-server": "^3.11.2"
+    "webpack-dev-server": "^3.11.2",
+    "webpack-manifest-plugin": "^3.1.1"
   },
   "dependencies": {
     "concurrently": "^6.2.0"

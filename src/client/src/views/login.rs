@@ -1,14 +1,21 @@
+use thunderforge_core::auth::Credentials;
 use yew::prelude::*;
 use yew::services::ConsoleService;
 
-pub enum LoginMethod {
+enum LoginMethod {
     Basic,
+}
+
+enum LoginStatus {
+    Success,
+    Failure,
 }
 
 pub enum Msg {
     SetUserName(String),
     SetPassWord(String),
     Click(LoginMethod),
+    LoginResponse(LoginStatus, String),
 }
 
 pub struct LoginComponent {
@@ -27,19 +34,21 @@ impl LoginComponent {
         let change_password = self
             .link
             .callback(|change: InputData| Msg::SetPassWord(change.value));
-        let login_basic = self.link.callback(|_action: MouseEvent| Msg::Click(LoginMethod::Basic));
+        let login_basic = self
+            .link
+            .callback(|_action: MouseEvent| Msg::Click(LoginMethod::Basic));
         html! {
-            <form action="POST">
-                <fieldset>
-                    <label for="username-field">{"Username:"}</label>
-                    <input id="username-field" oninput=change_username/>
-                </fieldset>
-                <fieldset>
-                    <label for="password-field">{"Password:"}</label>
-                    <input type="password" id="password-field" oninput=change_password/>
-                </fieldset>
+            <div action="POST">
+                <div>
+                    <label for="username">{"Username:"}</label>
+                    <input id="username" oninput=change_username/>
+                </div>
+                <div>
+                    <label for="password">{"Password:"}</label>
+                    <input type="password" id="password" oninput=change_password/>
+                </div>
                 <button onclick=login_basic>{"Login"}</button>
-            </form>
+            </div>
         }
     }
 }
@@ -72,8 +81,30 @@ impl Component for LoginComponent {
                 use LoginMethod::Basic;
                 match action {
                     Basic => {
-                        ConsoleService::debug("Logging in via basic auth.");
+                        let u_name = String::from(&self.username);
+                        let p_word = String::from(&self.username);
+                        ConsoleService::debug(
+                            "[Authentication][Basic]: Logging in with basic auth",
+                        );
+                        wasm_bindgen_futures::spawn_local(async {
+                            Credentials::new("123".to_string(), u_name, p_word)
+                                .login()
+                                .await;
+                        });
+                        false
+                    }
+                }
+            }
+            Msg::LoginResponse(response, message) => {
+                use LoginStatus::{Failure, Success};
+                match response {
+                    Success => {
+                        ConsoleService::log("Successfully logged in!");
                         true
+                    }
+                    Failure => {
+                        ConsoleService::error(&message);
+                        false
                     }
                 }
             }
@@ -88,10 +119,11 @@ impl Component for LoginComponent {
     }
 
     fn view(&self) -> Html {
-        html! {
+        let render: Html = html! {
             <div>
             {self.render_basic_login()}
             </div>
-        }
+        };
+        render
     }
 }

@@ -1,5 +1,6 @@
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const WasmPackPlugin = require("@wasm-tool/wasm-pack-plugin");
+const { WebpackManifestPlugin } = require('webpack-manifest-plugin');
 const path = require('path');
 
 module.exports = {
@@ -18,10 +19,21 @@ module.exports = {
     },
     plugins: [
         new HtmlWebpackPlugin({
-            title: 'ThunderForge VTT'
+            title: 'ThunderForge VTT',
+            meta: {
+                charset: "UTF-8",
+                viewport: 'width=device-width, initial-scale=1, shrink-to-fit=no'
+            }
         }),
+        new WebpackManifestPlugin(),
         new WasmPackPlugin({
             crateDirectory: path.resolve(__dirname, "./src/client"),
+        }),
+        new WasmPackPlugin({
+            crateDirectory: path.resolve(__dirname, "./src/engine"),
+        }),
+        new WasmPackPlugin({
+            crateDirectory: path.resolve(__dirname, "./src/core"),
         })
     ],
     optimization: {

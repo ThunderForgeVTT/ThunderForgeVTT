@@ -1,18 +1,19 @@
 [package]
-name = "vtt-authorizer-client"
+name = "thunderforge_client"
 version = "0.1.0"
 authors = ["mbround18 <12646562+mbround18@users.noreply.github.com>"]
 edition = "2018"
 description = "Introduce authorization platforms"
-repository = "https://github.com/mbround18/foundryvtt-authorizer"
+repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
 license = "BSD 3-Clause License"
 
 [lib]
-crate-type = ["cdylib"]
-
+crate-type = ["rlib", "cdylib"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 wasm-bindgen = "*"
 yew-router = "0.15"
 yew = "0.18"
+thunderforge_core = {path = "../core", features = ["client"]}
+wasm-bindgen-futures = "0.4.24"

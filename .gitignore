@@ -20,3 +20,6 @@ foundry
 
 .idea
 /dist/
+
+/pkg/
+/data/

@@ -2108,9 +2108,11 @@ __metadata:
     concurrently: ^6.2.0
     html-webpack-plugin: ^5.3.2
     nodemon: ^2.0.9
+    rimraf: ^3.0.2
     webpack: ^5.41.1
     webpack-cli: ^4.7.2
     webpack-dev-server: ^3.11.2
+    webpack-manifest-plugin: ^3.1.1
   languageName: unknown
   linkType: soft
 
@@ -5909,6 +5911,18 @@ fsevents@~2.3.2:
   languageName: node
   linkType: hard
 
+"webpack-manifest-plugin@npm:^3.1.1":
+  version: 3.1.1
+  resolution: "webpack-manifest-plugin@npm:3.1.1"
+  dependencies:
+    tapable: ^2.0.0
+    webpack-sources: ^2.2.0
+  peerDependencies:
+    webpack: ">=4.44.2"
+  checksum: fb49eccc0396c2e9307e21fa5df603640483de9e6f22d9413a9bce3876bc5504589335a327ca424b75e5c3512d160cec3060f79a16c77e36a91a406a66f31d87
+  languageName: node
+  linkType: hard
+
 "webpack-merge@npm:^5.7.3":
   version: 5.8.0
   resolution: "webpack-merge@npm:5.8.0"
@@ -5919,7 +5933,7 @@ fsevents@~2.3.2:
   languageName: node
   linkType: hard
 
-"webpack-sources@npm:^2.3.0":
+"webpack-sources@npm:^2.2.0, webpack-sources@npm:^2.3.0":
   version: 2.3.0
   resolution: "webpack-sources@npm:2.3.0"
   dependencies:
