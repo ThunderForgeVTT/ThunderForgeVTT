@@ -14,6 +14,8 @@ pub enum AppRoute {
     Counter,
     #[to = "/login"]
     Login,
+    #[to = "/signup"]
+    SignUp,
 }
 
 struct Main {}
@@ -35,15 +37,17 @@ impl Component for Main {
     }
 
     fn view(&self) -> Html {
-        use views::auth::login::LoginComponent;
+        use views::auth::{login::LoginComponent, signup::SignUpComponent};
+
+        let routes = Router::render(|switch: AppRoute| match switch {
+            AppRoute::Counter => html! {<CounterComponent/>},
+            AppRoute::Login => html! {<LoginComponent/>},
+            AppRoute::SignUp => html! {<SignUpComponent/>},
+        });
+
         html! {
             <Router<AppRoute, ()>
-                render = Router::render(|switch: AppRoute| {
-                    match switch {
-                        AppRoute::Counter => html!{<CounterComponent/>},
-                        AppRoute::Login => html!{<LoginComponent/>},
-                    }
-                })
+                render = routes
             />
         }
     }
