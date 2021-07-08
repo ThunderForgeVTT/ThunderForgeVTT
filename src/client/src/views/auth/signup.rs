@@ -2,11 +2,11 @@ use thunderforge_core::auth::Credentials;
 use yew::prelude::*;
 use yew::services::ConsoleService;
 
-enum LoginMethod {
+enum SignUpMethod {
     Basic,
 }
 
-enum LoginStatus {
+enum SignUpStatus {
     Success,
     Failure,
 }
@@ -14,19 +14,21 @@ enum LoginStatus {
 pub enum Msg {
     SetUserName(String),
     SetPassWord(String),
-    Click(LoginMethod),
-    LoginResponse(LoginStatus, String),
+    SetPassWordConfirmation(String),
+    Click(SignUpMethod),
+    LoginResponse(SignUpStatus, String),
 }
 
-pub struct LoginComponent {
+pub struct SignUpComponent {
     // `ComponentLink` is like a reference to a component.
     // It can be used to send messages to the component
     link: ComponentLink<Self>,
     username: String,
     password: String,
+    password_confirmation: String,
 }
 
-impl LoginComponent {
+impl SignUpComponent {
     fn render_basic_login(&self) -> Html {
         let change_username = self
             .link
@@ -34,9 +36,12 @@ impl LoginComponent {
         let change_password = self
             .link
             .callback(|change: InputData| Msg::SetPassWord(change.value));
-        let login_basic = self
+        let change_password_confirmation = self
             .link
-            .callback(|_action: MouseEvent| Msg::Click(LoginMethod::Basic));
+            .callback(|change: InputData| Msg::SetPassWordConfirmation(change.value));
+        let signup_basic = self
+            .link
+            .callback(|_action: MouseEvent| Msg::Click(SignUpMethod::Basic));
         html! {
             <div action="POST">
                 <div>
@@ -47,13 +52,17 @@ impl LoginComponent {
                     <label for="password">{"Password:"}</label>
                     <input type="password" id="password" oninput=change_password/>
                 </div>
-                <button onclick=login_basic>{"Login"}</button>
+            <div>
+                    <label for="password-confirmation">{"Password Confirmation:"}</label>
+                    <input type="password" id="password-confirmation" oninput=change_password_confirmation/>
+                </div>
+                <button onclick=signup_basic>{"Sign Up"}</button>
             </div>
         }
     }
 }
 
-impl Component for LoginComponent {
+impl Component for SignUpComponent {
     type Message = Msg;
     type Properties = ();
 
@@ -62,6 +71,7 @@ impl Component for LoginComponent {
             link,
             username: String::from(""),
             password: String::from(""),
+            password_confirmation: String::from(""),
         }
     }
 
@@ -73,30 +83,36 @@ impl Component for LoginComponent {
                 true
             }
             Msg::SetPassWord(value) => {
-                ConsoleService::info(&value);
                 self.password = String::from(&value);
                 true
             }
+            Msg::SetPassWordConfirmation(value) => {
+                self.password_confirmation = String::from(&value);
+                true
+            }
             Msg::Click(action) => {
-                use LoginMethod::Basic;
+                use SignUpMethod::Basic;
                 match action {
                     Basic => {
                         let u_name = String::from(&self.username);
-                        let p_word = String::from(&self.username);
+                        let p_word = String::from(&self.password);
+                        let pc_word = String::from(&self.password_confirmation);
                         ConsoleService::debug(
                             "[Authentication][Basic]: Logging in with basic auth",
                         );
-                        wasm_bindgen_futures::spawn_local(async {
-                            Credentials::new("123".to_string(), u_name, p_word)
-                                .login()
-                                .await;
-                        });
-                        false
+                        if !p_word.eq(&pc_word) {
+                            true
+                        } else {
+                            wasm_bindgen_futures::spawn_local(async {
+                                Credentials::new(Option::None, u_name, p_word).login().await;
+                            });
+                            false
+                        }
                     }
                 }
             }
             Msg::LoginResponse(response, message) => {
-                use LoginStatus::{Failure, Success};
+                use SignUpStatus::{Failure, Success};
                 match response {
                     Success => {
                         ConsoleService::log("Successfully logged in!");

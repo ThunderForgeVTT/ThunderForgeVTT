@@ -6,16 +6,21 @@
   "author": "mbround18 <12646562+mbround18@users.noreply.github.com>",
   "license": "BSD 3-Clause License",
   "scripts": {
-    "serve": "yarn webpack serve",
-    "start": "ROCKET_SECRET=\"CHANGME\" cargo run start",
+    "start": "concurrently --names 'HTTP,WATCH' 'cargo run start' 'yarn build:watch'",
     "clean": "rimraf ./target ./pkg ./dist",
-    "lint": "cargo fmt && cargo +nightly clippy"
+    "lint": "cargo fmt && cargo +nightly clippy",
+    "build:wasm:prod": "yarn webpack build --mode production -o ./data/client",
+    "build:watch": "yarn webpack build --watch"
   },
   "devDependencies": {
     "@wasm-tool/wasm-pack-plugin": "^1.4.0",
+    "css-loader": "^5.2.6",
     "html-webpack-plugin": "^5.3.2",
     "nodemon": "^2.0.9",
     "rimraf": "^3.0.2",
+    "sass": "^1.35.2",
+    "sass-loader": "^12.1.0",
+    "style-loader": "^3.0.0",
     "webpack": "^5.41.1",
     "webpack-cli": "^4.7.2",
     "webpack-dev-server": "^3.11.2",

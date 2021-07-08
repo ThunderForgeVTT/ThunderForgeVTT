@@ -31,6 +31,8 @@ fn not_found() -> Json<NotFoundError> {
 
 pub fn stage() -> AdHoc {
     AdHoc::on_ignite("Errors", |rocket| async {
-        rocket.register("/", catchers![not_found, internal_server_error])
+        rocket
+            .register("/", catchers![internal_server_error])
+            .register("/api/v1", catchers!(not_found))
     })
 }

@@ -2,6 +2,7 @@ mod auth;
 mod config;
 mod errors;
 mod serve;
+mod users;
 mod utils;
 mod world;
 
@@ -68,6 +69,13 @@ pub async fn rocket_ship(setup: RocketSetup) -> Rocket<Build> {
     rocket_config.ident = Ident::try_new(&setup.ident).unwrap();
     rocket_config.secret_key = SecretKey::from(setup.config.secret.as_bytes());
 
+    let database = unqlite::UnQLite::create_temp();
+
+    // UnQLite::create(format!(
+    //     "{}/system.json",
+    //     &setup.directories.databases_basedir
+    // ));
+
     rocket::custom(rocket_config)
         .attach(errors::stage())
         .attach(auth::stage())
@@ -75,6 +83,7 @@ pub async fn rocket_ship(setup: RocketSetup) -> Rocket<Build> {
         .attach(serve::stage())
         .manage(setup.config)
         .manage(setup.directories)
+        .manage(database)
 }
 
 async fn server(args: &Option<&ArgMatches<'_>>) {

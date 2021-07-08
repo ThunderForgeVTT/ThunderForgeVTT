@@ -6,6 +6,7 @@ use yew_router::prelude::*;
 
 use counter::CounterComponent;
 use wasm_bindgen::prelude::*;
+use yew::services::ConsoleService;
 
 #[derive(Switch, Debug, Clone)]
 pub enum AppRoute {
@@ -34,7 +35,7 @@ impl Component for Main {
     }
 
     fn view(&self) -> Html {
-        use views::login::LoginComponent;
+        use views::auth::login::LoginComponent;
         html! {
             <Router<AppRoute, ()>
                 render = Router::render(|switch: AppRoute| {
@@ -50,5 +51,6 @@ impl Component for Main {
 
 #[wasm_bindgen]
 pub fn main() {
+    ConsoleService::debug("Loading Client...");
     yew::start_app::<Main>();
 }

@@ -22,6 +22,7 @@ base64 = "0.13"
 include_dir = "0.6"
 dotenv = "0.15"
 rust-argon2 = "0.8"
+unqlite = "1.5"
 
 [dependencies.thunderforge_core]
 path = "../core"

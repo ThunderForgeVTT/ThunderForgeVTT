@@ -13,7 +13,7 @@ module.exports = {
         asyncWebAssembly: true
     },
     output: {
-        path: path.resolve(__dirname, './dist'),
+        path: path.resolve(__dirname, './data/client'),
         filename: "static/js/[name].js",
         chunkFilename: "static/js/[name].chunk.js",
     },
@@ -36,6 +36,21 @@ module.exports = {
             crateDirectory: path.resolve(__dirname, "./src/core"),
         })
     ],
+    module: {
+        rules: [
+            {
+                test: /\.s[ac]ss$/i,
+                use: [
+                    // Creates `style` nodes from JS strings
+                    "style-loader",
+                    // Translates CSS into CommonJS
+                    "css-loader",
+                    // Compiles Sass to CSS
+                    "sass-loader",
+                ],
+            },
+        ]
+    },
     optimization: {
         splitChunks: {
             // include all types of chunks

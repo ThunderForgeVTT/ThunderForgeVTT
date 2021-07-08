@@ -41,6 +41,8 @@ This simplified approach is designed to not be pretty for a version 0.0.1 and if
 - Provide a dndbeyond integration module
 - TBD
 
-Timelines
+## Timelines
 
 This project is a larger project inspired by many great providers such as FoundryVTT, Roll20, and BattleMapp. The current initial release cannot be given a date becuase it takes time to create great software but rest assured this project is getting worked on daily.
+
+

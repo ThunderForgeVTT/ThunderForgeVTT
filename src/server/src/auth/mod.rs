@@ -20,14 +20,6 @@ async fn basic_authentication(
     "success"
 }
 
-/// Retrieve the user's ID, if any.
-#[get("/user_id")]
-fn get_user_id(cookies: &CookieJar<'_>) -> Option<String> {
-    cookies
-        .get_private("user_id")
-        .map(|crumb| format!("User ID: {}", crumb.value()))
-}
-
 /// Remove the `user_id` cookie.
 #[post("/logout")]
 fn logout(cookies: &CookieJar<'_>) -> Flash<Redirect> {
@@ -39,7 +31,7 @@ pub fn stage() -> AdHoc {
     AdHoc::on_ignite("Manage Authentication", |rocket| async {
         rocket.mount(
             url_base("authentication"),
-            routes![basic_authentication, get_user_id, logout],
+            routes![basic_authentication, logout],
         )
     })
 }
