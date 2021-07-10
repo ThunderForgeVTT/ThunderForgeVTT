@@ -60,10 +60,9 @@ impl Credentials {
     #[cfg(feature = "client")]
     pub async fn login(&self) -> String {
         let body = Body::from(self.to_string());
-
         let client = HttpClient::new();
         let request = client
-            .post(&format!("/api/v1/authentication/basic"))
+            .post("/api/v1/authentication/basic")
             .body(body)
             .send()
             .await;
@@ -75,7 +74,7 @@ impl Credentials {
             Err(error) => {
                 let message = format!(
                     "[{}]: An error has occurred!\n{}",
-                    error.status().unwrap_or_else(|| StatusCode::SEE_OTHER),
+                    error.status().unwrap_or(StatusCode::SEE_OTHER),
                     error.to_string()
                 );
                 yew::services::ConsoleService::error(&message);
@@ -105,12 +104,12 @@ impl ToString for Credentials {
             None => String::new(),
         };
         let components = vec![
-            String::from(id),
+            id,
             String::from(&self.username),
             String::from(&self.password),
         ];
         // let contents = components.mapped( |value| String::from(value)).collect().join(&SEPARATOR).to_string();
 
-        encode(components.join(&SEPARATOR).to_string())
+        encode(components.join(SEPARATOR))
     }
 }

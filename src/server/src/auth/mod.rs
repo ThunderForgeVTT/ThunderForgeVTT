@@ -23,7 +23,7 @@ async fn basic_authentication(
 /// Remove the `user_id` cookie.
 #[post("/logout")]
 fn logout(cookies: &CookieJar<'_>) -> Flash<Redirect> {
-    cookies.remove_private(Cookie::named("user_id"));
+    cookies.remove_private(Cookie::named("session"));
     Flash::success(Redirect::to("/"), "Successfully logged out.")
 }
 

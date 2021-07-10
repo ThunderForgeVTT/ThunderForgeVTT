@@ -27,6 +27,7 @@ async fn main() {
             (about: "controls testing features")
             (@arg verbose: -v --verbose "Print test information verbosely")
             (@arg data_path: -d --data-path "Where do you want ThunderForgeVTT to store data?")
+            (@arg redis_url: -r --redis-url "What redis url would you like to connect to?")
         )
     );
 
@@ -59,6 +60,7 @@ pub struct RocketSetup {
     ident: String,
     config: Config,
     directories: Directories,
+    redis_url: String,
 }
 
 pub async fn rocket_ship(setup: RocketSetup) -> Rocket<Build> {
@@ -70,11 +72,6 @@ pub async fn rocket_ship(setup: RocketSetup) -> Rocket<Build> {
     rocket_config.secret_key = SecretKey::from(setup.config.secret.as_bytes());
 
     let database = unqlite::UnQLite::create_temp();
-
-    // UnQLite::create(format!(
-    //     "{}/system.json",
-    //     &setup.directories.databases_basedir
-    // ));
 
     rocket::custom(rocket_config)
         .attach(errors::stage())
@@ -90,6 +87,7 @@ async fn server(args: &Option<&ArgMatches<'_>>) {
     let mut ip_address = "127.0.0.1";
     let mut port = "30000";
     let mut config = load_config();
+    let mut redis_url = String::from("redis://127.0.0.1/");
 
     if args.is_some() {
         let arg_matches = args.unwrap();
@@ -102,6 +100,7 @@ async fn server(args: &Option<&ArgMatches<'_>>) {
                     .unwrap_or(&config.data_path),
             );
         }
+        redis_url = String::from(arg_matches.value_of("redis_url").unwrap_or(&redis_url));
     }
 
     let directories = Directories::from(String::from(&config.data_path));
@@ -112,6 +111,7 @@ async fn server(args: &Option<&ArgMatches<'_>>) {
         ident: String::from("ThunderForgeVTT"),
         config,
         directories,
+        redis_url,
     };
     let little_rocket_ship = rocket_ship(rocket_setup).await;
     match little_rocket_ship.launch().await {

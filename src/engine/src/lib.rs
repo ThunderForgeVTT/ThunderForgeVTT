@@ -1,3 +1,5 @@
+mod token;
+
 use wasm_bindgen::prelude::*;
 use yew::services::ConsoleService;
 

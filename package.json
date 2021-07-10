@@ -7,8 +7,9 @@
   "license": "BSD 3-Clause License",
   "scripts": {
     "start": "concurrently --names 'HTTP,WATCH' 'cargo run start' 'yarn build:watch'",
-    "clean": "rimraf ./target ./pkg ./dist",
+    "clean": "rimraf ./{**/pkg,target,pkg,dist,data/client/*}",
     "lint": "cargo fmt && cargo +nightly clippy",
+    "build": "cargo build",
     "build:wasm:prod": "yarn webpack build --mode production -o ./data/client",
     "build:watch": "yarn webpack build --watch"
   },
