@@ -18,7 +18,7 @@ reqwest-wasm = { version = "*", features = ["json"] }
 rocket = { version = "0.5.0-rc.1", optional = true,  default-features = false,  features = ["json", "uuid"] }
 yew = {version = "0.18", default-features = false, optional = true}
 wasm-bindgen-futures =  { version = "0.4.24", optional = true }
-
+regex = "1.5.4"
 
 [features]
 client = ["yew", "wasm-bindgen-futures"]

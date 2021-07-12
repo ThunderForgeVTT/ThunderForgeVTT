@@ -1,0 +1,7 @@
+{
+  "recommendations": [
+    "rust-lang.rust",
+    "formulahendry.code-runner",
+    "ms-azuretools.vscode-docker"
+  ]
+}

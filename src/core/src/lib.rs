@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod events;
+pub mod policies;
 mod utils;
 
 #[cfg(test)]

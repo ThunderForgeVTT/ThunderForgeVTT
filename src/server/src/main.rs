@@ -71,7 +71,7 @@ pub async fn rocket_ship(setup: RocketSetup) -> Rocket<Build> {
     rocket_config.ident = Ident::try_new(&setup.ident).unwrap();
     rocket_config.secret_key = SecretKey::from(setup.config.secret.as_bytes());
 
-    let database = unqlite::UnQLite::create_temp();
+    // let database = [];
 
     rocket::custom(rocket_config)
         .attach(errors::stage())
@@ -80,7 +80,7 @@ pub async fn rocket_ship(setup: RocketSetup) -> Rocket<Build> {
         .attach(serve::stage())
         .manage(setup.config)
         .manage(setup.directories)
-        .manage(database)
+        // .manage(database)
 }
 
 async fn server(args: &Option<&ArgMatches<'_>>) {

@@ -11,7 +11,8 @@
     "lint": "cargo fmt && cargo +nightly clippy",
     "build": "cargo build",
     "build:wasm:prod": "yarn webpack build --mode production -o ./data/client",
-    "build:watch": "yarn webpack build --watch"
+    "build:watch": "yarn webpack build --watch",
+    "test": "RUSTFLAGS=\"${RUSTFLAGS:-\"\"} -A unused_imports -A dead_code -A private_in_public -A unused_variables\" cargo test"
   },
   "devDependencies": {
     "@wasm-tool/wasm-pack-plugin": "^1.4.0",
