@@ -80,7 +80,7 @@ pub async fn rocket_ship(setup: RocketSetup) -> Rocket<Build> {
         .attach(serve::stage())
         .manage(setup.config)
         .manage(setup.directories)
-        // .manage(database)
+    // .manage(database)
 }
 
 async fn server(args: &Option<&ArgMatches<'_>>) {
