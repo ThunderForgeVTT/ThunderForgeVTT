@@ -19,6 +19,8 @@ rocket = { version = "0.5.0-rc.1", optional = true,  default-features = false,  
 yew = {version = "0.18", default-features = false, optional = true}
 wasm-bindgen-futures =  { version = "0.4.24", optional = true }
 regex = "1.5.4"
+getrandom = { version = "0.2", features = ["js"] }
+uuid = { version = "0.8", features = ["serde", "v4"] }
 
 [features]
 client = ["yew", "wasm-bindgen-futures"]

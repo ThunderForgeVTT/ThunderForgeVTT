@@ -1,4 +1,3 @@
-use std::str::FromStr;
 
 pub enum PolicyEffect {
     Allow,
@@ -65,16 +64,37 @@ impl Policy {
         let is_allowed = self.effect.is_allowed();
         self.looking_for(id, access, is_allowed)
     }
+
+    fn includes_id(&self, id: &String) -> bool {
+        let regex_str = format!("^{id}:.*)$", id = id);
+        let matcher = regex::Regex::new(&regex_str).unwrap();
+        self
+            .resources
+            .iter()
+            .find(|resource| matcher.is_match(&resource))
+            .is_some()
+    }
+
+    fn add_access(&self, id: &String, access: String) {
+
+    }
+
+    pub fn add(&self, id: String, access: String)
+    {
+        if self.includes_id(&id) {
+
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::Policy;
-    use rocket::serde::uuid::Uuid;
+    use uuid::Uuid;
 
-    #[test]
+  #[test]
     fn it_should_deny_on_default() {
-        let uuid = Uuid::default().to_string();
+        let uuid = Uuid::new_v4().to_string();
         let access = String::from("get");
         let basic = Policy::default();
         assert_eq!(basic.can_i(uuid, access), false)
