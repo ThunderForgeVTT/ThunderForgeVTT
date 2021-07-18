@@ -1,5 +1,5 @@
-use uuid::Uuid;
 use regex::Captures;
+use uuid::Uuid;
 
 pub enum PolicyEffect {
     Allow,
@@ -73,15 +73,13 @@ impl Policy {
     }
 
     fn is_match_by_id(&self, id: &String, resource: &String) -> bool {
-        let regex_str = format!("^{id}:.*)$", id = id);
+        let regex_str = format!("^{id}:(.*)$", id = id);
         let matcher = regex::Regex::new(&regex_str).unwrap();
         matcher.is_match(&resource)
     }
 
     fn includes_id(&self, id: &String) -> bool {
-
-        self
-            .resources
+        self.resources
             .iter()
             .find(|resource| self.is_match_by_id(id, resource))
             .is_some()
@@ -90,85 +88,121 @@ impl Policy {
     fn add_to_existing(&mut self, id: &String, access: String) {
         let regex_str = format!("^({id}):(.*)$", id = id);
         let matcher = regex::Regex::new(&regex_str).unwrap();
-        self.resources = self.resources.iter().map(|resource| {
-            if self.is_match_by_id(id, resource) {
-                String::from(matcher.replace(resource, |caps: &Captures| {
-                    format!(
-                        "{id}:{original_access},{new_access}",
-                        id=id,
-                        original_access=&caps[2],
-                        new_access=access
-                    )
-                }))
-            } else {
-                String::from(resource)
-            }
-        }).collect();
+        self.resources = self
+            .resources
+            .iter()
+            .map(|resource| {
+                if self.is_match_by_id(id, resource) {
+                    String::from(matcher.replace(resource, |caps: &Captures| {
+                        format!(
+                            "{id}:{original_access},{new_access}",
+                            id = id,
+                            original_access = &caps[2],
+                            new_access = access
+                        )
+                    }))
+                } else {
+                    String::from(resource)
+                }
+            })
+            .collect();
     }
 
-    // fn remove_from_existing(&self, id: &String, access: String) {
-    //
-    // }
-
-    pub fn add(&mut self, id: String, access: String)
-    {
+    pub fn add(&mut self, id: String, access: String) {
         if self.includes_id(&id) {
             self.add_to_existing(&id, access)
         } else {
-            self.resources.push(format!(
-                "{id}:{access}",
-                id=id,
-                access=access
-            ))
+            self.resources
+                .push(format!("{id}:{access}", id = id, access = access))
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Policy;
-    use uuid::Uuid;
-    use crate::policies::PolicyEffect;
 
-    #[test]
-    fn it_should_deny_on_default() {
-        let uuid = Uuid::new_v4().to_string();
-        let access = String::from("get");
-        let basic = Policy::default();
-        assert_eq!(basic.can_i(uuid, access), false)
+    #[cfg(test)]
+    mod default {
+        use crate::policies::{Policy, PolicyEffect};
+        use uuid::Uuid;
+
+        #[test]
+        fn it_should_deny_on_default() {
+            let uuid = Uuid::new_v4().to_string();
+            let access = String::from("get");
+            let basic = Policy::default();
+            assert_eq!(basic.can_i(uuid, access), false)
+        }
+
+        #[test]
+        fn it_should_add_new_resource_when_not_found() {
+            let uuid = Uuid::new_v4().to_string();
+            let access = String::from("get");
+            let mut basic = Policy::default();
+            assert!(basic.resources.is_empty());
+            basic.add(uuid.clone(), access.clone());
+            assert_eq!(basic.resources[0], format!("{}:{}", uuid, access));
+        }
+
+        #[test]
+        fn it_should_modify_existing_resource_when_found() {
+            let uuid = Uuid::new_v4().to_string();
+            let get_access = String::from("get");
+            let post_access = String::from("post");
+            let mut basic = Policy::default();
+            assert!(basic.resources.is_empty());
+            basic.add(uuid.clone(), get_access.clone());
+            basic.add(uuid.clone(), post_access.clone());
+            assert_eq!(
+                basic.resources[0],
+                format!("{}:{},{}", uuid, get_access, post_access)
+            );
+        }
     }
 
-    #[test]
-    fn it_should_deny_on_deny_effect_and_not_found() {
-        let uuid = Uuid::new_v4().to_string();
-        let access = String::from("get");
-        let policy = Policy::default_deny();
-        assert_eq!(policy.can_i(uuid, access), false)
+    #[cfg(test)]
+    mod deny_basic {
+        use crate::policies::{Policy, PolicyEffect};
+        use uuid::Uuid;
+
+        #[test]
+        fn it_should_deny_on_deny_effect_and_not_found() {
+            let uuid = Uuid::new_v4().to_string();
+            let access = String::from("get");
+            let policy = Policy::default_deny();
+            assert_eq!(policy.can_i(uuid, access), false)
+        }
+
+        #[test]
+        fn it_should_deny_on_effect_deny() {
+            let uuid = Uuid::new_v4().to_string();
+            let access = String::from("get");
+            let mut policy = Policy::default_deny();
+            policy.add(uuid.clone(), access.clone());
+            assert_eq!(policy.can_i(uuid, access), false)
+        }
     }
 
-    #[test]
-    fn it_should_deny_on_effect_deny() {
-        let uuid = Uuid::new_v4().to_string();
-        let access = String::from("get");
-        let mut policy = Policy::default_deny();
-        policy.add(uuid.clone(), access.clone());
-        assert_eq!(policy.can_i(uuid, access), false)
-    }
+    #[cfg(test)]
+    mod allow_basic {
+        use crate::policies::{Policy, PolicyEffect};
+        use uuid::Uuid;
 
-    #[test]
-    fn it_should_deny_on_allow_effect_and_not_found() {
-        let uuid = Uuid::new_v4().to_string();
-        let access = String::from("get");
-        let policy = Policy::default_allow();
-        assert_eq!(policy.can_i(uuid, access), false)
-    }
+        #[test]
+        fn it_should_allow_on_effect_allow() {
+            let uuid = Uuid::new_v4().to_string();
+            let access = String::from("get");
+            let mut policy = Policy::default_allow();
+            policy.add(uuid.clone(), access.clone());
+            assert_eq!(policy.can_i(uuid, access), true)
+        }
 
-    #[test]
-    fn it_should_allow_on_effect_allow() {
-        let uuid = Uuid::new_v4().to_string();
-        let access = String::from("get");
-        let mut policy = Policy::default_allow();
-        policy.add(uuid.clone(), access.clone());
-        assert_eq!(policy.can_i(uuid, access), true)
+        #[test]
+        fn it_should_deny_on_allow_effect_and_not_found() {
+            let uuid = Uuid::new_v4().to_string();
+            let access = String::from("get");
+            let policy = Policy::default_allow();
+            assert_eq!(policy.can_i(uuid, access), false)
+        }
     }
 }
