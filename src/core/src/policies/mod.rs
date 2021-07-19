@@ -116,6 +116,44 @@ impl Policy {
                 .push(format!("{id}:{access}", id = id, access = access))
         }
     }
+
+    fn remove_id(&mut self, id: String) {
+        let new_resources: Vec<String> = self
+            .resources
+            .iter()
+            .filter(|resource| !self.is_match_by_id(&id, resource))
+            .map(|resource| String::from(resource))
+            .collect();
+        self.resources = new_resources;
+    }
+
+    pub fn remove(&mut self, id: String, access: Option<String>) {
+        if let Some(found_access) = access {
+            let regex_str = format!("^({id}):(.*)$", id = id);
+            let matcher = regex::Regex::new(&regex_str).unwrap();
+            self.resources = self
+                .resources
+                .iter()
+                .map(|resource| {
+                    if self.is_match_by_id(&id, resource) {
+                        String::from(matcher.replace(resource, |parts: &Captures| {
+                            let adjusted_access = (&parts[2])
+                                .split(",")
+                                .filter(|specific_access| specific_access.ne(&found_access))
+                                .fold(String::new(), |a, b| {
+                                    a + b + ","
+                                });
+                            format!("{}:{}", id, adjusted_access.trim_end_matches(','))
+                        }))
+                    } else {
+                        String::from(resource)
+                    }
+                })
+                .collect()
+        } else {
+            self.remove_id(id)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -146,6 +184,35 @@ mod tests {
 
         #[test]
         fn it_should_modify_existing_resource_when_found() {
+            let uuid = Uuid::new_v4().to_string();
+            let get_access = String::from("get");
+            let post_access = String::from("post");
+            let mut basic = Policy::default();
+            assert!(basic.resources.is_empty());
+            basic.add(uuid.clone(), get_access.clone());
+            basic.add(uuid.clone(), post_access.clone());
+            assert_eq!(
+                basic.resources[0],
+                format!("{}:{},{}", uuid, get_access, post_access)
+            );
+        }
+
+        #[test]
+        fn it_should_remove_resource_when_found() {
+            let uuid = Uuid::new_v4().to_string();
+            let access = String::from("get");
+            let access_2 = String::from("post");
+            let mut basic = Policy::default();
+            assert!(basic.resources.is_empty());
+            basic.add(uuid.clone(), access.clone());
+            basic.add(uuid.clone(), access_2.clone());
+            assert_eq!(basic.resources[0], format!("{}:{},{}", &uuid, &access, &access_2));
+            basic.remove(uuid.clone(), Some(access));
+            assert_eq!(basic.resources[0], format!("{}:{}", uuid, access_2));
+        }
+
+        #[test]
+        fn it_should_modify_amd_remove_existing_access_when_resource_found() {
             let uuid = Uuid::new_v4().to_string();
             let get_access = String::from("get");
             let post_access = String::from("post");
