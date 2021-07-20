@@ -6,6 +6,11 @@ An open source virtual tabletop that is currently purely a concept.
 
 The current objective of this is to get a proof of concept going using Rocket.rs, wasm, and yew.
 
+## Curious on whats happening
+
+- [Check out the discussions](https://github.com/ThunderForgeVTT/ThunderForgeVTT/discussions)
+- [Take a look at project progress](https://github.com/ThunderForgeVTT/ThunderForgeVTT/projects)
+
 ### What features the PoC should include
 
 - Login screen, Basic authentication (argon2 for passwords)
