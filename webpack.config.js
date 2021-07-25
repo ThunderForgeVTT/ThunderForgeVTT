@@ -4,8 +4,34 @@ const { WebpackManifestPlugin } = require('webpack-manifest-plugin');
 const WorkboxPlugin = require('workbox-webpack-plugin');
 const path = require('path');
 
+const plugins = [
+    new HtmlWebpackPlugin({
+        title: 'ThunderForge VTT',
+        meta: {
+            charset: "UTF-8",
+            viewport: 'width=device-width, initial-scale=1, shrink-to-fit=no'
+        }
+    }),
+    new WebpackManifestPlugin(),
+    new WasmPackPlugin({
+        crateDirectory: path.resolve(__dirname, "./src/client"),
+    }),
+    new WasmPackPlugin({
+        crateDirectory: path.resolve(__dirname, "./src/core"),
+    }),
+];
+
+if (process.env.NODE_ENV === 'production') {
+    plugins.push(new WorkboxPlugin.GenerateSW({
+        // these options encourage the ServiceWorkers to get in there fast
+        // and not allow any straggling "old" SWs to hang around
+        clientsClaim: true,
+        skipWaiting: true,
+    }))
+}
+
 module.exports = {
-    entry: './src/loader.js',
+    entry: './src/client/src/loader.js',
     mode: "development",
     devServer: {
         historyApiFallback: true
@@ -18,31 +44,7 @@ module.exports = {
         filename: "static/js/[name].js",
         chunkFilename: "static/js/[name].chunk.js",
     },
-    plugins: [
-        new HtmlWebpackPlugin({
-            title: 'ThunderForge VTT',
-            meta: {
-                charset: "UTF-8",
-                viewport: 'width=device-width, initial-scale=1, shrink-to-fit=no'
-            }
-        }),
-        new WebpackManifestPlugin(),
-        new WasmPackPlugin({
-            crateDirectory: path.resolve(__dirname, "./src/client"),
-        }),
-        new WasmPackPlugin({
-            crateDirectory: path.resolve(__dirname, "./src/engine"),
-        }),
-        new WasmPackPlugin({
-            crateDirectory: path.resolve(__dirname, "./src/core"),
-        }),
-        new WorkboxPlugin.GenerateSW({
-            // these options encourage the ServiceWorkers to get in there fast
-            // and not allow any straggling "old" SWs to hang around
-            clientsClaim: true,
-            skipWaiting: true,
-        }),
-    ],
+    plugins,
     module: {
         rules: [
             {

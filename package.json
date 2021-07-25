@@ -1,21 +1,18 @@
 {
-  "name": "thunderforge-vtt",
-  "version": "1.0.0",
-  "main": "src/loader.js",
-  "repository": "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git",
-  "author": "mbround18 <12646562+mbround18@users.noreply.github.com>",
-  "license": "BSD 3-Clause License",
   "scripts": {
-    "start": "concurrently --names 'HTTP,WATCH' 'cargo run start' 'yarn build:watch'",
-    "clean": "rimraf ./{**/pkg,target,pkg,dist,data/client/*}",
-    "lint": "cargo fmt && cargo +nightly clippy",
-    "build": "cargo build",
-    "build:wasm:prod": "yarn webpack build --mode production -o ./data/client",
-    "build:watch": "yarn webpack build --watch",
-    "test": "RUSTFLAGS=\"${RUSTFLAGS:-\"\"} -A unused_imports -A dead_code -A private_in_public -A unused_variables\" cargo test"
+    "start": "concurrently -c 'blue,green' --names 'BACKEND,FRONTEND' 'yarn start:be' 'yarn start:fe'",
+    "start:be": "cargo run start",
+    "start:fe": "yarn webpack build --watch",
+    "build": "cargo build && yarn webpack build",
+    "clean": "rimraf ./{**/pkg,target,pkg,dist,data/client/*}"
   },
+  "workspaces": [
+    "./src/client"
+  ],
+  "private": true,
   "devDependencies": {
     "@wasm-tool/wasm-pack-plugin": "^1.4.0",
+    "concurrently": "^6.2.0",
     "css-loader": "^5.2.6",
     "html-webpack-plugin": "^5.3.2",
     "nodemon": "^2.0.9",
@@ -28,8 +25,5 @@
     "webpack-dev-server": "^3.11.2",
     "webpack-manifest-plugin": "^3.1.1",
     "workbox-webpack-plugin": "^6.1.5"
-  },
-  "dependencies": {
-    "concurrently": "^6.2.0"
   }
 }

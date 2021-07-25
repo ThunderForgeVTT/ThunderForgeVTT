@@ -2,11 +2,11 @@ use thunderforge_core::auth::Credentials;
 use yew::prelude::*;
 use yew::services::ConsoleService;
 
-enum SignUpMethod {
+pub enum SignUpMethod {
     Basic,
 }
 
-enum SignUpStatus {
+pub enum SignUpStatus {
     Success,
     Failure,
 }

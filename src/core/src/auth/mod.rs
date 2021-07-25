@@ -1,6 +1,4 @@
-use crate::utils::HttpClient;
 use base64::{decode, encode};
-use reqwest_wasm::{Body, StatusCode};
 use serde::{Deserialize, Serialize};
 use std::str::from_utf8;
 
@@ -59,8 +57,8 @@ impl Credentials {
 
     #[cfg(feature = "client")]
     pub async fn login(&self) -> String {
-        let body = Body::from(self.to_string());
-        let client = HttpClient::new();
+        let body = reqwest_wasm::Body::from(self.to_string());
+        let client = crate::utils::HttpClient::new();
         let request = client
             .post("/api/v1/authentication/basic")
             .body(body)
@@ -74,7 +72,9 @@ impl Credentials {
             Err(error) => {
                 let message = format!(
                     "[{}]: An error has occurred!\n{}",
-                    error.status().unwrap_or(StatusCode::SEE_OTHER),
+                    error
+                        .status()
+                        .unwrap_or(reqwest_wasm::StatusCode::SEE_OTHER),
                     error.to_string()
                 );
                 yew::services::ConsoleService::error(&message);

@@ -21,7 +21,7 @@ fn all_worlds() {}
 // fn switch_world(_id: String) {}
 
 #[get("/<id>/events")]
-async fn world_events(
+async fn world_events_by_id(
     id: String,
     queue: &State<Sender<WorldEvent>>,
     mut end: Shutdown,
@@ -45,13 +45,11 @@ async fn world_events(
 
 /// Receive a message from a form submission and broadcast it to any receivers.
 #[post("/<id>/event", data = "<form>")]
-fn world_event(form: Form<WorldEvent>, id: String, queue: &State<Sender<WorldEvent>>) {
+fn world_event_by_id(form: Form<WorldEvent>, id: String, queue: &State<Sender<WorldEvent>>) {
+    let event = WorldEvent::new(id);
+
     // A send 'fails' if there are no active subscribers. That's okay.
-    let updated_form = Form::from(WorldEvent {
-        event_code: form.event_code,
-        world_id: Option::from(id),
-        token: None,
-    });
+    let updated_form = Form::from(event);
     let _res = queue.send(updated_form.into_inner());
 }
 
@@ -63,8 +61,8 @@ pub fn stage() -> AdHoc {
                 all_worlds,
                 // world_by_id,
                 // switch_world,
-                world_events,
-                world_event
+                world_events_by_id,
+                world_event_by_id
             ],
         )
     })
