@@ -1,0 +1,4 @@
+.card {
+  @apply rounded w-1/4 h-auto m-2 p-1 flex flex-col;
+  background-color: $primary-foreground;
+}

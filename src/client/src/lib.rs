@@ -10,6 +10,8 @@ use yew::services::ConsoleService;
 
 #[derive(Switch, Debug, Clone)]
 pub enum AppRoute {
+    #[to = "/world/{id}"]
+    World(String),
     #[to = "/counter"]
     Counter,
     #[to = "/login"]
@@ -38,11 +40,13 @@ impl Component for Main {
 
     fn view(&self) -> Html {
         use views::auth::{login::LoginComponent, signup::SignUpComponent};
+        use views::world::WorldComponent;
 
         let routes = Router::render(|switch: AppRoute| match switch {
             AppRoute::Counter => html! {<CounterComponent/>},
             AppRoute::Login => html! {<LoginComponent/>},
             AppRoute::SignUp => html! {<SignUpComponent/>},
+            AppRoute::World(world_id) => html! {<WorldComponent world_id=world_id />},
         });
 
         html! {

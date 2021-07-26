@@ -1,12 +1,9 @@
-
-
 [workspace]
 
 members = [
     "src/server",
     "src/client",
-    "src/core",
-    "src/engine"
+    "src/core"
 ]
 
 [profile.release]

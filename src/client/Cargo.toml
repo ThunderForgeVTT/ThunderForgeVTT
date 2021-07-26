@@ -12,8 +12,8 @@ crate-type = ["rlib", "cdylib"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-wasm-bindgen = "*"
+wasm-bindgen = "0.2"
 yew-router = "0.15"
 yew = "0.18"
 thunderforge_core = {path = "../core", features = ["client"]}
-wasm-bindgen-futures = "0.4.24"
+wasm-bindgen-futures = "0.4"

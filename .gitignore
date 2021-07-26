@@ -23,3 +23,5 @@ foundry
 
 /pkg/
 /data/
+
+*.log

@@ -1,5 +1,4 @@
 use regex::Captures;
-use uuid::Uuid;
 
 pub enum PolicyEffect {
     Allow,
@@ -37,8 +36,9 @@ pub struct Policy {
 
 impl Default for Policy {
     fn default() -> Policy {
+        let uuid = uuid::Uuid::new_v4();
         Policy {
-            id: Uuid::new_v4().to_string(),
+            id: uuid.to_string(),
             effect: PolicyEffect::Deny,
             resources: vec![],
         }
@@ -140,9 +140,7 @@ impl Policy {
                             let adjusted_access = (&parts[2])
                                 .split(",")
                                 .filter(|specific_access| specific_access.ne(&found_access))
-                                .fold(String::new(), |a, b| {
-                                    a + b + ","
-                                });
+                                .fold(String::new(), |a, b| a + b + ",");
                             format!("{}:{}", id, adjusted_access.trim_end_matches(','))
                         }))
                     } else {
@@ -206,7 +204,10 @@ mod tests {
             assert!(basic.resources.is_empty());
             basic.add(uuid.clone(), access.clone());
             basic.add(uuid.clone(), access_2.clone());
-            assert_eq!(basic.resources[0], format!("{}:{},{}", &uuid, &access, &access_2));
+            assert_eq!(
+                basic.resources[0],
+                format!("{}:{},{}", &uuid, &access, &access_2)
+            );
             basic.remove(uuid.clone(), Some(access));
             assert_eq!(basic.resources[0], format!("{}:{}", uuid, access_2));
         }
