@@ -1,10 +1,16 @@
-import("./styles/main.sass").then(()=> {
+import("./styles/main.scss").then(()=> {
     console.debug("Loaded Styles...")
 })
 import("../pkg").then(client => {
     client.main()
     console.debug("Loaded Client...")
 })
+
+window.onload = ()=> {
+    import('./engine').then(engine => {
+        engine.load()
+    })
+}
 
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {

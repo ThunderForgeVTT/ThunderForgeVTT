@@ -10,7 +10,7 @@ use yew::services::ConsoleService;
 
 #[derive(Switch, Debug, Clone)]
 pub enum AppRoute {
-    #[to = "/{id}/world"]
+    #[to = "/world/{id}"]
     World(String),
     #[to = "/counter"]
     Counter,

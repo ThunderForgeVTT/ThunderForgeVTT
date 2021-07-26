@@ -1,0 +1,21 @@
+@import "components/card";
+
+input {
+  @apply rounded p-1 pr-3 pl-3;
+  border: gray solid 0.5px;
+  background-color: rgba($primary-foreground, .88);
+  &:focus {
+    border: $primary-accent solid 0.5px;
+  }
+}
+
+.btn {
+  border: gray solid 0.5px;
+  @apply rounded m-2 p-2;
+  background-color: $primary-accent;
+  color: $primary-text;
+  &-success {
+    background-color: $color-success;
+    color: white;
+  }
+}

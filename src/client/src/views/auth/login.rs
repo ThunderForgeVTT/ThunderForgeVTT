@@ -38,7 +38,7 @@ impl LoginComponent {
             .link
             .callback(|_action: MouseEvent| Msg::Click(LoginMethod::Basic));
         html! {
-            <div action="POST">
+            <div action="POST" class="card">
                 <div>
                     <label for="username">{"Username:"}</label>
                     <input id="username" oninput=change_username/>
@@ -47,7 +47,7 @@ impl LoginComponent {
                     <label for="password">{"Password:"}</label>
                     <input type="password" id="password" oninput=change_password/>
                 </div>
-                <button onclick=login_basic>{"Login"}</button>
+                <button onclick=login_basic class="btn btn-success">{"Login"}</button>
             </div>
         }
     }

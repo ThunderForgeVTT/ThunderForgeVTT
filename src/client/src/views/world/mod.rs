@@ -1,4 +1,5 @@
 use yew::prelude::*;
+use yew::services::ConsoleService;
 
 pub struct WorldComponent {
     // `ComponentLink` is like a reference to a component.
@@ -38,6 +39,7 @@ impl Component for WorldComponent {
 
     fn view(&self) -> Html {
         let id = self.world_id.clone();
+        ConsoleService::log("Hewwo");
         let render: Html = html! {
             <div id={"engine"} data-world-id=id></div>
         };

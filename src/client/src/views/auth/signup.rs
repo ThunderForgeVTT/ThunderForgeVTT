@@ -43,7 +43,7 @@ impl SignUpComponent {
             .link
             .callback(|_action: MouseEvent| Msg::Click(SignUpMethod::Basic));
         html! {
-            <div action="POST">
+            <div action="POST" class="card">
                 <div>
                     <label for="username">{"Username:"}</label>
                     <input id="username" oninput=change_username/>
@@ -56,7 +56,7 @@ impl SignUpComponent {
                     <label for="password-confirmation">{"Password Confirmation:"}</label>
                     <input type="password" id="password-confirmation" oninput=change_password_confirmation/>
                 </div>
-                <button onclick=signup_basic>{"Sign Up"}</button>
+                <button class="btn" onclick=signup_basic>{"Sign Up"}</button>
             </div>
         }
     }

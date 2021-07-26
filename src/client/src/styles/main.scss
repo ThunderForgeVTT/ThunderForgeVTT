@@ -1,0 +1,22 @@
+// Tailwind
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
+
+// Setup
+
+$primary-background: rgb(34, 40, 49);
+$primary-foreground: rgb(57, 62, 70);
+$primary-accent: rgb(0, 173, 181);
+$primary-text: rgb(238, 238, 238);
+$color-failure: rgb(191, 19, 99);
+$color-success: rgb(80, 203, 147);
+
+body {
+  @apply w-full h-full;
+  background-color: $primary-background;
+  color: $primary-text;
+}
+
+// Components
+@import "components";
