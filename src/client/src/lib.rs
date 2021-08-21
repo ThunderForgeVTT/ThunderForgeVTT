@@ -1,5 +1,7 @@
 mod counter;
+mod utils;
 mod views;
+use crate::utils::logger;
 
 use yew::prelude::*;
 use yew_router::prelude::*;
@@ -59,6 +61,6 @@ impl Component for Main {
 
 #[wasm_bindgen]
 pub fn main() {
-    ConsoleService::debug("Loading Client...");
+    logger::debug("Loading Client...");
     yew::start_app::<Main>();
 }
