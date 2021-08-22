@@ -1,3 +1,5 @@
+use crate::utils::logger;
+use wasm_bindgen::prelude::*;
 use yew::prelude::*;
 use yew::services::ConsoleService;
 
@@ -39,7 +41,9 @@ impl Component for WorldComponent {
 
     fn view(&self) -> Html {
         let id = self.world_id.clone();
-        ConsoleService::log("Hewwo");
+
+        logger::info("Rendering Engine");
+
         let render: Html = html! {
             <div id={"engine"} data-world-id=id></div>
         };

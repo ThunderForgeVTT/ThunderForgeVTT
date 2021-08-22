@@ -1,3 +1,4 @@
+use crate::utils::logger;
 use thunderforge_core::auth::Credentials;
 use yew::prelude::*;
 use yew::services::ConsoleService;
@@ -78,7 +79,7 @@ impl Component for SignUpComponent {
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
             Msg::SetUserName(value) => {
-                ConsoleService::info(&value);
+                logger::info(&value);
                 self.username = String::from(&value);
                 true
             }
@@ -97,9 +98,7 @@ impl Component for SignUpComponent {
                         let u_name = String::from(&self.username);
                         let p_word = String::from(&self.password);
                         let pc_word = String::from(&self.password_confirmation);
-                        ConsoleService::debug(
-                            "[Authentication][Basic]: Logging in with basic auth",
-                        );
+                        logger::debug("[Authentication][Basic]: Logging in with basic auth");
                         if !p_word.eq(&pc_word) {
                             true
                         } else {
@@ -115,11 +114,11 @@ impl Component for SignUpComponent {
                 use SignUpStatus::{Failure, Success};
                 match response {
                     Success => {
-                        ConsoleService::log("Successfully logged in!");
+                        logger::log("Successfully logged in!");
                         true
                     }
                     Failure => {
-                        ConsoleService::error(&message);
+                        logger::error(&message);
                         false
                     }
                 }

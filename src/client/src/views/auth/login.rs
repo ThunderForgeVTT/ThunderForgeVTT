@@ -1,3 +1,4 @@
+use crate::utils::logger;
 use thunderforge_core::auth::Credentials;
 use yew::prelude::*;
 use yew::services::ConsoleService;
@@ -81,9 +82,7 @@ impl Component for LoginComponent {
                     Basic => {
                         let u_name = String::from(&self.username);
                         let p_word = String::from(&self.username);
-                        ConsoleService::debug(
-                            "[Authentication][Basic]: Logging in with basic auth",
-                        );
+                        logger::debug("[Authentication][Basic]: Logging in with basic auth");
                         wasm_bindgen_futures::spawn_local(async {
                             Credentials::new(Option::None, u_name, p_word).login().await;
                         });
@@ -95,11 +94,11 @@ impl Component for LoginComponent {
                 use LoginStatus::{Failure, Success};
                 match response {
                     Success => {
-                        ConsoleService::log("Successfully logged in!");
+                        logger::log("Successfully logged in!");
                         true
                     }
                     Failure => {
-                        ConsoleService::error(&message);
+                        logger::error(&message);
                         false
                     }
                 }
