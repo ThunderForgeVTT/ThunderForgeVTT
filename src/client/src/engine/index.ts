@@ -21,8 +21,8 @@ export async function load() {
     const canvas = new Canvas();
     canvas.create(element);
 
-    const bunny = new Token("bunny", "/assets/gifs/bunny.gif");
-    canvas.addToken(bunny);
+    // const bunny = new Token("bunny", "/assets/gifs/bunny.gif");
+    // canvas.addToken(bunny);
 
     // // Listen for frame updates
     // app.ticker.add(() => {
