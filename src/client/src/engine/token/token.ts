@@ -17,7 +17,7 @@ export class Token {
       .add(this.name, this.resourceUrl)
       .load((loader: any, resources: any) => {
         const SpriteKlass = this.options.animated ? AnimatedSprite : Sprite;
-        EngineLogger.info({status: "Loading", name: this.name})
+        EngineLogger.info({ status: "Loading", name: this.name });
         this.sprite = new SpriteKlass(resources[this.name].texture);
         this.x = application.renderer.width / 2;
         this.y = application.renderer.height / 2;
@@ -26,8 +26,8 @@ export class Token {
         // this.sprite.anchor.x = 0.5;
         // this.sprite.anchor.y = 0.5;
         // Add the bunny to the scene we are building.
-        application.stage.addChild(this.sprite);
-        EngineLogger.info({status: "Loaded", name: this.name});
+        application.stage?.addChild(this.sprite);
+        EngineLogger.info({ status: "Loaded", name: this.name });
       });
   }
 
@@ -40,7 +40,7 @@ export class Token {
     }
   }
   get y() {
-      return this.sprite.y
+    return this.sprite.y;
   }
   set y(y: number) {
     if (this.loaded) {

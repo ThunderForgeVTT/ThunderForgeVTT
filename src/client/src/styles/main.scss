@@ -12,6 +12,13 @@ $primary-text: rgb(238, 238, 238);
 $color-failure: rgb(191, 19, 99);
 $color-success: rgb(80, 203, 147);
 
+:export {
+  primaryBackground: $primary-background;
+  primaryForeground: $primary-foreground;
+  primaryAccent: $primary-accent;
+  primaryText: $primary-text;
+}
+
 body {
   @apply w-full h-full;
   background-color: $primary-background;
