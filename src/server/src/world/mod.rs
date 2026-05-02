@@ -1,6 +1,5 @@
 use crate::state::AppState;
 use axum::{
-    middleware::{self, from_fn_with_state},
     Json, Router,
     extract::{Path, State},
     response::{
@@ -19,19 +18,6 @@ pub fn router() -> Router<AppState> {
         .route("/world/all", get(all_worlds))
         .route("/world/:id/events", get(world_events_by_id))
         .route("/world/:id/event", post(world_event_by_id))
-        .route_layer(from_fn_with_state(
-            AppState {
-                config: crate::config::Config::default(),
-                directories: crate::config::Directories::from(String::new()),
-                world_event_sender: tokio::sync::broadcast::channel(1).0,
-                key: tower_cookies::Key::generate(),
-                db_pool: {
-                    let manager = diesel::r2d2::ConnectionManager::<diesel::pg::PgConnection>::new("");
-                    diesel::r2d2::Pool::builder().max_size(1).build_unchecked(manager)
-                },
-            },
-            crate::auth_middleware::require_authenticated_user,
-        ))
 }
 
 async fn all_worlds() -> impl IntoResponse {

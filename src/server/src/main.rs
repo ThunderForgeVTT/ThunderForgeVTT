@@ -1,4 +1,5 @@
 mod auth;
+mod auth_middleware;
 mod config;
 mod db_types;
 mod errors;
@@ -19,6 +20,7 @@ use async_graphql_axum::{GraphQLProtocol, GraphQLRequest, GraphQLResponse, Graph
 use axum::{
     Extension, Router,
     extract::WebSocketUpgrade,
+    middleware::from_fn_with_state,
     response::{Html, IntoResponse, Response},
     routing::get,
 };
@@ -136,12 +138,17 @@ async fn main() {
         db_pool,
     };
 
+    let world_router = world::router().route_layer(from_fn_with_state(
+        app_state.clone(),
+        auth_middleware::require_authenticated_user,
+    ));
+
     let app = Router::new()
         .route("/health", get(|| async { "OK" }))
         .route("/graphql", get(graphql_playground).post(graphql_handler))
         .route("/ws", get(graphql_ws_handler))
         .merge(auth::router())
-        .merge(world::router())
+        .merge(world_router)
         .merge(serve::router(&directories))
         .fallback(errors::handler_404)
         .with_state(app_state)

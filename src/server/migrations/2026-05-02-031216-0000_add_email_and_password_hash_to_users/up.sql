@@ -1,0 +1,4 @@
+ALTER TABLE users ADD COLUMN email VARCHAR NOT NULL UNIQUE DEFAULT 'default@example.com';
+ALTER TABLE users RENAME COLUMN password TO password_hash;
+ALTER TABLE users ALTER COLUMN password_hash SET NOT NULL;
+ALTER TABLE users ALTER COLUMN email DROP DEFAULT;
