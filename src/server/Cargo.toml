@@ -32,6 +32,8 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 futures-util = "0.3.32"
 tokio-stream = { version = "0.1.18", features = ["sync"] }
 diesel = { version = "2.3.9", features = ["postgres", "r2d2"] }
+uuid = { version = "1.10.0", features = ["serde", "v4"] }
+chrono = { version = "0.4.38", features = ["serde"] }
 
 [dependencies.thunderforge_core]
 path = "../core"

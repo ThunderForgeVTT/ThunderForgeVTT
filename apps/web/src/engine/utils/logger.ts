@@ -1,8 +1,8 @@
-import * as Pino from "pino";
+import pino, { type Logger } from "pino";
 export class LoggerInstance {
   constructor(public source = "engine") {}
-  public create(): Pino.Logger {
-    return Pino({ browser: { asObject: true } }).child({ source: this.source });
+  public create(): Logger {
+    return pino({ browser: { asObject: true } }).child({ source: this.source });
   }
 }
 

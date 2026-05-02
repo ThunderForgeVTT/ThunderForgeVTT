@@ -1,5 +1,6 @@
 [tasks.build]
-install_crate = "wasm-pack"
+command = "cargo"
+args = ["build"]
 
 [tasks.format]
 install_crate = "rustfmt"

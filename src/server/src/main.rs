@@ -2,6 +2,7 @@ mod auth;
 mod config;
 mod errors;
 mod serve;
+mod schema; // Add this line
 mod state;
 mod utils;
 mod world;
@@ -17,6 +18,8 @@ use tower_cookies::{CookieManagerLayer, Key};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use diesel::r2d2::{ConnectionManager, Pool};
+use diesel::pg::PgConnection;
 
 #[derive(Parser, Debug)]
 #[command(name = "thunderforge")]
@@ -48,7 +51,7 @@ struct Cli {
 
 #[tokio::main]
 async fn main() {
-    dotenv::dotenv().ok();
+    dotenvy::dotenv().ok();
     let cli = Cli::parse();
 
     tracing_subscriber::registry()
@@ -74,11 +77,19 @@ async fn main() {
             .unwrap(),
     );
 
+    let database_url = std::env::var("DATABASE_URL")
+        .expect("DATABASE_URL must be set in .env");
+    let manager = ConnectionManager::<PgConnection>::new(database_url);
+    let db_pool = Pool::builder()
+        .build(manager)
+        .expect("Failed to create DB pool.");
+
     let app_state = AppState {
         config,
         directories: directories.clone(),
         world_event_sender,
         key,
+        db_pool,
     };
 
     let app = Router::new()

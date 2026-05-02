@@ -1,14 +1,17 @@
 {
   "compilerOptions": {
-    "noImplicitAny": true,
+    "target": "ES2022",
     "module": "ESNext",
-    "target": "ESNext",
+    "moduleResolution": "Bundler",
     "jsx": "react-jsx",
-    "sourceMap": true,
-    "allowJs": true,
-    "moduleResolution": "node",
-    "types": ["vite/client"],
-    "lib": ["es2017", "dom"],
-    "skipLibCheck": true
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "noImplicitAny": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "noEmit": true
   }
 }

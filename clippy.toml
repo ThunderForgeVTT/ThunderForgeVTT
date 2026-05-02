@@ -1,4 +1,0 @@
-standard-macro-braces = [
-    { name = "routes", brace = "(" },
-    { name = "html", brace = "(" }
-]

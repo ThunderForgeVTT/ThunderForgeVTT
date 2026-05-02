@@ -8,7 +8,7 @@ const SEPARATOR: &str = "~UwU~";
 pub struct Credentials {
     id: Option<String>,
     pub username: String,
-    password: String,
+    pub password: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
