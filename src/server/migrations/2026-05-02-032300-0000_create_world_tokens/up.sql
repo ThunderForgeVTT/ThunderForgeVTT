@@ -11,8 +11,9 @@ CREATE TABLE world_tokens (
     schema_version INTEGER NOT NULL DEFAULT 1,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    FOREIGN KEY (world_id) REFERENCES worlds(id) ON DELETE CASCADE
+    FOREIGN KEY (world_id) REFERENCES worlds (id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_world_tokens_world_id ON world_tokens(world_id);
-CREATE INDEX idx_world_tokens_created_at ON world_tokens(created_at);
+CREATE INDEX idx_world_tokens_world_id ON world_tokens (world_id);
+
+CREATE INDEX idx_world_tokens_created_at ON world_tokens (created_at);

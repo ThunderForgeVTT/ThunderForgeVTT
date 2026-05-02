@@ -1,16 +1,19 @@
 //! Adapters between Diesel models and Core shared models
-//! 
+//!
 //! This layer handles bidirectional conversion between:
 //! - Diesel ORM models (database-mapped)
 //! - Core shared models (serializable, engine-friendly)
-//! 
+//!
 //! Adapters ensure persistence layer details don't leak into business logic.
 
+use crate::models::{
+    OAuthProvider as DbOAuthProvider, User as DbUser, UserSession as DbUserSession,
+    World as DbWorld, WorldEvent as DbWorldEvent, WorldToken as DbWorldToken,
+};
 use thunderforge_core::models::{
-    auth::{User as CoreUser, UserSession as CoreUserSession, OAuthProvider as CoreOAuthProvider},
+    auth::{OAuthProvider as CoreOAuthProvider, User as CoreUser, UserSession as CoreUserSession},
     world::{World as CoreWorld, WorldEvent as CoreWorldEvent, WorldToken as CoreWorldToken},
 };
-use crate::models::{User as DbUser, UserSession as DbUserSession, OAuthProvider as DbOAuthProvider, World as DbWorld, WorldEvent as DbWorldEvent, WorldToken as DbWorldToken};
 
 // NOTE: WorldToken adapters - table created via migration 2026-05-02-032300-0000
 

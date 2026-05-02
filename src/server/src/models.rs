@@ -314,7 +314,6 @@ pub struct WorldEvent {
     pub schema_version: i32,
 }
 
-
 #[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
 #[diesel(table_name = world_tokens)]
 #[diesel(check_for_backend(diesel::pg::Pg))]

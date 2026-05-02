@@ -63,7 +63,7 @@ pub struct WorldEvent {
 
 impl WorldEvent {
     /// Migrate legacy event payloads to current schema
-    /// 
+    ///
     /// # Arguments
     /// * `raw_event` - Serialized JSON payload from database
     /// * `from_version` - Schema version of the payload
