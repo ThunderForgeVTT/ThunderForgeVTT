@@ -10,8 +10,8 @@ use chrono::Utc;
 use diesel::prelude::*;
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
-use tower_cookies::{Cookie, Cookies};
 use tower_cookies::cookie::SameSite;
+use tower_cookies::{Cookie, Cookies};
 
 #[derive(Clone, Debug)]
 pub struct AuthenticatedUser {
@@ -25,10 +25,7 @@ fn limiter_store() -> &'static Mutex<HashMap<String, Vec<i64>>> {
     AUTH_RATE_LIMITER.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-pub async fn rate_limit_auth_requests(
-    request: Request,
-    next: Next,
-) -> Response {
+pub async fn rate_limit_auth_requests(request: Request, next: Next) -> Response {
     let path = request.uri().path().to_string();
     if !path.starts_with("/authentication/") {
         return next.run(request).await;
@@ -39,7 +36,11 @@ pub async fn rate_limit_auth_requests(
 
     let now = Utc::now().timestamp();
     let window_seconds = 60;
-    let max_requests = if path.contains("/authentication/basic") { 15 } else { 40 };
+    let max_requests = if path.contains("/authentication/basic") {
+        15
+    } else {
+        40
+    };
 
     {
         let mut store = match limiter_store().lock() {
@@ -87,7 +88,8 @@ pub async fn require_csrf_for_session(
             .unwrap_or_default()
             .to_string();
 
-        if csrf_cookie.is_empty() || !secure_equals(csrf_cookie.as_bytes(), csrf_header.as_bytes()) {
+        if csrf_cookie.is_empty() || !secure_equals(csrf_cookie.as_bytes(), csrf_header.as_bytes())
+        {
             return StatusCode::FORBIDDEN.into_response();
         }
     }
@@ -115,10 +117,7 @@ fn ensure_csrf_cookie(cookies: &Cookies) {
 }
 
 fn client_ip(headers: &HeaderMap) -> String {
-    if let Some(forwarded) = headers
-        .get("x-forwarded-for")
-        .and_then(|v| v.to_str().ok())
-    {
+    if let Some(forwarded) = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
         if let Some(first) = forwarded.split(',').next() {
             let ip = first.trim();
             if !ip.is_empty() {
@@ -159,7 +158,9 @@ pub async fn require_authenticated_user(
     let session_id = match uuid::Uuid::parse_str(session_cookie.value()) {
         Ok(v) => v,
         Err(_) => {
-            cookies.private(&state.key).remove(Cookie::new("session", ""));
+            cookies
+                .private(&state.key)
+                .remove(Cookie::new("session", ""));
             return Err(StatusCode::UNAUTHORIZED);
         }
     };
@@ -183,7 +184,9 @@ pub async fn require_authenticated_user(
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let Some(session) = session else {
-        cookies.private(&state.key).remove(Cookie::new("session", ""));
+        cookies
+            .private(&state.key)
+            .remove(Cookie::new("session", ""));
         return Err(StatusCode::UNAUTHORIZED);
     };
 

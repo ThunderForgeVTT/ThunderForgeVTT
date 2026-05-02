@@ -1,5 +1,5 @@
-use crate::state::AppState;
 use crate::auth_middleware::AuthenticatedUser;
+use crate::state::AppState;
 use axum::{
     Json, Router,
     extract::{Extension, Path, State},

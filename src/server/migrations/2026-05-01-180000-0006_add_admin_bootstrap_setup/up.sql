@@ -7,13 +7,13 @@ CREATE TABLE admin_bootstrap_setup (
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-INSERT INTO admin_bootstrap_setup (id, created_at, updated_at)
-VALUES (1, NOW(), NOW())
-ON CONFLICT (id) DO NOTHING;
+INSERT INTO
+    admin_bootstrap_setup (id, created_at, updated_at)
+VALUES (1, NOW(), NOW()) ON CONFLICT (id) DO NOTHING;
 
 CREATE TABLE admin_bootstrap_oauth_sessions (
     id UUID PRIMARY KEY,
-    provider_id UUID NOT NULL REFERENCES oauth_providers(id) ON DELETE CASCADE,
+    provider_id UUID NOT NULL REFERENCES oauth_providers (id) ON DELETE CASCADE,
     oauth_provider_key VARCHAR NOT NULL,
     oauth_client_id VARCHAR NOT NULL,
     state VARCHAR NOT NULL UNIQUE,
@@ -26,5 +26,4 @@ CREATE TABLE admin_bootstrap_oauth_sessions (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_admin_bootstrap_oauth_sessions_state
-    ON admin_bootstrap_oauth_sessions (state);
+CREATE INDEX idx_admin_bootstrap_oauth_sessions_state ON admin_bootstrap_oauth_sessions (state);

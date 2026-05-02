@@ -1,21 +1,17 @@
-import React, { Suspense, lazy } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
-
-const LoginView = lazy(() => import("./views/LoginView"));
-const SignUpView = lazy(() => import("./views/SignUpView"));
-const CounterView = lazy(() => import("./views/CounterView"));
-const WorldView = lazy(() => import("./views/WorldView"));
+import React, { Suspense } from "react";
+import { useSetupStatus } from "./hooks/useSetupStatus";
+import AppRoutes from "./routes/AppRoutes";
 
 export default function App() {
+  const { setupStatus, isLoading, refreshSetupStatus } = useSetupStatus();
+
+  if (isLoading || !setupStatus) {
+    return <div className="app-loading">Checking setup status...</div>;
+  }
+
   return (
     <Suspense fallback={null}>
-      <Routes>
-        <Route path="/login" element={<LoginView />} />
-        <Route path="/signup" element={<SignUpView />} />
-        <Route path="/counter" element={<CounterView />} />
-        <Route path="/world/:id" element={<WorldView />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
+      <AppRoutes setupStatus={setupStatus} onSetupStatusRefresh={refreshSetupStatus} />
     </Suspense>
   );
 }

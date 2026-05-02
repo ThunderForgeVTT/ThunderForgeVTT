@@ -1,9 +1,8 @@
 use crate::models::{
-    AdminBootstrapOAuthSession, AdminBootstrapSetup, AuthSecuritySetting,
-    LoginTwoFactorChallenge, NewAdminBootstrapOAuthSession, NewAdminBootstrapSetup,
-    NewLoginTwoFactorChallenge, NewOAuthAuthorizationSession, NewOAuthLinkChallenge,
-    NewUserOAuthAccount, NewUserSession, OAuthAuthorizationSession, OAuthLinkChallenge,
-    OAuthProvider, UserOAuthAccount,
+    AdminBootstrapOAuthSession, AdminBootstrapSetup, AuthSecuritySetting, LoginTwoFactorChallenge,
+    NewAdminBootstrapOAuthSession, NewAdminBootstrapSetup, NewLoginTwoFactorChallenge,
+    NewOAuthAuthorizationSession, NewOAuthLinkChallenge, NewUserOAuthAccount, NewUserSession,
+    OAuthAuthorizationSession, OAuthLinkChallenge, OAuthProvider, UserOAuthAccount,
 };
 use crate::schema::{
     admin_bootstrap_oauth_sessions, admin_bootstrap_setup, auth_security_settings,
@@ -32,8 +31,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thunderforge_core::auth::Credentials;
 use totp_rs::{Algorithm, TOTP};
-use tower_cookies::{Cookie, Cookies};
 use tower_cookies::cookie::SameSite;
+use tower_cookies::{Cookie, Cookies};
 use url::Url;
 
 pub fn router() -> Router<AppState> {
@@ -185,6 +184,11 @@ struct AdminSetupOAuthStartRequest {
     redirect_uri: String,
     username: Option<String>,
     return_to: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct AdminSetupOAuthStartResponse {
+    authorization_url: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -402,7 +406,7 @@ async fn admin_setup_oauth_start(
     Path(provider_key): Path<String>,
     State(state): State<AppState>,
     Json(request): Json<AdminSetupOAuthStartRequest>,
-) -> Result<impl IntoResponse, (StatusCode, Json<OAuthResponse>)> {
+) -> Result<(StatusCode, Json<AdminSetupOAuthStartResponse>), (StatusCode, Json<OAuthResponse>)> {
     if let Err(resp) = ensure_admin_setup_code_valid(&state, &request.admin_code).await {
         return Err(resp);
     }
@@ -484,7 +488,12 @@ async fn admin_setup_oauth_start(
         .append_pair("code_challenge", &code_challenge)
         .append_pair("code_challenge_method", "S256");
 
-    Ok(Redirect::temporary(url.as_str()))
+    Ok((
+        StatusCode::OK,
+        Json(AdminSetupOAuthStartResponse {
+            authorization_url: url.to_string(),
+        }),
+    ))
 }
 
 async fn admin_setup_oauth_callback(
@@ -492,50 +501,34 @@ async fn admin_setup_oauth_callback(
     Query(query): Query<OAuthCallbackQuery>,
     cookies: Cookies,
     State(state): State<AppState>,
-) -> (StatusCode, Json<OAuthResponse>) {
+) -> axum::response::Response {
     if let Some(err) = query.error {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(OAuthResponse {
-                status: "oauth_error",
-                message: format!(
-                    "Provider returned error '{}': {}",
-                    err,
-                    query
-                        .error_description
-                        .unwrap_or_else(|| "unknown".to_string())
-                ),
-                challenge_id: None,
-                login_two_factor_challenge_id: None,
-            }),
+        let message = format!(
+            "Provider returned error '{}': {}",
+            err,
+            query
+                .error_description
+                .unwrap_or_else(|| "unknown".to_string())
         );
+        return bootstrap_error_redirect(&message);
     }
 
     let Some(code) = query.code else {
-        return error_response(
-            StatusCode::BAD_REQUEST,
-            "invalid_request",
-            "Missing 'code' query parameter",
-        );
+        return bootstrap_error_redirect("Missing 'code' query parameter");
     };
     let Some(state_token) = query.state else {
-        return error_response(
-            StatusCode::BAD_REQUEST,
-            "invalid_request",
-            "Missing 'state' query parameter",
-        );
+        return bootstrap_error_redirect("Missing 'state' query parameter");
     };
 
-    let auth_ctx = match load_and_consume_admin_bootstrap_oauth_session(
-        &state,
-        &provider_key,
-        &state_token,
-    )
-    .await
-    {
-        Ok(v) => v,
-        Err(resp) => return resp,
-    };
+    let auth_ctx =
+        match load_and_consume_admin_bootstrap_oauth_session(&state, &provider_key, &state_token)
+            .await
+        {
+            Ok(v) => v,
+            Err(_) => {
+                return bootstrap_error_redirect("Bootstrap OAuth state is invalid or expired");
+            }
+        };
 
     let token_response = match exchange_authorization_code_with_provider(
         &auth_ctx.provider,
@@ -547,11 +540,7 @@ async fn admin_setup_oauth_callback(
     {
         Ok(tokens) => tokens,
         Err(msg) => {
-            return error_response(
-                StatusCode::BAD_GATEWAY,
-                "token_exchange_failed",
-                msg.as_str(),
-            );
+            return bootstrap_error_redirect(msg.as_str());
         }
     };
 
@@ -559,7 +548,7 @@ async fn admin_setup_oauth_callback(
         match fetch_userinfo(userinfo_url, token_response.access_token.clone()).await {
             Ok(v) => Some(v),
             Err(msg) => {
-                return error_response(StatusCode::BAD_GATEWAY, "userinfo_failed", msg.as_str());
+                return bootstrap_error_redirect(msg.as_str());
             }
         }
     } else {
@@ -572,15 +561,14 @@ async fn admin_setup_oauth_callback(
         .or_else(|| extract_provider_user_id_from_token(&token_response));
 
     let Some(provider_user_id) = provider_user_id else {
-        return error_response(
-            StatusCode::BAD_GATEWAY,
-            "identity_missing",
+        return bootstrap_error_redirect(
             "Could not extract provider user id from provider response",
         );
     };
 
     let provider_email = userinfo.as_ref().and_then(extract_provider_email);
     let desired_username = auth_ctx.session.desired_username.clone();
+    let return_to = auth_ctx.session.return_to.clone();
     let user_id = match create_admin_user_from_oauth(
         &state,
         auth_ctx.provider.id,
@@ -592,15 +580,17 @@ async fn admin_setup_oauth_callback(
     .await
     {
         Ok(v) => v,
-        Err(resp) => return resp,
+        Err((_, payload)) => return bootstrap_error_redirect(payload.message.as_str()),
     };
 
     if let Err(msg) = issue_session_cookie(&state, &cookies, user_id).await {
-        return error_response(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "session_error",
-            msg.as_str(),
-        );
+        return bootstrap_error_redirect(msg.as_str());
+    }
+
+    if let Some(return_to) = return_to {
+        if let Ok(url) = Url::parse(&return_to) {
+            return Redirect::temporary(url.as_str()).into_response();
+        }
     }
 
     (
@@ -612,6 +602,15 @@ async fn admin_setup_oauth_callback(
             login_two_factor_challenge_id: None,
         }),
     )
+        .into_response()
+}
+
+fn bootstrap_error_redirect(message: &str) -> axum::response::Response {
+    let mut serializer = url::form_urlencoded::Serializer::new(String::new());
+    serializer.append_pair("oauth_error", message);
+    let query = serializer.finish();
+    let target = format!("/setup/callback?{query}");
+    Redirect::temporary(target.as_str()).into_response()
 }
 
 async fn basic_authentication(
@@ -1995,12 +1994,16 @@ async fn ensure_admin_setup_code_valid(
 
     match result {
         Ok(()) => Ok(()),
-        Err(msg) if msg == "Setup has already been completed" => {
-            Err(error_response(StatusCode::CONFLICT, "setup_complete", msg.as_str()))
-        }
-        Err(msg) if msg == "Invalid bootstrap admin code" => {
-            Err(error_response(StatusCode::UNAUTHORIZED, "invalid_admin_code", msg.as_str()))
-        }
+        Err(msg) if msg == "Setup has already been completed" => Err(error_response(
+            StatusCode::CONFLICT,
+            "setup_complete",
+            msg.as_str(),
+        )),
+        Err(msg) if msg == "Invalid bootstrap admin code" => Err(error_response(
+            StatusCode::UNAUTHORIZED,
+            "invalid_admin_code",
+            msg.as_str(),
+        )),
         Err(msg) => Err(error_response(
             StatusCode::BAD_REQUEST,
             "setup_unavailable",
@@ -2130,7 +2133,10 @@ async fn issue_session_cookie(
         created_at: now,
     };
 
-    let mut conn = state.db_pool.get().map_err(|_| "Failed to get DB connection")?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| "Failed to get DB connection")?;
     tokio::task::spawn_blocking(move || {
         // Revoke existing active sessions on new login to reduce session replay risk.
         diesel::update(
@@ -2361,16 +2367,13 @@ async fn verify_admin_request(
     };
 
     let now = Utc::now().naive_utc();
-    let mut conn = state
-        .db_pool
-        .get()
-        .map_err(|_| {
-            error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "session_error",
-                "Failed to get DB connection",
-            )
-        })?;
+    let mut conn = state.db_pool.get().map_err(|_| {
+        error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "session_error",
+            "Failed to get DB connection",
+        )
+    })?;
 
     let is_admin = tokio::task::spawn_blocking(move || {
         user_sessions::table
@@ -2436,13 +2439,14 @@ async fn create_admin_user_from_oauth(
         ));
     }
 
-    let encryption_key = encryption_key_from_config_secret(&state.config.secret).map_err(|msg| {
-        error_response(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "encryption_key_invalid",
-            msg.as_str(),
-        )
-    })?;
+    let encryption_key =
+        encryption_key_from_config_secret(&state.config.secret).map_err(|msg| {
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "encryption_key_invalid",
+                msg.as_str(),
+            )
+        })?;
 
     let access_token_encrypted = encrypt_secret(&token_response.access_token, &encryption_key)
         .map_err(|msg| {
@@ -2578,15 +2582,21 @@ async fn create_admin_user_from_oauth(
     })
     .and_then(|r| match r {
         Ok(user_id) => Ok(user_id),
-        Err(msg) if msg == "Setup has already been completed" => {
-            Err(error_response(StatusCode::CONFLICT, "setup_complete", msg.as_str()))
-        }
+        Err(msg) if msg == "Setup has already been completed" => Err(error_response(
+            StatusCode::CONFLICT,
+            "setup_complete",
+            msg.as_str(),
+        )),
         Err(msg)
             if msg == "Email is already in use"
                 || msg == "Username is already in use"
                 || msg == "OAuth account is already linked" =>
         {
-            Err(error_response(StatusCode::CONFLICT, "setup_conflict", msg.as_str()))
+            Err(error_response(
+                StatusCode::CONFLICT,
+                "setup_conflict",
+                msg.as_str(),
+            ))
         }
         Err(msg) => Err(error_response(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -2604,9 +2614,8 @@ fn mark_admin_setup_complete_sync(
         .set((
             admin_bootstrap_setup::setup_completed_at.eq(Some(now)),
             admin_bootstrap_setup::admin_code_hash.eq::<Option<String>>(None),
-            admin_bootstrap_setup::admin_code_generated_at.eq::<Option<chrono::NaiveDateTime>>(
-                None,
-            ),
+            admin_bootstrap_setup::admin_code_generated_at
+                .eq::<Option<chrono::NaiveDateTime>>(None),
             admin_bootstrap_setup::updated_at.eq(now),
         ))
         .execute(conn)
