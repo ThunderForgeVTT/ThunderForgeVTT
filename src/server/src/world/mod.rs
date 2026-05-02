@@ -8,7 +8,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use futures_util::stream::{self, Stream, StreamExt};
+use futures_util::stream::{Stream, StreamExt};
 use std::convert::Infallible;
 use thunderforge_core::events::WorldEvent;
 use tokio_stream::wrappers::BroadcastStream;
@@ -25,7 +25,7 @@ async fn all_worlds() -> impl IntoResponse {
 }
 
 async fn world_events_by_id(
-    Path(id): Path<String>,
+    Path(_id): Path<String>,
     State(state): State<AppState>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let rx = state.world_event_sender.subscribe();
@@ -41,7 +41,7 @@ async fn world_events_by_id(
 }
 
 async fn world_event_by_id(
-    Path(id): Path<String>,
+    Path(_id): Path<String>,
     State(state): State<AppState>,
     Json(payload): Json<WorldEvent>,
 ) {

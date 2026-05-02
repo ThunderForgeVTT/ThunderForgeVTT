@@ -1,9 +1,6 @@
-use crate::utils::HttpClient;
-
 #[cfg(feature = "client")]
 use wasm_bindgen::prelude::*;
 
-use reqwest_wasm::Response;
 use serde::{Deserialize, Serialize};
 
 pub enum WorldEvents {
@@ -21,7 +18,6 @@ impl WorldEvents {
 
 #[cfg_attr(feature = "client", wasm_bindgen)]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-#[cfg_attr(feature = "server", derive(rocket::form::FromForm))]
 pub struct TokenEvent {
     id: String,
     pub x: u32,
@@ -54,7 +50,6 @@ impl TokenEvent {
 
 #[cfg_attr(feature = "client", wasm_bindgen)]
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
-#[cfg_attr(feature = "server", derive(rocket::form::FromForm))]
 pub struct WorldEvent {
     pub event_code: u32,
     world_id: Option<String>,
@@ -66,7 +61,7 @@ pub struct WorldEvent {
 #[cfg_attr(feature = "client", wasm_bindgen)]
 impl WorldEvent {
     #[cfg_attr(feature = "client", wasm_bindgen(constructor))]
-    pub fn new(id: String) -> WorldEvent {
+    pub fn new(_id: String) -> WorldEvent {
         WorldEvent {
             event_code: 0,
             world_id: None,
