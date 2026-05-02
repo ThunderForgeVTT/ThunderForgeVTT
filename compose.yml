@@ -1,0 +1,16 @@
+services:
+  postgres:
+    container_name: thunderforge-postgres
+    image: postgres:18-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=thunderforge
+    ports:
+      - "5432:5432"
+    volumes:
+      - db:/var/lib/postgresql
+volumes:
+  db:
+    driver: local
