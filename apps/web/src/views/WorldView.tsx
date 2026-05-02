@@ -3,11 +3,14 @@ import { useParams } from "react-router-dom";
 
 import { WorldWhiteboard } from "../engine/tldraw/WorldWhiteboard";
 import { createWorldStore } from "../engine/world/store";
+import { createGraphQLWorldSyncTransport, startWorldSync } from "../engine/world/sync";
+import type { WorldSyncSession } from "../engine/world/sync/types";
 
 export default function WorldView() {
   const { id = "" } = useParams();
   const loaded = useRef(false);
   const canvasId = "engine-canvas";
+  const worldSyncSessionRef = useRef<WorldSyncSession | null>(null);
   const worldStoreRef = useRef(
     createWorldStore({
       worldId: id,
@@ -17,6 +20,36 @@ export default function WorldView() {
       ],
     })
   );
+
+  useEffect(() => {
+    if (!id) {
+      return;
+    }
+
+    let active = true;
+
+    const setupSync = async () => {
+      await worldSyncSessionRef.current?.stop();
+
+      if (!active) {
+        return;
+      }
+
+      worldSyncSessionRef.current = await startWorldSync({
+        worldId: id,
+        worldStore: worldStoreRef.current,
+        transport: createGraphQLWorldSyncTransport(),
+      });
+    };
+
+    void setupSync();
+
+    return () => {
+      active = false;
+      void worldSyncSessionRef.current?.stop();
+      worldSyncSessionRef.current = null;
+    };
+  }, [id]);
 
   useEffect(() => {
     if (loaded.current) {
