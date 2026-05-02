@@ -2,6 +2,7 @@ mod auth;
 mod config;
 mod db_types;
 mod errors;
+mod graphql;
 mod models;
 mod schema; // Add this line
 mod serve;
@@ -10,9 +11,17 @@ mod utils;
 mod world;
 
 use crate::config::{Config, Directories};
+use crate::graphql::{AppSchema, MutationRoot, QueryRoot};
 use crate::state::AppState;
-use axum::{Router, routing::get};
-use base64::{Engine as _, engine::general_purpose};
+use async_graphql::http::{playground_source, GraphQLPlaygroundConfig};
+use async_graphql::{EmptySubscription, Schema};
+use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
+use axum::{
+    response::{Html, IntoResponse},
+    routing::get,
+    Extension, Router,
+};
+use base64::{engine::general_purpose, Engine as _};
 use clap::Parser;
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
@@ -22,6 +31,24 @@ use tower_cookies::{CookieManagerLayer, Key};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+
+async fn graphql_playground() -> impl IntoResponse {
+    Html(playground_source(GraphQLPlaygroundConfig::new("/graphql")))
+}
+
+async fn graphql_handler(Extension(schema): Extension<AppSchema>, req: GraphQLRequest) -> GraphQLResponse {
+    schema.execute(req.into_inner()).await.into()
+}
+
+// async fn subscription_handler(
+//     ws: WebSocketUpgrade,
+//     Extension(schema): Extension<AppSchema>,
+// ) -> Response {
+//     ws.on_upgrade(GraphQLSubscription::with_data(schema.clone()))
+// }
+
+
 
 #[derive(Parser, Debug)]
 #[command(name = "thunderforge")]
@@ -82,6 +109,10 @@ async fn main() {
         .build(manager)
         .expect("Failed to create DB pool.");
 
+    let schema = Schema::build(QueryRoot::default(), MutationRoot::default(), EmptySubscription)
+        .data(db_pool.clone())
+        .finish();
+
     let app_state = AppState {
         config,
         directories: directories.clone(),
@@ -92,6 +123,8 @@ async fn main() {
 
     let app = Router::new()
         .route("/health", get(|| async { "OK" }))
+        .route("/graphql", get(graphql_playground).post(graphql_handler))
+        // .route("/ws", get(subscription_handler))
         .merge(auth::router())
         .merge(world::router())
         .merge(serve::router(&directories))
@@ -104,7 +137,8 @@ async fn main() {
                 .allow_headers(Any),
         )
         .layer(TraceLayer::new_for_http())
-        .layer(CookieManagerLayer::new());
+        .layer(CookieManagerLayer::new())
+        .layer(Extension(schema));
 
     let addr = SocketAddr::new(cli.ip_address.parse().unwrap(), cli.port);
     tracing::debug!("listening on {}", addr);

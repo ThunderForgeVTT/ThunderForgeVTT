@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = ["src/server", "src/core", "src/engine"]
+default-members = ["src/server", "src/core"]
 
 [profile.release]
 # less code to include into binary

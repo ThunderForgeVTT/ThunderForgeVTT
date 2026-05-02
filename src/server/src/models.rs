@@ -1,6 +1,19 @@
-use crate::schema::{policies, world_events, worlds};
+use crate::schema::{policies, users, world_events, worlds};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
+
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = users)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct User {
+    pub id: uuid::Uuid,
+    pub username: String,
+    pub password: String,
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
 
 #[derive(Queryable, Selectable, Insertable)]
 #[diesel(table_name = worlds)]
