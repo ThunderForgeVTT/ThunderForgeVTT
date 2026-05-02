@@ -8,12 +8,54 @@
 
 use thunderforge_core::models::{
     auth::{User as CoreUser, UserSession as CoreUserSession, OAuthProvider as CoreOAuthProvider},
-    world::{World as CoreWorld, WorldEvent as CoreWorldEvent},
+    world::{World as CoreWorld, WorldEvent as CoreWorldEvent, WorldToken as CoreWorldToken},
 };
-use crate::models::{User as DbUser, UserSession as DbUserSession, OAuthProvider as DbOAuthProvider, World as DbWorld, WorldEvent as DbWorldEvent};
+use crate::models::{User as DbUser, UserSession as DbUserSession, OAuthProvider as DbOAuthProvider, World as DbWorld, WorldEvent as DbWorldEvent, WorldToken as DbWorldToken};
 
-// NOTE: WorldToken adapters pending - table created via migration 2026-05-02-032300-0000
-// Will be uncommented after `diesel migration run` and schema.rs regeneration
+// NOTE: WorldToken adapters - table created via migration 2026-05-02-032300-0000
+
+/// Convert Diesel WorldToken to Core WorldToken
+impl From<DbWorldToken> for CoreWorldToken {
+    fn from(db: DbWorldToken) -> Self {
+        let mut token = CoreWorldToken {
+            id: db.id,
+            world_id: db.world_id,
+            x: db.x,
+            y: db.y,
+            z: db.z,
+            label: db.label,
+            health: db.health,
+            max_health: db.max_health,
+            created_at: db.created_at,
+            updated_at: db.updated_at,
+            schema_version: db.schema_version,
+            health_percentage: None,
+            is_alive: true,
+        };
+        // Calculate derived data on conversion
+        token.prepare_derived_data();
+        token
+    }
+}
+
+/// Convert Core WorldToken to Diesel WorldToken
+impl From<CoreWorldToken> for DbWorldToken {
+    fn from(core: CoreWorldToken) -> Self {
+        DbWorldToken {
+            id: core.id,
+            world_id: core.world_id,
+            x: core.x,
+            y: core.y,
+            z: core.z,
+            label: core.label,
+            health: core.health,
+            max_health: core.max_health,
+            schema_version: core.schema_version,
+            created_at: core.created_at,
+            updated_at: core.updated_at,
+        }
+    }
+}
 
 /// Convert Diesel User to Core User
 impl From<DbUser> for CoreUser {
@@ -147,8 +189,7 @@ impl From<DbWorldEvent> for CoreWorldEvent {
             event_code: db.event_code,
             token_event: db.token_event,
             created_at: db.created_at,
-            // NOTE: schema_version will be available after migration 2026-05-02-032400-0001
-            schema_version: 1, // Default version until column is added
+            schema_version: db.schema_version,
         }
     }
 }
@@ -162,7 +203,7 @@ impl From<CoreWorldEvent> for DbWorldEvent {
             event_code: core.event_code,
             token_event: core.token_event,
             created_at: core.created_at,
-            // schema_version not yet in database - will be added via migration
+            schema_version: core.schema_version,
         }
     }
 }

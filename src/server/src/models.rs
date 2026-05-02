@@ -1,7 +1,8 @@
 use crate::schema::{
     admin_bootstrap_oauth_sessions, admin_bootstrap_setup, auth_security_settings,
     login_two_factor_challenges, oauth_authorization_sessions, oauth_link_challenges,
-    oauth_providers, policies, user_oauth_accounts, user_sessions, users, world_events, worlds,
+    oauth_providers, policies, user_oauth_accounts, user_sessions, users, world_events,
+    world_tokens, worlds,
 };
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -301,7 +302,7 @@ pub struct Policy {
     pub updated_at: chrono::NaiveDateTime,
 }
 
-#[derive(Queryable, Selectable, Insertable, Debug)]
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
 #[diesel(table_name = world_events)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct WorldEvent {
@@ -310,42 +311,39 @@ pub struct WorldEvent {
     pub event_code: i32,
     pub token_event: Option<serde_json::Value>,
     pub created_at: chrono::NaiveDateTime,
-    // NOTE: schema_version will be added after migration 2026-05-02-032400-0001
-    // pub schema_version: i32,
+    pub schema_version: i32,
 }
 
-// NOTE: WorldToken model will be available after migration 2026-05-02-032300-0000
-// Once migration is run and schema.rs is regenerated, uncomment the models below:
-// 
-// #[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
-// #[diesel(table_name = world_tokens)]
-// #[diesel(check_for_backend(diesel::pg::Pg))]
-// pub struct WorldToken {
-//     pub id: String,
-//     pub world_id: uuid::Uuid,
-//     pub x: f32,
-//     pub y: f32,
-//     pub z: f32,
-//     pub label: Option<String>,
-//     pub health: Option<i32>,
-//     pub max_health: Option<i32>,
-//     pub schema_version: i32,
-//     pub created_at: chrono::NaiveDateTime,
-//     pub updated_at: chrono::NaiveDateTime,
-// }
-//
-// #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
-// #[diesel(table_name = world_tokens)]
-// pub struct NewWorldToken {
-//     pub id: String,
-//     pub world_id: uuid::Uuid,
-//     pub x: f32,
-//     pub y: f32,
-//     pub z: f32,
-//     pub label: Option<String>,
-//     pub health: Option<i32>,
-//     pub max_health: Option<i32>,
-//     pub schema_version: i32,
-//     pub created_at: chrono::NaiveDateTime,
-//     pub updated_at: chrono::NaiveDateTime,
-// }
+
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_tokens)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct WorldToken {
+    pub id: String,
+    pub world_id: uuid::Uuid,
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+    pub label: Option<String>,
+    pub health: Option<i32>,
+    pub max_health: Option<i32>,
+    pub schema_version: i32,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_tokens)]
+pub struct NewWorldToken {
+    pub id: String,
+    pub world_id: uuid::Uuid,
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+    pub label: Option<String>,
+    pub health: Option<i32>,
+    pub max_health: Option<i32>,
+    pub schema_version: i32,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}

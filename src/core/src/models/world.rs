@@ -19,9 +19,9 @@ pub struct WorldToken {
     // Base data (always transmitted)
     pub id: String,
     pub world_id: Uuid,
-    pub x: f32,
-    pub y: f32,
-    pub z: f32,
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
     pub label: Option<String>,
     pub health: Option<i32>,
     pub max_health: Option<i32>,

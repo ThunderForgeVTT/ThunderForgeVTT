@@ -1,7 +1,7 @@
 // @generated automatically by Diesel CLI.
 
 pub mod sql_types {
-    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+    #[derive(diesel::query_builder::QueryId, Clone, diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "PolicyEffect"))]
     pub struct PolicyEffect;
 }
@@ -78,10 +78,10 @@ diesel::table! {
         challenge_code -> Varchar,
         expires_at -> Timestamp,
         consumed_at -> Nullable<Timestamp>,
+        created_at -> Timestamp,
         pending_access_token_encrypted -> Nullable<Text>,
         pending_refresh_token_encrypted -> Nullable<Text>,
         pending_token_expires_at -> Nullable<Timestamp>,
-        created_at -> Timestamp,
     }
 }
 
@@ -93,13 +93,13 @@ diesel::table! {
         authorization_url -> Varchar,
         token_url -> Varchar,
         userinfo_url -> Nullable<Varchar>,
-        scopes -> Array<Text>,
-        oauth_client_id -> Nullable<Varchar>,
-        oauth_client_secret -> Nullable<Varchar>,
-        configured -> Bool,
+        scopes -> Array<Nullable<Text>>,
         enabled -> Bool,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        oauth_client_id -> Nullable<Varchar>,
+        oauth_client_secret -> Nullable<Varchar>,
+        configured -> Bool,
     }
 }
 
@@ -167,6 +167,23 @@ diesel::table! {
         event_code -> Int4,
         token_event -> Nullable<Jsonb>,
         created_at -> Timestamp,
+        schema_version -> Int4,
+    }
+}
+
+diesel::table! {
+    world_tokens (id) {
+        id -> Text,
+        world_id -> Uuid,
+        x -> Float8,
+        y -> Float8,
+        z -> Float8,
+        label -> Nullable<Text>,
+        health -> Nullable<Int4>,
+        max_health -> Nullable<Int4>,
+        schema_version -> Int4,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
     }
 }
 
@@ -188,6 +205,7 @@ diesel::joinable!(user_oauth_accounts -> oauth_providers (provider_id));
 diesel::joinable!(user_oauth_accounts -> users (user_id));
 diesel::joinable!(user_sessions -> users (user_id));
 diesel::joinable!(world_events -> worlds (world_id));
+diesel::joinable!(world_tokens -> worlds (world_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     admin_bootstrap_oauth_sessions,
@@ -202,5 +220,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     user_sessions,
     users,
     world_events,
+    world_tokens,
     worlds,
 );
