@@ -1,10 +1,68 @@
 use crate::schema::{
-    auth_security_settings, login_two_factor_challenges, oauth_authorization_sessions,
-    oauth_link_challenges, oauth_providers, policies, user_oauth_accounts, user_sessions, users,
-    world_events, worlds,
+    admin_bootstrap_oauth_sessions, admin_bootstrap_setup, auth_security_settings,
+    login_two_factor_challenges, oauth_authorization_sessions, oauth_link_challenges,
+    oauth_providers, policies, user_oauth_accounts, user_sessions, users, world_events, worlds,
 };
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
+
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = admin_bootstrap_setup)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct AdminBootstrapSetup {
+    pub id: i32,
+    pub setup_completed_at: Option<chrono::NaiveDateTime>,
+    pub admin_code_hash: Option<String>,
+    pub admin_code_generated_at: Option<chrono::NaiveDateTime>,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = admin_bootstrap_setup)]
+pub struct NewAdminBootstrapSetup {
+    pub id: i32,
+    pub setup_completed_at: Option<chrono::NaiveDateTime>,
+    pub admin_code_hash: Option<String>,
+    pub admin_code_generated_at: Option<chrono::NaiveDateTime>,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = admin_bootstrap_oauth_sessions)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct AdminBootstrapOAuthSession {
+    pub id: uuid::Uuid,
+    pub provider_id: uuid::Uuid,
+    pub oauth_provider_key: String,
+    pub oauth_client_id: String,
+    pub state: String,
+    pub code_verifier: String,
+    pub redirect_uri: String,
+    pub desired_username: Option<String>,
+    pub return_to: Option<String>,
+    pub expires_at: chrono::NaiveDateTime,
+    pub consumed_at: Option<chrono::NaiveDateTime>,
+    pub created_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = admin_bootstrap_oauth_sessions)]
+pub struct NewAdminBootstrapOAuthSession {
+    pub id: uuid::Uuid,
+    pub provider_id: uuid::Uuid,
+    pub oauth_provider_key: String,
+    pub oauth_client_id: String,
+    pub state: String,
+    pub code_verifier: String,
+    pub redirect_uri: String,
+    pub desired_username: Option<String>,
+    pub return_to: Option<String>,
+    pub expires_at: chrono::NaiveDateTime,
+    pub consumed_at: Option<chrono::NaiveDateTime>,
+    pub created_at: chrono::NaiveDateTime,
+}
 
 #[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
 #[diesel(table_name = users)]
@@ -13,6 +71,7 @@ pub struct User {
     pub id: uuid::Uuid,
     pub username: String,
     pub email: String,
+    pub is_admin: bool,
     pub password_hash: String,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,

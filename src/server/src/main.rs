@@ -20,7 +20,7 @@ use async_graphql_axum::{GraphQLProtocol, GraphQLRequest, GraphQLResponse, Graph
 use axum::{
     Extension, Router,
     extract::WebSocketUpgrade,
-    middleware::from_fn_with_state,
+    middleware::{from_fn, from_fn_with_state},
     response::{Html, IntoResponse, Response},
     routing::get,
 };
@@ -54,10 +54,7 @@ async fn graphql_ws_handler(
     ws.protocols(ALL_WEBSOCKET_PROTOCOLS)
         .on_upgrade(move |socket| async move {
             GraphQLWebSocket::new(socket, schema, protocol)
-                .on_connection_init(|value| {
-                    println!("Connection Params: {value:?}");
-                    async move { Ok(Data::default()) }
-                })
+                .on_connection_init(|_value| async move { Ok(Data::default()) })
                 .serve()
                 .await;
         })
@@ -138,20 +135,36 @@ async fn main() {
         db_pool,
     };
 
+    auth::ensure_admin_bootstrap_code(&app_state)
+        .await
+        .expect("Failed to initialize bootstrap admin setup state");
+
     let world_router = world::router().route_layer(from_fn_with_state(
         app_state.clone(),
         auth_middleware::require_authenticated_user,
     ));
 
-    let app = Router::new()
-        .route("/health", get(|| async { "OK" }))
+    let graphql_router = Router::new()
         .route("/graphql", get(graphql_playground).post(graphql_handler))
         .route("/ws", get(graphql_ws_handler))
+        .route_layer(from_fn_with_state(
+            app_state.clone(),
+            auth_middleware::require_authenticated_user,
+        ));
+
+    let app = Router::new()
+        .route("/health", get(|| async { "OK" }))
+        .merge(graphql_router)
         .merge(auth::router())
         .merge(world_router)
         .merge(serve::router(&directories))
         .fallback(errors::handler_404)
-        .with_state(app_state)
+        .with_state(app_state.clone())
+        .layer(from_fn(auth_middleware::rate_limit_auth_requests))
+        .layer(from_fn_with_state(
+            app_state.clone(),
+            auth_middleware::require_csrf_for_session,
+        ))
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)

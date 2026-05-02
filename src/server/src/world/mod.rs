@@ -1,7 +1,8 @@
 use crate::state::AppState;
+use crate::auth_middleware::AuthenticatedUser;
 use axum::{
     Json, Router,
-    extract::{Path, State},
+    extract::{Extension, Path, State},
     response::{
         IntoResponse,
         sse::{Event, Sse},
@@ -20,11 +21,13 @@ pub fn router() -> Router<AppState> {
         .route("/world/:id/event", post(world_event_by_id))
 }
 
-async fn all_worlds() -> impl IntoResponse {
+async fn all_worlds(Extension(auth_user): Extension<AuthenticatedUser>) -> impl IntoResponse {
+    let _ = (auth_user.user_id, auth_user.session_id);
     Json(vec![] as Vec<String>)
 }
 
 async fn world_events_by_id(
+    Extension(_auth_user): Extension<AuthenticatedUser>,
     Path(_id): Path<String>,
     State(state): State<AppState>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
@@ -41,6 +44,7 @@ async fn world_events_by_id(
 }
 
 async fn world_event_by_id(
+    Extension(_auth_user): Extension<AuthenticatedUser>,
     Path(_id): Path<String>,
     State(state): State<AppState>,
     Json(payload): Json<WorldEvent>,

@@ -105,6 +105,16 @@ diesel::table! {
 }
 
 diesel::table! {
+    user_sessions (id) {
+        id -> Uuid,
+        user_id -> Uuid,
+        expires_at -> Timestamp,
+        revoked_at -> Nullable<Timestamp>,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     users (id) {
         id -> Uuid,
         username -> Varchar,
@@ -146,6 +156,7 @@ diesel::joinable!(oauth_link_challenges -> oauth_providers (provider_id));
 diesel::joinable!(oauth_link_challenges -> users (user_id));
 diesel::joinable!(user_oauth_accounts -> oauth_providers (provider_id));
 diesel::joinable!(user_oauth_accounts -> users (user_id));
+diesel::joinable!(user_sessions -> users (user_id));
 diesel::joinable!(world_events -> worlds (world_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
@@ -156,6 +167,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     oauth_providers,
     policies,
     user_oauth_accounts,
+    user_sessions,
     users,
     world_events,
     worlds,

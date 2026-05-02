@@ -1,15 +1,19 @@
 use crate::models::{
-    AuthSecuritySetting, LoginTwoFactorChallenge, NewLoginTwoFactorChallenge,
-    NewOAuthAuthorizationSession, NewOAuthLinkChallenge, NewUserOAuthAccount,
-    OAuthAuthorizationSession, OAuthLinkChallenge, OAuthProvider, UserOAuthAccount,
+    AdminBootstrapOAuthSession, AdminBootstrapSetup, AuthSecuritySetting,
+    LoginTwoFactorChallenge, NewAdminBootstrapOAuthSession, NewAdminBootstrapSetup,
+    NewLoginTwoFactorChallenge, NewOAuthAuthorizationSession, NewOAuthLinkChallenge,
+    NewUserOAuthAccount, NewUserSession, OAuthAuthorizationSession, OAuthLinkChallenge,
+    OAuthProvider, UserOAuthAccount,
 };
 use crate::schema::{
-    auth_security_settings, login_two_factor_challenges, oauth_authorization_sessions,
-    oauth_link_challenges, oauth_providers, user_oauth_accounts, users,
+    admin_bootstrap_oauth_sessions, admin_bootstrap_setup, auth_security_settings,
+    login_two_factor_challenges, oauth_authorization_sessions, oauth_link_challenges,
+    oauth_providers, user_oauth_accounts, user_sessions, users,
 };
 use crate::state::AppState;
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
+use argon2::password_hash::{PasswordHasher, SaltString, rand_core::OsRng};
 use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use axum::extract::{Path, Query, State};
 use axum::http::HeaderMap;
@@ -29,10 +33,21 @@ use sha2::{Digest, Sha256};
 use thunderforge_core::auth::Credentials;
 use totp_rs::{Algorithm, TOTP};
 use tower_cookies::{Cookie, Cookies};
+use tower_cookies::cookie::SameSite;
 use url::Url;
 
 pub fn router() -> Router<AppState> {
     Router::new()
+        .route("/authentication/setup/status", get(setup_status))
+        .route("/authentication/setup/basic", post(admin_setup_basic))
+        .route(
+            "/authentication/setup/oauth/:provider_key/start",
+            post(admin_setup_oauth_start),
+        )
+        .route(
+            "/authentication/setup/oauth/:provider_key/callback",
+            get(admin_setup_oauth_callback),
+        )
         .route("/authentication/basic", post(basic_authentication))
         .route("/authentication/oauth/resolve", post(oauth_resolve))
         .route(
@@ -144,6 +159,35 @@ struct OAuthTokenExchangeRequest {
 }
 
 #[derive(Debug, Serialize)]
+struct SetupStatusResponse {
+    setup_required: bool,
+    setup_completed: bool,
+    configured_oauth_providers: Vec<SetupOAuthProvider>,
+}
+
+#[derive(Debug, Serialize)]
+struct SetupOAuthProvider {
+    provider_key: String,
+    display_name: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct AdminSetupBasicRequest {
+    admin_code: String,
+    username: String,
+    email: String,
+    password: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct AdminSetupOAuthStartRequest {
+    admin_code: String,
+    redirect_uri: String,
+    username: Option<String>,
+    return_to: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
 struct OAuthResponse {
     status: &'static str,
     message: String,
@@ -163,6 +207,11 @@ struct OAuthAuthorizationContext {
     session: OAuthAuthorizationSession,
 }
 
+struct AdminBootstrapOAuthContext {
+    provider: OAuthProvider,
+    session: AdminBootstrapOAuthSession,
+}
+
 enum ResolveOutcome {
     ProviderNotFound,
     LinkedUser(uuid::Uuid),
@@ -178,13 +227,399 @@ enum LinkConfirmOutcome {
     Linked(uuid::Uuid),
 }
 
+async fn setup_status(State(state): State<AppState>) -> (StatusCode, Json<SetupStatusResponse>) {
+    let mut conn = state.db_pool.get().expect("Failed to get DB connection");
+
+    let result = tokio::task::spawn_blocking(move || {
+        let admin_exists = users::table
+            .filter(users::is_admin.eq(true))
+            .select(users::id)
+            .first::<uuid::Uuid>(&mut conn)
+            .optional()?;
+
+        let setup = admin_bootstrap_setup::table
+            .filter(admin_bootstrap_setup::id.eq(1))
+            .select(AdminBootstrapSetup::as_select())
+            .first::<AdminBootstrapSetup>(&mut conn)
+            .optional()?;
+
+        let providers = oauth_providers::table
+            .filter(oauth_providers::enabled.eq(true))
+            .filter(oauth_providers::configured.eq(true))
+            .select((oauth_providers::provider_key, oauth_providers::display_name))
+            .load::<(String, String)>(&mut conn)?;
+
+        Ok::<_, diesel::result::Error>((admin_exists.is_some(), setup, providers))
+    })
+    .await
+    .expect("Failed to spawn blocking task")
+    .expect("Failed to query setup status");
+
+    let (admin_exists, setup, providers) = result;
+    let setup_completed = admin_exists || setup.and_then(|v| v.setup_completed_at).is_some();
+
+    (
+        StatusCode::OK,
+        Json(SetupStatusResponse {
+            setup_required: !setup_completed,
+            setup_completed,
+            configured_oauth_providers: providers
+                .into_iter()
+                .map(|(provider_key, display_name)| SetupOAuthProvider {
+                    provider_key,
+                    display_name,
+                })
+                .collect(),
+        }),
+    )
+}
+
+async fn admin_setup_basic(
+    cookies: Cookies,
+    State(state): State<AppState>,
+    Json(request): Json<AdminSetupBasicRequest>,
+) -> (StatusCode, Json<OAuthResponse>) {
+    if let Err(resp) = ensure_admin_setup_code_valid(&state, &request.admin_code).await {
+        return resp;
+    }
+
+    let username = request.username.trim().to_string();
+    let email = request.email.trim().to_lowercase();
+    if username.is_empty() || email.is_empty() || request.password.is_empty() {
+        return error_response(
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
+            "Username, email, and password are required",
+        );
+    }
+
+    let password_hash = match hash_password(&request.password) {
+        Ok(v) => v,
+        Err(msg) => {
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "password_hash_failed",
+                msg.as_str(),
+            );
+        }
+    };
+
+    let now = Utc::now().naive_utc();
+    let mut conn = state.db_pool.get().expect("Failed to get DB connection");
+    let result = tokio::task::spawn_blocking(move || -> Result<uuid::Uuid, String> {
+        let admin_exists = users::table
+            .filter(users::is_admin.eq(true))
+            .select(users::id)
+            .first::<uuid::Uuid>(&mut conn)
+            .optional()
+            .map_err(|_| "Failed to query existing admins".to_string())?;
+        if admin_exists.is_some() {
+            return Err("Setup has already been completed".to_string());
+        }
+
+        let username_exists = users::table
+            .filter(users::username.eq(&username))
+            .select(users::id)
+            .first::<uuid::Uuid>(&mut conn)
+            .optional()
+            .map_err(|_| "Failed to validate username".to_string())?;
+        if username_exists.is_some() {
+            return Err("Username is already in use".to_string());
+        }
+
+        let email_exists = users::table
+            .filter(users::email.eq(&email))
+            .select(users::id)
+            .first::<uuid::Uuid>(&mut conn)
+            .optional()
+            .map_err(|_| "Failed to validate email".to_string())?;
+        if email_exists.is_some() {
+            return Err("Email is already in use".to_string());
+        }
+
+        let user_id = uuid::Uuid::now_v7();
+        diesel::insert_into(users::table)
+            .values((
+                users::id.eq(user_id),
+                users::username.eq(username),
+                users::email.eq(email),
+                users::is_admin.eq(true),
+                users::password_hash.eq(password_hash),
+                users::created_at.eq(now),
+                users::updated_at.eq(now),
+                users::two_factor_enabled.eq(false),
+                users::two_factor_secret_encrypted.eq::<Option<String>>(None),
+                users::two_factor_confirmed_at.eq::<Option<chrono::NaiveDateTime>>(None),
+                users::two_factor_admin_required.eq(false),
+            ))
+            .execute(&mut conn)
+            .map_err(|_| "Failed to create admin user".to_string())?;
+
+        mark_admin_setup_complete_sync(&mut conn, now)?;
+
+        Ok(user_id)
+    })
+    .await
+    .expect("Failed to spawn blocking task");
+
+    let user_id = match result {
+        Ok(v) => v,
+        Err(msg) if msg == "Setup has already been completed" => {
+            return error_response(StatusCode::CONFLICT, "setup_complete", msg.as_str());
+        }
+        Err(msg) if msg == "Username is already in use" || msg == "Email is already in use" => {
+            return error_response(StatusCode::CONFLICT, "setup_conflict", msg.as_str());
+        }
+        Err(msg) => {
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "setup_error",
+                msg.as_str(),
+            );
+        }
+    };
+
+    if let Err(msg) = issue_session_cookie(&state, &cookies, user_id).await {
+        return error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "session_error",
+            msg.as_str(),
+        );
+    }
+
+    (
+        StatusCode::OK,
+        Json(OAuthResponse {
+            status: "success",
+            message: "Initial admin account created successfully".to_string(),
+            challenge_id: None,
+            login_two_factor_challenge_id: None,
+        }),
+    )
+}
+
+async fn admin_setup_oauth_start(
+    Path(provider_key): Path<String>,
+    State(state): State<AppState>,
+    Json(request): Json<AdminSetupOAuthStartRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<OAuthResponse>)> {
+    if let Err(resp) = ensure_admin_setup_code_valid(&state, &request.admin_code).await {
+        return Err(resp);
+    }
+
+    let mut conn = state.db_pool.get().expect("Failed to get DB connection");
+    let provider_key_clone = provider_key.clone();
+    let now = Utc::now().naive_utc();
+    let state_token = random_urlsafe(32);
+    let code_verifier = random_urlsafe(48);
+
+    let provider = tokio::task::spawn_blocking(move || {
+        oauth_providers::table
+            .filter(oauth_providers::provider_key.eq(provider_key_clone))
+            .filter(oauth_providers::enabled.eq(true))
+            .filter(oauth_providers::configured.eq(true))
+            .select(OAuthProvider::as_select())
+            .first::<OAuthProvider>(&mut conn)
+            .optional()
+    })
+    .await
+    .expect("Failed to spawn blocking task")
+    .expect("Failed to query DB")
+    .ok_or_else(|| {
+        error_response(
+            StatusCode::NOT_FOUND,
+            "provider_not_found",
+            "OAuth provider is not configured or disabled",
+        )
+    })?;
+
+    let Some(provider_client_id) = provider.oauth_client_id.clone() else {
+        return Err(error_response(
+            StatusCode::CONFLICT,
+            "provider_not_configured",
+            "Provider client id is not set",
+        ));
+    };
+
+    let session = NewAdminBootstrapOAuthSession {
+        id: uuid::Uuid::now_v7(),
+        provider_id: provider.id,
+        oauth_provider_key: provider_key.clone(),
+        oauth_client_id: provider_client_id.clone(),
+        state: state_token.clone(),
+        code_verifier: code_verifier.clone(),
+        redirect_uri: request.redirect_uri.clone(),
+        desired_username: request.username,
+        return_to: request.return_to,
+        expires_at: now + chrono::Duration::minutes(10),
+        consumed_at: None,
+        created_at: now,
+    };
+
+    let mut conn = state.db_pool.get().expect("Failed to get DB connection");
+    tokio::task::spawn_blocking(move || {
+        diesel::insert_into(admin_bootstrap_oauth_sessions::table)
+            .values(&session)
+            .execute(&mut conn)
+    })
+    .await
+    .expect("Failed to spawn blocking task")
+    .expect("Failed to persist bootstrap oauth session");
+
+    let code_challenge = code_challenge_from_verifier(&code_verifier);
+    let mut url = Url::parse(&provider.authorization_url).map_err(|_| {
+        error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "provider_misconfigured",
+            "Provider authorization URL is invalid",
+        )
+    })?;
+
+    url.query_pairs_mut()
+        .append_pair("response_type", "code")
+        .append_pair("client_id", &provider_client_id)
+        .append_pair("redirect_uri", &request.redirect_uri)
+        .append_pair("scope", &provider.scopes.join(" "))
+        .append_pair("state", &state_token)
+        .append_pair("code_challenge", &code_challenge)
+        .append_pair("code_challenge_method", "S256");
+
+    Ok(Redirect::temporary(url.as_str()))
+}
+
+async fn admin_setup_oauth_callback(
+    Path(provider_key): Path<String>,
+    Query(query): Query<OAuthCallbackQuery>,
+    cookies: Cookies,
+    State(state): State<AppState>,
+) -> (StatusCode, Json<OAuthResponse>) {
+    if let Some(err) = query.error {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(OAuthResponse {
+                status: "oauth_error",
+                message: format!(
+                    "Provider returned error '{}': {}",
+                    err,
+                    query
+                        .error_description
+                        .unwrap_or_else(|| "unknown".to_string())
+                ),
+                challenge_id: None,
+                login_two_factor_challenge_id: None,
+            }),
+        );
+    }
+
+    let Some(code) = query.code else {
+        return error_response(
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
+            "Missing 'code' query parameter",
+        );
+    };
+    let Some(state_token) = query.state else {
+        return error_response(
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
+            "Missing 'state' query parameter",
+        );
+    };
+
+    let auth_ctx = match load_and_consume_admin_bootstrap_oauth_session(
+        &state,
+        &provider_key,
+        &state_token,
+    )
+    .await
+    {
+        Ok(v) => v,
+        Err(resp) => return resp,
+    };
+
+    let token_response = match exchange_authorization_code_with_provider(
+        &auth_ctx.provider,
+        &auth_ctx.session.redirect_uri,
+        &auth_ctx.session.code_verifier,
+        &code,
+    )
+    .await
+    {
+        Ok(tokens) => tokens,
+        Err(msg) => {
+            return error_response(
+                StatusCode::BAD_GATEWAY,
+                "token_exchange_failed",
+                msg.as_str(),
+            );
+        }
+    };
+
+    let userinfo = if let Some(userinfo_url) = auth_ctx.provider.userinfo_url.clone() {
+        match fetch_userinfo(userinfo_url, token_response.access_token.clone()).await {
+            Ok(v) => Some(v),
+            Err(msg) => {
+                return error_response(StatusCode::BAD_GATEWAY, "userinfo_failed", msg.as_str());
+            }
+        }
+    } else {
+        None
+    };
+
+    let provider_user_id = userinfo
+        .as_ref()
+        .and_then(extract_provider_user_id)
+        .or_else(|| extract_provider_user_id_from_token(&token_response));
+
+    let Some(provider_user_id) = provider_user_id else {
+        return error_response(
+            StatusCode::BAD_GATEWAY,
+            "identity_missing",
+            "Could not extract provider user id from provider response",
+        );
+    };
+
+    let provider_email = userinfo.as_ref().and_then(extract_provider_email);
+    let desired_username = auth_ctx.session.desired_username.clone();
+    let user_id = match create_admin_user_from_oauth(
+        &state,
+        auth_ctx.provider.id,
+        provider_user_id,
+        provider_email,
+        desired_username,
+        token_response,
+    )
+    .await
+    {
+        Ok(v) => v,
+        Err(resp) => return resp,
+    };
+
+    if let Err(msg) = issue_session_cookie(&state, &cookies, user_id).await {
+        return error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "session_error",
+            msg.as_str(),
+        );
+    }
+
+    (
+        StatusCode::OK,
+        Json(OAuthResponse {
+            status: "success",
+            message: "Initial admin account created successfully via OAuth".to_string(),
+            challenge_id: None,
+            login_two_factor_challenge_id: None,
+        }),
+    )
+}
+
 async fn basic_authentication(
     cookies: Cookies,
     headers: HeaderMap,
     State(state): State<AppState>,
     credentials: String,
 ) -> (StatusCode, Json<OAuthResponse>) {
-    println!("{}", &credentials);
     let cred = Credentials::from(credentials);
 
     let mut conn = state.db_pool.get().expect("Failed to get DB connection");
@@ -232,9 +667,13 @@ async fn basic_authentication(
     let two_factor_required = global_required || two_factor_admin_required || two_factor_enabled;
 
     if !two_factor_required {
-        let mut cookie = Cookie::new("session", user_id.to_string());
-        cookie.set_path("/");
-        cookies.private(&state.key).add(cookie);
+        if let Err(msg) = issue_session_cookie(&state, &cookies, user_id).await {
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "session_error",
+                msg.as_str(),
+            );
+        }
         return (
             StatusCode::OK,
             Json(OAuthResponse {
@@ -275,9 +714,13 @@ async fn basic_authentication(
 
     match verify_two_factor_for_user(&state, user_id, &code).await {
         Ok(true) => {
-            let mut cookie = Cookie::new("session", user_id.to_string());
-            cookie.set_path("/");
-            cookies.private(&state.key).add(cookie);
+            if let Err(msg) = issue_session_cookie(&state, &cookies, user_id).await {
+                return error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "session_error",
+                    msg.as_str(),
+                );
+            }
             (
                 StatusCode::OK,
                 Json(OAuthResponse {
@@ -565,9 +1008,13 @@ async fn two_factor_verify(
             .expect("Failed to spawn blocking task")
             .expect("Failed to consume 2FA challenge");
 
-            let mut cookie = Cookie::new("session", user_id.to_string());
-            cookie.set_path("/");
-            cookies.private(&state.key).add(cookie);
+            if let Err(msg) = issue_session_cookie(&state, &cookies, user_id).await {
+                return error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "session_error",
+                    msg.as_str(),
+                );
+            }
 
             (
                 StatusCode::OK,
@@ -593,11 +1040,11 @@ async fn two_factor_verify(
 }
 
 async fn set_admin_two_factor_requirement(
-    headers: HeaderMap,
+    cookies: Cookies,
     State(state): State<AppState>,
     Json(request): Json<AdminTwoFactorRequirementRequest>,
 ) -> (StatusCode, Json<OAuthResponse>) {
-    if let Err(resp) = verify_admin_request(&headers) {
+    if let Err(resp) = verify_admin_request(&state, &cookies).await {
         return resp;
     }
 
@@ -636,12 +1083,12 @@ async fn set_admin_two_factor_requirement(
 }
 
 async fn set_admin_user_two_factor_required(
-    headers: HeaderMap,
+    cookies: Cookies,
     Path(user_id): Path<uuid::Uuid>,
     State(state): State<AppState>,
     Json(request): Json<AdminUserTwoFactorRequiredRequest>,
 ) -> (StatusCode, Json<OAuthResponse>) {
-    if let Err(resp) = verify_admin_request(&headers) {
+    if let Err(resp) = verify_admin_request(&state, &cookies).await {
         return resp;
     }
 
@@ -674,9 +1121,24 @@ async fn set_admin_user_two_factor_required(
     }
 }
 async fn logout(cookies: Cookies, State(state): State<AppState>) {
+    if let Some(session_cookie) = cookies.private(&state.key).get("session") {
+        if let Ok(session_id) = uuid::Uuid::parse_str(session_cookie.value()) {
+            let now = Utc::now().naive_utc();
+            if let Ok(mut conn) = state.db_pool.get() {
+                let _ = tokio::task::spawn_blocking(move || {
+                    diesel::update(user_sessions::table.filter(user_sessions::id.eq(session_id)))
+                        .set(user_sessions::revoked_at.eq(Some(now)))
+                        .execute(&mut conn)
+                })
+                .await;
+            }
+        }
+    }
+
     cookies
         .private(&state.key)
         .remove(Cookie::new("session", ""));
+    cookies.remove(Cookie::new("csrf_token", ""));
 }
 
 async fn oauth_start(
@@ -1067,9 +1529,13 @@ async fn resolve_oauth_login(
                 );
             }
 
-            let mut cookie = Cookie::new("session", user_id.to_string());
-            cookie.set_path("/");
-            cookies.private(&state.key).add(cookie);
+            if let Err(msg) = issue_session_cookie(&state, &cookies, user_id).await {
+                return error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "session_error",
+                    msg.as_str(),
+                );
+            }
 
             (
                 StatusCode::OK,
@@ -1220,9 +1686,13 @@ async fn oauth_link_confirm(
             "That OAuth identity is already linked to a different account",
         ),
         LinkConfirmOutcome::Linked(user_id) => {
-            let mut cookie = Cookie::new("session", user_id.to_string());
-            cookie.set_path("/");
-            cookies.private(&state.key).add(cookie);
+            if let Err(msg) = issue_session_cookie(&state, &cookies, user_id).await {
+                return error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "session_error",
+                    msg.as_str(),
+                );
+            }
 
             (
                 StatusCode::OK,
@@ -1303,23 +1773,38 @@ async fn exchange_authorization_code(
     auth_ctx: &OAuthAuthorizationContext,
     code: &str,
 ) -> Result<OAuthTokenResponse, String> {
-    let Some(client_id) = auth_ctx.provider.oauth_client_id.as_deref() else {
+    exchange_authorization_code_with_provider(
+        &auth_ctx.provider,
+        &auth_ctx.session.redirect_uri,
+        &auth_ctx.session.code_verifier,
+        code,
+    )
+    .await
+}
+
+async fn exchange_authorization_code_with_provider(
+    provider: &OAuthProvider,
+    redirect_uri: &str,
+    code_verifier: &str,
+    code: &str,
+) -> Result<OAuthTokenResponse, String> {
+    let Some(client_id) = provider.oauth_client_id.as_deref() else {
         return Err("Provider client id is not configured".to_string());
     };
-    let Some(client_secret) = auth_ctx.provider.oauth_client_secret.as_deref() else {
+    let Some(client_secret) = provider.oauth_client_secret.as_deref() else {
         return Err("Provider client secret is not configured".to_string());
     };
 
     let client = reqwest::Client::new();
     let response = client
-        .post(&auth_ctx.provider.token_url)
+        .post(&provider.token_url)
         .form(&[
             ("grant_type", "authorization_code"),
             ("code", code),
-            ("redirect_uri", &auth_ctx.session.redirect_uri),
+            ("redirect_uri", redirect_uri),
             ("client_id", client_id),
             ("client_secret", client_secret),
-            ("code_verifier", &auth_ctx.session.code_verifier),
+            ("code_verifier", code_verifier),
         ])
         .send()
         .await
@@ -1340,6 +1825,250 @@ async fn exchange_authorization_code(
         .json::<OAuthTokenResponse>()
         .await
         .map_err(|e| format!("Invalid token response format: {e}"))
+}
+
+pub async fn ensure_admin_bootstrap_code(state: &AppState) -> Result<(), String> {
+    let now = Utc::now().naive_utc();
+    let bootstrap_code = random_setup_code();
+    let bootstrap_code_hash = hash_password(&bootstrap_code)?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| "Failed to get DB connection".to_string())?;
+
+    let generated_code = tokio::task::spawn_blocking(move || -> Result<Option<String>, String> {
+        let admin_exists = users::table
+            .filter(users::is_admin.eq(true))
+            .select(users::id)
+            .first::<uuid::Uuid>(&mut conn)
+            .optional()
+            .map_err(|_| "Failed to query admin users".to_string())?;
+
+        let existing = admin_bootstrap_setup::table
+            .filter(admin_bootstrap_setup::id.eq(1))
+            .select(AdminBootstrapSetup::as_select())
+            .first::<AdminBootstrapSetup>(&mut conn)
+            .optional()
+            .map_err(|_| "Failed to load bootstrap setup state".to_string())?;
+
+        if admin_exists.is_some() {
+            if existing.is_some() {
+                mark_admin_setup_complete_sync(&mut conn, now)?;
+            } else {
+                let new_row = NewAdminBootstrapSetup {
+                    id: 1,
+                    setup_completed_at: Some(now),
+                    admin_code_hash: None,
+                    admin_code_generated_at: None,
+                    created_at: now,
+                    updated_at: now,
+                };
+                diesel::insert_into(admin_bootstrap_setup::table)
+                    .values(&new_row)
+                    .execute(&mut conn)
+                    .map_err(|_| "Failed to persist bootstrap setup state".to_string())?;
+            }
+
+            return Ok(None);
+        }
+
+        if existing.is_some() {
+            diesel::update(admin_bootstrap_setup::table.filter(admin_bootstrap_setup::id.eq(1)))
+                .set((
+                    admin_bootstrap_setup::setup_completed_at
+                        .eq::<Option<chrono::NaiveDateTime>>(None),
+                    admin_bootstrap_setup::admin_code_hash.eq(Some(bootstrap_code_hash)),
+                    admin_bootstrap_setup::admin_code_generated_at.eq(Some(now)),
+                    admin_bootstrap_setup::updated_at.eq(now),
+                ))
+                .execute(&mut conn)
+                .map_err(|_| "Failed to update bootstrap setup state".to_string())?;
+        } else {
+            let new_row = NewAdminBootstrapSetup {
+                id: 1,
+                setup_completed_at: None,
+                admin_code_hash: Some(bootstrap_code_hash),
+                admin_code_generated_at: Some(now),
+                created_at: now,
+                updated_at: now,
+            };
+            diesel::insert_into(admin_bootstrap_setup::table)
+                .values(&new_row)
+                .execute(&mut conn)
+                .map_err(|_| "Failed to persist bootstrap setup state".to_string())?;
+        }
+
+        Ok(Some(bootstrap_code))
+    })
+    .await
+    .map_err(|_| "Failed to spawn blocking task".to_string())??;
+
+    if let Some(bootstrap_code) = generated_code {
+        tracing::warn!(
+            "Initial admin setup is incomplete. Use bootstrap admin code: {}",
+            bootstrap_code
+        );
+    }
+
+    Ok(())
+}
+
+async fn ensure_admin_setup_code_valid(
+    state: &AppState,
+    admin_code: &str,
+) -> Result<(), (StatusCode, Json<OAuthResponse>)> {
+    let code = admin_code.trim().to_string();
+    if code.is_empty() {
+        return Err(error_response(
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
+            "Admin setup code is required",
+        ));
+    }
+
+    let mut conn = state.db_pool.get().map_err(|_| {
+        error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "setup_error",
+            "Failed to get DB connection",
+        )
+    })?;
+
+    let result = tokio::task::spawn_blocking(move || -> Result<Result<(), String>, String> {
+        let admin_exists = users::table
+            .filter(users::is_admin.eq(true))
+            .select(users::id)
+            .first::<uuid::Uuid>(&mut conn)
+            .optional()
+            .map_err(|_| "Failed to query admin users".to_string())?;
+        if admin_exists.is_some() {
+            return Ok(Err("Setup has already been completed".to_string()));
+        }
+
+        let setup = admin_bootstrap_setup::table
+            .filter(admin_bootstrap_setup::id.eq(1))
+            .select(AdminBootstrapSetup::as_select())
+            .first::<AdminBootstrapSetup>(&mut conn)
+            .optional()
+            .map_err(|_| "Failed to load bootstrap setup state".to_string())?;
+
+        let Some(setup) = setup else {
+            return Ok(Err("Setup state is not initialized yet".to_string()));
+        };
+
+        if setup.setup_completed_at.is_some() {
+            return Ok(Err("Setup has already been completed".to_string()));
+        }
+
+        let Some(admin_code_hash) = setup.admin_code_hash else {
+            return Ok(Err("Bootstrap admin code is not active".to_string()));
+        };
+
+        let parsed_hash = PasswordHash::new(&admin_code_hash)
+            .map_err(|_| "Stored bootstrap admin code hash is invalid".to_string())?;
+        if Argon2::default()
+            .verify_password(code.as_bytes(), &parsed_hash)
+            .is_err()
+        {
+            return Ok(Err("Invalid bootstrap admin code".to_string()));
+        }
+
+        Ok(Ok(()))
+    })
+    .await
+    .map_err(|_| {
+        error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "setup_error",
+            "Failed to spawn blocking task",
+        )
+    })
+    .and_then(|r| {
+        r.map_err(|msg| {
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "setup_error",
+                msg.as_str(),
+            )
+        })
+    })?;
+
+    match result {
+        Ok(()) => Ok(()),
+        Err(msg) if msg == "Setup has already been completed" => {
+            Err(error_response(StatusCode::CONFLICT, "setup_complete", msg.as_str()))
+        }
+        Err(msg) if msg == "Invalid bootstrap admin code" => {
+            Err(error_response(StatusCode::UNAUTHORIZED, "invalid_admin_code", msg.as_str()))
+        }
+        Err(msg) => Err(error_response(
+            StatusCode::BAD_REQUEST,
+            "setup_unavailable",
+            msg.as_str(),
+        )),
+    }
+}
+
+async fn load_and_consume_admin_bootstrap_oauth_session(
+    state: &AppState,
+    provider_key: &str,
+    state_token: &str,
+) -> Result<AdminBootstrapOAuthContext, (StatusCode, Json<OAuthResponse>)> {
+    let mut conn = state.db_pool.get().expect("Failed to get DB connection");
+    let provider_key = provider_key.to_string();
+    let state_token = state_token.to_string();
+    let now = Utc::now().naive_utc();
+
+    let result = tokio::task::spawn_blocking(
+        move || -> Result<Option<AdminBootstrapOAuthContext>, diesel::result::Error> {
+            let session = admin_bootstrap_oauth_sessions::table
+                .filter(admin_bootstrap_oauth_sessions::oauth_provider_key.eq(&provider_key))
+                .filter(admin_bootstrap_oauth_sessions::state.eq(&state_token))
+                .select(AdminBootstrapOAuthSession::as_select())
+                .first::<AdminBootstrapOAuthSession>(&mut conn)
+                .optional()?;
+
+            let Some(session) = session else {
+                return Ok(None);
+            };
+
+            if session.consumed_at.is_some() || session.expires_at <= now {
+                return Ok(None);
+            }
+
+            let provider = oauth_providers::table
+                .filter(oauth_providers::id.eq(session.provider_id))
+                .filter(oauth_providers::enabled.eq(true))
+                .filter(oauth_providers::configured.eq(true))
+                .select(OAuthProvider::as_select())
+                .first::<OAuthProvider>(&mut conn)
+                .optional()?;
+
+            let Some(provider) = provider else {
+                return Ok(None);
+            };
+
+            diesel::update(
+                admin_bootstrap_oauth_sessions::table
+                    .filter(admin_bootstrap_oauth_sessions::id.eq(session.id)),
+            )
+            .set(admin_bootstrap_oauth_sessions::consumed_at.eq(Some(now)))
+            .execute(&mut conn)?;
+
+            Ok(Some(AdminBootstrapOAuthContext { provider, session }))
+        },
+    )
+    .await
+    .expect("Failed to spawn blocking task")
+    .expect("Failed to query bootstrap oauth authorization session");
+
+    result.ok_or_else(|| {
+        error_response(
+            StatusCode::BAD_REQUEST,
+            "invalid_oauth_state",
+            "Bootstrap OAuth state is invalid, expired, or already consumed",
+        )
+    })
 }
 
 async fn fetch_userinfo(url: String, access_token: String) -> Result<serde_json::Value, String> {
@@ -1383,6 +2112,67 @@ fn extract_provider_email(userinfo: &serde_json::Value) -> Option<String> {
         .get("email")
         .and_then(|v| v.as_str())
         .map(|v| v.to_string())
+}
+
+async fn issue_session_cookie(
+    state: &AppState,
+    cookies: &Cookies,
+    user_id: uuid::Uuid,
+) -> Result<(), String> {
+    let now = Utc::now().naive_utc();
+    let session_id = uuid::Uuid::now_v7();
+    let session_ttl_days = 7;
+    let new_session = NewUserSession {
+        id: session_id,
+        user_id,
+        expires_at: now + chrono::Duration::days(session_ttl_days),
+        revoked_at: None,
+        created_at: now,
+    };
+
+    let mut conn = state.db_pool.get().map_err(|_| "Failed to get DB connection")?;
+    tokio::task::spawn_blocking(move || {
+        // Revoke existing active sessions on new login to reduce session replay risk.
+        diesel::update(
+            user_sessions::table
+                .filter(user_sessions::user_id.eq(user_id))
+                .filter(user_sessions::revoked_at.is_null()),
+        )
+        .set(user_sessions::revoked_at.eq(Some(now)))
+        .execute(&mut conn)?;
+
+        diesel::insert_into(user_sessions::table)
+            .values(&new_session)
+            .execute(&mut conn)
+    })
+    .await
+    .map_err(|_| "Failed to spawn blocking task".to_string())
+    .and_then(|r| r.map_err(|_| "Failed to persist user session".to_string()))?;
+
+    let mut cookie = Cookie::new("session", session_id.to_string());
+    cookie.set_path("/");
+    cookie.set_http_only(true);
+    cookie.set_same_site(SameSite::Lax);
+    if std::env::var("COOKIE_SECURE")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(!cfg!(debug_assertions))
+    {
+        cookie.set_secure(true);
+    }
+    cookies.private(&state.key).add(cookie);
+
+    let mut csrf_cookie = Cookie::new("csrf_token", uuid::Uuid::now_v7().to_string());
+    csrf_cookie.set_path("/");
+    csrf_cookie.set_http_only(false);
+    csrf_cookie.set_same_site(SameSite::Lax);
+    if std::env::var("COOKIE_SECURE")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(!cfg!(debug_assertions))
+    {
+        csrf_cookie.set_secure(true);
+    }
+    cookies.add(csrf_cookie);
+    Ok(())
 }
 
 async fn load_global_two_factor_requirement(state: &AppState) -> Result<bool, String> {
@@ -1550,31 +2340,321 @@ fn decrypt_secret(ciphertext: &str, key: &[u8; 32]) -> Result<String, String> {
     String::from_utf8(plaintext).map_err(|_| "Decrypted secret is not valid UTF-8".to_string())
 }
 
-fn verify_admin_request(headers: &HeaderMap) -> Result<(), (StatusCode, Json<OAuthResponse>)> {
-    let configured_secret = match std::env::var("ADMIN_SECRET") {
-        Ok(v) if !v.trim().is_empty() => v,
-        _ => {
-            return Err(error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "admin_secret_missing",
-                "ADMIN_SECRET is not configured",
-            ));
-        }
-    };
-
-    let provided = headers
-        .get("x-admin-secret")
-        .and_then(|h| h.to_str().ok())
-        .unwrap_or_default();
-
-    if provided != configured_secret {
+async fn verify_admin_request(
+    state: &AppState,
+    cookies: &Cookies,
+) -> Result<(), (StatusCode, Json<OAuthResponse>)> {
+    let Some(session_cookie) = cookies.private(&state.key).get("session") else {
         return Err(error_response(
             StatusCode::UNAUTHORIZED,
             "unauthorized",
-            "Missing or invalid admin secret",
+            "Authentication required",
+        ));
+    };
+
+    let Ok(session_id) = uuid::Uuid::parse_str(session_cookie.value()) else {
+        return Err(error_response(
+            StatusCode::UNAUTHORIZED,
+            "unauthorized",
+            "Invalid session",
+        ));
+    };
+
+    let now = Utc::now().naive_utc();
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| {
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "session_error",
+                "Failed to get DB connection",
+            )
+        })?;
+
+    let is_admin = tokio::task::spawn_blocking(move || {
+        user_sessions::table
+            .inner_join(users::table.on(users::id.eq(user_sessions::user_id)))
+            .filter(user_sessions::id.eq(session_id))
+            .filter(user_sessions::revoked_at.is_null())
+            .filter(user_sessions::expires_at.gt(now))
+            .select(users::is_admin)
+            .first::<bool>(&mut conn)
+            .optional()
+    })
+    .await
+    .map_err(|_| {
+        error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "session_error",
+            "Failed to verify admin session",
+        )
+    })
+    .and_then(|r| {
+        r.map_err(|_| {
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "session_error",
+                "Failed to verify admin session",
+            )
+        })
+    })?;
+
+    if is_admin != Some(true) {
+        return Err(error_response(
+            StatusCode::FORBIDDEN,
+            "forbidden",
+            "Admin privileges required",
         ));
     }
+
     Ok(())
+}
+
+async fn create_admin_user_from_oauth(
+    state: &AppState,
+    provider_id: uuid::Uuid,
+    provider_user_id: String,
+    provider_email: Option<String>,
+    desired_username: Option<String>,
+    token_response: OAuthTokenResponse,
+) -> Result<uuid::Uuid, (StatusCode, Json<OAuthResponse>)> {
+    let Some(provider_email) = provider_email.map(|v| v.trim().to_lowercase()) else {
+        return Err(error_response(
+            StatusCode::BAD_GATEWAY,
+            "email_missing",
+            "OAuth provider did not return an email address for bootstrap setup",
+        ));
+    };
+
+    let username = derive_bootstrap_username(desired_username, &provider_email);
+    if username.is_empty() {
+        return Err(error_response(
+            StatusCode::BAD_REQUEST,
+            "invalid_username",
+            "A valid username is required for bootstrap OAuth setup",
+        ));
+    }
+
+    let encryption_key = encryption_key_from_config_secret(&state.config.secret).map_err(|msg| {
+        error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "encryption_key_invalid",
+            msg.as_str(),
+        )
+    })?;
+
+    let access_token_encrypted = encrypt_secret(&token_response.access_token, &encryption_key)
+        .map_err(|msg| {
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "encryption_failed",
+                msg.as_str(),
+            )
+        })?;
+    let refresh_token_encrypted = token_response
+        .refresh_token
+        .as_deref()
+        .map(|value| encrypt_secret(value, &encryption_key))
+        .transpose()
+        .map_err(|msg| {
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "encryption_failed",
+                msg.as_str(),
+            )
+        })?;
+    let token_expires_at = token_response
+        .expires_in
+        .map(|seconds| Utc::now() + chrono::Duration::seconds(seconds))
+        .map(|v| v.naive_utc());
+    let random_password_hash = hash_password(&random_urlsafe(48)).map_err(|msg| {
+        error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "password_hash_failed",
+            msg.as_str(),
+        )
+    })?;
+
+    let now = Utc::now().naive_utc();
+    let mut conn = state.db_pool.get().map_err(|_| {
+        error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "setup_error",
+            "Failed to get DB connection",
+        )
+    })?;
+
+    tokio::task::spawn_blocking(move || -> Result<uuid::Uuid, String> {
+        let admin_exists = users::table
+            .filter(users::is_admin.eq(true))
+            .select(users::id)
+            .first::<uuid::Uuid>(&mut conn)
+            .optional()
+            .map_err(|_| "Failed to query existing admins".to_string())?;
+        if admin_exists.is_some() {
+            return Err("Setup has already been completed".to_string());
+        }
+
+        let existing_user_by_email = users::table
+            .filter(users::email.eq(&provider_email))
+            .select(users::id)
+            .first::<uuid::Uuid>(&mut conn)
+            .optional()
+            .map_err(|_| "Failed to validate provider email".to_string())?;
+        if existing_user_by_email.is_some() {
+            return Err("Email is already in use".to_string());
+        }
+
+        let existing_user_by_username = users::table
+            .filter(users::username.eq(&username))
+            .select(users::id)
+            .first::<uuid::Uuid>(&mut conn)
+            .optional()
+            .map_err(|_| "Failed to validate username".to_string())?;
+        if existing_user_by_username.is_some() {
+            return Err("Username is already in use".to_string());
+        }
+
+        let existing_link = user_oauth_accounts::table
+            .filter(user_oauth_accounts::provider_id.eq(provider_id))
+            .filter(user_oauth_accounts::provider_user_id.eq(&provider_user_id))
+            .select(UserOAuthAccount::as_select())
+            .first::<UserOAuthAccount>(&mut conn)
+            .optional()
+            .map_err(|_| "Failed to validate OAuth link".to_string())?;
+        if existing_link.is_some() {
+            return Err("OAuth account is already linked".to_string());
+        }
+
+        let user_id = uuid::Uuid::now_v7();
+        diesel::insert_into(users::table)
+            .values((
+                users::id.eq(user_id),
+                users::username.eq(username),
+                users::email.eq(provider_email.clone()),
+                users::is_admin.eq(true),
+                users::password_hash.eq(random_password_hash),
+                users::created_at.eq(now),
+                users::updated_at.eq(now),
+                users::two_factor_enabled.eq(false),
+                users::two_factor_secret_encrypted.eq::<Option<String>>(None),
+                users::two_factor_confirmed_at.eq::<Option<chrono::NaiveDateTime>>(None),
+                users::two_factor_admin_required.eq(false),
+            ))
+            .execute(&mut conn)
+            .map_err(|_| "Failed to create admin user".to_string())?;
+
+        let oauth_account = NewUserOAuthAccount {
+            id: uuid::Uuid::now_v7(),
+            user_id,
+            provider_id,
+            provider_user_id,
+            provider_email: Some(provider_email),
+            access_token_encrypted: Some(access_token_encrypted),
+            refresh_token_encrypted,
+            token_expires_at,
+            linked_at: now,
+            created_at: now,
+            updated_at: now,
+        };
+
+        diesel::insert_into(user_oauth_accounts::table)
+            .values(&oauth_account)
+            .execute(&mut conn)
+            .map_err(|_| "Failed to link OAuth account".to_string())?;
+
+        mark_admin_setup_complete_sync(&mut conn, now)?;
+
+        Ok(user_id)
+    })
+    .await
+    .map_err(|_| {
+        error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "setup_error",
+            "Failed to spawn blocking task",
+        )
+    })
+    .and_then(|r| match r {
+        Ok(user_id) => Ok(user_id),
+        Err(msg) if msg == "Setup has already been completed" => {
+            Err(error_response(StatusCode::CONFLICT, "setup_complete", msg.as_str()))
+        }
+        Err(msg)
+            if msg == "Email is already in use"
+                || msg == "Username is already in use"
+                || msg == "OAuth account is already linked" =>
+        {
+            Err(error_response(StatusCode::CONFLICT, "setup_conflict", msg.as_str()))
+        }
+        Err(msg) => Err(error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "setup_error",
+            msg.as_str(),
+        )),
+    })
+}
+
+fn mark_admin_setup_complete_sync(
+    conn: &mut diesel::PgConnection,
+    now: chrono::NaiveDateTime,
+) -> Result<(), String> {
+    diesel::update(admin_bootstrap_setup::table.filter(admin_bootstrap_setup::id.eq(1)))
+        .set((
+            admin_bootstrap_setup::setup_completed_at.eq(Some(now)),
+            admin_bootstrap_setup::admin_code_hash.eq::<Option<String>>(None),
+            admin_bootstrap_setup::admin_code_generated_at.eq::<Option<chrono::NaiveDateTime>>(
+                None,
+            ),
+            admin_bootstrap_setup::updated_at.eq(now),
+        ))
+        .execute(conn)
+        .map_err(|_| "Failed to update bootstrap setup state".to_string())?;
+
+    Ok(())
+}
+
+fn hash_password(value: &str) -> Result<String, String> {
+    let salt = SaltString::generate(&mut OsRng);
+    Argon2::default()
+        .hash_password(value.as_bytes(), &salt)
+        .map(|hash| hash.to_string())
+        .map_err(|e| format!("Failed to hash value: {e}"))
+}
+
+fn derive_bootstrap_username(desired_username: Option<String>, provider_email: &str) -> String {
+    let candidate = desired_username
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| {
+            provider_email
+                .split('@')
+                .next()
+                .unwrap_or("admin")
+                .trim()
+                .to_string()
+        });
+
+    candidate
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_' || *c == '.')
+        .collect::<String>()
+        .to_lowercase()
+}
+
+fn random_setup_code() -> String {
+    const CHARSET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let mut bytes = [0u8; 12];
+    let mut rng = rand::rng();
+    rng.fill(&mut bytes);
+
+    let token = bytes
+        .iter()
+        .map(|byte| CHARSET[*byte as usize % CHARSET.len()] as char)
+        .collect::<String>();
+
+    format!("{}-{}-{}", &token[0..4], &token[4..8], &token[8..12])
 }
 
 fn code_challenge_from_verifier(verifier: &str) -> String {

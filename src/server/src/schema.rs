@@ -7,6 +7,34 @@ pub mod sql_types {
 }
 
 diesel::table! {
+    admin_bootstrap_oauth_sessions (id) {
+        id -> Uuid,
+        provider_id -> Uuid,
+        oauth_provider_key -> Varchar,
+        oauth_client_id -> Varchar,
+        state -> Varchar,
+        code_verifier -> Varchar,
+        redirect_uri -> Varchar,
+        desired_username -> Nullable<Varchar>,
+        return_to -> Nullable<Varchar>,
+        expires_at -> Timestamp,
+        consumed_at -> Nullable<Timestamp>,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    admin_bootstrap_setup (id) {
+        id -> Int4,
+        setup_completed_at -> Nullable<Timestamp>,
+        admin_code_hash -> Nullable<Varchar>,
+        admin_code_generated_at -> Nullable<Timestamp>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     auth_security_settings (id) {
         id -> Int4,
         two_factor_required_for_all_users -> Bool,
@@ -89,16 +117,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    user_sessions (id) {
-        id -> Uuid,
-        user_id -> Uuid,
-        expires_at -> Timestamp,
-        revoked_at -> Nullable<Timestamp>,
-        created_at -> Timestamp,
-    }
-}
-
-diesel::table! {
     user_oauth_accounts (id) {
         id -> Uuid,
         user_id -> Uuid,
@@ -111,6 +129,16 @@ diesel::table! {
         linked_at -> Timestamp,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    user_sessions (id) {
+        id -> Uuid,
+        user_id -> Uuid,
+        expires_at -> Timestamp,
+        revoked_at -> Nullable<Timestamp>,
+        created_at -> Timestamp,
     }
 }
 
@@ -128,6 +156,7 @@ diesel::table! {
         two_factor_secret_encrypted -> Nullable<Text>,
         two_factor_confirmed_at -> Nullable<Timestamp>,
         two_factor_admin_required -> Bool,
+        is_admin -> Bool,
     }
 }
 
@@ -150,6 +179,7 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(admin_bootstrap_oauth_sessions -> oauth_providers (provider_id));
 diesel::joinable!(login_two_factor_challenges -> users (user_id));
 diesel::joinable!(oauth_authorization_sessions -> oauth_providers (provider_id));
 diesel::joinable!(oauth_link_challenges -> oauth_providers (provider_id));
@@ -160,6 +190,8 @@ diesel::joinable!(user_sessions -> users (user_id));
 diesel::joinable!(world_events -> worlds (world_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
+    admin_bootstrap_oauth_sessions,
+    admin_bootstrap_setup,
     auth_security_settings,
     login_two_factor_challenges,
     oauth_authorization_sessions,
