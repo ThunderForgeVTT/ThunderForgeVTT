@@ -1,3 +1,4 @@
+mod adapters;
 mod auth;
 mod auth_middleware;
 mod config;
