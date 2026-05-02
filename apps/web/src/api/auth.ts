@@ -21,7 +21,11 @@ interface SetupOAuthStartResponse {
   authorization_url: string;
 }
 
-function encodeCredentials(username: string, password: string, id = ""): string {
+function encodeCredentials(
+  username: string,
+  password: string,
+  id = ""
+): string {
   return btoa([id, username, password].join(SEPARATOR));
 }
 
@@ -48,7 +52,10 @@ export async function getSetupStatus(): Promise<SetupStatus> {
   return response.json() as Promise<SetupStatus>;
 }
 
-export async function basicLogin(username: string, password: string): Promise<string> {
+export async function basicLogin(
+  username: string,
+  password: string
+): Promise<string> {
   const response = await fetch(`${API_BASE}/authentication/basic`, {
     method: "POST",
     credentials: "same-origin",
@@ -58,7 +65,10 @@ export async function basicLogin(username: string, password: string): Promise<st
   return readAuthMessage(response);
 }
 
-export async function basicSignUp(username: string, password: string): Promise<string> {
+export async function basicSignUp(
+  username: string,
+  password: string
+): Promise<string> {
   // Server-side signup endpoint is not implemented yet; this preserves current behavior.
   return basicLogin(username, password);
 }
@@ -94,19 +104,22 @@ export async function startSetupOAuth(
   const redirectUri = `${window.location.origin}${API_BASE}/authentication/setup/oauth/${providerKey}/callback`;
   const returnTo = `${window.location.origin}/setup/callback?oauth=success`;
 
-  const response = await fetch(`${API_BASE}/authentication/setup/oauth/${providerKey}/start`, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      admin_code: adminCode,
-      redirect_uri: redirectUri,
-      username: username?.trim() ? username.trim() : undefined,
-      return_to: returnTo,
-    }),
-  });
+  const response = await fetch(
+    `${API_BASE}/authentication/setup/oauth/${providerKey}/start`,
+    {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        admin_code: adminCode,
+        redirect_uri: redirectUri,
+        username: username?.trim() ? username.trim() : undefined,
+        return_to: returnTo,
+      }),
+    }
+  );
 
   const contentType = response.headers.get("content-type") ?? "";
   if (!response.ok) {

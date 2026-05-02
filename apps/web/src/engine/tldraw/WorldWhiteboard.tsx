@@ -117,7 +117,9 @@ export function WorldWhiteboard({ worldId, worldStore }: WorldWhiteboardProps) {
       (entry: any) => {
         const changes = entry?.changes ?? {};
         const added = Object.values(changes.added ?? {});
-        const updated = Object.values(changes.updated ?? {}).map((value: any) => value[1] ?? value);
+        const updated = Object.values(changes.updated ?? {}).map(
+          (value: any) => value[1] ?? value
+        );
         const removed = Object.values(changes.removed ?? {});
 
         for (const record of [...added, ...updated]) {
@@ -137,7 +139,10 @@ export function WorldWhiteboard({ worldId, worldStore }: WorldWhiteboardProps) {
             continue;
           }
 
-          worldStore.dispatch({ type: "remove_token", tokenId: token.id }, "tldraw");
+          worldStore.dispatch(
+            { type: "remove_token", tokenId: token.id },
+            "tldraw"
+          );
         }
       },
       { source: "user", scope: "document" }
@@ -146,7 +151,10 @@ export function WorldWhiteboard({ worldId, worldStore }: WorldWhiteboardProps) {
 
   return (
     <div style={{ width: "100%", height: "100%" }} data-world-id={worldId}>
-      <Tldraw persistenceKey={`thunderforge-world-${worldId}`} onMount={handleMount} />
+      <Tldraw
+        persistenceKey={`thunderforge-world-${worldId}`}
+        onMount={handleMount}
+      />
     </div>
   );
 }

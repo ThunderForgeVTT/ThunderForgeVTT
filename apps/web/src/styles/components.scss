@@ -3,7 +3,7 @@
 input {
   @apply rounded p-1 pr-3 pl-3;
   border: gray solid 0.5px;
-  background-color: rgba($primary-foreground, .88);
+  background-color: rgba($primary-foreground, 0.88);
   &:focus {
     border: $primary-accent solid 0.5px;
   }

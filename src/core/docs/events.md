@@ -2,14 +2,13 @@
 
 ## World Events
 
-
 - Should have an event code
 - Should have world uuid
 - Should take optional parameter of Token Events.
 - Should take optional parameter of Scene Events.
 - Should take optional parameter of Effect Events.
-- Should take optional parameter of Audio Events. 
-  
+- Should take optional parameter of Audio Events.
+
 ## Token Events
 
 - Should contain positional updates
@@ -23,7 +22,7 @@
 - Should take uuid of scene
 - Should take string of scene name
 - Should take string of navigation name
-- Should have boolean of refresh 
+- Should have boolean of refresh
 - Should take u16 of light level
 
 - Should take optional parameter Grid Event

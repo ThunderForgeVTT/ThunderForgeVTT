@@ -54,9 +54,14 @@ export type WorldSyncSession = {
   stop: () => Promise<void>;
 };
 
-export type WorldStoreSyncEvent = WorldStoreEvent & { source: "sync" | WorldStoreEvent["source"] };
+export type WorldStoreSyncEvent = WorldStoreEvent & {
+  source: "sync" | WorldStoreEvent["source"];
+};
 
-export function tokenToDoc(worldId: string, token: WorldToken): DurableWorldTokenDoc {
+export function tokenToDoc(
+  worldId: string,
+  token: WorldToken
+): DurableWorldTokenDoc {
   return {
     id: token.id,
     worldId,

@@ -1,6 +1,5 @@
 # ThunderForge VTT Core
 
-
 ## Responsibilities
 
 - Persisting state
@@ -9,4 +8,3 @@
 - Character configuration
 - Monitoring event loops from Engine
 - Chat
-

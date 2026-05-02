@@ -3,7 +3,10 @@ import { useParams } from "react-router-dom";
 
 import { WorldWhiteboard } from "../engine/tldraw/WorldWhiteboard";
 import { createWorldStore } from "../engine/world/store";
-import { createGraphQLWorldSyncTransport, startWorldSync } from "../engine/world/sync";
+import {
+  createGraphQLWorldSyncTransport,
+  startWorldSync,
+} from "../engine/world/sync";
 import type { WorldSyncSession } from "../engine/world/sync/types";
 
 export default function WorldView() {
@@ -73,7 +76,9 @@ export default function WorldView() {
 
     worldStoreRef.current.dispatch({ type: "set_world", worldId: id }, "ui");
 
-    void import("../engine/bevy").then(({ setActiveWorld }) => setActiveWorld(id));
+    void import("../engine/bevy").then(({ setActiveWorld }) =>
+      setActiveWorld(id)
+    );
   }, [id]);
 
   return (
@@ -92,11 +97,24 @@ export default function WorldView() {
         <div style={{ position: "relative", width: "100%", height: "100%" }}>
           <canvas
             id={canvasId}
-            style={{ display: "block", width: "100%", height: "100%", borderRadius: "8px" }}
+            style={{
+              display: "block",
+              width: "100%",
+              height: "100%",
+              borderRadius: "8px",
+            }}
           />
         </div>
 
-        <div style={{ position: "relative", width: "100%", height: "100%", borderRadius: "8px", overflow: "hidden" }}>
+        <div
+          style={{
+            position: "relative",
+            width: "100%",
+            height: "100%",
+            borderRadius: "8px",
+            overflow: "hidden",
+          }}
+        >
           <WorldWhiteboard worldId={id} worldStore={worldStoreRef.current} />
         </div>
       </div>

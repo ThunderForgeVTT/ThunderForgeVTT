@@ -56,26 +56,42 @@ function worldEventPayload(kind: string, payload: unknown) {
 export function createGraphQLWorldSyncTransport(
   options: CreateGraphQLWorldSyncTransportOptions = {}
 ): WorldSyncTransport {
-  const graphqlEndpoint = options.graphqlEndpoint ?? import.meta.env.VITE_GRAPHQL_ENDPOINT ?? DEFAULT_GRAPHQL_ENDPOINT;
+  const graphqlEndpoint =
+    options.graphqlEndpoint ??
+    import.meta.env.VITE_GRAPHQL_ENDPOINT ??
+    DEFAULT_GRAPHQL_ENDPOINT;
   const worldEventPathTemplate =
     options.worldEventPathTemplate ??
     import.meta.env.VITE_WORLD_EVENT_PATH_TEMPLATE ??
     DEFAULT_WORLD_EVENT_PATH_TEMPLATE;
   const durableMutationName =
-    options.durableMutationName ?? import.meta.env.VITE_WORLD_SYNC_DURABLE_MUTATION ?? "syncWorldMutations";
+    options.durableMutationName ??
+    import.meta.env.VITE_WORLD_SYNC_DURABLE_MUTATION ??
+    "syncWorldMutations";
   const tokenDeltaMutationName =
-    options.tokenDeltaMutationName ?? import.meta.env.VITE_WORLD_SYNC_DELTA_MUTATION ?? "publishTokenDeltas";
+    options.tokenDeltaMutationName ??
+    import.meta.env.VITE_WORLD_SYNC_DELTA_MUTATION ??
+    "publishTokenDeltas";
 
   let activeWorldId: string | null = null;
 
-  async function fallbackDurable(worldId: string, mutations: DurableMutation[]) {
+  async function fallbackDurable(
+    worldId: string,
+    mutations: DurableMutation[]
+  ) {
     const path = resolveTemplate(worldEventPathTemplate, worldId);
-    await postJson(path, worldEventPayload("durable_world_mutations", { worldId, mutations }));
+    await postJson(
+      path,
+      worldEventPayload("durable_world_mutations", { worldId, mutations })
+    );
   }
 
   async function fallbackDeltas(worldId: string, deltas: TokenDelta[]) {
     const path = resolveTemplate(worldEventPathTemplate, worldId);
-    await postJson(path, worldEventPayload("token_deltas", { worldId, deltas }));
+    await postJson(
+      path,
+      worldEventPayload("token_deltas", { worldId, deltas })
+    );
   }
 
   return {
@@ -97,10 +113,14 @@ export function createGraphQLWorldSyncTransport(
       const query = `mutation ${durableMutationName}($worldId: String!, $mutations: JSON!) {\n  ${durableMutationName}(worldId: $worldId, mutations: $mutations)\n}`;
 
       try {
-        const response = await postGraphQL<GenericMutationResponse>(graphqlEndpoint, query, {
-          worldId: activeWorldId,
-          mutations,
-        });
+        const response = await postGraphQL<GenericMutationResponse>(
+          graphqlEndpoint,
+          query,
+          {
+            worldId: activeWorldId,
+            mutations,
+          }
+        );
 
         if (response.errors && response.errors.length > 0) {
           await fallbackDurable(activeWorldId, mutations);
@@ -118,10 +138,14 @@ export function createGraphQLWorldSyncTransport(
       const query = `mutation ${tokenDeltaMutationName}($worldId: String!, $deltas: JSON!) {\n  ${tokenDeltaMutationName}(worldId: $worldId, deltas: $deltas)\n}`;
 
       try {
-        const response = await postGraphQL<GenericMutationResponse>(graphqlEndpoint, query, {
-          worldId: activeWorldId,
-          deltas,
-        });
+        const response = await postGraphQL<GenericMutationResponse>(
+          graphqlEndpoint,
+          query,
+          {
+            worldId: activeWorldId,
+            deltas,
+          }
+        );
 
         if (response.errors && response.errors.length > 0) {
           await fallbackDeltas(activeWorldId, deltas);

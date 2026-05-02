@@ -11,7 +11,10 @@ export default function App() {
 
   return (
     <Suspense fallback={null}>
-      <AppRoutes setupStatus={setupStatus} onSetupStatusRefresh={refreshSetupStatus} />
+      <AppRoutes
+        setupStatus={setupStatus}
+        onSetupStatusRefresh={refreshSetupStatus}
+      />
     </Suspense>
   );
 }

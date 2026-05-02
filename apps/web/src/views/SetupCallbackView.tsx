@@ -5,14 +5,18 @@ interface SetupCallbackViewProps {
   onSetupComplete: () => Promise<void>;
 }
 
-export default function SetupCallbackView({ onSetupComplete }: SetupCallbackViewProps) {
+export default function SetupCallbackView({
+  onSetupComplete,
+}: SetupCallbackViewProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
     const oauthError = searchParams.get("oauth_error");
     if (oauthError) {
-      navigate(`/setup?oauth_error=${encodeURIComponent(oauthError)}`, { replace: true });
+      navigate(`/setup?oauth_error=${encodeURIComponent(oauthError)}`, {
+        replace: true,
+      });
       return;
     }
 

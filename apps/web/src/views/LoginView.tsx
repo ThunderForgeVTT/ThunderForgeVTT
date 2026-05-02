@@ -16,7 +16,11 @@ export default function LoginView() {
     <form onSubmit={onSubmit} className="card">
       <div>
         <label htmlFor="username">Username:</label>
-        <input id="username" value={username} onChange={(event) => setUsername(event.target.value)} />
+        <input
+          id="username"
+          value={username}
+          onChange={(event) => setUsername(event.target.value)}
+        />
       </div>
       <div>
         <label htmlFor="password">Password:</label>

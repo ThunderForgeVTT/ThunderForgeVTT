@@ -18,7 +18,6 @@
 > I hope you find this project useful once I am able to finally release a working version of it.
 > This message isnt a cry for money, stars, or anything. Its a note that this might take some time as I am only one individual and I wanted to thank you all for the patients.
 
-
 An open source virtual tabletop that is currently purely a concept.
 
 ## Current Objective
@@ -68,5 +67,3 @@ This simplified approach is designed to not be pretty for a version 0.0.1 and if
 ## Timelines
 
 This project is a larger project inspired by many great providers such as FoundryVTT, Roll20, and BattleMapp. The current initial release cannot be given a date becuase it takes time to create great software but rest assured this project is getting worked on daily.
-
-

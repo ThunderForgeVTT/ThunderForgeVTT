@@ -15,7 +15,10 @@ interface AppRoutesProps {
   onSetupStatusRefresh: () => Promise<SetupStatus>;
 }
 
-export default function AppRoutes({ setupStatus, onSetupStatusRefresh }: AppRoutesProps) {
+export default function AppRoutes({
+  setupStatus,
+  onSetupStatusRefresh,
+}: AppRoutesProps) {
   const setupRequired = setupStatus.setup_required;
 
   return (
@@ -25,7 +28,10 @@ export default function AppRoutes({ setupStatus, onSetupStatusRefresh }: AppRout
           path="/setup"
           element={
             setupRequired ? (
-              <SetupView setupStatus={setupStatus} onSetupComplete={onSetupStatusRefresh} />
+              <SetupView
+                setupStatus={setupStatus}
+                onSetupComplete={onSetupStatusRefresh}
+              />
             ) : (
               <Navigate to="/login" replace />
             )
@@ -41,12 +47,25 @@ export default function AppRoutes({ setupStatus, onSetupStatusRefresh }: AppRout
             )
           }
         />
-        <Route path="/login" element={setupRequired ? <Navigate to="/setup" replace /> : <LoginView />} />
-        <Route path="/signup" element={setupRequired ? <Navigate to="/setup" replace /> : <SignUpView />} />
+        <Route
+          path="/login"
+          element={
+            setupRequired ? <Navigate to="/setup" replace /> : <LoginView />
+          }
+        />
+        <Route
+          path="/signup"
+          element={
+            setupRequired ? <Navigate to="/setup" replace /> : <SignUpView />
+          }
+        />
         <Route path="/counter" element={<CounterView />} />
       </Route>
       <Route path="/world/:id" element={<WorldView />} />
-      <Route path="*" element={<Navigate to={setupRequired ? "/setup" : "/login"} replace />} />
+      <Route
+        path="*"
+        element={<Navigate to={setupRequired ? "/setup" : "/login"} replace />}
+      />
     </Routes>
   );
 }

@@ -28,7 +28,10 @@ export type RemoveTokenCommand = {
   tokenId: string;
 };
 
-export type WorldCommand = SetWorldCommand | UpsertTokenCommand | RemoveTokenCommand;
+export type WorldCommand =
+  | SetWorldCommand
+  | UpsertTokenCommand
+  | RemoveTokenCommand;
 
 export type WorldStoreEvent = {
   command: WorldCommand;

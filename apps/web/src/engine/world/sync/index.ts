@@ -1,7 +1,12 @@
 import { createTokenDeltaCoalescer } from "./coalescer";
 import { getWorldDatabase } from "./database";
 import { createGraphQLWorldSyncTransport } from "./transport";
-import type { DurableMutation, StartWorldSyncOptions, TokenDelta, WorldSyncSession } from "./types";
+import type {
+  DurableMutation,
+  StartWorldSyncOptions,
+  TokenDelta,
+  WorldSyncSession,
+} from "./types";
 import { createNoopWorldSyncTransport, tokenToDoc } from "./types";
 
 export { createNoopWorldSyncTransport } from "./types";
@@ -23,7 +28,9 @@ function toWorldTokenDocRecord(doc: unknown): Record<string, unknown> | null {
   return doc;
 }
 
-export async function startWorldSync(options: StartWorldSyncOptions): Promise<WorldSyncSession> {
+export async function startWorldSync(
+  options: StartWorldSyncOptions
+): Promise<WorldSyncSession> {
   const transport = options.transport ?? createNoopWorldSyncTransport();
   const flushIntervalMs = options.flushIntervalMs ?? 100;
   const maxDeltaBatchSize = options.maxDeltaBatchSize ?? 64;
@@ -34,13 +41,15 @@ export async function startWorldSync(options: StartWorldSyncOptions): Promise<Wo
   const tokenCollection = db.collections.world_tokens;
   const durableMutationsBuffer: DurableMutation[] = [];
 
-  const tokenDocs = await tokenCollection.find({
-    selector: {
-      worldId: {
-        $eq: options.worldId,
+  const tokenDocs = await tokenCollection
+    .find({
+      selector: {
+        worldId: {
+          $eq: options.worldId,
+        },
       },
-    },
-  }).exec();
+    })
+    .exec();
 
   for (const rawDoc of tokenDocs) {
     const doc = toWorldTokenDocRecord(rawDoc);
@@ -105,7 +114,11 @@ export async function startWorldSync(options: StartWorldSyncOptions): Promise<Wo
         .findOne(tokenId)
         .exec()
         .then((doc) => doc?.remove());
-      durableMutationsBuffer.push({ type: "remove_token", worldId: options.worldId, tokenId });
+      durableMutationsBuffer.push({
+        type: "remove_token",
+        worldId: options.worldId,
+        tokenId,
+      });
     }
   });
 
@@ -114,7 +127,10 @@ export async function startWorldSync(options: StartWorldSyncOptions): Promise<Wo
       await deltaCoalescer.flush();
 
       if (durableMutationsBuffer.length > 0) {
-        const mutations = durableMutationsBuffer.splice(0, durableMutationsBuffer.length);
+        const mutations = durableMutationsBuffer.splice(
+          0,
+          durableMutationsBuffer.length
+        );
         await transport.pushDurableMutations?.(mutations);
       }
     },
@@ -124,7 +140,10 @@ export async function startWorldSync(options: StartWorldSyncOptions): Promise<Wo
       await deltaCoalescer.stop();
 
       if (durableMutationsBuffer.length > 0) {
-        const mutations = durableMutationsBuffer.splice(0, durableMutationsBuffer.length);
+        const mutations = durableMutationsBuffer.splice(
+          0,
+          durableMutationsBuffer.length
+        );
         await transport.pushDurableMutations?.(mutations);
       }
 

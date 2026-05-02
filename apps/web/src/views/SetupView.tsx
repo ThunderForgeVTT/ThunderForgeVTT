@@ -7,7 +7,10 @@ interface SetupViewProps {
   onSetupComplete: () => Promise<void> | void;
 }
 
-export default function SetupView({ setupStatus, onSetupComplete }: SetupViewProps) {
+export default function SetupView({
+  setupStatus,
+  onSetupComplete,
+}: SetupViewProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [adminCode, setAdminCode] = useState("");
@@ -65,8 +68,9 @@ export default function SetupView({ setupStatus, onSetupComplete }: SetupViewPro
         <p className="setup-eyebrow">Initial bootstrap</p>
         <h1>Secure the first administrator account.</h1>
         <p className="setup-copy">
-          ThunderForge is in first-run mode. Enter the one-time admin code printed by the server,
-          then create the initial administrator with either local credentials or a configured OAuth provider.
+          ThunderForge is in first-run mode. Enter the one-time admin code
+          printed by the server, then create the initial administrator with
+          either local credentials or a configured OAuth provider.
         </p>
       </section>
 
@@ -116,14 +120,21 @@ export default function SetupView({ setupStatus, onSetupComplete }: SetupViewPro
             onChange={(event) => setPasswordConfirmation(event.target.value)}
           />
 
-          <button type="submit" className="btn btn-success" disabled={isSubmitting}>
+          <button
+            type="submit"
+            className="btn btn-success"
+            disabled={isSubmitting}
+          >
             {isSubmitting ? "Creating admin..." : "Create admin account"}
           </button>
         </form>
 
         <section className="card setup-card">
           <h2>OAuth bootstrap</h2>
-          <p>Start with a provider and create the initial admin account from that identity.</p>
+          <p>
+            Start with a provider and create the initial admin account from that
+            identity.
+          </p>
 
           <label htmlFor="setup-oauth-code">Bootstrap admin code</label>
           <input

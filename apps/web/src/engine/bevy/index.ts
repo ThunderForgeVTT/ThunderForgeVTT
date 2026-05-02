@@ -23,7 +23,9 @@ const state: EngineState = {
 async function getWasmModule() {
   if (!loadPromise) {
     loadPromise = (async () => {
-      const wasm = (await import("./pkg/thunderforge_engine")) as BevyWasmModule;
+      const wasm = (await import(
+        "./pkg/thunderforge_engine"
+      )) as BevyWasmModule;
       await wasm.default();
       return wasm;
     })();

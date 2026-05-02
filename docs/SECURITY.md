@@ -2,10 +2,10 @@
 
 ## Supported Versions
 
-| Version | Supported          |
-| ------- | ------------------ |
-| >  0.0.0-pre   | TBD |
-| <= 0.0.0-pre   | :x: |
+| Version      | Supported |
+| ------------ | --------- |
+| > 0.0.0-pre  | TBD       |
+| <= 0.0.0-pre | :x:       |
 
 ## Reporting a Vulnerability
 

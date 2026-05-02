@@ -9,9 +9,13 @@ let worldDbPromise: Promise<WorldDatabase> | null = null;
 
 export type WorldCollections = {
   world_tokens: {
-    find: (query?: unknown) => { exec: () => Promise<Array<Record<string, unknown>>> };
+    find: (query?: unknown) => {
+      exec: () => Promise<Array<Record<string, unknown>>>;
+    };
     upsert: (doc: Record<string, unknown>) => Promise<unknown>;
-    findOne: (id: string) => { exec: () => Promise<{ remove: () => Promise<unknown> } | null> };
+    findOne: (id: string) => {
+      exec: () => Promise<{ remove: () => Promise<unknown> } | null>;
+    };
   };
   world_snapshots: {
     upsert: (doc: Record<string, unknown>) => Promise<unknown>;

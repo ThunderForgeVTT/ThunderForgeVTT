@@ -8,7 +8,10 @@ export default function BaseLayout() {
   return (
     <div className="base-layout">
       <header className="base-layout__header">
-        <Link to={isSetupFlow ? "/setup" : "/login"} className="base-layout__brand">
+        <Link
+          to={isSetupFlow ? "/setup" : "/login"}
+          className="base-layout__brand"
+        >
           ThunderForge
         </Link>
       </header>

@@ -44,7 +44,11 @@ body {
   top: 0;
   z-index: 20;
   backdrop-filter: blur(8px);
-  background: linear-gradient(180deg, rgba($primary-foreground, 0.94), rgba($primary-foreground, 0.72));
+  background: linear-gradient(
+    180deg,
+    rgba($primary-foreground, 0.94),
+    rgba($primary-foreground, 0.72)
+  );
   border-bottom: 1px solid rgba($primary-accent, 0.2);
   padding: 0.75rem 1rem;
 }
@@ -70,9 +74,16 @@ body {
 
 .setup-shell {
   padding: 4rem 1.5rem;
-  background:
-    radial-gradient(circle at top left, rgba($primary-accent, 0.24), transparent 30%),
-    radial-gradient(circle at bottom right, rgba($color-success, 0.16), transparent 28%),
+  background: radial-gradient(
+      circle at top left,
+      rgba($primary-accent, 0.24),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at bottom right,
+      rgba($color-success, 0.16),
+      transparent 28%
+    ),
     linear-gradient(180deg, rgba(white, 0.02), rgba(white, 0));
 }
 

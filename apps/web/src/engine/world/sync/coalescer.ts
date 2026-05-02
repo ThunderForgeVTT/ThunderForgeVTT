@@ -12,7 +12,9 @@ export type TokenDeltaCoalescer = {
   stop: () => Promise<void>;
 };
 
-export function createTokenDeltaCoalescer(options: TokenDeltaCoalescerOptions): TokenDeltaCoalescer {
+export function createTokenDeltaCoalescer(
+  options: TokenDeltaCoalescerOptions
+): TokenDeltaCoalescer {
   const pendingByToken = new Map<string, TokenDelta>();
   let flushTimer: ReturnType<typeof setInterval> | null = null;
   let flushing = false;
@@ -25,7 +27,10 @@ export function createTokenDeltaCoalescer(options: TokenDeltaCoalescerOptions): 
     flushing = true;
 
     try {
-      const items = Array.from(pendingByToken.values()).slice(0, options.maxBatchSize);
+      const items = Array.from(pendingByToken.values()).slice(
+        0,
+        options.maxBatchSize
+      );
       for (const item of items) {
         pendingByToken.delete(item.tokenId);
       }
