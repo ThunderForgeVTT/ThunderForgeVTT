@@ -1,16 +1,19 @@
 {
   "compilerOptions": {
-    "outDir": "./data/client/",
     "noImplicitAny": true,
-    "module": "commonjs",
-    "target": "esnext",
-    "jsx": "react",
+    "module": "ESNext",
+    "target": "ESNext",
+    "jsx": "react-jsx",
     "sourceMap": true,
     "allowJs": true,
     "moduleResolution": "node",
+    "types": [
+      "vite/client"
+    ],
     "lib": [
       "es2017",
       "dom"
-    ]
+    ],
+    "skipLibCheck": true
   }
 }

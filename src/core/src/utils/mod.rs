@@ -28,37 +28,37 @@ impl HttpClient {
     }
     pub fn get(&self, url: &str) -> RequestBuilder {
         #[cfg(feature = "client")]
-        yew::services::ConsoleService::debug(&format!("[core.utils.HttpClient][GET]: {}", &url));
+        web_sys::console::debug_1(&format!("[core.utils.HttpClient][GET]: {}", &url).into());
 
         self.client.clone().get(&self.build_url(url))
     }
     pub fn post(&self, url: &str) -> RequestBuilder {
         #[cfg(feature = "client")]
-        yew::services::ConsoleService::debug(&format!("[core.utils.HttpClient][POST]: {}", &url));
+        web_sys::console::debug_1(&format!("[core.utils.HttpClient][POST]: {}", &url).into());
 
         self.client.clone().post(&self.build_url(url))
     }
     pub fn delete(&self, url: &str) -> RequestBuilder {
         #[cfg(feature = "client")]
-        yew::services::ConsoleService::debug(&format!("[core.utils.HttpClient][DELETE]: {}", &url));
+        web_sys::console::debug_1(&format!("[core.utils.HttpClient][DELETE]: {}", &url).into());
 
         self.client.clone().delete(&self.build_url(url))
     }
     pub fn put(&self, url: &str) -> RequestBuilder {
         #[cfg(feature = "client")]
-        yew::services::ConsoleService::debug(&format!("[core.utils.HttpClient][PUT]: {}", &url));
+        web_sys::console::debug_1(&format!("[core.utils.HttpClient][PUT]: {}", &url).into());
 
         self.client.clone().put(&self.build_url(url))
     }
     pub fn patch(&self, url: &str) -> RequestBuilder {
         #[cfg(feature = "client")]
-        yew::services::ConsoleService::debug(&format!("[core.utils.HttpClient][PATCH]: {}", &url));
+        web_sys::console::debug_1(&format!("[core.utils.HttpClient][PATCH]: {}", &url).into());
 
         self.client.clone().patch(&self.build_url(url))
     }
     pub fn head(&self, url: &str) -> RequestBuilder {
         #[cfg(feature = "client")]
-        yew::services::ConsoleService::debug(&format!("[core.utils.HttpClient][HEAD]: {}", &url));
+        web_sys::console::debug_1(&format!("[core.utils.HttpClient][HEAD]: {}", &url).into());
 
         self.client.clone().head(&self.build_url(url))
     }

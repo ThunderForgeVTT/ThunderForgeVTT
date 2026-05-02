@@ -1,7 +1,8 @@
+use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct OAuth2Config {
     pub(crate) id: String,
     pub(crate) secret: String,
@@ -10,12 +11,12 @@ pub struct OAuth2Config {
     pub(crate) scopes: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct SupportedAuthentication {
     pub(crate) oauth2: Option<Vec<OAuth2Config>>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Config {
     pub(crate) secret: String,
     pub(crate) data_path: String,
@@ -25,14 +26,14 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Config {
         Config {
-            secret: base64::encode("Change me to something complex, overall it should be unique and greater than 64 characters."),
+            secret: general_purpose::STANDARD.encode("Change me to something complex, overall it should be unique and greater than 64 characters."),
             data_path: std::env::current_dir().unwrap().as_path().join("data").to_str().unwrap().to_string(),
             authentication: None,
         }
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Directories {
     pub(crate) user_database: String,
     pub(crate) world_basedir: String,

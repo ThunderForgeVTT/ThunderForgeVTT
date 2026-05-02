@@ -77,7 +77,7 @@ impl Credentials {
                         .unwrap_or(reqwest_wasm::StatusCode::SEE_OTHER),
                     error.to_string()
                 );
-                yew::services::ConsoleService::error(&message);
+                web_sys::console::error_1(&message.into());
                 String::from("failure")
             }
         }

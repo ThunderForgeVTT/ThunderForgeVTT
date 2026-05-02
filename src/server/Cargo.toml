@@ -2,7 +2,7 @@
 name = "thunderforge"
 version = "0.1.0"
 authors = ["mbround18 <12646562+mbround18@users.noreply.github.com>"]
-edition = "2018"
+edition = "2024"
 repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
 license = "BSD 3-Clause License"
 
@@ -12,27 +12,25 @@ license = "BSD 3-Clause License"
 name = "thunderforge"
 
 [dependencies]
-tokio = "1"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.64"
-clap = "2"
-serde_derive = "1"
-websocket = "0.24"
-base64 = "0.13"
-include_dir = "0.6"
-dotenv = "0.15"
-rust-argon2 = "0.8"
-async-recursion = "0.3.2"
+tokio = { version = "1.52.1", features = ["full"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+clap = { version = "4.6.1", features = ["derive"] }
+serde_derive = "1.0.228"
+websocket = "0.27.1"
+base64 = "0.22.1"
+include_dir = "0.7.4"
+dotenv = "0.15.0"
+rust-argon2 = "3.0.0"
+async-recursion = "1.1.1"
+axum = "0.8.9"
+tower = "0.5.3"
+tower-http = { version = "0.6.8", features = ["fs", "trace", "cors"] }
+tower-cookies = { version = "0.11.0", features = ["private"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+futures-util = "0.3.32"
+tokio-stream = { version = "0.1.18", features = ["sync"] }
 
 [dependencies.thunderforge_core]
 path = "../core"
-features = ["server"]
-
-[dependencies.rocket]
-version = "0.5.0-rc.1"
-features = ["json", "default", "secrets"]
-
-[dependencies.rocket_contrib]
-version = "0.4.10"
-default-features = false
-features = ["serve"]

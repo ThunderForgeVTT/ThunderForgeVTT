@@ -10,13 +10,8 @@ Cargo.lock
 **/*.rs.bk
 
 foundry
-.yarn/*
-!.yarn/patches
-!.yarn/releases
-!.yarn/plugins
-!.yarn/sdks
-!.yarn/versions
-.pnp.*
+node_modules/
+.pnpm-store/
 
 .idea
 /dist/
