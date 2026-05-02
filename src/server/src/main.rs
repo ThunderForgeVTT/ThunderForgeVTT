@@ -11,17 +11,18 @@ mod utils;
 mod world;
 
 use crate::config::{Config, Directories};
-use crate::graphql::{AppSchema, MutationRoot, QueryRoot};
+use crate::graphql::{AppSchema, MutationRoot, QueryRoot, SubscriptionRoot}; // Added SubscriptionRoot
 use crate::state::AppState;
-use async_graphql::http::{playground_source, GraphQLPlaygroundConfig};
-use async_graphql::{EmptySubscription, Schema};
-use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
+use async_graphql::http::{ALL_WEBSOCKET_PROTOCOLS, GraphQLPlaygroundConfig, playground_source};
+use async_graphql::{Data, Schema}; // Added Data
+use async_graphql_axum::{GraphQLProtocol, GraphQLRequest, GraphQLResponse, GraphQLWebSocket}; // Added GraphQLWebSocket
 use axum::{
-    response::{Html, IntoResponse},
-    routing::get,
     Extension, Router,
+    extract::WebSocketUpgrade,
+    response::{Html, IntoResponse, Response},
+    routing::get,
 };
-use base64::{engine::general_purpose, Engine as _};
+use base64::{Engine as _, engine::general_purpose};
 use clap::Parser;
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
@@ -32,23 +33,33 @@ use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-
 async fn graphql_playground() -> impl IntoResponse {
     Html(playground_source(GraphQLPlaygroundConfig::new("/graphql")))
 }
 
-async fn graphql_handler(Extension(schema): Extension<AppSchema>, req: GraphQLRequest) -> GraphQLResponse {
+async fn graphql_handler(
+    Extension(schema): Extension<AppSchema>,
+    req: GraphQLRequest,
+) -> GraphQLResponse {
     schema.execute(req.into_inner()).await.into()
 }
 
-// async fn subscription_handler(
-//     ws: WebSocketUpgrade,
-//     Extension(schema): Extension<AppSchema>,
-// ) -> Response {
-//     ws.on_upgrade(GraphQLSubscription::with_data(schema.clone()))
-// }
-
-
+async fn graphql_ws_handler(
+    Extension(schema): Extension<AppSchema>, // Changed from State to Extension
+    protocol: GraphQLProtocol,
+    ws: WebSocketUpgrade,
+) -> Response {
+    ws.protocols(ALL_WEBSOCKET_PROTOCOLS)
+        .on_upgrade(move |socket| async move {
+            GraphQLWebSocket::new(socket, schema, protocol)
+                .on_connection_init(|value| {
+                    println!("Connection Params: {value:?}");
+                    async move { Ok(Data::default()) }
+                })
+                .serve()
+                .await;
+        })
+}
 
 #[derive(Parser, Debug)]
 #[command(name = "thunderforge")]
@@ -109,9 +120,13 @@ async fn main() {
         .build(manager)
         .expect("Failed to create DB pool.");
 
-    let schema = Schema::build(QueryRoot::default(), MutationRoot::default(), EmptySubscription)
-        .data(db_pool.clone())
-        .finish();
+    let schema = Schema::build(
+        QueryRoot::default(),
+        MutationRoot::default(),
+        SubscriptionRoot::default(),
+    )
+    .data(db_pool.clone())
+    .finish();
 
     let app_state = AppState {
         config,
@@ -124,7 +139,7 @@ async fn main() {
     let app = Router::new()
         .route("/health", get(|| async { "OK" }))
         .route("/graphql", get(graphql_playground).post(graphql_handler))
-        // .route("/ws", get(subscription_handler))
+        .route("/ws", get(graphql_ws_handler))
         .merge(auth::router())
         .merge(world::router())
         .merge(serve::router(&directories))

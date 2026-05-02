@@ -31,8 +31,13 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 futures-util = "0.3.32"
 tokio-stream = { version = "0.1.18", features = ["sync"] }
-async-graphql = { version = "7.0", features = ["chrono", "dataloader", "log", "uuid"] }
-async-graphql-axum = "7.0"
+async-graphql = { version = "7.2.1", features = [
+  "chrono",
+  "dataloader",
+  "log",
+  "uuid",
+] }
+async-graphql-axum = "7.2.1"
 diesel = { version = "2.3.9", features = [
   "postgres",
   "r2d2",
@@ -43,6 +48,18 @@ diesel = { version = "2.3.9", features = [
 chrono = { version = "0.4.44", features = ["serde"] }
 diesel-derive-enum = { version = "2.1.0", features = ["postgres"] }
 uuid = { version = "1.23.1", features = ["serde", "v7"] }
+reqwest = { version = "0.13.3", default-features = false, features = [
+  "form",
+  "json",
+  "rustls",
+] }
+rand = "0.10.1"
+sha2 = "0.11.0"
+url = "2.5.8"
+thiserror = "2.0.18"
+aes-gcm = "0.10.3"
+totp-rs = { version = "5.7.0", features = ["otpauth"] }
+data-encoding = "2.9.0"
 
 [dependencies.thunderforge_core]
 path = "../core"
