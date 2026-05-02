@@ -4,17 +4,14 @@
   "private": true,
   "main": "src/main.tsx",
   "scripts": {
-    "build": "vite build",
+    "build": "pnpm run build:engine && vite build",
+    "build:engine": "wasm-pack build ../../src/engine --target web --release --out-dir ./src/engine/bevy/pkg",
+    "dev:engine": "wasm-pack build ../../src/engine --target web --dev --out-dir ./src/engine/bevy/pkg",
     "generate": "pnpm run build",
-    "start:vite": "vite build --watch",
-    "dev": "vite"
+    "start:vite": "pnpm run build:engine && vite build --watch",
+    "dev": "pnpm run dev:engine && vite"
   },
   "devDependencies": {
-    "@pixi/mesh-extras": "6.1.2",
-    "@pixi/mixin-get-child-by-name": "6.1.2",
-    "@pixi/mixin-get-global-position": "6.1.2",
-    "@pixi/sprite-animated": "6.1.2",
-    "@types/lodash": "^4.14.172",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
@@ -27,26 +24,9 @@
     "vite-plugin-static-copy": "^1.0.6"
   },
   "dependencies": {
-    "@pixi/canvas-renderer": "6.1.2",
-    "@pixi/constants": "6.1.2",
-    "@pixi/core": "6.1.2",
-    "@pixi/display": "6.1.2",
-    "@pixi/graphics": "6.1.2",
-    "@pixi/layers": "^1.0.8",
-    "@pixi/math": "6.1.2",
-    "@pixi/mesh": "6.1.2",
-    "@pixi/runner": "6.1.2",
-    "@pixi/settings": "6.1.2",
-    "@pixi/sprite": "6.1.2",
-    "@pixi/ticker": "6.1.2",
-    "@pixi/tilemap": "^3.2.1",
-    "@pixi/utils": "6.1.2",
-    "lodash": "^4.17.21",
-    "pino": "^6.13.1",
-    "pixi-viewport": "4.32.0",
-    "pixi.js": "6.1.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.30.1"
+    "react-router-dom": "^6.30.1",
+    "tldraw": "^4.0.6"
   }
 }

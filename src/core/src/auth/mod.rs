@@ -33,34 +33,8 @@ impl Credentials {
         true
     }
 
-    #[cfg(feature = "client")]
-    pub async fn login(&self) -> String {
-        let body = reqwest_wasm::Body::from(self.to_string());
-        let client = crate::utils::HttpClient::new();
-        let request = client
-            .post("/api/v1/authentication/basic")
-            .body(body)
-            .send()
-            .await;
-        match request {
-            Ok(response) => response
-                .text()
-                .await
-                .unwrap_or_else(|_| String::from("error")),
-            Err(error) => {
-                let message = format!(
-                    "[{}]: An error has occurred!
-{}",
-                    error
-                        .status()
-                        .unwrap_or(reqwest_wasm::StatusCode::SEE_OTHER),
-                    error.to_string()
-                );
-                web_sys::console::error_1(&message.into());
-                String::from("failure")
-            }
-        }
-    }
+
+
 }
 
 impl From<String> for Credentials {

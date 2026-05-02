@@ -1,9 +1,22 @@
 import React, { useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 
+import { WorldWhiteboard } from "../engine/tldraw/WorldWhiteboard";
+import { createWorldStore } from "../engine/world/store";
+
 export default function WorldView() {
   const { id = "" } = useParams();
   const loaded = useRef(false);
+  const canvasId = "engine-canvas";
+  const worldStoreRef = useRef(
+    createWorldStore({
+      worldId: id,
+      initialTokens: [
+        { id: "player", x: 140, y: 140, z: 0, label: "Player" },
+        { id: "npc", x: 360, y: 220, z: 0, label: "NPC" },
+      ],
+    })
+  );
 
   useEffect(() => {
     if (loaded.current) {
@@ -12,8 +25,48 @@ export default function WorldView() {
 
     loaded.current = true;
 
-    void import("../engine").then(({ load }) => load());
-  }, []);
+    void import("../engine/bevy").then(({ bindWorldStore, mountEngine }) =>
+      Promise.all([
+        bindWorldStore(worldStoreRef.current),
+        mountEngine({ canvasSelector: `#${canvasId}`, worldId: id }),
+      ])
+    );
+  }, [canvasId, id]);
 
-  return <div id="engine" data-world-id={id}></div>;
+  useEffect(() => {
+    if (!id) {
+      return;
+    }
+
+    worldStoreRef.current.dispatch({ type: "set_world", worldId: id }, "ui");
+
+    void import("../engine/bevy").then(({ setActiveWorld }) => setActiveWorld(id));
+  }, [id]);
+
+  return (
+    <div data-world-id={id} style={{ width: "100vw", height: "100vh" }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1.2fr 1fr",
+          width: "100%",
+          height: "100%",
+          gap: "8px",
+          padding: "8px",
+          boxSizing: "border-box",
+        }}
+      >
+        <div style={{ position: "relative", width: "100%", height: "100%" }}>
+          <canvas
+            id={canvasId}
+            style={{ display: "block", width: "100%", height: "100%", borderRadius: "8px" }}
+          />
+        </div>
+
+        <div style={{ position: "relative", width: "100%", height: "100%", borderRadius: "8px", overflow: "hidden" }}>
+          <WorldWhiteboard worldId={id} worldStore={worldStoreRef.current} />
+        </div>
+      </div>
+    </div>
+  );
 }

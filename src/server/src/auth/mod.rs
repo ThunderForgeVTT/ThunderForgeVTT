@@ -1,5 +1,5 @@
 use crate::schema::users;
-use crate::state::{AppState, DbPool};
+use crate::state::AppState;
 use axum::{
     routing::post,
     Router,
@@ -8,6 +8,8 @@ use axum::extract::State;
 use diesel::prelude::*;
 use tower_cookies::{Cookies, Cookie};
 use thunderforge_core::auth::Credentials;
+
+use argon2::{Argon2, PasswordHash, PasswordVerifier};
 
 #[derive(Queryable, Selectable)]
 #[diesel(table_name = users)]
@@ -50,7 +52,8 @@ async fn basic_authentication(
 
     match user {
         Some(user) => {
-            if user.password == cred.password { // This should be a password hash check
+            let parsed_hash = PasswordHash::new(&user.password).expect("Invalid hash in db");
+            if Argon2::default().verify_password(cred.password.as_bytes(), &parsed_hash).is_ok() {
                 let mut cookie = Cookie::new("session", "123");
                 cookie.set_path("/");
                 cookies.private(&state.key).add(cookie);
@@ -65,6 +68,4 @@ async fn basic_authentication(
 
 async fn logout(cookies: Cookies, State(state): State<AppState>) {
     cookies.private(&state.key).remove(Cookie::new("session", ""));
-}
-te(&state.key).remove(Cookie::new("session", ""));
 }

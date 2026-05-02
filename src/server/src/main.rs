@@ -1,7 +1,9 @@
 mod auth;
 mod config;
+mod db_types;
 mod errors;
 mod serve;
+mod models;
 mod schema; // Add this line
 mod state;
 mod utils;
