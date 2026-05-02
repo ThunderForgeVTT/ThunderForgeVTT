@@ -2,26 +2,26 @@ mod auth;
 mod config;
 mod db_types;
 mod errors;
-mod serve;
 mod models;
 mod schema; // Add this line
+mod serve;
 mod state;
 mod utils;
 mod world;
 
 use crate::config::{Config, Directories};
 use crate::state::AppState;
-use axum::{routing::get, Router};
-use base64::{engine::general_purpose, Engine as _};
+use axum::{Router, routing::get};
+use base64::{Engine as _, engine::general_purpose};
 use clap::Parser;
+use diesel::pg::PgConnection;
+use diesel::r2d2::{ConnectionManager, Pool};
 use std::net::SocketAddr;
 use tokio::sync::broadcast;
 use tower_cookies::{CookieManagerLayer, Key};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use diesel::r2d2::{ConnectionManager, Pool};
-use diesel::pg::PgConnection;
 
 #[derive(Parser, Debug)]
 #[command(name = "thunderforge")]
@@ -34,13 +34,14 @@ struct Cli {
         help = "IP address to bind the server to"
     )]
     ip_address: String,
-    #[arg(short, long, default_value_t = 30000, help = "Port to bind the server to")]
-    port: u16,
     #[arg(
         short,
         long,
-        help = "Where do you want ThunderForgeVTT to store data?"
+        default_value_t = 30000,
+        help = "Port to bind the server to"
     )]
+    port: u16,
+    #[arg(short, long, help = "Where do you want ThunderForgeVTT to store data?")]
     data_path: Option<String>,
     #[arg(
         short,
@@ -73,14 +74,9 @@ async fn main() {
 
     let (world_event_sender, _) = broadcast::channel(1024);
 
-    let key = Key::from(
-        &general_purpose::STANDARD
-            .decode(&config.secret)
-            .unwrap(),
-    );
+    let key = Key::from(&general_purpose::STANDARD.decode(&config.secret).unwrap());
 
-    let database_url = std::env::var("DATABASE_URL")
-        .expect("DATABASE_URL must be set in .env");
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env");
     let manager = ConnectionManager::<PgConnection>::new(database_url);
     let db_pool = Pool::builder()
         .build(manager)

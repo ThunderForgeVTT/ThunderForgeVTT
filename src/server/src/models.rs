@@ -1,4 +1,4 @@
-use crate::schema::{policies, worlds, world_events};
+use crate::schema::{policies, world_events, worlds};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 

@@ -1,4 +1,4 @@
-use base64::{engine::general_purpose, Engine as _};
+use base64::{Engine as _, engine::general_purpose};
 use serde::{Deserialize, Serialize};
 use std::str::from_utf8;
 
@@ -32,9 +32,6 @@ impl Credentials {
     pub async fn authenticate(&self) -> bool {
         true
     }
-
-
-
 }
 
 impl From<String> for Credentials {

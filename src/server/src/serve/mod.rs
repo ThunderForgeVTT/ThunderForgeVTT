@@ -1,6 +1,6 @@
 use crate::config::Directories;
 use crate::state::AppState;
-use axum::{routing::get_service, Router};
+use axum::{Router, routing::get_service};
 use tower_http::services::ServeDir;
 
 pub fn router(directories: &Directories) -> Router<AppState> {

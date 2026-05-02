@@ -1,12 +1,12 @@
 use crate::state::AppState;
 use axum::{
+    Json, Router,
     extract::{Path, State},
     response::{
-        sse::{Event, Sse},
         IntoResponse,
+        sse::{Event, Sse},
     },
     routing::{get, post},
-    Json, Router,
 };
 use futures_util::stream::{Stream, StreamExt};
 use std::convert::Infallible;

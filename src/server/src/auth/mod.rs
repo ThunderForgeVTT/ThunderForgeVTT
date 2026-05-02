@@ -1,13 +1,10 @@
 use crate::schema::users;
 use crate::state::AppState;
-use axum::{
-    routing::post,
-    Router,
-};
 use axum::extract::State;
+use axum::{Router, routing::post};
 use diesel::prelude::*;
-use tower_cookies::{Cookies, Cookie};
 use thunderforge_core::auth::Credentials;
+use tower_cookies::{Cookie, Cookies};
 
 use argon2::{Argon2, PasswordHash, PasswordVerifier};
 
@@ -53,7 +50,10 @@ async fn basic_authentication(
     match user {
         Some(user) => {
             let parsed_hash = PasswordHash::new(&user.password).expect("Invalid hash in db");
-            if Argon2::default().verify_password(cred.password.as_bytes(), &parsed_hash).is_ok() {
+            if Argon2::default()
+                .verify_password(cred.password.as_bytes(), &parsed_hash)
+                .is_ok()
+            {
                 let mut cookie = Cookie::new("session", "123");
                 cookie.set_path("/");
                 cookies.private(&state.key).add(cookie);
@@ -67,5 +67,7 @@ async fn basic_authentication(
 }
 
 async fn logout(cookies: Cookies, State(state): State<AppState>) {
-    cookies.private(&state.key).remove(Cookie::new("session", ""));
+    cookies
+        .private(&state.key)
+        .remove(Cookie::new("session", ""));
 }

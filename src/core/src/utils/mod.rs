@@ -63,4 +63,3 @@
 //         self.client.clone().head(&self.build_url(url))
 //     }
 // }
-

@@ -6,10 +6,13 @@ type BevyWasmModule = {
   default: (moduleOrPath?: unknown) => Promise<unknown>;
   start: (canvasSelector: string) => void;
   apply_world_command?: (json: string) => void;
+  set_event_callback?: (callback: (json: string) => void) => void;
 };
 
 let loadPromise: Promise<BevyWasmModule> | null = null;
 let worldStoreUnsubscribe: (() => void) | null = null;
+let bevyCallbackRegistered = false;
+let boundWorldStore: WorldStore | null = null;
 
 const state: EngineState = {
   started: false,
@@ -43,6 +46,19 @@ export async function mountEngine(options: EngineMountOptions): Promise<void> {
 
 export async function bindWorldStore(worldStore: WorldStore): Promise<void> {
   const module = await getWasmModule();
+  boundWorldStore = worldStore;
+
+  if (!bevyCallbackRegistered && module.set_event_callback) {
+    module.set_event_callback((payload: string) => {
+      try {
+        const command = JSON.parse(payload) as WorldCommand;
+        boundWorldStore?.dispatch(command, "bevy");
+      } catch {
+        // Ignore malformed payloads from the wasm layer.
+      }
+    });
+    bevyCallbackRegistered = true;
+  }
 
   if (worldStoreUnsubscribe) {
     worldStoreUnsubscribe();
