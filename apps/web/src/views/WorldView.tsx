@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
-import { load } from "../engine";
 
 export default function WorldView() {
   const { id = "" } = useParams();
@@ -12,7 +11,8 @@ export default function WorldView() {
     }
 
     loaded.current = true;
-    void load();
+
+    void import("../engine").then(({ load }) => load());
   }, []);
 
   return <div id="engine" data-world-id={id}></div>;

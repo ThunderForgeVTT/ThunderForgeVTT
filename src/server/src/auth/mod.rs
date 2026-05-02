@@ -6,8 +6,6 @@ use axum::{
 };
 use axum::extract::State;
 use diesel::prelude::*;
-use diesel::r2d2::ConnectionManager;
-use diesel::PgConnection;
 use tower_cookies::{Cookies, Cookie};
 use thunderforge_core::auth::Credentials;
 
@@ -67,4 +65,6 @@ async fn basic_authentication(
 
 async fn logout(cookies: Cookies, State(state): State<AppState>) {
     cookies.private(&state.key).remove(Cookie::new("session", ""));
+}
+te(&state.key).remove(Cookie::new("session", ""));
 }
