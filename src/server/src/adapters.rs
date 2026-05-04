@@ -129,7 +129,7 @@ impl From<DbOAuthProvider> for CoreOAuthProvider {
             authorization_url: db.authorization_url,
             token_url: db.token_url,
             userinfo_url: db.userinfo_url,
-            scopes: db.scopes.into_iter().map(Some).collect(),
+            scopes: db.scopes,
             enabled: db.enabled,
             configured: db.configured,
             created_at: db.created_at,
@@ -148,7 +148,7 @@ impl From<CoreOAuthProvider> for DbOAuthProvider {
             authorization_url: core.authorization_url,
             token_url: core.token_url,
             userinfo_url: core.userinfo_url,
-            scopes: core.scopes.into_iter().flatten().collect(),
+            scopes: core.scopes,
             oauth_client_id: None,
             oauth_client_secret: None,
             enabled: core.enabled,
@@ -214,11 +214,11 @@ impl From<CoreWorldEvent> for DbWorldEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use uuid::Uuid;
+    use uuid::{Timestamp, Uuid};
 
     #[test]
     fn test_user_roundtrip() {
-        let user_id = Uuid::new_v7();
+        let user_id = Uuid::new_v7(Timestamp::now(uuid::NoContext));
         let db_user = DbUser {
             id: user_id,
             username: "testuser".to_string(),

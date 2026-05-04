@@ -1,0 +1,33 @@
+@use "styles/tokens" as tokens;
+
+.badge {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border-radius: tokens.$radius-sm;
+  border: 1px solid transparent;
+  font-size: 0.95rem;
+}
+
+.info {
+  background: rgba(tokens.$color-info, 0.12);
+  border-color: rgba(tokens.$color-info, 0.24);
+  color: tokens.$color-info;
+}
+
+.success {
+  background: rgba(tokens.$color-success, 0.12);
+  border-color: rgba(tokens.$color-success, 0.24);
+  color: tokens.$color-success;
+}
+
+.warning {
+  background: rgba(tokens.$color-warning, 0.12);
+  border-color: rgba(tokens.$color-warning, 0.24);
+  color: tokens.$color-warning;
+}
+
+.danger {
+  background: rgba(tokens.$color-danger, 0.12);
+  border-color: rgba(tokens.$color-danger, 0.24);
+  color: tokens.$color-danger;
+}

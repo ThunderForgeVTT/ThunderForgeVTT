@@ -1,6 +1,6 @@
-use async_graphql::{MergedObject, Schema, SimpleObject, Context, Subscription};
-use diesel::{r2d2::ConnectionManager, PgConnection, r2d2::Pool};
+use async_graphql::{Context, MergedObject, Schema, SimpleObject, Subscription};
 use diesel::prelude::*;
+use diesel::{PgConnection, r2d2::ConnectionManager, r2d2::Pool};
 use futures_util::Stream; // Import Stream
 use std::time::Duration; // Import Duration
 use tokio_stream::wrappers::IntervalStream; // Import IntervalStream
@@ -62,7 +62,9 @@ impl UserQuery {
     async fn me(&self, ctx: &Context<'_>) -> Option<GraphQLUser> {
         // This is a placeholder. Real authentication logic will go here.
         // For now, let's assume a user can be fetched from the DB
-        let pool = ctx.data::<Pool<ConnectionManager<PgConnection>>>().expect("Can't get DB pool");
+        let pool = ctx
+            .data::<Pool<ConnectionManager<PgConnection>>>()
+            .expect("Can't get DB pool");
         let mut conn = pool.get().expect("Can't get DB connection");
 
         // Example: Fetch the first user from the database
@@ -82,8 +84,14 @@ pub struct WorldMutation;
 #[async_graphql::Object]
 impl WorldMutation {
     /// Creates a new world for the user.
-    async fn create_world(&self, ctx: &Context<'_>, world_name: String) -> async_graphql::Result<GraphQLWorld> {
-        let pool = ctx.data::<Pool<ConnectionManager<PgConnection>>>().expect("Can't get DB pool");
+    async fn create_world(
+        &self,
+        ctx: &Context<'_>,
+        world_name: String,
+    ) -> async_graphql::Result<GraphQLWorld> {
+        let pool = ctx
+            .data::<Pool<ConnectionManager<PgConnection>>>()
+            .expect("Can't get DB pool");
         let mut conn = pool.get().expect("Can't get DB connection");
 
         let new_world = World {
@@ -109,10 +117,13 @@ impl SubscriptionRoot {
     /// Returns an incrementing number every second.
     async fn tick(&self) -> impl Stream<Item = i32> {
         let mut value = 0;
-        tokio_stream::StreamExt::map(IntervalStream::new(tokio::time::interval(Duration::from_secs(1))), move |_| {
-            value += 1;
-            value
-        })
+        tokio_stream::StreamExt::map(
+            IntervalStream::new(tokio::time::interval(Duration::from_secs(1))),
+            move |_| {
+                value += 1;
+                value
+            },
+        )
     }
 }
 

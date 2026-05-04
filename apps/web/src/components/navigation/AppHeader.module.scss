@@ -1,0 +1,66 @@
+@use "styles/tokens" as tokens;
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  backdrop-filter: blur(18px);
+  background: rgba(tokens.$color-background, 0.84);
+  border-bottom: 1px solid tokens.$color-border;
+}
+
+.inner {
+  width: min(tokens.$content-width, calc(100% - 2rem));
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 5rem;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.9rem;
+
+  span {
+    display: grid;
+    gap: 0.1rem;
+  }
+
+  strong {
+    font-size: 1rem;
+    letter-spacing: 0.02em;
+  }
+
+  small {
+    color: tokens.$color-text-muted;
+    font-size: 0.78rem;
+  }
+}
+
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.link {
+  padding: 0.65rem 0.9rem;
+  border-radius: tokens.$radius-sm;
+  color: tokens.$color-text-muted;
+  transition:
+    color tokens.$transition-base,
+    background-color tokens.$transition-base;
+
+  &:hover {
+    color: tokens.$color-text;
+    background: rgba(tokens.$color-background-elevated, 0.92);
+  }
+}
+
+.active {
+  color: tokens.$color-text;
+  background: rgba(tokens.$color-background-elevated, 0.92);
+}

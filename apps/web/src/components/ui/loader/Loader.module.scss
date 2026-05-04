@@ -1,0 +1,32 @@
+@use "styles/tokens" as tokens;
+
+.loader {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+  color: tokens.$color-text-muted;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.82rem;
+}
+
+.fullScreen {
+  min-height: 100vh;
+  width: 100%;
+}
+
+.spinner {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  border: 2px solid rgba(tokens.$color-accent, 0.24);
+  border-top-color: tokens.$color-accent;
+  animation: spin 700ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

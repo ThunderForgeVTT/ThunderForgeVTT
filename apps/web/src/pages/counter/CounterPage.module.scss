@@ -1,0 +1,65 @@
+@use "styles/tokens" as tokens;
+
+.shell {
+  display: grid;
+  gap: 2rem;
+}
+
+.hero {
+  display: grid;
+  gap: 0.75rem;
+
+  h1,
+  p {
+    margin: 0;
+  }
+
+  p {
+    max-width: 48rem;
+    color: tokens.$color-text-muted;
+  }
+}
+
+.stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.worldLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.9rem;
+  padding: 0.85rem 1.15rem;
+  border-radius: tokens.$radius-sm;
+  background: linear-gradient(135deg, tokens.$color-accent, tokens.$color-accent-strong);
+  color: #031119;
+  font-weight: 700;
+}
+
+.counterPanel {
+  display: grid;
+  gap: 1rem;
+}
+
+.counterRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.counterValue {
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 800;
+}
+
+.metaList {
+  display: grid;
+  gap: 0.8rem;
+
+  p {
+    margin: 0.25rem 0 0;
+    color: tokens.$color-text-muted;
+  }
+}

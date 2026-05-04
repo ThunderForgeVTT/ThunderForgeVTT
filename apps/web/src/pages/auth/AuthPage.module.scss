@@ -1,0 +1,41 @@
+@use "styles/tokens" as tokens;
+
+.form {
+  display: grid;
+  gap: 1rem;
+}
+
+.header {
+  display: grid;
+  gap: 0.5rem;
+
+  h2,
+  p {
+    margin: 0;
+  }
+
+  p {
+    color: tokens.$color-text-muted;
+  }
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.auxiliary {
+  display: grid;
+  gap: 1rem;
+}
+
+.linkList {
+  display: grid;
+  gap: 0.75rem;
+
+  a {
+    color: tokens.$color-accent;
+    font-weight: 600;
+  }
+}

@@ -1,0 +1,27 @@
+@use "styles/tokens" as tokens;
+
+@mixin focus-ring {
+  outline: none;
+  box-shadow:
+    0 0 0 1px rgba(tokens.$color-accent, 0.38),
+    0 0 0 4px rgba(tokens.$color-accent, 0.16);
+}
+
+@mixin surface($background: tokens.$color-surface) {
+  background: $background;
+  border: 1px solid tokens.$color-border;
+  box-shadow: tokens.$shadow-md;
+  backdrop-filter: blur(18px);
+}
+
+@mixin content-width($width: tokens.$content-width) {
+  width: min($width, calc(100% - 2rem));
+  margin-inline: auto;
+}
+
+@mixin page-gradient {
+  background:
+    radial-gradient(circle at top left, rgba(tokens.$color-accent, 0.16), transparent 28%),
+    radial-gradient(circle at right bottom, rgba(tokens.$color-info, 0.12), transparent 22%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0));
+}

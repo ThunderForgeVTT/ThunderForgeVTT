@@ -1,7 +1,11 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
     "types": ["vite/client"]
   },
-  "include": ["src"]
+  "include": ["src", "eslint.config.mjs", "vite.config.mts", "scripts"]
 }

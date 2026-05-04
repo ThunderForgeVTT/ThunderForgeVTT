@@ -40,11 +40,11 @@ pub fn router() -> Router<AppState> {
         .route("/authentication/setup/status", get(setup_status))
         .route("/authentication/setup/basic", post(admin_setup_basic))
         .route(
-            "/authentication/setup/oauth/:provider_key/start",
+            "/authentication/setup/oauth/{provider_key}/start",
             post(admin_setup_oauth_start),
         )
         .route(
-            "/authentication/setup/oauth/:provider_key/callback",
+            "/authentication/setup/oauth/{provider_key}/callback",
             get(admin_setup_oauth_callback),
         )
         .route("/authentication/basic", post(basic_authentication))
@@ -54,15 +54,15 @@ pub fn router() -> Router<AppState> {
             post(oauth_link_confirm),
         )
         .route(
-            "/authentication/oauth/:provider_key/start",
+            "/authentication/oauth/{provider_key}/start",
             get(oauth_start),
         )
         .route(
-            "/authentication/oauth/:provider_key/callback",
+            "/authentication/oauth/{provider_key}/callback",
             get(oauth_callback),
         )
         .route(
-            "/authentication/oauth/:provider_key/token",
+            "/authentication/oauth/{provider_key}/token",
             post(oauth_token_exchange),
         )
         .route(
@@ -79,7 +79,7 @@ pub fn router() -> Router<AppState> {
             post(set_admin_two_factor_requirement),
         )
         .route(
-            "/authentication/admin/users/:user_id/2fa/required",
+            "/authentication/admin/users/{user_id}/2fa/required",
             post(set_admin_user_two_factor_required),
         )
         .route("/authentication/logout", post(logout))
@@ -407,9 +407,7 @@ async fn admin_setup_oauth_start(
     State(state): State<AppState>,
     Json(request): Json<AdminSetupOAuthStartRequest>,
 ) -> Result<(StatusCode, Json<AdminSetupOAuthStartResponse>), (StatusCode, Json<OAuthResponse>)> {
-    if let Err(resp) = ensure_admin_setup_code_valid(&state, &request.admin_code).await {
-        return Err(resp);
-    }
+    ensure_admin_setup_code_valid(&state, &request.admin_code).await?;
 
     let mut conn = state.db_pool.get().expect("Failed to get DB connection");
     let provider_key_clone = provider_key.clone();
@@ -483,7 +481,16 @@ async fn admin_setup_oauth_start(
         .append_pair("response_type", "code")
         .append_pair("client_id", &provider_client_id)
         .append_pair("redirect_uri", &request.redirect_uri)
-        .append_pair("scope", &provider.scopes.join(" "))
+        .append_pair(
+            "scope",
+            &provider
+                .scopes
+                .iter()
+                .filter_map(|s| s.as_ref())
+                .cloned()
+                .collect::<Vec<String>>()
+                .join(" "),
+        )
         .append_pair("state", &state_token)
         .append_pair("code_challenge", &code_challenge)
         .append_pair("code_challenge_method", "S256");
@@ -587,10 +594,10 @@ async fn admin_setup_oauth_callback(
         return bootstrap_error_redirect(msg.as_str());
     }
 
-    if let Some(return_to) = return_to {
-        if let Ok(url) = Url::parse(&return_to) {
-            return Redirect::temporary(url.as_str()).into_response();
-        }
+    if let Some(return_to) = return_to
+        && let Ok(url) = Url::parse(&return_to)
+    {
+        return Redirect::temporary(url.as_str()).into_response();
     }
 
     (
@@ -1120,17 +1127,17 @@ async fn set_admin_user_two_factor_required(
     }
 }
 async fn logout(cookies: Cookies, State(state): State<AppState>) {
-    if let Some(session_cookie) = cookies.private(&state.key).get("session") {
-        if let Ok(session_id) = uuid::Uuid::parse_str(session_cookie.value()) {
-            let now = Utc::now().naive_utc();
-            if let Ok(mut conn) = state.db_pool.get() {
-                let _ = tokio::task::spawn_blocking(move || {
-                    diesel::update(user_sessions::table.filter(user_sessions::id.eq(session_id)))
-                        .set(user_sessions::revoked_at.eq(Some(now)))
-                        .execute(&mut conn)
-                })
-                .await;
-            }
+    if let Some(session_cookie) = cookies.private(&state.key).get("session")
+        && let Ok(session_id) = uuid::Uuid::parse_str(session_cookie.value())
+    {
+        let now = Utc::now().naive_utc();
+        if let Ok(mut conn) = state.db_pool.get() {
+            let _ = tokio::task::spawn_blocking(move || {
+                diesel::update(user_sessions::table.filter(user_sessions::id.eq(session_id)))
+                    .set(user_sessions::revoked_at.eq(Some(now)))
+                    .execute(&mut conn)
+            })
+            .await;
         }
     }
 
@@ -1223,7 +1230,16 @@ async fn oauth_start(
         .append_pair("response_type", "code")
         .append_pair("client_id", &provider_client_id)
         .append_pair("redirect_uri", &query.redirect_uri)
-        .append_pair("scope", &provider.scopes.join(" "))
+        .append_pair(
+            "scope",
+            &provider
+                .scopes
+                .iter()
+                .filter_map(|s| s.as_ref())
+                .cloned()
+                .collect::<Vec<String>>()
+                .join(" "),
+        )
         .append_pair("state", &state_token)
         .append_pair("code_challenge", &code_challenge)
         .append_pair("code_challenge_method", "S256");
@@ -1617,10 +1633,10 @@ async fn oauth_link_confirm(
                 .first::<UserOAuthAccount>(&mut conn)
                 .optional()?;
 
-            if let Some(account_for_subject) = account_for_subject.as_ref() {
-                if account_for_subject.user_id != challenge.user_id {
-                    return Ok(LinkConfirmOutcome::LinkConflict);
-                }
+            if let Some(account_for_subject) = account_for_subject.as_ref()
+                && account_for_subject.user_id != challenge.user_id
+            {
+                return Ok(LinkConfirmOutcome::LinkConflict);
             }
 
             let account_for_user_provider = user_oauth_accounts::table
@@ -1904,7 +1920,7 @@ pub async fn ensure_admin_bootstrap_code(state: &AppState) -> Result<(), String>
 
     if let Some(bootstrap_code) = generated_code {
         tracing::warn!(
-            "Initial admin setup is incomplete. Use bootstrap admin code: {}",
+            "Initial admin setup is incomplete. To create an admin account, visit: http://127.0.0.1:5173/setup/{}",
             bootstrap_code
         );
     }

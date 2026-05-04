@@ -1,0 +1,17 @@
+@use "styles/mixins" as mixins;
+@use "styles/tokens" as tokens;
+
+.card {
+  @include mixins.surface;
+
+  border-radius: tokens.$radius-lg;
+  padding: 1.5rem;
+}
+
+.strong {
+  @include mixins.surface(tokens.$color-surface-strong);
+}
+
+.default {
+  @include mixins.surface;
+}

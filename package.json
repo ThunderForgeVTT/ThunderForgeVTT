@@ -13,9 +13,8 @@
     "build": "cargo build",
     "start": "pnpm run --filter='*' \"/^start:.*/\"",
     "generate": "pnpm --filter @thunderforge/web run generate",
-    "start:vite": "pnpm --filter @thunderforge/web run start:vite",
-    "dev:client": "pnpm --filter @thunderforge/web run dev",
-    "start:server": "cargo run start",
+    "start:vite": "pnpm --filter @thunderforge/web run dev",
+    "start:server": "cargo run -p thunderforge",
     "test": "RUSTFLAGS=\"${RUSTFLAGS:-\"\"} -A unused_imports -A dead_code -A private_in_public -A unused_variables\" cargo test"
   },
   "devDependencies": {

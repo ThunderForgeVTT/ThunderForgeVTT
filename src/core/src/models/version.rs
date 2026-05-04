@@ -12,7 +12,11 @@ pub struct SchemaVersion {
 
 impl SchemaVersion {
     pub fn new(major: u32, minor: u32, patch: u32) -> Self {
-        Self { major, minor, patch }
+        Self {
+            major,
+            minor,
+            patch,
+        }
     }
 
     pub fn as_i32(&self) -> i32 {
@@ -23,7 +27,11 @@ impl SchemaVersion {
         let major = (v / 1_000_000) as u32;
         let minor = ((v % 1_000_000) / 1_000) as u32;
         let patch = (v % 1_000) as u32;
-        Self { major, minor, patch }
+        Self {
+            major,
+            minor,
+            patch,
+        }
     }
 }
 

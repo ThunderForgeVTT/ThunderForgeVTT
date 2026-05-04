@@ -1,6 +1,5 @@
 import { createTokenDeltaCoalescer } from "./coalescer";
 import { getWorldDatabase } from "./database";
-import { createGraphQLWorldSyncTransport } from "./transport";
 import type {
   DurableMutation,
   StartWorldSyncOptions,

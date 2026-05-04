@@ -28,7 +28,8 @@ tower = "0.5.3"
 tower-http = { version = "0.6.8", features = ["fs", "trace", "cors"] }
 tower-cookies = { version = "0.11.0", features = ["private"] }
 tracing = "0.1.44"
-tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
+tracing-bunyan-formatter = "0.3.9"
 futures-util = "0.3.32"
 tokio-stream = { version = "0.1.18", features = ["sync"] }
 async-graphql = { version = "7.2.1", features = [

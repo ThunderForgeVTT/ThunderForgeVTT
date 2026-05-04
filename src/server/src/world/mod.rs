@@ -17,8 +17,8 @@ use tokio_stream::wrappers::BroadcastStream;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/world/all", get(all_worlds))
-        .route("/world/:id/events", get(world_events_by_id))
-        .route("/world/:id/event", post(world_event_by_id))
+        .route("/world/{id}/events", get(world_events_by_id))
+        .route("/world/{id}/event", post(world_event_by_id))
 }
 
 async fn all_worlds(Extension(auth_user): Extension<AuthenticatedUser>) -> impl IntoResponse {

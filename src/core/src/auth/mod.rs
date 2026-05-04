@@ -1,5 +1,6 @@
 use base64::{Engine as _, engine::general_purpose};
 use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter, Result};
 use std::str::from_utf8;
 
 const SEPARATOR: &str = "~UwU~";
@@ -47,19 +48,20 @@ impl From<String> for Credentials {
     }
 }
 
-impl ToString for Credentials {
-    fn to_string(&self) -> String {
+impl Display for Credentials {
+    fn fmt(&self, f: &mut Formatter) -> Result {
         let id = match &self.id {
             Some(val) => val.to_owned(),
             None => String::new(),
         };
-        let components = vec![
+        let components = [
             id,
             String::from(&self.username),
             String::from(&self.password),
         ];
         // let contents = components.mapped( |value| String::from(value)).collect().join(&SEPARATOR).to_string();
 
-        general_purpose::STANDARD.encode(components.join(SEPARATOR))
+        let result = general_purpose::STANDARD.encode(components.join(SEPARATOR));
+        write!(f, "{}", result)
     }
 }

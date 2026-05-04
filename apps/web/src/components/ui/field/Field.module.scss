@@ -1,0 +1,17 @@
+@use "styles/tokens" as tokens;
+
+.field {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: tokens.$color-text;
+}
+
+.hint {
+  font-size: 0.88rem;
+  color: tokens.$color-text-muted;
+}

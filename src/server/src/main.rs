@@ -20,21 +20,23 @@ use async_graphql::{Data, Schema}; // Added Data
 use async_graphql_axum::{GraphQLProtocol, GraphQLRequest, GraphQLResponse, GraphQLWebSocket}; // Added GraphQLWebSocket
 use axum::{
     Extension, Router,
-    extract::WebSocketUpgrade,
+    extract::{State, WebSocketUpgrade},
+    http::StatusCode,
     middleware::{from_fn, from_fn_with_state},
     response::{Html, IntoResponse, Response},
     routing::get,
 };
 use base64::{Engine as _, engine::general_purpose};
 use clap::Parser;
-use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
+use diesel::{RunQueryDsl, pg::PgConnection};
 use std::net::SocketAddr;
 use tokio::sync::broadcast;
 use tower_cookies::{CookieManagerLayer, Key};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
+use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt, util::SubscriberInitExt};
 
 async fn graphql_playground() -> impl IntoResponse {
     Html(playground_source(GraphQLPlaygroundConfig::new("/graphql")))
@@ -59,6 +61,23 @@ async fn graphql_ws_handler(
                 .serve()
                 .await;
         })
+}
+
+/// Liveness probe endpoint.
+async fn liveness_handler() -> impl IntoResponse {
+    StatusCode::OK
+}
+
+/// Readiness probe endpoint.
+async fn readiness_handler(State(state): State<AppState>) -> impl IntoResponse {
+    // Check database connection
+    match state.db_pool.get() {
+        Ok(mut conn) => match diesel::sql_query("SELECT 1").execute(&mut conn) {
+            Ok(_) => StatusCode::OK,
+            Err(_) => StatusCode::SERVICE_UNAVAILABLE,
+        },
+        Err(_) => StatusCode::SERVICE_UNAVAILABLE,
+    }
 }
 
 #[derive(Parser, Debug)]
@@ -95,14 +114,16 @@ async fn main() {
     dotenvy::dotenv().ok();
     let cli = Cli::parse();
 
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
-        )
-        .with(tracing_subscriber::fmt::layer())
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let formatting_layer = BunyanFormattingLayer::new("thunderforge".into(), std::io::stdout);
+
+    Registry::default()
+        .with(env_filter)
+        .with(JsonStorageLayer)
+        .with(formatting_layer)
         .init();
 
-    let mut config = load_config();
+    let mut config = Config::from_env();
     if let Some(data_path) = cli.data_path {
         config.data_path = data_path;
     }
@@ -123,7 +144,7 @@ async fn main() {
     let schema = Schema::build(
         QueryRoot::default(),
         MutationRoot::default(),
-        SubscriptionRoot::default(),
+        SubscriptionRoot,
     )
     .data(db_pool.clone())
     .finish();
@@ -154,7 +175,8 @@ async fn main() {
         ));
 
     let app = Router::new()
-        .route("/health", get(|| async { "OK" }))
+        .route("/healthz", get(liveness_handler))
+        .route("/readyz", get(readiness_handler))
         .merge(graphql_router)
         .merge(auth::router())
         .merge(world_router)
@@ -179,17 +201,34 @@ async fn main() {
     let addr = SocketAddr::new(cli.ip_address.parse().unwrap(), cli.port);
     tracing::debug!("listening on {}", addr);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+        .unwrap();
 }
 
-fn load_config() -> Config {
-    let dir = std::env::current_dir().unwrap();
-    let current_dir = dir.as_path();
-    let config = &current_dir.join("config.json");
-    if config.exists() {
-        let data = std::fs::read_to_string(&config).unwrap();
-        serde_json::from_str(&data).unwrap()
-    } else {
-        Config::default()
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
     }
+
+    tracing::info!("signal received, starting graceful shutdown");
 }

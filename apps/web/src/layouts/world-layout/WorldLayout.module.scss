@@ -1,0 +1,74 @@
+@use "styles/mixins" as mixins;
+@use "styles/tokens" as tokens;
+
+.layout {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 1rem;
+  padding: 1rem;
+  background:
+    radial-gradient(circle at top left, rgba(tokens.$color-accent, 0.14), transparent 24%),
+    linear-gradient(180deg, #071019, #09131c);
+}
+
+.header {
+  @include mixins.surface;
+
+  border-radius: tokens.$radius-lg;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+
+  h1,
+  p {
+    margin: 0;
+  }
+}
+
+.eyebrow {
+  color: tokens.$color-text-muted;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+
+.link {
+  color: tokens.$color-accent;
+  font-weight: 600;
+}
+
+.grid {
+  min-height: 0;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.95fr);
+}
+
+.canvas,
+.whiteboard {
+  min-height: 0;
+  border-radius: tokens.$radius-lg;
+  overflow: hidden;
+  border: 1px solid tokens.$color-border;
+}
+
+.canvas {
+  background: #050b11;
+}
+
+.whiteboard {
+  @include mixins.surface(tokens.$color-surface-strong);
+}
+
+@media (max-width: 960px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .whiteboard {
+    min-height: 32rem;
+  }
+}

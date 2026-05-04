@@ -1,16 +1,17 @@
 use regex::Captures;
+use std::fmt::{Display, Formatter, Result};
 
 pub enum PolicyEffect {
     Allow,
     Deny,
 }
 
-impl ToString for PolicyEffect {
-    fn to_string(&self) -> String {
+impl Display for PolicyEffect {
+    fn fmt(&self, f: &mut Formatter) -> Result {
         use PolicyEffect::{Allow, Deny};
         match &self {
-            Allow => String::from("Allow"),
-            Deny => String::from("Deny"),
+            Allow => write!(f, "allow"),
+            Deny => write!(f, "deny"),
         }
     }
 }
@@ -62,7 +63,7 @@ impl Policy {
         let is_match = self
             .resources
             .iter()
-            .find(|resource| matcher.is_match(&resource))
+            .find(|resource| matcher.is_match(resource))
             .is_some();
         is_match && to_be
     }
@@ -72,10 +73,10 @@ impl Policy {
         self.looking_for(id, access, is_allowed)
     }
 
-    fn is_match_by_id(&self, id: &String, resource: &String) -> bool {
+    fn is_match_by_id(&self, id: &String, resource: &str) -> bool {
         let regex_str = format!("^{id}:(.*)$", id = id);
         let matcher = regex::Regex::new(&regex_str).unwrap();
-        matcher.is_match(&resource)
+        matcher.is_match(resource)
     }
 
     fn includes_id(&self, id: &String) -> bool {
@@ -122,7 +123,7 @@ impl Policy {
             .resources
             .iter()
             .filter(|resource| !self.is_match_by_id(&id, resource))
-            .map(|resource| String::from(resource))
+            .map(String::from)
             .collect();
         self.resources = new_resources;
     }
@@ -137,7 +138,7 @@ impl Policy {
                 .map(|resource| {
                     if self.is_match_by_id(&id, resource) {
                         String::from(matcher.replace(resource, |parts: &Captures| {
-                            let adjusted_access = (&parts[2])
+                            let adjusted_access = parts[2]
                                 .split(",")
                                 .filter(|specific_access| specific_access.ne(&found_access))
                                 .fold(String::new(), |a, b| a + b + ",");
@@ -159,7 +160,7 @@ mod tests {
 
     #[cfg(test)]
     mod default {
-        use crate::policies::{Policy, PolicyEffect};
+        use crate::policies::Policy;
         use uuid::Uuid;
 
         #[test]
@@ -167,7 +168,7 @@ mod tests {
             let uuid = Uuid::new_v4().to_string();
             let access = String::from("get");
             let basic = Policy::default();
-            assert_eq!(basic.can_i(uuid, access), false)
+            assert!(!basic.can_i(uuid, access))
         }
 
         #[test]

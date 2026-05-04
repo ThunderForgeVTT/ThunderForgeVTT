@@ -1,0 +1,21 @@
+@use "styles/mixins" as mixins;
+@use "styles/tokens" as tokens;
+
+.layout {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  @include mixins.page-gradient;
+}
+
+.main {
+  padding-block: 2rem 3rem;
+}
+
+.footer {
+  width: min(tokens.$content-width, calc(100% - 2rem));
+  margin-inline: auto;
+  padding-bottom: 2rem;
+  color: tokens.$color-text-muted;
+  font-size: 0.92rem;
+}

@@ -1,0 +1,9 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" rx="32" fill="#0A1018"/>
+  <circle cx="1010" cy="110" r="220" fill="#133047"/>
+  <circle cx="220" cy="560" r="260" fill="#132A3B"/>
+  <path d="M270 170H560L520 280H420L370 520L270 560L318 280H220L270 170Z" fill="#F5F8FF"/>
+  <path d="M480 388L760 130L822 240L542 498L480 388Z" fill="#56E0C7"/>
+  <text x="620" y="268" fill="#F5F8FF" font-size="80" font-family="Arial, Helvetica, sans-serif" font-weight="700">ThunderForge VTT</text>
+  <text x="620" y="348" fill="#8EA2B8" font-size="34" font-family="Arial, Helvetica, sans-serif">Persistent worlds, secure setup, and collaborative tabletop play.</text>
+</svg>

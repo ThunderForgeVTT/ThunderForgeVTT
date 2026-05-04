@@ -1,0 +1,10 @@
+@use "styles/tokens" as tokens;
+
+.container {
+  width: min(tokens.$content-width, calc(100% - 2rem));
+  margin-inline: auto;
+}
+
+.narrow {
+  width: min(tokens.$content-width-narrow, calc(100% - 2rem));
+}

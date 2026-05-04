@@ -1,18 +1,27 @@
-import React, { lazy } from "react";
+import { lazy, Suspense } from "react";
+import type { ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
-import { SetupStatus } from "../api/auth";
-import BaseLayout from "../layouts/BaseLayout";
+import { Loader } from "@/components/ui/loader/Loader";
+import { MainLayout } from "@/layouts/main-layout/MainLayout";
+import type { HeaderNavItem } from "@/components/navigation/AppHeader";
+import type { SetupStatus } from "@/types/auth";
+import { pageLoaders } from "./pageLoaders";
 
-const LoginView = lazy(() => import("../views/LoginView"));
-const SignUpView = lazy(() => import("../views/SignUpView"));
-const SetupView = lazy(() => import("../views/SetupView"));
-const SetupCallbackView = lazy(() => import("../views/SetupCallbackView"));
-const CounterView = lazy(() => import("../views/CounterView"));
-const WorldView = lazy(() => import("../views/WorldView"));
+const LoginPage = lazy(pageLoaders.login);
+const SignUpPage = lazy(pageLoaders.signup);
+const SetupPage = lazy(pageLoaders.setup);
+const SetupCallbackPage = lazy(pageLoaders.setupCallback);
+const CounterPage = lazy(pageLoaders.counter);
+const WorldPage = lazy(pageLoaders.world);
+const NotFoundPage = lazy(pageLoaders.notFound);
 
 interface AppRoutesProps {
   setupStatus: SetupStatus;
   onSetupStatusRefresh: () => Promise<SetupStatus>;
+}
+
+function renderLazyPage(page: ReactNode, label: string) {
+  return <Suspense fallback={<Loader fullScreen label={label} />}>{page}</Suspense>;
 }
 
 export default function AppRoutes({
@@ -20,18 +29,58 @@ export default function AppRoutes({
   onSetupStatusRefresh,
 }: AppRoutesProps) {
   const setupRequired = setupStatus.setup_required;
+  const navItems: readonly HeaderNavItem[] = setupRequired
+    ? [
+        { to: "/setup", label: "Setup", prefetch: "setup" },
+        { to: "/counter", label: "Status", prefetch: "counter" },
+      ]
+    : [
+        { to: "/login", label: "Login", prefetch: "login" },
+        { to: "/signup", label: "Sign up", prefetch: "signup" },
+        { to: "/counter", label: "Dashboard", prefetch: "counter" },
+      ];
 
   return (
     <Routes>
-      <Route element={<BaseLayout />}>
+      <Route
+        element={
+          <MainLayout
+            brandHref={setupRequired ? "/setup" : "/login"}
+            navItems={navItems}
+          />
+        }
+      >
+        <Route
+          index
+          element={<Navigate to={setupRequired ? "/setup" : "/login"} replace />}
+        />
+        <Route
+          path="/setup/:code"
+          element={
+            setupRequired ? (
+              renderLazyPage(
+                <SetupPage
+                  setupStatus={setupStatus}
+                  onSetupComplete={onSetupStatusRefresh}
+                />,
+                "Loading setup workspace",
+              )
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
         <Route
           path="/setup"
           element={
             setupRequired ? (
-              <SetupView
-                setupStatus={setupStatus}
-                onSetupComplete={onSetupStatusRefresh}
-              />
+              renderLazyPage(
+                <SetupPage
+                  setupStatus={setupStatus}
+                  onSetupComplete={onSetupStatusRefresh}
+                />,
+                "Loading setup workspace",
+              )
             ) : (
               <Navigate to="/login" replace />
             )
@@ -41,7 +90,10 @@ export default function AppRoutes({
           path="/setup/callback"
           element={
             setupRequired ? (
-              <SetupCallbackView onSetupComplete={onSetupStatusRefresh} />
+              renderLazyPage(
+                <SetupCallbackPage onSetupComplete={onSetupStatusRefresh} />,
+                "Finishing setup",
+              )
             ) : (
               <Navigate to="/login" replace />
             )
@@ -50,21 +102,38 @@ export default function AppRoutes({
         <Route
           path="/login"
           element={
-            setupRequired ? <Navigate to="/setup" replace /> : <LoginView />
+            setupRequired ? (
+              <Navigate to="/setup" replace />
+            ) : (
+              renderLazyPage(<LoginPage />, "Loading login screen")
+            )
           }
         />
         <Route
           path="/signup"
           element={
-            setupRequired ? <Navigate to="/setup" replace /> : <SignUpView />
+            setupRequired ? (
+              <Navigate to="/setup" replace />
+            ) : (
+              renderLazyPage(<SignUpPage />, "Loading sign-up screen")
+            )
           }
         />
-        <Route path="/counter" element={<CounterView />} />
+        <Route
+          path="/counter"
+          element={renderLazyPage(<CounterPage />, "Loading dashboard")}
+        />
+        <Route
+          path="*"
+          element={renderLazyPage(
+            <NotFoundPage setupRequired={setupRequired} />,
+            "Loading page",
+          )}
+        />
       </Route>
-      <Route path="/world/:id" element={<WorldView />} />
       <Route
-        path="*"
-        element={<Navigate to={setupRequired ? "/setup" : "/login"} replace />}
+        path="/world/:id"
+        element={renderLazyPage(<WorldPage />, "Loading world workspace")}
       />
     </Routes>
   );

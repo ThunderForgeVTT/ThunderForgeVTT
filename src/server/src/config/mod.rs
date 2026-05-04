@@ -23,13 +23,37 @@ pub struct Config {
     pub(crate) authentication: Option<SupportedAuthentication>,
 }
 
+impl Config {
+    pub fn from_env() -> Config {
+        let secret = std::env::var("THUNDERFORGE_SECRET").unwrap_or_else(|_| {
+            general_purpose::STANDARD.encode(
+                "Change me to something complex, overall it should be unique and greater than 64 characters.",
+            )
+        });
+        let data_path = std::env::var("THUNDERFORGE_DATA_PATH").unwrap_or_else(|_| {
+            std::env::current_dir()
+                .unwrap()
+                .as_path()
+                .join("data")
+                .to_str()
+                .unwrap()
+                .to_string()
+        });
+        let authentication = std::env::var("THUNDERFORGE_AUTHENTICATION")
+            .ok()
+            .and_then(|auth_str| serde_json::from_str(&auth_str).ok());
+
+        Config {
+            secret,
+            data_path,
+            authentication,
+        }
+    }
+}
+
 impl Default for Config {
     fn default() -> Config {
-        Config {
-            secret: general_purpose::STANDARD.encode("Change me to something complex, overall it should be unique and greater than 64 characters."),
-            data_path: std::env::current_dir().unwrap().as_path().join("data").to_str().unwrap().to_string(),
-            authentication: None,
-        }
+        Config::from_env()
     }
 }
 

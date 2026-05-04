@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { SetupStatus, setupBasic, startSetupOAuth } from "../api/auth";
 
 interface SetupViewProps {
@@ -13,6 +13,7 @@ export default function SetupView({
 }: SetupViewProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { code } = useParams();
   const [adminCode, setAdminCode] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -22,6 +23,12 @@ export default function SetupView({
   const [status, setStatus] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isStartingOAuth, setIsStartingOAuth] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (code) {
+      setAdminCode(code);
+    }
+  }, [code]);
 
   useEffect(() => {
     const oauthError = searchParams.get("oauth_error");

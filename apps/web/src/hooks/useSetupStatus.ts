@@ -1,21 +1,31 @@
-import { useEffect, useState } from "react";
-import { SetupStatus, getSetupStatus } from "../api/auth";
-
-const FALLBACK_SETUP_STATUS: SetupStatus = {
-  setup_required: false,
-  setup_completed: true,
-  configured_oauth_providers: [],
-};
+import { useCallback, useEffect, useState } from "react";
+import { getSetupStatus } from "@/services/auth";
+import type { SetupStatus } from "@/types/auth";
 
 export function useSetupStatus() {
   const [setupStatus, setSetupStatus] = useState<SetupStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const refreshSetupStatus = async () => {
-    const nextStatus = await getSetupStatus();
-    setSetupStatus(nextStatus);
-    return nextStatus;
-  };
+  const refreshSetupStatus = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const nextStatus = await getSetupStatus();
+      setSetupStatus(nextStatus);
+      return nextStatus;
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Failed to load setup status.",
+      );
+      throw nextError;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     let isActive = true;
@@ -27,13 +37,18 @@ export function useSetupStatus() {
         }
 
         setSetupStatus(status);
+        setError(null);
       })
-      .catch(() => {
+      .catch((nextError) => {
         if (!isActive) {
           return;
         }
 
-        setSetupStatus(FALLBACK_SETUP_STATUS);
+        setError(
+          nextError instanceof Error
+            ? nextError.message
+            : "Failed to load setup status.",
+        );
       })
       .finally(() => {
         if (isActive) {
@@ -49,6 +64,7 @@ export function useSetupStatus() {
   return {
     setupStatus,
     isLoading,
+    error,
     refreshSetupStatus,
   };
 }

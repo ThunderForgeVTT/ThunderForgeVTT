@@ -74,21 +74,21 @@ impl WorldEvent {
         if from_version < CURRENT_EVENT_SCHEMA_VERSION {
             if let Some(ref mut payload) = self.token_event {
                 // Version 1 → 2: Convert flat "level" to nested "progress.level"
-                if from_version <= 1 {
-                    if let Some(level) = payload.get("level") {
-                        payload["progress"] = serde_json::json!({
-                            "level": level.clone()
-                        });
-                        payload.as_object_mut().map(|m| m.remove("level"));
-                    }
+                if from_version <= 1
+                    && let Some(level) = payload.get("level")
+                {
+                    payload["progress"] = serde_json::json!({
+                        "level": level.clone()
+                    });
+                    payload.as_object_mut().map(|m| m.remove("level"));
                 }
 
                 // Version 2 → 3: Rename "token_position" → "position"
-                if from_version <= 2 {
-                    if let Some(pos) = payload.get("token_position") {
-                        payload["position"] = pos.clone();
-                        payload.as_object_mut().map(|m| m.remove("token_position"));
-                    }
+                if from_version <= 2
+                    && let Some(pos) = payload.get("token_position")
+                {
+                    payload["position"] = pos.clone();
+                    payload.as_object_mut().map(|m| m.remove("token_position"));
                 }
 
                 // Add more migrations as schema evolves

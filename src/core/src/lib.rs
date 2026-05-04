@@ -1,16 +1,16 @@
 pub mod auth;
 pub mod events;
-pub mod models;
 mod loops;
+pub mod models;
 pub mod policies;
 mod utils;
 
 // Re-export commonly used types for convenience
 pub use models::{
-    auth::{User, UserSession, OAuthProvider, TwoFactorSecret, AuthSecuritySettings},
-    world::{World, WorldToken, WorldEvent, WorldEventCode, MutationResult},
-    errors::{ErrorResponse, ERR_UNAUTHORIZED, ERR_FORBIDDEN, ERR_NOT_FOUND},
-    version::{SchemaVersion, CORE_SCHEMA_VERSION, Migratable},
+    auth::{AuthSecuritySettings, OAuthProvider, TwoFactorSecret, User, UserSession},
+    errors::{ERR_FORBIDDEN, ERR_NOT_FOUND, ERR_UNAUTHORIZED, ErrorResponse},
+    version::{CORE_SCHEMA_VERSION, Migratable, SchemaVersion},
+    world::{MutationResult, World, WorldEvent, WorldEventCode, WorldToken},
 };
 
 #[cfg(test)]

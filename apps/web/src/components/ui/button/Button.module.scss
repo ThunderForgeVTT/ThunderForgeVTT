@@ -1,0 +1,63 @@
+@use "styles/mixins" as mixins;
+@use "styles/tokens" as tokens;
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  border: 1px solid transparent;
+  border-radius: tokens.$radius-sm;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  transition:
+    transform tokens.$transition-base,
+    background-color tokens.$transition-base,
+    border-color tokens.$transition-base,
+    color tokens.$transition-base,
+    box-shadow tokens.$transition-base;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+
+  &:focus-visible {
+    @include mixins.focus-ring;
+  }
+}
+
+.md {
+  min-height: 2.9rem;
+  padding: 0.85rem 1.15rem;
+}
+
+.lg {
+  min-height: 3.2rem;
+  padding: 0.95rem 1.25rem;
+}
+
+.primary {
+  background: linear-gradient(135deg, tokens.$color-accent, tokens.$color-accent-strong);
+  color: #031119;
+}
+
+.secondary {
+  background: rgba(tokens.$color-background-elevated, 0.9);
+  border-color: tokens.$color-border-strong;
+  color: tokens.$color-text;
+}
+
+.success {
+  background: linear-gradient(135deg, tokens.$color-success, #43b972);
+  color: #06140d;
+}
+
+.ghost {
+  background: transparent;
+  border-color: tokens.$color-border;
+  color: tokens.$color-text-muted;
+}
+
+.fullWidth {
+  width: 100%;
+}
