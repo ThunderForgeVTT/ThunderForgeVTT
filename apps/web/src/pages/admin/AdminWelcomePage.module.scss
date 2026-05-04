@@ -1,0 +1,81 @@
+@use "styles/mixins" as mixins;
+@use "styles/tokens" as tokens;
+
+.shell {
+  display: grid;
+  gap: 1.5rem;
+  padding-bottom: 3rem;
+}
+
+.hero {
+  @include mixins.surface(
+    linear-gradient(
+      135deg,
+      rgba(tokens.$color-background-soft, 0.96),
+      rgba(tokens.$color-umber, 0.42) 46%,
+      rgba(tokens.$color-background, 0.98)
+    )
+  );
+  display: grid;
+  gap: 0.8rem;
+  padding: 1.5rem;
+  border-radius: tokens.$radius-xl;
+
+  h1,
+  p {
+    margin: 0;
+  }
+
+  p:last-of-type {
+    color: tokens.$color-text-muted;
+    max-width: 60ch;
+  }
+}
+
+.eyebrow {
+  @include mixins.rune-caption;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.metricsGrid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.quickGrid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.quickCard {
+  display: grid;
+  gap: 0.85rem;
+
+  h2,
+  p {
+    margin: 0;
+  }
+}
+
+.linkList {
+  display: grid;
+  gap: 0.6rem;
+
+  a {
+    font-weight: 700;
+  }
+}
+
+@media (max-width: 1080px) {
+  .metricsGrid,
+  .quickGrid {
+    grid-template-columns: 1fr;
+  }
+}

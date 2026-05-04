@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { deleteUserData, exportUserData } from "@/api/auth";
 import { SEO } from "@/components/seo/SEO";
 import { Avatar } from "@/components/ui/avatar/Avatar";
 import { Button } from "@/components/ui/button/Button";
@@ -17,6 +18,7 @@ import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { Tabs } from "@/components/ui/tabs/Tabs";
 import { TokenAvatar } from "@/components/ui/token-avatar/TokenAvatar";
 import { Tooltip } from "@/components/ui/tooltip/Tooltip";
+import { useAuth } from "@/hooks/useAuth";
 import { useAvatar } from "@/hooks/useAvatar";
 import type { SeoConfig } from "@/types/seo";
 import styles from "./CounterPage.module.scss";
@@ -35,8 +37,12 @@ export const counterPageSeo: SeoConfig = {
 };
 
 export default function CounterPage() {
+  const { logout, user } = useAuth();
   const [value, setValue] = useState(0);
   const [searchParams] = useSearchParams();
+  const [accountStatus, setAccountStatus] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState<"json" | "zip" | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const bootstrapComplete = searchParams.get("bootstrap") === "complete";
   const { exportAvatar, exportToken } = useAvatar("demo-world-builder");
   const insights = useMemo(
@@ -103,6 +109,52 @@ export default function CounterPage() {
     ],
     [],
   );
+
+  const downloadExport = async (format: "json" | "zip") => {
+    setIsExporting(format);
+    setAccountStatus(null);
+
+    try {
+      const blob = await exportUserData(format);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download =
+        format === "zip"
+          ? "thunderforge-user-export.zip"
+          : "thunderforge-user-export.json";
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setAccountStatus(
+        format === "zip"
+          ? "ZIP export is ready for download."
+          : "JSON export is ready for download.",
+      );
+    } catch (error) {
+      setAccountStatus(
+        error instanceof Error ? error.message : "Export request failed.",
+      );
+    } finally {
+      setIsExporting(null);
+    }
+  };
+
+  const permanentlyDeleteAccount = async () => {
+    setIsDeleting(true);
+    setAccountStatus(null);
+
+    try {
+      const response = await deleteUserData();
+      setAccountStatus(response.message);
+      await logout();
+      window.location.assign("/login");
+    } catch (error) {
+      setAccountStatus(
+        error instanceof Error ? error.message : "Delete request failed.",
+      );
+      setIsDeleting(false);
+    }
+  };
 
   return (
     <>
@@ -237,6 +289,63 @@ export default function CounterPage() {
               </div>
             </Card>
           </Grid>
+
+          <Card surface="stone" className={styles.notesCard}>
+            <div className={styles.notesHeader}>
+              <div>
+                <p className={styles.panelEyebrow}>Account controls</p>
+                <h2>Data ownership and privacy</h2>
+              </div>
+            </div>
+            <p>
+              Manage the authenticated account for{" "}
+              <strong>{user?.username ?? "this session"}</strong> with self-service
+              export and permanent deletion actions.
+            </p>
+            <div className={styles.counterRow}>
+              <Button
+                variant="secondary"
+                icon="actors"
+                disabled={isExporting !== null}
+                onClick={() => void downloadExport("json")}
+              >
+                {isExporting === "json" ? "Preparing JSON..." : "Download JSON export"}
+              </Button>
+              <Button
+                variant="secondary"
+                icon="inventory"
+                disabled={isExporting !== null}
+                onClick={() => void downloadExport("zip")}
+              >
+                {isExporting === "zip" ? "Preparing ZIP..." : "Download ZIP export"}
+              </Button>
+              <Dialog
+                trigger={
+                  <Button variant="danger" icon="skull" disabled={isDeleting}>
+                    {isDeleting ? "Deleting account..." : "Delete account"}
+                  </Button>
+                }
+                title="Permanently delete this account?"
+                description="This deletes the local profile, linked OAuth identities, sessions, and all currently persisted user-created data. Shared worlds keep their remaining owners."
+                footer={
+                  <Button
+                    variant="danger"
+                    icon="skull"
+                    disabled={isDeleting}
+                    onClick={() => void permanentlyDeleteAccount()}
+                  >
+                    {isDeleting ? "Deleting..." : "Delete permanently"}
+                  </Button>
+                }
+              >
+                <p>
+                  This action is irreversible. ThunderForge will remove local
+                  credentials, OAuth links, sessions, and owned persisted content.
+                </p>
+              </Dialog>
+            </div>
+            {accountStatus ? <StatusBadge>{accountStatus}</StatusBadge> : null}
+          </Card>
 
           <RuneDivider label="Future phase integration" />
 

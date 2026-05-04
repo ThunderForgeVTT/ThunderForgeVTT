@@ -1,4 +1,4 @@
-# ADR-005: REST Authentication with Database-Backed Cookie Sessions
+# ADR-005: Session Cookie Strategy for Unified Authentication
 
 **Status:** Accepted
 
@@ -123,7 +123,34 @@ Cookie session
 
    - _Mitigation:_ Reuse the same session issuance and user-resolution path for OAuth completion flows rather than introducing a separate model.
 
-### Implementation Notes
+## Alternatives Considered
+
+1. **JWT access tokens in browser storage**
+
+   - Rejected because it would move primary credentials into a script-visible storage model and complicate revocation and rotation.
+
+2. **GraphQL-native authentication mutations only**
+
+   - Rejected because the repo already had REST setup/OAuth/session seams and middleware that align naturally with cookies and CSRF.
+
+3. **Multiple concurrent long-lived sessions by default**
+
+   - Deferred because Phase 1 prioritizes replay-risk reduction and a simpler invalidation model over multi-device UX.
+
+## Migration Implications
+
+- Requires `user_sessions` as the authoritative session store.
+- Requires frontend auth clients to target the REST session lifecycle endpoints instead of inventing a second token transport.
+- Future multi-device or remembered-device support can extend the same table rather than replacing the cookie model.
+
+## Security Implications
+
+- Session cookies are `httpOnly`, `SameSite=Strict`, and `Secure`.
+- Session rotation on login/refresh reduces replay window length.
+- CSRF is enforced on state-changing requests whenever a session cookie is present.
+- Server-side revocation remains possible because the session identifier is opaque and DB-backed.
+
+## Implementation Notes
 
 - Passwords are hashed with Argon2.
 - Session rows are stored in `user_sessions`.

@@ -1,6 +1,7 @@
 import type { FormEvent } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { getSetupStatus, startOAuthLogin } from "@/api/auth";
 import { Avatar } from "@/components/ui/avatar/Avatar";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
@@ -10,6 +11,7 @@ import { RuneDivider } from "@/components/ui/rune-divider/RuneDivider";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { AuthLayout } from "@/layouts/auth-layout/AuthLayout";
 import { useAuth } from "@/hooks/useAuth";
+import type { SetupProvider } from "@/types/auth";
 import type { SeoConfig } from "@/types/seo";
 import styles from "./AuthPage.module.scss";
 
@@ -29,19 +31,40 @@ export const registerPageSeo: SeoConfig = {
 function redirectTarget(search: string) {
   const params = new URLSearchParams(search);
   const returnTo = params.get("returnTo");
-  return returnTo && returnTo.startsWith("/") ? returnTo : "/counter";
+  return returnTo && returnTo.startsWith("/") ? returnTo : null;
 }
 
 export default function RegisterPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { register } = useAuth();
+  const { register, redirectAfterLogin } = useAuth();
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [providers, setProviders] = useState<SetupProvider[]>([]);
+
+  useEffect(() => {
+    let active = true;
+
+    void getSetupStatus()
+      .then((response) => {
+        if (active) {
+          setProviders(response.configured_oauth_providers);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setProviders([]);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -63,7 +86,10 @@ export default function RegisterPage() {
       setStatus(response.message);
 
       if (response.session?.authenticated) {
-        navigate(redirectTarget(location.search), { replace: true });
+        navigate(
+          redirectTarget(location.search) ?? redirectAfterLogin(response.session.user),
+          { replace: true },
+        );
       }
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Registration failed.");
@@ -83,7 +109,7 @@ export default function RegisterPage() {
           <Card surface="parchment">
             <div className={styles.auxiliary}>
               <h2>Already have access?</h2>
-              <p>Return to login or review the dashboard shell that this session unlocks.</p>
+              <p>Return to login or review the welcome hall this session unlocks.</p>
               <div className={styles.avatarGroup}>
                 <div className={styles.avatarRow}>
                   <Avatar seed="archivist" name="Archivist" />
@@ -94,7 +120,7 @@ export default function RegisterPage() {
               <RuneDivider label="Return paths" />
               <div className={styles.linkList}>
                 <Link to="/login">Return to login</Link>
-                <Link to="/counter">Open the dashboard preview</Link>
+                <Link to="/welcome">Open the welcome hall</Link>
               </div>
             </div>
           </Card>
@@ -167,6 +193,30 @@ export default function RegisterPage() {
             </div>
 
             {status ? <StatusBadge>{status}</StatusBadge> : null}
+
+            {providers.length ? (
+              <>
+                <RuneDivider label="Existing linked provider" />
+                <div className={styles.actions}>
+                  {providers.map((provider) => (
+                    <Button
+                      key={provider.provider_key}
+                      type="button"
+                      variant="secondary"
+                      icon="spark"
+                      onClick={() =>
+                        startOAuthLogin(
+                          provider.provider_key,
+                          redirectTarget(location.search) ?? "/welcome",
+                        )
+                      }
+                    >
+                      Sign in with {provider.display_name}
+                    </Button>
+                  ))}
+                </div>
+              </>
+            ) : null}
           </form>
         </Card>
       </AuthLayout>

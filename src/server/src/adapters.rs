@@ -29,6 +29,8 @@ impl From<DbWorldToken> for CoreWorldToken {
             label: db.label,
             health: db.health,
             max_health: db.max_health,
+            created_by: db.created_by,
+            updated_by: db.updated_by,
             created_at: db.created_at,
             updated_at: db.updated_at,
             schema_version: db.schema_version,
@@ -53,6 +55,8 @@ impl From<CoreWorldToken> for DbWorldToken {
             label: core.label,
             health: core.health,
             max_health: core.max_health,
+            created_by: core.created_by,
+            updated_by: core.updated_by,
             schema_version: core.schema_version,
             created_at: core.created_at,
             updated_at: core.updated_at,
@@ -165,6 +169,8 @@ impl From<DbWorld> for CoreWorld {
         CoreWorld {
             id: db.id,
             name: db.name,
+            created_by: db.created_by,
+            updated_by: db.updated_by,
             created_at: db.created_at,
             updated_at: db.updated_at,
         }
@@ -177,6 +183,8 @@ impl From<CoreWorld> for DbWorld {
         DbWorld {
             id: core.id,
             name: core.name,
+            created_by: core.created_by,
+            updated_by: core.updated_by,
             created_at: core.created_at,
             updated_at: core.updated_at,
         }
@@ -191,7 +199,10 @@ impl From<DbWorldEvent> for CoreWorldEvent {
             world_id: db.world_id,
             event_code: db.event_code,
             token_event: db.token_event,
+            created_by: db.created_by,
+            updated_by: db.updated_by,
             created_at: db.created_at,
+            updated_at: db.updated_at,
             schema_version: db.schema_version,
         }
     }
@@ -205,7 +216,10 @@ impl From<CoreWorldEvent> for DbWorldEvent {
             world_id: core.world_id,
             event_code: core.event_code,
             token_event: core.token_event,
+            created_by: core.created_by,
+            updated_by: core.updated_by,
             created_at: core.created_at,
+            updated_at: core.updated_at,
             schema_version: core.schema_version,
         }
     }

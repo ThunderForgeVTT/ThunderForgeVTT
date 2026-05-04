@@ -33,7 +33,7 @@ export default function SetupCallbackPage({
     if (searchParams.get("oauth") === "success") {
       void onSetupComplete()
         .then(() => {
-          navigate("/counter?bootstrap=complete", { replace: true });
+          navigate("/admin/welcome?bootstrap=complete", { replace: true });
         })
         .catch((error) => {
           const message =

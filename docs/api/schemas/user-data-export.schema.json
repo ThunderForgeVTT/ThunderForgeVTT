@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thunderforgevtt.dev/schemas/user-data-export.schema.json",
+  "title": "UserDataExport",
+  "type": "object",
+  "required": [
+    "manifest",
+    "user",
+    "worlds",
+    "world_tokens",
+    "world_events",
+    "policies",
+    "scenes",
+    "actors",
+    "asset_packs",
+    "game_systems"
+  ],
+  "properties": {
+    "manifest": {
+      "type": "object",
+      "required": ["schema_version", "exported_at", "counts"],
+      "properties": {
+        "schema_version": { "type": "string" },
+        "exported_at": { "type": "string", "format": "date-time" },
+        "counts": { "type": "object" }
+      }
+    },
+    "user": { "type": "object" },
+    "worlds": { "type": "array" },
+    "world_tokens": { "type": "array" },
+    "world_events": { "type": "array" },
+    "policies": { "type": "array" },
+    "scenes": { "type": "array" },
+    "actors": { "type": "array" },
+    "asset_packs": { "type": "array" },
+    "game_systems": { "type": "array" }
+  }
+}

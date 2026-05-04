@@ -14,6 +14,7 @@ import {
   logout as logoutRequest,
   refresh as refreshRequest,
   register as registerRequest,
+  verifyTwoFactor as verifyTwoFactorRequest,
 } from "@/api/auth";
 import type {
   AuthSession,
@@ -27,9 +28,15 @@ type AuthContextValue = {
   user: AuthUser | null;
   session: AuthSession | null;
   isAuthenticated: boolean;
+  isAdmin: boolean;
   isLoading: boolean;
   login: (payload: LoginPayload) => Promise<AuthSessionResponse>;
+  completeTwoFactorChallenge: (
+    challengeId: string,
+    code: string,
+  ) => Promise<AuthSessionResponse>;
   register: (payload: RegisterPayload) => Promise<AuthSessionResponse>;
+  redirectAfterLogin: (userOverride?: AuthUser | null) => string;
   logout: () => Promise<void>;
   refresh: () => Promise<AuthSessionResponse | null>;
 };
@@ -88,10 +95,35 @@ export function AuthProvider({ children }: PropsWithChildren) {
     return applySession(response, setSession);
   }, []);
 
+  const completeTwoFactorChallenge = useCallback(
+    async (challengeId: string, code: string) => {
+      const verification = await verifyTwoFactorRequest(challengeId, code);
+      const refreshed = await refreshRequest();
+      setSession(refreshed.session ?? null);
+
+      return {
+        ...refreshed,
+        status: verification.status,
+        message: verification.message,
+        loginTwoFactorChallengeId: null,
+        requiresEmailVerification: refreshed.requiresEmailVerification,
+      };
+    },
+    [],
+  );
+
   const register = useCallback(async (payload: RegisterPayload) => {
     const response = await registerRequest(payload);
     return applySession(response, setSession);
   }, []);
+
+  const redirectAfterLogin = useCallback(
+    (userOverride?: AuthUser | null) => {
+      const resolvedUser = userOverride ?? session?.user ?? null;
+      return resolvedUser?.role === "admin" ? "/admin/welcome" : "/welcome";
+    },
+    [session],
+  );
 
   const logout = useCallback(async () => {
     await logoutRequest();
@@ -103,13 +135,25 @@ export function AuthProvider({ children }: PropsWithChildren) {
       user: session?.user ?? null,
       session,
       isAuthenticated: Boolean(session?.authenticated),
+      isAdmin: session?.user?.role === "admin",
       isLoading,
       login,
+      completeTwoFactorChallenge,
       register,
+      redirectAfterLogin,
       logout,
       refresh,
     }),
-    [isLoading, login, logout, refresh, register, session],
+    [
+      completeTwoFactorChallenge,
+      isLoading,
+      login,
+      logout,
+      redirectAfterLogin,
+      refresh,
+      register,
+      session,
+    ],
   );
 
   return createElement(AuthContext.Provider, { value }, children);

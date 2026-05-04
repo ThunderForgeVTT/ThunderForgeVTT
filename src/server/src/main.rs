@@ -1,3 +1,4 @@
+mod admin;
 mod adapters;
 mod auth;
 mod auth_middleware;
@@ -154,14 +155,6 @@ async fn main() {
         .build(manager)
         .expect("Failed to create DB pool.");
 
-    let schema = Schema::build(
-        QueryRoot::default(),
-        MutationRoot::default(),
-        SubscriptionRoot,
-    )
-    .data(db_pool.clone())
-    .finish();
-
     let app_state = AppState {
         config,
         directories: directories.clone(),
@@ -170,11 +163,26 @@ async fn main() {
         db_pool,
     };
 
+    let schema = Schema::build(
+        QueryRoot::default(),
+        MutationRoot::default(),
+        SubscriptionRoot,
+    )
+    .data(app_state.clone())
+    .finish();
+
     auth::ensure_admin_bootstrap_code(&app_state)
         .await
         .expect("Failed to initialize bootstrap admin setup state");
+    admin::ensure_admin_defaults(&app_state)
+        .await
+        .expect("Failed to initialize admin configuration state");
 
     let world_router = world::router().route_layer(from_fn_with_state(
+        app_state.clone(),
+        auth_middleware::require_authenticated_user,
+    ));
+    let user_router = users::router().route_layer(from_fn_with_state(
         app_state.clone(),
         auth_middleware::require_authenticated_user,
     ));
@@ -192,6 +200,7 @@ async fn main() {
         .route("/readyz", get(readiness_handler))
         .merge(graphql_router)
         .merge(auth::router())
+        .merge(user_router)
         .merge(world_router)
         .merge(serve::router(&directories))
         .fallback(errors::handler_404)

@@ -9,6 +9,8 @@ use uuid::Uuid;
 pub struct World {
     pub id: Uuid,
     pub name: String,
+    pub created_by: Uuid,
+    pub updated_by: Uuid,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
 }
@@ -25,6 +27,8 @@ pub struct WorldToken {
     pub label: Option<String>,
     pub health: Option<i32>,
     pub max_health: Option<i32>,
+    pub created_by: Uuid,
+    pub updated_by: Uuid,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
     pub schema_version: i32, // For future migrations
@@ -57,7 +61,10 @@ pub struct WorldEvent {
     pub world_id: Uuid,
     pub event_code: i32,
     pub token_event: Option<JsonValue>, // Flexible JSON payload
+    pub created_by: Uuid,
+    pub updated_by: Uuid,
     pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
     pub schema_version: i32, // Track schema version of payload
 }
 

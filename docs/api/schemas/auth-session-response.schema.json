@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thunderforgevtt.dev/schemas/auth-session-response.schema.json",
+  "title": "AuthSessionResponse",
+  "type": "object",
+  "required": ["status", "message", "session", "login_two_factor_challenge_id", "requires_email_verification"],
+  "properties": {
+    "status": { "type": "string" },
+    "message": { "type": "string" },
+    "login_two_factor_challenge_id": {
+      "type": ["string", "null"],
+      "format": "uuid"
+    },
+    "requires_email_verification": { "type": "boolean" },
+    "session": {
+      "type": ["object", "null"],
+      "required": ["authenticated", "session_expires_at", "user"],
+      "properties": {
+        "authenticated": { "type": "boolean" },
+        "session_expires_at": { "type": "string", "format": "date-time" },
+        "user": {
+          "type": "object",
+          "required": ["id", "username", "email", "is_admin", "created_at", "updated_at"],
+          "properties": {
+            "id": { "type": "string", "format": "uuid" },
+            "username": { "type": "string" },
+            "email": { "type": "string", "format": "email" },
+            "is_admin": { "type": "boolean" },
+            "created_at": { "type": "string", "format": "date-time" },
+            "updated_at": { "type": "string", "format": "date-time" }
+          }
+        }
+      }
+    }
+  }
+}

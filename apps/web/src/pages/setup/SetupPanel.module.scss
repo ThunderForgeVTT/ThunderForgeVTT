@@ -1,0 +1,113 @@
+@use "styles/tokens" as tokens;
+
+.panel {
+  display: grid;
+  gap: 1.15rem;
+  min-height: 100%;
+  padding: 1.65rem;
+  border-radius: 26px;
+  box-shadow: inset 0 1px 0 rgba(tokens.$color-candlelight, 0.16),
+    inset 0 -12px 32px rgba(tokens.$color-background, 0.08), tokens.$shadow-lg;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    border-radius: inherit;
+    pointer-events: none;
+    border: 1px solid rgba(tokens.$color-gold-bright, 0.08);
+  }
+}
+
+.localPanel {
+  --setup-input-background: linear-gradient(
+    180deg,
+    rgba(41, 28, 19, 0.96),
+    rgba(18, 12, 9, 0.94)
+  );
+  --setup-input-text: #{tokens.$color-text};
+  --setup-input-placeholder: rgba(248, 241, 223, 0.62);
+  --setup-input-border: rgba(240, 213, 150, 0.28);
+  --setup-strength-text: rgba(248, 241, 223, 0.72);
+}
+
+.oauthPanel {
+  --setup-input-background: linear-gradient(
+    180deg,
+    rgba(255, 250, 241, 0.96),
+    rgba(245, 230, 200, 0.92)
+  );
+  --setup-input-text: #2c1a0e;
+  --setup-input-placeholder: rgba(44, 26, 14, 0.48);
+  --setup-input-border: rgba(122, 92, 158, 0.3);
+  --setup-strength-text: rgba(44, 26, 14, 0.72);
+}
+
+.asidePanel {
+  gap: 1rem;
+}
+
+.sectionHeader {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.sectionKicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.74rem;
+  font-variant: small-caps;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--setup-panel-accent, tokens.$color-gold-bright);
+}
+
+.sectionTitle {
+  font-family: var(--tf-font-ritual);
+  font-size: clamp(1.6rem, 2vw, 2rem);
+  line-height: 1;
+  letter-spacing: 0.03em;
+}
+
+.sectionSubtitle {
+  margin: 0;
+  font-family: var(--tf-font-readable);
+  color: inherit;
+  opacity: 0.82;
+}
+
+.pillRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid rgba(tokens.$color-gold-bright, 0.24);
+  background: rgba(tokens.$color-background, 0.14);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.panelFooter {
+  display: grid;
+  gap: 0.65rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid rgba(tokens.$color-gold, 0.18);
+  font-size: 0.92rem;
+  color: inherit;
+  opacity: 0.82;
+}
+
+.guideList {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.45rem;
+}

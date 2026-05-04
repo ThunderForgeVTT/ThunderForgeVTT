@@ -1,9 +1,13 @@
 export const pageLoaders = {
   login: () => import("@/pages/auth/LoginPage"),
   signup: () => import("@/pages/auth/RegisterPage"),
+  oauthCallback: () => import("@/pages/auth/OAuthCallbackPage"),
+  adminWelcome: () => import("@/pages/admin/AdminWelcomePage"),
+  adminSettings: () => import("@/pages/admin/SettingsPage"),
   setup: () => import("@/pages/setup/SetupPage"),
   setupCallback: () => import("@/pages/setup/SetupCallbackPage"),
   counter: () => import("@/pages/counter/CounterPage"),
+  welcome: () => import("@/pages/user/WelcomePage"),
   world: () => import("@/pages/world/WorldPage"),
   notFound: () => import("@/pages/not-found/NotFoundPage"),
 } as const;

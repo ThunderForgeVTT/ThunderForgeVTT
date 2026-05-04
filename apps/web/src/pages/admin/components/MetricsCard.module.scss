@@ -1,0 +1,56 @@
+@use "styles/tokens" as tokens;
+
+.card {
+  display: grid;
+  gap: 0.55rem;
+  padding: 1rem 1.1rem;
+  border-radius: tokens.$radius-md;
+  border: 1px solid rgba(tokens.$color-gold, 0.18);
+  background: rgba(tokens.$color-background, 0.18);
+  box-shadow: inset 0 1px 0 rgba(tokens.$color-candlelight, 0.06);
+
+  &[data-emphasis="violet"] {
+    border-color: rgba(tokens.$color-violet-soft, 0.28);
+  }
+
+  &[data-emphasis="forest"] {
+    border-color: rgba(tokens.$color-success, 0.28);
+  }
+}
+
+.header {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+
+  p {
+    margin: 0;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: tokens.$color-text-muted;
+  }
+}
+
+.iconWrap {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  border: 1px solid rgba(tokens.$color-gold-bright, 0.26);
+  background: rgba(tokens.$color-background, 0.22);
+  color: tokens.$color-gold-bright;
+}
+
+.value {
+  font-family: var(--tf-font-ritual);
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  line-height: 1;
+}
+
+.subtitle {
+  color: tokens.$color-text-muted;
+  font-size: 0.9rem;
+}

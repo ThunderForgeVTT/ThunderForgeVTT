@@ -1,4 +1,6 @@
 use crate::auth_middleware::AuthenticatedUser;
+use crate::models::World;
+use crate::schema::worlds;
 use crate::state::AppState;
 use axum::{
     Json, Router,
@@ -9,6 +11,7 @@ use axum::{
     },
     routing::{get, post},
 };
+use diesel::prelude::*;
 use futures_util::stream::{Stream, StreamExt};
 use std::convert::Infallible;
 use thunderforge_core::events::WorldEvent;
@@ -21,9 +24,30 @@ pub fn router() -> Router<AppState> {
         .route("/world/{id}/event", post(world_event_by_id))
 }
 
-async fn all_worlds(Extension(auth_user): Extension<AuthenticatedUser>) -> impl IntoResponse {
-    let _ = (auth_user.user_id, auth_user.session_id);
-    Json(vec![] as Vec<String>)
+async fn all_worlds(
+    Extension(auth_user): Extension<AuthenticatedUser>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let user_id = auth_user.user_id;
+    let mut conn = match state.db_pool.get() {
+        Ok(conn) => conn,
+        Err(_) => return Json(Vec::<String>::new()),
+    };
+
+    let names = tokio::task::spawn_blocking(move || {
+        worlds::table
+            .filter(worlds::created_by.eq(user_id))
+            .order(worlds::created_at.desc())
+            .select(World::as_select())
+            .load::<World>(&mut conn)
+            .map(|items| items.into_iter().map(|world| world.name).collect::<Vec<_>>())
+    })
+    .await
+    .ok()
+    .and_then(Result::ok)
+    .unwrap_or_default();
+
+    Json(names)
 }
 
 async fn world_events_by_id(

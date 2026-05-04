@@ -59,6 +59,9 @@ impl Default for Config {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Directories {
+    pub(crate) base_dir: String,
+    pub(crate) config_directory: String,
+    pub(crate) manifest_file: String,
     pub(crate) user_database: String,
     pub(crate) world_basedir: String,
     pub(crate) modules_basedir: String,
@@ -71,7 +74,17 @@ impl From<String> for Directories {
     fn from(data_path: String) -> Directories {
         let base_dir = Path::new(&data_path);
         let databases_dir = &base_dir.join("databases");
+        let config_dir = &base_dir.join("config");
         Directories {
+            base_dir: String::from(&base_dir.to_str().unwrap().to_owned()),
+            config_directory: String::from(&config_dir.to_str().unwrap().to_owned()),
+            manifest_file: String::from(
+                &config_dir
+                    .join("manifest.json")
+                    .to_str()
+                    .unwrap()
+                    .to_owned(),
+            ),
             databases_basedir: String::from(&databases_dir.to_str().unwrap().to_owned()),
             user_database: String::from(
                 &databases_dir
@@ -92,6 +105,7 @@ impl Directories {
     pub fn create_if_not_present(&self) {
         let directories = vec![
             &self.asset_directory,
+            &self.config_directory,
             &self.databases_basedir,
             &self.modules_basedir,
             &self.static_files,

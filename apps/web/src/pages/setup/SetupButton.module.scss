@@ -1,0 +1,77 @@
+@use "styles/mixins" as mixins;
+@use "styles/tokens" as tokens;
+
+.primaryAction,
+.secondaryAction,
+.providerAction,
+.helpButton {
+  border-radius: 999px;
+}
+
+.primaryAction,
+.secondaryAction,
+.providerAction {
+  min-height: 3.5rem;
+  letter-spacing: 0.14em;
+  box-shadow: inset 0 1px 0 rgba(tokens.$color-candlelight, 0.18),
+    inset 0 -10px 22px rgba(tokens.$color-background, 0.14), tokens.$shadow-md;
+
+  &:hover:not(:disabled) {
+    border-color: rgba(tokens.$color-gold-bright, 0.78);
+  }
+}
+
+.primaryAction {
+  background: linear-gradient(
+      180deg,
+      rgba(tokens.$color-candlelight, 0.32),
+      transparent 52%
+    ),
+    linear-gradient(135deg, #e2bd56, #b9822b);
+}
+
+.secondaryAction {
+  background: linear-gradient(
+      180deg,
+      rgba(tokens.$color-candlelight, 0.08),
+      transparent
+    ),
+    linear-gradient(
+      135deg,
+      rgba(tokens.$color-umber, 0.98),
+      rgba(tokens.$color-background, 0.96)
+    );
+}
+
+.providerAction {
+  justify-content: flex-start;
+  border-color: rgba(tokens.$color-violet-soft, 0.42);
+  background: linear-gradient(
+      180deg,
+      rgba(tokens.$color-candlelight, 0.08),
+      transparent 56%
+    ),
+    linear-gradient(
+      135deg,
+      rgba(tokens.$color-violet-soft, 0.34),
+      rgba(tokens.$color-umber, 0.88)
+    );
+}
+
+.helpButton {
+  width: 2.5rem;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+  padding: 0;
+  border-radius: 999px;
+  border-color: rgba(tokens.$color-gold-bright, 0.2);
+  background: rgba(tokens.$color-background, 0.36);
+
+  &:hover:not(:disabled) {
+    box-shadow: tokens.$shadow-glow;
+  }
+
+  &:focus-visible {
+    @include mixins.focus-ring;
+  }
+}

@@ -62,13 +62,6 @@ export default function App() {
           "tldraw",
           "ThunderForge",
         ]}
-        preloadAssets={[
-          {
-            href: "/brand-mark.svg",
-            as: "image",
-            type: "image/svg+xml",
-          },
-        ]}
         prefetchHrefs={
           setupStatus.setup_required ? ["/setup"] : ["/login", "/signup"]
         }

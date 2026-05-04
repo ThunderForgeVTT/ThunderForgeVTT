@@ -1,5 +1,6 @@
+use crate::admin::user_role;
 use crate::models::UserSession;
-use crate::schema::user_sessions;
+use crate::schema::{user_sessions, users};
 use crate::state::AppState;
 use axum::extract::{Request, State};
 use axum::http::{HeaderMap, Method, StatusCode};
@@ -18,6 +19,8 @@ pub struct AuthenticatedUser {
     pub user_id: uuid::Uuid,
     pub session_id: uuid::Uuid,
     pub expires_at: chrono::NaiveDateTime,
+    pub is_admin: bool,
+    pub role: String,
 }
 
 static AUTH_RATE_LIMITER: OnceLock<Mutex<HashMap<String, Vec<i64>>>> = OnceLock::new();
@@ -110,13 +113,8 @@ fn ensure_csrf_cookie(cookies: &Cookies) {
     let mut cookie = Cookie::new("csrf_token", token);
     cookie.set_path("/");
     cookie.set_http_only(false);
-    cookie.set_same_site(SameSite::Lax);
-    if std::env::var("COOKIE_SECURE")
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(!cfg!(debug_assertions))
-    {
-        cookie.set_secure(true);
-    }
+    cookie.set_same_site(SameSite::Strict);
+    cookie.set_secure(true);
     cookies.add(cookie);
 }
 
@@ -162,6 +160,21 @@ pub async fn require_authenticated_user(
     Ok(next.run(request).await)
 }
 
+pub async fn require_admin_user(
+    State(state): State<AppState>,
+    cookies: Cookies,
+    mut request: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    let authenticated_user = resolve_authenticated_user(&state, &cookies).await?;
+    if !authenticated_user.is_admin {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    request.extensions_mut().insert(authenticated_user);
+    Ok(next.run(request).await)
+}
+
 pub async fn resolve_authenticated_user(
     state: &AppState,
     cookies: &Cookies,
@@ -187,18 +200,19 @@ pub async fn resolve_authenticated_user(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let session = tokio::task::spawn_blocking(move || {
         user_sessions::table
+            .inner_join(users::table.on(users::id.eq(user_sessions::user_id)))
             .filter(user_sessions::id.eq(session_id))
             .filter(user_sessions::revoked_at.is_null())
             .filter(user_sessions::expires_at.gt(now))
-            .select(UserSession::as_select())
-            .first::<UserSession>(&mut conn)
+            .select((UserSession::as_select(), users::is_admin))
+            .first::<(UserSession, bool)>(&mut conn)
             .optional()
     })
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let Some(session) = session else {
+    let Some((session, is_admin)) = session else {
         cookies
             .private(&state.key)
             .remove(Cookie::new("session", ""));
@@ -209,5 +223,7 @@ pub async fn resolve_authenticated_user(
         user_id: session.user_id,
         session_id: session.id,
         expires_at: session.expires_at,
+        is_admin,
+        role: user_role(is_admin).to_string(),
     })
 }

@@ -80,5 +80,24 @@ export default defineConfig({
   server: {
     host: "127.0.0.1",
     port: 5173,
+    proxy: {
+      "/authentication": {
+        target: "http://127.0.0.1:30000",
+        changeOrigin: true,
+      },
+      "/user": {
+        target: "http://127.0.0.1:30000",
+        changeOrigin: true,
+      },
+      "/graphql": {
+        target: "http://127.0.0.1:30000",
+        changeOrigin: true,
+        ws: true,
+      },
+      "/world": {
+        target: "http://127.0.0.1:30000",
+        changeOrigin: true,
+      },
+    },
   },
 });

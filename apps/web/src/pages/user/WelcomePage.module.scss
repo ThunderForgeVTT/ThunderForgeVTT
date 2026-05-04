@@ -1,0 +1,59 @@
+@use "styles/mixins" as mixins;
+@use "styles/tokens" as tokens;
+
+.shell {
+  display: grid;
+  gap: 1.5rem;
+  padding-bottom: 3rem;
+}
+
+.hero {
+  @include mixins.surface(
+    linear-gradient(
+      135deg,
+      rgba(tokens.$color-background-soft, 0.96),
+      rgba(tokens.$color-umber, 0.42) 46%,
+      rgba(tokens.$color-background, 0.98)
+    )
+  );
+  display: grid;
+  gap: 0.8rem;
+  padding: 1.5rem;
+  border-radius: tokens.$radius-xl;
+
+  h1,
+  p {
+    margin: 0;
+  }
+
+  p:last-of-type {
+    color: tokens.$color-text-muted;
+    max-width: 58ch;
+  }
+}
+
+.eyebrow {
+  @include mixins.rune-caption;
+}
+
+.grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.card {
+  display: grid;
+  gap: 0.8rem;
+
+  h2,
+  p {
+    margin: 0;
+  }
+}
+
+@media (max-width: 960px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}

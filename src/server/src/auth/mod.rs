@@ -11,7 +11,7 @@ use crate::schema::{
 };
 use crate::auth_middleware::resolve_authenticated_user;
 use crate::state::AppState;
-use crate::users::{PublicUser, load_public_user};
+use crate::users::{PublicUser, load_public_user, record_auth_audit_event};
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
 use argon2::password_hash::{PasswordHasher, SaltString, rand_core::OsRng};
@@ -1606,6 +1606,7 @@ async fn resolve_oauth_login(
     let mut conn = state.db_pool.get().expect("Failed to get DB connection");
     let now = Utc::now().naive_utc();
     let provider_key = request.provider_key;
+    let provider_key_for_audit = provider_key.clone();
     let provider_user_id = request.provider_user_id;
     let provider_email = request.provider_email;
     let token_expires_at = request.token_expires_at.map(|v| v.naive_utc());
@@ -1746,16 +1747,30 @@ async fn resolve_oauth_login(
                 }),
             )
         }
-        ResolveOutcome::PasswordRequired(challenge_id) => (
-            StatusCode::CONFLICT,
-            Json(OAuthResponse {
-                status: "password_required",
-                message: "Existing account detected; confirm password to link this OAuth account"
-                    .to_string(),
-                challenge_id: Some(challenge_id),
-                login_two_factor_challenge_id: None,
-            }),
-        ),
+        ResolveOutcome::PasswordRequired(challenge_id) => {
+            let _ = record_auth_audit_event(
+                &state,
+                None,
+                "oauth_link_challenge_issued",
+                None,
+                Some(serde_json::json!({
+                    "challenge_id": challenge_id,
+                    "provider_key": provider_key_for_audit,
+                })),
+            )
+            .await;
+
+            (
+                StatusCode::CONFLICT,
+                Json(OAuthResponse {
+                    status: "password_required",
+                    message: "Existing account detected; confirm password to link this OAuth account"
+                        .to_string(),
+                    challenge_id: Some(challenge_id),
+                    login_two_factor_challenge_id: None,
+                }),
+            )
+        }
         ResolveOutcome::NoMatchingUser => error_response(
             StatusCode::NOT_FOUND,
             "no_matching_user",
@@ -1769,6 +1784,7 @@ async fn oauth_link_confirm(
     State(state): State<AppState>,
     Json(request): Json<OAuthLinkConfirmRequest>,
 ) -> (StatusCode, Json<OAuthResponse>) {
+    let challenge_id = request.challenge_id;
     let mut conn = state.db_pool.get().expect("Failed to get DB connection");
     let now = Utc::now().naive_utc();
 
@@ -1892,6 +1908,17 @@ async fn oauth_link_confirm(
                     msg.as_str(),
                 );
             }
+
+            let _ = record_auth_audit_event(
+                &state,
+                Some(user_id),
+                "oauth_link_confirmed",
+                None,
+                Some(serde_json::json!({
+                    "challenge_id": challenge_id,
+                })),
+            )
+            .await;
 
             (
                 StatusCode::OK,
@@ -2359,25 +2386,15 @@ async fn issue_session_cookie(
     let mut cookie = Cookie::new("session", session_id.to_string());
     cookie.set_path("/");
     cookie.set_http_only(true);
-    cookie.set_same_site(SameSite::Lax);
-    if std::env::var("COOKIE_SECURE")
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(!cfg!(debug_assertions))
-    {
-        cookie.set_secure(true);
-    }
+    cookie.set_same_site(SameSite::Strict);
+    cookie.set_secure(true);
     cookies.private(&state.key).add(cookie);
 
     let mut csrf_cookie = Cookie::new("csrf_token", uuid::Uuid::now_v7().to_string());
     csrf_cookie.set_path("/");
     csrf_cookie.set_http_only(false);
-    csrf_cookie.set_same_site(SameSite::Lax);
-    if std::env::var("COOKIE_SECURE")
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(!cfg!(debug_assertions))
-    {
-        csrf_cookie.set_secure(true);
-    }
+    csrf_cookie.set_same_site(SameSite::Strict);
+    csrf_cookie.set_secure(true);
     cookies.add(csrf_cookie);
     Ok(crate::models::UserSession {
         id: session_id,

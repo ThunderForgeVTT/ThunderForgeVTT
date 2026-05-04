@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thunderforgevtt.dev/schemas/oauth-action-response.schema.json",
+  "title": "OAuthActionResponse",
+  "type": "object",
+  "required": ["status", "message", "challenge_id", "login_two_factor_challenge_id"],
+  "properties": {
+    "status": { "type": "string" },
+    "message": { "type": "string" },
+    "challenge_id": { "type": ["string", "null"], "format": "uuid" },
+    "login_two_factor_challenge_id": {
+      "type": ["string", "null"],
+      "format": "uuid"
+    }
+  }
+}

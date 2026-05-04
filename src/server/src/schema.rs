@@ -111,6 +111,8 @@ diesel::table! {
         id -> Uuid,
         effect -> PolicyEffect,
         resources -> Array<Nullable<Text>>,
+        created_by -> Uuid,
+        updated_by -> Uuid,
         created_at -> Timestamp,
         updated_at -> Timestamp,
     }
@@ -166,7 +168,10 @@ diesel::table! {
         world_id -> Uuid,
         event_code -> Int4,
         token_event -> Nullable<Jsonb>,
+        created_by -> Uuid,
+        updated_by -> Uuid,
         created_at -> Timestamp,
+        updated_at -> Timestamp,
         schema_version -> Int4,
     }
 }
@@ -181,6 +186,8 @@ diesel::table! {
         label -> Nullable<Text>,
         health -> Nullable<Int4>,
         max_health -> Nullable<Int4>,
+        created_by -> Uuid,
+        updated_by -> Uuid,
         schema_version -> Int4,
         created_at -> Timestamp,
         updated_at -> Timestamp,
@@ -191,6 +198,8 @@ diesel::table! {
     worlds (id) {
         id -> Uuid,
         name -> Varchar,
+        created_by -> Uuid,
+        updated_by -> Uuid,
         created_at -> Timestamp,
         updated_at -> Timestamp,
     }

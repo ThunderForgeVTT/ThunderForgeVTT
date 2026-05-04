@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thunderforgevtt.dev/schemas/user-data-delete-response.schema.json",
+  "title": "UserDataDeleteResponse",
+  "type": "object",
+  "required": ["status", "message", "summary"],
+  "properties": {
+    "status": { "type": "string" },
+    "message": { "type": "string" },
+    "summary": {
+      "type": "object",
+      "required": [
+        "worlds_deleted",
+        "world_tokens_deleted",
+        "world_events_deleted",
+        "policies_deleted",
+        "oauth_links_deleted",
+        "sessions_deleted",
+        "login_challenges_deleted",
+        "oauth_link_challenges_deleted",
+        "users_deleted"
+      ],
+      "properties": {
+        "worlds_deleted": { "type": "integer" },
+        "world_tokens_deleted": { "type": "integer" },
+        "world_events_deleted": { "type": "integer" },
+        "policies_deleted": { "type": "integer" },
+        "oauth_links_deleted": { "type": "integer" },
+        "sessions_deleted": { "type": "integer" },
+        "login_challenges_deleted": { "type": "integer" },
+        "oauth_link_challenges_deleted": { "type": "integer" },
+        "users_deleted": { "type": "integer" }
+      }
+    }
+  }
+}

@@ -1,0 +1,297 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ThunderForgeVTT Phase 1 Authentication and User Data API",
+    "version": "v1",
+    "description": "Public contract for local auth, OAuth completion/linking, session lifecycle, self-service data export, and permanent deletion."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Same-origin deployment"
+    }
+  ],
+  "paths": {
+    "/authentication/register": {
+      "post": {
+        "summary": "Register a local account",
+        "responses": {
+          "201": {
+            "description": "Account created and session issued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSessionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/authentication/login": {
+      "post": {
+        "summary": "Sign in with local credentials",
+        "responses": {
+          "200": {
+            "description": "Authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials or second factor required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSessionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/authentication/session": {
+      "get": {
+        "summary": "Fetch the current session",
+        "responses": {
+          "200": {
+            "description": "Active session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSessionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/authentication/session/refresh": {
+      "post": {
+        "summary": "Rotate the current session cookie",
+        "responses": {
+          "200": {
+            "description": "Session rotated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSessionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/authentication/logout": {
+      "post": {
+        "summary": "Log out and revoke the current session",
+        "responses": {
+          "200": {
+            "description": "Session cleared",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSessionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/authentication/oauth/{providerKey}/token": {
+      "post": {
+        "summary": "Exchange OAuth code/state after provider redirect",
+        "responses": {
+          "200": {
+            "description": "OAuth sign-in succeeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthActionResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Password confirmation required before linking",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthActionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/authentication/oauth/link/confirm": {
+      "post": {
+        "summary": "Confirm an OAuth link against a local account password",
+        "responses": {
+          "200": {
+            "description": "Link created and session issued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthActionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/authentication/2fa/verify": {
+      "post": {
+        "summary": "Verify a login-time two-factor challenge",
+        "responses": {
+          "200": {
+            "description": "2FA completed and session issued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthActionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user/data/export": {
+      "get": {
+        "summary": "Export the authenticated user's data",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["json", "zip"],
+              "default": "json"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON or ZIP export payload"
+          }
+        }
+      }
+    },
+    "/user/data": {
+      "delete": {
+        "summary": "Permanently delete the authenticated user and owned persisted data",
+        "responses": {
+          "200": {
+            "description": "Deletion completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDataDeleteResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AuthUser": {
+        "type": "object",
+        "required": ["id", "username", "email", "is_admin", "created_at", "updated_at"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "username": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "is_admin": { "type": "boolean" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "AuthSessionResponse": {
+        "type": "object",
+        "required": ["status", "message", "session", "login_two_factor_challenge_id", "requires_email_verification"],
+        "properties": {
+          "status": { "type": "string" },
+          "message": { "type": "string" },
+          "login_two_factor_challenge_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "requires_email_verification": { "type": "boolean" },
+          "session": {
+            "type": ["object", "null"],
+            "properties": {
+              "authenticated": { "type": "boolean" },
+              "session_expires_at": { "type": "string", "format": "date-time" },
+              "user": { "$ref": "#/components/schemas/AuthUser" }
+            }
+          }
+        }
+      },
+      "OAuthActionResponse": {
+        "type": "object",
+        "required": ["status", "message", "challenge_id", "login_two_factor_challenge_id"],
+        "properties": {
+          "status": { "type": "string" },
+          "message": { "type": "string" },
+          "challenge_id": { "type": ["string", "null"], "format": "uuid" },
+          "login_two_factor_challenge_id": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          }
+        }
+      },
+      "UserDataDeleteResponse": {
+        "type": "object",
+        "required": ["status", "message", "summary"],
+        "properties": {
+          "status": { "type": "string" },
+          "message": { "type": "string" },
+          "summary": {
+            "$ref": "#/components/schemas/UserDataDeleteSummary"
+          }
+        }
+      },
+      "UserDataDeleteSummary": {
+        "type": "object",
+        "required": [
+          "worlds_deleted",
+          "world_tokens_deleted",
+          "world_events_deleted",
+          "policies_deleted",
+          "oauth_links_deleted",
+          "sessions_deleted",
+          "login_challenges_deleted",
+          "oauth_link_challenges_deleted",
+          "users_deleted"
+        ],
+        "properties": {
+          "worlds_deleted": { "type": "integer" },
+          "world_tokens_deleted": { "type": "integer" },
+          "world_events_deleted": { "type": "integer" },
+          "policies_deleted": { "type": "integer" },
+          "oauth_links_deleted": { "type": "integer" },
+          "sessions_deleted": { "type": "integer" },
+          "login_challenges_deleted": { "type": "integer" },
+          "oauth_link_challenges_deleted": { "type": "integer" },
+          "users_deleted": { "type": "integer" }
+        }
+      }
+    }
+  }
+}

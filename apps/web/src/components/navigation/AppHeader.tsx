@@ -24,7 +24,7 @@ interface AppHeaderProps {
 
 export function AppHeader({ brandHref, navItems }: AppHeaderProps) {
   const navigate = useNavigate();
-  const { isAuthenticated, logout, user } = useAuth();
+  const { isAdmin, isAuthenticated, logout, user } = useAuth();
 
   return (
     <header className={styles.header}>
@@ -73,19 +73,19 @@ export function AppHeader({ brandHref, navItems }: AppHeaderProps) {
             }
             items={[
               {
-                label: "Open dashboard preview",
-                icon: "scene",
-                onSelect: () => navigate("/counter"),
+                label: isAdmin ? "Open admin welcome" : "Open welcome hall",
+                icon: isAdmin ? "crown" : "scene",
+                onSelect: () => navigate(isAdmin ? "/admin/welcome" : "/welcome"),
+              },
+              {
+                label: "System settings",
+                icon: "settings",
+                onSelect: () => navigate(isAdmin ? "/admin/system" : "/counter"),
               },
               {
                 label: "Enter demo world",
                 icon: "worlds",
                 onSelect: () => navigate("/world/demo-world"),
-              },
-              {
-                label: "Review setup gate",
-                icon: "settings",
-                onSelect: () => navigate("/setup"),
               },
               ...(isAuthenticated
                 ? [
@@ -108,7 +108,13 @@ export function AppHeader({ brandHref, navItems }: AppHeaderProps) {
             />
             <div>
               <strong>{user?.username ?? "Archmage"}</strong>
-              <small>{isAuthenticated ? "Authenticated session" : "Realm steward"}</small>
+              <small>
+                {isAuthenticated
+                  ? user?.role === "admin"
+                    ? "Realm administrator"
+                    : "Realm steward"
+                  : "Realm steward"}
+              </small>
             </div>
           </div>
         </div>

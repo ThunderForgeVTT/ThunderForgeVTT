@@ -1,0 +1,99 @@
+@use "styles/mixins" as mixins;
+@use "styles/tokens" as tokens;
+
+.input {
+  border-radius: 18px;
+  border-color: var(--setup-input-border, rgba(240, 213, 150, 0.28));
+  color: var(--setup-input-text, tokens.$color-text);
+  background: var(
+    --setup-input-background,
+    linear-gradient(
+      180deg,
+      rgba(tokens.$color-background-soft, 0.92),
+      rgba(tokens.$color-background, 0.94)
+    )
+  );
+  box-shadow: inset 0 1px 0 rgba(tokens.$color-candlelight, 0.08),
+    inset 0 -8px 18px rgba(tokens.$color-background, 0.12);
+
+  &::placeholder {
+    color: var(--setup-input-placeholder, tokens.$color-text-muted);
+  }
+
+  &:hover {
+    border-color: rgba(tokens.$color-gold-bright, 0.52);
+  }
+
+  &:focus-visible {
+    border-color: rgba(tokens.$color-gold-bright, 0.8);
+    box-shadow: 0 0 0 1px rgba(tokens.$color-gold-bright, 0.64),
+      0 0 0 4px rgba(tokens.$color-violet-soft, 0.18), tokens.$shadow-glow,
+      inset 0 1px 0 rgba(tokens.$color-candlelight, 0.18);
+  }
+}
+
+.strength {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.strengthHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.82rem;
+  color: var(--setup-strength-text, tokens.$color-text-muted);
+}
+
+.strengthTrack {
+  height: 0.5rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(tokens.$color-background, 0.24);
+  box-shadow: inset 0 1px 2px rgba(tokens.$color-background, 0.18);
+}
+
+.strengthFill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    var(--setup-strength-color, tokens.$color-danger),
+    rgba(tokens.$color-candlelight, 0.96)
+  );
+  transition: width tokens.$transition-slow, background-color tokens.$transition-base;
+}
+
+.strengthCopy {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--setup-strength-text, tokens.$color-text-muted);
+}
+
+.weak {
+  --setup-strength-color: #{tokens.$color-danger};
+}
+
+.fair {
+  --setup-strength-color: #{tokens.$color-warning};
+}
+
+.good {
+  --setup-strength-color: #{tokens.$color-gold};
+}
+
+.strong {
+  --setup-strength-color: #{tokens.$color-success};
+}
+
+.helpInline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.validationNote {
+  font-size: 0.82rem;
+  color: var(--setup-strength-text, tokens.$color-text-muted);
+}

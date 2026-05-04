@@ -279,25 +279,29 @@ pub struct NewOAuthLinkChallenge {
     pub created_at: chrono::NaiveDateTime,
 }
 
-#[derive(Queryable, Selectable, Insertable)]
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
 #[diesel(table_name = worlds)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct World {
     pub id: uuid::Uuid,
     pub name: String,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
 }
 
 use crate::db_types::PolicyEffectEnum;
 
-#[derive(Queryable, Selectable, Insertable, Debug)]
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
 #[diesel(table_name = policies)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Policy {
     pub id: uuid::Uuid,
     pub effect: PolicyEffectEnum,
     pub resources: Vec<Option<String>>,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
 }
@@ -310,7 +314,10 @@ pub struct WorldEvent {
     pub world_id: uuid::Uuid,
     pub event_code: i32,
     pub token_event: Option<serde_json::Value>,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
     pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
     pub schema_version: i32,
 }
 
@@ -326,6 +333,8 @@ pub struct WorldToken {
     pub label: Option<String>,
     pub health: Option<i32>,
     pub max_health: Option<i32>,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
     pub schema_version: i32,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
@@ -342,6 +351,8 @@ pub struct NewWorldToken {
     pub label: Option<String>,
     pub health: Option<i32>,
     pub max_health: Option<i32>,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
     pub schema_version: i32,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,

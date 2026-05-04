@@ -9,9 +9,13 @@ import { pageLoaders } from "./pageLoaders";
 
 const LoginPage = lazy(pageLoaders.login);
 const RegisterPage = lazy(pageLoaders.signup);
+const OAuthCallbackPage = lazy(pageLoaders.oauthCallback);
+const AdminWelcomePage = lazy(pageLoaders.adminWelcome);
+const AdminSettingsPage = lazy(pageLoaders.adminSettings);
 const SetupPage = lazy(pageLoaders.setup);
 const SetupCallbackPage = lazy(pageLoaders.setupCallback);
 const CounterPage = lazy(pageLoaders.counter);
+const WelcomePage = lazy(pageLoaders.welcome);
 const WorldPage = lazy(pageLoaders.world);
 const NotFoundPage = lazy(pageLoaders.notFound);
 
@@ -40,40 +44,79 @@ function RequireAuthenticated({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+function RequireAdmin({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  const { isAdmin, isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <Loader fullScreen label="Restoring session" />;
+  }
+
+  if (!isAuthenticated) {
+    const returnTo = `${location.pathname}${location.search}${location.hash}`;
+    return <Navigate to={`/login?returnTo=${encodeURIComponent(returnTo)}`} replace />;
+  }
+
+  if (!isAdmin) {
+    return <Navigate to="/welcome" replace />;
+  }
+
+  return <>{children}</>;
+}
+
 export default function AppRoutes({
   setupStatus,
   onSetupStatusRefresh,
 }: AppRoutesProps) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAdmin, isAuthenticated, isLoading, redirectAfterLogin } = useAuth();
   const setupRequired = setupStatus.setup_required;
 
   if (!setupRequired && isLoading) {
     return <Loader fullScreen label="Restoring session" />;
   }
 
+  const authenticatedHome = redirectAfterLogin();
+  const publicHome = isAuthenticated && !isLoading ? authenticatedHome : "/login";
+
   const navItems: readonly HeaderNavItem[] = setupRequired
     ? [
         { to: "/setup", label: "Setup", prefetch: "setup", icon: "settings" },
         { to: "/counter", label: "Status", prefetch: "counter", icon: "scene" },
       ]
-    : isAuthenticated
+    : isAuthenticated && isAdmin
       ? [
-          { to: "/counter", label: "Dashboard", prefetch: "counter", icon: "scene" },
+          {
+            to: "/admin/welcome",
+            label: "Admin",
+            prefetch: "adminWelcome",
+            icon: "crown",
+          },
+          {
+            to: "/admin/settings",
+            label: "Settings",
+            prefetch: "adminSettings",
+            icon: "settings",
+          },
+          { to: "/counter", label: "Preview", prefetch: "counter", icon: "scene" },
           { to: "/world/demo-world", label: "World", prefetch: "world", icon: "worlds" },
         ]
-      : [
-          { to: "/login", label: "Login", prefetch: "login", icon: "shield" },
-          { to: "/register", label: "Register", prefetch: "signup", icon: "quill" },
-        ];
-
-  const publicHome = isAuthenticated && !isLoading ? "/counter" : "/login";
+      : isAuthenticated
+        ? [
+            { to: "/welcome", label: "Welcome", prefetch: "welcome", icon: "scene" },
+            { to: "/counter", label: "Preview", prefetch: "counter", icon: "spark" },
+            { to: "/world/demo-world", label: "World", prefetch: "world", icon: "worlds" },
+          ]
+        : [
+            { to: "/login", label: "Login", prefetch: "login", icon: "shield" },
+            { to: "/register", label: "Register", prefetch: "signup", icon: "quill" },
+          ];
 
   return (
     <Routes>
       <Route
         element={
           <MainLayout
-            brandHref={setupRequired ? "/setup" : isAuthenticated ? "/counter" : "/login"}
+            brandHref={setupRequired ? "/setup" : isAuthenticated ? authenticatedHome : "/login"}
             navItems={navItems}
           />
         }
@@ -133,7 +176,7 @@ export default function AppRoutes({
             setupRequired ? (
               <Navigate to="/setup" replace />
             ) : isAuthenticated ? (
-              <Navigate to="/counter" replace />
+              <Navigate to={authenticatedHome} replace />
             ) : (
               renderLazyPage(<LoginPage />, "Loading login screen")
             )
@@ -145,13 +188,81 @@ export default function AppRoutes({
             setupRequired ? (
               <Navigate to="/setup" replace />
             ) : isAuthenticated ? (
-              <Navigate to="/counter" replace />
+              <Navigate to={authenticatedHome} replace />
             ) : (
               renderLazyPage(<RegisterPage />, "Loading registration screen")
             )
           }
         />
         <Route path="/signup" element={<Navigate to="/register" replace />} />
+        <Route
+          path="/oauth/callback/:providerKey"
+          element={renderLazyPage(<OAuthCallbackPage />, "Completing OAuth sign-in")}
+        />
+        <Route
+          path="/admin/welcome"
+          element={
+            <RequireAdmin>
+              {renderLazyPage(<AdminWelcomePage />, "Loading admin welcome")}
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="/admin/settings"
+          element={
+            <RequireAdmin>
+              {renderLazyPage(
+                <AdminSettingsPage initialSection="overview" />,
+                "Loading admin settings",
+              )}
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="/admin/analytics"
+          element={
+            <RequireAdmin>
+              {renderLazyPage(
+                <AdminSettingsPage initialSection="storage" />,
+                "Loading admin analytics",
+              )}
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="/admin/oauth"
+          element={
+            <RequireAdmin>
+              {renderLazyPage(
+                <AdminSettingsPage initialSection="configuration" />,
+                "Loading OAuth settings",
+              )}
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="/admin/system"
+          element={
+            <RequireAdmin>
+              {renderLazyPage(
+                <AdminSettingsPage initialSection="configuration" />,
+                "Loading system settings",
+              )}
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="/welcome"
+          element={
+            <RequireAuthenticated>
+              {isAdmin ? (
+                <Navigate to="/admin/welcome" replace />
+              ) : (
+                renderLazyPage(<WelcomePage />, "Loading welcome page")
+              )}
+            </RequireAuthenticated>
+          }
+        />
         <Route
           path="/counter"
           element={
