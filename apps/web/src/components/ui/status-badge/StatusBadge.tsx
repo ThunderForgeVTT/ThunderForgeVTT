@@ -20,10 +20,10 @@ export function StatusBadge({
     variant === "success"
       ? "shield"
       : variant === "warning"
-        ? "torch"
-        : variant === "danger"
-          ? "skull"
-          : "spark";
+      ? "torch"
+      : variant === "danger"
+      ? "skull"
+      : "spark";
 
   return (
     <p className={cn(styles.badge, styles[variant], className)}>

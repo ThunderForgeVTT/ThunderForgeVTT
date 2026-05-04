@@ -11,7 +11,14 @@ export interface FieldProps {
   children: ReactNode;
 }
 
-export function Field({ label, htmlFor, hint, error, accent, children }: FieldProps) {
+export function Field({
+  label,
+  htmlFor,
+  hint,
+  error,
+  accent,
+  children,
+}: FieldProps) {
   return (
     <div className={styles.field}>
       <Label.Root className={styles.label} htmlFor={htmlFor}>

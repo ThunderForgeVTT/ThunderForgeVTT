@@ -9,8 +9,12 @@
 .line {
   flex: 1;
   height: 1px;
-  background:
-    linear-gradient(90deg, transparent, rgba(tokens.$color-gold, 0.64), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(tokens.$color-gold, 0.64),
+    transparent
+  );
 }
 
 .label {

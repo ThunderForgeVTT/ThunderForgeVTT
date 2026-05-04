@@ -32,21 +32,38 @@ export function Dropdown({
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>{trigger}</DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content align={align} className={cn(styles.content, className)} sideOffset={10}>
+        <DropdownMenu.Content
+          align={align}
+          className={cn(styles.content, className)}
+          sideOffset={10}
+        >
           {items.map((item) => {
             const body = (
-              <span className={cn(styles.item, item.tone === "danger" && styles.danger)}>
+              <span
+                className={cn(
+                  styles.item,
+                  item.tone === "danger" && styles.danger,
+                )}
+              >
                 <span className={styles.itemLabel}>
-                  {item.icon ? <FantasyIcon name={item.icon} size={16} /> : null}
+                  {item.icon ? (
+                    <FantasyIcon name={item.icon} size={16} />
+                  ) : null}
                   {item.label}
                 </span>
-                {item.shortcut ? <span className={styles.shortcut}>{item.shortcut}</span> : null}
+                {item.shortcut ? (
+                  <span className={styles.shortcut}>{item.shortcut}</span>
+                ) : null}
               </span>
             );
 
             if (item.href) {
               return (
-                <DropdownMenu.Item key={item.label} asChild disabled={item.disabled}>
+                <DropdownMenu.Item
+                  key={item.label}
+                  asChild
+                  disabled={item.disabled}
+                >
                   <a className={styles.rootItem} href={item.href}>
                     {body}
                   </a>

@@ -28,9 +28,15 @@
   inset: 0;
   pointer-events: none;
   z-index: 2;
-  background:
-    linear-gradient(rgba(tokens.$color-violet-soft, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(tokens.$color-violet-soft, 0.07) 1px, transparent 1px);
+  background: linear-gradient(
+      rgba(tokens.$color-violet-soft, 0.07) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      rgba(tokens.$color-violet-soft, 0.07) 1px,
+      transparent 1px
+    );
   background-size: 48px 48px;
   mask-image: radial-gradient(circle at center, black, transparent 92%);
 }
@@ -60,9 +66,16 @@
   height: 8rem;
   border-radius: tokens.$radius-md;
   border: 1px dashed rgba(tokens.$color-umber, 0.28);
-  background:
-    radial-gradient(circle at center, rgba(tokens.$color-candlelight, 0.18), transparent 65%),
-    linear-gradient(180deg, rgba(tokens.$color-parchment-shadow, 0.12), rgba(tokens.$color-parchment, 0.05));
+  background: radial-gradient(
+      circle at center,
+      rgba(tokens.$color-candlelight, 0.18),
+      transparent 65%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(tokens.$color-parchment-shadow, 0.12),
+      rgba(tokens.$color-parchment, 0.05)
+    );
   overflow: hidden;
 }
 
@@ -78,7 +91,14 @@
 }
 
 :global(.tl-container) {
-  background:
-    radial-gradient(circle at top, rgba(tokens.$color-candlelight, 0.12), transparent 28%),
-    linear-gradient(180deg, rgba(tokens.$color-parchment, 0.12), rgba(tokens.$color-parchment, 0.04));
+  background: radial-gradient(
+      circle at top,
+      rgba(tokens.$color-candlelight, 0.12),
+      transparent 28%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(tokens.$color-parchment, 0.12),
+      rgba(tokens.$color-parchment, 0.04)
+    );
 }

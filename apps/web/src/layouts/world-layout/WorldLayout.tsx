@@ -16,7 +16,12 @@ interface WorldLayoutProps {
   tokens: WorldToken[];
 }
 
-export function WorldLayout({ worldId, canvas, whiteboard, tokens }: WorldLayoutProps) {
+export function WorldLayout({
+  worldId,
+  canvas,
+  whiteboard,
+  tokens,
+}: WorldLayoutProps) {
   return (
     <main className={styles.layout} data-world-id={worldId}>
       <header className={styles.header}>
@@ -24,8 +29,8 @@ export function WorldLayout({ worldId, canvas, whiteboard, tokens }: WorldLayout
           <p className={styles.eyebrow}>World workspace</p>
           <h1>{worldId || "Untitled realm"}</h1>
           <p className={styles.copy}>
-            Bevy remains the authority for the 3D stage while the fantasy shell layers
-            in navigation, party rosters, and whiteboard controls.
+            Bevy remains the authority for the 3D stage while the fantasy shell
+            layers in navigation, party rosters, and whiteboard controls.
           </p>
         </div>
         <div className={styles.headerActions}>
@@ -44,7 +49,10 @@ export function WorldLayout({ worldId, canvas, whiteboard, tokens }: WorldLayout
               <div className={styles.tokenList}>
                 {tokens.map((token) => (
                   <div key={token.id} className={styles.tokenRow}>
-                    <TokenAvatar seed={token.id} label={token.label ?? token.id} />
+                    <TokenAvatar
+                      seed={token.id}
+                      label={token.label ?? token.id}
+                    />
                     <div>
                       <strong>{token.label ?? token.id}</strong>
                       <small>
@@ -67,8 +75,8 @@ export function WorldLayout({ worldId, canvas, whiteboard, tokens }: WorldLayout
                   icon: "worlds",
                   content: (
                     <p className={styles.tabCopy}>
-                      Future world metadata, discovery, and handoff flows can mount in
-                      this sidebar without moving the engine canvas.
+                      Future world metadata, discovery, and handoff flows can
+                      mount in this sidebar without moving the engine canvas.
                     </p>
                   ),
                 },
@@ -78,8 +86,9 @@ export function WorldLayout({ worldId, canvas, whiteboard, tokens }: WorldLayout
                   icon: "actors",
                   content: (
                     <p className={styles.tabCopy}>
-                      Actor sheets, permissions, and compendium panels can sit beside
-                      the scene while staying decoupled from runtime sync.
+                      Actor sheets, permissions, and compendium panels can sit
+                      beside the scene while staying decoupled from runtime
+                      sync.
                     </p>
                   ),
                 },
@@ -89,8 +98,9 @@ export function WorldLayout({ worldId, canvas, whiteboard, tokens }: WorldLayout
                   icon: "shield",
                   content: (
                     <p className={styles.tabCopy}>
-                      Player roles and world governance can layer onto this shell
-                      without rewriting the whiteboard or Bevy entrypoints.
+                      Player roles and world governance can layer onto this
+                      shell without rewriting the whiteboard or Bevy
+                      entrypoints.
                     </p>
                   ),
                 },

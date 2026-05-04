@@ -140,19 +140,23 @@ sequenceDiagram
 ### Negative
 
 1. **Heavier Frontend Surface Area**: More components, styles, and shell variants increase maintenance cost.
-   - *Mitigation:* Keep the design system centralized in tokens/mixins and continue routing UI changes through shared primitives.
+
+   - _Mitigation:_ Keep the design system centralized in tokens/mixins and continue routing UI changes through shared primitives.
 
 2. **Theme Coupling**: Strong visual identity makes ad hoc one-off components more obviously inconsistent.
-   - *Mitigation:* Require new views to compose from `components/ui/*` and theme tokens rather than page-local styling first.
+
+   - _Mitigation:_ Require new views to compose from `components/ui/*` and theme tokens rather than page-local styling first.
 
 3. **Wrapped tldraw Complexity**: Themed chrome around tldraw adds coordination work whenever editor behavior changes.
-   - *Mitigation:* Continue treating `WorldWhiteboard.tsx` as a wrapper layer and avoid deep editor rewrites unless a stable API requires it.
+
+   - _Mitigation:_ Continue treating `WorldWhiteboard.tsx` as a wrapper layer and avoid deep editor rewrites unless a stable API requires it.
 
 4. **External Identity Dependency**: Dicebear introduces a remote avatar generation dependency.
-   - *Mitigation:* Keep generation isolated behind `useAvatar()` so future local rendering/caching strategies can replace it without page churn.
+
+   - _Mitigation:_ Keep generation isolated behind `useAvatar()` so future local rendering/caching strategies can replace it without page churn.
 
 5. **CSS Growth**: A fantasy shell with multiple surface types and effects expands SCSS output and styling complexity.
-   - *Mitigation:* Prefer reusable mixins and shared modules; avoid duplicating visual recipes in page-level SCSS.
+   - _Mitigation:_ Prefer reusable mixins and shared modules; avoid duplicating visual recipes in page-level SCSS.
 
 ### Implementation Todos
 

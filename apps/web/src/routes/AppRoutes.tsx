@@ -21,7 +21,9 @@ interface AppRoutesProps {
 }
 
 function renderLazyPage(page: ReactNode, label: string) {
-  return <Suspense fallback={<Loader fullScreen label={label} />}>{page}</Suspense>;
+  return (
+    <Suspense fallback={<Loader fullScreen label={label} />}>{page}</Suspense>
+  );
 }
 
 export default function AppRoutes({
@@ -30,14 +32,19 @@ export default function AppRoutes({
 }: AppRoutesProps) {
   const setupRequired = setupStatus.setup_required;
   const navItems: readonly HeaderNavItem[] = setupRequired
-      ? [
-          { to: "/setup", label: "Setup", prefetch: "setup", icon: "settings" },
-          { to: "/counter", label: "Status", prefetch: "counter", icon: "scene" },
-        ]
-      : [
-          { to: "/login", label: "Login", prefetch: "login", icon: "shield" },
-          { to: "/signup", label: "Sign up", prefetch: "signup", icon: "quill" },
-          { to: "/counter", label: "Dashboard", prefetch: "counter", icon: "scene" },
+    ? [
+        { to: "/setup", label: "Setup", prefetch: "setup", icon: "settings" },
+        { to: "/counter", label: "Status", prefetch: "counter", icon: "scene" },
+      ]
+    : [
+        { to: "/login", label: "Login", prefetch: "login", icon: "shield" },
+        { to: "/signup", label: "Sign up", prefetch: "signup", icon: "quill" },
+        {
+          to: "/counter",
+          label: "Dashboard",
+          prefetch: "counter",
+          icon: "scene",
+        },
       ];
 
   return (
@@ -52,7 +59,9 @@ export default function AppRoutes({
       >
         <Route
           index
-          element={<Navigate to={setupRequired ? "/setup" : "/login"} replace />}
+          element={
+            <Navigate to={setupRequired ? "/setup" : "/login"} replace />
+          }
         />
         <Route
           path="/setup/:code"

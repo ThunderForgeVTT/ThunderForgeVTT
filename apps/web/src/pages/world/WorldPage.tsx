@@ -35,7 +35,10 @@ export default function WorldPage() {
   );
   const [worldState, setWorldState] = useState(() => worldStore.getState());
 
-  useEffect(() => worldStore.subscribe((event) => setWorldState(event.state)), [worldStore]);
+  useEffect(
+    () => worldStore.subscribe((event) => setWorldState(event.state)),
+    [worldStore],
+  );
 
   useEffect(() => {
     if (!id) {
@@ -89,7 +92,9 @@ export default function WorldPage() {
 
     worldStore.dispatch({ type: "set_world", worldId: id }, "ui");
 
-    void import("@/engine/bevy").then(({ setActiveWorld }) => setActiveWorld(id));
+    void import("@/engine/bevy").then(({ setActiveWorld }) =>
+      setActiveWorld(id),
+    );
   }, [id, worldStore]);
 
   const seo = useMemo<SeoConfig>(
@@ -113,9 +118,7 @@ export default function WorldPage() {
             style={{ display: "block", width: "100%", height: "100%" }}
           />
         }
-        whiteboard={
-          <WorldWhiteboard worldId={id} worldStore={worldStore} />
-        }
+        whiteboard={<WorldWhiteboard worldId={id} worldStore={worldStore} />}
       />
     </>
   );

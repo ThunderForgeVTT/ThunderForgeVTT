@@ -14,7 +14,9 @@ export function Loader({
   className,
 }: LoaderProps) {
   return (
-    <div className={cn(styles.loader, fullScreen && styles.fullScreen, className)}>
+    <div
+      className={cn(styles.loader, fullScreen && styles.fullScreen, className)}
+    >
       <span className={styles.spinner} aria-hidden="true">
         <FantasyIcon name="spark" size={20} />
       </span>

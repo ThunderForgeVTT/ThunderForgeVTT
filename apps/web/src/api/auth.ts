@@ -24,7 +24,7 @@ interface SetupOAuthStartResponse {
 function encodeCredentials(
   username: string,
   password: string,
-  id = ""
+  id = "",
 ): string {
   return btoa([id, username, password].join(SEPARATOR));
 }
@@ -54,7 +54,7 @@ export async function getSetupStatus(): Promise<SetupStatus> {
 
 export async function basicLogin(
   username: string,
-  password: string
+  password: string,
 ): Promise<string> {
   const response = await fetch(`${API_BASE}/authentication/basic`, {
     method: "POST",
@@ -67,7 +67,7 @@ export async function basicLogin(
 
 export async function basicSignUp(
   username: string,
-  password: string
+  password: string,
 ): Promise<string> {
   // Server-side signup endpoint is not implemented yet; this preserves current behavior.
   return basicLogin(username, password);
@@ -77,7 +77,7 @@ export async function setupBasic(
   adminCode: string,
   username: string,
   email: string,
-  password: string
+  password: string,
 ): Promise<string> {
   const response = await fetch(`${API_BASE}/authentication/setup/basic`, {
     method: "POST",
@@ -99,7 +99,7 @@ export async function setupBasic(
 export async function startSetupOAuth(
   providerKey: string,
   adminCode: string,
-  username?: string
+  username?: string,
 ): Promise<void> {
   const redirectUri = `${window.location.origin}${API_BASE}/authentication/setup/oauth/${providerKey}/callback`;
   const returnTo = `${window.location.origin}/setup/callback?oauth=success`;
@@ -118,7 +118,7 @@ export async function startSetupOAuth(
         username: username?.trim() ? username.trim() : undefined,
         return_to: returnTo,
       }),
-    }
+    },
   );
 
   const contentType = response.headers.get("content-type") ?? "";

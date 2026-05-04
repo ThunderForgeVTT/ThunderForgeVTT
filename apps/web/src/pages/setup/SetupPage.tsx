@@ -18,7 +18,11 @@ export const setupPageSeo: SeoConfig = {
   title: "Secure first-run setup",
   description:
     "Complete ThunderForge VTT bootstrap with a one-time admin code, local credentials, or an approved OAuth provider.",
-  keywords: ["ThunderForge setup", "bootstrap admin", "virtual tabletop onboarding"],
+  keywords: [
+    "ThunderForge setup",
+    "bootstrap admin",
+    "virtual tabletop onboarding",
+  ],
   canonicalPath: "/setup",
   noindex: true,
   prefetchHrefs: ["/setup/callback", "/counter"],
@@ -62,7 +66,12 @@ export default function SetupPage({
     setStatus(null);
 
     try {
-      const result = await setupBasic(resolvedAdminCode, username, email, password);
+      const result = await setupBasic(
+        resolvedAdminCode,
+        username,
+        email,
+        password,
+      );
       setStatus(result);
       await onSetupComplete();
       navigate("/counter?bootstrap=complete", { replace: true });
@@ -99,8 +108,8 @@ export default function SetupPage({
             <h1>Secure the first administrator account.</h1>
             <p>
               ThunderForge is in first-run mode. Enter the one-time admin code
-              from the server and finish setup with either local credentials or a
-              configured OAuth provider.
+              from the server and finish setup with either local credentials or
+              a configured OAuth provider.
             </p>
           </section>
 
@@ -158,7 +167,9 @@ export default function SetupPage({
                     id="setup-password-confirmation"
                     type="password"
                     value={passwordConfirmation}
-                    onChange={(event) => setPasswordConfirmation(event.target.value)}
+                    onChange={(event) =>
+                      setPasswordConfirmation(event.target.value)
+                    }
                     placeholder="Confirm the password"
                   />
                 </Field>
@@ -178,8 +189,8 @@ export default function SetupPage({
             <Card surface="parchment" className={styles.card}>
               <h2>OAuth bootstrap</h2>
               <p>
-                Start with a configured provider and create the initial admin from
-                that identity.
+                Start with a configured provider and create the initial admin
+                from that identity.
               </p>
 
               <Field label="Bootstrap admin code" htmlFor="setup-oauth-code">
@@ -232,7 +243,9 @@ export default function SetupPage({
           {resolvedStatus ? (
             <StatusBadge
               variant={
-                resolvedStatus.toLowerCase().includes("failed") ? "danger" : "info"
+                resolvedStatus.toLowerCase().includes("failed")
+                  ? "danger"
+                  : "info"
               }
             >
               {resolvedStatus}

@@ -66,10 +66,8 @@
   padding: 0.65rem 0.9rem;
   border-radius: tokens.$radius-sm;
   color: tokens.$color-text-muted;
-  transition:
-    color tokens.$transition-base,
-    background-color tokens.$transition-base,
-    box-shadow tokens.$transition-base;
+  transition: color tokens.$transition-base,
+    background-color tokens.$transition-base, box-shadow tokens.$transition-base;
 
   &:hover {
     color: tokens.$color-gold-bright;

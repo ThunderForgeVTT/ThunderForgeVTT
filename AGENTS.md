@@ -82,7 +82,7 @@ export const DrawingComponent = () => {
 
 // ✅ Right
 export const DrawingComponent = () => {
-  const drawing$ = useRxDB('drawings').find().sort('_id');
+  const drawing$ = useRxDB("drawings").find().sort("_id");
   const handleDraw = (shape) => {
     drawing$.insert({ ...shape, _id: uuid() }); // RxDB handles everything
     // RxDB replication → GraphQL mutation → Server → NOTIFY → other clients
@@ -196,10 +196,10 @@ pub fn handle_move_token(
 ) {
     if let Ok(mut transform) = query.get_single_mut() {
         let old_pos = transform.translation;
-        
+
         // 1. Update locally (optimistic)
         transform.translation = new_pos;
-        
+
         // 2. Queue mutation to server
         mutation_queue.push_with_rollback(
             MoveTokenMutation { ... },
@@ -217,17 +217,17 @@ pub fn handle_move_token(
 #### React/RxDB Optimistic Updates
 
 ```typescript
-export const handleTokenMove = async (tokenId: string, newPos: { x, y }) => {
+export const handleTokenMove = async (tokenId: string, newPos: { x; y }) => {
   const tokens = db.collections.world_tokens;
   const oldDoc = await tokens.findByIds([tokenId]);
-  
+
   // 1. Update locally (optimistic)
   await tokens.upsert({
     ...oldDoc[0],
     x: newPos.x,
     y: newPos.y,
   });
-  
+
   // 2. Send mutation to server
   try {
     await graphql.mutate(UpsertTokenMutation, { tokenId, ...newPos });
@@ -259,7 +259,7 @@ pub struct WorldToken {
     pub max_health: i32,
     pub strength: i32,
     pub temporary_buff_strength: i32,
-    
+
     // Derived data (calculated locally, never sent)
     #[serde(skip)]
     pub effective_strength: i32,
@@ -276,6 +276,7 @@ impl WorldToken {
 ```
 
 **In Bevy:**
+
 ```rust
 pub fn calculate_stats_system(mut query: Query<&mut WorldToken>) {
     for mut token in query.iter_mut() {
@@ -285,8 +286,9 @@ pub fn calculate_stats_system(mut query: Query<&mut WorldToken>) {
 ```
 
 **In React:**
+
 ```typescript
-const token = useRxDB('world_tokens').findOne(id);
+const token = useRxDB("world_tokens").findOne(id);
 token.prepareDerivedData(); // Calculation on client side
 return <TokenDisplay strength={token.effectiveStrength} />;
 ```
@@ -338,12 +340,12 @@ impl PubSubBackplane {
     ) -> Result<broadcast::Receiver<WorldEvent>> {
         let (tx, _rx) = broadcast::channel(1000);
         let tx_clone = tx.clone();
-        
+
         // Single Tokio task, single PG connection
         tokio::spawn(async move {
             let mut conn = pool.get().await?;
             conn.execute("LISTEN world_events_channel")?;
-            
+
             // Loop receives notifications
             while let Some(notification) = conn.recv_notification().await {
                 if let Ok(event_id) = notification.payload.parse::<i64>() {
@@ -353,7 +355,7 @@ impl PubSubBackplane {
                 }
             }
         });
-        
+
         Ok(tx.subscribe())
     }
 }
@@ -372,13 +374,13 @@ pub async fn create_world_event(
     event: &WorldEvent,
 ) -> Result<()> {
     let mut conn = pool.get().await?;
-    
+
     // Insert event
     let event_id = diesel::insert_into(world_events::table)
         .values(event)
         .returning(world_events::id)
         .get_result::<i64>(&mut conn)?;
-    
+
     // Notify with full JSON (might exceed 8KB!)
     let payload = serde_json::to_string(event)?;
     conn.execute(&format!("NOTIFY world_events_channel, '{}'", payload))?;
@@ -391,16 +393,16 @@ pub async fn create_world_event(
     event: &WorldEvent,
 ) -> Result<()> {
     let mut conn = pool.get().await?;
-    
+
     // Insert event
     let event_id = diesel::insert_into(world_events::table)
         .values(event)
         .returning(world_events::id)
         .get_result::<i64>(&mut conn)?;
-    
+
     // Notify with only the ID (always <8KB)
     conn.execute(&format!("NOTIFY world_events_channel, '{}'", event_id))?;
-    
+
     // Listener will SELECT event by ID when it receives the notification
     Ok(())
 }
@@ -421,19 +423,20 @@ pub async fn setup_websocket_subscription(
     let backlog = query_world_events_since(pool, last_event_id)
         .await
         .unwrap_or_default();
-    
+
     // 2. Yield backlog first
     let backlog_stream = futures::stream::iter(backlog);
-    
+
     // 3. Then subscribe to live notifications
     let live_stream = tokio_stream::wrappers::BroadcastStream::new(pubsub_rx);
-    
+
     // 4. Combine: backlog then live
     backlog_stream.chain(live_stream)
 }
 ```
 
 **Client-side** (Bevy):
+
 ```rust
 pub async fn subscribe_world_events(
     graphql_client: &GraphQLClient,
@@ -524,6 +527,7 @@ EXECUTE FUNCTION notify_world_event();
 **Symptom**: Clients see old state after reconnect
 
 **Solution**: Implement catch-up query in subscription setup:
+
 ```rust
 // On reconnect, query events since last_event_id
 let backlog = db.query_world_events_since(last_event_id).await?;
@@ -534,7 +538,8 @@ send_backlog_to_client(backlog).await?;
 
 **Symptom**: Tokens move slowly, 2+ second delays
 
-**Solution**: 
+**Solution**:
+
 1. Check load shedding middleware is active
 2. Verify single LISTEN connection (not one per client)
 3. Profile Diesel queries for missing indexes
@@ -545,6 +550,7 @@ send_backlog_to_client(backlog).await?;
 **Symptom**: Engine shows token at (10, 20), frontend shows (15, 25)
 
 **Solution**:
+
 1. Verify both are listening to same `worldEventCreated` subscription
 2. Check optimistic rollback logic fires on mutation rejection
 3. Ensure schema versions match between engine and frontend
@@ -555,6 +561,7 @@ send_backlog_to_client(backlog).await?;
 **Symptom**: Occasional state divergence during rapid moves
 
 **Solution**:
+
 1. Increase `broadcast::channel` buffer size: `broadcast::channel(10000)` instead of 1000
 2. Reduce GraphQL subscription overhead (check derived data calculations)
 3. Profile PG LISTEN loop: ensure no blocking operations

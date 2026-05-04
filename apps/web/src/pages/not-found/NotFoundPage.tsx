@@ -28,11 +28,13 @@ export default function NotFoundPage({ setupRequired }: NotFoundPageProps) {
         <Card surface="parchment" className={styles.card}>
           <h1>That page does not exist.</h1>
           <p>
-            The route you requested is missing or no longer available. Head back to
-            the main ThunderForge flow to continue.
+            The route you requested is missing or no longer available. Head back
+            to the main ThunderForge flow to continue.
           </p>
           <Button asChild icon="arrow-left">
-            <Link to={destination}>Return to {setupRequired ? "setup" : "login"}</Link>
+            <Link to={destination}>
+              Return to {setupRequired ? "setup" : "login"}
+            </Link>
           </Button>
         </Card>
       </Container>

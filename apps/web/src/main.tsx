@@ -9,5 +9,5 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <BrowserRouter>
       <App />
     </BrowserRouter>
-  </HelmetProvider>
+  </HelmetProvider>,
 );

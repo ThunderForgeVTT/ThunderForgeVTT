@@ -17,9 +17,15 @@ export const loginPageSeo: SeoConfig = {
   title: "Login",
   description:
     "Access ThunderForge VTT to manage your instance, review setup status, and enter collaborative worlds.",
-  keywords: ["ThunderForge login", "virtual tabletop login", "tabletop control room"],
+  keywords: [
+    "ThunderForge login",
+    "virtual tabletop login",
+    "tabletop control room",
+  ],
   canonicalPath: "/login",
-  preloadAssets: [{ href: "/brand-mark.svg", as: "image", type: "image/svg+xml" }],
+  preloadAssets: [
+    { href: "/brand-mark.svg", as: "image", type: "image/svg+xml" },
+  ],
   prefetchHrefs: ["/signup", "/counter"],
 };
 
@@ -56,15 +62,18 @@ export default function LoginPage() {
             <div className={styles.auxiliary}>
               <h2>What you can do here</h2>
               <p>
-                Authenticate with the current instance, check server readiness, and
-                move directly into collaborative world views.
+                Authenticate with the current instance, check server readiness,
+                and move directly into collaborative world views.
               </p>
               <div className={styles.avatarGroup}>
                 <div className={styles.avatarRow}>
                   <Avatar seed="guild-warden" name="Guild warden" />
                   <Avatar seed="map-smith" name="Map smith" />
                 </div>
-                <p>Dicebear portraits can become player profiles, NPC cards, and token seeds.</p>
+                <p>
+                  Dicebear portraits can become player profiles, NPC cards, and
+                  token seeds.
+                </p>
               </div>
               <RuneDivider label="Fast routes" />
               <div className={styles.linkList}>
@@ -79,7 +88,10 @@ export default function LoginPage() {
           <form onSubmit={onSubmit} className={styles.form}>
             <div className={styles.header}>
               <h2>Local credentials</h2>
-              <p>Use a username and password configured for this ThunderForge instance.</p>
+              <p>
+                Use a username and password configured for this ThunderForge
+                instance.
+              </p>
             </div>
 
             <Field label="Username" htmlFor="login-username">

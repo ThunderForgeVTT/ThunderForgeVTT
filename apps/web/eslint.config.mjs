@@ -41,8 +41,7 @@ export default tseslint.config(
         { allowConstantExport: true },
       ],
     },
-  }
-  ,
+  },
   {
     files: ["src/engine/**/*.{ts,tsx}"],
     rules: {

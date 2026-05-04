@@ -9,7 +9,8 @@ import AppRoutes from "./routes/AppRoutes";
 import { schedulePagePrefetch } from "./routes/pageLoaders";
 
 export default function App() {
-  const { setupStatus, isLoading, error, refreshSetupStatus } = useSetupStatus();
+  const { setupStatus, isLoading, error, refreshSetupStatus } =
+    useSetupStatus();
 
   useEffect(() => {
     if (!setupStatus) {
@@ -68,7 +69,9 @@ export default function App() {
             type: "image/svg+xml",
           },
         ]}
-        prefetchHrefs={setupStatus.setup_required ? ["/setup"] : ["/login", "/signup"]}
+        prefetchHrefs={
+          setupStatus.setup_required ? ["/setup"] : ["/login", "/signup"]
+        }
       />
       <AppRoutes
         setupStatus={setupStatus}

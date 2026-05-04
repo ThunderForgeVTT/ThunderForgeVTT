@@ -385,19 +385,23 @@ const client = createClient({
 ### Negative
 
 1. **Round-Trip Latency**: Engine actions require server validation (50-200ms typical); not suitable for sub-frame timing.
-   - *Mitigation:* Implement optimistic updates in engine; optimistic UI updates in frontend. Accept server decision as ground truth but show feedback immediately.
+
+   - _Mitigation:_ Implement optimistic updates in engine; optimistic UI updates in frontend. Accept server decision as ground truth but show feedback immediately.
 
 2. **Optimistic Update Complexity**: Engine must implement rollback for rejected mutations (e.g., invalid move).
-   - *Mitigation:* Define clear mutation result types (success/failure). Engine caches pre-move state; reverts on rejection. Log rejections for debugging.
+
+   - _Mitigation:_ Define clear mutation result types (success/failure). Engine caches pre-move state; reverts on rejection. Log rejections for debugging.
 
 3. **WebSocket Dependency**: Real-time sync requires stable WebSocket connection; graceful degradation needed.
-   - *Mitigation:* **Implement fallback transports** (HTTP long-polling, Socket.IO) via adaptive GraphQL client. Clients automatically degrade with higher latency but remain functional.
+
+   - _Mitigation:_ **Implement fallback transports** (HTTP long-polling, Socket.IO) via adaptive GraphQL client. Clients automatically degrade with higher latency but remain functional.
 
 4. **Delta Versioning**: If schema evolves, old delta payloads may become unreadable; migration strategy required.
-   - *Mitigation:* **Implement `migrateData` pattern** in Core Models. Version all `WorldEvent` payloads. Intercept legacy events on subscription and migrate to current schema before delivery.
+
+   - _Mitigation:_ **Implement `migrateData` pattern** in Core Models. Version all `WorldEvent` payloads. Intercept legacy events on subscription and migrate to current schema before delivery.
 
 5. **Server Load**: Every game action becomes a database write + WebSocket broadcast; must scale accordingly.
-   - *Mitigation:* **Introduce Redis pub/sub backplane**. Decouple servers horizontally; each validates locally, publishes to Redis, which fans out to other server instances. Use Axum **middleware-based load shedding** to drop requests before saturation. Reduce payload sizes via **`prepareDerivedData` pattern** (20-40% reduction).
+   - _Mitigation:_ **Introduce Redis pub/sub backplane**. Decouple servers horizontally; each validates locally, publishes to Redis, which fans out to other server instances. Use Axum **middleware-based load shedding** to drop requests before saturation. Reduce payload sizes via **`prepareDerivedData` pattern** (20-40% reduction).
 
 ### Implementation Todos
 
@@ -433,4 +437,4 @@ const client = createClient({
 - [Redis Pub/Sub for Horizontal Scaling](https://redis.io/docs/latest/develop/interact/pubsub/)
 - [Axum WebSocket Upgrades](https://docs.rs/axum/latest/axum/extract/ws/index.html)
 - [Tower Middleware & Load Shedding](https://docs.rs/tower/latest/tower/middleware/index.html)
-- [HTTP Long-Polling Fallback Pattern](https://en.wikipedia.org/wiki/Comet_(programming))
+- [HTTP Long-Polling Fallback Pattern](<https://en.wikipedia.org/wiki/Comet_(programming)>)

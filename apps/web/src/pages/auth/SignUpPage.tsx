@@ -17,7 +17,11 @@ export const signUpPageSeo: SeoConfig = {
   title: "Create account",
   description:
     "Create a local ThunderForge VTT account with a form structure designed for reusable, type-safe growth.",
-  keywords: ["ThunderForge sign up", "create tabletop account", "React auth page"],
+  keywords: [
+    "ThunderForge sign up",
+    "create tabletop account",
+    "React auth page",
+  ],
   canonicalPath: "/signup",
   prefetchHrefs: ["/login"],
 };
@@ -61,13 +65,19 @@ export default function SignUpPage() {
           <Card surface="parchment">
             <div className={styles.auxiliary}>
               <h2>Already have access?</h2>
-              <p>Jump back to the login flow or review the instance dashboard preview.</p>
+              <p>
+                Jump back to the login flow or review the instance dashboard
+                preview.
+              </p>
               <div className={styles.avatarGroup}>
                 <div className={styles.avatarRow}>
                   <Avatar seed="archivist" name="Archivist" />
                   <Avatar seed="summoner" name="Summoner" />
                 </div>
-                <p>New accounts can later inherit world, scene, and permission presets.</p>
+                <p>
+                  New accounts can later inherit world, scene, and permission
+                  presets.
+                </p>
               </div>
               <RuneDivider label="Return paths" />
               <div className={styles.linkList}>
@@ -82,7 +92,10 @@ export default function SignUpPage() {
           <form onSubmit={onSubmit} className={styles.form}>
             <div className={styles.header}>
               <h2>Create credentials</h2>
-              <p>Keep local sign-up and login consistent with the same form system.</p>
+              <p>
+                Keep local sign-up and login consistent with the same form
+                system.
+              </p>
             </div>
 
             <Field label="Username" htmlFor="signup-username">
@@ -108,14 +121,19 @@ export default function SignUpPage() {
               />
             </Field>
 
-            <Field label="Confirm password" htmlFor="signup-password-confirmation">
+            <Field
+              label="Confirm password"
+              htmlFor="signup-password-confirmation"
+            >
               <input
                 id="signup-password-confirmation"
                 name="passwordConfirmation"
                 type="password"
                 autoComplete="new-password"
                 value={passwordConfirmation}
-                onChange={(event) => setPasswordConfirmation(event.target.value)}
+                onChange={(event) =>
+                  setPasswordConfirmation(event.target.value)
+                }
                 placeholder="Confirm your password"
               />
             </Field>

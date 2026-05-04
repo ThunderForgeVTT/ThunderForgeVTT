@@ -60,7 +60,7 @@ export type WorldStoreSyncEvent = WorldStoreEvent & {
 
 export function tokenToDoc(
   worldId: string,
-  token: WorldToken
+  token: WorldToken,
 ): DurableWorldTokenDoc {
   return {
     id: token.id,

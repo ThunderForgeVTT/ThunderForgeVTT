@@ -53,7 +53,10 @@ export async function getSetupStatus(): Promise<SetupStatus> {
   return response.json() as Promise<SetupStatus>;
 }
 
-export function basicLogin(username: string, password: string): Promise<string> {
+export function basicLogin(
+  username: string,
+  password: string,
+): Promise<string> {
   return fetch(`${API_BASE}/authentication/basic`, {
     method: "POST",
     credentials: "same-origin",
@@ -61,7 +64,10 @@ export function basicLogin(username: string, password: string): Promise<string> 
   }).then(expectMessage);
 }
 
-export function basicSignUp(username: string, password: string): Promise<string> {
+export function basicSignUp(
+  username: string,
+  password: string,
+): Promise<string> {
   return fetch(`${API_BASE}/authentication/basic`, {
     method: "POST",
     credentials: "same-origin",

@@ -7,9 +7,16 @@
   overflow: hidden;
   border-radius: 999px;
   border: 1px solid rgba(tokens.$color-gold-bright, 0.54);
-  background:
-    radial-gradient(circle at top, rgba(tokens.$color-candlelight, 0.18), transparent 45%),
-    linear-gradient(180deg, rgba(tokens.$color-violet, 0.4), rgba(tokens.$color-background, 0.9));
+  background: radial-gradient(
+      circle at top,
+      rgba(tokens.$color-candlelight, 0.18),
+      transparent 45%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(tokens.$color-violet, 0.4),
+      rgba(tokens.$color-background, 0.9)
+    );
   box-shadow: tokens.$shadow-glow;
 }
 

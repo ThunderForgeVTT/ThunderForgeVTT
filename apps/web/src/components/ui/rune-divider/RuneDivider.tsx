@@ -7,12 +7,23 @@ export interface RuneDividerProps {
   className?: string;
 }
 
-export function RuneDivider({ label = "Arcane sigils", className }: RuneDividerProps) {
+export function RuneDivider({
+  label = "Arcane sigils",
+  className,
+}: RuneDividerProps) {
   return (
     <div className={cn(styles.divider, className)}>
-      <Separator.Root className={styles.line} decorative orientation="horizontal" />
+      <Separator.Root
+        className={styles.line}
+        decorative
+        orientation="horizontal"
+      />
       <span className={styles.label}>{label}</span>
-      <Separator.Root className={styles.line} decorative orientation="horizontal" />
+      <Separator.Root
+        className={styles.line}
+        decorative
+        orientation="horizontal"
+      />
     </div>
   );
 }

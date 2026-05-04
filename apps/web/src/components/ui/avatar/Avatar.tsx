@@ -26,7 +26,11 @@ export function Avatar({ seed, name, size = "md", className }: AvatarProps) {
 
   return (
     <RadixAvatar.Root className={cn(styles.avatar, styles[size], className)}>
-      <RadixAvatar.Image alt={name ?? seed} className={styles.image} src={avatarSvgUrl} />
+      <RadixAvatar.Image
+        alt={name ?? seed}
+        className={styles.image}
+        src={avatarSvgUrl}
+      />
       <RadixAvatar.Fallback className={styles.fallback} delayMs={250}>
         {initials}
       </RadixAvatar.Fallback>

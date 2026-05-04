@@ -42,7 +42,9 @@ export function AppHeader({ brandHref, navItems }: AppHeaderProps) {
             <NavLink
               key={item.to}
               to={item.to}
-              className={({ isActive }) => cn(styles.link, isActive && styles.active)}
+              className={({ isActive }) =>
+                cn(styles.link, isActive && styles.active)
+              }
               onMouseEnter={() => {
                 if (item.prefetch) {
                   prefetchPage(item.prefetch);

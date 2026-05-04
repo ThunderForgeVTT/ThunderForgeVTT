@@ -14,7 +14,10 @@ export function Popover({ trigger, children, className }: PopoverProps) {
     <RadixPopover.Root>
       <RadixPopover.Trigger asChild>{trigger}</RadixPopover.Trigger>
       <RadixPopover.Portal>
-        <RadixPopover.Content className={cn(styles.content, className)} sideOffset={12}>
+        <RadixPopover.Content
+          className={cn(styles.content, className)}
+          sideOffset={12}
+        >
           {children}
           <RadixPopover.Arrow className={styles.arrow} />
         </RadixPopover.Content>

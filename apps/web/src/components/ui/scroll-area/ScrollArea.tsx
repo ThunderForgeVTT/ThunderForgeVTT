@@ -16,10 +16,15 @@ export function ScrollArea({
 }: ScrollAreaProps) {
   return (
     <RadixScrollArea.Root className={cn(styles.root, className)}>
-      <RadixScrollArea.Viewport className={cn(styles.viewport, viewportClassName)}>
+      <RadixScrollArea.Viewport
+        className={cn(styles.viewport, viewportClassName)}
+      >
         {children}
       </RadixScrollArea.Viewport>
-      <RadixScrollArea.Scrollbar className={styles.scrollbar} orientation="vertical">
+      <RadixScrollArea.Scrollbar
+        className={styles.scrollbar}
+        orientation="vertical"
+      >
         <RadixScrollArea.Thumb className={styles.thumb} />
       </RadixScrollArea.Scrollbar>
     </RadixScrollArea.Root>

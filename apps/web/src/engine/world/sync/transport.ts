@@ -35,7 +35,7 @@ async function postJson(path: string, body: unknown): Promise<Response> {
 async function postGraphQL<TData>(
   endpoint: string,
   query: string,
-  variables: Record<string, unknown>
+  variables: Record<string, unknown>,
 ): Promise<GraphQLResponse<TData>> {
   const response = await postJson(endpoint, { query, variables });
   if (!response.ok) {
@@ -54,7 +54,7 @@ function worldEventPayload(kind: string, payload: unknown) {
 }
 
 export function createGraphQLWorldSyncTransport(
-  options: CreateGraphQLWorldSyncTransportOptions = {}
+  options: CreateGraphQLWorldSyncTransportOptions = {},
 ): WorldSyncTransport {
   const graphqlEndpoint =
     options.graphqlEndpoint ??
@@ -77,12 +77,12 @@ export function createGraphQLWorldSyncTransport(
 
   async function fallbackDurable(
     worldId: string,
-    mutations: DurableMutation[]
+    mutations: DurableMutation[],
   ) {
     const path = resolveTemplate(worldEventPathTemplate, worldId);
     await postJson(
       path,
-      worldEventPayload("durable_world_mutations", { worldId, mutations })
+      worldEventPayload("durable_world_mutations", { worldId, mutations }),
     );
   }
 
@@ -90,7 +90,7 @@ export function createGraphQLWorldSyncTransport(
     const path = resolveTemplate(worldEventPathTemplate, worldId);
     await postJson(
       path,
-      worldEventPayload("token_deltas", { worldId, deltas })
+      worldEventPayload("token_deltas", { worldId, deltas }),
     );
   }
 
@@ -119,7 +119,7 @@ export function createGraphQLWorldSyncTransport(
           {
             worldId: activeWorldId,
             mutations,
-          }
+          },
         );
 
         if (response.errors && response.errors.length > 0) {
@@ -144,7 +144,7 @@ export function createGraphQLWorldSyncTransport(
           {
             worldId: activeWorldId,
             deltas,
-          }
+          },
         );
 
         if (response.errors && response.errors.length > 0) {

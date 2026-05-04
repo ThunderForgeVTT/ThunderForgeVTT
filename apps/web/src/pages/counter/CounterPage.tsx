@@ -25,7 +25,11 @@ export const counterPageSeo: SeoConfig = {
   title: "Dashboard preview",
   description:
     "Preview reusable dashboard surfaces, setup completion state, and code-split navigation targets inside ThunderForge VTT.",
-  keywords: ["ThunderForge dashboard", "React dashboard", "virtual tabletop admin"],
+  keywords: [
+    "ThunderForge dashboard",
+    "React dashboard",
+    "virtual tabletop admin",
+  ],
   canonicalPath: "/counter",
   prefetchHrefs: ["/world/demo-world"],
 };
@@ -62,8 +66,8 @@ export default function CounterPage() {
           <Panel variant="parchment" className={styles.tabPanel}>
             <h3>Guild atlas</h3>
             <p>
-              Use this surface for world discovery, invitations, ownership transfer,
-              and world summaries.
+              Use this surface for world discovery, invitations, ownership
+              transfer, and world summaries.
             </p>
           </Panel>
         ),
@@ -76,8 +80,8 @@ export default function CounterPage() {
           <Panel variant="parchment" className={styles.tabPanel}>
             <h3>Token forge</h3>
             <p>
-              Dicebear portraits and token exports are ready for scene placement,
-              actor linking, and faction theming.
+              Dicebear portraits and token exports are ready for scene
+              placement, actor linking, and faction theming.
             </p>
           </Panel>
         ),
@@ -90,8 +94,8 @@ export default function CounterPage() {
           <Panel variant="parchment" className={styles.tabPanel}>
             <h3>Ward sigils</h3>
             <p>
-              Permissions can map onto Radix dialogs, dropdowns, and scroll areas as
-              the policy surface expands.
+              Permissions can map onto Radix dialogs, dropdowns, and scroll
+              areas as the policy surface expands.
             </p>
           </Panel>
         ),
@@ -109,8 +113,9 @@ export default function CounterPage() {
             <p className={styles.eyebrow}>Design system showcase</p>
             <h1>The fantasy command deck for ThunderForge.</h1>
             <p>
-              This page now acts as the UI guild hall: Radix primitives, themed panels,
-              Dicebear identity previews, and integration notes for the next content phases.
+              This page now acts as the UI guild hall: Radix primitives, themed
+              panels, Dicebear identity previews, and integration notes for the
+              next content phases.
             </p>
             <div className={styles.heroActions}>
               <Tooltip content="Preview the scene shell with Bevy and tldraw still mounted beneath the new chrome.">
@@ -128,8 +133,8 @@ export default function CounterPage() {
                 <div className={styles.popoverCopy}>
                   <strong>Fantasy palette</strong>
                   <p>
-                    Parchment, umber, forest, violet, gold, and candlelight compose the
-                    shared token language for every page.
+                    Parchment, umber, forest, violet, gold, and candlelight
+                    compose the shared token language for every page.
                   </p>
                 </div>
               </Popover>
@@ -141,8 +146,16 @@ export default function CounterPage() {
                 }
                 items={[
                   { label: "Login chamber", icon: "shield", href: "/login" },
-                  { label: "Bootstrap setup", icon: "settings", href: "/setup" },
-                  { label: "Demo world", icon: "worlds", href: "/world/demo-world" },
+                  {
+                    label: "Bootstrap setup",
+                    icon: "settings",
+                    href: "/setup",
+                  },
+                  {
+                    label: "Demo world",
+                    icon: "worlds",
+                    href: "/world/demo-world",
+                  },
                 ]}
               />
             </div>
@@ -160,12 +173,19 @@ export default function CounterPage() {
                 <div>
                   <p className={styles.panelEyebrow}>Motion and controls</p>
                   <h2>Command rune counter</h2>
-                  <p>Keep one lightweight interactive element around as a regression harness.</p>
+                  <p>
+                    Keep one lightweight interactive element around as a
+                    regression harness.
+                  </p>
                 </div>
                 <span className={styles.counterValue}>{value}</span>
               </div>
               <div className={styles.counterRow}>
-                <Button variant="secondary" icon="rune" onClick={() => setValue(0)}>
+                <Button
+                  variant="secondary"
+                  icon="rune"
+                  onClick={() => setValue(0)}
+                >
                   Reset
                 </Button>
                 <Button
@@ -180,18 +200,33 @@ export default function CounterPage() {
 
             <Card surface="parchment" className={styles.stack}>
               <div className={styles.avatarStrip}>
-                <Avatar seed="demo-world-builder" name="World builder" size="lg" />
+                <Avatar
+                  seed="demo-world-builder"
+                  name="World builder"
+                  size="lg"
+                />
                 <div>
                   <p className={styles.panelEyebrow}>Dicebear integration</p>
                   <h2>Avatars and token exports</h2>
-                  <p>Player profiles, NPC portraits, and scene tokens can all derive from seeds.</p>
+                  <p>
+                    Player profiles, NPC portraits, and scene tokens can all
+                    derive from seeds.
+                  </p>
                 </div>
               </div>
               <div className={styles.avatarActions}>
-                <Button variant="secondary" icon="actors" onClick={() => void exportAvatar("svg")}>
+                <Button
+                  variant="secondary"
+                  icon="actors"
+                  onClick={() => void exportAvatar("svg")}
+                >
                   Export avatar SVG
                 </Button>
-                <Button variant="secondary" icon="tokens" onClick={() => void exportToken("png")}>
+                <Button
+                  variant="secondary"
+                  icon="tokens"
+                  onClick={() => void exportToken("png")}
+                >
                   Export token PNG
                 </Button>
               </div>
@@ -209,7 +244,11 @@ export default function CounterPage() {
 
           <Grid columns="three">
             {insights.map((insight) => (
-              <Card key={insight.title} surface="stone" className={styles.metaList}>
+              <Card
+                key={insight.title}
+                surface="stone"
+                className={styles.metaList}
+              >
                 <h2>{insight.title}</h2>
                 <p>{insight.body}</p>
               </Card>
@@ -237,8 +276,9 @@ export default function CounterPage() {
                 }
               >
                 <p>
-                  The current pass establishes theme tokens, layouts, navigation, avatar
-                  plumbing, and a skinned world workspace while leaving engine bindings untouched.
+                  The current pass establishes theme tokens, layouts,
+                  navigation, avatar plumbing, and a skinned world workspace
+                  while leaving engine bindings untouched.
                 </p>
               </Dialog>
             </div>

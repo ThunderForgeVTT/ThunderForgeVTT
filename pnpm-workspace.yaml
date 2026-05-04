@@ -2,4 +2,4 @@ packages:
   - apps/*
   - dist/engine
 allowBuilds:
-  '@parcel/watcher': true
+  "@parcel/watcher": true

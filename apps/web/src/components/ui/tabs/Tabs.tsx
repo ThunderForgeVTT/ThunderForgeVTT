@@ -20,10 +20,17 @@ export interface TabsProps {
 
 export function Tabs({ items, defaultValue, className }: TabsProps) {
   return (
-    <RadixTabs.Root className={cn(styles.tabs, className)} defaultValue={defaultValue}>
+    <RadixTabs.Root
+      className={cn(styles.tabs, className)}
+      defaultValue={defaultValue}
+    >
       <RadixTabs.List className={styles.list} aria-label="Sections">
         {items.map((item) => (
-          <RadixTabs.Trigger key={item.value} className={styles.trigger} value={item.value}>
+          <RadixTabs.Trigger
+            key={item.value}
+            className={styles.trigger}
+            value={item.value}
+          >
             {item.icon ? <FantasyIcon name={item.icon} size={16} /> : null}
             <span>{item.label}</span>
           </RadixTabs.Trigger>
@@ -31,7 +38,11 @@ export function Tabs({ items, defaultValue, className }: TabsProps) {
       </RadixTabs.List>
 
       {items.map((item) => (
-        <RadixTabs.Content key={item.value} className={styles.content} value={item.value}>
+        <RadixTabs.Content
+          key={item.value}
+          className={styles.content}
+          value={item.value}
+        >
           {item.content}
         </RadixTabs.Content>
       ))}

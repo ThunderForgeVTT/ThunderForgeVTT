@@ -33,7 +33,7 @@ async function run() {
     log(
       "dev",
       `Uncaught exception: ${err.stack ?? err.message}`,
-      process.stderr,
+      process.stderr
     );
     await terminateChildren("SIGTERM");
     process.exit(1);
@@ -69,13 +69,13 @@ async function run() {
     if (result.signal) {
       log(
         "dev",
-        `${name} exited due to ${result.signal}. Stopping remaining process...`,
+        `${name} exited due to ${result.signal}. Stopping remaining process...`
       );
     } else if (result.code !== 0) {
       log(
         "dev",
         `${name} exited with code ${result.code}. Stopping remaining process...`,
-        process.stderr,
+        process.stderr
       );
     } else {
       log("dev", `${name} exited normally. Stopping remaining process...`);

@@ -8,9 +8,7 @@
   border-radius: tokens.$radius-sm;
   color: tokens.$color-text;
   font-size: 0.88rem;
-  box-shadow:
-    tokens.$shadow-md,
-    0 0 24px rgba(tokens.$color-violet-soft, 0.18);
+  box-shadow: tokens.$shadow-md, 0 0 24px rgba(tokens.$color-violet-soft, 0.18);
   z-index: 80;
 }
 

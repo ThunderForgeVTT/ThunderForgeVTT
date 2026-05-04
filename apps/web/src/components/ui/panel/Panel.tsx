@@ -16,7 +16,10 @@ export function Panel({
   ...props
 }: PanelProps) {
   return (
-    <section className={cn(styles.panel, styles[variant], className)} {...props}>
+    <section
+      className={cn(styles.panel, styles[variant], className)}
+      {...props}
+    >
       {children}
     </section>
   );

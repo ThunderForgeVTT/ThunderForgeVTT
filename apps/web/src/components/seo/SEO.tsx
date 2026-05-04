@@ -16,8 +16,12 @@ export function SEO({
   prefetchHrefs = [],
 }: SeoConfig) {
   const location = useLocation();
-  const canonicalUrl = toAbsoluteUrl(canonicalPath ?? location.pathname + location.search);
-  const metaTitle = title.includes(SITE_NAME) ? title : `${title} | ${SITE_NAME}`;
+  const canonicalUrl = toAbsoluteUrl(
+    canonicalPath ?? location.pathname + location.search,
+  );
+  const metaTitle = title.includes(SITE_NAME)
+    ? title
+    : `${title} | ${SITE_NAME}`;
   const resolvedImage = toAbsoluteUrl(image ?? getDefaultOgImage());
 
   return (
@@ -27,9 +31,15 @@ export function SEO({
       <meta name="description" content={description} />
       <meta
         name="keywords"
-        content={keywords?.join(", ") ?? "virtual tabletop, collaborative worldbuilding"}
+        content={
+          keywords?.join(", ") ??
+          "virtual tabletop, collaborative worldbuilding"
+        }
       />
-      <meta name="robots" content={noindex ? "noindex, nofollow" : "index, follow"} />
+      <meta
+        name="robots"
+        content={noindex ? "noindex, nofollow" : "index, follow"}
+      />
       <link rel="canonical" href={canonicalUrl} />
       <meta property="og:site_name" content={SITE_NAME} />
       <meta property="og:type" content="website" />

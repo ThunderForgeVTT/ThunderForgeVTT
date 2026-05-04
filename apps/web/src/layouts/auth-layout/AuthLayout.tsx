@@ -32,7 +32,10 @@ export function AuthLayout({
               <Avatar seed="warden" name="Warden" size="sm" />
               <Avatar seed="seer" name="Seer" size="sm" />
             </div>
-            <span>Guild access, onboarding, and realm stewardship all route through the same typed shell.</span>
+            <span>
+              Guild access, onboarding, and realm stewardship all route through
+              the same typed shell.
+            </span>
           </div>
         </section>
 

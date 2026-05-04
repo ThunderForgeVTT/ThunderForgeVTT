@@ -33,7 +33,9 @@ export function Dialog({
         <RadixDialog.Content className={cn(styles.content, className)}>
           <div className={styles.header}>
             <div>
-              <RadixDialog.Title className={styles.title}>{title}</RadixDialog.Title>
+              <RadixDialog.Title className={styles.title}>
+                {title}
+              </RadixDialog.Title>
               {description ? (
                 <RadixDialog.Description className={styles.description}>
                   {description}

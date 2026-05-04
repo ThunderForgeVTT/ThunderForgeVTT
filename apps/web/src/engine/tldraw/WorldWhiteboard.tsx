@@ -20,7 +20,11 @@ function tokenShapeId(tokenId: string) {
 }
 
 function tokenFromShape(record: unknown): WorldToken | null {
-  if (!record || typeof record !== "object" || (record as { typeName?: string }).typeName !== "shape") {
+  if (
+    !record ||
+    typeof record !== "object" ||
+    (record as { typeName?: string }).typeName !== "shape"
+  ) {
     return null;
   }
 
@@ -89,7 +93,9 @@ function upsertTokenShape(editor: Editor, token: WorldToken) {
 export function WorldWhiteboard({ worldId, worldStore }: WorldWhiteboardProps) {
   const editorRef = useRef<Editor | null>(null);
   const [activeTool, setActiveTool] = useState<ToolbarTool>("select");
-  const [tokens, setTokens] = useState(() => Object.values(worldStore.getState().tokens));
+  const [tokens, setTokens] = useState(() =>
+    Object.values(worldStore.getState().tokens),
+  );
 
   useEffect(
     () =>
@@ -137,12 +143,18 @@ export function WorldWhiteboard({ worldId, worldStore }: WorldWhiteboardProps) {
 
     editor.store.listen(
       (entry: unknown) => {
-        const changes = (entry as { changes?: Record<string, unknown> })?.changes ?? {};
-        const added = Object.values((changes as { added?: Record<string, unknown> }).added ?? {});
+        const changes =
+          (entry as { changes?: Record<string, unknown> })?.changes ?? {};
+        const added = Object.values(
+          (changes as { added?: Record<string, unknown> }).added ?? {},
+        );
         const updated = Object.values(
-          (changes as { updated?: Record<string, [unknown, unknown]> }).updated ?? {},
+          (changes as { updated?: Record<string, [unknown, unknown]> })
+            .updated ?? {},
         ).map((value) => value[1] ?? value);
-        const removed = Object.values((changes as { removed?: Record<string, unknown> }).removed ?? {});
+        const removed = Object.values(
+          (changes as { removed?: Record<string, unknown> }).removed ?? {},
+        );
 
         for (const record of [...added, ...updated]) {
           const token = tokenFromShape(record);
@@ -161,7 +173,10 @@ export function WorldWhiteboard({ worldId, worldStore }: WorldWhiteboardProps) {
             continue;
           }
 
-          worldStore.dispatch({ type: "remove_token", tokenId: token.id }, "tldraw");
+          worldStore.dispatch(
+            { type: "remove_token", tokenId: token.id },
+            "tldraw",
+          );
         }
       },
       { source: "user", scope: "document" },

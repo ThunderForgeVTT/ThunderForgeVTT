@@ -28,7 +28,7 @@ function toWorldTokenDocRecord(doc: unknown): Record<string, unknown> | null {
 }
 
 export async function startWorldSync(
-  options: StartWorldSyncOptions
+  options: StartWorldSyncOptions,
 ): Promise<WorldSyncSession> {
   const transport = options.transport ?? createNoopWorldSyncTransport();
   const flushIntervalMs = options.flushIntervalMs ?? 100;
@@ -74,7 +74,7 @@ export async function startWorldSync(
           type: "upsert_token",
           token: { id, x, y, z, label },
         },
-        "sync"
+        "sync",
       );
     }
   }
@@ -128,7 +128,7 @@ export async function startWorldSync(
       if (durableMutationsBuffer.length > 0) {
         const mutations = durableMutationsBuffer.splice(
           0,
-          durableMutationsBuffer.length
+          durableMutationsBuffer.length,
         );
         await transport.pushDurableMutations?.(mutations);
       }
@@ -141,7 +141,7 @@ export async function startWorldSync(
       if (durableMutationsBuffer.length > 0) {
         const mutations = durableMutationsBuffer.splice(
           0,
-          durableMutationsBuffer.length
+          durableMutationsBuffer.length,
         );
         await transport.pushDurableMutations?.(mutations);
       }
