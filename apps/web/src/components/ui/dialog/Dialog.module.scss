@@ -1,0 +1,67 @@
+@use "styles/mixins" as mixins;
+@use "styles/tokens" as tokens;
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 5, 2, 0.72);
+  backdrop-filter: blur(12px);
+  animation: fade-in 220ms ease;
+  z-index: 80;
+}
+
+.content {
+  @include mixins.parchment-panel;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(42rem, calc(100vw - 2rem));
+  max-height: min(88vh, 48rem);
+  padding: 1.5rem;
+  z-index: 81;
+  animation: unfurl 240ms ease;
+}
+
+.header,
+.footer {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.header {
+  margin-bottom: 1rem;
+}
+
+.body {
+  display: grid;
+  gap: 1rem;
+}
+
+.title {
+  font-size: 1.5rem;
+}
+
+.description {
+  margin: 0.35rem 0 0;
+  color: rgba(45, 33, 22, 0.8);
+}
+
+.footer {
+  margin-top: 1.5rem;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes unfurl {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.96);
+  }
+}

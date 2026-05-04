@@ -7,7 +7,7 @@
   gap: 0.85rem;
   color: tokens.$color-text-muted;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.18em;
   font-size: 0.82rem;
 }
 
@@ -17,16 +17,23 @@
 }
 
 .spinner {
-  width: 1rem;
-  height: 1rem;
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
   border-radius: 999px;
-  border: 2px solid rgba(tokens.$color-accent, 0.24);
-  border-top-color: tokens.$color-accent;
-  animation: spin 700ms linear infinite;
+  border: 1px solid rgba(tokens.$color-gold, 0.36);
+  color: tokens.$color-gold-bright;
+  background: rgba(tokens.$color-background-elevated, 0.8);
+  animation: pulse 1.2s ease-in-out infinite;
+  box-shadow: tokens.$shadow-glow;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
+@keyframes pulse {
+  50% {
+    transform: scale(1.08);
+    box-shadow:
+      0 0 0 6px rgba(tokens.$color-violet-soft, 0.1),
+      tokens.$shadow-glow;
   }
 }

@@ -30,14 +30,14 @@ export default function AppRoutes({
 }: AppRoutesProps) {
   const setupRequired = setupStatus.setup_required;
   const navItems: readonly HeaderNavItem[] = setupRequired
-    ? [
-        { to: "/setup", label: "Setup", prefetch: "setup" },
-        { to: "/counter", label: "Status", prefetch: "counter" },
-      ]
-    : [
-        { to: "/login", label: "Login", prefetch: "login" },
-        { to: "/signup", label: "Sign up", prefetch: "signup" },
-        { to: "/counter", label: "Dashboard", prefetch: "counter" },
+      ? [
+          { to: "/setup", label: "Setup", prefetch: "setup", icon: "settings" },
+          { to: "/counter", label: "Status", prefetch: "counter", icon: "scene" },
+        ]
+      : [
+          { to: "/login", label: "Login", prefetch: "login", icon: "shield" },
+          { to: "/signup", label: "Sign up", prefetch: "signup", icon: "quill" },
+          { to: "/counter", label: "Dashboard", prefetch: "counter", icon: "scene" },
       ];
 
   return (

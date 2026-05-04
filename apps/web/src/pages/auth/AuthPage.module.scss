@@ -28,6 +28,10 @@
 .auxiliary {
   display: grid;
   gap: 1rem;
+
+  p {
+    margin: 0;
+  }
 }
 
 .linkList {
@@ -35,7 +39,22 @@
   gap: 0.75rem;
 
   a {
-    color: tokens.$color-accent;
+    color: tokens.$color-umber;
     font-weight: 600;
   }
+}
+
+.avatarGroup {
+  display: grid;
+  gap: 0.75rem;
+
+  p {
+    color: rgba(45, 33, 22, 0.74);
+    font-size: 0.96rem;
+  }
+}
+
+.avatarRow {
+  display: inline-flex;
+  gap: 0.75rem;
 }

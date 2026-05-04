@@ -1,10 +1,12 @@
 import { Link } from "react-router-dom";
 import type { FormEvent } from "react";
 import { useState } from "react";
+import { Avatar } from "@/components/ui/avatar/Avatar";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import { Field } from "@/components/ui/field/Field";
+import { RuneDivider } from "@/components/ui/rune-divider/RuneDivider";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { AuthLayout } from "@/layouts/auth-layout/AuthLayout";
 import { basicSignUp } from "@/services/auth";
@@ -56,10 +58,18 @@ export default function SignUpPage() {
         title="Create a local ThunderForge account."
         description="Use the same reusable primitives as login while keeping this page ready for more fields, policies, and post-signup flows."
         aside={
-          <Card>
+          <Card surface="parchment">
             <div className={styles.auxiliary}>
               <h2>Already have access?</h2>
               <p>Jump back to the login flow or review the instance dashboard preview.</p>
+              <div className={styles.avatarGroup}>
+                <div className={styles.avatarRow}>
+                  <Avatar seed="archivist" name="Archivist" />
+                  <Avatar seed="summoner" name="Summoner" />
+                </div>
+                <p>New accounts can later inherit world, scene, and permission presets.</p>
+              </div>
+              <RuneDivider label="Return paths" />
               <div className={styles.linkList}>
                 <Link to="/login">Return to login</Link>
                 <Link to="/counter">Open the dashboard preview</Link>
@@ -68,7 +78,7 @@ export default function SignUpPage() {
           </Card>
         }
       >
-        <Card>
+        <Card surface="leather">
           <form onSubmit={onSubmit} className={styles.form}>
             <div className={styles.header}>
               <h2>Create credentials</h2>
@@ -111,7 +121,13 @@ export default function SignUpPage() {
             </Field>
 
             <div className={styles.actions}>
-              <Button type="submit" variant="success" size="lg" disabled={isSubmitting}>
+              <Button
+                type="submit"
+                variant="success"
+                size="lg"
+                disabled={isSubmitting}
+                icon="quill"
+              >
                 {isSubmitting ? "Creating account..." : "Sign up"}
               </Button>
             </div>

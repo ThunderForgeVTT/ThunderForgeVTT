@@ -1,0 +1,19 @@
+@use "styles/mixins" as mixins;
+@use "styles/tokens" as tokens;
+
+.content {
+  @include mixins.leather-panel;
+  max-width: 18rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: tokens.$radius-sm;
+  color: tokens.$color-text;
+  font-size: 0.88rem;
+  box-shadow:
+    tokens.$shadow-md,
+    0 0 24px rgba(tokens.$color-violet-soft, 0.18);
+  z-index: 80;
+}
+
+.arrow {
+  fill: rgba(tokens.$color-umber, 0.96);
+}

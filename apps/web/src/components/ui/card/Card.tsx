@@ -4,7 +4,7 @@ import styles from "./Card.module.scss";
 
 export interface CardProps extends HTMLAttributes<HTMLElement> {
   children: ReactNode;
-  surface?: "default" | "strong";
+  surface?: "default" | "strong" | "parchment" | "stone" | "leather";
   style?: CSSProperties;
 }
 

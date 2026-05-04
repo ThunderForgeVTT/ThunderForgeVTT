@@ -1,0 +1,25 @@
+@use "styles/tokens" as tokens;
+
+.icon {
+  flex-shrink: 0;
+}
+
+.default {
+  color: currentColor;
+}
+
+.gold {
+  color: tokens.$color-gold-bright;
+}
+
+.violet {
+  color: #d2b6ff;
+}
+
+.forest {
+  color: #add2aa;
+}
+
+.ember {
+  color: #f2b27a;
+}

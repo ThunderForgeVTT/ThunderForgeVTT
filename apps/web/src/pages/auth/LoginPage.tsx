@@ -1,10 +1,12 @@
 import type { FormEvent } from "react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { Avatar } from "@/components/ui/avatar/Avatar";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import { Field } from "@/components/ui/field/Field";
+import { RuneDivider } from "@/components/ui/rune-divider/RuneDivider";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { AuthLayout } from "@/layouts/auth-layout/AuthLayout";
 import { basicLogin } from "@/services/auth";
@@ -50,13 +52,21 @@ export default function LoginPage() {
         title="Sign in to your ThunderForge instance."
         description="Keep authentication flows simple, typed, and easy to extend as you connect more areas of the tabletop experience."
         aside={
-          <Card>
+          <Card surface="parchment">
             <div className={styles.auxiliary}>
               <h2>What you can do here</h2>
               <p>
                 Authenticate with the current instance, check server readiness, and
                 move directly into collaborative world views.
               </p>
+              <div className={styles.avatarGroup}>
+                <div className={styles.avatarRow}>
+                  <Avatar seed="guild-warden" name="Guild warden" />
+                  <Avatar seed="map-smith" name="Map smith" />
+                </div>
+                <p>Dicebear portraits can become player profiles, NPC cards, and token seeds.</p>
+              </div>
+              <RuneDivider label="Fast routes" />
               <div className={styles.linkList}>
                 <Link to="/signup">Create a local account</Link>
                 <Link to="/counter">Review the dashboard preview</Link>
@@ -65,7 +75,7 @@ export default function LoginPage() {
           </Card>
         }
       >
-        <Card>
+        <Card surface="leather">
           <form onSubmit={onSubmit} className={styles.form}>
             <div className={styles.header}>
               <h2>Local credentials</h2>
@@ -96,7 +106,13 @@ export default function LoginPage() {
             </Field>
 
             <div className={styles.actions}>
-              <Button type="submit" variant="primary" size="lg" disabled={isSubmitting}>
+              <Button
+                type="submit"
+                variant="primary"
+                size="lg"
+                disabled={isSubmitting}
+                icon="shield"
+              >
                 {isSubmitting ? "Signing in..." : "Login"}
               </Button>
             </div>

@@ -1,0 +1,48 @@
+@use "styles/mixins" as mixins;
+@use "styles/tokens" as tokens;
+
+.content {
+  @include mixins.leather-panel;
+  min-width: 14rem;
+  padding: 0.4rem;
+  border-radius: tokens.$radius-md;
+  z-index: 70;
+}
+
+.rootItem {
+  display: block;
+  outline: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: tokens.$radius-sm;
+  color: tokens.$color-text;
+  transition: background-color tokens.$transition-base;
+}
+
+.rootItem[data-highlighted] .item,
+.rootItem:hover .item {
+  background: rgba(tokens.$color-violet-soft, 0.22);
+}
+
+.itemLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.shortcut {
+  color: tokens.$color-text-muted;
+  font-size: 0.76rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.danger {
+  color: #ffd4c7;
+}

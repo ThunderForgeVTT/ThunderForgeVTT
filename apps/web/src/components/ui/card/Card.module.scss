@@ -2,10 +2,15 @@
 @use "styles/tokens" as tokens;
 
 .card {
-  @include mixins.surface;
-
   border-radius: tokens.$radius-lg;
   padding: 1.5rem;
+  position: relative;
+  overflow: hidden;
+
+  > * {
+    position: relative;
+    z-index: 1;
+  }
 }
 
 .strong {
@@ -14,4 +19,16 @@
 
 .default {
   @include mixins.surface;
+}
+
+.parchment {
+  @include mixins.parchment-panel;
+}
+
+.stone {
+  @include mixins.stone-panel;
+}
+
+.leather {
+  @include mixins.leather-panel;
 }

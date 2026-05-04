@@ -1,4 +1,5 @@
 @use "styles/tokens" as tokens;
+@use "styles/mixins" as mixins;
 
 .shell {
   display: grid;
@@ -14,27 +15,34 @@
     margin: 0;
   }
 
+  h1 {
+    font-size: clamp(2.5rem, 6vw, 4.6rem);
+    line-height: 0.95;
+  }
+
   p {
     max-width: 48rem;
     color: tokens.$color-text-muted;
   }
 }
 
+.eyebrow,
+.panelEyebrow {
+  margin: 0;
+  @include mixins.rune-caption;
+}
+
+.heroActions,
+.avatarActions,
+.tokenPreview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
 .stack {
   display: grid;
   gap: 1rem;
-}
-
-.worldLink {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 2.9rem;
-  padding: 0.85rem 1.15rem;
-  border-radius: tokens.$radius-sm;
-  background: linear-gradient(135deg, tokens.$color-accent, tokens.$color-accent-strong);
-  color: #031119;
-  font-weight: 700;
 }
 
 .counterPanel {
@@ -52,6 +60,22 @@
 .counterValue {
   font-size: clamp(2rem, 4vw, 3rem);
   font-weight: 800;
+  color: tokens.$color-gold-bright;
+}
+
+.avatarStrip {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.popoverCopy {
+  display: grid;
+  gap: 0.5rem;
+
+  p {
+    margin: 0;
+  }
 }
 
 .metaList {
@@ -62,4 +86,41 @@
     margin: 0.25rem 0 0;
     color: tokens.$color-text-muted;
   }
+}
+
+.tabPanel {
+  display: grid;
+  gap: 0.5rem;
+
+  p {
+    margin: 0;
+  }
+}
+
+.notesCard {
+  display: grid;
+  gap: 1rem;
+}
+
+.notesHeader {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.notesScroll {
+  height: 12rem;
+}
+
+.notesList {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.noteItem {
+  display: flex;
+  align-items: start;
+  gap: 0.65rem;
+  color: tokens.$color-text-muted;
 }

@@ -33,6 +33,9 @@ export default function WorldPage() {
       ],
     }),
   );
+  const [worldState, setWorldState] = useState(() => worldStore.getState());
+
+  useEffect(() => worldStore.subscribe((event) => setWorldState(event.state)), [worldStore]);
 
   useEffect(() => {
     if (!id) {
@@ -103,6 +106,7 @@ export default function WorldPage() {
       <SEO {...seo} />
       <WorldLayout
         worldId={id}
+        tokens={Object.values(worldState.tokens)}
         canvas={
           <canvas
             id={canvasId}

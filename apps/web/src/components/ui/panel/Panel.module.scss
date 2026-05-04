@@ -1,0 +1,30 @@
+@use "styles/mixins" as mixins;
+@use "styles/tokens" as tokens;
+
+.panel {
+  border-radius: tokens.$radius-lg;
+  padding: 1.25rem;
+  position: relative;
+  overflow: hidden;
+
+  > * {
+    position: relative;
+    z-index: 1;
+  }
+}
+
+.parchment {
+  @include mixins.parchment-panel;
+}
+
+.stone {
+  @include mixins.stone-panel;
+}
+
+.leather {
+  @include mixins.leather-panel;
+}
+
+.veil {
+  @include mixins.surface(rgba(tokens.$color-background, 0.56));
+}

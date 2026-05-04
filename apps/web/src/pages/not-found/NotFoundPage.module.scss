@@ -1,15 +1,17 @@
+@use "styles/tokens" as tokens;
+
 .shell {
+  display: grid;
+  gap: 2rem;
   padding-block: 4rem;
 }
 
-.linkAction {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 2.9rem;
-  padding: 0.85rem 1.15rem;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #56e0c7, #20b89c);
-  color: #031119;
-  font-weight: 700;
+.card {
+  display: grid;
+  gap: 1rem;
+
+  p {
+    margin: 0;
+    color: rgba(45, 33, 22, 0.78);
+  }
 }

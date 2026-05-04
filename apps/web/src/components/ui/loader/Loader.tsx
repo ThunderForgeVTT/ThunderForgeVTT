@@ -1,4 +1,5 @@
 import { cn } from "@/utils/cn";
+import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
 import styles from "./Loader.module.scss";
 
 export interface LoaderProps {
@@ -14,7 +15,9 @@ export function Loader({
 }: LoaderProps) {
   return (
     <div className={cn(styles.loader, fullScreen && styles.fullScreen, className)}>
-      <span className={styles.spinner} aria-hidden="true" />
+      <span className={styles.spinner} aria-hidden="true">
+        <FantasyIcon name="spark" size={20} />
+      </span>
       <span>{label}</span>
     </div>
   );

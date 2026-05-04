@@ -1,0 +1,27 @@
+@use "styles/tokens" as tokens;
+
+.token {
+  display: inline-grid;
+  gap: 0.45rem;
+  justify-items: center;
+}
+
+.image {
+  width: 4.25rem;
+  height: 4.25rem;
+  border-radius: 999px;
+  border: 2px solid rgba(tokens.$color-gold-bright, 0.6);
+  background:
+    radial-gradient(circle at top, rgba(tokens.$color-candlelight, 0.2), transparent 48%),
+    linear-gradient(180deg, rgba(tokens.$color-forest, 0.45), rgba(tokens.$color-background, 0.94));
+  box-shadow:
+    0 0 0 4px rgba(tokens.$color-background, 0.4),
+    tokens.$shadow-glow;
+}
+
+.label {
+  color: tokens.$color-text-muted;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}

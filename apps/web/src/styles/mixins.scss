@@ -3,15 +3,23 @@
 @mixin focus-ring {
   outline: none;
   box-shadow:
-    0 0 0 1px rgba(tokens.$color-accent, 0.38),
-    0 0 0 4px rgba(tokens.$color-accent, 0.16);
+    0 0 0 1px rgba(tokens.$color-gold-bright, 0.58),
+    0 0 0 4px rgba(tokens.$color-violet-soft, 0.2),
+    tokens.$shadow-glow;
+}
+
+@mixin gold-frame {
+  border: 1px solid tokens.$color-border-strong;
+  box-shadow:
+    inset 0 0 0 1px rgba(tokens.$color-background, 0.42),
+    inset 0 0 24px rgba(tokens.$color-candlelight, 0.06),
+    tokens.$shadow-md;
 }
 
 @mixin surface($background: tokens.$color-surface) {
   background: $background;
-  border: 1px solid tokens.$color-border;
-  box-shadow: tokens.$shadow-md;
-  backdrop-filter: blur(18px);
+  @include gold-frame;
+  backdrop-filter: blur(14px);
 }
 
 @mixin content-width($width: tokens.$content-width) {
@@ -19,9 +27,78 @@
   margin-inline: auto;
 }
 
+@mixin parchment-panel {
+  @include surface(
+    linear-gradient(
+      180deg,
+      rgba(tokens.$color-parchment-soft, 0.98),
+      rgba(tokens.$color-parchment, 0.9)
+    )
+  );
+  color: #2d2116;
+  position: relative;
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background:
+      radial-gradient(circle at top left, rgba(tokens.$color-candlelight, 0.32), transparent 26%),
+      radial-gradient(circle at bottom right, rgba(tokens.$color-umber, 0.14), transparent 22%),
+      linear-gradient(135deg, rgba(255, 255, 255, 0.18), transparent 45%);
+    mix-blend-mode: soft-light;
+  }
+}
+
+@mixin stone-panel {
+  @include surface(
+    linear-gradient(
+      180deg,
+      rgba(tokens.$color-stone, 0.92),
+      rgba(tokens.$color-background-elevated, 0.96)
+    )
+  );
+}
+
+@mixin leather-panel {
+  @include surface(
+    linear-gradient(180deg, rgba(tokens.$color-umber, 0.96), rgba(tokens.$color-background, 0.96))
+  );
+}
+
+@mixin tome-bar {
+  @include leather-panel;
+  background:
+    linear-gradient(180deg, rgba(tokens.$color-gold-bright, 0.08), transparent),
+    linear-gradient(180deg, rgba(tokens.$color-umber, 0.96), rgba(tokens.$color-background, 0.98));
+}
+
 @mixin page-gradient {
   background:
-    radial-gradient(circle at top left, rgba(tokens.$color-accent, 0.16), transparent 28%),
-    radial-gradient(circle at right bottom, rgba(tokens.$color-info, 0.12), transparent 22%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0));
+    radial-gradient(circle at top left, rgba(tokens.$color-violet-soft, 0.18), transparent 26%),
+    radial-gradient(circle at right bottom, rgba(tokens.$color-forest-soft, 0.18), transparent 24%),
+    radial-gradient(circle at center top, rgba(tokens.$color-candlelight, 0.05), transparent 24%),
+    linear-gradient(180deg, rgba(tokens.$color-umber, 0.06), rgba(tokens.$color-background, 0));
+}
+
+@mixin rune-caption {
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-size: 0.74rem;
+  color: tokens.$color-text-muted;
+}
+
+@mixin vignette {
+  position: relative;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    box-shadow: inset 0 0 120px rgba(0, 0, 0, 0.32);
+  }
 }

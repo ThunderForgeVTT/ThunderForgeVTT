@@ -1,18 +1,19 @@
-@use "tailwindcss";
+@use "styles/theme";
 @use "styles/mixins" as mixins;
 @use "styles/tokens" as tokens;
 
 :root {
   color-scheme: dark;
-  font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+  font-family: var(--tf-font-body);
   line-height: 1.5;
   font-weight: 400;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background:
+    radial-gradient(circle at top, rgba(tokens.$color-candlelight, 0.07), transparent 18%),
+    linear-gradient(180deg, tokens.$color-background-soft, tokens.$color-background);
 }
 
 *,
@@ -30,7 +31,10 @@ body,
 body {
   margin: 0;
   min-height: 100vh;
-  background: tokens.$color-background;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(tokens.$color-violet-soft, 0.16), transparent 26%),
+    radial-gradient(circle at 100% 10%, rgba(tokens.$color-forest-soft, 0.14), transparent 24%),
+    linear-gradient(180deg, #271d14, tokens.$color-background 24%, #090705);
   color: tokens.$color-text;
 }
 
@@ -40,6 +44,27 @@ input,
 textarea,
 select {
   font: inherit;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  font-family: var(--tf-font-heading);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+p,
+li,
+input,
+textarea,
+select,
+button {
+  font-family: var(--tf-font-body);
 }
 
 img,
@@ -68,11 +93,13 @@ input,
 textarea,
 select {
   width: 100%;
-  border: 1px solid tokens.$color-border;
+  border: 1px solid rgba(tokens.$color-gold, 0.4);
   border-radius: tokens.$radius-sm;
   padding: 0.85rem 1rem;
   color: tokens.$color-text;
-  background: rgba(tokens.$color-background-elevated, 0.92);
+  background:
+    linear-gradient(180deg, rgba(tokens.$color-background-soft, 0.92), rgba(tokens.$color-background, 0.92));
+  box-shadow: inset 0 1px 0 rgba(tokens.$color-candlelight, 0.06);
   transition:
     border-color tokens.$transition-base,
     box-shadow tokens.$transition-base,
@@ -87,7 +114,7 @@ textarea::placeholder {
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-  border-color: rgba(tokens.$color-accent, 0.7);
+  border-color: rgba(tokens.$color-gold-bright, 0.72);
   @include mixins.focus-ring;
 }
 
@@ -95,6 +122,15 @@ main {
   min-height: 1px;
 }
 
+.fantasy-shell {
+  @include mixins.page-gradient;
+}
+
+.rune-text {
+  @include mixins.rune-caption;
+}
+
+.sr-only,
 .visually-hidden {
   position: absolute;
   width: 1px;

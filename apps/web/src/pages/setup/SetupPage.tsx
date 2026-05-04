@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card/Card";
 import { Container } from "@/components/ui/container/Container";
 import { Field } from "@/components/ui/field/Field";
 import { Grid } from "@/components/ui/grid/Grid";
+import { RuneDivider } from "@/components/ui/rune-divider/RuneDivider";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { setupBasic, startSetupOAuth } from "@/services/auth";
 import type { SetupStatus } from "@/types/auth";
@@ -103,8 +104,10 @@ export default function SetupPage({
             </p>
           </section>
 
+          <RuneDivider label="Choose a founding ritual" />
+
           <Grid columns="two">
-            <Card className={styles.card}>
+            <Card surface="leather" className={styles.card}>
               <form onSubmit={onSubmitBasic} className={styles.card}>
                 <h2>Username and password</h2>
                 <p>Create the first admin with local credentials.</p>
@@ -160,13 +163,19 @@ export default function SetupPage({
                   />
                 </Field>
 
-                <Button type="submit" variant="success" size="lg" disabled={isSubmitting}>
+                <Button
+                  type="submit"
+                  variant="success"
+                  size="lg"
+                  disabled={isSubmitting}
+                  icon="shield"
+                >
                   {isSubmitting ? "Creating admin..." : "Create admin account"}
                 </Button>
               </form>
             </Card>
 
-            <Card className={styles.card}>
+            <Card surface="parchment" className={styles.card}>
               <h2>OAuth bootstrap</h2>
               <p>
                 Start with a configured provider and create the initial admin from
@@ -205,6 +214,7 @@ export default function SetupPage({
                     <Button
                       key={provider.provider_key}
                       variant="secondary"
+                      icon="wand"
                       fullWidth
                       disabled={Boolean(isStartingOAuth)}
                       onClick={() => void onStartOAuth(provider.provider_key)}

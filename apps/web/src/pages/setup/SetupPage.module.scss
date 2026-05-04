@@ -1,4 +1,5 @@
 @use "styles/tokens" as tokens;
+@use "styles/mixins" as mixins;
 
 .shell {
   display: grid;
@@ -26,10 +27,7 @@
 }
 
 .eyebrow {
-  color: tokens.$color-text-muted;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  font-size: 0.84rem;
+  @include mixins.rune-caption;
 }
 
 .card {

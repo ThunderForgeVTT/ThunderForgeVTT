@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { SEO } from "@/components/seo/SEO";
+import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import { Container } from "@/components/ui/container/Container";
 import type { SeoConfig } from "@/types/seo";
@@ -24,15 +25,15 @@ export default function NotFoundPage({ setupRequired }: NotFoundPageProps) {
     <>
       <SEO {...notFoundPageSeo} />
       <Container narrow className={styles.shell}>
-        <Card>
+        <Card surface="parchment" className={styles.card}>
           <h1>That page does not exist.</h1>
           <p>
             The route you requested is missing or no longer available. Head back to
             the main ThunderForge flow to continue.
           </p>
-          <Link to={destination} className={styles.linkAction}>
-            Return to {setupRequired ? "setup" : "login"}
-          </Link>
+          <Button asChild icon="arrow-left">
+            <Link to={destination}>Return to {setupRequired ? "setup" : "login"}</Link>
+          </Button>
         </Card>
       </Container>
     </>

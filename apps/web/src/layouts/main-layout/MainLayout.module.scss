@@ -9,13 +9,43 @@
 }
 
 .main {
-  padding-block: 2rem 3rem;
+  padding-block: 1.5rem 3rem;
+}
+
+.chrome {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.hero {
+  max-width: 64rem;
+  display: grid;
+  gap: 0.75rem;
+
+  h1 {
+    font-size: clamp(2rem, 5vw, 3.75rem);
+    line-height: 0.96;
+  }
+
+  p:last-child {
+    margin: 0;
+    max-width: 52rem;
+    color: tokens.$color-text-muted;
+  }
+}
+
+.eyebrow {
+  margin: 0;
+  @include mixins.rune-caption;
 }
 
 .footer {
-  width: min(tokens.$content-width, calc(100% - 2rem));
-  margin-inline: auto;
   padding-bottom: 2rem;
+}
+
+.footerInner {
+  padding-top: 1rem;
   color: tokens.$color-text-muted;
   font-size: 0.92rem;
 }
