@@ -4,15 +4,13 @@
   "private": true,
   "main": "src/main.tsx",
   "scripts": {
-    "build": "pnpm run generate:seo && pnpm run build:engine && vite build",
-    "build:engine": "wasm-pack build ../../src/engine --target web --release --out-dir ./src/engine/bevy/pkg",
-    "dev:engine": "wasm-pack build ../../src/engine --target web --dev --out-dir ./src/engine/bevy/pkg",
+    "build": "pnpm run generate:seo && vite build",
     "generate": "pnpm run build",
     "generate:seo": "node ./scripts/generate-seo-files.mjs",
     "lint": "eslint . --ext .ts,.tsx --max-warnings=0",
     "format": "prettier --check \"{index.html,vite.config.mts,eslint.config.mjs,.prettierrc.json,src/**/*.{ts,tsx,scss},scripts/**/*.mjs}\"",
-    "start:vite": "pnpm run build:engine && vite build --watch",
-    "dev": "pnpm run dev:engine && vite"
+    "start:vite": "vite build --watch",
+    "dev": "vite"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -38,6 +36,7 @@
     "vite-tsconfig-paths": "^5.1.4"
   },
   "dependencies": {
+    "@thunderforge/thunderforge_engine": "workspace:^",
     "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",

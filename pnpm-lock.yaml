@@ -47,6 +47,9 @@ importers:
       '@tailwindcss/postcss':
         specifier: ^4.2.4
         version: 4.2.4
+      '@thunderforge/thunderforge_engine':
+        specifier: workspace:^
+        version: link:../../dist/engine
       react:
         specifier: ^19.2.5
         version: 19.2.5
@@ -132,6 +135,8 @@ importers:
       vite-tsconfig-paths:
         specifier: ^5.1.4
         version: 5.1.4(typescript@6.0.3)(vite@8.0.10(@types/node@25.6.0)(jiti@2.6.1)(sass@1.99.0)(terser@5.46.2))
+
+  dist/engine: {}
 
 packages:
 

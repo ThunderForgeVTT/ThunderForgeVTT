@@ -15,7 +15,8 @@
     "generate": "pnpm --filter @thunderforge/web run generate",
     "start:vite": "pnpm --filter @thunderforge/web run dev",
     "start:server": "cargo run -p thunderforge",
-    "test": "RUSTFLAGS=\"${RUSTFLAGS:-\"\"} -A unused_imports -A dead_code -A private_in_public -A unused_variables\" cargo test"
+    "test": "RUSTFLAGS=\"${RUSTFLAGS:-\"\"} -A unused_imports -A dead_code -A private_in_public -A unused_variables\" cargo test",
+    "preinstall": "./scripts/build.mjs --only-wasm"
   },
   "devDependencies": {
     "rimraf": "6.1.3"
