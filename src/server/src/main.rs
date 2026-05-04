@@ -9,6 +9,7 @@ mod models;
 mod schema; // Add this line
 mod serve;
 mod state;
+mod users;
 mod utils;
 mod world;
 
@@ -44,20 +45,32 @@ async fn graphql_playground() -> impl IntoResponse {
 
 async fn graphql_handler(
     Extension(schema): Extension<AppSchema>,
+    Extension(auth_user): Extension<auth_middleware::AuthenticatedUser>,
     req: GraphQLRequest,
 ) -> GraphQLResponse {
-    schema.execute(req.into_inner()).await.into()
+    schema
+        .execute(req.into_inner().data(auth_user))
+        .await
+        .into()
 }
 
 async fn graphql_ws_handler(
     Extension(schema): Extension<AppSchema>, // Changed from State to Extension
+    Extension(auth_user): Extension<auth_middleware::AuthenticatedUser>,
     protocol: GraphQLProtocol,
     ws: WebSocketUpgrade,
 ) -> Response {
     ws.protocols(ALL_WEBSOCKET_PROTOCOLS)
         .on_upgrade(move |socket| async move {
             GraphQLWebSocket::new(socket, schema, protocol)
-                .on_connection_init(|_value| async move { Ok(Data::default()) })
+                .on_connection_init(move |_value| {
+                    let auth_user = auth_user.clone();
+                    async move {
+                        let mut data = Data::default();
+                        data.insert(auth_user);
+                        Ok(data)
+                    }
+                })
                 .serve()
                 .await;
         })

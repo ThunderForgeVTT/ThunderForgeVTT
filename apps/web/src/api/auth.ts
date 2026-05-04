@@ -1,43 +1,98 @@
-const SEPARATOR = "~UwU~";
-const API_BASE = "/api/v1";
+import type {
+  AuthSessionResponse,
+  AuthUser,
+  LoginPayload,
+  RegisterPayload,
+  SetupStatus,
+} from "@/types/auth";
+
+const API_BASE = "";
 
 export interface SetupProvider {
   provider_key: string;
   display_name: string;
 }
 
-export interface SetupStatus {
-  setup_required: boolean;
-  setup_completed: boolean;
-  configured_oauth_providers: SetupProvider[];
-}
-
-interface AuthResponse {
+interface AuthResponsePayload {
   status?: string;
   message?: string;
+  login_two_factor_challenge_id?: string | null;
+  requires_email_verification?: boolean;
+  session?: {
+    authenticated: boolean;
+    session_expires_at: string;
+    user: AuthUser;
+  } | null;
 }
 
 interface SetupOAuthStartResponse {
   authorization_url: string;
 }
 
-function encodeCredentials(
-  username: string,
-  password: string,
-  id = "",
-): string {
+const SEPARATOR = "~UwU~";
+
+function encodeCredentials(username: string, password: string, id = ""): string {
   return btoa([id, username, password].join(SEPARATOR));
 }
 
-async function readAuthMessage(response: Response): Promise<string> {
-  const contentType = response.headers.get("content-type") ?? "";
-
-  if (contentType.includes("application/json")) {
-    const payload = (await response.json()) as AuthResponse;
-    return payload.message ?? payload.status ?? "Request completed";
+function readCookie(name: string): string | null {
+  if (typeof document === "undefined") {
+    return null;
   }
 
-  return response.text();
+  const prefix = `${name}=`;
+  return document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(prefix))
+    ?.slice(prefix.length) ?? null;
+}
+
+function withCsrf(headers: HeadersInit = {}): HeadersInit {
+  const csrfToken = readCookie("csrf_token");
+  if (!csrfToken) {
+    return headers;
+  }
+
+  return {
+    ...headers,
+    "x-csrf-token": csrfToken,
+  };
+}
+
+async function readJson<T>(response: Response): Promise<T | null> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    return null;
+  }
+
+  return (await response.json()) as T;
+}
+
+function normalizeAuthResponse(payload: AuthResponsePayload | null): AuthSessionResponse {
+  return {
+    status: payload?.status ?? "unknown",
+    message: payload?.message ?? "Request completed",
+    loginTwoFactorChallengeId: payload?.login_two_factor_challenge_id ?? null,
+    requiresEmailVerification: payload?.requires_email_verification ?? false,
+    session: payload?.session
+      ? {
+          authenticated: payload.session.authenticated,
+          sessionExpiresAt: payload.session.session_expires_at,
+          user: payload.session.user,
+        }
+      : null,
+  };
+}
+
+async function expectAuthResponse(response: Response): Promise<AuthSessionResponse> {
+  const payload = normalizeAuthResponse(await readJson<AuthResponsePayload>(response));
+
+  if (!response.ok) {
+    throw new Error(payload.message || "Request failed");
+  }
+
+  return payload;
 }
 
 export async function getSetupStatus(): Promise<SetupStatus> {
@@ -52,24 +107,63 @@ export async function getSetupStatus(): Promise<SetupStatus> {
   return response.json() as Promise<SetupStatus>;
 }
 
-export async function basicLogin(
-  username: string,
-  password: string,
-): Promise<string> {
-  const response = await fetch(`${API_BASE}/authentication/basic`, {
+export function login(payload: LoginPayload): Promise<AuthSessionResponse> {
+  return fetch(`${API_BASE}/authentication/login`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  }).then(expectAuthResponse);
+}
+
+export function register(payload: RegisterPayload): Promise<AuthSessionResponse> {
+  return fetch(`${API_BASE}/authentication/register`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  }).then(expectAuthResponse);
+}
+
+export function logout(): Promise<AuthSessionResponse> {
+  return fetch(`${API_BASE}/authentication/logout`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: withCsrf({
+      "Content-Type": "application/json",
+    }),
+  }).then(expectAuthResponse);
+}
+
+export function refresh(): Promise<AuthSessionResponse> {
+  return fetch(`${API_BASE}/authentication/session/refresh`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: withCsrf({
+      "Content-Type": "application/json",
+    }),
+  }).then(expectAuthResponse);
+}
+
+export function getCurrentSession(): Promise<AuthSessionResponse> {
+  return fetch(`${API_BASE}/authentication/session`, {
+    credentials: "same-origin",
+  }).then(expectAuthResponse);
+}
+
+export function basicLogin(username: string, password: string): Promise<string> {
+  return fetch(`${API_BASE}/authentication/basic`, {
     method: "POST",
     credentials: "same-origin",
     body: encodeCredentials(username, password),
-  });
-
-  return readAuthMessage(response);
+  }).then(async (response) => normalizeAuthResponse(await readJson(response)).message);
 }
 
-export async function basicSignUp(
-  username: string,
-  password: string,
-): Promise<string> {
-  // Server-side signup endpoint is not implemented yet; this preserves current behavior.
+export function basicSignUp(username: string, password: string): Promise<string> {
   return basicLogin(username, password);
 }
 
@@ -93,7 +187,12 @@ export async function setupBasic(
     }),
   });
 
-  return readAuthMessage(response);
+  const payload = normalizeAuthResponse(await readJson<AuthResponsePayload>(response));
+  if (!response.ok) {
+    throw new Error(payload.message);
+  }
+
+  return payload.message;
 }
 
 export async function startSetupOAuth(
@@ -121,15 +220,15 @@ export async function startSetupOAuth(
     },
   );
 
-  const contentType = response.headers.get("content-type") ?? "";
   if (!response.ok) {
-    throw new Error(await readAuthMessage(response));
+    const payload = normalizeAuthResponse(await readJson<AuthResponsePayload>(response));
+    throw new Error(payload.message);
   }
 
-  if (!contentType.includes("application/json")) {
+  const payload = await readJson<SetupOAuthStartResponse>(response);
+  if (!payload) {
     throw new Error("OAuth start response was not valid JSON");
   }
 
-  const payload = (await response.json()) as SetupOAuthStartResponse;
   window.location.assign(payload.authorization_url);
 }

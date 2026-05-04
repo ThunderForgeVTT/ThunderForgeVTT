@@ -8,6 +8,7 @@ This directory contains architecture decisions for ThunderForgeVTT, captured usi
 | -------------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------- |
 | [20260501-000](./20260501-000-durable_objects_with_graphql_event_driven_sync.md) | Accepted | Durable Objects via GraphQL Event-Driven Synchronization Architecture                         |
 | [20260504-000](./20260504-000-fantasy_ui_shell_with_radix_and_wrapped_tldraw.md) | Accepted | Fantasy UI Shell with Radix Primitives, Dicebear Identity Surfaces, and Wrapped tldraw Chrome |
+| [20260504-001](./20260504-001-rest_auth_with_db_backed_cookie_sessions.md)       | Accepted | REST Authentication with Database-Backed Cookie Sessions                                      |
 
 ## Guidelines
 

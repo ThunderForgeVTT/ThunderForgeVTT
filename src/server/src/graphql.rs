@@ -5,6 +5,7 @@ use futures_util::Stream; // Import Stream
 use std::time::Duration; // Import Duration
 use tokio_stream::wrappers::IntervalStream; // Import IntervalStream
 
+use crate::auth_middleware::AuthenticatedUser;
 use crate::models::{User, World};
 use crate::schema::worlds::dsl::*;
 
@@ -60,21 +61,19 @@ pub struct UserQuery;
 impl UserQuery {
     /// Retrieves the currently authenticated user.
     async fn me(&self, ctx: &Context<'_>) -> Option<GraphQLUser> {
-        // This is a placeholder. Real authentication logic will go here.
-        // For now, let's assume a user can be fetched from the DB
         let pool = ctx
             .data::<Pool<ConnectionManager<PgConnection>>>()
             .expect("Can't get DB pool");
+        let auth_user = ctx.data::<AuthenticatedUser>().ok()?;
         let mut conn = pool.get().expect("Can't get DB connection");
 
-        // Example: Fetch the first user from the database
-        let user = crate::schema::users::dsl::users
+        crate::schema::users::dsl::users
+            .filter(crate::schema::users::dsl::id.eq(auth_user.user_id))
             .select(crate::models::User::as_select())
             .first::<crate::models::User>(&mut conn)
             .optional()
-            .expect("Error loading user");
-
-        user.map(GraphQLUser::from)
+            .expect("Error loading user")
+            .map(GraphQLUser::from)
     }
 }
 

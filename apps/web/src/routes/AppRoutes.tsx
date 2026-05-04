@@ -1,14 +1,14 @@
-import { lazy, Suspense } from "react";
-import type { ReactNode } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { lazy, Suspense, type ReactNode } from "react";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Loader } from "@/components/ui/loader/Loader";
-import { MainLayout } from "@/layouts/main-layout/MainLayout";
 import type { HeaderNavItem } from "@/components/navigation/AppHeader";
+import { useAuth } from "@/hooks/useAuth";
+import { MainLayout } from "@/layouts/main-layout/MainLayout";
 import type { SetupStatus } from "@/types/auth";
 import { pageLoaders } from "./pageLoaders";
 
 const LoginPage = lazy(pageLoaders.login);
-const SignUpPage = lazy(pageLoaders.signup);
+const RegisterPage = lazy(pageLoaders.signup);
 const SetupPage = lazy(pageLoaders.setup);
 const SetupCallbackPage = lazy(pageLoaders.setupCallback);
 const CounterPage = lazy(pageLoaders.counter);
@@ -21,47 +21,66 @@ interface AppRoutesProps {
 }
 
 function renderLazyPage(page: ReactNode, label: string) {
-  return (
-    <Suspense fallback={<Loader fullScreen label={label} />}>{page}</Suspense>
-  );
+  return <Suspense fallback={<Loader fullScreen label={label} />}>{page}</Suspense>;
+}
+
+function RequireAuthenticated({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <Loader fullScreen label="Restoring session" />;
+  }
+
+  if (!isAuthenticated) {
+    const returnTo = `${location.pathname}${location.search}${location.hash}`;
+    return <Navigate to={`/login?returnTo=${encodeURIComponent(returnTo)}`} replace />;
+  }
+
+  return <>{children}</>;
 }
 
 export default function AppRoutes({
   setupStatus,
   onSetupStatusRefresh,
 }: AppRoutesProps) {
+  const { isAuthenticated, isLoading } = useAuth();
   const setupRequired = setupStatus.setup_required;
+
+  if (!setupRequired && isLoading) {
+    return <Loader fullScreen label="Restoring session" />;
+  }
+
   const navItems: readonly HeaderNavItem[] = setupRequired
     ? [
         { to: "/setup", label: "Setup", prefetch: "setup", icon: "settings" },
         { to: "/counter", label: "Status", prefetch: "counter", icon: "scene" },
       ]
-    : [
-        { to: "/login", label: "Login", prefetch: "login", icon: "shield" },
-        { to: "/signup", label: "Sign up", prefetch: "signup", icon: "quill" },
-        {
-          to: "/counter",
-          label: "Dashboard",
-          prefetch: "counter",
-          icon: "scene",
-        },
-      ];
+    : isAuthenticated
+      ? [
+          { to: "/counter", label: "Dashboard", prefetch: "counter", icon: "scene" },
+          { to: "/world/demo-world", label: "World", prefetch: "world", icon: "worlds" },
+        ]
+      : [
+          { to: "/login", label: "Login", prefetch: "login", icon: "shield" },
+          { to: "/register", label: "Register", prefetch: "signup", icon: "quill" },
+        ];
+
+  const publicHome = isAuthenticated && !isLoading ? "/counter" : "/login";
 
   return (
     <Routes>
       <Route
         element={
           <MainLayout
-            brandHref={setupRequired ? "/setup" : "/login"}
+            brandHref={setupRequired ? "/setup" : isAuthenticated ? "/counter" : "/login"}
             navItems={navItems}
           />
         }
       >
         <Route
           index
-          element={
-            <Navigate to={setupRequired ? "/setup" : "/login"} replace />
-          }
+          element={<Navigate to={setupRequired ? "/setup" : publicHome} replace />}
         />
         <Route
           path="/setup/:code"
@@ -75,7 +94,7 @@ export default function AppRoutes({
                 "Loading setup workspace",
               )
             ) : (
-              <Navigate to="/login" replace />
+              <Navigate to={publicHome} replace />
             )
           }
         />
@@ -91,7 +110,7 @@ export default function AppRoutes({
                 "Loading setup workspace",
               )
             ) : (
-              <Navigate to="/login" replace />
+              <Navigate to={publicHome} replace />
             )
           }
         />
@@ -104,7 +123,7 @@ export default function AppRoutes({
                 "Finishing setup",
               )
             ) : (
-              <Navigate to="/login" replace />
+              <Navigate to={publicHome} replace />
             )
           }
         />
@@ -113,24 +132,33 @@ export default function AppRoutes({
           element={
             setupRequired ? (
               <Navigate to="/setup" replace />
+            ) : isAuthenticated ? (
+              <Navigate to="/counter" replace />
             ) : (
               renderLazyPage(<LoginPage />, "Loading login screen")
             )
           }
         />
         <Route
-          path="/signup"
+          path="/register"
           element={
             setupRequired ? (
               <Navigate to="/setup" replace />
+            ) : isAuthenticated ? (
+              <Navigate to="/counter" replace />
             ) : (
-              renderLazyPage(<SignUpPage />, "Loading sign-up screen")
+              renderLazyPage(<RegisterPage />, "Loading registration screen")
             )
           }
         />
+        <Route path="/signup" element={<Navigate to="/register" replace />} />
         <Route
           path="/counter"
-          element={renderLazyPage(<CounterPage />, "Loading dashboard")}
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(<CounterPage />, "Loading dashboard")}
+            </RequireAuthenticated>
+          }
         />
         <Route
           path="*"
@@ -142,7 +170,11 @@ export default function AppRoutes({
       </Route>
       <Route
         path="/world/:id"
-        element={renderLazyPage(<WorldPage />, "Loading world workspace")}
+        element={
+          <RequireAuthenticated>
+            {renderLazyPage(<WorldPage />, "Loading world workspace")}
+          </RequireAuthenticated>
+        }
       />
     </Routes>
   );

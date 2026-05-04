@@ -60,7 +60,7 @@ function pipeWithPrefix(stream, prefix, target) {
 
 export function spawnManaged(
   command,
-  { cwd = ROOT_DIR, prefix, detached = true }
+  { cwd = ROOT_DIR, prefix, detached = true },
 ) {
   const child = spawn(command, {
     cwd,
@@ -144,7 +144,7 @@ export async function buildEngine() {
     {
       cwd: ENGINE_DIR,
       prefix: "engine",
-    }
+    },
   );
   const result = await waitForProcess(child, "engine build");
 
@@ -237,8 +237,8 @@ export async function terminateChildren(signal = "SIGINT") {
         (child) =>
           new Promise((resolve) => {
             child.once("close", resolve);
-          })
-      )
+          }),
+      ),
     ).then(() => true);
 
     const timedOut = await Promise.race([
@@ -268,7 +268,7 @@ export async function terminateChildren(signal = "SIGINT") {
   log(
     "dev",
     "Processes still running, escalating to SIGKILL...",
-    process.stderr
+    process.stderr,
   );
   sendSignal("SIGKILL");
   await waitForClose(SHUTDOWN_KILL_MS);

@@ -17,6 +17,7 @@ use tower_cookies::{Cookie, Cookies};
 pub struct AuthenticatedUser {
     pub user_id: uuid::Uuid,
     pub session_id: uuid::Uuid,
+    pub expires_at: chrono::NaiveDateTime,
 }
 
 static AUTH_RATE_LIMITER: OnceLock<Mutex<HashMap<String, Vec<i64>>>> = OnceLock::new();
@@ -27,7 +28,7 @@ fn limiter_store() -> &'static Mutex<HashMap<String, Vec<i64>>> {
 
 pub async fn rate_limit_auth_requests(request: Request, next: Next) -> Response {
     let path = request.uri().path().to_string();
-    if !path.starts_with("/authentication/") {
+    if !path.contains("/authentication/") {
         return next.run(request).await;
     }
 
@@ -36,7 +37,10 @@ pub async fn rate_limit_auth_requests(request: Request, next: Next) -> Response 
 
     let now = Utc::now().timestamp();
     let window_seconds = 60;
-    let max_requests = if path.contains("/authentication/basic") {
+    let max_requests = if path.contains("/authentication/basic")
+        || path.contains("/authentication/login")
+        || path.contains("/authentication/register")
+    {
         15
     } else {
         40
@@ -151,6 +155,17 @@ pub async fn require_authenticated_user(
     mut request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
+    let authenticated_user = resolve_authenticated_user(&state, &cookies).await?;
+
+    request.extensions_mut().insert(authenticated_user);
+
+    Ok(next.run(request).await)
+}
+
+pub async fn resolve_authenticated_user(
+    state: &AppState,
+    cookies: &Cookies,
+) -> Result<AuthenticatedUser, StatusCode> {
     let Some(session_cookie) = cookies.private(&state.key).get("session") else {
         return Err(StatusCode::UNAUTHORIZED);
     };
@@ -190,10 +205,9 @@ pub async fn require_authenticated_user(
         return Err(StatusCode::UNAUTHORIZED);
     };
 
-    request.extensions_mut().insert(AuthenticatedUser {
+    Ok(AuthenticatedUser {
         user_id: session.user_id,
         session_id: session.id,
-    });
-
-    Ok(next.run(request).await)
+        expires_at: session.expires_at,
+    })
 }

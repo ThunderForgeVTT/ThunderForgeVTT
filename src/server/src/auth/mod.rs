@@ -9,7 +9,9 @@ use crate::schema::{
     login_two_factor_challenges, oauth_authorization_sessions, oauth_link_challenges,
     oauth_providers, user_oauth_accounts, user_sessions, users,
 };
+use crate::auth_middleware::resolve_authenticated_user;
 use crate::state::AppState;
+use crate::users::{PublicUser, load_public_user};
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
 use argon2::password_hash::{PasswordHasher, SaltString, rand_core::OsRng};
@@ -48,6 +50,10 @@ pub fn router() -> Router<AppState> {
             get(admin_setup_oauth_callback),
         )
         .route("/authentication/basic", post(basic_authentication))
+        .route("/authentication/login", post(login))
+        .route("/authentication/register", post(register))
+        .route("/authentication/session", get(current_session))
+        .route("/authentication/session/refresh", post(refresh_session))
         .route("/authentication/oauth/resolve", post(oauth_resolve))
         .route(
             "/authentication/oauth/link/confirm",
@@ -83,6 +89,20 @@ pub fn router() -> Router<AppState> {
             post(set_admin_user_two_factor_required),
         )
         .route("/authentication/logout", post(logout))
+}
+
+#[derive(Debug, Deserialize)]
+struct LoginRequest {
+    identifier: String,
+    password: String,
+    two_factor_code: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RegisterRequest {
+    username: String,
+    email: String,
+    password: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -197,6 +217,22 @@ struct OAuthResponse {
     message: String,
     challenge_id: Option<uuid::Uuid>,
     login_two_factor_challenge_id: Option<uuid::Uuid>,
+}
+
+#[derive(Debug, Serialize)]
+struct SessionStateResponse {
+    authenticated: bool,
+    user: PublicUser,
+    session_expires_at: chrono::NaiveDateTime,
+}
+
+#[derive(Debug, Serialize)]
+struct AuthSessionResponse {
+    status: &'static str,
+    message: String,
+    session: Option<SessionStateResponse>,
+    login_two_factor_challenge_id: Option<uuid::Uuid>,
+    requires_email_verification: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -626,126 +662,263 @@ async fn basic_authentication(
     State(state): State<AppState>,
     credentials: String,
 ) -> (StatusCode, Json<OAuthResponse>) {
-    let cred = Credentials::from(credentials);
-
-    let mut conn = state.db_pool.get().expect("Failed to get DB connection");
-
-    let outcome = tokio::task::spawn_blocking(move || {
-        users::table
-            .filter(users::username.eq(&cred.username))
-            .select((
-                users::id,
-                users::password_hash,
-                users::two_factor_enabled,
-                users::two_factor_admin_required,
-            ))
-            .first::<(uuid::Uuid, String, bool, bool)>(&mut conn)
-            .optional()
-    })
-    .await
-    .expect("Failed to spawn blocking task")
-    .expect("Failed to query DB");
-
-    let Some((user_id, password_hash, two_factor_enabled, two_factor_admin_required)) = outcome
-    else {
-        return error_response(StatusCode::UNAUTHORIZED, "failure", "Invalid credentials");
-    };
-
-    let parsed_hash = PasswordHash::new(&password_hash).expect("Invalid hash in db");
-    if Argon2::default()
-        .verify_password(cred.password.as_bytes(), &parsed_hash)
-        .is_err()
-    {
-        return error_response(StatusCode::UNAUTHORIZED, "failure", "Invalid credentials");
-    }
-
-    let global_required = match load_global_two_factor_requirement(&state).await {
-        Ok(v) => v,
-        Err(msg) => {
-            return error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "settings_error",
-                msg.as_str(),
-            );
+    let cred = match Credentials::decode(&credentials) {
+        Ok(value) => value,
+        Err(message) => {
+            return error_response(StatusCode::BAD_REQUEST, "invalid_request", message.as_str());
         }
     };
 
-    let two_factor_required = global_required || two_factor_admin_required || two_factor_enabled;
-
-    if !two_factor_required {
-        if let Err(msg) = issue_session_cookie(&state, &cookies, user_id).await {
-            return error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "session_error",
-                msg.as_str(),
-            );
-        }
-        return (
-            StatusCode::OK,
-            Json(OAuthResponse {
-                status: "success",
-                message: "Authenticated successfully".to_string(),
-                challenge_id: None,
-                login_two_factor_challenge_id: None,
-            }),
-        );
-    }
-
-    let Some(code) = headers
+    let code = headers
         .get("x-2fa-code")
         .and_then(|h| h.to_str().ok())
-        .map(|v| v.to_string())
-    else {
-        let challenge_id = match create_login_two_factor_challenge(&state, user_id).await {
-            Ok(v) => v,
-            Err(msg) => {
-                return error_response(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "two_factor_error",
-                    msg.as_str(),
-                );
-            }
-        };
+        .map(|v| v.to_string());
 
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(OAuthResponse {
-                status: "two_factor_required",
-                message: "2FA code required to complete sign-in".to_string(),
-                challenge_id: None,
-                login_two_factor_challenge_id: Some(challenge_id),
-            }),
-        );
+    let (status, response) =
+        authenticate_password_login(&state, &cookies, &cred.username, &cred.password, code.as_deref())
+            .await;
+
+    (
+        status,
+        Json(OAuthResponse {
+            status: response.status,
+            message: response.message.clone(),
+            challenge_id: None,
+            login_two_factor_challenge_id: response.login_two_factor_challenge_id,
+        }),
+    )
+}
+
+async fn login(
+    cookies: Cookies,
+    State(state): State<AppState>,
+    Json(request): Json<LoginRequest>,
+) -> (StatusCode, Json<AuthSessionResponse>) {
+    authenticate_password_login(
+        &state,
+        &cookies,
+        &request.identifier,
+        &request.password,
+        request.two_factor_code.as_deref(),
+    )
+    .await
+}
+
+async fn register(
+    cookies: Cookies,
+    State(state): State<AppState>,
+    Json(request): Json<RegisterRequest>,
+) -> (StatusCode, Json<AuthSessionResponse>) {
+    if let Err(message) = ensure_registration_allowed(&state).await {
+        return auth_session_error(StatusCode::CONFLICT, "registration_blocked", message.as_str());
+    }
+
+    let username = request.username.trim().to_string();
+    let email = request.email.trim().to_lowercase();
+
+    if let Err(message) = validate_registration_input(&username, &email, &request.password) {
+        return auth_session_error(StatusCode::BAD_REQUEST, "invalid_request", message.as_str());
+    }
+
+    let password_hash = match hash_password(&request.password) {
+        Ok(value) => value,
+        Err(message) => {
+            return auth_session_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "password_hash_failed",
+                message.as_str(),
+            );
+        }
     };
 
-    match verify_two_factor_for_user(&state, user_id, &code).await {
-        Ok(true) => {
-            if let Err(msg) = issue_session_cookie(&state, &cookies, user_id).await {
-                return error_response(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "session_error",
-                    msg.as_str(),
-                );
+    let now = Utc::now().naive_utc();
+    let mut conn = state.db_pool.get().expect("Failed to get DB connection");
+    let create_result =
+        tokio::task::spawn_blocking(move || -> Result<uuid::Uuid, RegisterUserError> {
+            let username_exists = users::table
+                .filter(users::username.eq(&username))
+                .select(users::id)
+                .first::<uuid::Uuid>(&mut conn)
+                .optional()
+                .map_err(|_| RegisterUserError::Storage)?;
+            if username_exists.is_some() {
+                return Err(RegisterUserError::UsernameTaken);
             }
-            (
-                StatusCode::OK,
-                Json(OAuthResponse {
-                    status: "success",
-                    message: "Authenticated successfully".to_string(),
-                    challenge_id: None,
-                    login_two_factor_challenge_id: None,
-                }),
-            )
+
+            let email_exists = users::table
+                .filter(users::email.eq(&email))
+                .select(users::id)
+                .first::<uuid::Uuid>(&mut conn)
+                .optional()
+                .map_err(|_| RegisterUserError::Storage)?;
+            if email_exists.is_some() {
+                return Err(RegisterUserError::EmailTaken);
+            }
+
+            let user_id = uuid::Uuid::now_v7();
+            diesel::insert_into(users::table)
+                .values((
+                    users::id.eq(user_id),
+                    users::username.eq(username),
+                    users::email.eq(email),
+                    users::is_admin.eq(false),
+                    users::password_hash.eq(password_hash),
+                    users::created_at.eq(now),
+                    users::updated_at.eq(now),
+                    users::two_factor_enabled.eq(false),
+                    users::two_factor_secret_encrypted.eq::<Option<String>>(None),
+                    users::two_factor_confirmed_at.eq::<Option<chrono::NaiveDateTime>>(None),
+                    users::two_factor_admin_required.eq(false),
+                ))
+                .execute(&mut conn)
+                .map_err(|_| RegisterUserError::Storage)?;
+
+            Ok(user_id)
+        })
+        .await
+        .expect("Failed to spawn blocking task");
+
+    let user_id = match create_result {
+        Ok(value) => value,
+        Err(RegisterUserError::UsernameTaken) => {
+            return auth_session_error(
+                StatusCode::CONFLICT,
+                "username_taken",
+                "Username is already in use",
+            );
         }
-        Ok(false) => error_response(
-            StatusCode::UNAUTHORIZED,
-            "two_factor_invalid",
-            "Invalid 2FA code",
-        ),
-        Err(msg) => error_response(
+        Err(RegisterUserError::EmailTaken) => {
+            return auth_session_error(
+                StatusCode::CONFLICT,
+                "email_taken",
+                "Email is already in use",
+            );
+        }
+        Err(RegisterUserError::Storage) => {
+            return auth_session_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "registration_failed",
+                "Failed to create account",
+            );
+        }
+    };
+
+    let session = match issue_session_cookie(&state, &cookies, user_id).await {
+        Ok(value) => value,
+        Err(message) => {
+            return auth_session_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "session_error",
+                message.as_str(),
+            );
+        }
+    };
+
+    match build_session_response(
+        &state,
+        user_id,
+        session.expires_at,
+        "success",
+        "Account created successfully",
+    )
+    .await
+    {
+        Ok(response) => (StatusCode::CREATED, Json(response)),
+        Err(message) => auth_session_error(
             StatusCode::INTERNAL_SERVER_ERROR,
-            "two_factor_error",
-            msg.as_str(),
+            "session_error",
+            message.as_str(),
+        ),
+    }
+}
+
+async fn current_session(
+    cookies: Cookies,
+    State(state): State<AppState>,
+) -> (StatusCode, Json<AuthSessionResponse>) {
+    let authenticated_user = match resolve_authenticated_user(&state, &cookies).await {
+        Ok(value) => value,
+        Err(StatusCode::UNAUTHORIZED) => {
+            return auth_session_error(
+                StatusCode::UNAUTHORIZED,
+                "unauthenticated",
+                "No active session",
+            );
+        }
+        Err(_) => {
+            return auth_session_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "session_error",
+                "Failed to validate current session",
+            );
+        }
+    };
+
+    match build_session_response(
+        &state,
+        authenticated_user.user_id,
+        authenticated_user.expires_at,
+        "authenticated",
+        "Active session found",
+    )
+    .await
+    {
+        Ok(response) => (StatusCode::OK, Json(response)),
+        Err(message) => auth_session_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "session_error",
+            message.as_str(),
+        ),
+    }
+}
+
+async fn refresh_session(
+    cookies: Cookies,
+    State(state): State<AppState>,
+) -> (StatusCode, Json<AuthSessionResponse>) {
+    let authenticated_user = match resolve_authenticated_user(&state, &cookies).await {
+        Ok(value) => value,
+        Err(StatusCode::UNAUTHORIZED) => {
+            return auth_session_error(
+                StatusCode::UNAUTHORIZED,
+                "unauthenticated",
+                "No active session to refresh",
+            );
+        }
+        Err(_) => {
+            return auth_session_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "session_error",
+                "Failed to validate current session",
+            );
+        }
+    };
+
+    let session = match issue_session_cookie(&state, &cookies, authenticated_user.user_id).await {
+        Ok(value) => value,
+        Err(message) => {
+            return auth_session_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "session_error",
+                message.as_str(),
+            );
+        }
+    };
+
+    match build_session_response(
+        &state,
+        authenticated_user.user_id,
+        session.expires_at,
+        "refreshed",
+        "Session rotated successfully",
+    )
+    .await
+    {
+        Ok(response) => (StatusCode::OK, Json(response)),
+        Err(message) => auth_session_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "session_error",
+            message.as_str(),
         ),
     }
 }
@@ -1126,7 +1299,7 @@ async fn set_admin_user_two_factor_required(
         ),
     }
 }
-async fn logout(cookies: Cookies, State(state): State<AppState>) {
+async fn logout(cookies: Cookies, State(state): State<AppState>) -> (StatusCode, Json<AuthSessionResponse>) {
     if let Some(session_cookie) = cookies.private(&state.key).get("session")
         && let Ok(session_id) = uuid::Uuid::parse_str(session_cookie.value())
     {
@@ -1145,6 +1318,17 @@ async fn logout(cookies: Cookies, State(state): State<AppState>) {
         .private(&state.key)
         .remove(Cookie::new("session", ""));
     cookies.remove(Cookie::new("csrf_token", ""));
+
+    (
+        StatusCode::OK,
+        Json(AuthSessionResponse {
+            status: "logged_out",
+            message: "Session cleared".to_string(),
+            session: None,
+            login_two_factor_challenge_id: None,
+            requires_email_verification: false,
+        }),
+    )
 }
 
 async fn oauth_start(
@@ -2137,14 +2321,15 @@ async fn issue_session_cookie(
     state: &AppState,
     cookies: &Cookies,
     user_id: uuid::Uuid,
-) -> Result<(), String> {
+) -> Result<crate::models::UserSession, String> {
     let now = Utc::now().naive_utc();
     let session_id = uuid::Uuid::now_v7();
     let session_ttl_days = 7;
+    let expires_at = now + chrono::Duration::days(session_ttl_days);
     let new_session = NewUserSession {
         id: session_id,
         user_id,
-        expires_at: now + chrono::Duration::days(session_ttl_days),
+        expires_at,
         revoked_at: None,
         created_at: now,
     };
@@ -2194,7 +2379,13 @@ async fn issue_session_cookie(
         csrf_cookie.set_secure(true);
     }
     cookies.add(csrf_cookie);
-    Ok(())
+    Ok(crate::models::UserSession {
+        id: session_id,
+        user_id,
+        expires_at,
+        revoked_at: None,
+        created_at: now,
+    })
 }
 
 async fn load_global_two_factor_requirement(state: &AppState) -> Result<bool, String> {
@@ -2648,6 +2839,233 @@ fn hash_password(value: &str) -> Result<String, String> {
         .map_err(|e| format!("Failed to hash value: {e}"))
 }
 
+async fn authenticate_password_login(
+    state: &AppState,
+    cookies: &Cookies,
+    identifier: &str,
+    password: &str,
+    two_factor_code: Option<&str>,
+) -> (StatusCode, Json<AuthSessionResponse>) {
+    let identifier = identifier.trim().to_string();
+    let email_candidate = identifier.to_lowercase();
+    if identifier.is_empty() || password.is_empty() {
+        return auth_session_error(
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
+            "Email or username and password are required",
+        );
+    }
+
+    let mut conn = state.db_pool.get().expect("Failed to get DB connection");
+    let outcome = tokio::task::spawn_blocking(move || {
+        users::table
+            .filter(users::username.eq(&identifier).or(users::email.eq(&email_candidate)))
+            .select((
+                users::id,
+                users::password_hash,
+                users::two_factor_enabled,
+                users::two_factor_admin_required,
+            ))
+            .first::<(uuid::Uuid, String, bool, bool)>(&mut conn)
+            .optional()
+    })
+    .await
+    .expect("Failed to spawn blocking task")
+    .expect("Failed to query DB");
+
+    let Some((user_id, password_hash, two_factor_enabled, two_factor_admin_required)) = outcome
+    else {
+        return auth_session_error(StatusCode::UNAUTHORIZED, "failure", "Invalid credentials");
+    };
+
+    let parsed_hash = PasswordHash::new(&password_hash).expect("Invalid hash in db");
+    if Argon2::default()
+        .verify_password(password.as_bytes(), &parsed_hash)
+        .is_err()
+    {
+        return auth_session_error(StatusCode::UNAUTHORIZED, "failure", "Invalid credentials");
+    }
+
+    let global_required = match load_global_two_factor_requirement(state).await {
+        Ok(value) => value,
+        Err(message) => {
+            return auth_session_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "settings_error",
+                message.as_str(),
+            );
+        }
+    };
+
+    let two_factor_required = global_required || two_factor_admin_required || two_factor_enabled;
+    if two_factor_required && two_factor_code.is_none() {
+        let challenge_id = match create_login_two_factor_challenge(state, user_id).await {
+            Ok(value) => value,
+            Err(message) => {
+                return auth_session_error(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "two_factor_error",
+                    message.as_str(),
+                );
+            }
+        };
+
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(AuthSessionResponse {
+                status: "two_factor_required",
+                message: "2FA code required to complete sign-in".to_string(),
+                session: None,
+                login_two_factor_challenge_id: Some(challenge_id),
+                requires_email_verification: false,
+            }),
+        );
+    }
+
+    if let Some(code) = two_factor_code {
+        match verify_two_factor_for_user(state, user_id, code).await {
+            Ok(true) => {}
+            Ok(false) => {
+                return auth_session_error(
+                    StatusCode::UNAUTHORIZED,
+                    "two_factor_invalid",
+                    "Invalid 2FA code",
+                );
+            }
+            Err(message) => {
+                return auth_session_error(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "two_factor_error",
+                    message.as_str(),
+                );
+            }
+        }
+    }
+
+    let session = match issue_session_cookie(state, cookies, user_id).await {
+        Ok(value) => value,
+        Err(message) => {
+            return auth_session_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "session_error",
+                message.as_str(),
+            );
+        }
+    };
+
+    match build_session_response(
+        state,
+        user_id,
+        session.expires_at,
+        "success",
+        "Authenticated successfully",
+    )
+    .await
+    {
+        Ok(response) => (StatusCode::OK, Json(response)),
+        Err(message) => auth_session_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "session_error",
+            message.as_str(),
+        ),
+    }
+}
+
+async fn build_session_response(
+    state: &AppState,
+    user_id: uuid::Uuid,
+    session_expires_at: chrono::NaiveDateTime,
+    status: &'static str,
+    message: &str,
+) -> Result<AuthSessionResponse, String> {
+    let user = load_public_user(state, user_id).await?;
+    Ok(AuthSessionResponse {
+        status,
+        message: message.to_string(),
+        session: Some(SessionStateResponse {
+            authenticated: true,
+            user,
+            session_expires_at,
+        }),
+        login_two_factor_challenge_id: None,
+        requires_email_verification: false,
+    })
+}
+
+fn auth_session_error(
+    status_code: StatusCode,
+    status: &'static str,
+    message: &str,
+) -> (StatusCode, Json<AuthSessionResponse>) {
+    (
+        status_code,
+        Json(AuthSessionResponse {
+            status,
+            message: message.to_string(),
+            session: None,
+            login_two_factor_challenge_id: None,
+            requires_email_verification: false,
+        }),
+    )
+}
+
+async fn ensure_registration_allowed(state: &AppState) -> Result<(), String> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| "Failed to get DB connection".to_string())?;
+
+    let admin_exists = tokio::task::spawn_blocking(move || {
+        users::table
+            .filter(users::is_admin.eq(true))
+            .select(users::id)
+            .first::<uuid::Uuid>(&mut conn)
+            .optional()
+    })
+    .await
+    .map_err(|_| "Failed to spawn blocking task".to_string())?
+    .map_err(|_| "Failed to query admin setup state".to_string())?;
+
+    if admin_exists.is_some() {
+        Ok(())
+    } else {
+        Err("Registration is unavailable until the initial admin setup is complete".to_string())
+    }
+}
+
+fn validate_registration_input(username: &str, email: &str, password: &str) -> Result<(), String> {
+    if username.is_empty() || email.is_empty() || password.is_empty() {
+        return Err("Username, email, and password are required".to_string());
+    }
+
+    if username.len() < 3 || username.len() > 32 {
+        return Err("Username must be between 3 and 32 characters".to_string());
+    }
+
+    if !username
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.'))
+    {
+        return Err("Username may only contain letters, numbers, '-', '_' and '.'".to_string());
+    }
+
+    if !email.contains('@') || email.starts_with('@') || email.ends_with('@') {
+        return Err("Email address is invalid".to_string());
+    }
+
+    if password.len() < 12 {
+        return Err("Password must be at least 12 characters long".to_string());
+    }
+
+    Ok(())
+}
+
+enum RegisterUserError {
+    UsernameTaken,
+    EmailTaken,
+    Storage,
+}
+
 fn derive_bootstrap_username(desired_username: Option<String>, provider_email: &str) -> String {
     let candidate = desired_username
         .map(|v| v.trim().to_string())
@@ -2733,4 +3151,56 @@ fn error_response(
             login_two_factor_challenge_id: None,
         }),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{derive_bootstrap_username, random_setup_code, validate_registration_input};
+
+    #[test]
+    fn registration_validation_rejects_short_password() {
+        let result = validate_registration_input("wizard", "wizard@thunderforge.dev", "short");
+
+        assert_eq!(
+            result,
+            Err("Password must be at least 12 characters long".to_string())
+        );
+    }
+
+    #[test]
+    fn registration_validation_rejects_invalid_username() {
+        let result = validate_registration_input("bad name", "wizard@thunderforge.dev", "very-secure-password");
+
+        assert_eq!(
+            result,
+            Err("Username may only contain letters, numbers, '-', '_' and '.'".to_string())
+        );
+    }
+
+    #[test]
+    fn registration_validation_accepts_valid_input() {
+        let result = validate_registration_input(
+            "archmage.1",
+            "wizard@thunderforge.dev",
+            "very-secure-password",
+        );
+
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn bootstrap_username_falls_back_to_email_local_part() {
+        let username = derive_bootstrap_username(None, "Grand.Magister+Admin@thunderforge.dev");
+
+        assert_eq!(username, "grand.magisteradmin");
+    }
+
+    #[test]
+    fn setup_code_uses_expected_fantasy_friendly_format() {
+        let code = random_setup_code();
+
+        assert_eq!(code.len(), 14);
+        assert!(code.chars().all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '-'));
+        assert_eq!(code.chars().filter(|ch| *ch == '-').count(), 2);
+    }
 }

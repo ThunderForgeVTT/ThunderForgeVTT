@@ -1,6 +1,6 @@
 export const pageLoaders = {
   login: () => import("@/pages/auth/LoginPage"),
-  signup: () => import("@/pages/auth/SignUpPage"),
+  signup: () => import("@/pages/auth/RegisterPage"),
   setup: () => import("@/pages/setup/SetupPage"),
   setupCallback: () => import("@/pages/setup/SetupCallbackPage"),
   counter: () => import("@/pages/counter/CounterPage"),

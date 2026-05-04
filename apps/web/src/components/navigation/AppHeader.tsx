@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button/Button";
 import { Dropdown } from "@/components/ui/dropdown/Dropdown";
 import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
 import type { FantasyIconName } from "@/components/ui/fantasy-icon/FantasyIcon";
+import { useAuth } from "@/hooks/useAuth";
 import styles from "./AppHeader.module.scss";
 
 export interface HeaderNavItem {
@@ -23,6 +24,7 @@ interface AppHeaderProps {
 
 export function AppHeader({ brandHref, navItems }: AppHeaderProps) {
   const navigate = useNavigate();
+  const { isAuthenticated, logout, user } = useAuth();
 
   return (
     <header className={styles.header}>
@@ -85,13 +87,28 @@ export function AppHeader({ brandHref, navItems }: AppHeaderProps) {
                 icon: "settings",
                 onSelect: () => navigate("/setup"),
               },
+              ...(isAuthenticated
+                ? [
+                    {
+                      label: "Sign out",
+                      icon: "arrow-left" as const,
+                      onSelect: () => {
+                        void logout().then(() => navigate("/login"));
+                      },
+                    },
+                  ]
+                : []),
             ]}
           />
           <div className={styles.profile}>
-            <Avatar seed="archmage-of-thunderforge" name="Archmage" size="sm" />
+            <Avatar
+              seed={user?.id ?? "archmage-of-thunderforge"}
+              name={user?.username ?? "Archmage"}
+              size="sm"
+            />
             <div>
-              <strong>Archmage</strong>
-              <small>Realm steward</small>
+              <strong>{user?.username ?? "Archmage"}</strong>
+              <small>{isAuthenticated ? "Authenticated session" : "Realm steward"}</small>
             </div>
           </div>
         </div>

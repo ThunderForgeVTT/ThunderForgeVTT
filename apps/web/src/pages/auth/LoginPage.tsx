@@ -1,6 +1,6 @@
 import type { FormEvent } from "react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Avatar } from "@/components/ui/avatar/Avatar";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
@@ -8,8 +8,8 @@ import { Card } from "@/components/ui/card/Card";
 import { Field } from "@/components/ui/field/Field";
 import { RuneDivider } from "@/components/ui/rune-divider/RuneDivider";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
+import { useAuth } from "@/hooks/useAuth";
 import { AuthLayout } from "@/layouts/auth-layout/AuthLayout";
-import { basicLogin } from "@/services/auth";
 import type { SeoConfig } from "@/types/seo";
 import styles from "./AuthPage.module.scss";
 
@@ -26,12 +26,22 @@ export const loginPageSeo: SeoConfig = {
   preloadAssets: [
     { href: "/brand-mark.svg", as: "image", type: "image/svg+xml" },
   ],
-  prefetchHrefs: ["/signup", "/counter"],
+  prefetchHrefs: ["/register", "/counter"],
 };
 
+function redirectTarget(search: string) {
+  const params = new URLSearchParams(search);
+  const returnTo = params.get("returnTo");
+  return returnTo && returnTo.startsWith("/") ? returnTo : "/counter";
+}
+
 export default function LoginPage() {
-  const [username, setUsername] = useState("");
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { login } = useAuth();
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [twoFactorCode, setTwoFactorCode] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -41,8 +51,16 @@ export default function LoginPage() {
     setStatus(null);
 
     try {
-      const result = await basicLogin(username, password);
-      setStatus(result);
+      const response = await login({
+        identifier,
+        password,
+        two_factor_code: twoFactorCode.trim() || undefined,
+      });
+      setStatus(response.message);
+
+      if (response.session?.authenticated) {
+        navigate(redirectTarget(location.search), { replace: true });
+      }
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Login failed.");
     } finally {
@@ -77,7 +95,7 @@ export default function LoginPage() {
               </div>
               <RuneDivider label="Fast routes" />
               <div className={styles.linkList}>
-                <Link to="/signup">Create a local account</Link>
+                <Link to="/register">Create a local account</Link>
                 <Link to="/counter">Review the dashboard preview</Link>
               </div>
             </div>
@@ -89,19 +107,18 @@ export default function LoginPage() {
             <div className={styles.header}>
               <h2>Local credentials</h2>
               <p>
-                Use a username and password configured for this ThunderForge
-                instance.
+                Sign in with the email address or username tied to your local ThunderForge account.
               </p>
             </div>
 
-            <Field label="Username" htmlFor="login-username">
+            <Field label="Email address or username" htmlFor="login-identifier">
               <input
-                id="login-username"
-                name="username"
+                id="login-identifier"
+                name="identifier"
                 autoComplete="username"
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                placeholder="founder"
+                value={identifier}
+                onChange={(event) => setIdentifier(event.target.value)}
+                placeholder="founder@thunderforge.app"
               />
             </Field>
 
@@ -117,6 +134,21 @@ export default function LoginPage() {
               />
             </Field>
 
+            <Field
+              label="Two-factor code"
+              htmlFor="login-two-factor"
+              hint="Optional unless your account requires 2FA."
+            >
+              <input
+                id="login-two-factor"
+                name="twoFactorCode"
+                inputMode="numeric"
+                value={twoFactorCode}
+                onChange={(event) => setTwoFactorCode(event.target.value)}
+                placeholder="123456"
+              />
+            </Field>
+
             <div className={styles.actions}>
               <Button
                 type="submit"
@@ -125,7 +157,7 @@ export default function LoginPage() {
                 disabled={isSubmitting}
                 icon="shield"
               >
-                {isSubmitting ? "Signing in..." : "Login"}
+                {isSubmitting ? "Signing in..." : "Sign in"}
               </Button>
             </div>
 

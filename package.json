@@ -7,16 +7,10 @@
   "license": "BSD 3-Clause License",
   "packageManager": "pnpm@10.33.2",
   "scripts": {
-    "clean": "rimraf ./{**/pkg,target,pkg,dist,data/client/*,node_modules,.pnpm-store}",
-    "postclean": "pnpm install",
-    "lint": "cargo fmt && cargo +nightly clippy",
-    "build": "cargo build",
-    "start": "pnpm run --filter='*' \"/^start:.*/\"",
-    "generate": "pnpm --filter @thunderforge/web run generate",
-    "start:vite": "pnpm --filter @thunderforge/web run dev",
-    "start:server": "cargo run -p thunderforge",
-    "test": "RUSTFLAGS=\"${RUSTFLAGS:-\"\"} -A unused_imports -A dead_code -A private_in_public -A unused_variables\" cargo test",
-    "preinstall": "./scripts/build.mjs --only-wasm"
+    "build": "./scripts/build.mjs",
+    "clean": "rimraf dist",
+    "dev": "./scripts/dev.mjs",
+    "format": "prettier --check \"{apps,src,scripts}/**/*.{ts,tsx,js,mjs,json,scss}\"; cargo fmt"
   },
   "devDependencies": {
     "rimraf": "6.1.3"

@@ -30,6 +30,25 @@ impl Credentials {
         }
     }
 
+    pub fn decode(encoded: &str) -> std::result::Result<Credentials, String> {
+        let cred_bytes = general_purpose::STANDARD
+            .decode(encoded)
+            .map_err(|_| "Credentials were not valid base64".to_string())?;
+        let cred_string = from_utf8(&cred_bytes)
+            .map_err(|_| "Credentials payload was not valid UTF-8".to_string())?
+            .to_string();
+        let cred_parts: Vec<&str> = cred_string.split(SEPARATOR).collect();
+        if cred_parts.len() != 3 {
+            return Err("Credentials payload was malformed".to_string());
+        }
+
+        Ok(Credentials {
+            id: Some(cred_parts[0].to_string()),
+            username: cred_parts[1].to_string(),
+            password: cred_parts[2].to_string(),
+        })
+    }
+
     pub async fn authenticate(&self) -> bool {
         true
     }
@@ -37,14 +56,11 @@ impl Credentials {
 
 impl From<String> for Credentials {
     fn from(cred: String) -> Self {
-        let cred_bytes = general_purpose::STANDARD.decode(cred).ok().unwrap();
-        let cred_string: String = from_utf8(&cred_bytes).unwrap().to_string();
-        let cred_parts: Vec<&str> = cred_string.split(&SEPARATOR).collect();
-        Credentials {
-            id: Option::Some(cred_parts[0].to_string()),
-            username: cred_parts[1].to_string(),
-            password: cred_parts[2].to_string(),
-        }
+        Credentials::decode(&cred).unwrap_or_else(|_| Credentials {
+            id: Some(String::new()),
+            username: String::new(),
+            password: String::new(),
+        })
     }
 }
 
@@ -63,5 +79,31 @@ impl Display for Credentials {
 
         let result = general_purpose::STANDARD.encode(components.join(SEPARATOR));
         write!(f, "{}", result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Credentials;
+
+    #[test]
+    fn credentials_roundtrip() {
+        let credentials = Credentials::new(
+            Some("id-1".to_string()),
+            "mage".to_string(),
+            "secret".to_string(),
+        );
+
+        let encoded = credentials.to_string();
+        let decoded = Credentials::decode(&encoded).expect("credentials should decode");
+
+        assert_eq!(decoded.username, "mage");
+        assert_eq!(decoded.password, "secret");
+    }
+
+    #[test]
+    fn credentials_decode_rejects_invalid_input() {
+        let error = Credentials::decode("not-base64").expect_err("invalid credentials must fail");
+        assert!(error.contains("base64"));
     }
 }
