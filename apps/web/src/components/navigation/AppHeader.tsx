@@ -75,17 +75,24 @@ export function AppHeader({ brandHref, navItems }: AppHeaderProps) {
               {
                 label: isAdmin ? "Open admin welcome" : "Open welcome hall",
                 icon: isAdmin ? "crown" : "scene",
-                onSelect: () => navigate(isAdmin ? "/admin/welcome" : "/welcome"),
+                onSelect: () =>
+                  navigate(isAdmin ? "/admin/welcome" : "/welcome"),
+              },
+              {
+                label: "World archive",
+                icon: "worlds",
+                onSelect: () => navigate("/worlds"),
               },
               {
                 label: "System settings",
                 icon: "settings",
-                onSelect: () => navigate(isAdmin ? "/admin/system" : "/counter"),
+                onSelect: () =>
+                  navigate(isAdmin ? "/admin/system" : "/counter"),
               },
               {
-                label: "Enter demo world",
-                icon: "worlds",
-                onSelect: () => navigate("/world/demo-world"),
+                label: "Enter demo workspace",
+                icon: "spark",
+                onSelect: () => navigate("/world/demo-world/play"),
               },
               ...(isAuthenticated
                 ? [

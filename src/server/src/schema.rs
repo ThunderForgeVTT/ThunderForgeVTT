@@ -111,6 +111,7 @@ diesel::table! {
         id -> Uuid,
         effect -> PolicyEffect,
         resources -> Array<Nullable<Text>>,
+        world_id -> Nullable<Uuid>,
         created_by -> Uuid,
         updated_by -> Uuid,
         created_at -> Timestamp,
@@ -198,6 +199,9 @@ diesel::table! {
     worlds (id) {
         id -> Uuid,
         name -> Varchar,
+        description -> Nullable<Text>,
+        game_system_id -> Nullable<Varchar>,
+        interface_pack_id -> Nullable<Varchar>,
         created_by -> Uuid,
         updated_by -> Uuid,
         created_at -> Timestamp,

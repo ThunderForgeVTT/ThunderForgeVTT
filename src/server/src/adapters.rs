@@ -169,6 +169,9 @@ impl From<DbWorld> for CoreWorld {
         CoreWorld {
             id: db.id,
             name: db.name,
+            description: db.description,
+            game_system_id: db.game_system_id,
+            interface_pack_id: db.interface_pack_id,
             created_by: db.created_by,
             updated_by: db.updated_by,
             created_at: db.created_at,
@@ -183,6 +186,9 @@ impl From<CoreWorld> for DbWorld {
         DbWorld {
             id: core.id,
             name: core.name,
+            description: core.description,
+            game_system_id: core.game_system_id,
+            interface_pack_id: core.interface_pack_id,
             created_by: core.created_by,
             updated_by: core.updated_by,
             created_at: core.created_at,

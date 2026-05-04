@@ -1,0 +1,115 @@
+@use "styles/mixins" as mixins;
+@use "styles/tokens" as tokens;
+
+.card {
+  display: grid;
+  gap: 1rem;
+  padding: 1.25rem;
+  position: relative;
+  overflow: hidden;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: auto -3rem -3rem auto;
+    width: 10rem;
+    height: 10rem;
+    border-radius: 999px;
+    background: radial-gradient(
+      circle,
+      rgba(tokens.$color-candlelight, 0.2),
+      transparent 70%
+    );
+    pointer-events: none;
+  }
+}
+
+.header,
+.actions {
+  position: relative;
+  z-index: 1;
+}
+
+.header {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.titleGroup {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.9rem;
+
+  h2,
+  p {
+    margin: 0;
+  }
+}
+
+.icon {
+  display: inline-grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(tokens.$color-gold, 0.24);
+  background: rgba(tokens.$color-background, 0.08);
+}
+
+.kicker {
+  @include mixins.rune-caption;
+  color: rgba(44, 26, 14, 0.7);
+}
+
+.updated {
+  color: rgba(44, 26, 14, 0.6);
+  font-size: 0.88rem;
+}
+
+.description {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  color: rgba(44, 26, 14, 0.74);
+  min-height: 3.4rem;
+}
+
+.metaGrid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  div {
+    display: grid;
+    gap: 0.25rem;
+    padding: 0.75rem 0.85rem;
+    border-radius: tokens.$radius-md;
+    border: 1px solid rgba(tokens.$color-umber, 0.14);
+    background: rgba(255, 255, 255, 0.22);
+  }
+
+  span {
+    @include mixins.rune-caption;
+    color: rgba(44, 26, 14, 0.62);
+  }
+
+  strong {
+    color: #2c1a0e;
+    word-break: break-word;
+  }
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .metaGrid {
+    grid-template-columns: 1fr;
+  }
+}

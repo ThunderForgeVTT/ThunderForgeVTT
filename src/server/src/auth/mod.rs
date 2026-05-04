@@ -1,3 +1,4 @@
+use crate::auth_middleware::resolve_authenticated_user;
 use crate::models::{
     AdminBootstrapOAuthSession, AdminBootstrapSetup, AuthSecuritySetting, LoginTwoFactorChallenge,
     NewAdminBootstrapOAuthSession, NewAdminBootstrapSetup, NewLoginTwoFactorChallenge,
@@ -9,7 +10,6 @@ use crate::schema::{
     login_two_factor_challenges, oauth_authorization_sessions, oauth_link_challenges,
     oauth_providers, user_oauth_accounts, user_sessions, users,
 };
-use crate::auth_middleware::resolve_authenticated_user;
 use crate::state::AppState;
 use crate::users::{PublicUser, load_public_user, record_auth_audit_event};
 use aes_gcm::aead::{Aead, KeyInit};
@@ -674,9 +674,14 @@ async fn basic_authentication(
         .and_then(|h| h.to_str().ok())
         .map(|v| v.to_string());
 
-    let (status, response) =
-        authenticate_password_login(&state, &cookies, &cred.username, &cred.password, code.as_deref())
-            .await;
+    let (status, response) = authenticate_password_login(
+        &state,
+        &cookies,
+        &cred.username,
+        &cred.password,
+        code.as_deref(),
+    )
+    .await;
 
     (
         status,
@@ -710,7 +715,11 @@ async fn register(
     Json(request): Json<RegisterRequest>,
 ) -> (StatusCode, Json<AuthSessionResponse>) {
     if let Err(message) = ensure_registration_allowed(&state).await {
-        return auth_session_error(StatusCode::CONFLICT, "registration_blocked", message.as_str());
+        return auth_session_error(
+            StatusCode::CONFLICT,
+            "registration_blocked",
+            message.as_str(),
+        );
     }
 
     let username = request.username.trim().to_string();
@@ -1299,7 +1308,10 @@ async fn set_admin_user_two_factor_required(
         ),
     }
 }
-async fn logout(cookies: Cookies, State(state): State<AppState>) -> (StatusCode, Json<AuthSessionResponse>) {
+async fn logout(
+    cookies: Cookies,
+    State(state): State<AppState>,
+) -> (StatusCode, Json<AuthSessionResponse>) {
     if let Some(session_cookie) = cookies.private(&state.key).get("session")
         && let Ok(session_id) = uuid::Uuid::parse_str(session_cookie.value())
     {
@@ -1764,8 +1776,9 @@ async fn resolve_oauth_login(
                 StatusCode::CONFLICT,
                 Json(OAuthResponse {
                     status: "password_required",
-                    message: "Existing account detected; confirm password to link this OAuth account"
-                        .to_string(),
+                    message:
+                        "Existing account detected; confirm password to link this OAuth account"
+                            .to_string(),
                     challenge_id: Some(challenge_id),
                     login_two_factor_challenge_id: None,
                 }),
@@ -2876,7 +2889,11 @@ async fn authenticate_password_login(
     let mut conn = state.db_pool.get().expect("Failed to get DB connection");
     let outcome = tokio::task::spawn_blocking(move || {
         users::table
-            .filter(users::username.eq(&identifier).or(users::email.eq(&email_candidate)))
+            .filter(
+                users::username
+                    .eq(&identifier)
+                    .or(users::email.eq(&email_candidate)),
+            )
             .select((
                 users::id,
                 users::password_hash,
@@ -3186,7 +3203,11 @@ mod tests {
 
     #[test]
     fn registration_validation_rejects_invalid_username() {
-        let result = validate_registration_input("bad name", "wizard@thunderforge.dev", "very-secure-password");
+        let result = validate_registration_input(
+            "bad name",
+            "wizard@thunderforge.dev",
+            "very-secure-password",
+        );
 
         assert_eq!(
             result,
@@ -3217,7 +3238,10 @@ mod tests {
         let code = random_setup_code();
 
         assert_eq!(code.len(), 14);
-        assert!(code.chars().all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '-'));
+        assert!(
+            code.chars()
+                .all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '-')
+        );
         assert_eq!(code.chars().filter(|ch| *ch == '-').count(), 2);
     }
 }

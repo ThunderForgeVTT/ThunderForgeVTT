@@ -33,7 +33,7 @@ export const counterPageSeo: SeoConfig = {
     "virtual tabletop admin",
   ],
   canonicalPath: "/counter",
-  prefetchHrefs: ["/world/demo-world"],
+  prefetchHrefs: ["/world/demo-world/play", "/worlds"],
 };
 
 export default function CounterPage() {
@@ -172,7 +172,7 @@ export default function CounterPage() {
             <div className={styles.heroActions}>
               <Tooltip content="Preview the scene shell with Bevy and tldraw still mounted beneath the new chrome.">
                 <Button asChild icon="worlds">
-                  <Link to="/world/demo-world">Open demo world</Link>
+                  <Link to="/world/demo-world/play">Open demo world</Link>
                 </Button>
               </Tooltip>
               <Popover
@@ -206,7 +206,7 @@ export default function CounterPage() {
                   {
                     label: "Demo world",
                     icon: "worlds",
-                    href: "/world/demo-world",
+                    href: "/world/demo-world/play",
                   },
                 ]}
               />
@@ -299,8 +299,8 @@ export default function CounterPage() {
             </div>
             <p>
               Manage the authenticated account for{" "}
-              <strong>{user?.username ?? "this session"}</strong> with self-service
-              export and permanent deletion actions.
+              <strong>{user?.username ?? "this session"}</strong> with
+              self-service export and permanent deletion actions.
             </p>
             <div className={styles.counterRow}>
               <Button
@@ -309,7 +309,9 @@ export default function CounterPage() {
                 disabled={isExporting !== null}
                 onClick={() => void downloadExport("json")}
               >
-                {isExporting === "json" ? "Preparing JSON..." : "Download JSON export"}
+                {isExporting === "json"
+                  ? "Preparing JSON..."
+                  : "Download JSON export"}
               </Button>
               <Button
                 variant="secondary"
@@ -317,7 +319,9 @@ export default function CounterPage() {
                 disabled={isExporting !== null}
                 onClick={() => void downloadExport("zip")}
               >
-                {isExporting === "zip" ? "Preparing ZIP..." : "Download ZIP export"}
+                {isExporting === "zip"
+                  ? "Preparing ZIP..."
+                  : "Download ZIP export"}
               </Button>
               <Dialog
                 trigger={
@@ -340,7 +344,8 @@ export default function CounterPage() {
               >
                 <p>
                   This action is irreversible. ThunderForge will remove local
-                  credentials, OAuth links, sessions, and owned persisted content.
+                  credentials, OAuth links, sessions, and owned persisted
+                  content.
                 </p>
               </Dialog>
             </div>

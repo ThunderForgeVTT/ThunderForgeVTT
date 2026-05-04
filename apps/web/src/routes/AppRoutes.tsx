@@ -16,7 +16,10 @@ const SetupPage = lazy(pageLoaders.setup);
 const SetupCallbackPage = lazy(pageLoaders.setupCallback);
 const CounterPage = lazy(pageLoaders.counter);
 const WelcomePage = lazy(pageLoaders.welcome);
-const WorldPage = lazy(pageLoaders.world);
+const WorldListPage = lazy(pageLoaders.worldList);
+const CreateWorldPage = lazy(pageLoaders.createWorld);
+const WorldDashboardPage = lazy(pageLoaders.worldDashboard);
+const WorldPage = lazy(pageLoaders.worldWorkspace);
 const NotFoundPage = lazy(pageLoaders.notFound);
 
 interface AppRoutesProps {
@@ -25,7 +28,9 @@ interface AppRoutesProps {
 }
 
 function renderLazyPage(page: ReactNode, label: string) {
-  return <Suspense fallback={<Loader fullScreen label={label} />}>{page}</Suspense>;
+  return (
+    <Suspense fallback={<Loader fullScreen label={label} />}>{page}</Suspense>
+  );
 }
 
 function RequireAuthenticated({ children }: { children: ReactNode }) {
@@ -38,7 +43,12 @@ function RequireAuthenticated({ children }: { children: ReactNode }) {
 
   if (!isAuthenticated) {
     const returnTo = `${location.pathname}${location.search}${location.hash}`;
-    return <Navigate to={`/login?returnTo=${encodeURIComponent(returnTo)}`} replace />;
+    return (
+      <Navigate
+        to={`/login?returnTo=${encodeURIComponent(returnTo)}`}
+        replace
+      />
+    );
   }
 
   return <>{children}</>;
@@ -54,7 +64,12 @@ function RequireAdmin({ children }: { children: ReactNode }) {
 
   if (!isAuthenticated) {
     const returnTo = `${location.pathname}${location.search}${location.hash}`;
-    return <Navigate to={`/login?returnTo=${encodeURIComponent(returnTo)}`} replace />;
+    return (
+      <Navigate
+        to={`/login?returnTo=${encodeURIComponent(returnTo)}`}
+        replace
+      />
+    );
   }
 
   if (!isAdmin) {
@@ -76,7 +91,8 @@ export default function AppRoutes({
   }
 
   const authenticatedHome = redirectAfterLogin();
-  const publicHome = isAuthenticated && !isLoading ? authenticatedHome : "/login";
+  const publicHome =
+    isAuthenticated && !isLoading ? authenticatedHome : "/login";
 
   const navItems: readonly HeaderNavItem[] = setupRequired
     ? [
@@ -97,18 +113,48 @@ export default function AppRoutes({
             prefetch: "adminSettings",
             icon: "settings",
           },
-          { to: "/counter", label: "Preview", prefetch: "counter", icon: "scene" },
-          { to: "/world/demo-world", label: "World", prefetch: "world", icon: "worlds" },
+          {
+            to: "/counter",
+            label: "Preview",
+            prefetch: "counter",
+            icon: "scene",
+          },
+          {
+            to: "/worlds",
+            label: "Worlds",
+            prefetch: "worldList",
+            icon: "worlds",
+          },
         ]
       : isAuthenticated
         ? [
-            { to: "/welcome", label: "Welcome", prefetch: "welcome", icon: "scene" },
-            { to: "/counter", label: "Preview", prefetch: "counter", icon: "spark" },
-            { to: "/world/demo-world", label: "World", prefetch: "world", icon: "worlds" },
+            {
+              to: "/welcome",
+              label: "Welcome",
+              prefetch: "welcome",
+              icon: "scene",
+            },
+            {
+              to: "/counter",
+              label: "Preview",
+              prefetch: "counter",
+              icon: "spark",
+            },
+            {
+              to: "/worlds",
+              label: "Worlds",
+              prefetch: "worldList",
+              icon: "worlds",
+            },
           ]
         : [
             { to: "/login", label: "Login", prefetch: "login", icon: "shield" },
-            { to: "/register", label: "Register", prefetch: "signup", icon: "quill" },
+            {
+              to: "/register",
+              label: "Register",
+              prefetch: "signup",
+              icon: "quill",
+            },
           ];
 
   return (
@@ -116,14 +162,22 @@ export default function AppRoutes({
       <Route
         element={
           <MainLayout
-            brandHref={setupRequired ? "/setup" : isAuthenticated ? authenticatedHome : "/login"}
+            brandHref={
+              setupRequired
+                ? "/setup"
+                : isAuthenticated
+                  ? authenticatedHome
+                  : "/login"
+            }
             navItems={navItems}
           />
         }
       >
         <Route
           index
-          element={<Navigate to={setupRequired ? "/setup" : publicHome} replace />}
+          element={
+            <Navigate to={setupRequired ? "/setup" : publicHome} replace />
+          }
         />
         <Route
           path="/setup/:code"
@@ -197,7 +251,10 @@ export default function AppRoutes({
         <Route path="/signup" element={<Navigate to="/register" replace />} />
         <Route
           path="/oauth/callback/:providerKey"
-          element={renderLazyPage(<OAuthCallbackPage />, "Completing OAuth sign-in")}
+          element={renderLazyPage(
+            <OAuthCallbackPage />,
+            "Completing OAuth sign-in",
+          )}
         />
         <Route
           path="/admin/welcome"
@@ -272,6 +329,33 @@ export default function AppRoutes({
           }
         />
         <Route
+          path="/worlds"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(<WorldListPage />, "Loading world archive")}
+            </RequireAuthenticated>
+          }
+        />
+        <Route
+          path="/worlds/create"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(<CreateWorldPage />, "Loading world creation")}
+            </RequireAuthenticated>
+          }
+        />
+        <Route
+          path="/world/:id"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(
+                <WorldDashboardPage />,
+                "Loading world dashboard",
+              )}
+            </RequireAuthenticated>
+          }
+        />
+        <Route
           path="*"
           element={renderLazyPage(
             <NotFoundPage setupRequired={setupRequired} />,
@@ -280,7 +364,7 @@ export default function AppRoutes({
         />
       </Route>
       <Route
-        path="/world/:id"
+        path="/world/:id/play"
         element={
           <RequireAuthenticated>
             {renderLazyPage(<WorldPage />, "Loading world workspace")}

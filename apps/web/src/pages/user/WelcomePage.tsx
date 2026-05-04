@@ -36,23 +36,30 @@ export default function WelcomePage() {
           <section className={styles.grid}>
             <Card surface="parchment" className={styles.card}>
               <h2>Enter a world</h2>
-              <p>Resume collaborative scenecraft inside the current guild atlas.</p>
+              <p>
+                Resume collaborative scenecraft inside the current guild atlas.
+              </p>
               <Button asChild icon="worlds">
-                <Link to="/world/demo-world">Enter a World</Link>
+                <Link to="/worlds">Enter a World</Link>
               </Button>
             </Card>
 
             <Card surface="leather" className={styles.card}>
               <h2>Create a world</h2>
-              <p>Start a fresh tabletop chapter from the dashboard preview shell.</p>
+              <p>
+                Start a fresh tabletop chapter from the dashboard preview shell.
+              </p>
               <Button asChild variant="secondary" icon="quill">
-                <Link to="/counter">Create a World</Link>
+                <Link to="/worlds/create">Create a World</Link>
               </Button>
             </Card>
 
             <Card surface="stone" className={styles.card}>
               <h2>Join via invite code</h2>
-              <p>Use the existing dashboard chrome while invite rituals are staged.</p>
+              <p>
+                Use the existing dashboard chrome while invite rituals are
+                staged.
+              </p>
               <Button asChild variant="ghost" icon="spark">
                 <Link to="/counter">Join via Invite Code</Link>
               </Button>

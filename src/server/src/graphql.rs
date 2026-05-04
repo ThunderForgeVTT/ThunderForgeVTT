@@ -4,6 +4,7 @@ use async_graphql::{
 };
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
+use diesel::result::{DatabaseErrorKind, Error as DieselError};
 use futures_util::Stream;
 use std::time::Duration;
 use tokio_stream::wrappers::IntervalStream;
@@ -18,10 +19,15 @@ use crate::admin::{
 };
 use crate::auth_middleware::AuthenticatedUser;
 use crate::db_types::PolicyEffectEnum;
-use crate::models::{AdminBootstrapSetup, AuthSecuritySetting, OAuthProvider, Policy, User, World, WorldEvent, WorldToken};
+use crate::models::{
+    AdminBootstrapSetup, AuthSecuritySetting, OAuthProvider, Policy, User, World, WorldEvent,
+    WorldToken,
+};
 use crate::schema::{policies, users, world_events, world_tokens, worlds};
 use crate::state::AppState;
-use crate::users::{UserDataDeleteSummary, UserDataExport, delete_user_data_owned, export_user_data_payload};
+use crate::users::{
+    UserDataDeleteSummary, UserDataExport, delete_user_data_owned, export_user_data_payload,
+};
 
 #[derive(SimpleObject, Debug, Clone)]
 pub struct GraphQLUser {
@@ -52,10 +58,27 @@ impl From<User> for GraphQLUser {
     }
 }
 
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLCreateWorldInput {
+    name: String,
+    description: Option<String>,
+    game_system_id: Option<String>,
+    interface_pack_id: Option<String>,
+}
+
 #[derive(SimpleObject, Debug, Clone)]
 pub struct GraphQLWorld {
     id: uuid::Uuid,
     name: String,
+    description: Option<String>,
+    game_system_id: Option<String>,
+    interface_pack_id: Option<String>,
+    scenes: Vec<String>,
+    actors: Vec<String>,
+    tokens: Vec<String>,
+    events: Vec<String>,
+    game_system: Option<String>,
+    interface_pack: Option<String>,
     created_by: uuid::Uuid,
     updated_by: uuid::Uuid,
     created_at: chrono::NaiveDateTime,
@@ -67,6 +90,15 @@ impl From<World> for GraphQLWorld {
         Self {
             id: world.id,
             name: world.name,
+            description: world.description,
+            game_system_id: world.game_system_id,
+            interface_pack_id: world.interface_pack_id,
+            scenes: Vec::new(),
+            actors: Vec::new(),
+            tokens: Vec::new(),
+            events: Vec::new(),
+            game_system: None,
+            interface_pack: None,
             created_by: world.created_by,
             updated_by: world.updated_by,
             created_at: world.created_at,
@@ -227,6 +259,13 @@ pub struct GraphQLDeleteMyDataPayload {
 }
 
 #[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLDeleteWorldPayload {
+    id: uuid::Uuid,
+    status: String,
+    message: String,
+}
+
+#[derive(SimpleObject, Debug, Clone)]
 pub struct GraphQLDiskUsageBreakdown {
     total_bytes: i64,
     worlds_bytes: i64,
@@ -352,7 +391,9 @@ impl GraphQLSystemManifest {
             .metadata
             .into_iter()
             .map(|(key, value)| GraphQLManifestEntry {
-                editable: editable_manifest_keys().iter().any(|candidate| *candidate == key),
+                editable: editable_manifest_keys()
+                    .iter()
+                    .any(|candidate| *candidate == key),
                 key,
                 value,
             })
@@ -474,7 +515,11 @@ impl From<UserDataExport> for GraphQLExportMyDataPayload {
                 .into_iter()
                 .map(GraphQLWorldEvent::from)
                 .collect(),
-            policies: export.policies.into_iter().map(GraphQLPolicy::from).collect(),
+            policies: export
+                .policies
+                .into_iter()
+                .map(GraphQLPolicy::from)
+                .collect(),
             scenes: export
                 .scenes
                 .into_iter()
@@ -511,6 +556,19 @@ impl From<UserDataExport> for GraphQLExportMyDataPayload {
     }
 }
 
+const MIN_WORLD_NAME_LEN: usize = 3;
+const MAX_WORLD_NAME_LEN: usize = 64;
+const MAX_WORLD_DESCRIPTION_LEN: usize = 600;
+const MAX_WORLD_REFERENCE_ID_LEN: usize = 64;
+
+#[derive(Debug, Clone)]
+struct PreparedWorldInput {
+    name: String,
+    description: Option<String>,
+    game_system_id: Option<String>,
+    interface_pack_id: Option<String>,
+}
+
 fn app_state<'a>(ctx: &'a Context<'_>) -> GraphQLResult<&'a AppState> {
     ctx.data::<AppState>()
         .map_err(|_| Error::new("Application state unavailable"))
@@ -530,6 +588,99 @@ fn admin_user<'a>(ctx: &'a Context<'_>) -> GraphQLResult<&'a AuthenticatedUser> 
     }
 }
 
+fn normalize_world_name(value: &str) -> String {
+    value.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn normalize_optional_text(value: Option<String>) -> Option<String> {
+    value
+        .map(|item| item.trim().to_string())
+        .filter(|item| !item.is_empty())
+}
+
+fn validate_world_name(name: &str) -> Result<(), String> {
+    if name.len() < MIN_WORLD_NAME_LEN || name.len() > MAX_WORLD_NAME_LEN {
+        return Err(format!(
+            "World name must be between {MIN_WORLD_NAME_LEN} and {MAX_WORLD_NAME_LEN} characters"
+        ));
+    }
+
+    if !name.chars().all(|ch| {
+        ch.is_ascii_alphanumeric()
+            || matches!(
+                ch,
+                ' ' | '\'' | '-' | '_' | '.' | ',' | ':' | '!' | '?' | '(' | ')'
+            )
+    }) {
+        return Err(
+            "World name may only contain letters, numbers, spaces, apostrophes, and - _ . , : ! ? ( )"
+                .to_string(),
+        );
+    }
+
+    Ok(())
+}
+
+fn validate_optional_reference_id(label: &str, value: Option<&str>) -> Result<(), String> {
+    let Some(value) = value else {
+        return Ok(());
+    };
+
+    if value.len() > MAX_WORLD_REFERENCE_ID_LEN {
+        return Err(format!(
+            "{label} must be {MAX_WORLD_REFERENCE_ID_LEN} characters or fewer"
+        ));
+    }
+
+    if !value
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.' | ':'))
+    {
+        return Err(format!(
+            "{label} may only contain letters, numbers, '-', '_', '.', and ':'"
+        ));
+    }
+
+    Ok(())
+}
+
+fn prepare_world_input(input: GraphQLCreateWorldInput) -> Result<PreparedWorldInput, String> {
+    let name = normalize_world_name(&input.name);
+    validate_world_name(&name)?;
+
+    let description = normalize_optional_text(input.description);
+    if description
+        .as_ref()
+        .is_some_and(|value| value.len() > MAX_WORLD_DESCRIPTION_LEN)
+    {
+        return Err(format!(
+            "World description must be {MAX_WORLD_DESCRIPTION_LEN} characters or fewer"
+        ));
+    }
+
+    let game_system_id = normalize_optional_text(input.game_system_id);
+    validate_optional_reference_id("Game system ID", game_system_id.as_deref())?;
+
+    let interface_pack_id = normalize_optional_text(input.interface_pack_id);
+    validate_optional_reference_id("Interface pack ID", interface_pack_id.as_deref())?;
+
+    Ok(PreparedWorldInput {
+        name,
+        description,
+        game_system_id,
+        interface_pack_id,
+    })
+}
+
+fn world_write_error(error: DieselError, fallback_message: &str) -> Error {
+    match error {
+        DieselError::DatabaseError(DatabaseErrorKind::UniqueViolation, _) => {
+            Error::new("You already own a world with this name")
+        }
+        _ => Error::new(fallback_message),
+    }
+}
+
 async fn load_owned_worlds(state: &AppState, user_id: uuid::Uuid) -> GraphQLResult<Vec<World>> {
     let mut conn = state
         .db_pool
@@ -540,6 +691,23 @@ async fn load_owned_worlds(state: &AppState, user_id: uuid::Uuid) -> GraphQLResu
         worlds::table
             .filter(worlds::created_by.eq(user_id))
             .order(worlds::created_at.desc())
+            .select(World::as_select())
+            .load::<World>(&mut conn)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to query worlds"))
+}
+
+async fn load_all_worlds(state: &AppState) -> GraphQLResult<Vec<World>> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    tokio::task::spawn_blocking(move || {
+        worlds::table
+            .order((worlds::updated_at.desc(), worlds::created_at.desc()))
             .select(World::as_select())
             .load::<World>(&mut conn)
     })
@@ -608,9 +776,10 @@ async fn load_owned_policies(state: &AppState, user_id: uuid::Uuid) -> GraphQLRe
     .map_err(|_| Error::new("Failed to query policies"))
 }
 
-async fn load_owned_world_by_id(
+async fn load_visible_world_by_id(
     state: &AppState,
     user_id: uuid::Uuid,
+    is_admin: bool,
     world_id: uuid::Uuid,
 ) -> GraphQLResult<Option<World>> {
     let mut conn = state
@@ -630,7 +799,7 @@ async fn load_owned_world_by_id(
     .map_err(|_| Error::new("Failed to query world"))?;
 
     match found {
-        Some(world) if world.created_by != user_id => Err(Error::new("Forbidden")),
+        Some(world) if !is_admin && world.created_by != user_id => Err(Error::new("Forbidden")),
         other => Ok(other),
     }
 }
@@ -764,11 +933,11 @@ impl UserQuery {
     async fn world(
         &self,
         ctx: &Context<'_>,
-        world_id: uuid::Uuid,
+        id: uuid::Uuid,
     ) -> GraphQLResult<Option<GraphQLWorld>> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        load_owned_world_by_id(state, auth_user.user_id, world_id)
+        load_visible_world_by_id(state, auth_user.user_id, auth_user.is_admin, id)
             .await
             .map(|item| item.map(GraphQLWorld::from))
     }
@@ -848,6 +1017,14 @@ pub struct AdminQuery;
 
 #[async_graphql::Object]
 impl AdminQuery {
+    async fn all_worlds(&self, ctx: &Context<'_>) -> GraphQLResult<Vec<GraphQLWorld>> {
+        let state = app_state(ctx)?;
+        let _ = admin_user(ctx)?;
+        load_all_worlds(state)
+            .await
+            .map(|items| items.into_iter().map(GraphQLWorld::from).collect())
+    }
+
     async fn admin_welcome_summary(
         &self,
         ctx: &Context<'_>,
@@ -887,7 +1064,12 @@ impl AdminQuery {
         let _ = admin_user(ctx)?;
         load_oauth_providers(state)
             .await
-            .map(|providers| providers.into_iter().map(GraphQLOAuthProvider::from).collect())
+            .map(|providers| {
+                providers
+                    .into_iter()
+                    .map(GraphQLOAuthProvider::from)
+                    .collect()
+            })
             .map_err(Error::new)
     }
 
@@ -924,10 +1106,11 @@ impl WorldMutation {
     async fn create_world(
         &self,
         ctx: &Context<'_>,
-        world_name: String,
+        input: GraphQLCreateWorldInput,
     ) -> GraphQLResult<GraphQLWorld> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
+        let prepared_input = prepare_world_input(input).map_err(Error::new)?;
         let mut conn = state
             .db_pool
             .get()
@@ -936,17 +1119,25 @@ impl WorldMutation {
 
         let new_world = World {
             id: uuid::Uuid::now_v7(),
-            name: world_name,
+            name: prepared_input.name,
+            description: prepared_input.description,
+            game_system_id: prepared_input.game_system_id,
+            interface_pack_id: prepared_input.interface_pack_id,
             created_by: auth_user.user_id,
             updated_by: auth_user.user_id,
             created_at: now,
             updated_at: now,
         };
 
-        diesel::insert_into(worlds::table)
-            .values(&new_world)
-            .execute(&mut conn)
-            .map_err(|_| Error::new("Failed to create world"))?;
+        let inserted_world = new_world.clone();
+        tokio::task::spawn_blocking(move || {
+            diesel::insert_into(worlds::table)
+                .values(&inserted_world)
+                .execute(&mut conn)
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|error| world_write_error(error, "Failed to create world"))?;
 
         Ok(GraphQLWorld::from(new_world))
     }
@@ -959,6 +1150,8 @@ impl WorldMutation {
     ) -> GraphQLResult<GraphQLWorld> {
         let state = app_state(ctx)?;
         let user_id = authenticated_user(ctx)?.user_id;
+        let world_name = normalize_world_name(&world_name);
+        validate_world_name(&world_name).map_err(Error::new)?;
         let now = Utc::now().naive_utc();
         let mut conn = state
             .db_pool
@@ -986,12 +1179,44 @@ impl WorldMutation {
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to rename world"))?;
+        .map_err(|error| world_write_error(error, "Failed to rename world"))?;
 
         match updated {
             Some(world) => Ok(GraphQLWorld::from(world)),
             None => Err(Error::new("Forbidden")),
         }
+    }
+
+    async fn delete_world(
+        &self,
+        ctx: &Context<'_>,
+        id: uuid::Uuid,
+    ) -> GraphQLResult<GraphQLDeleteWorldPayload> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        let existing = load_visible_world_by_id(state, auth_user.user_id, false, id).await?;
+
+        let Some(world) = existing else {
+            return Err(Error::new("World not found"));
+        };
+
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        tokio::task::spawn_blocking(move || {
+            diesel::delete(worlds::table.filter(worlds::id.eq(id))).execute(&mut conn)
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to delete world"))?;
+
+        Ok(GraphQLDeleteWorldPayload {
+            id: world.id,
+            status: "deleted".to_string(),
+            message: format!("World '{}' was deleted", world.name),
+        })
     }
 }
 
@@ -1102,3 +1327,43 @@ pub struct QueryRoot(HealthcheckQuery, UserQuery, AdminQuery);
 pub struct MutationRoot(WorldMutation, UserDataMutation, AdminMutation);
 
 pub type AppSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;
+
+#[cfg(test)]
+mod tests {
+    use super::{GraphQLCreateWorldInput, prepare_world_input, validate_world_name};
+
+    #[test]
+    fn world_name_validation_rejects_invalid_characters() {
+        let result = validate_world_name("Bad@World");
+
+        assert_eq!(
+            result,
+            Err(
+                "World name may only contain letters, numbers, spaces, apostrophes, and - _ . , : ! ? ( )"
+                    .to_string(),
+            )
+        );
+    }
+
+    #[test]
+    fn prepare_world_input_trims_optional_fields() {
+        let prepared = prepare_world_input(GraphQLCreateWorldInput {
+            name: "  The   Ember   Crown  ".to_string(),
+            description: Some("  A fallen kingdom  ".to_string()),
+            game_system_id: Some("  systemless-sandbox ".to_string()),
+            interface_pack_id: Some(" guild-hall-default ".to_string()),
+        })
+        .expect("world input should be valid");
+
+        assert_eq!(prepared.name, "The Ember Crown");
+        assert_eq!(prepared.description.as_deref(), Some("A fallen kingdom"));
+        assert_eq!(
+            prepared.game_system_id.as_deref(),
+            Some("systemless-sandbox")
+        );
+        assert_eq!(
+            prepared.interface_pack_id.as_deref(),
+            Some("guild-hall-default")
+        );
+    }
+}

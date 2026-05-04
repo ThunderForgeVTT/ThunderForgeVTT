@@ -285,6 +285,9 @@ pub struct NewOAuthLinkChallenge {
 pub struct World {
     pub id: uuid::Uuid,
     pub name: String,
+    pub description: Option<String>,
+    pub game_system_id: Option<String>,
+    pub interface_pack_id: Option<String>,
     pub created_by: uuid::Uuid,
     pub updated_by: uuid::Uuid,
     pub created_at: chrono::NaiveDateTime,
@@ -300,6 +303,7 @@ pub struct Policy {
     pub id: uuid::Uuid,
     pub effect: PolicyEffectEnum,
     pub resources: Vec<Option<String>>,
+    pub world_id: Option<uuid::Uuid>,
     pub created_by: uuid::Uuid,
     pub updated_by: uuid::Uuid,
     pub created_at: chrono::NaiveDateTime,

@@ -15,7 +15,7 @@ export const worldPageSeo: SeoConfig = {
   title: "World workspace",
   description:
     "Launch the ThunderForge VTT collaborative world canvas powered by Bevy, tldraw, and synchronized world state.",
-  canonicalPath: "/world",
+  canonicalPath: "/world/play",
   noindex: true,
 };
 
@@ -101,7 +101,7 @@ export default function WorldPage() {
     () => ({
       ...worldPageSeo,
       title: `${id || "World"} workspace`,
-      canonicalPath: `/world/${id}`,
+      canonicalPath: `/world/${id}/play`,
     }),
     [id],
   );

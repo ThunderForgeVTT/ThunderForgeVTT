@@ -9,6 +9,9 @@ use uuid::Uuid;
 pub struct World {
     pub id: Uuid,
     pub name: String,
+    pub description: Option<String>,
+    pub game_system_id: Option<String>,
+    pub interface_pack_id: Option<String>,
     pub created_by: Uuid,
     pub updated_by: Uuid,
     pub created_at: chrono::NaiveDateTime,

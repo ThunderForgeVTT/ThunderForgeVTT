@@ -1,0 +1,141 @@
+@use "styles/mixins" as mixins;
+@use "styles/tokens" as tokens;
+
+.shell {
+  display: grid;
+  gap: 1.25rem;
+  padding-bottom: 3rem;
+}
+
+.hero {
+  @include mixins.surface(
+    linear-gradient(
+      135deg,
+      rgba(tokens.$color-background-soft, 0.96),
+      rgba(tokens.$color-forest-soft, 0.24) 36%,
+      rgba(tokens.$color-background, 0.98)
+    )
+  );
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 1.5rem;
+  border-radius: tokens.$radius-xl;
+
+  h1,
+  p {
+    margin: 0;
+  }
+
+  p:last-child {
+    color: tokens.$color-text-muted;
+    max-width: 62ch;
+  }
+}
+
+.eyebrow {
+  @include mixins.rune-caption;
+}
+
+.heroActions {
+  display: grid;
+  gap: 0.75rem;
+  align-content: start;
+}
+
+.metadataGrid,
+.panelGrid {
+  display: grid;
+  gap: 1rem;
+}
+
+.metadataGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.metadataCard {
+  display: grid;
+  gap: 1rem;
+  padding: 1.2rem;
+
+  h2,
+  p {
+    margin: 0;
+  }
+}
+
+.metadataList {
+  display: grid;
+  gap: 0.8rem;
+
+  div {
+    display: grid;
+    gap: 0.2rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(tokens.$color-umber, 0.14);
+  }
+
+  dt {
+    @include mixins.rune-caption;
+    color: rgba(44, 26, 14, 0.62);
+  }
+
+  dd {
+    margin: 0;
+    color: #2c1a0e;
+    word-break: break-word;
+  }
+}
+
+.quickCopy {
+  color: tokens.$color-text-muted;
+}
+
+.quickList {
+  display: grid;
+  gap: 0.7rem;
+
+  a,
+  button {
+    color: tokens.$color-text;
+    text-align: left;
+    background: rgba(tokens.$color-background, 0.2);
+    border: 1px solid tokens.$color-border;
+    border-radius: tokens.$radius-md;
+    padding: 0.85rem 0.95rem;
+    text-decoration: none;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  button {
+    color: #ffd4c8;
+  }
+}
+
+.panelGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.emptyState {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1.5rem;
+
+  h1,
+  p {
+    margin: 0;
+  }
+
+  p {
+    color: tokens.$color-text-muted;
+  }
+}
+
+@media (max-width: 980px) {
+  .hero,
+  .metadataGrid,
+  .panelGrid {
+    grid-template-columns: 1fr;
+  }
+}

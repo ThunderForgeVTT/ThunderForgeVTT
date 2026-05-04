@@ -8,7 +8,10 @@ export const pageLoaders = {
   setupCallback: () => import("@/pages/setup/SetupCallbackPage"),
   counter: () => import("@/pages/counter/CounterPage"),
   welcome: () => import("@/pages/user/WelcomePage"),
-  world: () => import("@/pages/world/WorldPage"),
+  worldList: () => import("@/pages/world/WorldListPage"),
+  createWorld: () => import("@/pages/world/CreateWorldPage"),
+  worldDashboard: () => import("@/pages/world/WorldDashboardPage"),
+  worldWorkspace: () => import("@/pages/world/WorldPage"),
   notFound: () => import("@/pages/not-found/NotFoundPage"),
 } as const;
 

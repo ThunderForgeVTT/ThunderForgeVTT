@@ -27,6 +27,11 @@ This directory contains architecture decisions for ThunderForgeVTT, captured usi
 | [20260504-017](./20260504-017-oauth_provider_configuration_contract.md)          | Accepted | OAuth Provider Configuration Contract                                                         |
 | [20260504-018](./20260504-018-manifest_editing_policy.md)                        | Accepted | Manifest Editing Policy                                                                       |
 | [20260504-019](./20260504-019-disk_usage_calculation_strategy.md)                | Accepted | Disk Usage Calculation Strategy                                                               |
+| [20260504-020](./20260504-020-world_creation_contract.md)                        | Accepted | World Creation Contract                                                                       |
+| [20260504-021](./20260504-021-world_metadata_schema.md)                          | Accepted | World Metadata Schema                                                                         |
+| [20260504-022](./20260504-022-world_routing_rules.md)                            | Accepted | World Routing Rules                                                                           |
+| [20260504-023](./20260504-023-world_ownership_rules.md)                          | Accepted | World Ownership Rules                                                                         |
+| [20260504-024](./20260504-024-world_placeholder_domain_objects.md)               | Accepted | World Placeholder Domain Objects                                                              |
 
 ## Guidelines
 
