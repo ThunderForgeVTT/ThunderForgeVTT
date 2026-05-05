@@ -14,11 +14,7 @@ use serde_json::json;
 use std::path::PathBuf;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
-use std::io; // Keep this, used by std::io::copy
-use zip::ZipArchive; // Keep this, used by zip::ZipArchive::new
-use tempfile;
 use pack_system_spec::{validate_system_manifest, SystemManifest};
-use chrono::Utc; // Keep this, used by NewGameSystem
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -118,7 +114,7 @@ async fn download_system_package(
 
     // Create a response with appropriate headers
     let filename = format!("{}.zip", slug);
-    let content_disposition = format!("attachment; filename="{}"", filename); // FIX: Escaped quotes
+    let content_disposition = format!("attachment; filename=\"{}\"", filename);
 
     let response = Response::builder()
         .status(StatusCode::OK)
@@ -253,9 +249,9 @@ async fn install_game_system(
             })?;
         } else {
             // It's a file
-            if let Some(p) = outpath.parent() {
-                if !p.exists() {
-                    std::fs::create_dir_all(&p).map_err(|e| {
+            if let Some(p) = outpath.parent()
+                && !p.exists() {
+                    std::fs::create_dir_all(p).map_err(|e| {
                         (
                             StatusCode::INTERNAL_SERVER_ERROR,
                             Json(json!({"error": format!("Failed to create parent directory during extraction: {}", e)})),
@@ -263,7 +259,6 @@ async fn install_game_system(
                     }
                     )?;
                 }
-            }
             let mut outfile = std::fs::File::create(&outpath).map_err(|e| {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
@@ -339,8 +334,7 @@ async fn install_game_system(
             .get_result::<i64>(&mut conn)
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to query existing systems: {}", e)}))))
     }).await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to spawn blocking task: {}", e)}))))?
-    .map_err(|e| e)?; // Propagate the error from the blocking task
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to spawn blocking task: {}", e)}))))??; // Propagate the error from the blocking task
 
     if existing_system_count > 0 {
         return Err((
@@ -390,8 +384,7 @@ async fn install_game_system(
             .execute(&mut conn)
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to insert new game system into DB: {}", e)}))))
     }).await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to spawn blocking task for DB insertion: {}", e)}))))?
-    .map_err(|e| e)?; // Propagate the error from the blocking task
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to spawn blocking task for DB insertion: {}", e)}))))??; // Propagate the error from the blocking task
 
     Ok(Json(json!({"message": format!("Game system '{}' (v{}) installed successfully!", system_title, system_version)})))
 }

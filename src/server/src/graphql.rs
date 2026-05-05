@@ -2,6 +2,7 @@ use async_graphql::{
     Context, Enum, Error, InputObject, Json, MergedObject, Result as GraphQLResult, Schema,
     SimpleObject, Subscription,
 };
+use base64::Engine;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel::result::{DatabaseErrorKind, Error as DieselError};
@@ -929,6 +930,7 @@ async fn load_owned_policy_by_id(
     }
 }
 
+#[allow(dead_code)]
 async fn load_game_system_by_id(
     state: &AppState,
     system_id: uuid::Uuid,
@@ -948,6 +950,783 @@ async fn load_game_system_by_id(
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(|_| Error::new("Failed to query game system"))
+}
+
+// ========== Phase 3.5: Scene System GraphQL Types ==========
+
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLScene {
+    scene_id: uuid::Uuid,
+    world_id: uuid::Uuid,
+    name: String,
+    description: Option<String>,
+    #[graphql(name = "type")]
+    type_: String,
+    grid_size: i32,
+    grid_type: String,
+    width: i32,
+    height: i32,
+    metadata: Option<Json<serde_json::Value>>,
+    owner_id: uuid::Uuid,
+    created_at: chrono::NaiveDateTime,
+    updated_at: chrono::NaiveDateTime,
+}
+
+impl From<crate::models::Scene> for GraphQLScene {
+    fn from(scene: crate::models::Scene) -> Self {
+        Self {
+            scene_id: scene.scene_id,
+            world_id: scene.world_id,
+            name: scene.name,
+            description: scene.description,
+            type_: scene.type_,
+            grid_size: scene.grid_size,
+            grid_type: scene.grid_type,
+            width: scene.width,
+            height: scene.height,
+            metadata: scene.metadata.map(Json),
+            owner_id: scene.owner_id,
+            created_at: scene.created_at,
+            updated_at: scene.updated_at,
+        }
+    }
+}
+
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLCreateSceneInput {
+    world_id: uuid::Uuid,
+    name: String,
+    description: Option<String>,
+    #[graphql(name = "type")]
+    type_: Option<String>,
+    grid_size: Option<i32>,
+    grid_type: Option<String>,
+    width: Option<i32>,
+    height: Option<i32>,
+    metadata: Option<Json<serde_json::Value>>,
+}
+
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLUpdateSceneInput {
+    name: Option<String>,
+    description: Option<String>,
+    grid_size: Option<i32>,
+    grid_type: Option<String>,
+    width: Option<i32>,
+    height: Option<i32>,
+    metadata: Option<Json<serde_json::Value>>,
+}
+
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLToken {
+    token_id: uuid::Uuid,
+    scene_id: uuid::Uuid,
+    actor_id: Option<uuid::Uuid>,
+    x: f64,
+    y: f64,
+    rotation: f64,
+    scale: f64,
+    metadata: Option<Json<serde_json::Value>>,
+    created_at: chrono::NaiveDateTime,
+    updated_at: chrono::NaiveDateTime,
+}
+
+impl From<crate::models::Token> for GraphQLToken {
+    fn from(token: crate::models::Token) -> Self {
+        Self {
+            token_id: token.token_id,
+            scene_id: token.scene_id,
+            actor_id: token.actor_id,
+            x: token.x,
+            y: token.y,
+            rotation: token.rotation,
+            scale: token.scale,
+            metadata: token.metadata.map(Json),
+            created_at: token.created_at,
+            updated_at: token.updated_at,
+        }
+    }
+}
+
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLUpsertTokenInput {
+    token_id: Option<uuid::Uuid>,
+    scene_id: uuid::Uuid,
+    actor_id: Option<uuid::Uuid>,
+    x: Option<f64>,
+    y: Option<f64>,
+    rotation: Option<f64>,
+    scale: Option<f64>,
+    metadata: Option<Json<serde_json::Value>>,
+}
+
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLFogMask {
+    fog_id: uuid::Uuid,
+    scene_id: uuid::Uuid,
+    bitmap_data_base64: String,
+    version: i32,
+    width: i32,
+    height: i32,
+    updated_by: uuid::Uuid,
+    created_at: chrono::NaiveDateTime,
+    updated_at: chrono::NaiveDateTime,
+}
+
+impl From<crate::models::FogMask> for GraphQLFogMask {
+    fn from(fog: crate::models::FogMask) -> Self {
+        Self {
+            fog_id: fog.fog_id,
+            scene_id: fog.scene_id,
+            bitmap_data_base64: fog.bitmap_data_base64(),
+            version: fog.version,
+            width: fog.width,
+            height: fog.height,
+            updated_by: fog.updated_by,
+            created_at: fog.created_at,
+            updated_at: fog.updated_at,
+        }
+    }
+}
+
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLUpdateFogMaskInput {
+    scene_id: uuid::Uuid,
+    bitmap_data_base64: String,
+    width: i32,
+    height: i32,
+}
+
+// ========== Phase 4: World Token GraphQL Types ==========
+
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLCreateWorldTokenInput {
+    world_id: uuid::Uuid,
+    label: Option<String>,
+    x: Option<f64>,
+    y: Option<f64>,
+    z: Option<f64>,
+    health: Option<i32>,
+    max_health: Option<i32>,
+}
+
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLUpsertWorldTokenInput {
+    world_id: uuid::Uuid,
+    token_id: Option<String>,
+    label: Option<String>,
+    x: Option<f64>,
+    y: Option<f64>,
+    z: Option<f64>,
+    health: Option<i32>,
+    max_health: Option<i32>,
+}
+
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLMoveTokenInput {
+    token_id: String,
+    x: f64,
+    y: f64,
+    z: Option<f64>,
+}
+
+#[derive(Default)]
+pub struct WorldTokenMutation;
+
+#[async_graphql::Object]
+impl WorldTokenMutation {
+    async fn create_world_token(
+        &self,
+        ctx: &Context<'_>,
+        input: GraphQLCreateWorldTokenInput,
+    ) -> GraphQLResult<GraphQLWorldToken> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        let user_id = auth_user.user_id;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+        let now = Utc::now().naive_utc();
+
+        let token_id = uuid::Uuid::now_v7().to_string();
+        let world_id = input.world_id;
+        let label = input.label;
+        let x = input.x.unwrap_or(0.0);
+        let y = input.y.unwrap_or(0.0);
+        let z = input.z.unwrap_or(0.0);
+        let health = input.health;
+        let max_health = input.max_health;
+
+        let created_token = tokio::task::spawn_blocking(move || {
+            use crate::schema::world_tokens;
+            use diesel::prelude::*;
+            
+            diesel::insert_into(world_tokens::table)
+                .values((
+                    world_tokens::id.eq(&token_id),
+                    world_tokens::world_id.eq(world_id),
+                    world_tokens::x.eq(x),
+                    world_tokens::y.eq(y),
+                    world_tokens::z.eq(z),
+                    world_tokens::label.eq(&label),
+                    world_tokens::health.eq(health),
+                    world_tokens::max_health.eq(max_health),
+                    world_tokens::schema_version.eq(1),
+                    world_tokens::created_at.eq(now),
+                    world_tokens::updated_at.eq(now),
+                    world_tokens::created_by.eq(user_id),
+                    world_tokens::updated_by.eq(user_id),
+                ))
+                .returning(crate::models::WorldToken::as_returning())
+                .get_result(&mut conn)
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to create world token"))?;
+
+        Ok(GraphQLWorldToken::from(created_token))
+    }
+
+    async fn upsert_world_token(
+        &self,
+        ctx: &Context<'_>,
+        input: GraphQLUpsertWorldTokenInput,
+    ) -> GraphQLResult<GraphQLWorldToken> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        let user_id = auth_user.user_id;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+        let now = Utc::now().naive_utc();
+
+        let token_id = input.token_id.unwrap_or_else(|| uuid::Uuid::now_v7().to_string());
+        let world_id = input.world_id;
+        let label = input.label;
+        let x = input.x.unwrap_or(0.0);
+        let y = input.y.unwrap_or(0.0);
+        let z = input.z.unwrap_or(0.0);
+        let health = input.health;
+        let max_health = input.max_health;
+
+        let upserted_token = tokio::task::spawn_blocking(move || {
+            use crate::schema::world_tokens;
+            use diesel::prelude::*;
+            
+            diesel::insert_into(world_tokens::table)
+                .values((
+                    world_tokens::id.eq(&token_id),
+                    world_tokens::world_id.eq(world_id),
+                    world_tokens::x.eq(x),
+                    world_tokens::y.eq(y),
+                    world_tokens::z.eq(z),
+                    world_tokens::label.eq(&label),
+                    world_tokens::health.eq(health),
+                    world_tokens::max_health.eq(max_health),
+                    world_tokens::schema_version.eq(1),
+                    world_tokens::created_at.eq(now),
+                    world_tokens::updated_at.eq(now),
+                    world_tokens::created_by.eq(user_id),
+                    world_tokens::updated_by.eq(user_id),
+                ))
+                .on_conflict(world_tokens::id)
+                .do_update()
+                .set((
+                    world_tokens::x.eq(x),
+                    world_tokens::y.eq(y),
+                    world_tokens::z.eq(z),
+                    world_tokens::label.eq(&label),
+                    world_tokens::health.eq(health),
+                    world_tokens::max_health.eq(max_health),
+                    world_tokens::updated_by.eq(user_id),
+                    world_tokens::updated_at.eq(now),
+                ))
+                .returning(crate::models::WorldToken::as_returning())
+                .get_result(&mut conn)
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to upsert world token"))?;
+
+        Ok(GraphQLWorldToken::from(upserted_token))
+    }
+
+    async fn move_token(
+        &self,
+        ctx: &Context<'_>,
+        input: GraphQLMoveTokenInput,
+    ) -> GraphQLResult<GraphQLWorldToken> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        let user_id = auth_user.user_id;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+        let now = Utc::now().naive_utc();
+
+        let token_id = input.token_id;
+        let x = input.x;
+        let y = input.y;
+        let z = input.z.unwrap_or(0.0);
+
+        let moved_token = tokio::task::spawn_blocking(move || {
+            use crate::schema::world_tokens;
+            use diesel::prelude::*;
+            
+            diesel::update(
+                world_tokens::table
+                    .filter(world_tokens::id.eq(&token_id))
+                    .filter(world_tokens::created_by.eq(user_id)),
+            )
+            .set((
+                world_tokens::x.eq(x),
+                world_tokens::y.eq(y),
+                world_tokens::z.eq(z),
+                world_tokens::updated_by.eq(user_id),
+                world_tokens::updated_at.eq(now),
+            ))
+            .returning(crate::models::WorldToken::as_returning())
+            .get_result(&mut conn)
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to move token"))?;
+
+        Ok(GraphQLWorldToken::from(moved_token))
+    }
+
+    async fn delete_world_token(
+        &self,
+        ctx: &Context<'_>,
+        token_id: String,
+    ) -> GraphQLResult<bool> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        let user_id = auth_user.user_id;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        let deleted = tokio::task::spawn_blocking(move || {
+            use crate::schema::world_tokens;
+            use diesel::prelude::*;
+            diesel::delete(
+                world_tokens::table
+                    .filter(world_tokens::id.eq(&token_id))
+                    .filter(world_tokens::created_by.eq(user_id)),
+            )
+            .execute(&mut conn)
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to delete token"))?;
+
+        Ok(deleted > 0)
+    }
+}
+
+#[derive(Default)]
+pub struct SceneQuery;
+
+#[async_graphql::Object]
+impl SceneQuery {
+    async fn scenes(
+        &self,
+        ctx: &Context<'_>,
+        world_id: uuid::Uuid,
+    ) -> GraphQLResult<Vec<GraphQLScene>> {
+        let state = app_state(ctx)?;
+        let _auth_user = authenticated_user(ctx)?;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        let scenes = tokio::task::spawn_blocking(move || {
+            use crate::schema::scenes;
+            scenes::table
+                .filter(scenes::world_id.eq(world_id))
+                .select(crate::models::Scene::as_select())
+                .load::<crate::models::Scene>(&mut conn)
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to load scenes"))?;
+
+        Ok(scenes.into_iter().map(GraphQLScene::from).collect())
+    }
+
+    async fn scene(
+        &self,
+        ctx: &Context<'_>,
+        scene_id: uuid::Uuid,
+    ) -> GraphQLResult<Option<GraphQLScene>> {
+        let state = app_state(ctx)?;
+        let _auth_user = authenticated_user(ctx)?;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        let scene = tokio::task::spawn_blocking(move || {
+            use crate::schema::scenes;
+            scenes::table
+                .filter(scenes::scene_id.eq(scene_id))
+                .select(crate::models::Scene::as_select())
+                .first::<crate::models::Scene>(&mut conn)
+                .optional()
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to load scene"))?;
+
+        Ok(scene.map(GraphQLScene::from))
+    }
+
+    async fn tokens(
+        &self,
+        ctx: &Context<'_>,
+        scene_id: uuid::Uuid,
+    ) -> GraphQLResult<Vec<GraphQLToken>> {
+        let state = app_state(ctx)?;
+        let _auth_user = authenticated_user(ctx)?;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        let tokens = tokio::task::spawn_blocking(move || {
+            use crate::schema::tokens;
+            tokens::table
+                .filter(tokens::scene_id.eq(scene_id))
+                .select(crate::models::Token::as_select())
+                .load::<crate::models::Token>(&mut conn)
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to load tokens"))?;
+
+        Ok(tokens.into_iter().map(GraphQLToken::from).collect())
+    }
+
+    async fn fog_mask(
+        &self,
+        ctx: &Context<'_>,
+        scene_id: uuid::Uuid,
+    ) -> GraphQLResult<Option<GraphQLFogMask>> {
+        let state = app_state(ctx)?;
+        let _auth_user = authenticated_user(ctx)?;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        let fog_mask = tokio::task::spawn_blocking(move || {
+            use crate::schema::fog_masks;
+            fog_masks::table
+                .filter(fog_masks::scene_id.eq(scene_id))
+                .select(crate::models::FogMask::as_select())
+                .first::<crate::models::FogMask>(&mut conn)
+                .optional()
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to load fog mask"))?;
+
+        Ok(fog_mask.map(GraphQLFogMask::from))
+    }
+}
+
+#[derive(Default)]
+pub struct SceneMutation;
+
+#[async_graphql::Object]
+impl SceneMutation {
+    async fn create_scene(
+        &self,
+        ctx: &Context<'_>,
+        input: GraphQLCreateSceneInput,
+    ) -> GraphQLResult<GraphQLScene> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        let user_id = auth_user.user_id;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+        let now = Utc::now().naive_utc();
+
+        let scene_id = uuid::Uuid::now_v7();
+        let new_scene = crate::models::Scene {
+            scene_id,
+            world_id: input.world_id,
+            name: input.name,
+            description: input.description,
+            type_: input.type_.unwrap_or_else(|| "battlemap".to_string()),
+            grid_size: input.grid_size.unwrap_or(5),
+            grid_type: input.grid_type.unwrap_or_else(|| "square".to_string()),
+            width: input.width.unwrap_or(100),
+            height: input.height.unwrap_or(100),
+            metadata: input.metadata.map(|j| j.0),
+            owner_id: user_id,
+            created_at: now,
+            updated_at: now,
+        };
+
+        let inserted_scene = tokio::task::spawn_blocking(move || {
+            use crate::schema::scenes;
+            use diesel::prelude::*;
+            
+            let values = (
+                scenes::scene_id.eq(new_scene.scene_id),
+                scenes::world_id.eq(new_scene.world_id),
+                scenes::name.eq(&new_scene.name),
+                scenes::description.eq(&new_scene.description),
+                scenes::type_.eq(&new_scene.type_),
+                scenes::grid_size.eq(new_scene.grid_size),
+                scenes::grid_type.eq(&new_scene.grid_type),
+                scenes::width.eq(new_scene.width),
+                scenes::height.eq(new_scene.height),
+                scenes::metadata.eq(&new_scene.metadata),
+                scenes::owner_id.eq(new_scene.owner_id),
+                scenes::created_at.eq(new_scene.created_at),
+                scenes::updated_at.eq(new_scene.updated_at),
+            );
+            
+            diesel::insert_into(scenes::table)
+                .values(values)
+                .returning(crate::models::Scene::as_returning())
+                .get_result(&mut conn)
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to create scene"))?;
+
+        Ok(GraphQLScene::from(inserted_scene))
+    }
+
+    async fn update_scene(
+        &self,
+        ctx: &Context<'_>,
+        scene_id: uuid::Uuid,
+        input: GraphQLUpdateSceneInput,
+    ) -> GraphQLResult<GraphQLScene> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        let user_id = auth_user.user_id;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+        let now = Utc::now().naive_utc();
+
+        let updated_scene = tokio::task::spawn_blocking(move || {
+            use crate::schema::scenes;
+            use diesel::prelude::*;
+            
+            let update_data = crate::models::SceneUpdate {
+                name: input.name,
+                description: input.description,
+                grid_size: input.grid_size,
+                grid_type: input.grid_type,
+                width: input.width,
+                height: input.height,
+                metadata: input.metadata.map(|j| j.0),
+            };
+
+            diesel::update(
+                scenes::table
+                    .filter(scenes::scene_id.eq(scene_id))
+                    .filter(scenes::owner_id.eq(user_id)),
+            )
+            .set(update_data)
+            .returning(crate::models::Scene::as_returning())
+            .get_result(&mut conn)
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to update scene"))?;
+
+        Ok(GraphQLScene::from(updated_scene))
+    }
+
+    async fn delete_scene(
+        &self,
+        ctx: &Context<'_>,
+        scene_id: uuid::Uuid,
+    ) -> GraphQLResult<bool> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        let user_id = auth_user.user_id;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        let deleted = tokio::task::spawn_blocking(move || {
+            use crate::schema::scenes;
+            use diesel::prelude::*;
+            diesel::delete(
+                scenes::table
+                    .filter(scenes::scene_id.eq(scene_id))
+                    .filter(scenes::owner_id.eq(user_id)),
+            )
+            .execute(&mut conn)
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to delete scene"))?;
+
+        Ok(deleted > 0)
+    }
+
+    async fn upsert_token(
+        &self,
+        ctx: &Context<'_>,
+        input: GraphQLUpsertTokenInput,
+    ) -> GraphQLResult<GraphQLToken> {
+        let state = app_state(ctx)?;
+        let _auth_user = authenticated_user(ctx)?;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+        let now = Utc::now().naive_utc();
+
+        let token_id = input.token_id.unwrap_or_else(uuid::Uuid::now_v7);
+        let scene_id = input.scene_id;
+        let actor_id = input.actor_id;
+        let x = input.x.unwrap_or(0.0);
+        let y = input.y.unwrap_or(0.0);
+        let rotation = input.rotation.unwrap_or(0.0);
+        let scale = input.scale.unwrap_or(1.0);
+        let metadata = input.metadata.map(|j| j.0);
+
+        let upserted_token = tokio::task::spawn_blocking(move || {
+            use crate::schema::tokens;
+            use diesel::prelude::*;
+            
+            diesel::insert_into(tokens::table)
+                .values((
+                    tokens::token_id.eq(token_id),
+                    tokens::scene_id.eq(scene_id),
+                    tokens::actor_id.eq(actor_id),
+                    tokens::x.eq(x),
+                    tokens::y.eq(y),
+                    tokens::rotation.eq(rotation),
+                    tokens::scale.eq(scale),
+                    tokens::metadata.eq(&metadata),
+                    tokens::created_at.eq(now),
+                    tokens::updated_at.eq(now),
+                ))
+                .on_conflict(tokens::token_id)
+                .do_update()
+                .set((
+                    tokens::actor_id.eq(actor_id),
+                    tokens::x.eq(x),
+                    tokens::y.eq(y),
+                    tokens::rotation.eq(rotation),
+                    tokens::scale.eq(scale),
+                    tokens::metadata.eq(&metadata),
+                    tokens::updated_at.eq(now),
+                ))
+                .returning(crate::models::Token::as_returning())
+                .get_result(&mut conn)
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to upsert token"))?;
+
+        Ok(GraphQLToken::from(upserted_token))
+    }
+
+    async fn delete_token(
+        &self,
+        ctx: &Context<'_>,
+        token_id: uuid::Uuid,
+    ) -> GraphQLResult<bool> {
+        let state = app_state(ctx)?;
+        let _auth_user = authenticated_user(ctx)?;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        let deleted = tokio::task::spawn_blocking(move || {
+            use crate::schema::tokens;
+            use diesel::prelude::*;
+            diesel::delete(tokens::table.filter(tokens::token_id.eq(token_id)))
+                .execute(&mut conn)
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to delete token"))?;
+
+        Ok(deleted > 0)
+    }
+
+    async fn update_fog_mask(
+        &self,
+        ctx: &Context<'_>,
+        input: GraphQLUpdateFogMaskInput,
+    ) -> GraphQLResult<GraphQLFogMask> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        let user_id = auth_user.user_id;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+        let now = Utc::now().naive_utc();
+
+        let scene_id = input.scene_id;
+        let bitmap_data_base64 = input.bitmap_data_base64;
+        let width = input.width;
+        let height = input.height;
+
+        let updated_fog_mask = tokio::task::spawn_blocking(move || {
+            use crate::schema::fog_masks;
+            use diesel::prelude::*;
+            
+            let bitmap_bytes = base64::engine::general_purpose::STANDARD
+                .decode(&bitmap_data_base64)
+                .map_err(|_| DieselError::NotFound)?;
+
+            diesel::insert_into(fog_masks::table)
+                .values((
+                    fog_masks::fog_id.eq(uuid::Uuid::now_v7()),
+                    fog_masks::scene_id.eq(scene_id),
+                    fog_masks::bitmap_data.eq(&bitmap_bytes),
+                    fog_masks::version.eq(1),
+                    fog_masks::width.eq(width),
+                    fog_masks::height.eq(height),
+                    fog_masks::updated_by.eq(user_id),
+                    fog_masks::created_at.eq(now),
+                    fog_masks::updated_at.eq(now),
+                ))
+                .on_conflict(fog_masks::scene_id)
+                .do_update()
+                .set((
+                    fog_masks::bitmap_data.eq(&bitmap_bytes),
+                    fog_masks::version.eq(fog_masks::version + 1),
+                    fog_masks::width.eq(width),
+                    fog_masks::height.eq(height),
+                    fog_masks::updated_by.eq(user_id),
+                    fog_masks::updated_at.eq(now),
+                ))
+                .returning(crate::models::FogMask::as_returning())
+                .get_result(&mut conn)
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to update fog mask"))?;
+
+        Ok(GraphQLFogMask::from(updated_fog_mask))
+    }
 }
 
 #[derive(Default)]
@@ -1393,10 +2172,10 @@ impl SubscriptionRoot {
 }
 
 #[derive(MergedObject, Default)]
-pub struct QueryRoot(HealthcheckQuery, UserQuery, AdminQuery);
+pub struct QueryRoot(HealthcheckQuery, UserQuery, AdminQuery, SceneQuery);
 
 #[derive(MergedObject, Default)]
-pub struct MutationRoot(WorldMutation, UserDataMutation, AdminMutation);
+pub struct MutationRoot(WorldMutation, UserDataMutation, AdminMutation, SceneMutation, WorldTokenMutation);
 
 pub type AppSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;
 

@@ -409,9 +409,7 @@ fn default_manifest() -> SystemManifestDocument {
 }
 
 fn is_editable_manifest_key(key: &str) -> bool {
-    editable_manifest_keys()
-        .iter()
-        .any(|allowed| *allowed == key)
+    editable_manifest_keys().contains(&key)
 }
 
 fn dir_size(path: &Path) -> Result<u64, String> {

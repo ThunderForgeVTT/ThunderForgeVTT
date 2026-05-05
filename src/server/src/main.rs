@@ -7,6 +7,7 @@ mod db_types;
 mod errors;
 mod graphql;
 mod models;
+mod pubsub;
 mod schema; // Add this line
 mod serve;
 mod state;

@@ -1,6 +1,5 @@
 use schemars::{JsonSchema, schema_for};
 use serde::{Deserialize, Serialize};
-use serde_json;
 use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, JsonSchema, Debug, Clone)]

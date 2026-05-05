@@ -17,9 +17,11 @@ use tower_cookies::{Cookie, Cookies};
 #[derive(Clone, Debug)]
 pub struct AuthenticatedUser {
     pub user_id: uuid::Uuid,
+    #[allow(dead_code)]
     pub session_id: uuid::Uuid,
     pub expires_at: chrono::NaiveDateTime,
     pub is_admin: bool,
+    #[allow(dead_code)]
     pub role: String,
 }
 

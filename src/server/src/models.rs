@@ -1,8 +1,8 @@
 use crate::schema::{
-    admin_bootstrap_oauth_sessions, admin_bootstrap_setup, auth_security_settings, game_systems,
-    login_two_factor_challenges, oauth_authorization_sessions, oauth_link_challenges,
-    oauth_providers, policies, user_oauth_accounts, user_sessions, users, world_events,
-    world_tokens, worlds,
+    admin_bootstrap_oauth_sessions, admin_bootstrap_setup, auth_security_settings, fog_masks,
+    game_systems, login_two_factor_challenges, oauth_authorization_sessions, oauth_link_challenges,
+    oauth_providers, policies, scenes, tokens, user_oauth_accounts, user_sessions, users,
+    world_events, world_tokens, worlds,
 };
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -384,4 +384,164 @@ pub struct NewWorldToken {
     pub schema_version: i32,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+}
+
+// ========== Scene Models (Phase 3.5) ==========
+
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = scenes)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct Scene {
+    pub scene_id: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    #[serde(rename = "type")]
+    pub type_: String,
+    pub grid_size: i32,
+    pub grid_type: String,
+    pub width: i32,
+    pub height: i32,
+    pub metadata: Option<serde_json::Value>,
+    pub owner_id: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = scenes)]
+pub struct NewScene {
+    pub world_id: uuid::Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    #[serde(rename = "type")]
+    pub type_: String,
+    pub grid_size: Option<i32>,
+    pub grid_type: Option<String>,
+    pub width: Option<i32>,
+    pub height: Option<i32>,
+    pub metadata: Option<serde_json::Value>,
+    pub owner_id: uuid::Uuid,
+}
+
+#[derive(AsChangeset, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = scenes)]
+pub struct SceneUpdate {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub grid_size: Option<i32>,
+    pub grid_type: Option<String>,
+    pub width: Option<i32>,
+    pub height: Option<i32>,
+    pub metadata: Option<serde_json::Value>,
+}
+
+// ========== Token Models (Phase 3.5) ==========
+
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = tokens)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct Token {
+    pub token_id: uuid::Uuid,
+    pub scene_id: uuid::Uuid,
+    pub actor_id: Option<uuid::Uuid>,
+    pub x: f64,
+    pub y: f64,
+    pub rotation: f64,
+    pub scale: f64,
+    pub metadata: Option<serde_json::Value>,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = tokens)]
+pub struct NewToken {
+    pub scene_id: uuid::Uuid,
+    pub actor_id: Option<uuid::Uuid>,
+    pub x: Option<f64>,
+    pub y: Option<f64>,
+    pub rotation: Option<f64>,
+    pub scale: Option<f64>,
+    pub metadata: Option<serde_json::Value>,
+}
+
+#[derive(AsChangeset, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = tokens)]
+pub struct TokenUpdate {
+    pub actor_id: Option<uuid::Uuid>,
+    pub x: Option<f64>,
+    pub y: Option<f64>,
+    pub rotation: Option<f64>,
+    pub scale: Option<f64>,
+    pub metadata: Option<serde_json::Value>,
+}
+
+// ========== Fog Mask Models (Phase 3.5) ==========
+
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = fog_masks)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct FogMask {
+    pub fog_id: uuid::Uuid,
+    pub scene_id: uuid::Uuid,
+    #[serde(skip)]
+    pub bitmap_data: Vec<u8>,
+    pub version: i32,
+    pub width: i32,
+    pub height: i32,
+    pub updated_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone)]
+#[diesel(table_name = fog_masks)]
+pub struct NewFogMask {
+    pub scene_id: uuid::Uuid,
+    pub bitmap_data: Vec<u8>,
+    pub version: i32,
+    pub width: i32,
+    pub height: i32,
+    pub updated_by: uuid::Uuid,
+}
+
+#[derive(AsChangeset, Debug, Clone)]
+#[diesel(table_name = fog_masks)]
+pub struct FogMaskUpdate {
+    pub bitmap_data: Option<Vec<u8>>,
+    pub version: Option<i32>,
+    pub width: Option<i32>,
+    pub height: Option<i32>,
+    pub updated_by: Option<uuid::Uuid>,
+}
+
+impl FogMask {
+    /// Get bitmap data as base64 for transmission
+    pub fn bitmap_data_base64(&self) -> String {
+        use base64::Engine;
+        base64::engine::general_purpose::STANDARD.encode(&self.bitmap_data)
+    }
+}
+
+impl NewFogMask {
+    /// Create from base64 encoded bitmap
+    pub fn from_base64(
+        scene_id: uuid::Uuid,
+        bitmap_data_base64: &str,
+        width: i32,
+        height: i32,
+        updated_by: uuid::Uuid,
+    ) -> Result<Self, base64::DecodeError> {
+        use base64::Engine;
+        let bitmap_data = base64::engine::general_purpose::STANDARD.decode(bitmap_data_base64)?;
+        Ok(NewFogMask {
+            scene_id,
+            bitmap_data,
+            version: 1,
+            width,
+            height,
+            updated_by,
+        })
+    }
 }

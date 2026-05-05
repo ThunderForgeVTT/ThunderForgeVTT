@@ -43,6 +43,20 @@ diesel::table! {
 }
 
 diesel::table! {
+    fog_masks (fog_id) {
+        fog_id -> Uuid,
+        scene_id -> Uuid,
+        bitmap_data -> Bytea,
+        version -> Int4,
+        width -> Int4,
+        height -> Int4,
+        updated_by -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     game_systems (id) {
         id -> Uuid,
         slug -> Text,
@@ -129,6 +143,40 @@ diesel::table! {
         created_by -> Uuid,
         updated_by -> Uuid,
         world_id -> Nullable<Uuid>,
+    }
+}
+
+diesel::table! {
+    scenes (scene_id) {
+        scene_id -> Uuid,
+        world_id -> Uuid,
+        name -> Text,
+        description -> Nullable<Text>,
+        #[sql_name = "type"]
+        type_ -> Text,
+        grid_size -> Int4,
+        grid_type -> Text,
+        width -> Int4,
+        height -> Int4,
+        metadata -> Nullable<Jsonb>,
+        owner_id -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    tokens (token_id) {
+        token_id -> Uuid,
+        scene_id -> Uuid,
+        actor_id -> Nullable<Uuid>,
+        x -> Float8,
+        y -> Float8,
+        rotation -> Float8,
+        scale -> Float8,
+        metadata -> Nullable<Jsonb>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
     }
 }
 
@@ -223,11 +271,16 @@ diesel::table! {
 }
 
 diesel::joinable!(admin_bootstrap_oauth_sessions -> oauth_providers (provider_id));
+diesel::joinable!(fog_masks -> scenes (scene_id));
+diesel::joinable!(fog_masks -> users (updated_by));
 diesel::joinable!(login_two_factor_challenges -> users (user_id));
 diesel::joinable!(oauth_authorization_sessions -> oauth_providers (provider_id));
 diesel::joinable!(oauth_link_challenges -> oauth_providers (provider_id));
 diesel::joinable!(oauth_link_challenges -> users (user_id));
 diesel::joinable!(policies -> worlds (world_id));
+diesel::joinable!(scenes -> users (owner_id));
+diesel::joinable!(scenes -> worlds (world_id));
+diesel::joinable!(tokens -> scenes (scene_id));
 diesel::joinable!(user_oauth_accounts -> oauth_providers (provider_id));
 diesel::joinable!(user_oauth_accounts -> users (user_id));
 diesel::joinable!(user_sessions -> users (user_id));
@@ -238,12 +291,15 @@ diesel::allow_tables_to_appear_in_same_query!(
     admin_bootstrap_oauth_sessions,
     admin_bootstrap_setup,
     auth_security_settings,
+    fog_masks,
     game_systems,
     login_two_factor_challenges,
     oauth_authorization_sessions,
     oauth_link_challenges,
     oauth_providers,
     policies,
+    scenes,
+    tokens,
     user_oauth_accounts,
     user_sessions,
     users,
