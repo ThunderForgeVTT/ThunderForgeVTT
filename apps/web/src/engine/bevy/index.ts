@@ -24,7 +24,7 @@ async function getWasmModule() {
   if (!loadPromise) {
     loadPromise = (async () => {
       const wasm = (await import(
-        "@thunderforge/thunderforge_engine/engine"
+        "@thunderforge/engine/engine"
       )) as BevyWasmModule;
       await wasm.default();
       return wasm;

@@ -36,7 +36,7 @@
     "vite-tsconfig-paths": "^5.1.4"
   },
   "dependencies": {
-    "@thunderforge/thunderforge_engine": "workspace:^",
+    "@thunderforge/engine": "workspace:^",
     "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",

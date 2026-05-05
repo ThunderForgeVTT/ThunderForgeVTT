@@ -474,3 +474,186 @@ async fn install_game_system(
 
     Ok(Json(json!({"message": format!("Game system '{}' (v{}) installed successfully!", system_title, system_version)})))
 }
+// ============================================================================
+// Phase 4.8.1: System-Agnostic Game System Validator Registry
+// ============================================================================
+// Dynamic loader for game system validators and metadata
+// Supports unlimited systems (D&D 5e, Pathfinder, CoC 7e, etc.) without schema migrations
+
+use serde_json::Value;
+use std::collections::HashMap;
+
+/// Validator function signature: takes JSON data, returns Result<(), error message>
+pub type ValidatorFn = fn(&Value) -> Result<(), String>;
+
+/// Game system validator registry entry
+pub struct SystemValidators {
+    pub ability_data: Option<ValidatorFn>,
+    pub resource_data: Option<ValidatorFn>,
+    pub proficiency_data: Option<ValidatorFn>,
+    pub trait_data: Option<ValidatorFn>,
+    pub spell_data: Option<ValidatorFn>,
+}
+
+/// Game system validation registry
+pub struct GameSystemRegistry {
+    systems: HashMap<String, SystemValidators>,
+}
+
+impl GameSystemRegistry {
+    /// Create new empty registry
+    pub fn new() -> Self {
+        Self {
+            systems: HashMap::new(),
+        }
+    }
+
+    /// Register a system's validators
+    pub fn register(
+        &mut self,
+        system_id: &str,
+        validators: SystemValidators,
+    ) {
+        self.systems.insert(system_id.to_string(), validators);
+    }
+
+    /// Validate data using system-specific validator
+    /// Returns Ok(()) if valid, Err(message) if invalid
+    pub fn validate(
+        &self,
+        system_id: &str,
+        data_type: &str,
+        data: &Value,
+    ) -> Result<(), String> {
+        let system = self
+            .systems
+            .get(system_id)
+            .ok_or_else(|| format!("System '{}' not registered", system_id))?;
+
+        let validator = match data_type {
+            "ability_data" => system.ability_data,
+            "resource_data" => system.resource_data,
+            "proficiency_data" => system.proficiency_data,
+            "trait_data" => system.trait_data,
+            "spell_data" => system.spell_data,
+            _ => return Err(format!("Unknown data_type: {}", data_type)),
+        };
+
+        match validator {
+            Some(validate_fn) => validate_fn(data),
+            None => Ok(()), // No validator for this data type in this system
+        }
+    }
+}
+
+// ============================================================================
+// D&D 5e System Registration
+// ============================================================================
+
+/// Initialize D&D 5e validators in the registry
+pub fn register_dnd5e_system(registry: &mut GameSystemRegistry) {
+    use dnd5e_server::{
+        validate_ability_data_for_registry, validate_proficiency_data_for_registry,
+        validate_resource_data_for_registry, validate_spell_data_for_registry,
+        validate_trait_data_for_registry,
+    };
+
+    registry.register(
+        "dnd5e",
+        SystemValidators {
+            ability_data: Some(validate_ability_data_for_registry),
+            resource_data: Some(validate_resource_data_for_registry),
+            proficiency_data: Some(validate_proficiency_data_for_registry),
+            trait_data: Some(validate_trait_data_for_registry),
+            spell_data: Some(validate_spell_data_for_registry),
+        },
+    );
+}
+
+// ============================================================================
+// Lazy-Loaded Global Registry (Singleton Pattern)
+// ============================================================================
+
+use once_cell::sync::Lazy;
+use std::sync::Mutex;
+
+/// Global registry instance - initialized once, accessed many times
+pub static GAME_SYSTEMS: Lazy<Mutex<GameSystemRegistry>> = Lazy::new(|| {
+    let mut registry = GameSystemRegistry::new();
+
+    // 🎮 Register all available systems on first access
+    register_dnd5e_system(&mut registry);
+    // In future phases: register_pathfinder2e_system(&mut registry);
+    // In future phases: register_coc7e_system(&mut registry);
+
+    Mutex::new(registry)
+});
+
+/// Validate actor system data using globally registered validators
+/// This is the main entry point from GraphQL mutations
+pub fn validate_actor_system_data(
+    game_system_id: &str,
+    data_type: &str,
+    data: &Value,
+) -> Result<(), String> {
+    let registry = GAME_SYSTEMS.lock().map_err(|e| e.to_string())?;
+    registry.validate(game_system_id, data_type, data)
+}
+
+#[cfg(test)]
+mod registry_tests {
+    use super::*;
+
+    #[test]
+    fn test_registry_new() {
+        let registry = GameSystemRegistry::new();
+        assert_eq!(registry.systems.len(), 0);
+    }
+
+    #[test]
+    fn test_registry_register_and_validate() {
+        let mut registry = GameSystemRegistry::new();
+
+        // Simple test validator that rejects values > 100
+        fn test_validator(data: &Value) -> Result<(), String> {
+            if let Some(val) = data.get("test_field").and_then(|v| v.as_i64()) {
+                if val > 100 {
+                    return Err("Value too large".to_string());
+                }
+            }
+            Ok(())
+        }
+
+        registry.register(
+            "test_system",
+            SystemValidators {
+                ability_data: Some(test_validator),
+                resource_data: None,
+                proficiency_data: None,
+                trait_data: None,
+                spell_data: None,
+            },
+        );
+
+        // Should pass
+        let valid_data = serde_json::json!({ "test_field": 50 });
+        assert!(registry.validate("test_system", "ability_data", &valid_data).is_ok());
+
+        // Should fail
+        let invalid_data = serde_json::json!({ "test_field": 150 });
+        assert!(registry.validate("test_system", "ability_data", &invalid_data).is_err());
+
+        // Unknown system
+        assert!(registry.validate("unknown_system", "ability_data", &valid_data).is_err());
+
+        // Unknown data type
+        assert!(registry.validate("test_system", "unknown_type", &valid_data).is_err());
+    }
+
+    #[test]
+    fn test_global_registry_dnd5e_registered() {
+        let registry = GAME_SYSTEMS.lock().unwrap();
+        // D&D 5e should be registered on first access
+        assert!(registry.systems.contains_key("dnd5e"));
+    }
+}

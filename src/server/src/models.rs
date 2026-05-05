@@ -2,7 +2,7 @@ use crate::schema::{
     admin_bootstrap_oauth_sessions, admin_bootstrap_setup, auth_security_settings, fog_masks,
     game_systems, login_two_factor_challenges, oauth_authorization_sessions, oauth_link_challenges,
     oauth_providers, policies, scenes, tokens, user_oauth_accounts, user_sessions, users,
-    world_events, world_tokens, worlds,
+    world_actors, world_actor_system_data, world_events, world_tokens, worlds,
 };
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -545,3 +545,81 @@ impl NewFogMask {
         })
     }
 }
+
+// ============================================================================
+// Phase 4.8.1: System-Agnostic Actor Data Architecture
+// ============================================================================
+
+/// Universal actor registry - stores actor identity, ownership, location, type
+/// Same schema for D&D 5e characters, Pathfinder NPCs, hazards, props, light sources
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_actors)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct WorldActor {
+    pub id: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub scene_id: uuid::Uuid,
+    pub actor_type: String,  // 'character', 'npc', 'hazard', 'prop', 'light_source', 'vehicle'
+    pub game_system_id: Option<String>,  // NULL for non-game objects, 'dnd5e'/'pathfinder2e' for game systems
+    pub label: String,
+    pub created_by: uuid::Uuid,
+    pub owned_by: uuid::Uuid,
+    pub is_public: bool,
+    pub is_npc: bool,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+/// New actor for insertion
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_actors)]
+pub struct NewWorldActor {
+    pub world_id: uuid::Uuid,
+    pub scene_id: uuid::Uuid,
+    pub actor_type: String,
+    pub game_system_id: Option<String>,
+    pub label: String,
+    pub created_by: uuid::Uuid,
+    pub owned_by: uuid::Uuid,
+    pub is_public: bool,
+    pub is_npc: bool,
+}
+
+/// System-specific actor data - five semantic JSONB columns
+/// Same column names for all systems, different JSON structure per system
+/// Example: D&D 5e ability_data = { "strength": 10, "dexterity": 12, ... }
+/// Example: Pathfinder ability_data = { "strength_mod": 0, "reflex_mod": 2, ... }
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_actor_system_data)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct ActorSystemData {
+    pub id: uuid::Uuid,
+    pub actor_id: uuid::Uuid,
+    pub game_system_id: String,  // 'dnd5e', 'pathfinder2e', 'coc7e', etc.
+    pub ability_data: Option<serde_json::Value>,  // Base ability scores/modifiers
+    pub resource_data: Option<serde_json::Value>,  // HP, mana, sanity, focus, etc.
+    pub proficiency_data: Option<serde_json::Value>,  // Skills, weapon/armor proficiencies
+    pub trait_data: Option<serde_json::Value>,  // Class, subclass, feats, backgrounds
+    pub spell_data: Option<serde_json::Value>,  // Spellbook, slots, prepared spells
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+/// New actor system data for insertion
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_actor_system_data)]
+pub struct NewActorSystemData {
+    pub actor_id: uuid::Uuid,
+    pub game_system_id: String,
+    pub ability_data: Option<serde_json::Value>,
+    pub resource_data: Option<serde_json::Value>,
+    pub proficiency_data: Option<serde_json::Value>,
+    pub trait_data: Option<serde_json::Value>,
+    pub spell_data: Option<serde_json::Value>,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+}
+
+

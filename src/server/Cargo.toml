@@ -50,6 +50,7 @@ diesel = { version = "2.3.9", features = [
 chrono = { version = "0.4.44", features = ["serde"] }
 diesel-derive-enum = { version = "2.1.0", features = ["postgres"] }
 uuid = { version = "1.23.1", features = ["serde", "v7"] }
+once_cell = "1.20.2"
 reqwest = { version = "0.13.3", default-features = false, features = [
   "form",
   "json",
@@ -70,3 +71,7 @@ path = "../core"
 
 [dependencies.pack_system_spec]
 path = "../../crates/pack_system_spec"
+
+[dependencies.dnd5e_server]
+path = "../../packs/systems/dnd5e/server"
+package = "dnd5e-server"

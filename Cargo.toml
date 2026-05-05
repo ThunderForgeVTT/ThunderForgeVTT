@@ -1,6 +1,13 @@
 [workspace]
 resolver = "3"
-members = ["src/server", "src/core", "src/engine", "crates/pack_system_spec"]
+members = [
+    "src/server", 
+    "src/core", 
+    "src/engine", 
+    "crates/pack_system_spec",
+    "packs/systems/dnd5e/server",
+    "packs/systems/dnd5e/engine"
+]
 default-members = ["src/server", "src/core"]
 
 [profile.release]

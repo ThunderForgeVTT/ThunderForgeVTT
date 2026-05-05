@@ -23,13 +23,14 @@ use crate::auth_middleware::AuthenticatedUser;
 use crate::db_types::PolicyEffectEnum;
 use crate::models::{
     AdminBootstrapSetup, AuthSecuritySetting, GameSystem, OAuthProvider, Policy, User, World,
-    WorldEvent, WorldToken,
+    WorldEvent, WorldToken, WorldActor, ActorSystemData,
 };
-use crate::schema::{game_systems, policies, users, world_events, world_tokens, worlds};
+use crate::schema::{game_systems, policies, users, world_events, world_tokens, worlds, world_actors, world_actor_system_data};
 use crate::state::AppState;
 use crate::users::{
     UserDataDeleteSummary, UserDataExport, delete_user_data_owned, export_user_data_payload,
 };
+// Phase 4.8.1: dnd5e_server will be loaded at runtime via game system registry
 
 #[derive(SimpleObject, Debug, Clone)]
 pub struct GraphQLUser {
@@ -1205,7 +1206,7 @@ impl WorldTokenMutation {
 
         let token_id = input.token_id.unwrap_or_else(|| uuid::Uuid::now_v7().to_string());
         let world_id = input.world_id;
-        let label = input.label;
+        let label = input.label.clone();
         let x = input.x.unwrap_or(0.0);
         let y = input.y.unwrap_or(0.0);
         let z = input.z.unwrap_or(0.0);
@@ -1218,13 +1219,16 @@ impl WorldTokenMutation {
             token_id, x, y, z
         );
 
-        let upserted_token = tokio::task::spawn_blocking(move || {
-            use crate::schema::world_tokens;
+        // Combine all DB operations into a single spawn_blocking call
+        let token_id_clone = token_id.clone();
+        let (upserted_token, event_id) = tokio::task::spawn_blocking(move || {
+            use crate::schema::{world_tokens, world_events};
             use diesel::prelude::*;
-            
-            diesel::insert_into(world_tokens::table)
+
+            // 1. UPSERT token
+            let upserted = diesel::insert_into(world_tokens::table)
                 .values((
-                    world_tokens::id.eq(&token_id),
+                    world_tokens::id.eq(&token_id_clone),
                     world_tokens::world_id.eq(world_id),
                     world_tokens::x.eq(x),
                     world_tokens::y.eq(y),
@@ -1252,19 +1256,11 @@ impl WorldTokenMutation {
                     world_tokens::updated_at.eq(now),
                 ))
                 .returning(crate::models::WorldToken::as_returning())
-                .get_result(&mut conn)
-        })
-        .await
-        .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to upsert world token"))?;
+                .get_result(&mut conn)?;
 
-        // 🔔 Phase 4.6: Record delta event for audit trail + pg_notify broadcast
-        let event_id = tokio::task::spawn_blocking(move || {
-            use crate::schema::world_events;
-            use diesel::prelude::*;
-
+            // 2. Record world_event for audit trail
             let token_event_payload = serde_json::json!({
-                "token_id": token_id,
+                "token_id": token_id_clone,
                 "x": x,
                 "y": y,
                 "z": z,
@@ -1273,7 +1269,7 @@ impl WorldTokenMutation {
                 "max_health": max_health,
             });
 
-            diesel::insert_into(world_events::table)
+            let event_id = diesel::insert_into(world_events::table)
                 .values((
                     world_events::world_id.eq(world_id),
                     // Event code 1 = token_event
@@ -1286,34 +1282,23 @@ impl WorldTokenMutation {
                     world_events::updated_by.eq(user_id),
                 ))
                 .returning(world_events::id)
-                .get_result::<i64>(&mut conn)
+                .get_result::<i64>(&mut conn)?;
+
+            // 3. Trigger pg_notify for backplane broadcast
+            diesel::sql_query("SELECT pg_notify('world_events_channel', $1)")
+                .bind::<diesel::sql_types::Text, _>(event_id.to_string())
+                .execute(&mut conn)?;
+
+            Ok::<_, diesel::result::Error>((upserted, event_id))
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to record world event"))?;
+        .map_err(|e| Error::new(format!("Database operation failed: {}", e)))?;
 
-        // 📡 Phase 4.6: Trigger pg_notify for backplane broadcast to all clients
-        let notify_result = tokio::task::spawn_blocking(move || {
-            conn.execute(&format!(
-                "NOTIFY world_events_channel, '{}'; SELECT true",
-                event_id
-            ))
-        })
-        .await
-        .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to notify subscribers"));
-
-        if notify_result.is_ok() {
-            eprintln!(
-                "[Phase4.6✅] upsertToken complete: token_id={}, event_id={}, broadcasted",
-                token_id, event_id
-            );
-        } else {
-            eprintln!(
-                "[Phase4.6❌] upsertToken notify failed: event_id={}",
-                event_id
-            );
-        }
+        eprintln!(
+            "[Phase4.6✅] upsertToken complete: token_id={}, event_id={}, broadcasted",
+            token_id, event_id
+        );
 
         Ok(GraphQLWorldToken::from(upserted_token))
     }
@@ -1391,6 +1376,227 @@ impl WorldTokenMutation {
         .map_err(|_| Error::new("Failed to delete token"))?;
 
         Ok(deleted > 0)
+    }
+}
+
+// ============================================================================
+// Phase 4.8.1: Actor System Data Mutations (Generic for all systems)
+// ============================================================================
+
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLUpdateActorSystemDataInput {
+    actor_id: uuid::Uuid,
+    game_system_id: String,  // 'dnd5e', 'pathfinder2e', etc.
+    data_type: String,        // 'ability_data', 'resource_data', 'proficiency_data', 'trait_data', 'spell_data'
+    data: Json<serde_json::Value>,  // Raw JSON for system-specific content
+}
+
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLActorSystemData {
+    id: uuid::Uuid,
+    actor_id: uuid::Uuid,
+    game_system_id: String,
+    ability_data: Option<Json<serde_json::Value>>,
+    resource_data: Option<Json<serde_json::Value>>,
+    proficiency_data: Option<Json<serde_json::Value>>,
+    trait_data: Option<Json<serde_json::Value>>,
+    spell_data: Option<Json<serde_json::Value>>,
+    created_at: chrono::NaiveDateTime,
+    updated_at: chrono::NaiveDateTime,
+}
+
+impl From<crate::models::ActorSystemData> for GraphQLActorSystemData {
+    fn from(data: crate::models::ActorSystemData) -> Self {
+        Self {
+            id: data.id,
+            actor_id: data.actor_id,
+            game_system_id: data.game_system_id,
+            ability_data: data.ability_data.map(Json),
+            resource_data: data.resource_data.map(Json),
+            proficiency_data: data.proficiency_data.map(Json),
+            trait_data: data.trait_data.map(Json),
+            spell_data: data.spell_data.map(Json),
+            created_at: data.created_at,
+            updated_at: data.updated_at,
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct ActorSystemDataMutation;
+
+#[async_graphql::Object]
+impl ActorSystemDataMutation {
+    /// Generic mutation for updating system-specific actor data
+    /// Validates against manifest schema for the system
+    /// 🎮📤 Phase 4.8.1: Client sends mutation to update game-specific stats
+    async fn update_actor_system_data(
+        &self,
+        ctx: &Context<'_>,
+        input: GraphQLUpdateActorSystemDataInput,
+    ) -> GraphQLResult<GraphQLActorSystemData> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        let user_id = auth_user.user_id;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        let actor_id = input.actor_id;
+        let game_system_id = input.game_system_id.clone();
+        let data_type = input.data_type.clone();
+        let data_value = input.data.0.clone();
+        let now = Utc::now().naive_utc();
+
+        // 🔐 ADR-010: Verify user owns the actor + persist update in single spawn_blocking call
+        let upserted_data = tokio::task::spawn_blocking({
+            let actor_id = actor_id;
+            let user_id = user_id;
+            let game_system_id = game_system_id.clone();
+            let data_type = data_type.clone();
+            let data_value = data_value.clone();
+            move || {
+                use crate::schema::{world_actors, world_actor_system_data};
+                use diesel::prelude::*;
+
+                // 1. Verify user owns the actor
+                let actor = world_actors::table
+                    .filter(world_actors::id.eq(actor_id))
+                    .filter(world_actors::owned_by.eq(user_id))
+                    .select(crate::models::WorldActor::as_select())
+                    .first::<crate::models::WorldActor>(&mut conn)
+                    .optional()
+                    .map_err(|e| format!("Failed to load actor: {}", e))?
+                    .ok_or_else(|| "Actor not found or not owned by user".to_string())?;
+
+                // 2. Validate: Actor's game_system_id must match the mutation's game_system_id
+                if actor.game_system_id.as_ref() != Some(&game_system_id) {
+                    return Err("Game system mismatch: actor is not configured for this system".to_string());
+                }
+
+                // 3. Validate data_type and use registry-based validators
+                if !matches!(data_type.as_str(), "ability_data" | "resource_data" | "proficiency_data" | "trait_data" | "spell_data") {
+                    return Err("Unknown data_type".to_string());
+                }
+
+                // 🔔 C2: Call system registry to validate data using game system's validators
+                crate::systems::validate_actor_system_data(&game_system_id, &data_type, &data_value)
+                    .map_err(|e| format!("Validation failed: {}", e))?;
+
+                // 4. UPSERT actor system data with appropriate column
+                let result = match data_type.as_str() {
+                    "ability_data" => {
+                        diesel::insert_into(world_actor_system_data::table)
+                            .values((
+                                world_actor_system_data::actor_id.eq(actor_id),
+                                world_actor_system_data::game_system_id.eq(&game_system_id),
+                                world_actor_system_data::ability_data.eq(&data_value),
+                                world_actor_system_data::created_by.eq(user_id),
+                                world_actor_system_data::updated_by.eq(user_id),
+                            ))
+                            .on_conflict(world_actor_system_data::actor_id)
+                            .do_update()
+                            .set((
+                                world_actor_system_data::ability_data.eq(&data_value),
+                                world_actor_system_data::updated_by.eq(user_id),
+                                world_actor_system_data::updated_at.eq(now),
+                            ))
+                            .returning(crate::models::ActorSystemData::as_returning())
+                            .get_result(&mut conn)
+                    },
+                    "resource_data" => {
+                        diesel::insert_into(world_actor_system_data::table)
+                            .values((
+                                world_actor_system_data::actor_id.eq(actor_id),
+                                world_actor_system_data::game_system_id.eq(&game_system_id),
+                                world_actor_system_data::resource_data.eq(&data_value),
+                                world_actor_system_data::created_by.eq(user_id),
+                                world_actor_system_data::updated_by.eq(user_id),
+                            ))
+                            .on_conflict(world_actor_system_data::actor_id)
+                            .do_update()
+                            .set((
+                                world_actor_system_data::resource_data.eq(&data_value),
+                                world_actor_system_data::updated_by.eq(user_id),
+                                world_actor_system_data::updated_at.eq(now),
+                            ))
+                            .returning(crate::models::ActorSystemData::as_returning())
+                            .get_result(&mut conn)
+                    },
+                    "proficiency_data" => {
+                        diesel::insert_into(world_actor_system_data::table)
+                            .values((
+                                world_actor_system_data::actor_id.eq(actor_id),
+                                world_actor_system_data::game_system_id.eq(&game_system_id),
+                                world_actor_system_data::proficiency_data.eq(&data_value),
+                                world_actor_system_data::created_by.eq(user_id),
+                                world_actor_system_data::updated_by.eq(user_id),
+                            ))
+                            .on_conflict(world_actor_system_data::actor_id)
+                            .do_update()
+                            .set((
+                                world_actor_system_data::proficiency_data.eq(&data_value),
+                                world_actor_system_data::updated_by.eq(user_id),
+                                world_actor_system_data::updated_at.eq(now),
+                            ))
+                            .returning(crate::models::ActorSystemData::as_returning())
+                            .get_result(&mut conn)
+                    },
+                    "trait_data" => {
+                        diesel::insert_into(world_actor_system_data::table)
+                            .values((
+                                world_actor_system_data::actor_id.eq(actor_id),
+                                world_actor_system_data::game_system_id.eq(&game_system_id),
+                                world_actor_system_data::trait_data.eq(&data_value),
+                                world_actor_system_data::created_by.eq(user_id),
+                                world_actor_system_data::updated_by.eq(user_id),
+                            ))
+                            .on_conflict(world_actor_system_data::actor_id)
+                            .do_update()
+                            .set((
+                                world_actor_system_data::trait_data.eq(&data_value),
+                                world_actor_system_data::updated_by.eq(user_id),
+                                world_actor_system_data::updated_at.eq(now),
+                            ))
+                            .returning(crate::models::ActorSystemData::as_returning())
+                            .get_result(&mut conn)
+                    },
+                    "spell_data" => {
+                        diesel::insert_into(world_actor_system_data::table)
+                            .values((
+                                world_actor_system_data::actor_id.eq(actor_id),
+                                world_actor_system_data::game_system_id.eq(&game_system_id),
+                                world_actor_system_data::spell_data.eq(&data_value),
+                                world_actor_system_data::created_by.eq(user_id),
+                                world_actor_system_data::updated_by.eq(user_id),
+                            ))
+                            .on_conflict(world_actor_system_data::actor_id)
+                            .do_update()
+                            .set((
+                                world_actor_system_data::spell_data.eq(&data_value),
+                                world_actor_system_data::updated_by.eq(user_id),
+                                world_actor_system_data::updated_at.eq(now),
+                            ))
+                            .returning(crate::models::ActorSystemData::as_returning())
+                            .get_result(&mut conn)
+                    },
+                    _ => return Err("Invalid data type".to_string()),
+                };
+
+                result.map_err(|e| e.to_string())
+            }
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|e| Error::new(format!("Failed to upsert actor system data: {}", e)))?;
+
+        eprintln!(
+            "[Phase4.8.1✅] updateActorSystemData complete: actor_id={}, system={}, data_type={}",
+            actor_id, game_system_id, data_type
+        );
+
+        Ok(GraphQLActorSystemData::from(upserted_data))
     }
 }
 
@@ -2240,7 +2446,7 @@ impl SubscriptionRoot {
 pub struct QueryRoot(HealthcheckQuery, UserQuery, AdminQuery, SceneQuery);
 
 #[derive(MergedObject, Default)]
-pub struct MutationRoot(WorldMutation, UserDataMutation, AdminMutation, SceneMutation, WorldTokenMutation);
+pub struct MutationRoot(WorldMutation, UserDataMutation, AdminMutation, SceneMutation, WorldTokenMutation, ActorSystemDataMutation);
 
 pub type AppSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;
 

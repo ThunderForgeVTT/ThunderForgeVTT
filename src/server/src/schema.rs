@@ -239,6 +239,40 @@ diesel::table! {
 }
 
 diesel::table! {
+    world_actors (id) {
+        id -> Uuid,
+        world_id -> Uuid,
+        scene_id -> Uuid,
+        actor_type -> Varchar,
+        game_system_id -> Nullable<Varchar>,
+        label -> Text,
+        created_by -> Uuid,
+        owned_by -> Uuid,
+        is_public -> Bool,
+        is_npc -> Bool,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    world_actor_system_data (id) {
+        id -> Uuid,
+        actor_id -> Uuid,
+        game_system_id -> Varchar,
+        ability_data -> Nullable<Jsonb>,
+        resource_data -> Nullable<Jsonb>,
+        proficiency_data -> Nullable<Jsonb>,
+        trait_data -> Nullable<Jsonb>,
+        spell_data -> Nullable<Jsonb>,
+        created_by -> Uuid,
+        updated_by -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     world_tokens (id) {
         id -> Text,
         world_id -> Uuid,
@@ -284,6 +318,16 @@ diesel::joinable!(tokens -> scenes (scene_id));
 diesel::joinable!(user_oauth_accounts -> oauth_providers (provider_id));
 diesel::joinable!(user_oauth_accounts -> users (user_id));
 diesel::joinable!(user_sessions -> users (user_id));
+diesel::joinable!(world_actors -> scenes (scene_id));
+diesel::joinable!(world_actors -> worlds (world_id));
+// Note: world_actors has two foreign keys to users (created_by, owned_by)
+// Diesel doesn't support multiple joinables for the same table pair,
+// so joins with users must be written manually
+
+diesel::joinable!(world_actor_system_data -> world_actors (actor_id));
+// Note: world_actor_system_data has two foreign keys to users (created_by, updated_by)
+// Diesel doesn't support multiple joinables for the same table pair,
+// so joins with users must be written manually
 diesel::joinable!(world_events -> worlds (world_id));
 diesel::joinable!(world_tokens -> worlds (world_id));
 
@@ -303,6 +347,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     user_oauth_accounts,
     user_sessions,
     users,
+    world_actors,
+    world_actor_system_data,
     world_events,
     world_tokens,
     worlds,

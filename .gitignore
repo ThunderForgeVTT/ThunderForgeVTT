@@ -1,5 +1,6 @@
 /data
 *.sum
+PHASE_*.md
 
 # Created by https://www.toptal.com/developers/gitignore/api/rust,node
 # Edit at https://www.toptal.com/developers/gitignore?templates=rust,node

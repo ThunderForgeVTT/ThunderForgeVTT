@@ -4,6 +4,7 @@ packages:
   - "packages/*"
   - "crates/*"
   - "packs/*"
+  - "packs/systems/*/web"
 
 allowBuilds:
   "@parcel/watcher": true
