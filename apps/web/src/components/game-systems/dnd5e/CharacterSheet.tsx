@@ -2,7 +2,7 @@
  * CharacterSheet.tsx
  * D&D 5e Character Sheet Component
  *
- * Phase 4.8.1: System-Aware React Components (Phase E.1)
+ * Phase 4.8.1: System-Aware React Components (Phase E.1-E.2)
  *
  * Main component that displays the full D&D 5e character sheet by composing:
  * - AbilityScores: Core ability scores with modifiers
@@ -11,8 +11,12 @@
  * - Resources: HP, hit dice, spell slots, etc. (future)
  *
  * Data is fetched from RxDB world_actor_system_data collection and updated
- * via GraphQL mutations. Manifest-aware rendering allows other game systems
- * (Pathfinder 2e, CoC 7e) to define their own CharacterSheet components.
+ * via GraphQL mutations with optimistic updates and rollback.
+ *
+ * Phase E.2 Integration:
+ * ✅ useActorSystemData - Real-time RxDB sync
+ * ✅ useUpdateActorData - Optimistic mutations
+ * ✅ useGameSystemManifest - System calculators
  */
 
 import type { ReactNode } from "react";
@@ -21,6 +25,9 @@ import { Container } from "@/components/ui/container/Container";
 import { Tabs } from "@/components/ui/tabs/Tabs";
 import { Card } from "@/components/ui/card/Card";
 import { cn } from "@/utils/cn";
+import { useActorSystemData } from "@/hooks/useActorSystemData";
+import { useUpdateActorData } from "@/hooks/useUpdateActorData";
+import { useGameSystemManifest } from "@/contexts/GameSystemContext";
 import { AbilityScores } from "./AbilityScores";
 import { SkillsList } from "./SkillsList";
 import styles from "./CharacterSheet.module.scss";
@@ -28,48 +35,97 @@ import styles from "./CharacterSheet.module.scss";
 export interface CharacterSheetProps {
   actorId: string;
   actorName: string;
-  actorData?: {
-    ability_data?: Record<string, any>;
-    resource_data?: Record<string, any>;
-    proficiency_data?: Record<string, any>;
-    trait_data?: Record<string, any>;
-    spell_data?: Record<string, any>;
-  };
+  gameSystemId?: string;
   editable?: boolean;
-  onUpdate?: (dataType: string, data: Record<string, any>) => void;
   onError?: (error: Error) => void;
 }
 
 /**
  * Main D&D 5e Character Sheet Component
  *
- * This is a manifest-aware component that could be swapped out for
- * Pathfinder 2e, CoC 7e, etc. by the game system loader.
- *
  * Usage:
  * ```tsx
  * <CharacterSheet
  *   actorId="actor-123"
  *   actorName="Aragorn"
- *   actorData={{
- *     ability_data: { strength: 15, dexterity: 14, ... },
- *     proficiency_data: { acrobatics: true, ... },
- *   }}
+ *   gameSystemId="dnd5e"
  *   editable={true}
- *   onUpdate={(dataType, data) => graphql.mutate(...)}
  * />
  * ```
+ *
+ * ✅ E2.1: useActorSystemData loads data from RxDB with real-time subscriptions
+ * ✅ E2.2: useUpdateActorData handles optimistic mutations with rollback
+ * ✅ E2.3: useGameSystemManifest provides system calculators (no prop drilling)
  */
 export function CharacterSheet({
   actorId,
   actorName,
-  actorData = {},
+  gameSystemId = "dnd5e",
   editable = false,
-  onUpdate,
   onError,
 }: CharacterSheetProps): ReactNode {
   const [activeTab, setActiveTab] = useState("abilities");
-  const [isOptimistic, setIsOptimistic] = useState(false);
+
+  // E2.1: Load actor system data from RxDB
+  const { data: actorData, loading: dataLoading, error: dataError } = useActorSystemData(
+    actorId,
+    gameSystemId,
+  );
+
+  // E2.2: Setup mutation handler with optimistic updates
+  const { mutate: updateActorData, isPending: isMutating, error: mutationError } = useUpdateActorData(
+    actorId,
+    gameSystemId,
+  );
+
+  // E2.3: Load system manifest for calculators
+  const { manifest, loading: manifestLoading, error: manifestError } = useGameSystemManifest(
+    gameSystemId,
+  );
+
+  const isLoading = dataLoading || manifestLoading;
+  const isOptimistic = isMutating;
+  const currentError = dataError || manifestError || mutationError;
+
+  // Notify parent of errors
+  useEffect(() => {
+    if (currentError && onError) {
+      onError(currentError);
+    }
+  }, [currentError, onError]);
+
+  if (isLoading) {
+    return (
+      <Container className={styles.container}>
+        <div className={styles.loadingState}>
+          <div className={styles.spinner} />
+          <p>Loading character sheet...</p>
+        </div>
+      </Container>
+    );
+  }
+
+  if (currentError) {
+    return (
+      <Container className={styles.container}>
+        <div className={styles.errorState}>
+          <h2>Failed to Load Character</h2>
+          <p>{currentError.message}</p>
+          <button onClick={() => window.location.reload()}>Reload</button>
+        </div>
+      </Container>
+    );
+  }
+
+  if (!actorData) {
+    return (
+      <Container className={styles.container}>
+        <div className={styles.emptyState}>
+          <p>No character data found</p>
+        </div>
+      </Container>
+    );
+  }
 
   const abilityData = actorData.ability_data ?? {};
   const proficiencyData = actorData.proficiency_data ?? {};
@@ -79,23 +135,19 @@ export function CharacterSheet({
 
   const handleUpdateAbility = async (abilityId: string, score: number) => {
     try {
-      setIsOptimistic(true);
       const updated = { ...abilityData, [abilityId]: score };
-      onUpdate?.("ability_data", updated);
+      await updateActorData("ability_data", updated);
     } catch (error) {
       onError?.(error instanceof Error ? error : new Error(String(error)));
-      setIsOptimistic(false);
     }
   };
 
   const handleToggleProficiency = async (skillId: string, proficient: boolean) => {
     try {
-      setIsOptimistic(true);
       const updated = { ...proficiencyData, [skillId]: proficient };
-      onUpdate?.("proficiency_data", updated);
+      await updateActorData("proficiency_data", updated);
     } catch (error) {
       onError?.(error instanceof Error ? error : new Error(String(error)));
-      setIsOptimistic(false);
     }
   };
 
