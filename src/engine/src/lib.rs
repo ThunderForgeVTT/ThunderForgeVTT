@@ -9,6 +9,19 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use wasm_bindgen::prelude::*;
 
+// Public module exports for Phase 4.2/4.3 Bevy integration
+pub mod components;
+pub mod network;
+pub mod movement;
+pub mod derived_data;
+pub mod sync_test;
+pub mod systems;
+
+use movement::{PlayerControlled, handle_keyboard_movement, sync_grid_to_transform, sync_transform_to_grid, apply_grid_snapping};
+use derived_data::*;
+use sync_test::*;
+use systems::*;
+
 static ENGINE_STARTED: AtomicBool = AtomicBool::new(false);
 static EVENT_CALLBACK: OnceLock<Mutex<Option<Function>>> = OnceLock::new();
 static EXTERNAL_COMMANDS: OnceLock<Mutex<Vec<ExternalCommand>>> = OnceLock::new();
@@ -32,6 +45,21 @@ struct TokenEntities(HashMap<String, Entity>);
 
 #[derive(Resource)]
 struct LastPlayerSent(Vec2);
+
+#[derive(Resource, Clone, Debug)]
+struct GridConfig {
+    grid_size: f32,
+    grid_type: String, // "square" or "hex"
+}
+
+impl Default for GridConfig {
+    fn default() -> Self {
+        Self {
+            grid_size: 32.0,
+            grid_type: "square".to_string(),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Deserialize)]
 struct WorldTokenPayload {
@@ -116,6 +144,13 @@ pub fn start(canvas_selector: &str) {
         .insert_resource(ActiveWorld("default".to_string()))
         .insert_resource(TokenEntities::default())
         .insert_resource(LastPlayerSent(Vec2::new(f32::MIN, f32::MIN)))
+        .insert_resource(GridConfig::default())
+        .insert_resource(network::GraphQLClient::new("http://localhost:8080".to_string()))
+        .insert_resource(network::WorldEventSubscription::new())
+        .insert_resource(CircularFlowTracer::new())
+        .insert_resource(SystemHooksRegistry { hooks: None })
+        // PHASE 4.5: Add ServerEvent registration with proper Bevy event system
+        // .add_event::<network::ServerEvent>()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 canvas: Some(canvas_selector.to_owned()),
@@ -130,7 +165,41 @@ pub fn start(canvas_selector: &str) {
         .add_systems(Startup, setup_scene)
         .add_systems(
             Update,
-            (apply_external_commands, move_player, emit_player_state),
+            (
+                apply_external_commands,
+                move_player,
+                emit_player_state,
+            ),
+        )
+        .add_systems(
+            Update,
+            (
+                handle_keyboard_movement,
+                sync_grid_to_transform,
+                sync_transform_to_grid,
+                apply_grid_snapping,
+            ),
+        )
+        .add_systems(
+            Update,
+            (
+                calculate_derived_stats,
+                calculate_ability_stats,
+            ),
+        )
+        .add_systems(
+            Update,
+            (
+                network::process_server_events,
+                process_server_responses,
+                handle_mutation_errors,
+                trace_keyboard_input,
+                trace_mutation_sent,
+                trace_server_event,
+                trace_update_confirmation,
+                trace_rollback,
+                print_flow_summary,
+            ),
         )
         .run();
 }
@@ -144,6 +213,7 @@ fn setup_scene(mut commands: Commands, mut token_entities: ResMut<TokenEntities>
             Transform::from_xyz(-180.0, 0.0, 0.0),
             PlayerToken,
             TokenIdentity("player".to_string()),
+            PlayerControlled,
         ))
         .id();
 

@@ -32,6 +32,7 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 tracing-bunyan-formatter = "0.3.9"
 futures-util = "0.3.32"
 tokio-stream = { version = "0.1.18", features = ["sync"] }
+tokio-postgres = { version = "0.7", features = ["with-chrono-0_4"] }
 async-graphql = { version = "7.2.1", features = [
   "chrono",
   "dataloader",

@@ -7,6 +7,7 @@ mod db_types;
 mod errors;
 mod graphql;
 mod models;
+mod network;
 mod pubsub;
 mod schema; // Add this line
 mod serve;
@@ -163,11 +164,15 @@ async fn main() {
     let app_state = AppState {
         config,
         directories: directories.clone(),
-        world_event_sender,
+        world_event_sender: world_event_sender.clone(),
         key,
-        db_pool,
+        db_pool: db_pool.clone(),
         system_hooks: std::sync::Arc::new(tokio::sync::RwLock::new(system_hooks::SystemHookRegistry::new())),
     };
+
+    // Spawn the PostgreSQL LISTEN background task
+    eprintln!("[Server] 🚀 Starting PostgreSQL LISTEN background task");
+    network::spawn_listen_task(db_pool, world_event_sender);
 
     let schema = Schema::build(
         QueryRoot::default(),

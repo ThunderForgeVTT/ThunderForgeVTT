@@ -342,11 +342,11 @@ pub struct WorldEvent {
     pub world_id: uuid::Uuid,
     pub event_code: i32,
     pub token_event: Option<serde_json::Value>,
+    pub created_at: chrono::NaiveDateTime,
+    pub schema_version: i32,
+    pub updated_at: chrono::NaiveDateTime,
     pub created_by: uuid::Uuid,
     pub updated_by: uuid::Uuid,
-    pub created_at: chrono::NaiveDateTime,
-    pub updated_at: chrono::NaiveDateTime,
-    pub schema_version: i32,
 }
 
 #[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
