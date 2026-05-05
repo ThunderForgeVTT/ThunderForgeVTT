@@ -21,6 +21,7 @@ pub fn router() -> Router<AppState> {
         .route("/", get(list_systems))
         .route("/:slug/manifest.json", get(get_system_manifest))
         .route("/:slug/download", get(download_system_package))
+        .route("/:slug/*path", get(serve_system_file))
 }
 
 pub fn admin_router() -> Router<AppState> {
@@ -120,6 +121,91 @@ async fn download_system_package(
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "application/zip")
         .header(header::CONTENT_DISPOSITION, content_disposition)
+        .body(axum::body::Body::from(file_content))
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": format!("Failed to construct response: {}", e)})),
+            )
+        })?;
+
+    Ok(response)
+}
+
+/// Serve system files (JavaScript modules, CSS, assets, etc.)
+/// Supports paths like /systems/:slug/module/main.mjs, /systems/:slug/styles/main.css
+async fn serve_system_file(
+    Path((slug, path)): Path<(String, String)>,
+    State(state): State<AppState>,
+) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
+    // Prevent directory traversal attacks
+    if path.contains("..") {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "Invalid path: directory traversal not allowed"})),
+        ));
+    }
+
+    let systems_dir_path = PathBuf::from(&state.directories.systems_dir);
+    let file_path = systems_dir_path.join(&slug).join(&path);
+
+    // Verify the resolved path is within the system directory
+    let canonical_system_dir = systems_dir_path
+        .join(&slug)
+        .canonicalize()
+        .map_err(|_| {
+            (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "System directory not found"})),
+            )
+        })?;
+
+    let canonical_file = file_path.canonicalize().map_err(|_| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "File not found"})),
+        )
+    })?;
+
+    if !canonical_file.starts_with(&canonical_system_dir) {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "Access denied"})),
+        ));
+    }
+
+    // Read the file
+    let file_content = fs::read(&file_path).await.map_err(|e| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": format!("Failed to read file: {}", e)})),
+        )
+    })?;
+
+    // Determine MIME type based on file extension
+    let content_type = match file_path.extension().and_then(|ext| ext.to_str()) {
+        Some("mjs") | Some("js") => "application/javascript; charset=utf-8",
+        Some("json") => "application/json; charset=utf-8",
+        Some("css") => "text/css; charset=utf-8",
+        Some("svg") => "image/svg+xml",
+        Some("png") => "image/png",
+        Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("gif") => "image/gif",
+        Some("webp") => "image/webp",
+        Some("woff") => "font/woff",
+        Some("woff2") => "font/woff2",
+        Some("ttf") => "font/ttf",
+        Some("txt") => "text/plain; charset=utf-8",
+        Some("html") => "text/html; charset=utf-8",
+        _ => "application/octet-stream",
+    };
+
+    // Build response with appropriate headers
+    let response = Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, content_type)
+        .header(header::CACHE_CONTROL, "public, max-age=3600") // Cache for 1 hour
+        .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*") // CORS for module loading
         .body(axum::body::Body::from(file_content))
         .map_err(|e| {
             (

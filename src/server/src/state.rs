@@ -1,4 +1,5 @@
 use crate::config::{Config, Directories};
+use crate::system_hooks::SystemHookRegistry;
 use axum::extract::FromRef;
 use thunderforge_core::events::WorldEvent;
 use tokio::sync::broadcast::Sender;
@@ -16,6 +17,7 @@ pub struct AppState {
     pub world_event_sender: Sender<WorldEvent>,
     pub key: Key,
     pub db_pool: DbPool,
+    pub system_hooks: std::sync::Arc<tokio::sync::RwLock<SystemHookRegistry>>,
 }
 
 impl FromRef<AppState> for Key {

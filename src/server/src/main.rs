@@ -11,6 +11,7 @@ mod pubsub;
 mod schema; // Add this line
 mod serve;
 mod state;
+mod system_hooks;
 mod systems;
 mod users;
 mod utils;
@@ -165,6 +166,7 @@ async fn main() {
         world_event_sender,
         key,
         db_pool,
+        system_hooks: std::sync::Arc::new(tokio::sync::RwLock::new(system_hooks::SystemHookRegistry::new())),
     };
 
     let schema = Schema::build(
