@@ -5,14 +5,15 @@
 //! via a Tokio broadcast channel for fan-out to all WebSocket subscriptions.
 
 use crate::models::WorldEvent;
-use diesel::prelude::*;
 use diesel::r2d2::{self, ConnectionManager};
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
+#[allow(dead_code)]
 type DbPool = r2d2::Pool<ConnectionManager<diesel::PgConnection>>;
 
 /// Manages the pub/sub backplane for world events.
+#[allow(dead_code)]
 pub struct PubSubBackplane {
     /// Broadcast channel for world events. Clients subscribe to receive events.
     broadcast_tx: broadcast::Sender<WorldEvent>,
@@ -45,7 +46,8 @@ impl PubSubBackplane {
     }
 
     /// Main loop for listening to PostgreSQL notifications.
-    async fn listen_loop(pool: DbPool, tx: broadcast::Sender<WorldEvent>) -> Result<(), String> {
+    #[allow(dead_code)]
+    async fn listen_loop(pool: DbPool, _tx: broadcast::Sender<WorldEvent>) -> Result<(), String> {
         loop {
             // Get a dedicated connection for LISTEN
             let mut conn = pool
@@ -73,17 +75,20 @@ impl PubSubBackplane {
     /// Each caller gets their own broadcast::Receiver that will receive
     /// all subsequent events. Events already sent before subscription is created
     /// are not received (fire-and-forget semantics).
+    #[allow(dead_code)]
     pub fn subscribe(&self) -> broadcast::Receiver<WorldEvent> {
         self.broadcast_tx.subscribe()
     }
 
     /// Send an event to all subscribers (primarily for testing/manual triggering).
+    #[allow(dead_code)]
     pub fn publish(&self, event: WorldEvent) {
         let _ = self.broadcast_tx.send(event);
     }
 }
 
 /// Initialize the pub/sub backplane for a given database pool.
+#[allow(dead_code)]
 pub async fn initialize_pubsub(pool: DbPool) -> Result<Arc<PubSubBackplane>, String> {
     let _rx = PubSubBackplane::spawn_listener(pool.clone()).await?;
 

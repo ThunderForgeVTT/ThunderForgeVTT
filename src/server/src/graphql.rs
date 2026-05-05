@@ -1522,7 +1522,7 @@ impl SceneMutation {
             .db_pool
             .get()
             .map_err(|_| Error::new("Failed to get DB connection"))?;
-        let now = Utc::now().naive_utc();
+        let _now = Utc::now().naive_utc();
 
         let updated_scene = tokio::task::spawn_blocking(move || {
             use crate::schema::scenes;
