@@ -1,4 +1,6 @@
-use crate::models::{AdminBootstrapSetup, AuthSecuritySetting, NewAuthSecuritySetting, OAuthProvider};
+use crate::models::{
+    AdminBootstrapSetup, AuthSecuritySetting, NewAuthSecuritySetting, OAuthProvider,
+};
 use crate::schema::{
     admin_bootstrap_setup, auth_security_settings, oauth_providers, policies, users, world_events,
     world_tokens, worlds,
@@ -121,7 +123,10 @@ pub async fn load_oauth_providers(state: &AppState) -> Result<Vec<OAuthProvider>
 
     tokio::task::spawn_blocking(move || {
         oauth_providers::table
-            .order((oauth_providers::display_name.asc(), oauth_providers::provider_key.asc()))
+            .order((
+                oauth_providers::display_name.asc(),
+                oauth_providers::provider_key.asc(),
+            ))
             .select(OAuthProvider::as_select())
             .load::<OAuthProvider>(&mut conn)
     })
@@ -164,9 +169,7 @@ pub async fn update_oauth_provider(
 
         let display_name = update.display_name.unwrap_or(existing.display_name);
         let oauth_client_id = update.oauth_client_id.or(existing.oauth_client_id);
-        let oauth_client_secret = update
-            .oauth_client_secret
-            .or(existing.oauth_client_secret);
+        let oauth_client_secret = update.oauth_client_secret.or(existing.oauth_client_secret);
         let enabled = update.enabled.unwrap_or(existing.enabled);
         let userinfo_url = update.userinfo_url.or(existing.userinfo_url);
         let scopes = update
@@ -234,7 +237,8 @@ pub async fn update_two_factor_policy(
     tokio::task::spawn_blocking(move || {
         diesel::update(auth_security_settings::table.filter(auth_security_settings::id.eq(1)))
             .set((
-                auth_security_settings::two_factor_required_for_all_users.eq(required_for_all_users),
+                auth_security_settings::two_factor_required_for_all_users
+                    .eq(required_for_all_users),
                 auth_security_settings::updated_at.eq(now),
             ))
             .execute(&mut conn)?;
@@ -272,7 +276,8 @@ pub async fn load_admin_bootstrap_settings(
 pub fn read_system_manifest(state: &AppState) -> Result<SystemManifestDocument, String> {
     ensure_manifest_exists(&state.directories.manifest_file)?;
     let path = Path::new(&state.directories.manifest_file);
-    let contents = fs::read_to_string(path).map_err(|_| "Failed to read manifest file".to_string())?;
+    let contents =
+        fs::read_to_string(path).map_err(|_| "Failed to read manifest file".to_string())?;
     serde_json::from_str::<SystemManifestDocument>(&contents)
         .map_err(|_| "Failed to parse manifest file".to_string())
 }
@@ -287,7 +292,9 @@ pub fn update_manifest_key(
     }
 
     let mut manifest = read_system_manifest(state)?;
-    manifest.metadata.insert(key.to_string(), value.trim().to_string());
+    manifest
+        .metadata
+        .insert(key.to_string(), value.trim().to_string());
     manifest.updated_at = Utc::now();
     write_manifest(&state.directories.manifest_file, &manifest)?;
     Ok(manifest)
@@ -360,7 +367,8 @@ fn ensure_manifest_exists(manifest_path: &str) -> Result<(), String> {
     }
 
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|_| "Failed to create manifest directory".to_string())?;
+        fs::create_dir_all(parent)
+            .map_err(|_| "Failed to create manifest directory".to_string())?;
     }
 
     let manifest = default_manifest();
@@ -368,8 +376,8 @@ fn ensure_manifest_exists(manifest_path: &str) -> Result<(), String> {
 }
 
 fn write_manifest(path: &str, manifest: &SystemManifestDocument) -> Result<(), String> {
-    let json =
-        serde_json::to_string_pretty(manifest).map_err(|_| "Failed to serialize manifest".to_string())?;
+    let json = serde_json::to_string_pretty(manifest)
+        .map_err(|_| "Failed to serialize manifest".to_string())?;
     fs::write(path, json).map_err(|_| "Failed to write manifest file".to_string())
 }
 
@@ -380,8 +388,14 @@ fn default_manifest() -> SystemManifestDocument {
         "interface_pack_id".to_string(),
         DEFAULT_INTERFACE_PACK_ID.to_string(),
     );
-    metadata.insert("asset_pack_id".to_string(), DEFAULT_ASSET_PACK_ID.to_string());
-    metadata.insert("support_email".to_string(), DEFAULT_SUPPORT_EMAIL.to_string());
+    metadata.insert(
+        "asset_pack_id".to_string(),
+        DEFAULT_ASSET_PACK_ID.to_string(),
+    );
+    metadata.insert(
+        "support_email".to_string(),
+        DEFAULT_SUPPORT_EMAIL.to_string(),
+    );
     metadata.insert(
         "welcome_message".to_string(),
         "Welcome to the ThunderForge guild hall.".to_string(),
@@ -395,7 +409,9 @@ fn default_manifest() -> SystemManifestDocument {
 }
 
 fn is_editable_manifest_key(key: &str) -> bool {
-    editable_manifest_keys().iter().any(|allowed| *allowed == key)
+    editable_manifest_keys()
+        .iter()
+        .any(|allowed| *allowed == key)
 }
 
 fn dir_size(path: &Path) -> Result<u64, String> {
@@ -407,8 +423,8 @@ fn dir_size(path: &Path) -> Result<u64, String> {
     let mut stack = vec![PathBuf::from(path)];
 
     while let Some(current) = stack.pop() {
-        let entries =
-            fs::read_dir(&current).map_err(|_| format!("Failed to read directory {}", current.display()))?;
+        let entries = fs::read_dir(&current)
+            .map_err(|_| format!("Failed to read directory {}", current.display()))?;
 
         for entry in entries {
             let entry = entry.map_err(|_| "Failed to read directory entry".to_string())?;

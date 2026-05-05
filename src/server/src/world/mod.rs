@@ -40,7 +40,12 @@ async fn all_worlds(
             .order(worlds::created_at.desc())
             .select(World::as_select())
             .load::<World>(&mut conn)
-            .map(|items| items.into_iter().map(|world| world.name).collect::<Vec<_>>())
+            .map(|items| {
+                items
+                    .into_iter()
+                    .map(|world| world.name)
+                    .collect::<Vec<_>>()
+            })
     })
     .await
     .ok()

@@ -1,5 +1,5 @@
 use crate::schema::{
-    admin_bootstrap_oauth_sessions, admin_bootstrap_setup, auth_security_settings,
+    admin_bootstrap_oauth_sessions, admin_bootstrap_setup, auth_security_settings, game_systems,
     login_two_factor_challenges, oauth_authorization_sessions, oauth_link_challenges,
     oauth_providers, policies, user_oauth_accounts, user_sessions, users, world_events,
     world_tokens, worlds,
@@ -63,6 +63,30 @@ pub struct NewAdminBootstrapOAuthSession {
     pub expires_at: chrono::NaiveDateTime,
     pub consumed_at: Option<chrono::NaiveDateTime>,
     pub created_at: chrono::NaiveDateTime,
+}
+
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = game_systems)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct GameSystem {
+    pub id: uuid::Uuid,
+    pub slug: String,
+    pub title: String,
+    pub manifest_url: String,
+    pub version: String,
+    pub installed_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = game_systems)]
+pub struct NewGameSystem {
+    pub slug: String,
+    pub title: String,
+    pub manifest_url: String,
+    pub version: String,
+    pub installed_by: uuid::Uuid,
 }
 
 #[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]

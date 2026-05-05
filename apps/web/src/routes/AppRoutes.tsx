@@ -10,7 +10,6 @@ import { pageLoaders } from "./pageLoaders";
 const LoginPage = lazy(pageLoaders.login);
 const RegisterPage = lazy(pageLoaders.signup);
 const OAuthCallbackPage = lazy(pageLoaders.oauthCallback);
-const AdminWelcomePage = lazy(pageLoaders.adminWelcome);
 const AdminSettingsPage = lazy(pageLoaders.adminSettings);
 const SetupPage = lazy(pageLoaders.setup);
 const SetupCallbackPage = lazy(pageLoaders.setupCallback);
@@ -99,19 +98,13 @@ export default function AppRoutes({
         { to: "/setup", label: "Setup", prefetch: "setup", icon: "settings" },
         { to: "/counter", label: "Status", prefetch: "counter", icon: "scene" },
       ]
-    : isAuthenticated && isAdmin
+      : isAuthenticated && isAdmin
       ? [
           {
-            to: "/admin/welcome",
+            to: "/admin",
             label: "Admin",
-            prefetch: "adminWelcome",
-            icon: "crown",
-          },
-          {
-            to: "/admin/settings",
-            label: "Settings",
             prefetch: "adminSettings",
-            icon: "settings",
+            icon: "crown",
           },
           {
             to: "/counter",
@@ -257,26 +250,38 @@ export default function AppRoutes({
           )}
         />
         <Route
-          path="/admin/welcome"
-          element={
-            <RequireAdmin>
-              {renderLazyPage(<AdminWelcomePage />, "Loading admin welcome")}
-            </RequireAdmin>
-          }
-        />
-        <Route
-          path="/admin/settings"
+          path="/admin"
           element={
             <RequireAdmin>
               {renderLazyPage(
                 <AdminSettingsPage initialSection="overview" />,
-                "Loading admin settings",
+                "Loading admin command center",
+              )}
+            </RequireAdmin>
+          }
+        />
+        <Route path="/admin/welcome" element={<Navigate to="/admin" replace />} />
+        <Route
+          path="/admin/settings"
+          element={<Navigate to="/admin" replace />}
+        />
+        <Route
+          path="/admin/configuration"
+          element={
+            <RequireAdmin>
+              {renderLazyPage(
+                <AdminSettingsPage initialSection="configuration" />,
+                "Loading admin configuration",
               )}
             </RequireAdmin>
           }
         />
         <Route
           path="/admin/analytics"
+          element={<Navigate to="/admin/storage" replace />}
+        />
+        <Route
+          path="/admin/storage"
           element={
             <RequireAdmin>
               {renderLazyPage(
@@ -288,22 +293,19 @@ export default function AppRoutes({
         />
         <Route
           path="/admin/oauth"
-          element={
-            <RequireAdmin>
-              {renderLazyPage(
-                <AdminSettingsPage initialSection="configuration" />,
-                "Loading OAuth settings",
-              )}
-            </RequireAdmin>
-          }
+          element={<Navigate to="/admin/configuration" replace />}
         />
         <Route
           path="/admin/system"
+          element={<Navigate to="/admin/security" replace />}
+        />
+        <Route
+          path="/admin/security"
           element={
             <RequireAdmin>
               {renderLazyPage(
-                <AdminSettingsPage initialSection="configuration" />,
-                "Loading system settings",
+                <AdminSettingsPage initialSection="security" />,
+                "Loading admin security",
               )}
             </RequireAdmin>
           }
@@ -313,7 +315,7 @@ export default function AppRoutes({
           element={
             <RequireAuthenticated>
               {isAdmin ? (
-                <Navigate to="/admin/welcome" replace />
+                <Navigate to="/admin" replace />
               ) : (
                 renderLazyPage(<WelcomePage />, "Loading welcome page")
               )}

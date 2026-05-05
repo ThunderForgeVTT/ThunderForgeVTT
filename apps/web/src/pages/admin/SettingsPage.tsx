@@ -37,10 +37,10 @@ interface SettingsPageProps {
 }
 
 export const settingsPageSeo: SeoConfig = {
-  title: "Admin settings",
+  title: "Admin command center",
   description:
     "Review ThunderForge system analytics, storage posture, OAuth provider configuration, and manifest metadata from the admin control center.",
-  canonicalPath: "/admin/settings",
+  canonicalPath: "/admin",
   noindex: true,
 };
 
@@ -149,22 +149,22 @@ export default function SettingsPage({
   }> = [
     {
       section: "overview",
-      path: "/admin/settings",
+      path: "/admin",
       description: "Realm analytics and live system counts",
     },
     {
       section: "configuration",
-      path: "/admin/oauth",
+      path: "/admin/configuration",
       description: "OAuth envoys and manifest editing",
     },
     {
       section: "storage",
-      path: "/admin/analytics",
+      path: "/admin/storage",
       description: "Disk posture and persisted footprint",
     },
     {
       section: "security",
-      path: "/admin/system",
+      path: "/admin/security",
       description: "2FA enforcement and bootstrap record",
     },
   ];
@@ -306,16 +306,18 @@ export default function SettingsPage({
                       <FantasyIcon name="scene" size={16} />
                       Overview
                     </p>
-                    <h2>Realm analytics</h2>
+                      <h2>Realm analytics</h2>
                   </div>
-                  <Button
-                    asChild
-                    variant="secondary"
-                    size="sm"
-                    icon="crown"
-                  >
-                    <Link to="/admin/welcome">Return to admin welcome</Link>
-                  </Button>
+                  {section !== "overview" ? (
+                    <Button
+                      asChild
+                      variant="secondary"
+                      size="sm"
+                      icon="crown"
+                    >
+                      <Link to="/admin">Return to admin overview</Link>
+                    </Button>
+                  ) : null}
                 </div>
                 <div className={styles.metricsGrid}>
                   {metricItems.map((item) => (

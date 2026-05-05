@@ -31,7 +31,7 @@ export const setupPageSeo: SeoConfig = {
   ],
   canonicalPath: "/setup",
   noindex: true,
-  prefetchHrefs: ["/setup/callback", "/admin/welcome"],
+  prefetchHrefs: ["/setup/callback", "/admin"],
 };
 
 interface SetupPageProps {
@@ -337,7 +337,7 @@ export default function SetupPage({
       );
       setStatus(result);
       await onSetupComplete();
-      navigate("/admin/welcome?bootstrap=complete", { replace: true });
+      navigate("/admin?bootstrap=complete", { replace: true });
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Setup failed.");
     } finally {

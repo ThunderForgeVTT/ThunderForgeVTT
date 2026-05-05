@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["src/server", "src/core", "src/engine"]
+members = ["src/server", "src/core", "src/engine", "crates/pack_system_spec"]
 default-members = ["src/server", "src/core"]
 
 [profile.release]

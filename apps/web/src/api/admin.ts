@@ -18,7 +18,7 @@ type GraphQLResponse<TData> = {
   errors?: GraphQLError[];
 };
 
-const GRAPHQL_ENDPOINT = "/graphql";
+const GRAPHQL_ENDPOINT = "/api/graphql";
 
 async function postGraphQL<TData>(
   query: string,

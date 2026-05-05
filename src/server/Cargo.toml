@@ -23,7 +23,7 @@ include_dir = "0.7.4"
 dotenvy = "0.15.7"
 argon2 = "0.5.3"
 async-recursion = "1.1.1"
-axum = "0.8.9"
+axum = { version = "0.8.9", features = ["multipart"] }
 tower = "0.5.3"
 tower-http = { version = "0.6.8", features = ["fs", "trace", "cors"] }
 tower-cookies = { version = "0.11.0", features = ["private"] }
@@ -62,6 +62,10 @@ aes-gcm = "0.10.3"
 totp-rs = { version = "5.7.0", features = ["otpauth"] }
 data-encoding = "2.9.0"
 zip = { version = "4.6.1", default-features = false, features = ["deflate"] }
+tempfile = "3.27.0"
 
 [dependencies.thunderforge_core]
 path = "../core"
+
+[dependencies.pack_system_spec]
+path = "../../crates/pack_system_spec"

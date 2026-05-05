@@ -1,5 +1,5 @@
-mod admin;
 mod adapters;
+mod admin;
 mod auth;
 mod auth_middleware;
 mod config;
@@ -10,6 +10,7 @@ mod models;
 mod schema; // Add this line
 mod serve;
 mod state;
+mod systems;
 mod users;
 mod utils;
 mod world;
@@ -41,7 +42,9 @@ use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
 use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt, util::SubscriberInitExt};
 
 async fn graphql_playground() -> impl IntoResponse {
-    Html(playground_source(GraphQLPlaygroundConfig::new("/graphql")))
+    Html(playground_source(
+        GraphQLPlaygroundConfig::new("/api/graphql").subscription_endpoint("/api/ws"),
+    ))
 }
 
 async fn graphql_handler(
@@ -195,13 +198,24 @@ async fn main() {
             auth_middleware::require_authenticated_user,
         ));
 
-    let app = Router::new()
+    let api_router = Router::new()
         .route("/healthz", get(liveness_handler))
         .route("/readyz", get(readiness_handler))
         .merge(graphql_router)
         .merge(auth::router())
         .merge(user_router)
-        .merge(world_router)
+        .merge(world_router);
+
+    let systems_admin_router = systems::admin_router().route_layer(from_fn_with_state(
+        app_state.clone(),
+        auth_middleware::require_admin_user,
+    ));
+
+    let app = Router::new()
+        .nest(
+            "/api",
+            api_router.nest("/systems", systems::router().merge(systems_admin_router)),
+        )
         .merge(serve::router(&directories))
         .fallback(errors::handler_404)
         .with_state(app_state.clone())

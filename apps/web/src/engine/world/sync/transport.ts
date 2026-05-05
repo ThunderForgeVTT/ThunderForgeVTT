@@ -14,8 +14,8 @@ type GraphQLResponse<TData> = {
 
 type GenericMutationResponse = Record<string, unknown>;
 
-const DEFAULT_GRAPHQL_ENDPOINT = "/graphql";
-const DEFAULT_WORLD_EVENT_PATH_TEMPLATE = "/world/{worldId}/event";
+const DEFAULT_GRAPHQL_ENDPOINT = "/api/graphql";
+const DEFAULT_WORLD_EVENT_PATH_TEMPLATE = "/api/world/{worldId}/event";
 
 function resolveTemplate(template: string, worldId: string): string {
   return template.replace("{worldId}", encodeURIComponent(worldId));

@@ -1,5 +1,9 @@
 packages:
   - apps/*
   - dist/engine
+  - "packages/*"
+  - "crates/*"
+  - "packs/*"
+
 allowBuilds:
   "@parcel/watcher": true

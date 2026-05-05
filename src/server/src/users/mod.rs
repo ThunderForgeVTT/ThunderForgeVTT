@@ -2,8 +2,8 @@ use crate::admin::user_role;
 use crate::auth_middleware::AuthenticatedUser;
 use crate::models::{Policy, User, World, WorldEvent, WorldToken};
 use crate::schema::{
-    login_two_factor_challenges, oauth_link_challenges, policies,
-    user_oauth_accounts, user_sessions, users, world_events, world_tokens, worlds,
+    login_two_factor_challenges, oauth_link_challenges, policies, user_oauth_accounts,
+    user_sessions, users, world_events, world_tokens, worlds,
 };
 use crate::state::AppState;
 use axum::{
@@ -275,7 +275,9 @@ async fn export_user_data(
 
     match export_format {
         "json" => match serde_json::to_vec_pretty(&export) {
-            Ok(body) => build_download_response(body, "application/json", "thunderforge-user-export.json"),
+            Ok(body) => {
+                build_download_response(body, "application/json", "thunderforge-user-export.json")
+            }
             Err(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({
@@ -286,7 +288,9 @@ async fn export_user_data(
                 .into_response(),
         },
         "zip" => match build_zip_export(&export) {
-            Ok(body) => build_download_response(body, "application/zip", "thunderforge-user-export.zip"),
+            Ok(body) => {
+                build_download_response(body, "application/zip", "thunderforge-user-export.zip")
+            }
             Err(message) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({
@@ -335,7 +339,9 @@ async fn delete_user_data(
     )
     .await;
 
-    cookies.private(&state.key).remove(Cookie::new("session", ""));
+    cookies
+        .private(&state.key)
+        .remove(Cookie::new("session", ""));
     cookies.remove(Cookie::new("csrf_token", ""));
 
     info!(subject_user_hash, "user data permanently deleted");
@@ -383,19 +389,17 @@ fn delete_user_data_sync(
                     .execute(conn)? as i64;
         }
 
-        summary.world_events_deleted += diesel::delete(
-            world_events::table.filter(world_events::created_by.eq(user_id)),
-        )
-        .execute(conn)? as i64;
+        summary.world_events_deleted +=
+            diesel::delete(world_events::table.filter(world_events::created_by.eq(user_id)))
+                .execute(conn)? as i64;
 
-        summary.world_tokens_deleted += diesel::delete(
-            world_tokens::table.filter(world_tokens::created_by.eq(user_id)),
-        )
-        .execute(conn)? as i64;
+        summary.world_tokens_deleted +=
+            diesel::delete(world_tokens::table.filter(world_tokens::created_by.eq(user_id)))
+                .execute(conn)? as i64;
 
         summary.policies_deleted +=
-            diesel::delete(policies::table.filter(policies::created_by.eq(user_id))).execute(conn)?
-                as i64;
+            diesel::delete(policies::table.filter(policies::created_by.eq(user_id)))
+                .execute(conn)? as i64;
 
         summary.oauth_link_challenges_deleted += diesel::delete(
             oauth_link_challenges::table.filter(oauth_link_challenges::user_id.eq(user_id)),
@@ -413,10 +417,9 @@ fn delete_user_data_sync(
         )
         .execute(conn)? as i64;
 
-        summary.sessions_deleted += diesel::delete(
-            user_sessions::table.filter(user_sessions::user_id.eq(user_id)),
-        )
-        .execute(conn)? as i64;
+        summary.sessions_deleted +=
+            diesel::delete(user_sessions::table.filter(user_sessions::user_id.eq(user_id)))
+                .execute(conn)? as i64;
 
         summary.users_deleted +=
             diesel::delete(users::table.filter(users::id.eq(user_id))).execute(conn)? as i64;
@@ -427,7 +430,12 @@ fn delete_user_data_sync(
 }
 
 fn normalize_export_format(format: Option<&str>) -> Result<&'static str, &'static str> {
-    match format.unwrap_or("json").trim().to_ascii_lowercase().as_str() {
+    match format
+        .unwrap_or("json")
+        .trim()
+        .to_ascii_lowercase()
+        .as_str()
+    {
         "json" => Ok("json"),
         "zip" => Ok("zip"),
         _ => Err("Unsupported export format. Use 'json' or 'zip'."),
@@ -442,8 +450,7 @@ fn build_zip_export(export: &UserDataExport) -> Result<Vec<u8>, String> {
 
     let cursor = Cursor::new(Vec::new());
     let mut zip = zip::ZipWriter::new(cursor);
-    let options =
-        SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
     zip.start_file("manifest.json", options)
         .map_err(|e| format!("Failed to create manifest entry: {e}"))?;

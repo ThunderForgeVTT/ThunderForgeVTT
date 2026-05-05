@@ -20,10 +20,10 @@ use crate::admin::{
 use crate::auth_middleware::AuthenticatedUser;
 use crate::db_types::PolicyEffectEnum;
 use crate::models::{
-    AdminBootstrapSetup, AuthSecuritySetting, OAuthProvider, Policy, User, World, WorldEvent,
-    WorldToken,
+    AdminBootstrapSetup, AuthSecuritySetting, GameSystem, OAuthProvider, Policy, User, World,
+    WorldEvent, WorldToken,
 };
-use crate::schema::{policies, users, world_events, world_tokens, worlds};
+use crate::schema::{game_systems, policies, users, world_events, world_tokens, worlds};
 use crate::state::AppState;
 use crate::users::{
     UserDataDeleteSummary, UserDataExport, delete_user_data_owned, export_user_data_payload,
@@ -54,6 +54,33 @@ impl From<User> for GraphQLUser {
             is_admin: user.is_admin,
             created_at: user.created_at,
             updated_at: user.updated_at,
+        }
+    }
+}
+
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLGameSystem {
+    id: uuid::Uuid,
+    slug: String,
+    title: String,
+    manifest_url: String,
+    version: String,
+    installed_by: uuid::Uuid,
+    created_at: chrono::NaiveDateTime,
+    updated_at: chrono::NaiveDateTime,
+}
+
+impl From<GameSystem> for GraphQLGameSystem {
+    fn from(system: GameSystem) -> Self {
+        Self {
+            id: system.id,
+            slug: system.slug,
+            title: system.title,
+            manifest_url: system.manifest_url,
+            version: system.version,
+            installed_by: system.installed_by,
+            created_at: system.created_at,
+            updated_at: system.updated_at,
         }
     }
 }
@@ -681,6 +708,23 @@ fn world_write_error(error: DieselError, fallback_message: &str) -> Error {
     }
 }
 
+async fn load_game_systems(state: &AppState) -> GraphQLResult<Vec<GameSystem>> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    tokio::task::spawn_blocking(move || {
+        game_systems::table
+            .order(game_systems::title.asc())
+            .select(GameSystem::as_select())
+            .load::<GameSystem>(&mut conn)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to query game systems"))
+}
+
 async fn load_owned_worlds(state: &AppState, user_id: uuid::Uuid) -> GraphQLResult<Vec<World>> {
     let mut conn = state
         .db_pool
@@ -885,6 +929,27 @@ async fn load_owned_policy_by_id(
     }
 }
 
+async fn load_game_system_by_id(
+    state: &AppState,
+    system_id: uuid::Uuid,
+) -> GraphQLResult<Option<GameSystem>> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    tokio::task::spawn_blocking(move || {
+        game_systems::table
+            .filter(game_systems::id.eq(system_id))
+            .select(GameSystem::as_select())
+            .first::<GameSystem>(&mut conn)
+            .optional()
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to query game system"))
+}
+
 #[derive(Default)]
 pub struct HealthcheckQuery;
 
@@ -920,6 +985,13 @@ impl UserQuery {
         .map_err(|_| Error::new("Failed to load user"))?;
 
         Ok(user.map(GraphQLUser::from))
+    }
+
+    async fn game_systems(&self, ctx: &Context<'_>) -> GraphQLResult<Vec<GraphQLGameSystem>> {
+        let state = app_state(ctx)?;
+        load_game_systems(state)
+            .await
+            .map(|items| items.into_iter().map(GraphQLGameSystem::from).collect())
     }
 
     async fn my_worlds(&self, ctx: &Context<'_>) -> GraphQLResult<Vec<GraphQLWorld>> {

@@ -20,6 +20,7 @@ pub struct SupportedAuthentication {
 pub struct Config {
     pub(crate) secret: String,
     pub(crate) data_path: String,
+    pub(crate) secure_cookies: bool,
     pub(crate) authentication: Option<SupportedAuthentication>,
 }
 
@@ -39,6 +40,15 @@ impl Config {
                 .unwrap()
                 .to_string()
         });
+        let secure_cookies = std::env::var("THUNDERFORGE_SECURE_COOKIES")
+            .ok()
+            .map(|value| {
+                matches!(
+                    value.trim().to_ascii_lowercase().as_str(),
+                    "1" | "true" | "yes" | "on"
+                )
+            })
+            .unwrap_or(false);
         let authentication = std::env::var("THUNDERFORGE_AUTHENTICATION")
             .ok()
             .and_then(|auth_str| serde_json::from_str(&auth_str).ok());
@@ -46,6 +56,7 @@ impl Config {
         Config {
             secret,
             data_path,
+            secure_cookies,
             authentication,
         }
     }
@@ -68,6 +79,7 @@ pub struct Directories {
     pub(crate) static_files: String,
     pub(crate) asset_directory: String,
     pub(crate) databases_basedir: String,
+    pub(crate) systems_dir: String,
 }
 
 impl From<String> for Directories {
@@ -75,6 +87,7 @@ impl From<String> for Directories {
         let base_dir = Path::new(&data_path);
         let databases_dir = &base_dir.join("databases");
         let config_dir = &base_dir.join("config");
+        let systems_dir = &base_dir.join("packs").join("systems");
         Directories {
             base_dir: String::from(&base_dir.to_str().unwrap().to_owned()),
             config_directory: String::from(&config_dir.to_str().unwrap().to_owned()),
@@ -97,6 +110,7 @@ impl From<String> for Directories {
             modules_basedir: String::from(&base_dir.join("modules").to_str().unwrap().to_owned()),
             static_files: String::from(&base_dir.join("client").to_str().unwrap().to_owned()),
             asset_directory: String::from(&base_dir.join("assets").to_str().unwrap().to_owned()),
+            systems_dir: String::from(&systems_dir.to_str().unwrap().to_owned()),
         }
     }
 }
@@ -110,6 +124,7 @@ impl Directories {
             &self.modules_basedir,
             &self.static_files,
             &self.world_basedir,
+            &self.systems_dir,
         ];
         for directory in directories {
             let dir_path = Path::new(&directory);

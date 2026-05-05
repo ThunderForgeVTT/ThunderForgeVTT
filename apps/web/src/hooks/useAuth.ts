@@ -120,7 +120,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const redirectAfterLogin = useCallback(
     (userOverride?: AuthUser | null) => {
       const resolvedUser = userOverride ?? session?.user ?? null;
-      return resolvedUser?.role === "admin" ? "/admin/welcome" : "/welcome";
+      return resolvedUser?.role === "admin" ? "/admin" : "/welcome";
     },
     [session],
   );

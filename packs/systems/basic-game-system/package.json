@@ -1,0 +1,11 @@
+{
+  "name": "@thunderforge/basic-game-system",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/module/main.mjs",
+  "files": ["dist/**", "system.json"],
+  "scripts": {
+    "build": "rollup -c rollup.config.js && cp system.json dist/system.json && zip -r dist/boilerplate.zip dist",
+    "pack": "npm run build"
+  }
+}

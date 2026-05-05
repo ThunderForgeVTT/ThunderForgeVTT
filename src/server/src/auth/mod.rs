@@ -2400,14 +2400,14 @@ async fn issue_session_cookie(
     cookie.set_path("/");
     cookie.set_http_only(true);
     cookie.set_same_site(SameSite::Strict);
-    cookie.set_secure(true);
+    cookie.set_secure(state.config.secure_cookies);
     cookies.private(&state.key).add(cookie);
 
     let mut csrf_cookie = Cookie::new("csrf_token", uuid::Uuid::now_v7().to_string());
     csrf_cookie.set_path("/");
     csrf_cookie.set_http_only(false);
     csrf_cookie.set_same_site(SameSite::Strict);
-    csrf_cookie.set_secure(true);
+    csrf_cookie.set_secure(state.config.secure_cookies);
     cookies.add(csrf_cookie);
     Ok(crate::models::UserSession {
         id: session_id,

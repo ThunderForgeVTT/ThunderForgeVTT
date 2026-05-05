@@ -74,7 +74,7 @@ pub async fn require_csrf_for_session(
     let has_session = cookies.private(&state.key).get("session").is_some();
 
     if has_session {
-        ensure_csrf_cookie(&cookies);
+        ensure_csrf_cookie(&state, &cookies);
     }
 
     let method = request.method().clone();
@@ -104,7 +104,7 @@ pub async fn require_csrf_for_session(
     next.run(request).await
 }
 
-fn ensure_csrf_cookie(cookies: &Cookies) {
+fn ensure_csrf_cookie(state: &AppState, cookies: &Cookies) {
     if cookies.get("csrf_token").is_some() {
         return;
     }
@@ -114,7 +114,7 @@ fn ensure_csrf_cookie(cookies: &Cookies) {
     cookie.set_path("/");
     cookie.set_http_only(false);
     cookie.set_same_site(SameSite::Strict);
-    cookie.set_secure(true);
+    cookie.set_secure(state.config.secure_cookies);
     cookies.add(cookie);
 }
 

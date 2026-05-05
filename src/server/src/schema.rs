@@ -43,6 +43,19 @@ diesel::table! {
 }
 
 diesel::table! {
+    game_systems (id) {
+        id -> Uuid,
+        slug -> Text,
+        title -> Text,
+        manifest_url -> Text,
+        version -> Text,
+        installed_by -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     login_two_factor_challenges (id) {
         id -> Uuid,
         user_id -> Uuid,
@@ -111,11 +124,11 @@ diesel::table! {
         id -> Uuid,
         effect -> PolicyEffect,
         resources -> Array<Nullable<Text>>,
-        world_id -> Nullable<Uuid>,
-        created_by -> Uuid,
-        updated_by -> Uuid,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        created_by -> Uuid,
+        updated_by -> Uuid,
+        world_id -> Nullable<Uuid>,
     }
 }
 
@@ -169,11 +182,11 @@ diesel::table! {
         world_id -> Uuid,
         event_code -> Int4,
         token_event -> Nullable<Jsonb>,
+        created_at -> Timestamp,
+        schema_version -> Int4,
+        updated_at -> Timestamp,
         created_by -> Uuid,
         updated_by -> Uuid,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
-        schema_version -> Int4,
     }
 }
 
@@ -187,11 +200,11 @@ diesel::table! {
         label -> Nullable<Text>,
         health -> Nullable<Int4>,
         max_health -> Nullable<Int4>,
-        created_by -> Uuid,
-        updated_by -> Uuid,
         schema_version -> Int4,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        created_by -> Uuid,
+        updated_by -> Uuid,
     }
 }
 
@@ -199,13 +212,13 @@ diesel::table! {
     worlds (id) {
         id -> Uuid,
         name -> Varchar,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+        created_by -> Uuid,
+        updated_by -> Uuid,
         description -> Nullable<Text>,
         game_system_id -> Nullable<Varchar>,
         interface_pack_id -> Nullable<Varchar>,
-        created_by -> Uuid,
-        updated_by -> Uuid,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
     }
 }
 
@@ -214,6 +227,7 @@ diesel::joinable!(login_two_factor_challenges -> users (user_id));
 diesel::joinable!(oauth_authorization_sessions -> oauth_providers (provider_id));
 diesel::joinable!(oauth_link_challenges -> oauth_providers (provider_id));
 diesel::joinable!(oauth_link_challenges -> users (user_id));
+diesel::joinable!(policies -> worlds (world_id));
 diesel::joinable!(user_oauth_accounts -> oauth_providers (provider_id));
 diesel::joinable!(user_oauth_accounts -> users (user_id));
 diesel::joinable!(user_sessions -> users (user_id));
@@ -224,6 +238,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     admin_bootstrap_oauth_sessions,
     admin_bootstrap_setup,
     auth_security_settings,
+    game_systems,
     login_two_factor_challenges,
     oauth_authorization_sessions,
     oauth_link_challenges,

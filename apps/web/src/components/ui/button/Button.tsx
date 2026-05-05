@@ -1,5 +1,5 @@
-import { Slot } from "@radix-ui/react-slot";
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactElement, ReactNode } from "react";
+import { Children, cloneElement, isValidElement } from "react";
 import { cn } from "@/utils/cn";
 import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
 import type { FantasyIconName } from "@/components/ui/fantasy-icon/FantasyIcon";
@@ -30,20 +30,16 @@ export function Button({
   children,
   ...props
 }: ButtonProps) {
-  const Comp = asChild ? Slot : "button";
+  const resolvedClassName = cn(
+    styles.button,
+    styles[variant],
+    styles[size],
+    fullWidth && styles.fullWidth,
+    className,
+  );
 
-  return (
-    <Comp
-      type={asChild ? undefined : type}
-      className={cn(
-        styles.button,
-        styles[variant],
-        styles[size],
-        fullWidth && styles.fullWidth,
-        className,
-      )}
-      {...props}
-    >
+  const content = (
+    <>
       {icon && iconPosition === "start" ? (
         <FantasyIcon name={icon} size={18} className={styles.icon} />
       ) : null}
@@ -51,6 +47,36 @@ export function Button({
       {icon && iconPosition === "end" ? (
         <FantasyIcon name={icon} size={18} className={styles.icon} />
       ) : null}
-    </Comp>
+    </>
+  );
+
+  if (asChild) {
+    const child = Children.only(children);
+
+    if (!isValidElement(child)) {
+      throw new Error(
+        "Button with asChild requires a single React element child",
+      );
+    }
+
+    const childProps = child.props as {
+      className?: string;
+      children?: ReactNode;
+    };
+
+    return cloneElement(
+      child as ReactElement,
+      {
+        ...props,
+        className: cn(resolvedClassName, childProps.className),
+      },
+      content,
+    );
+  }
+
+  return (
+    <button type={type} className={resolvedClassName} {...props}>
+      {content}
+    </button>
   );
 }

@@ -73,10 +73,9 @@ export function AppHeader({ brandHref, navItems }: AppHeaderProps) {
             }
             items={[
               {
-                label: isAdmin ? "Open admin welcome" : "Open welcome hall",
+                label: isAdmin ? "Open admin command center" : "Open welcome hall",
                 icon: isAdmin ? "crown" : "scene",
-                onSelect: () =>
-                  navigate(isAdmin ? "/admin/welcome" : "/welcome"),
+                onSelect: () => navigate(isAdmin ? "/admin" : "/welcome"),
               },
               {
                 label: "World archive",
@@ -86,8 +85,7 @@ export function AppHeader({ brandHref, navItems }: AppHeaderProps) {
               {
                 label: "System settings",
                 icon: "settings",
-                onSelect: () =>
-                  navigate(isAdmin ? "/admin/system" : "/counter"),
+                onSelect: () => navigate(isAdmin ? "/admin" : "/counter"),
               },
               {
                 label: "Enter demo workspace",
