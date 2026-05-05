@@ -10,6 +10,14 @@ import { createNoopWorldSyncTransport, tokenToDoc } from "./types";
 
 export { createNoopWorldSyncTransport } from "./types";
 export { createGraphQLWorldSyncTransport } from "./transport";
+export {
+  startActorDataReplication,
+  useActorSystemDataSubscription,
+  prepareActorDataOptimisticUpdate,
+  applyActorDataOptimisticUpdate,
+  type ReplicationOptions,
+  type ActorSystemDataEvent,
+} from "./replication";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;

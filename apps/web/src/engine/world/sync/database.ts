@@ -2,7 +2,7 @@ import { createRxDatabase, addRxPlugin } from "rxdb/plugins/core";
 import { getRxStorageLocalstorage } from "rxdb/plugins/storage-localstorage";
 import { wrappedValidateAjvStorage } from "rxdb/plugins/validate-ajv";
 import { RxDBDevModePlugin } from "rxdb/plugins/dev-mode";
-import { worldSnapshotsSchema, worldTokensSchema } from "./schemas";
+import { worldSnapshotsSchema, worldTokensSchema, worldActorSystemDataSchema } from "./schemas";
 
 let devPluginRegistered = false;
 let worldDbPromise: Promise<WorldDatabase> | null = null;
@@ -19,6 +19,22 @@ export type WorldCollections = {
   };
   world_snapshots: {
     upsert: (doc: Record<string, unknown>) => Promise<unknown>;
+  };
+  world_actor_system_data: {
+    find: (query?: unknown) => {
+      where: (field: string) => {
+        eq: (value: string) => {
+          exec: () => Promise<Array<Record<string, unknown>>>;
+        };
+      };
+      sort: (config: { [key: string]: -1 | 1 }) => {
+        exec: () => Promise<Array<Record<string, unknown>>>;
+      };
+    };
+    upsert: (doc: Record<string, unknown>) => Promise<unknown>;
+    findOne: (id: string) => {
+      exec: () => Promise<{ remove: () => Promise<unknown>; update: (changes: any) => Promise<unknown> } | null>;
+    };
   };
 };
 
@@ -75,6 +91,7 @@ export async function getWorldDatabase(): Promise<WorldDatabase> {
       await db.addCollections({
         world_tokens: { schema: worldTokensSchema },
         world_snapshots: { schema: worldSnapshotsSchema },
+        world_actor_system_data: { schema: worldActorSystemDataSchema },
       });
 
       return db as unknown as WorldDatabase;

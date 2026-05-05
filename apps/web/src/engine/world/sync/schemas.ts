@@ -76,3 +76,82 @@ export const worldSnapshotsSchema = {
   },
   required: ["id", "worldId", "sceneVersion", "updatedAt", "payload"],
 } as const;
+
+export const worldActorSystemDataSchema = {
+  title: "world actor system data schema",
+  version: 0,
+  primaryKey: "id",
+  type: "object",
+  properties: {
+    id: {
+      type: "string",
+      maxLength: 128,
+    },
+    actor_id: {
+      type: "string",
+      maxLength: 128,
+      index: true,
+    },
+    game_system_id: {
+      type: "string",
+      maxLength: 128,
+      index: true,
+    },
+    ability_data: {
+      type: "object",
+      additionalProperties: true,
+    },
+    resource_data: {
+      type: "object",
+      additionalProperties: true,
+    },
+    proficiency_data: {
+      type: "object",
+      additionalProperties: true,
+    },
+    trait_data: {
+      type: "object",
+      additionalProperties: true,
+    },
+    spell_data: {
+      type: "object",
+      additionalProperties: true,
+    },
+    created_by: {
+      type: "string",
+      maxLength: 128,
+    },
+    updated_by: {
+      type: "string",
+      maxLength: 128,
+    },
+    created_at: {
+      type: "string",
+      format: "date-time",
+      maxLength: 64,
+    },
+    updated_at: {
+      type: "string",
+      format: "date-time",
+      maxLength: 64,
+    },
+    _optimistic: {
+      type: "boolean",
+      default: false,
+    },
+    _lastServerData: {
+      type: "object",
+      additionalProperties: true,
+    },
+  },
+  required: [
+    "id",
+    "actor_id",
+    "game_system_id",
+    "created_by",
+    "updated_by",
+    "created_at",
+    "updated_at",
+  ],
+  indexes: ["actor_id", ["game_system_id", "updated_at"]],
+} as const;
