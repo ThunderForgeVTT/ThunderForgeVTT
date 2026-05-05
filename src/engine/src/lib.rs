@@ -139,6 +139,8 @@ pub fn start(canvas_selector: &str) {
 
     console_error_panic_hook::set_once();
 
+    let tracker = network::mutations::MutationTracker::new();
+
     App::new()
         .insert_resource(ClearColor(Color::srgb(0.133, 0.157, 0.192)))
         .insert_resource(ActiveWorld("default".to_string()))
@@ -146,11 +148,11 @@ pub fn start(canvas_selector: &str) {
         .insert_resource(LastPlayerSent(Vec2::new(f32::MIN, f32::MIN)))
         .insert_resource(GridConfig::default())
         .insert_resource(network::GraphQLClient::new("http://localhost:8080".to_string()))
-        .insert_resource(network::WorldEventSubscription::new())
+        .insert_resource(network::websocket::WebSocketSubscription::new())
+        .insert_resource(tracker)
         .insert_resource(CircularFlowTracer::new())
         .insert_resource(SystemHooksRegistry { hooks: None })
-        // PHASE 4.5: Add ServerEvent registration with proper Bevy event system
-        // .add_event::<network::ServerEvent>()
+        // Phase 4.5: Event system registration deferred
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 canvas: Some(canvas_selector.to_owned()),
@@ -190,10 +192,17 @@ pub fn start(canvas_selector: &str) {
         .add_systems(
             Update,
             (
+                network::websocket::poll_websocket_stream,
                 network::process_server_events,
+                systems::process_mutation_results,
                 process_server_responses,
                 handle_mutation_errors,
                 trace_keyboard_input,
+            ),
+        )
+        .add_systems(
+            Update,
+            (
                 trace_mutation_sent,
                 trace_server_event,
                 trace_update_confirmation,

@@ -2,6 +2,9 @@
 
 use bevy::prelude::*;
 use crate::components::*;
+use crate::network::mutations::{execute_move_token_mutation, MutationTracker};
+use crate::systems::optimistic::mark_mutation_pending;
+use crate::sync_test::{CircularFlowTracer, FlowStage};
 
 /// Token is player-controlled and can be moved interactively
 #[derive(Component)]
@@ -9,9 +12,13 @@ pub struct PlayerControlled;
 
 /// Handle keyboard input for testing movement
 /// WASD or arrow keys to move first player-controlled token
+/// Also queues mutations to the server
 pub fn handle_keyboard_movement(
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut query: Query<(&mut GridPosition, &PlayerControlled)>,
+    mut commands: Commands,
+    mut tracer: ResMut<CircularFlowTracer>,
+    tracker: Res<MutationTracker>,
+    mut query: Query<(Entity, &mut GridPosition, &TokenId, &PlayerControlled)>,
 ) {
     let mut direction = Vec2::ZERO;
     
@@ -35,10 +42,49 @@ pub fn handle_keyboard_movement(
     let step_size = 32.0; // Move in 32-unit steps (typical grid cell)
     let delta = direction.normalize() * step_size;
     
-    for (mut grid_pos, _) in query.iter_mut() {
+    for (entity, mut grid_pos, token_id, _) in query.iter_mut() {
+        let old_x = grid_pos.x;
+        let old_y = grid_pos.y;
+        let old_z = grid_pos.z;
+
+        // 1. Update GridPosition optimistically
         grid_pos.x += delta.x;
         grid_pos.y += delta.y;
-        eprintln!("Moved token to ({:.1}, {:.1})", grid_pos.x, grid_pos.y);
+        
+        eprintln!("🎮 Moved token {} to ({:.1}, {:.1})", token_id.0, grid_pos.x, grid_pos.y);
+        tracer.trace(
+            FlowStage::LocalInput,
+            token_id.0.clone(),
+            format!("Move input: ({:.1}, {:.1})", grid_pos.x, grid_pos.y),
+            0.0,
+        );
+
+        // 2. Queue mutation to server
+        let mutation_id = execute_move_token_mutation(
+            &tracker,
+            "localhost:8080",
+            "default".to_string(),
+            token_id.0.clone(),
+            grid_pos.x,
+            grid_pos.y,
+            grid_pos.z,
+        );
+
+        // 3. Mark as pending (for correlation later)
+        mark_mutation_pending(
+            &mut commands,
+            entity,
+            mutation_id,
+            GridPosition::new(old_x, old_y, old_z),
+        );
+
+        tracer.trace(
+            FlowStage::MutationSent,
+            token_id.0.clone(),
+            format!("Mutation queued: id={}", mutation_id),
+            0.0,
+        );
+
         break; // Only move first player-controlled token
     }
 }

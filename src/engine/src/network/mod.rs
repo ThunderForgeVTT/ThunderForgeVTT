@@ -6,6 +6,8 @@
 #![cfg(target_arch = "wasm32")]
 
 pub mod client;
+pub mod websocket;
+pub mod mutations;
 
 use bevy::prelude::*;
 use bevy::ecs::event::Event;
