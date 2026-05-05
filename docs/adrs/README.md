@@ -32,6 +32,7 @@ This directory contains architecture decisions for ThunderForgeVTT, captured usi
 | [20260504-022](./20260504-022-world_routing_rules.md)                            | Accepted | World Routing Rules                                                                           |
 | [20260504-023](./20260504-023-world_ownership_rules.md)                          | Accepted | World Ownership Rules                                                                         |
 | [20260504-024](./20260504-024-world_placeholder_domain_objects.md)               | Accepted | World Placeholder Domain Objects                                                              |
+| [20260505-036](./20260505-036-extensible_system_agnostic_actor_data_architecture.md) | Accepted | Extensible System-Agnostic Actor Data Architecture (Type-Indexed JSONB)                      |
 
 ## Guidelines
 
