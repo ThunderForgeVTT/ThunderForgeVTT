@@ -1212,6 +1212,12 @@ impl WorldTokenMutation {
         let health = input.health;
         let max_health = input.max_health;
 
+        // 🎮📤 Phase 4.6: Circular flow begins - client sent mutation
+        eprintln!(
+            "[Phase4.6📤] upsertToken mutation received: token_id={}, pos=({},{},{})",
+            token_id, x, y, z
+        );
+
         let upserted_token = tokio::task::spawn_blocking(move || {
             use crate::schema::world_tokens;
             use diesel::prelude::*;
@@ -1229,6 +1235,7 @@ impl WorldTokenMutation {
                     world_tokens::schema_version.eq(1),
                     world_tokens::created_at.eq(now),
                     world_tokens::updated_at.eq(now),
+                    // 🔐 ADR-010: Server assigns ownership from auth context
                     world_tokens::created_by.eq(user_id),
                     world_tokens::updated_by.eq(user_id),
                 ))
@@ -1250,6 +1257,63 @@ impl WorldTokenMutation {
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
         .map_err(|_| Error::new("Failed to upsert world token"))?;
+
+        // 🔔 Phase 4.6: Record delta event for audit trail + pg_notify broadcast
+        let event_id = tokio::task::spawn_blocking(move || {
+            use crate::schema::world_events;
+            use diesel::prelude::*;
+
+            let token_event_payload = serde_json::json!({
+                "token_id": token_id,
+                "x": x,
+                "y": y,
+                "z": z,
+                "label": label,
+                "health": health,
+                "max_health": max_health,
+            });
+
+            diesel::insert_into(world_events::table)
+                .values((
+                    world_events::world_id.eq(world_id),
+                    // Event code 1 = token_event
+                    world_events::event_code.eq(1),
+                    world_events::token_event.eq(token_event_payload),
+                    world_events::schema_version.eq(1),
+                    world_events::created_at.eq(now),
+                    world_events::updated_at.eq(now),
+                    world_events::created_by.eq(user_id),
+                    world_events::updated_by.eq(user_id),
+                ))
+                .returning(world_events::id)
+                .get_result::<i64>(&mut conn)
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to record world event"))?;
+
+        // 📡 Phase 4.6: Trigger pg_notify for backplane broadcast to all clients
+        let notify_result = tokio::task::spawn_blocking(move || {
+            conn.execute(&format!(
+                "NOTIFY world_events_channel, '{}'; SELECT true",
+                event_id
+            ))
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to notify subscribers"));
+
+        if notify_result.is_ok() {
+            eprintln!(
+                "[Phase4.6✅] upsertToken complete: token_id={}, event_id={}, broadcasted",
+                token_id, event_id
+            );
+        } else {
+            eprintln!(
+                "[Phase4.6❌] upsertToken notify failed: event_id={}",
+                event_id
+            );
+        }
 
         Ok(GraphQLWorldToken::from(upserted_token))
     }

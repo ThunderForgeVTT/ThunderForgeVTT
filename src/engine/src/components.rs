@@ -22,8 +22,32 @@ pub struct Token {
     /// World this token belongs to
     pub world_id: String,
     
+    /// Scene this token is placed on
+    pub scene_id: String,
+    
+    /// Token type (character, npc, object, etc.)
+    pub token_type: String,
+    
     /// Label or name (e.g., "Goblin #1", "Player Character")
     pub label: Option<String>,
+    
+    /// Grid X position (logical game board coordinate)
+    pub base_x: i32,
+    
+    /// Grid Y position (logical game board coordinate)
+    pub base_y: i32,
+    
+    /// Width in grid units (e.g., 1 for 1x1, 2 for 2x2)
+    pub size_x: i32,
+    
+    /// Height in grid units
+    pub size_y: i32,
+    
+    /// Color tint for visual distinction (team indicators, etc.)
+    pub color: Color,
+    
+    /// Visibility flag (for fog of war, Phase 4.7.1)
+    pub is_visible: bool,
     
     /// Base health value
     pub health: Option<i32>,
@@ -36,6 +60,12 @@ pub struct Token {
     
     /// Schema version for migrations
     pub schema_version: i32,
+    
+    /// Selection state (Phase 4.7.E1)
+    pub is_selected: bool,
+    
+    /// Hover state for tooltips/feedback (Phase 4.7.E1)
+    pub is_hovered: bool,
 }
 
 /// Ability scores (D&D-style or system-specific)

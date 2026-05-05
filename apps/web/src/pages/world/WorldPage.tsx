@@ -10,6 +10,8 @@ import {
   startWorldSync,
 } from "@/engine/world/sync";
 import type { WorldSyncSession } from "@/engine/world/sync/types";
+import { useCanvasEngine } from "@/engine/bevy/useCanvasEngine";
+import { useTokenSync } from "@/engine/bevy/useTokenSync";
 
 export const worldPageSeo: SeoConfig = {
   title: "World workspace",
@@ -22,7 +24,7 @@ export const worldPageSeo: SeoConfig = {
 export default function WorldPage() {
   const { id = "" } = useParams();
   const loaded = useRef(false);
-  const canvasId = "engine-canvas";
+  const canvasContainerId = "game-canvas-container";
   const worldSyncSessionRef = useRef<WorldSyncSession | null>(null);
   const [worldStore] = useState(() =>
     createWorldStore({
@@ -34,6 +36,18 @@ export default function WorldPage() {
     }),
   );
   const [worldState, setWorldState] = useState(() => worldStore.getState());
+
+  // 🎮 Phase 4.7.F1: Use canvas engine hook for responsive sizing
+  const { containerRef, engine, engineReady, error: engineError } = useCanvasEngine({
+    worldId: id,
+    canvasSelector: `#${canvasContainerId}`,
+    onError: (err) => {
+      console.error("Bevy engine failed to mount:", err);
+    },
+  });
+
+  // 🎮 Phase 4.7.C2: Sync RxDB tokens to Bevy engine
+  useTokenSync(engine, id);
 
   useEffect(
     () => worldStore.subscribe((event) => setWorldState(event.state)),
@@ -77,13 +91,12 @@ export default function WorldPage() {
 
     loaded.current = true;
 
-    void import("@/engine/bevy").then(({ bindWorldStore, mountEngine }) =>
-      Promise.all([
-        bindWorldStore(worldStore),
-        mountEngine({ canvasSelector: `#${canvasId}`, worldId: id }),
-      ]),
+    // Engine is now mounted via useCanvasEngine hook
+    // Still need to bind world store for mutations
+    void import("@/engine/bevy").then(({ bindWorldStore }) =>
+      bindWorldStore(worldStore),
     );
-  }, [canvasId, id, worldStore]);
+  }, [worldStore]);
 
   useEffect(() => {
     if (!id) {
@@ -113,10 +126,36 @@ export default function WorldPage() {
         worldId={id}
         tokens={Object.values(worldState.tokens)}
         canvas={
-          <canvas
-            id={canvasId}
-            style={{ display: "block", width: "100%", height: "100%" }}
-          />
+          <div
+            ref={containerRef}
+            id={canvasContainerId}
+            style={{
+              display: "block",
+              width: "100%",
+              height: "100%",
+              position: "relative",
+              background: "#2a2a2a",
+              overflow: "hidden",
+            }}
+          >
+            {/* Bevy mounts canvas here */}
+            {engineError && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "50%",
+                  left: "50%",
+                  transform: "translate(-50%, -50%)",
+                  color: "red",
+                  textAlign: "center",
+                  zIndex: 1000,
+                }}
+              >
+                <p>Failed to load game engine</p>
+                <p style={{ fontSize: "0.9em" }}>{engineError.message}</p>
+              </div>
+            )}
+          </div>
         }
         whiteboard={<WorldWhiteboard worldId={id} worldStore={worldStore} />}
       />

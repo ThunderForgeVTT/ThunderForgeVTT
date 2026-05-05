@@ -17,10 +17,20 @@ pub mod derived_data;
 pub mod sync_test;
 pub mod systems;
 
+// Phase 4.7: Canvas Rendering Infrastructure
+pub mod plugins;
+pub mod resources;
+pub mod transforms;
+pub mod grid;
+
+// Phase 4.7.G2: Integration & E2E Tests
+mod integration_tests;
+
 use movement::{PlayerControlled, handle_keyboard_movement, sync_grid_to_transform, sync_transform_to_grid, apply_grid_snapping};
 use derived_data::*;
 use sync_test::*;
 use systems::*;
+use plugins::{ScenePlugin, GridPlugin, TokenPlugin, CameraPlugin, SelectionPlugin, SystemRegistrationPlugin};
 
 static ENGINE_STARTED: AtomicBool = AtomicBool::new(false);
 static EVENT_CALLBACK: OnceLock<Mutex<Option<Function>>> = OnceLock::new();
@@ -152,7 +162,6 @@ pub fn start(canvas_selector: &str) {
         .insert_resource(tracker)
         .insert_resource(CircularFlowTracer::new())
         .insert_resource(SystemHooksRegistry { hooks: None })
-        // Phase 4.5: Event system registration deferred
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 canvas: Some(canvas_selector.to_owned()),
@@ -164,6 +173,14 @@ pub fn start(canvas_selector: &str) {
             }),
             ..default()
         }))
+        // Phase 4.7.F2: System Registration & Plugin Setup
+        .add_plugins(SystemRegistrationPlugin)
+        // Phase 4.7: Canvas Rendering Infrastructure
+        .add_plugins(ScenePlugin)
+        .add_plugins(GridPlugin)
+        .add_plugins(TokenPlugin)
+        .add_plugins(CameraPlugin)
+        .add_plugins(SelectionPlugin)  // Phase 4.7.E1: Token Selection
         .add_systems(Startup, setup_scene)
         .add_systems(
             Update,
@@ -200,6 +217,16 @@ pub fn start(canvas_selector: &str) {
                 trace_keyboard_input,
             ),
         )
+        // Phase 4.6: Token sync systems (temporarily disabled for Phase 4.7.F1/A1 validation)
+        // TODO: Re-enable after Phase 4.6 code is refactored
+        // .add_systems(
+        //     Update,
+        //     (
+        //         systems::handle_token_move_system,
+        //         systems::handle_mutation_rejection_system,
+        //         systems::process_mutation_confirmations,
+        //     ),
+        // )
         .add_systems(
             Update,
             (
@@ -360,4 +387,11 @@ fn apply_external_commands(
             }
         }
     }
+}
+
+/// WASM export: Called from React when RxDB tokens change
+/// Stores token JSON which will be picked up by sync_tokens_from_rxdb system
+#[wasm_bindgen]
+pub fn update_world_tokens(tokens_json: &str) {
+    crate::systems::token_sync::set_pending_tokens(tokens_json);
 }
