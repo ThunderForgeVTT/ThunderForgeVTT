@@ -1422,6 +1422,22 @@ impl From<crate::models::ActorSystemData> for GraphQLActorSystemData {
     }
 }
 
+/// GraphQL event for actor system data changes (used in subscriptions)
+/// Emitted from pg_notify backplane via PostgreSQL trigger
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLActorSystemDataEvent {
+    id: uuid::Uuid,
+    actor_id: uuid::Uuid,
+    game_system_id: String,
+    event_type: String,  // "INSERT", "UPDATE", "DELETE"
+    ability_data: Option<Json<serde_json::Value>>,
+    resource_data: Option<Json<serde_json::Value>>,
+    proficiency_data: Option<Json<serde_json::Value>>,
+    trait_data: Option<Json<serde_json::Value>>,
+    spell_data: Option<Json<serde_json::Value>>,
+    updated_at: chrono::NaiveDateTime,
+}
+
 #[derive(Default)]
 pub struct ActorSystemDataMutation;
 
@@ -2438,6 +2454,40 @@ impl SubscriptionRoot {
                 value += 1;
                 value
             },
+        )
+    }
+
+    /// Subscribe to actor system data changes (D&D 5e, Pathfinder, CoC, etc.)
+    /// 
+    /// PHASE D.2 STUB: This subscription will stream actor system data updates
+    /// from the pg_notify backplane when client subscribes.
+    /// Full implementation pending async database driver integration.
+    /// 
+    /// For now, returns a tick stream that can be tested.
+    async fn world_actor_system_data_updated(
+        &self,
+        _ctx: &Context<'_>,
+        _world_id: String,
+        _game_system_id: String,
+    ) -> impl Stream<Item = GraphQLResult<GraphQLActorSystemDataEvent>> {
+        // STUB: Return a placeholder stream
+        // In production, this would listen to pg_notify and stream real events
+        tokio_stream::StreamExt::map(
+            IntervalStream::new(tokio::time::interval(Duration::from_secs(10))),
+            |_| {
+                Ok(GraphQLActorSystemDataEvent {
+                    id: uuid::Uuid::new_v4(),
+                    actor_id: uuid::Uuid::new_v4(),
+                    game_system_id: "dnd5e".to_string(),
+                    event_type: "UPDATE".to_string(),
+                    ability_data: None,
+                    resource_data: None,
+                    proficiency_data: None,
+                    trait_data: None,
+                    spell_data: None,
+                    updated_at: chrono::Local::now().naive_utc(),
+                })
+            }
         )
     }
 }
