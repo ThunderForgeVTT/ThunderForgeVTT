@@ -20,6 +20,7 @@ use crate::admin::{
     update_manifest_key as persist_manifest_key, update_oauth_provider as persist_oauth_provider,
     update_two_factor_policy as persist_two_factor_policy,
 };
+use crate::audit::{log_mutation, log_deletion, log_admin_query};
 use crate::auth_middleware::AuthenticatedUser;
 use crate::db_types::PolicyEffectEnum;
 use crate::models::{
@@ -344,6 +345,18 @@ impl WorldTokenMutation {
         .await
         {
             eprintln!("⚠️  Failed to update session: {}", e);
+        }
+
+        // Phase 1.3: Log mutation to audit trail
+        if let Ok(token_uuid) = uuid::Uuid::parse_str(&created_token.id) {
+            let _ = log_mutation(
+                state,
+                "create",
+                user_id,
+                "world_token",
+                token_uuid,
+            )
+            .await;
         }
 
         Ok(GraphQLWorldToken::from(created_token))
@@ -1132,6 +1145,16 @@ impl WorldMutation {
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
         .map_err(|error| world_write_error(error, "Failed to create world"))?;
 
+        // Phase 1.3: Log mutation to audit trail
+        let _ = log_mutation(
+            state,
+            "create",
+            auth_user.user_id,
+            "world",
+            new_world.id,
+        )
+        .await;
+
         Ok(GraphQLWorld::from(new_world))
     }
 
@@ -1205,6 +1228,16 @@ impl WorldMutation {
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
         .map_err(|_| Error::new("Failed to delete world"))?;
 
+        // Phase 1.3: Log deletion to audit trail
+        let _ = log_deletion(
+            state,
+            auth_user.user_id,
+            "world",
+            world.id,
+            None,
+        )
+        .await;
+
         Ok(GraphQLDeleteWorldPayload {
             id: world.id,
             status: "deleted".to_string(),
@@ -1240,11 +1273,22 @@ impl AdminMutation {
         config: GraphQLOAuthProviderConfigInput,
     ) -> GraphQLResult<GraphQLOAuthProvider> {
         let state = app_state(ctx)?;
-        let _ = admin_user(ctx)?;
-        persist_oauth_provider(state, provider_id, config.into())
+        let admin_user_id = admin_user(ctx)?.user_id;
+        let result = persist_oauth_provider(state, provider_id, config.into())
             .await
             .map(GraphQLOAuthProvider::from)
-            .map_err(Error::new)
+            .map_err(Error::new)?;
+
+        // Phase 1.3: Log admin action to audit trail
+        let _ = log_admin_query(
+            state,
+            admin_user_id,
+            "update_oauth_provider",
+            None,
+        )
+        .await;
+
+        Ok(result)
     }
 
     async fn update_manifest_key(
@@ -1254,15 +1298,26 @@ impl AdminMutation {
         value: String,
     ) -> GraphQLResult<GraphQLSystemManifest> {
         let state = app_state(ctx)?;
-        let _ = admin_user(ctx)?;
-        persist_manifest_key(state, &key, &value)
+        let admin_user_id = admin_user(ctx)?.user_id;
+        let result = persist_manifest_key(state, &key, &value)
             .map(|manifest| {
                 GraphQLSystemManifest::from_document(
                     state.directories.manifest_file.clone(),
                     manifest,
                 )
             })
-            .map_err(Error::new)
+            .map_err(Error::new)?;
+
+        // Phase 1.3: Log admin action to audit trail
+        let _ = log_admin_query(
+            state,
+            admin_user_id,
+            "update_manifest_key",
+            None,
+        )
+        .await;
+
+        Ok(result)
     }
 
     async fn recalculate_disk_usage(&self, ctx: &Context<'_>) -> GraphQLResult<GraphQLAdminStats> {
@@ -1288,11 +1343,22 @@ impl AdminMutation {
         required_for_all_users: bool,
     ) -> GraphQLResult<GraphQLAuthSecuritySettings> {
         let state = app_state(ctx)?;
-        let _ = admin_user(ctx)?;
-        persist_two_factor_policy(state, required_for_all_users)
+        let admin_user_id = admin_user(ctx)?.user_id;
+        let result = persist_two_factor_policy(state, required_for_all_users)
             .await
             .map(GraphQLAuthSecuritySettings::from)
-            .map_err(Error::new)
+            .map_err(Error::new)?;
+
+        // Phase 1.3: Log admin action to audit trail
+        let _ = log_admin_query(
+            state,
+            admin_user_id,
+            "update_two_factor_policy",
+            None,
+        )
+        .await;
+
+        Ok(result)
     }
 }
 
