@@ -151,7 +151,7 @@ impl Default for Proficiencies {
 }
 
 /// 18 D&D 5e Skills
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SkillProficiencies {
     pub acrobatics: bool,
     pub animal_handling: bool,
@@ -173,33 +173,8 @@ pub struct SkillProficiencies {
     pub survival: bool,
 }
 
-impl Default for SkillProficiencies {
-    fn default() -> Self {
-        Self {
-            acrobatics: false,
-            animal_handling: false,
-            arcana: false,
-            athletics: false,
-            deception: false,
-            history: false,
-            insight: false,
-            intimidation: false,
-            investigation: false,
-            medicine: false,
-            nature: false,
-            perception: false,
-            performance: false,
-            persuasion: false,
-            religion: false,
-            sleight_of_hand: false,
-            stealth: false,
-            survival: false,
-        }
-    }
-}
-
 /// Saving throw proficiencies (ability-based)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SavingThrowProficiencies {
     pub strength: bool,
     pub dexterity: bool,
@@ -209,39 +184,14 @@ pub struct SavingThrowProficiencies {
     pub charisma: bool,
 }
 
-impl Default for SavingThrowProficiencies {
-    fn default() -> Self {
-        Self {
-            strength: false,
-            dexterity: false,
-            constitution: false,
-            intelligence: false,
-            wisdom: false,
-            charisma: false,
-        }
-    }
-}
-
 /// Currency purse (copper pieces are base unit)
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 pub struct CurrencyPurse {
     pub platinum: i32,   // 100 pp = 1 gp
     pub gold: i32,       // 10 gp = 1 pp
     pub electrum: i32,   // 5 ep = 1 gp
     pub silver: i32,     // 10 sp = 1 gp
     pub copper: i32,     // 100 cp = 1 gp
-}
-
-impl Default for CurrencyPurse {
-    fn default() -> Self {
-        Self {
-            platinum: 0,
-            gold: 0,
-            electrum: 0,
-            silver: 0,
-            copper: 0,
-        }
-    }
 }
 
 /// D&D 5e Item Data - Base item information

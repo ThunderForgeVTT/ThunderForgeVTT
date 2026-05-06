@@ -42,7 +42,7 @@ pub fn validate_ability_data(data: &serde_json::Value) -> Result<(), ValidationE
                 message: "must be an integer".to_string(),
             })?;
 
-        if value < 1 || value > 20 {
+        if !(1..=20).contains(&value) {
             return Err(ValidationError {
                 field: format!("ability_data.{}", ability),
                 message: "must be between 1 and 20".to_string(),
@@ -214,7 +214,7 @@ pub fn validate_proficiency_data(data: &serde_json::Value) -> Result<(), Validat
             message: "must be an integer".to_string(),
         })?;
 
-        if bonus < 2 || bonus > 6 {
+        if !(2..=6).contains(&bonus) {
             return Err(ValidationError {
                 field: "proficiency_data.proficiency_bonus".to_string(),
                 message: "must be between 2 and 6 (character levels 1-20)".to_string(),
@@ -274,7 +274,7 @@ pub fn validate_trait_data(data: &serde_json::Value) -> Result<(), ValidationErr
             message: "must be an integer".to_string(),
         })?;
 
-    if level < 1 || level > 20 {
+    if !(1..=20).contains(&level) {
         return Err(ValidationError {
             field: "trait_data.level".to_string(),
             message: "must be between 1 and 20".to_string(),
@@ -382,7 +382,7 @@ pub fn validate_spell_data(data: &serde_json::Value) -> Result<(), ValidationErr
             message: "must be an integer".to_string(),
         })?;
 
-        if dc < 8 || dc > 20 {
+        if !(8..=20).contains(&dc) {
             return Err(ValidationError {
                 field: "spell_data.spell_save_dc".to_string(),
                 message: "must be between 8 and 20".to_string(),

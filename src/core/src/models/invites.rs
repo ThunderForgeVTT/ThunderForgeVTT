@@ -99,10 +99,9 @@ impl WorldInvite {
         let now = chrono::Utc::now().naive_utc();
 
         // Check expiry
-        if let Some(expires) = self.expires_at {
-            if now > expires {
-                return false;
-            }
+        if let Some(expires) = self.expires_at
+            && now > expires {
+            return false;
         }
 
         // Check max uses
