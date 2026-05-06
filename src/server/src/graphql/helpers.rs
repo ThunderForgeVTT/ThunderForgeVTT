@@ -334,6 +334,15 @@ pub async fn load_visible_world_by_id(
     is_admin: bool,
     world_id: uuid::Uuid,
 ) -> GraphQLResult<Option<World>> {
+    // Phase 2.3: Use RBAC engine to check permissions
+    let has_access = crate::rbac::RbacEngine::can_view_world(state, user_id, world_id, is_admin)
+        .await
+        .map_err(|e| Error::new(format!("Permission check failed: {}", e)))?;
+
+    if !has_access {
+        return Err(Error::new("Forbidden"));
+    }
+
     let mut conn = state
         .db_pool
         .get()
@@ -350,10 +359,7 @@ pub async fn load_visible_world_by_id(
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(|_| Error::new("Failed to query world"))?;
 
-    match found {
-        Some(world) if !is_admin && world.created_by != user_id => Err(Error::new("Forbidden")),
-        other => Ok(other),
-    }
+    Ok(found)
 }
 
 /// Load a single world token by ID with ownership verification.
