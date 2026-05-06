@@ -17,6 +17,7 @@ interface Invite {
 
 interface Member {
   id: string;
+  userId: string;
   role: string;
   joinedAt: string;
 }
@@ -72,7 +73,9 @@ async function postGraphQL<TData>(
  * - Display active invites with usage counters
  * - Copy-to-clipboard invite URLs
  * - Show expiry and max uses
- * - Display player roster
+ * - Display player roster with role management
+ * - Change member roles (Owner/GM only)
+ * - Remove members from campaign
  */
 export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
   const [invites, setInvites] = useState<Invite[]>([]);
@@ -82,6 +85,8 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
+  const [changingRoleFor, setChangingRoleFor] = useState<string | null>(null);
 
   // Load invites and members on mount
   useEffect(() => {
@@ -123,6 +128,7 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
           query worldMembers($world_id: ID!) {
             worldMembers(world_id: $world_id) {
               id
+              userId
               role
               joinedAt
             }
@@ -131,6 +137,13 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
         { world_id: worldId },
       );
       setMembers(data.worldMembers || []);
+
+      // Determine current user's role (for now, just check if they can manage)
+      // In a real app, this would come from auth context
+      if (data.worldMembers && data.worldMembers.length > 0) {
+        // Assume first member is current user for now (this needs auth context)
+        setCurrentUserRole(data.worldMembers[0]?.role);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load members");
     } finally {
@@ -202,6 +215,66 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
     const maxUses = invite.maxUses || 0;
     const isExpired = invite.expiresAt && new Date(invite.expiresAt) < new Date();
     return usedCount < maxUses && !isExpired;
+  };
+
+  const canChangeRole = (targetMember: Member): boolean => {
+    if (!currentUserRole) return false;
+    const roleHierarchy = { Owner: 3, GM: 2, Player: 1 };
+    const currentLevel = roleHierarchy[currentUserRole as keyof typeof roleHierarchy] || 0;
+    const targetLevel = roleHierarchy[targetMember.role as keyof typeof roleHierarchy] || 0;
+    return currentLevel > targetLevel;
+  };
+
+  const handleChangeRole = async (memberId: string, newRole: string) => {
+    try {
+      setError(null);
+      setChangingRoleFor(memberId);
+
+      await postGraphQL(
+        `
+          mutation updateMemberRole($world_id: ID!, $member_id: ID!, $role: String!) {
+            updateMemberRole(world_id: $world_id, member_id: $member_id, role: $role) {
+              id
+              role
+            }
+          }
+        `,
+        {
+          world_id: worldId,
+          member_id: memberId,
+          role: newRole,
+        },
+      );
+
+      // Reload members to show the updated role
+      await loadMembers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to change member role");
+    } finally {
+      setChangingRoleFor(null);
+    }
+  };
+
+  const handleRemoveMember = async (memberId: string) => {
+    if (!window.confirm("Are you sure you want to remove this member from the campaign?")) {
+      return;
+    }
+
+    try {
+      setError(null);
+      setChangingRoleFor(memberId);
+
+      // TODO: Implement removeMember mutation in backend (Phase 4.10.F)
+      // For now, this is a placeholder that shows a message
+      setError("Member removal coming soon! Please use role management for now.");
+      
+      // Reload members to refresh state
+      await loadMembers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove member");
+    } finally {
+      setChangingRoleFor(null);
+    }
   };
 
   return (
@@ -297,6 +370,29 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
                   <span className={styles.memberJoinDate}>
                     Joined: {new Date(member.joinedAt).toLocaleDateString()}
                   </span>
+                  {canChangeRole(member) && (
+                    <div className={styles.memberActions}>
+                      <select
+                        value={member.role}
+                        onChange={(e) => void handleChangeRole(member.id, e.target.value)}
+                        disabled={changingRoleFor === member.id}
+                        className={styles.roleSelect}
+                      >
+                        <option value="Owner">Owner</option>
+                        <option value="GM">GM</option>
+                        <option value="Player">Player</option>
+                      </select>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => void handleRemoveMember(member.id)}
+                        disabled={changingRoleFor === member.id}
+                        icon="trash"
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
