@@ -7,8 +7,10 @@ pub mod admin;
 pub mod healthcheck;
 pub mod scene;
 pub mod user;
+pub mod invite;
 
 pub use admin::AdminQuery;
 pub use healthcheck::HealthcheckQuery;
 pub use scene::SceneQuery;
 pub use user::UserQuery;
+pub use invite::InviteQuery;

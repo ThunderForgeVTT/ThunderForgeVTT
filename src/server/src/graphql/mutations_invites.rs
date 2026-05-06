@@ -9,9 +9,15 @@ use uuid::Uuid;
 use crate::models::{NewWorldInvite, NewWorldMember, WorldInvite, WorldMember};
 use crate::schema::world_invites;
 use crate::schema::world_members;
+use crate::schema::world_events;
 use crate::state::AppState;
 use crate::auth_middleware::AuthenticatedUser;
 use thunderforge_core::models::invites::WorldMemberRole;
+
+// Event codes for world_events audit trail
+const EVENT_CODE_INVITE_CREATED: i32 = 2;
+const EVENT_CODE_MEMBER_JOINED: i32 = 3;
+const EVENT_CODE_MEMBER_ROLE_CHANGED: i32 = 4;
 
 // ========== Input Types ==========
 
@@ -80,6 +86,40 @@ fn get_authenticated_user(ctx: &Context<'_>) -> GraphQLResult<AuthenticatedUser>
     ctx.data::<AuthenticatedUser>()
         .cloned()
         .map_err(|_| Error::new("Authentication required"))
+}
+
+/// Record a world event to the audit trail and trigger NOTIFY for real-time sync
+fn record_world_event(
+    conn: &mut PgConnection,
+    world_id: Uuid,
+    event_code: i32,
+    event_payload: Option<serde_json::Value>,
+    user_id: Uuid,
+) -> GraphQLResult<i64> {
+    let now = Utc::now().naive_utc();
+
+    let event_id = diesel::insert_into(world_events::table)
+        .values((
+            world_events::world_id.eq(world_id),
+            world_events::event_code.eq(event_code),
+            world_events::token_event.eq(event_payload),
+            world_events::schema_version.eq(1),
+            world_events::created_at.eq(now),
+            world_events::updated_at.eq(now),
+            world_events::created_by.eq(user_id),
+            world_events::updated_by.eq(user_id),
+        ))
+        .returning(world_events::id)
+        .get_result::<i64>(conn)
+        .map_err(|e| Error::new(format!("Failed to record event: {}", e)))?;
+
+    // Trigger pg_notify for backplane broadcast
+    diesel::sql_query("SELECT pg_notify('world_events_channel', $1)")
+        .bind::<diesel::sql_types::Text, _>(event_id.to_string())
+        .execute(conn)
+        .map_err(|e| Error::new(format!("Failed to notify: {}", e)))?;
+
+    Ok(event_id)
 }
 
 // ========== Mutations ==========
@@ -152,6 +192,14 @@ impl InviteMutation {
             .values(&new_invite)
             .execute(&mut conn)
             .map_err(|e| Error::new(format!("Failed to create invite: {}", e)))?;
+
+        // Record event for audit trail and real-time sync
+        let event_payload = serde_json::json!({
+            "invite_id": new_invite.id,
+            "invite_code": new_invite.invite_code,
+            "max_uses": new_invite.max_uses,
+        });
+        record_world_event(&mut conn, world_id, EVENT_CODE_INVITE_CREATED, Some(event_payload), user_id)?;
 
         Ok(WorldInvitePayload {
             id: new_invite.id,
@@ -243,6 +291,14 @@ impl InviteMutation {
             .execute(&mut conn)
             .map_err(|e| Error::new(format!("Failed to create membership: {}", e)))?;
 
+        // Record event for audit trail and real-time sync
+        let event_payload = serde_json::json!({
+            "user_id": new_member.user_id,
+            "role": new_member.role,
+            "invite_code": invite.invite_code,
+        });
+        record_world_event(&mut conn, world_id, EVENT_CODE_MEMBER_JOINED, Some(event_payload), user_id)?;
+
         Ok(WorldMembershipPayload {
             id: new_member.id,
             world_id: new_member.world_id,
@@ -323,6 +379,14 @@ impl InviteMutation {
             ))
             .execute(&mut conn)
             .map_err(|e| Error::new(format!("Failed to update member: {}", e)))?;
+
+        // Record event for audit trail and real-time sync
+        let event_payload = serde_json::json!({
+            "user_id": target_member.user_id,
+            "old_role": target_member.role,
+            "new_role": new_role_str.clone(),
+        });
+        record_world_event(&mut conn, world_id, EVENT_CODE_MEMBER_ROLE_CHANGED, Some(event_payload), user_id)?;
 
         Ok(WorldMembershipPayload {
             id: target_member.id,

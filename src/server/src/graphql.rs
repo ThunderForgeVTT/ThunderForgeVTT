@@ -72,7 +72,7 @@ pub use helpers::{
 
 // Phase 4.9.Z Step 5: Query extraction into separate modules
 pub mod queries;
-pub use queries::{AdminQuery, HealthcheckQuery, SceneQuery, UserQuery};
+pub use queries::{AdminQuery, HealthcheckQuery, SceneQuery, UserQuery, InviteQuery};
 
 // Phase 4.10.B: Invite & Membership mutations for multiplayer campaigns
 pub mod mutations_invites;
@@ -1764,7 +1764,7 @@ impl CollaboratorMutation {
 }
 
 #[derive(MergedObject, Default)]
-pub struct QueryRoot(HealthcheckQuery, UserQuery, AdminQuery, SceneQuery);
+pub struct QueryRoot(HealthcheckQuery, UserQuery, AdminQuery, SceneQuery, InviteQuery);
 
 #[derive(MergedObject, Default)]
 pub struct MutationRoot(
