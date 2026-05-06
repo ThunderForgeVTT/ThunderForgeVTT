@@ -7,6 +7,7 @@ use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel::result::{DatabaseErrorKind, Error as DieselError};
 use futures_util::Stream;
+use std::str::FromStr;
 use std::time::Duration;
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::IntervalStream;
@@ -1572,11 +1573,196 @@ impl SubscriptionRoot {
     }
 }
 
+// Phase 2.5: RBAC Collaborator Management
+#[derive(Default)]
+pub struct CollaboratorMutation;
+
+#[async_graphql::Object]
+impl CollaboratorMutation {
+    async fn invite_collaborator(
+        &self,
+        ctx: &Context<'_>,
+        world_id: uuid::Uuid,
+        user_id: uuid::Uuid,
+        role: String,
+    ) -> GraphQLResult<String> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+
+        // Verify invoker is OWNER
+        let invoker_role = crate::rbac::RbacEngine::get_user_role(state, auth_user.user_id, world_id, false)
+            .await
+            .map_err(|e| Error::new(format!("Failed to check role: {}", e)))?;
+
+        if invoker_role != Some(crate::rbac::Role::Owner) {
+            return Err(Error::new("Only OWNER can invite collaborators"));
+        }
+
+        // Validate role
+        if crate::rbac::Role::from_str(&role).is_none() {
+            return Err(Error::new("Invalid role"));
+        }
+
+        // Prepare values before spawn_blocking
+        let auth_user_id = auth_user.user_id;
+        let role_clone = role.clone();
+        let now = chrono::Utc::now().naive_utc();
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        tokio::task::spawn_blocking(move || {
+            use crate::schema::world_collaborators;
+
+            let collaborator_id = uuid::Uuid::now_v7();
+            diesel::insert_into(world_collaborators::table)
+                .values((
+                    world_collaborators::id.eq(collaborator_id),
+                    world_collaborators::world_id.eq(world_id),
+                    world_collaborators::user_id.eq(user_id),
+                    world_collaborators::role.eq(&role_clone),
+                    world_collaborators::created_by.eq(auth_user_id),
+                    world_collaborators::created_at.eq(now),
+                    world_collaborators::updated_at.eq(now),
+                ))
+                .execute(&mut conn)
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to invite collaborator"))?;
+
+        // Phase 1.3: Log audit event
+        let _ = crate::audit::log_mutation(
+            state,
+            "invite_collaborator",
+            auth_user_id,
+            "world_collaborator",
+            world_id,
+        )
+        .await;
+
+        Ok(format!("Collaborator {} invited with role {}", user_id, role))
+    }
+
+    async fn revoke_collaborator(
+        &self,
+        ctx: &Context<'_>,
+        world_id: uuid::Uuid,
+        user_id: uuid::Uuid,
+    ) -> GraphQLResult<String> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+
+        // Verify invoker is OWNER
+        let invoker_role = crate::rbac::RbacEngine::get_user_role(state, auth_user.user_id, world_id, false)
+            .await
+            .map_err(|e| Error::new(format!("Failed to check role: {}", e)))?;
+
+        if invoker_role != Some(crate::rbac::Role::Owner) {
+            return Err(Error::new("Only OWNER can revoke access"));
+        }
+
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        tokio::task::spawn_blocking(move || {
+            use crate::schema::world_collaborators;
+
+            diesel::delete(
+                world_collaborators::table
+                    .filter(world_collaborators::world_id.eq(world_id))
+                    .filter(world_collaborators::user_id.eq(user_id))
+            )
+            .execute(&mut conn)
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to revoke access"))?;
+
+        // Phase 1.3: Log audit event
+        let _ = crate::audit::log_mutation(
+            state,
+            "revoke_collaborator",
+            auth_user.user_id,
+            "world_collaborator",
+            world_id,
+        )
+        .await;
+
+        Ok("Access revoked".to_string())
+    }
+
+    async fn change_collaborator_role(
+        &self,
+        ctx: &Context<'_>,
+        world_id: uuid::Uuid,
+        user_id: uuid::Uuid,
+        new_role: String,
+    ) -> GraphQLResult<String> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+
+        // Verify invoker is OWNER
+        let invoker_role = crate::rbac::RbacEngine::get_user_role(state, auth_user.user_id, world_id, false)
+            .await
+            .map_err(|e| Error::new(format!("Failed to check role: {}", e)))?;
+
+        if invoker_role != Some(crate::rbac::Role::Owner) {
+            return Err(Error::new("Only OWNER can change roles"));
+        }
+
+        // Validate new role
+        if crate::rbac::Role::from_str(&new_role).is_none() {
+            return Err(Error::new("Invalid role"));
+        }
+
+        let new_role_clone = new_role.clone();
+        let now = chrono::Utc::now().naive_utc();
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        tokio::task::spawn_blocking(move || {
+            use crate::schema::world_collaborators;
+
+            diesel::update(
+                world_collaborators::table
+                    .filter(world_collaborators::world_id.eq(world_id))
+                    .filter(world_collaborators::user_id.eq(user_id))
+            )
+            .set((
+                world_collaborators::role.eq(&new_role_clone),
+                world_collaborators::updated_at.eq(now),
+            ))
+            .execute(&mut conn)
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to change role"))?;
+
+        // Phase 1.3: Log audit event
+        let _ = crate::audit::log_mutation(
+            state,
+            "change_role",
+            auth_user.user_id,
+            "world_collaborator",
+            world_id,
+        )
+        .await;
+
+        Ok(format!("Role changed to {}", new_role))
+    }
+}
+
 #[derive(MergedObject, Default)]
 pub struct QueryRoot(HealthcheckQuery, UserQuery, AdminQuery, SceneQuery);
 
 #[derive(MergedObject, Default)]
-pub struct MutationRoot(WorldMutation, UserDataMutation, AdminMutation, SceneMutation, WorldTokenMutation, ActorSystemDataMutation);
+pub struct MutationRoot(WorldMutation, UserDataMutation, AdminMutation, SceneMutation, WorldTokenMutation, ActorSystemDataMutation, CollaboratorMutation);
 
 pub type AppSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;
 
