@@ -1,0 +1,337 @@
+//! GraphQL mutations for campaign invites and world membership (Phase 4.10)
+
+use async_graphql::{Context, Error, InputObject, Result as GraphQLResult, SimpleObject};
+use chrono::Utc;
+use diesel::prelude::*;
+use std::str::FromStr;
+use uuid::Uuid;
+
+use crate::models::{NewWorldInvite, NewWorldMember, WorldInvite, WorldMember};
+use crate::schema::world_invites;
+use crate::schema::world_members;
+use crate::state::AppState;
+use crate::auth_middleware::AuthenticatedUser;
+use thunderforge_core::models::invites::WorldMemberRole;
+
+// ========== Input Types ==========
+
+#[derive(InputObject, Debug, Clone)]
+pub struct GenerateInviteCodeInput {
+    /// World ID for the campaign
+    pub world_id: Uuid,
+    /// Maximum number of times this invite can be used (0 = unlimited)
+    pub max_uses: i32,
+    /// Optional expiry time (ISO 8601 format)
+    pub expires_at: Option<String>,
+}
+
+#[derive(InputObject, Debug, Clone)]
+pub struct JoinWorldInput {
+    /// The invite code from the URL
+    pub invite_code: String,
+}
+
+#[derive(InputObject, Debug, Clone)]
+pub struct UpdateMemberRoleInput {
+    /// World ID where the member belongs
+    pub world_id: Uuid,
+    /// User ID of the member to update
+    pub user_id: Uuid,
+    /// New role: Owner, GM, or Player
+    pub role: String,
+}
+
+// ========== Output Types ==========
+
+#[derive(SimpleObject, Debug, Clone)]
+pub struct WorldInvitePayload {
+    pub id: Uuid,
+    pub world_id: Uuid,
+    pub invite_code: String,
+    pub max_uses: i32,
+    pub used_count: i32,
+    pub expires_at: Option<String>,
+    pub created_by: Uuid,
+    pub created_at: String,
+    pub updated_at: String,
+    pub status: String,
+}
+
+#[derive(SimpleObject, Debug, Clone)]
+pub struct WorldMembershipPayload {
+    pub id: Uuid,
+    pub world_id: Uuid,
+    pub user_id: Uuid,
+    pub role: String,
+    pub joined_at: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+// ========== Helper Functions ==========
+
+fn get_app_state(ctx: &Context<'_>) -> GraphQLResult<AppState> {
+    ctx.data::<AppState>()
+        .cloned()
+        .map_err(|_| Error::new("Failed to get app state"))
+}
+
+fn get_authenticated_user(ctx: &Context<'_>) -> GraphQLResult<AuthenticatedUser> {
+    ctx.data::<AuthenticatedUser>()
+        .cloned()
+        .map_err(|_| Error::new("Authentication required"))
+}
+
+// ========== Mutations ==========
+
+#[derive(Default)]
+pub struct InviteMutation;
+
+#[async_graphql::Object]
+impl InviteMutation {
+    /// Generate a new invite code for a world (Owner/GM only)
+    pub async fn generate_invite_code(
+        &self,
+        ctx: &Context<'_>,
+        input: GenerateInviteCodeInput,
+    ) -> GraphQLResult<WorldInvitePayload> {
+        let state = get_app_state(ctx)?;
+        let auth_user = get_authenticated_user(ctx)?;
+        let user_id = auth_user.user_id;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        let world_id = input.world_id;
+        let max_uses = input.max_uses;
+
+        if max_uses <= 0 {
+            return Err(Error::new("max_uses must be greater than 0"));
+        }
+
+        // Verify user is Owner/GM of the world
+        let member: Option<WorldMember> = world_members::table
+            .filter(world_members::world_id.eq(world_id))
+            .filter(world_members::user_id.eq(user_id))
+            .select(WorldMember::as_select())
+            .first::<WorldMember>(&mut conn)
+            .optional()
+            .map_err(|e| Error::new(format!("Database error: {}", e)))?;
+
+        let member = member.ok_or_else(|| Error::new("User is not a member of this world"))?;
+
+        if member.role != "Owner" && member.role != "GM" {
+            return Err(Error::new("Only Owners and GMs can generate invite codes"));
+        }
+
+        // Generate invite code
+        let invite_id = Uuid::now_v7();
+        let invite_code = format!("{}", invite_id.to_string().replace("-", "").chars().take(8).collect::<String>())
+            .to_uppercase();
+
+        let now = Utc::now().naive_utc();
+        let expires_at = input
+            .expires_at
+            .as_ref()
+            .and_then(|s| chrono::NaiveDateTime::parse_from_rfc3339(s).ok());
+
+        let new_invite = NewWorldInvite {
+            id: invite_id,
+            world_id,
+            invite_code: invite_code.clone(),
+            max_uses,
+            used_count: 0,
+            expires_at,
+            created_by: user_id,
+            created_at: now,
+            updated_at: now,
+        };
+
+        diesel::insert_into(world_invites::table)
+            .values(&new_invite)
+            .execute(&mut conn)
+            .map_err(|e| Error::new(format!("Failed to create invite: {}", e)))?;
+
+        Ok(WorldInvitePayload {
+            id: new_invite.id,
+            world_id: new_invite.world_id,
+            invite_code: new_invite.invite_code,
+            max_uses: new_invite.max_uses,
+            used_count: new_invite.used_count,
+            expires_at: new_invite.expires_at.map(|dt| dt.to_string()),
+            created_by: new_invite.created_by,
+            created_at: new_invite.created_at.to_string(),
+            updated_at: new_invite.updated_at.to_string(),
+            status: format!("0/{} uses", max_uses),
+        })
+    }
+
+    /// Join a world using an invite code
+    pub async fn join_world(
+        &self,
+        ctx: &Context<'_>,
+        input: JoinWorldInput,
+    ) -> GraphQLResult<WorldMembershipPayload> {
+        let state = get_app_state(ctx)?;
+        let auth_user = get_authenticated_user(ctx)?;
+        let user_id = auth_user.user_id;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        // Look up invite code
+        let mut invite: WorldInvite = world_invites::table
+            .filter(world_invites::invite_code.eq(input.invite_code.clone()))
+            .select(WorldInvite::as_select())
+            .first::<WorldInvite>(&mut conn)
+            .map_err(|e| match e {
+                diesel::result::Error::NotFound => Error::new("Invalid invite code"),
+                _ => Error::new(format!("Database error: {}", e)),
+            })?;
+
+        // Convert to core model to use validation
+        let mut core_invite: CoreInvite = invite.clone().into();
+
+        // Validate invite
+        if !core_invite.is_valid() {
+            return Err(Error::new("Invite code is no longer valid"));
+        }
+
+        let world_id = invite.world_id;
+
+        // Check if user is already a member
+        let existing: Option<WorldMember> = world_members::table
+            .filter(world_members::world_id.eq(world_id))
+            .filter(world_members::user_id.eq(user_id))
+            .select(WorldMember::as_select())
+            .first::<WorldMember>(&mut conn)
+            .optional()
+            .map_err(|e| Error::new(format!("Database error: {}", e)))?;
+
+        if existing.is_some() {
+            return Err(Error::new("You are already a member of this world"));
+        }
+
+        // Increment usage
+        core_invite.use_invite().map_err(|e| Error::new(e))?;
+
+        // Update invite usage count
+        let updated_count = core_invite.used_count;
+        diesel::update(world_invites::table.find(invite.id))
+            .set(world_invites::used_count.eq(updated_count))
+            .execute(&mut conn)
+            .map_err(|e| Error::new(format!("Failed to update invite: {}", e)))?;
+
+        // Create membership record
+        let membership_id = Uuid::now_v7();
+        let now = Utc::now().naive_utc();
+
+        let new_member = NewWorldMember {
+            id: membership_id,
+            world_id,
+            user_id,
+            role: "Player".to_string(),
+            joined_at: now,
+            created_at: now,
+            updated_at: now,
+        };
+
+        diesel::insert_into(world_members::table)
+            .values(&new_member)
+            .execute(&mut conn)
+            .map_err(|e| Error::new(format!("Failed to create membership: {}", e)))?;
+
+        Ok(WorldMembershipPayload {
+            id: new_member.id,
+            world_id: new_member.world_id,
+            user_id: new_member.user_id,
+            role: new_member.role,
+            joined_at: new_member.joined_at.to_string(),
+            created_at: new_member.created_at.to_string(),
+            updated_at: new_member.updated_at.to_string(),
+        })
+    }
+
+    /// Update a member's role in a world (Owner/GM only, with permission checks)
+    pub async fn update_member_role(
+        &self,
+        ctx: &Context<'_>,
+        input: UpdateMemberRoleInput,
+    ) -> GraphQLResult<WorldMembershipPayload> {
+        let state = get_app_state(ctx)?;
+        let auth_user = get_authenticated_user(ctx)?;
+        let user_id = auth_user.user_id;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        let world_id = input.world_id;
+        let target_user_id = input.user_id;
+        let new_role_str = input.role.clone();
+
+        // Parse and validate new role
+        let _new_role = match new_role_str.as_str() {
+            "Owner" | "GM" | "Player" => {},
+            _ => return Err(Error::new("Invalid role. Must be Owner, GM, or Player")),
+        };
+
+        // Verify caller is Owner/GM
+        let caller_member: Option<WorldMember> = world_members::table
+            .filter(world_members::world_id.eq(world_id))
+            .filter(world_members::user_id.eq(user_id))
+            .select(WorldMember::as_select())
+            .first::<WorldMember>(&mut conn)
+            .optional()
+            .map_err(|e| Error::new(format!("Database error: {}", e)))?;
+
+        let caller = caller_member.ok_or_else(|| Error::new("You are not a member of this world"))?;
+        let caller_role = WorldMemberRole::from_str(&caller.role)
+            .unwrap_or(WorldMemberRole::Player);
+
+        if !caller_role.can_change_roles() {
+            return Err(Error::new("You do not have permission to change member roles"));
+        }
+
+        // Get target member
+        let mut target_member: WorldMember = world_members::table
+            .filter(world_members::world_id.eq(world_id))
+            .filter(world_members::user_id.eq(target_user_id))
+            .select(WorldMember::as_select())
+            .first::<WorldMember>(&mut conn)
+            .map_err(|e| match e {
+                diesel::result::Error::NotFound => Error::new("Target user is not a member of this world"),
+                _ => Error::new(format!("Database error: {}", e)),
+            })?;
+
+        let target_role = WorldMemberRole::from_str(&target_member.role)
+            .unwrap_or(WorldMemberRole::Player);
+
+        // Check permission
+        if !caller_role.can_manage(target_role) {
+            return Err(Error::new("You do not have permission to manage this member's role"));
+        }
+
+        // Update role
+        let now = Utc::now().naive_utc();
+        diesel::update(world_members::table.find(target_member.id))
+            .set((
+                world_members::role.eq(new_role_str.clone()),
+                world_members::updated_at.eq(now),
+            ))
+            .execute(&mut conn)
+            .map_err(|e| Error::new(format!("Failed to update member: {}", e)))?;
+
+        Ok(WorldMembershipPayload {
+            id: target_member.id,
+            world_id: target_member.world_id,
+            user_id: target_member.user_id,
+            role: new_role_str,
+            joined_at: target_member.joined_at.to_string(),
+            created_at: target_member.created_at.to_string(),
+            updated_at: now.to_string(),
+        })
+    }
+}

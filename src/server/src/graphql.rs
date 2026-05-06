@@ -74,6 +74,10 @@ pub use helpers::{
 pub mod queries;
 pub use queries::{AdminQuery, HealthcheckQuery, SceneQuery, UserQuery};
 
+// Phase 4.10.B: Invite & Membership mutations for multiplayer campaigns
+pub mod mutations_invites;
+pub use mutations_invites::{InviteMutation, WorldInvitePayload, WorldMembershipPayload};
+
 
 
 // Admin types are now in admin_types.rs module (Phase 4.9.Z Step 2)
@@ -1763,7 +1767,16 @@ impl CollaboratorMutation {
 pub struct QueryRoot(HealthcheckQuery, UserQuery, AdminQuery, SceneQuery);
 
 #[derive(MergedObject, Default)]
-pub struct MutationRoot(WorldMutation, UserDataMutation, AdminMutation, SceneMutation, WorldTokenMutation, ActorSystemDataMutation, CollaboratorMutation);
+pub struct MutationRoot(
+    WorldMutation,
+    UserDataMutation,
+    AdminMutation,
+    SceneMutation,
+    WorldTokenMutation,
+    ActorSystemDataMutation,
+    CollaboratorMutation,
+    InviteMutation,
+);
 
 pub type AppSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;
 
