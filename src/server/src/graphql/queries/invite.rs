@@ -161,4 +161,100 @@ impl InviteQuery {
             updated_at: member.updated_at.to_string(),
         }))
     }
+
+    /// Get world info by invite code (for /join/:code landing page)
+    async fn world_by_invite_code(
+        &self,
+        ctx: &Context<'_>,
+        code: String,
+    ) -> GraphQLResult<Option<WorldPreviewPayload>> {
+        use crate::schema::worlds;
+
+        let state = app_state(ctx)?;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        // Find the invite by code
+        let invite: Option<WorldInvite> = world_invites::table
+            .filter(world_invites::invite_code.eq(code))
+            .select(WorldInvite::as_select())
+            .first::<WorldInvite>(&mut conn)
+            .optional()
+            .map_err(|e| Error::new(format!("Database error: {}", e)))?;
+
+        let invite = match invite {
+            Some(inv) => inv,
+            None => return Ok(None), // Code not found
+        };
+
+        // Check if invite is still valid
+        if let Some(expires_at) = invite.expires_at {
+            use chrono::Utc;
+            if expires_at < Utc::now() {
+                return Ok(None); // Invite expired
+            }
+        }
+
+        if invite.used_count >= invite.max_uses {
+            return Ok(None); // Invite exhausted
+        }
+
+        // Load the world info
+        let world = worlds::table
+            .find(invite.world_id)
+            .select((worlds::id, worlds::name, worlds::description))
+            .first::<(Uuid, String, Option<String>)>(&mut conn)
+            .optional()
+            .map_err(|e| Error::new(format!("Failed to load world: {}", e)))?;
+
+        Ok(world.map(|(id, name, description)| WorldPreviewPayload {
+            id: id.to_string(),
+            name,
+            description,
+        }))
+    }
+
+    /// Check if current user is already a member of world via invite code
+    async fn already_member(
+        &self,
+        ctx: &Context<'_>,
+        code: String,
+    ) -> GraphQLResult<bool> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        let user_id = auth_user.user_id;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        // Find the invite by code
+        let invite: Option<WorldInvite> = world_invites::table
+            .filter(world_invites::invite_code.eq(code))
+            .select(WorldInvite::as_select())
+            .first::<WorldInvite>(&mut conn)
+            .optional()
+            .map_err(|e| Error::new(format!("Database error: {}", e)))?;
+
+        let invite = invite.ok_or_else(|| Error::new("Invalid invite code"))?;
+
+        // Check if user is already a member
+        let is_member: bool = world_members::table
+            .filter(world_members::world_id.eq(invite.world_id))
+            .filter(world_members::user_id.eq(user_id))
+            .select(diesel::dsl::exists(world_members::table))
+            .first::<bool>(&mut conn)
+            .map_err(|e| Error::new(format!("Database error: {}", e)))?;
+
+        Ok(is_member)
+    }
+}
+
+#[derive(async_graphql::SimpleObject)]
+pub struct WorldPreviewPayload {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
 }
