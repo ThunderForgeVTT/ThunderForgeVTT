@@ -225,15 +225,15 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
     return currentLevel > targetLevel;
   };
 
-  const handleChangeRole = async (memberId: string, newRole: string) => {
+  const handleChangeRole = async (member: Member, newRole: string) => {
     try {
       setError(null);
-      setChangingRoleFor(memberId);
+      setChangingRoleFor(member.id);
 
       await postGraphQL(
         `
-          mutation updateMemberRole($world_id: ID!, $member_id: ID!, $role: String!) {
-            updateMemberRole(world_id: $world_id, member_id: $member_id, role: $role) {
+          mutation updateMemberRole($world_id: ID!, $user_id: ID!, $role: String!) {
+            updateMemberRole(world_id: $world_id, user_id: $user_id, role: $role) {
               id
               role
             }
@@ -241,7 +241,7 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
         `,
         {
           world_id: worldId,
-          member_id: memberId,
+          user_id: member.userId,
           role: newRole,
         },
       );
@@ -255,18 +255,26 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
     }
   };
 
-  const handleRemoveMember = async (memberId: string) => {
+  const handleRemoveMember = async (member: Member) => {
     if (!window.confirm("Are you sure you want to remove this member from the campaign?")) {
       return;
     }
 
     try {
       setError(null);
-      setChangingRoleFor(memberId);
+      setChangingRoleFor(member.id);
 
-      // TODO: Implement removeMember mutation in backend (Phase 4.10.F)
-      // For now, this is a placeholder that shows a message
-      setError("Member removal coming soon! Please use role management for now.");
+      await postGraphQL(
+        `
+          mutation removeMember($world_id: ID!, $user_id: ID!) {
+            removeMember(world_id: $world_id, user_id: $user_id)
+          }
+        `,
+        {
+          world_id: worldId,
+          user_id: member.userId,
+        },
+      );
       
       // Reload members to refresh state
       await loadMembers();
@@ -374,7 +382,7 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
                     <div className={styles.memberActions}>
                       <select
                         value={member.role}
-                        onChange={(e) => void handleChangeRole(member.id, e.target.value)}
+                        onChange={(e) => void handleChangeRole(member, e.target.value)}
                         disabled={changingRoleFor === member.id}
                         className={styles.roleSelect}
                       >
@@ -385,7 +393,7 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
                       <Button
                         variant="danger"
                         size="sm"
-                        onClick={() => void handleRemoveMember(member.id)}
+                        onClick={() => void handleRemoveMember(member)}
                         disabled={changingRoleFor === member.id}
                         icon="trash"
                       >

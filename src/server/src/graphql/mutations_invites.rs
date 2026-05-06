@@ -18,6 +18,7 @@ use thunderforge_core::models::invites::WorldMemberRole;
 const EVENT_CODE_INVITE_CREATED: i32 = 2;
 const EVENT_CODE_MEMBER_JOINED: i32 = 3;
 const EVENT_CODE_MEMBER_ROLE_CHANGED: i32 = 4;
+const EVENT_CODE_MEMBER_REMOVED: i32 = 5;
 
 // ========== Input Types ==========
 
@@ -397,5 +398,88 @@ impl InviteMutation {
             created_at: target_member.created_at.to_string(),
             updated_at: now.to_string(),
         })
+    }
+
+    /// Remove a member from a world (Owner/GM only)
+    async fn remove_member(
+        &self,
+        ctx: &Context<'_>,
+        world_id: Uuid,
+        user_id: Uuid,
+    ) -> GraphQLResult<bool> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        let caller_id = auth_user.user_id;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        // Prevent self-removal
+        if caller_id == user_id {
+            return Err(Error::new("You cannot remove yourself from the world"));
+        }
+
+        // Get caller's role
+        let caller_member: Option<WorldMember> = world_members::table
+            .filter(world_members::world_id.eq(world_id))
+            .filter(world_members::user_id.eq(caller_id))
+            .select(WorldMember::as_select())
+            .first::<WorldMember>(&mut conn)
+            .optional()
+            .map_err(|e| Error::new(format!("Database error: {}", e)))?;
+
+        let caller_member = caller_member
+            .ok_or_else(|| Error::new("You are not a member of this world"))?;
+
+        let caller_role = WorldMemberRole::from_str(&caller_member.role)
+            .unwrap_or(WorldMemberRole::Player);
+
+        // Check permission: Only Owner or GM can remove members
+        if caller_role != WorldMemberRole::Owner && caller_role != WorldMemberRole::GM {
+            return Err(Error::new("You do not have permission to remove members"));
+        }
+
+        // Get target member
+        let target_member: Option<WorldMember> = world_members::table
+            .filter(world_members::world_id.eq(world_id))
+            .filter(world_members::user_id.eq(user_id))
+            .select(WorldMember::as_select())
+            .first::<WorldMember>(&mut conn)
+            .optional()
+            .map_err(|e| Error::new(format!("Database error: {}", e)))?;
+
+        let target_member = target_member
+            .ok_or_else(|| Error::new("Target user is not a member of this world"))?;
+
+        let target_role = WorldMemberRole::from_str(&target_member.role)
+            .unwrap_or(WorldMemberRole::Player);
+
+        // Check permission: Can't remove someone of equal or higher rank
+        if !caller_role.can_manage(target_role) {
+            return Err(Error::new(
+                "You cannot remove a member of equal or higher rank",
+            ));
+        }
+
+        // Delete the membership
+        diesel::delete(world_members::table.find(target_member.id))
+            .execute(&mut conn)
+            .map_err(|e| Error::new(format!("Failed to remove member: {}", e)))?;
+
+        // Record event for audit trail
+        let event_payload = serde_json::json!({
+            "user_id": target_member.user_id,
+            "role": target_member.role,
+        });
+        record_world_event(
+            &mut conn,
+            world_id,
+            EVENT_CODE_MEMBER_REMOVED,
+            Some(event_payload),
+            caller_id,
+        )?;
+
+        Ok(true)
     }
 }
