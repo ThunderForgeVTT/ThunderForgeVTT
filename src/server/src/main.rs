@@ -1,5 +1,6 @@
 mod adapters;
 mod admin;
+mod audit;
 mod auth;
 mod auth_middleware;
 mod config;
