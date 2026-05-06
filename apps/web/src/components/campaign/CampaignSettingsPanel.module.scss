@@ -1,0 +1,178 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.card {
+  padding: 2rem;
+}
+
+.header {
+  margin-bottom: 2rem;
+  border-bottom: 1px solid var(--color-border-subtle);
+  padding-bottom: 1.5rem;
+
+  h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+  }
+}
+
+.subtitle {
+  margin: 0.5rem 0 0 0;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+}
+
+.section {
+  margin-bottom: 2rem;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid var(--color-border-subtle);
+
+  &:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+
+  h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+  }
+}
+
+.sectionDescription {
+  margin: 0 0 1rem 0;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+}
+
+.emptyState {
+  padding: 2rem;
+  text-align: center;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-subtle);
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+/* Invites List */
+.invitesList {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.inviteCard {
+  padding: 1rem;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  background: var(--color-bg-subtle);
+
+  &:hover {
+    background: var(--color-bg-hover);
+  }
+}
+
+.inviteHeader {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.inviteCode {
+  font-family: monospace;
+  background: var(--color-bg-default);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.inviteStatus {
+  padding: 0.25rem 0.75rem;
+  background: var(--color-bg-default);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.inviteUrl {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.urlInput {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.85rem;
+  background: var(--color-bg-default);
+  color: var(--color-text-primary);
+  
+  &:focus {
+    outline: none;
+    border-color: var(--color-border-focus);
+    box-shadow: 0 0 0 2px var(--color-focus-ring);
+  }
+}
+
+.inviteMeta {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+
+  span {
+    display: inline-block;
+  }
+}
+
+/* Members List */
+.membersList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.memberRow {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  gap: 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 6px;
+  background: var(--color-bg-subtle);
+  align-items: center;
+  font-size: 0.9rem;
+
+  &:hover {
+    background: var(--color-bg-hover);
+  }
+}
+
+.memberRole {
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  background: var(--color-bg-default);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.memberJoinDate {
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+}

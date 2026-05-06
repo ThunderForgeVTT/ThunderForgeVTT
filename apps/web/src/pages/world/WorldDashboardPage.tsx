@@ -8,6 +8,7 @@ import { Container } from "@/components/ui/container/Container";
 import { Loader } from "@/components/ui/loader/Loader";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { useAuth } from "@/hooks/useAuth";
+import { CampaignSettingsPanel } from "@/components/campaign/CampaignSettingsPanel";
 import type { SeoConfig } from "@/types/seo";
 import type { WorldRecord } from "@/types/world";
 import { WorldPlaceholderPanel } from "./components/WorldPlaceholderPanel";
@@ -274,6 +275,8 @@ export default function WorldDashboardPage() {
                   surface="leather"
                 />
               </section>
+
+              <CampaignSettingsPanel worldId={world.id} />
             </>
           )}
         </main>
