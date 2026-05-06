@@ -175,7 +175,11 @@ impl InviteMutation {
         let expires_at = input
             .expires_at
             .as_ref()
-            .and_then(|s| chrono::NaiveDateTime::parse_from_rfc3339(s).ok());
+            .and_then(|s| {
+                chrono::DateTime::parse_from_rfc3339(s)
+                    .ok()
+                    .map(|dt| dt.naive_utc())
+            });
 
         let new_invite = NewWorldInvite {
             id: invite_id,
@@ -353,7 +357,7 @@ impl InviteMutation {
         }
 
         // Get target member
-        let mut target_member: WorldMember = world_members::table
+        let target_member: WorldMember = world_members::table
             .filter(world_members::world_id.eq(world_id))
             .filter(world_members::user_id.eq(target_user_id))
             .select(WorldMember::as_select())

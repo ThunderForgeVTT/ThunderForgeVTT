@@ -192,7 +192,7 @@ impl InviteQuery {
         // Check if invite is still valid
         if let Some(expires_at) = invite.expires_at {
             use chrono::Utc;
-            if expires_at < Utc::now() {
+            if expires_at < Utc::now().naive_utc() {
                 return Ok(None); // Invite expired
             }
         }
@@ -244,8 +244,9 @@ impl InviteQuery {
         let is_member: bool = world_members::table
             .filter(world_members::world_id.eq(invite.world_id))
             .filter(world_members::user_id.eq(user_id))
-            .select(diesel::dsl::exists(world_members::table))
-            .first::<bool>(&mut conn)
+            .count()
+            .get_result::<i64>(&mut conn)
+            .map(|count| count > 0)
             .map_err(|e| Error::new(format!("Database error: {}", e)))?;
 
         Ok(is_member)
