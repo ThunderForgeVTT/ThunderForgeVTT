@@ -133,7 +133,7 @@ async fn run_listen_loop(
     eprintln!("[PubSub] 📡 Connecting to PostgreSQL LISTEN on '{}'", LISTEN_CHANNEL);
     
     // Create a dedicated tokio-postgres connection (not from pool)
-    let (client, connection) = timeout(
+    let (_client, connection) = timeout(
         Duration::from_secs(10),
         tokio_postgres::connect(&db_url, tokio_postgres::tls::NoTls)
     )
@@ -148,24 +148,16 @@ async fn run_listen_loop(
         }
     });
 
-    // Issue LISTEN on the channel
-    client
+    // Issue LISTEN on the channel to keep it active (connection kept alive for notifications)
+    _client
         .execute(&format!("LISTEN {}", LISTEN_CHANNEL), &[])
         .await
         .map_err(|e| format!("LISTEN failed: {}", e))?;
 
     eprintln!("[PubSub] ✅ LISTEN active on '{}', waiting for notifications...", LISTEN_CHANNEL);
 
-    // Create a notification stream
-    let _notifications = client
-        .copy_out("LISTEN world_events_channel")
-        .await
-        .map_err(|e| format!("Failed to start listening: {}", e))?;
-
-    eprintln!("[PubSub] 📊 Entering notification loop");
-
-    // Fallback: use polling since true LISTEN/NOTIFY stream is complex in tokio-postgres
-    // We'll implement proper notification handling while keeping connection alive
+    // Use polling since true LISTEN/NOTIFY stream handling is complex in tokio-postgres
+    // We'll poll for events periodically while keeping the connection alive
     let mut last_event_id: i64 = 0;
     let mut last_log_time = Instant::now();
     
