@@ -12,7 +12,7 @@ use crate::schema::world_members;
 use crate::schema::world_events;
 use crate::state::AppState;
 use crate::auth_middleware::AuthenticatedUser;
-use thunderforge_core::models::invites::WorldMemberRole;
+use thunderforge_core::models::invites::{WorldMemberRole, WorldInvite as CoreWorldInvite};
 
 // Event codes for world_events audit trail
 const EVENT_CODE_INVITE_CREATED: i32 = 2;
@@ -245,7 +245,7 @@ impl InviteMutation {
             })?;
 
         // Convert to core model to use validation
-        let mut core_invite: CoreInvite = invite.clone().into();
+        let core_invite: CoreWorldInvite = invite.clone().into();
 
         // Validate invite
         if !core_invite.is_valid() {
@@ -411,8 +411,8 @@ impl InviteMutation {
         world_id: Uuid,
         user_id: Uuid,
     ) -> GraphQLResult<bool> {
-        let state = app_state(ctx)?;
-        let auth_user = authenticated_user(ctx)?;
+        let state = get_app_state(ctx)?;
+        let auth_user = get_authenticated_user(ctx)?;
         let caller_id = auth_user.user_id;
         let mut conn = state
             .db_pool
