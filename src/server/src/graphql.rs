@@ -1613,4 +1613,72 @@ mod tests {
             Some("guild-hall-default")
         );
     }
+
+    // Phase 1.4: Security test - validate_world_name rejects XSS attempts
+    #[test]
+    fn world_name_validation_rejects_xss_attempts() {
+        let xss_attempts = vec![
+            "<script>alert('xss')</script>",
+            "World<img src=x onerror=alert('xss')>",
+            "'; DROP TABLE worlds; --",
+            "World\x00Null",
+        ];
+
+        for xss in xss_attempts {
+            let result = validate_world_name(xss);
+            assert!(result.is_err(), "Should reject XSS attempt: {}", xss);
+        }
+    }
+
+    // Phase 1.4: Security test - world name length limits
+    #[test]
+    fn world_name_validation_enforces_length_limits() {
+        // Valid: 64 characters (MAX_WORLD_NAME_LEN)
+        let valid = "A".repeat(64);
+        assert!(validate_world_name(&valid).is_ok(), "64 chars should be valid");
+
+        // Invalid: 65+ characters
+        let invalid = "A".repeat(65);
+        assert!(validate_world_name(&invalid).is_err(), "65+ chars should be rejected");
+
+        // Invalid: 2 characters (MIN_WORLD_NAME_LEN is 3)
+        let too_short = "AB";
+        assert!(validate_world_name(too_short).is_err(), "2 chars should be rejected");
+
+        // Valid: 3 characters (MIN_WORLD_NAME_LEN)
+        let min_valid = "ABC";
+        assert!(validate_world_name(min_valid).is_ok(), "3 chars should be valid");
+    }
+
+    // Phase 1.4: Security test - prepare_world_input rejects empty name
+    #[test]
+    fn prepare_world_input_rejects_empty_name() {
+        let result = prepare_world_input(GraphQLCreateWorldInput {
+            name: "  \t\n  ".to_string(), // Only whitespace
+            description: None,
+            game_system_id: None,
+            interface_pack_id: None,
+        });
+
+        assert!(result.is_err(), "Should reject empty/whitespace-only name");
+    }
+
+    // Phase 1.4: Security test - validate special characters are allowed (D&D names)
+    #[test]
+    fn world_name_validation_allows_dnd_style_names() {
+        let valid_names = vec![
+            "The Forgotten Realms",
+            "Dragonlance: Time of Legend",
+            "Spelljammer (Far Realm)",
+            "Ravenloft's Dark Masters",
+        ];
+
+        for name in valid_names {
+            assert!(
+                validate_world_name(name).is_ok(),
+                "Should allow D&D-style name: {}",
+                name
+            );
+        }
+    }
 }
