@@ -19,6 +19,7 @@ const WorldListPage = lazy(pageLoaders.worldList);
 const CreateWorldPage = lazy(pageLoaders.createWorld);
 const WorldDashboardPage = lazy(pageLoaders.worldDashboard);
 const WorldPage = lazy(pageLoaders.worldWorkspace);
+const JoinWorldPage = lazy(pageLoaders.joinWorld);
 const NotFoundPage = lazy(pageLoaders.notFound);
 
 interface AppRoutesProps {
@@ -370,6 +371,14 @@ export default function AppRoutes({
         element={
           <RequireAuthenticated>
             {renderLazyPage(<WorldPage />, "Loading world workspace")}
+          </RequireAuthenticated>
+        }
+      />
+      <Route
+        path="/join/:code"
+        element={
+          <RequireAuthenticated>
+            {renderLazyPage(<JoinWorldPage />, "Loading campaign preview")}
           </RequireAuthenticated>
         }
       />

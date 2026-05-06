@@ -12,6 +12,7 @@ export const pageLoaders = {
   createWorld: () => import("@/pages/world/CreateWorldPage"),
   worldDashboard: () => import("@/pages/world/WorldDashboardPage"),
   worldWorkspace: () => import("@/pages/world/WorldPage"),
+  joinWorld: () => import("@/pages/world/JoinWorldPage"),
   notFound: () => import("@/pages/not-found/NotFoundPage"),
 } as const;
 
