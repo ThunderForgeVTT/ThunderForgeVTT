@@ -45,121 +45,20 @@ pub use admin_types::{
     GraphQLOAuthProviderConfigInput, GraphQLDiskUsageBreakdown,
 };
 
-#[derive(InputObject, Debug, Clone)]
-pub struct GraphQLCreateWorldInput {
-    name: String,
-    description: Option<String>,
-    game_system_id: Option<String>,
-    interface_pack_id: Option<String>,
-}
+// Phase 4.9.Z Step 3: Input & utility types extracted to separate module
+pub mod input_types;
+pub use input_types::{
+    GraphQLCreateWorldInput, GraphQLCreateSceneInput, GraphQLUpdateSceneInput,
+    GraphQLPlayerPresence, GraphQLPlayersOnlineList, GraphQLPolicyEffect, GraphQLPolicy,
+    GraphQLPlaceholderDomainObject, GraphQLExportManifest, GraphQLExportMyDataPayload,
+    GraphQLDeleteMyDataPayload, GraphQLDeleteWorldPayload, GraphQLCreateWorldTokenInput,
+    GraphQLUpsertWorldTokenInput, GraphQLMoveTokenInput, GraphQLUpsertTokenInput,
+    GraphQLUpdateFogMaskInput,
+};
 
-/// Phase 4.9.B.3: Player presence data
-#[derive(SimpleObject, Debug, Clone)]
-pub struct GraphQLPlayerPresence {
-    player_id: uuid::Uuid,
-    world_id: uuid::Uuid,
-    scene_id: Option<uuid::Uuid>,
-    idle_duration_secs: i32,
-}
+// Input/output types moved to input_types.rs module (Phase 4.9.Z Step 3)
 
-/// Phase 4.9.B.3: Player online list (for presence subscription)
-#[derive(SimpleObject, Debug, Clone)]
-pub struct GraphQLPlayersOnlineList {
-    world_id: uuid::Uuid,
-    players: Vec<GraphQLPlayerPresence>,
-}
 
-#[derive(Enum, Debug, Copy, Clone, Eq, PartialEq)]
-pub enum GraphQLPolicyEffect {
-    Allow,
-    Deny,
-}
-
-impl From<PolicyEffectEnum> for GraphQLPolicyEffect {
-    fn from(effect: PolicyEffectEnum) -> Self {
-        match effect {
-            PolicyEffectEnum::Allow => Self::Allow,
-            PolicyEffectEnum::Deny => Self::Deny,
-        }
-    }
-}
-
-#[derive(SimpleObject, Debug, Clone)]
-pub struct GraphQLPolicy {
-    id: uuid::Uuid,
-    effect: GraphQLPolicyEffect,
-    resources: Vec<String>,
-    created_by: uuid::Uuid,
-    updated_by: uuid::Uuid,
-    created_at: chrono::NaiveDateTime,
-    updated_at: chrono::NaiveDateTime,
-}
-
-impl From<Policy> for GraphQLPolicy {
-    fn from(policy: Policy) -> Self {
-        Self {
-            id: policy.id,
-            effect: policy.effect.into(),
-            resources: policy.resources.into_iter().flatten().collect(),
-            created_by: policy.created_by,
-            updated_by: policy.updated_by,
-            created_at: policy.created_at,
-            updated_at: policy.updated_at,
-        }
-    }
-}
-
-#[derive(SimpleObject, Debug, Clone)]
-pub struct GraphQLPlaceholderDomainObject {
-    schema_version: String,
-    status: String,
-}
-
-#[derive(SimpleObject, Debug, Clone)]
-pub struct GraphQLExportManifest {
-    schema_version: String,
-    exported_at: DateTime<Utc>,
-    worlds: i32,
-    world_tokens: i32,
-    world_events: i32,
-    policies: i32,
-}
-
-#[derive(SimpleObject, Debug, Clone)]
-pub struct GraphQLExportMyDataPayload {
-    manifest: GraphQLExportManifest,
-    user: GraphQLUser,
-    worlds: Vec<GraphQLWorld>,
-    world_tokens: Vec<GraphQLWorldToken>,
-    world_events: Vec<GraphQLWorldEvent>,
-    policies: Vec<GraphQLPolicy>,
-    scenes: Vec<GraphQLPlaceholderDomainObject>,
-    actors: Vec<GraphQLPlaceholderDomainObject>,
-    asset_packs: Vec<GraphQLPlaceholderDomainObject>,
-    game_systems: Vec<GraphQLPlaceholderDomainObject>,
-}
-
-#[derive(SimpleObject, Debug, Clone)]
-pub struct GraphQLDeleteMyDataPayload {
-    status: String,
-    message: String,
-    worlds_deleted: i64,
-    world_tokens_deleted: i64,
-    world_events_deleted: i64,
-    policies_deleted: i64,
-    oauth_links_deleted: i64,
-    sessions_deleted: i64,
-    login_challenges_deleted: i64,
-    oauth_link_challenges_deleted: i64,
-    users_deleted: i64,
-}
-
-#[derive(SimpleObject, Debug, Clone)]
-pub struct GraphQLDeleteWorldPayload {
-    id: uuid::Uuid,
-    status: String,
-    message: String,
-}
 
 // Admin types are now in admin_types.rs module (Phase 4.9.Z Step 2)
 
@@ -663,30 +562,7 @@ impl From<crate::models::Scene> for GraphQLScene {
     }
 }
 
-#[derive(InputObject, Debug, Clone)]
-pub struct GraphQLCreateSceneInput {
-    world_id: uuid::Uuid,
-    name: String,
-    description: Option<String>,
-    #[graphql(name = "type")]
-    type_: Option<String>,
-    grid_size: Option<i32>,
-    grid_type: Option<String>,
-    width: Option<i32>,
-    height: Option<i32>,
-    metadata: Option<Json<serde_json::Value>>,
-}
-
-#[derive(InputObject, Debug, Clone)]
-pub struct GraphQLUpdateSceneInput {
-    name: Option<String>,
-    description: Option<String>,
-    grid_size: Option<i32>,
-    grid_type: Option<String>,
-    width: Option<i32>,
-    height: Option<i32>,
-    metadata: Option<Json<serde_json::Value>>,
-}
+// Scene input types moved to input_types.rs (Phase 4.9.Z Step 3)
 
 #[derive(SimpleObject, Debug, Clone)]
 pub struct GraphQLToken {
@@ -719,17 +595,7 @@ impl From<crate::models::Token> for GraphQLToken {
     }
 }
 
-#[derive(InputObject, Debug, Clone)]
-pub struct GraphQLUpsertTokenInput {
-    token_id: Option<uuid::Uuid>,
-    scene_id: uuid::Uuid,
-    actor_id: Option<uuid::Uuid>,
-    x: Option<f64>,
-    y: Option<f64>,
-    rotation: Option<f64>,
-    scale: Option<f64>,
-    metadata: Option<Json<serde_json::Value>>,
-}
+// Token input types moved to input_types.rs (Phase 4.9.Z Step 3)
 
 #[derive(SimpleObject, Debug, Clone)]
 pub struct GraphQLFogMask {
@@ -760,46 +626,7 @@ impl From<crate::models::FogMask> for GraphQLFogMask {
     }
 }
 
-#[derive(InputObject, Debug, Clone)]
-pub struct GraphQLUpdateFogMaskInput {
-    scene_id: uuid::Uuid,
-    bitmap_data_base64: String,
-    width: i32,
-    height: i32,
-}
-
-// ========== Phase 4: World Token GraphQL Types ==========
-
-#[derive(InputObject, Debug, Clone)]
-pub struct GraphQLCreateWorldTokenInput {
-    world_id: uuid::Uuid,
-    label: Option<String>,
-    x: Option<f64>,
-    y: Option<f64>,
-    z: Option<f64>,
-    health: Option<i32>,
-    max_health: Option<i32>,
-}
-
-#[derive(InputObject, Debug, Clone)]
-pub struct GraphQLUpsertWorldTokenInput {
-    world_id: uuid::Uuid,
-    token_id: Option<String>,
-    label: Option<String>,
-    x: Option<f64>,
-    y: Option<f64>,
-    z: Option<f64>,
-    health: Option<i32>,
-    max_health: Option<i32>,
-}
-
-#[derive(InputObject, Debug, Clone)]
-pub struct GraphQLMoveTokenInput {
-    token_id: String,
-    x: f64,
-    y: f64,
-    z: Option<f64>,
-}
+// World token input types moved to input_types.rs (Phase 4.9.Z Step 3)
 
 #[derive(Default)]
 pub struct WorldTokenMutation;
