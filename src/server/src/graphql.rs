@@ -37,6 +37,14 @@ use crate::users::{
 pub mod types;
 pub use types::{GraphQLUser, GraphQLGameSystem, GraphQLWorld, GraphQLWorldToken, GraphQLWorldEvent};
 
+// Phase 4.9.Z Step 2: Admin types extracted to separate module
+pub mod admin_types;
+pub use admin_types::{
+    GraphQLAdminStats, GraphQLAdminWelcomeSummary, GraphQLOAuthProvider, GraphQLManifestEntry,
+    GraphQLSystemManifest, GraphQLAuthSecuritySettings, GraphQLAdminBootstrapSettings,
+    GraphQLOAuthProviderConfigInput, GraphQLDiskUsageBreakdown,
+};
+
 #[derive(InputObject, Debug, Clone)]
 pub struct GraphQLCreateWorldInput {
     name: String,
@@ -153,206 +161,9 @@ pub struct GraphQLDeleteWorldPayload {
     message: String,
 }
 
-#[derive(SimpleObject, Debug, Clone)]
-pub struct GraphQLDiskUsageBreakdown {
-    total_bytes: i64,
-    worlds_bytes: i64,
-    assets_bytes: i64,
-    client_bytes: i64,
-    databases_bytes: i64,
-    modules_bytes: i64,
-}
+// Admin types are now in admin_types.rs module (Phase 4.9.Z Step 2)
 
-impl From<DiskUsageSummary> for GraphQLDiskUsageBreakdown {
-    fn from(value: DiskUsageSummary) -> Self {
-        Self {
-            total_bytes: value.total_bytes,
-            worlds_bytes: value.worlds_bytes,
-            assets_bytes: value.assets_bytes,
-            client_bytes: value.client_bytes,
-            databases_bytes: value.databases_bytes,
-            modules_bytes: value.modules_bytes,
-        }
-    }
-}
 
-#[derive(SimpleObject, Debug, Clone)]
-pub struct GraphQLAdminStats {
-    total_users: i64,
-    total_worlds: i64,
-    total_world_tokens: i64,
-    total_world_events: i64,
-    total_policies: i64,
-    disk_usage_bytes: i64,
-    disk_usage: GraphQLDiskUsageBreakdown,
-}
-
-impl From<AdminStatsSnapshot> for GraphQLAdminStats {
-    fn from(value: AdminStatsSnapshot) -> Self {
-        let disk_usage_bytes = value.disk_usage.total_bytes;
-        Self {
-            total_users: value.total_users,
-            total_worlds: value.total_worlds,
-            total_world_tokens: value.total_world_tokens,
-            total_world_events: value.total_world_events,
-            total_policies: value.total_policies,
-            disk_usage_bytes,
-            disk_usage: value.disk_usage.into(),
-        }
-    }
-}
-
-#[derive(SimpleObject, Debug, Clone)]
-pub struct GraphQLAdminWelcomeSummary {
-    total_users: i64,
-    total_worlds: i64,
-    total_tokens: i64,
-    total_events: i64,
-    disk_usage: i64,
-}
-
-impl From<AdminWelcomeSummarySnapshot> for GraphQLAdminWelcomeSummary {
-    fn from(value: AdminWelcomeSummarySnapshot) -> Self {
-        Self {
-            total_users: value.total_users,
-            total_worlds: value.total_worlds,
-            total_tokens: value.total_world_tokens,
-            total_events: value.total_world_events,
-            disk_usage: value.disk_usage_bytes,
-        }
-    }
-}
-
-#[derive(SimpleObject, Debug, Clone)]
-pub struct GraphQLOAuthProvider {
-    id: uuid::Uuid,
-    provider_key: String,
-    display_name: String,
-    authorization_url: String,
-    token_url: String,
-    userinfo_url: Option<String>,
-    scopes: Vec<String>,
-    oauth_client_id: Option<String>,
-    configured: bool,
-    enabled: bool,
-    has_client_secret: bool,
-    updated_at: chrono::NaiveDateTime,
-}
-
-impl From<OAuthProvider> for GraphQLOAuthProvider {
-    fn from(value: OAuthProvider) -> Self {
-        Self {
-            id: value.id,
-            provider_key: value.provider_key,
-            display_name: value.display_name,
-            authorization_url: value.authorization_url,
-            token_url: value.token_url,
-            userinfo_url: value.userinfo_url,
-            scopes: value.scopes.into_iter().flatten().collect(),
-            oauth_client_id: value.oauth_client_id,
-            configured: value.configured,
-            enabled: value.enabled,
-            has_client_secret: value.oauth_client_secret.is_some(),
-            updated_at: value.updated_at,
-        }
-    }
-}
-
-#[derive(SimpleObject, Debug, Clone)]
-pub struct GraphQLManifestEntry {
-    key: String,
-    value: String,
-    editable: bool,
-}
-
-#[derive(SimpleObject, Debug, Clone)]
-pub struct GraphQLSystemManifest {
-    path: String,
-    schema_version: String,
-    updated_at: DateTime<Utc>,
-    entries: Vec<GraphQLManifestEntry>,
-}
-
-impl GraphQLSystemManifest {
-    fn from_document(path: String, manifest: SystemManifestDocument) -> Self {
-        let mut entries = manifest
-            .metadata
-            .into_iter()
-            .map(|(key, value)| GraphQLManifestEntry {
-                editable: editable_manifest_keys()
-                    .iter()
-                    .any(|candidate| *candidate == key),
-                key,
-                value,
-            })
-            .collect::<Vec<_>>();
-        entries.sort_by(|left, right| left.key.cmp(&right.key));
-
-        Self {
-            path,
-            schema_version: manifest.schema_version,
-            updated_at: manifest.updated_at,
-            entries,
-        }
-    }
-}
-
-#[derive(SimpleObject, Debug, Clone)]
-pub struct GraphQLAuthSecuritySettings {
-    two_factor_required_for_all_users: bool,
-    updated_at: chrono::NaiveDateTime,
-}
-
-impl From<AuthSecuritySetting> for GraphQLAuthSecuritySettings {
-    fn from(value: AuthSecuritySetting) -> Self {
-        Self {
-            two_factor_required_for_all_users: value.two_factor_required_for_all_users,
-            updated_at: value.updated_at,
-        }
-    }
-}
-
-#[derive(SimpleObject, Debug, Clone)]
-pub struct GraphQLAdminBootstrapSettings {
-    setup_completed: bool,
-    admin_code_generated_at: Option<chrono::NaiveDateTime>,
-    setup_completed_at: Option<chrono::NaiveDateTime>,
-    updated_at: chrono::NaiveDateTime,
-}
-
-impl From<AdminBootstrapSetup> for GraphQLAdminBootstrapSettings {
-    fn from(value: AdminBootstrapSetup) -> Self {
-        Self {
-            setup_completed: value.setup_completed_at.is_some(),
-            admin_code_generated_at: value.admin_code_generated_at,
-            setup_completed_at: value.setup_completed_at,
-            updated_at: value.updated_at,
-        }
-    }
-}
-
-#[derive(InputObject, Debug, Clone, Default)]
-pub struct GraphQLOAuthProviderConfigInput {
-    display_name: Option<String>,
-    oauth_client_id: Option<String>,
-    oauth_client_secret: Option<String>,
-    enabled: Option<bool>,
-    userinfo_url: Option<String>,
-    scopes: Option<Vec<String>>,
-}
-
-impl From<GraphQLOAuthProviderConfigInput> for OAuthProviderUpdate {
-    fn from(value: GraphQLOAuthProviderConfigInput) -> Self {
-        Self {
-            display_name: value.display_name,
-            oauth_client_id: value.oauth_client_id,
-            oauth_client_secret: value.oauth_client_secret,
-            enabled: value.enabled,
-            userinfo_url: value.userinfo_url,
-            scopes: value.scopes,
-        }
-    }
-}
 
 impl From<UserDataDeleteSummary> for GraphQLDeleteMyDataPayload {
     fn from(summary: UserDataDeleteSummary) -> Self {
