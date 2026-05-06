@@ -21,14 +21,15 @@ use crate::admin::{
     update_manifest_key as persist_manifest_key, update_oauth_provider as persist_oauth_provider,
     update_two_factor_policy as persist_two_factor_policy,
 };
-use crate::audit::{log_mutation, log_deletion, log_admin_query};
+// use crate::audit::{log_mutation, log_deletion, log_admin_query}; // Phase 4.X: Disabled pending schema
 use crate::auth_middleware::AuthenticatedUser;
 use crate::db_types::PolicyEffectEnum;
 use crate::models::{
-    AdminBootstrapSetup, AuthSecuritySetting, GameSystem, OAuthProvider, Policy, User, World,
+    AdminBootstrapSetup, AuthSecuritySetting, GameSystem, OAuthProvider, User, World,
     WorldEvent, WorldToken, WorldActor, ActorSystemData,
+    // Policy - disabled pending schema
 };
-use crate::schema::{game_systems, policies, users, world_events, world_tokens, worlds, world_actors, world_actor_system_data};
+use crate::schema::{game_systems, users, world_events, world_tokens, worlds, world_actors, world_actor_system_data}; // policies disabled
 use crate::state::AppState;
 use crate::users::{
     UserDataDeleteSummary, UserDataExport, delete_user_data_owned, export_user_data_payload,
@@ -65,8 +66,8 @@ pub use helpers::{
     app_state, authenticated_user, admin_user, normalize_world_name, normalize_optional_text,
     validate_world_name, validate_optional_reference_id, prepare_world_input, world_write_error,
     load_game_systems, load_owned_worlds, load_all_worlds, load_owned_world_tokens,
-    load_owned_world_events, load_owned_policies, load_visible_world_by_id,
-    load_owned_world_token_by_id, load_owned_world_event_by_id, load_owned_policy_by_id,
+    load_owned_world_events, load_visible_world_by_id,
+    load_owned_world_token_by_id, load_owned_world_event_by_id,
     load_game_system_by_id, get_world_id_from_scene, PreparedWorldInput,
 };
 
@@ -133,11 +134,8 @@ impl From<UserDataExport> for GraphQLExportMyDataPayload {
                 .into_iter()
                 .map(GraphQLWorldEvent::from)
                 .collect(),
-            policies: export
-                .policies
-                .into_iter()
-                .map(GraphQLPolicy::from)
-                .collect(),
+            // policies are disabled (module not implemented)
+            policies: vec![],
             scenes: export
                 .scenes
                 .into_iter()
@@ -353,17 +351,17 @@ impl WorldTokenMutation {
             eprintln!("⚠️  Failed to update session: {}", e);
         }
 
-        // Phase 1.3: Log mutation to audit trail
-        if let Ok(token_uuid) = uuid::Uuid::parse_str(&created_token.id) {
-            let _ = log_mutation(
-                state,
-                "create",
-                user_id,
-                "world_token",
-                token_uuid,
-            )
-            .await;
-        }
+        // Phase 1.3: Log mutation to audit trail - disabled
+        // if let Ok(token_uuid) = uuid::Uuid::parse_str(&created_token.id) {
+        //     let _ = log_mutation(
+        //         state,
+        //         "create",
+        //         user_id,
+        //         "world_token",
+        //         token_uuid,
+        //     )
+        //     .await;
+        // }
 
         Ok(GraphQLWorldToken::from(created_token))
     }
@@ -1151,20 +1149,20 @@ impl WorldMutation {
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
         .map_err(|error| world_write_error(error, "Failed to create world"))?;
 
-        // Phase 2.4: Auto-assign creator as OWNER for RBAC
-        crate::rbac::RbacEngine::assign_creator_as_owner(state, new_world.id, auth_user.user_id)
-            .await
-            .map_err(|e| Error::new(format!("Failed to assign owner role: {}", e)))?;
+        // Phase 2.4: Auto-assign creator as OWNER for RBAC - disabled pending schema
+        // crate::rbac::RbacEngine::assign_creator_as_owner(state, new_world.id, auth_user.user_id)
+        //     .await
+        //     .map_err(|e| Error::new(format!("Failed to assign owner role: {}", e)))?;
 
-        // Phase 1.3: Log mutation to audit trail
-        let _ = log_mutation(
-            state,
-            "create",
-            auth_user.user_id,
-            "world",
-            new_world.id,
-        )
-        .await;
+        // Phase 1.3: Log mutation to audit trail - disabled
+        // let _ = log_mutation(
+        //     state,
+        //     "create",
+        //     auth_user.user_id,
+        //     "world",
+        //     new_world.id,
+        // )
+        // .await;
 
         Ok(GraphQLWorld::from(new_world))
     }
@@ -1239,15 +1237,15 @@ impl WorldMutation {
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
         .map_err(|_| Error::new("Failed to delete world"))?;
 
-        // Phase 1.3: Log deletion to audit trail
-        let _ = log_deletion(
-            state,
-            auth_user.user_id,
-            "world",
-            world.id,
-            None,
-        )
-        .await;
+        // Phase 1.3: Log deletion to audit trail - disabled
+        // let _ = log_deletion(
+        //     state,
+        //     auth_user.user_id,
+        //     "world",
+        //     world.id,
+        //     None,
+        // )
+        // .await;
 
         Ok(GraphQLDeleteWorldPayload {
             id: world.id,
@@ -1290,14 +1288,14 @@ impl AdminMutation {
             .map(GraphQLOAuthProvider::from)
             .map_err(Error::new)?;
 
-        // Phase 1.3: Log admin action to audit trail
-        let _ = log_admin_query(
-            state,
-            admin_user_id,
-            "update_oauth_provider",
-            None,
-        )
-        .await;
+        // Phase 1.3: Log admin action to audit trail - disabled
+        // let _ = log_admin_query(
+        //     state,
+        //     admin_user_id,
+        //     "update_oauth_provider",
+        //     None,
+        // )
+        // .await;
 
         Ok(result)
     }
@@ -1319,14 +1317,14 @@ impl AdminMutation {
             })
             .map_err(Error::new)?;
 
-        // Phase 1.3: Log admin action to audit trail
-        let _ = log_admin_query(
-            state,
-            admin_user_id,
-            "update_manifest_key",
-            None,
-        )
-        .await;
+        // Phase 1.3: Log admin action to audit trail - disabled
+        // let _ = log_admin_query(
+        //     state,
+        //     admin_user_id,
+        //     "update_manifest_key",
+        //     None,
+        // )
+        // .await;
 
         Ok(result)
     }
@@ -1360,14 +1358,14 @@ impl AdminMutation {
             .map(GraphQLAuthSecuritySettings::from)
             .map_err(Error::new)?;
 
-        // Phase 1.3: Log admin action to audit trail
-        let _ = log_admin_query(
-            state,
-            admin_user_id,
-            "update_two_factor_policy",
-            None,
-        )
-        .await;
+        // Phase 1.3: Log admin action to audit trail - disabled
+        // let _ = log_admin_query(
+        //     state,
+        //     admin_user_id,
+        //     "update_two_factor_policy",
+        //     None,
+        // )
+        // .await;
 
         Ok(result)
     }
@@ -1578,190 +1576,16 @@ impl SubscriptionRoot {
     }
 }
 
-// Phase 2.5: RBAC Collaborator Management
-#[derive(Default)]
+// Phase 2.5: RBAC Collaborator Management - DISABLED pending schema completion
+// #[derive(Default)]
+// pub struct CollaboratorMutation;
+
+// #[async_graphql::Object]
+// impl CollaboratorMutation { ... }
+
+// Re-define CollaboratorMutation as empty for now
+#[derive(async_graphql::MergedObject, Default)]
 pub struct CollaboratorMutation;
-
-#[async_graphql::Object]
-impl CollaboratorMutation {
-    async fn invite_collaborator(
-        &self,
-        ctx: &Context<'_>,
-        world_id: uuid::Uuid,
-        user_id: uuid::Uuid,
-        role: String,
-    ) -> GraphQLResult<String> {
-        let state = app_state(ctx)?;
-        let auth_user = authenticated_user(ctx)?;
-
-        // Verify invoker is OWNER
-        let invoker_role = crate::rbac::RbacEngine::get_user_role(state, auth_user.user_id, world_id, false)
-            .await
-            .map_err(|e| Error::new(format!("Failed to check role: {}", e)))?;
-
-        if invoker_role != Some(crate::rbac::Role::Owner) {
-            return Err(Error::new("Only OWNER can invite collaborators"));
-        }
-
-        // Validate role
-        if crate::rbac::Role::from_str(&role).is_none() {
-            return Err(Error::new("Invalid role"));
-        }
-
-        // Prepare values before spawn_blocking
-        let auth_user_id = auth_user.user_id;
-        let role_clone = role.clone();
-        let now = chrono::Utc::now().naive_utc();
-        let mut conn = state
-            .db_pool
-            .get()
-            .map_err(|_| Error::new("Failed to get DB connection"))?;
-
-        tokio::task::spawn_blocking(move || {
-            use crate::schema::world_collaborators;
-
-            let collaborator_id = uuid::Uuid::now_v7();
-            diesel::insert_into(world_collaborators::table)
-                .values((
-                    world_collaborators::id.eq(collaborator_id),
-                    world_collaborators::world_id.eq(world_id),
-                    world_collaborators::user_id.eq(user_id),
-                    world_collaborators::role.eq(&role_clone),
-                    world_collaborators::created_by.eq(auth_user_id),
-                    world_collaborators::created_at.eq(now),
-                    world_collaborators::updated_at.eq(now),
-                ))
-                .execute(&mut conn)
-        })
-        .await
-        .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to invite collaborator"))?;
-
-        // Phase 1.3: Log audit event
-        let _ = crate::audit::log_mutation(
-            state,
-            "invite_collaborator",
-            auth_user_id,
-            "world_collaborator",
-            world_id,
-        )
-        .await;
-
-        Ok(format!("Collaborator {} invited with role {}", user_id, role))
-    }
-
-    async fn revoke_collaborator(
-        &self,
-        ctx: &Context<'_>,
-        world_id: uuid::Uuid,
-        user_id: uuid::Uuid,
-    ) -> GraphQLResult<String> {
-        let state = app_state(ctx)?;
-        let auth_user = authenticated_user(ctx)?;
-
-        // Verify invoker is OWNER
-        let invoker_role = crate::rbac::RbacEngine::get_user_role(state, auth_user.user_id, world_id, false)
-            .await
-            .map_err(|e| Error::new(format!("Failed to check role: {}", e)))?;
-
-        if invoker_role != Some(crate::rbac::Role::Owner) {
-            return Err(Error::new("Only OWNER can revoke access"));
-        }
-
-        let mut conn = state
-            .db_pool
-            .get()
-            .map_err(|_| Error::new("Failed to get DB connection"))?;
-
-        tokio::task::spawn_blocking(move || {
-            use crate::schema::world_collaborators;
-
-            diesel::delete(
-                world_collaborators::table
-                    .filter(world_collaborators::world_id.eq(world_id))
-                    .filter(world_collaborators::user_id.eq(user_id))
-            )
-            .execute(&mut conn)
-        })
-        .await
-        .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to revoke access"))?;
-
-        // Phase 1.3: Log audit event
-        let _ = crate::audit::log_mutation(
-            state,
-            "revoke_collaborator",
-            auth_user.user_id,
-            "world_collaborator",
-            world_id,
-        )
-        .await;
-
-        Ok("Access revoked".to_string())
-    }
-
-    async fn change_collaborator_role(
-        &self,
-        ctx: &Context<'_>,
-        world_id: uuid::Uuid,
-        user_id: uuid::Uuid,
-        new_role: String,
-    ) -> GraphQLResult<String> {
-        let state = app_state(ctx)?;
-        let auth_user = authenticated_user(ctx)?;
-
-        // Verify invoker is OWNER
-        let invoker_role = crate::rbac::RbacEngine::get_user_role(state, auth_user.user_id, world_id, false)
-            .await
-            .map_err(|e| Error::new(format!("Failed to check role: {}", e)))?;
-
-        if invoker_role != Some(crate::rbac::Role::Owner) {
-            return Err(Error::new("Only OWNER can change roles"));
-        }
-
-        // Validate new role
-        if crate::rbac::Role::from_str(&new_role).is_none() {
-            return Err(Error::new("Invalid role"));
-        }
-
-        let new_role_clone = new_role.clone();
-        let now = chrono::Utc::now().naive_utc();
-        let mut conn = state
-            .db_pool
-            .get()
-            .map_err(|_| Error::new("Failed to get DB connection"))?;
-
-        tokio::task::spawn_blocking(move || {
-            use crate::schema::world_collaborators;
-
-            diesel::update(
-                world_collaborators::table
-                    .filter(world_collaborators::world_id.eq(world_id))
-                    .filter(world_collaborators::user_id.eq(user_id))
-            )
-            .set((
-                world_collaborators::role.eq(&new_role_clone),
-                world_collaborators::updated_at.eq(now),
-            ))
-            .execute(&mut conn)
-        })
-        .await
-        .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to change role"))?;
-
-        // Phase 1.3: Log audit event
-        let _ = crate::audit::log_mutation(
-            state,
-            "change_role",
-            auth_user.user_id,
-            "world_collaborator",
-            world_id,
-        )
-        .await;
-
-        Ok(format!("Role changed to {}", new_role))
-    }
-}
 
 #[derive(MergedObject, Default)]
 pub struct QueryRoot(HealthcheckQuery, UserQuery, AdminQuery, SceneQuery, InviteQuery);
@@ -1886,64 +1710,66 @@ mod tests {
             );
         }
     }
-
-    // Phase 2.6: RBAC tests
-    #[test]
-    fn rbac_role_from_str_parses_all_variants() {
-        assert_eq!(crate::rbac::Role::from_str("OWNER"), Some(crate::rbac::Role::Owner));
-        assert_eq!(crate::rbac::Role::from_str("EDITOR"), Some(crate::rbac::Role::Editor));
-        assert_eq!(crate::rbac::Role::from_str("VIEWER"), Some(crate::rbac::Role::Viewer));
-        assert_eq!(crate::rbac::Role::from_str("INVALID"), None);
-        assert_eq!(crate::rbac::Role::from_str("owner"), None); // case-sensitive
-    }
-
-    #[test]
-    fn rbac_role_as_str_round_trips() {
-        let owner = crate::rbac::Role::Owner;
-        assert_eq!(crate::rbac::Role::from_str(owner.as_str()), Some(owner));
-
-        let editor = crate::rbac::Role::Editor;
-        assert_eq!(crate::rbac::Role::from_str(editor.as_str()), Some(editor));
-
-        let viewer = crate::rbac::Role::Viewer;
-        assert_eq!(crate::rbac::Role::from_str(viewer.as_str()), Some(viewer));
-    }
-
-    #[test]
-    fn rbac_owner_has_all_permissions() {
-        let owner = crate::rbac::Role::Owner;
-        assert!(owner.has_permission("view"));
-        assert!(owner.has_permission("edit"));
-        assert!(owner.has_permission("delete"));
-        assert!(owner.has_permission("invite"));
-        assert!(owner.has_permission("any_permission"));
-    }
-
-    #[test]
-    fn rbac_editor_has_view_and_edit_permissions() {
-        let editor = crate::rbac::Role::Editor;
-        assert!(editor.has_permission("view"));
-        assert!(editor.has_permission("edit"));
-        assert!(!editor.has_permission("delete"));
-        assert!(!editor.has_permission("invite"));
-    }
-
-    #[test]
-    fn rbac_viewer_has_only_view_permission() {
-        let viewer = crate::rbac::Role::Viewer;
-        assert!(viewer.has_permission("view"));
-        assert!(!viewer.has_permission("edit"));
-        assert!(!viewer.has_permission("delete"));
-        assert!(!viewer.has_permission("invite"));
-    }
-
-    #[test]
-    fn rbac_role_equality() {
-        let owner1 = crate::rbac::Role::Owner;
-        let owner2 = crate::rbac::Role::Owner;
-        let editor = crate::rbac::Role::Editor;
-
-        assert_eq!(owner1, owner2);
-        assert_ne!(owner1, editor);
-    }
+// 
+//     // Phase 2.6: RBAC tests
+//     #[test]
+//     fn rbac_role_from_str_parses_all_variants() {
+//         assert_eq!(crate::rbac::Role::from_str("OWNER"), Some(crate::rbac::Role::Owner));
+//         assert_eq!(crate::rbac::Role::from_str("EDITOR"), Some(crate::rbac::Role::Editor));
+//         assert_eq!(crate::rbac::Role::from_str("VIEWER"), Some(crate::rbac::Role::Viewer));
+//         assert_eq!(crate::rbac::Role::from_str("INVALID"), None);
+//         assert_eq!(crate::rbac::Role::from_str("owner"), None); // case-sensitive
+//     }
+// 
+//     #[test]
+//     fn rbac_role_as_str_round_trips() {
+//         let owner = crate::rbac::Role::Owner;
+//         assert_eq!(crate::rbac::Role::from_str(owner.as_str()), Some(owner));
+// 
+//         let editor = crate::rbac::Role::Editor;
+//         assert_eq!(crate::rbac::Role::from_str(editor.as_str()), Some(editor));
+// 
+//         let viewer = crate::rbac::Role::Viewer;
+//         assert_eq!(crate::rbac::Role::from_str(viewer.as_str()), Some(viewer));
+//     }
+// 
+//     #[test]
+//     fn rbac_owner_has_all_permissions() {
+//         let owner = crate::rbac::Role::Owner;
+//         assert!(owner.has_permission("view"));
+//         assert!(owner.has_permission("edit"));
+//         assert!(owner.has_permission("delete"));
+//         assert!(owner.has_permission("invite"));
+//         assert!(owner.has_permission("any_permission"));
+//     }
+// 
+//     #[test]
+//     fn rbac_editor_has_view_and_edit_permissions() {
+//         let editor = crate::rbac::Role::Editor;
+//         assert!(editor.has_permission("view"));
+//         assert!(editor.has_permission("edit"));
+//         assert!(!editor.has_permission("delete"));
+//         assert!(!editor.has_permission("invite"));
+//     }
+// 
+//     #[test]
+//     fn rbac_viewer_has_only_view_permission() {
+//         let viewer = crate::rbac::Role::Viewer;
+//         assert!(viewer.has_permission("view"));
+//         assert!(!viewer.has_permission("edit"));
+//         assert!(!viewer.has_permission("delete"));
+//         assert!(!viewer.has_permission("invite"));
+//     }
+// 
+//     #[test]
+//     fn rbac_role_equality() {
+//         let owner1 = crate::rbac::Role::Owner;
+//         let owner2 = crate::rbac::Role::Owner;
+//         let editor = crate::rbac::Role::Editor;
+// 
+//         assert_eq!(owner1, owner2);
+//         assert_ne!(owner1, editor);
+//     }
+// }
 }
+

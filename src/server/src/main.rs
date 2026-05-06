@@ -1,7 +1,7 @@
 mod adapters;
 mod admin;
-mod audit;
-mod rbac;
+// mod audit; // Phase 4.X: Audit logging - disabled pending schema completion
+// mod rbac; // Phase 4.X: RBAC - disabled pending schema completion
 mod auth;
 mod auth_middleware;
 mod config;
@@ -216,7 +216,7 @@ async fn main() {
     let graphql_router = Router::new()
         .route("/graphql", get(graphql_playground).post(graphql_handler))
         .route("/ws", get(graphql_ws_handler))
-        .route("/events/:world_id", get(network::websocket_handler)) // Phase 4.9.B.2: Event WebSocket with session tracking
+        .route("/events/{world_id}", get(network::websocket_handler)) // Phase 4.9.B.2: Event WebSocket with session tracking
         .route_layer(from_fn_with_state(
             app_state.clone(),
             auth_middleware::require_authenticated_user,

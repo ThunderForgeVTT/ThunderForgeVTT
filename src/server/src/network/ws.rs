@@ -24,7 +24,7 @@ use crate::{
 ///
 /// This function is used as an Axum handler:
 /// ```ignore
-/// app.route("/events/:world_id", get(websocket_handler))
+/// app.route("/events/{world_id}", get(websocket_handler))
 /// ```
 ///
 /// When a client connects, it:

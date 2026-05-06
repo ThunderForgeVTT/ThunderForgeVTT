@@ -1,6 +1,6 @@
 use crate::admin::user_role;
 use crate::auth_middleware::AuthenticatedUser;
-use crate::models::{Policy, User, World, WorldEvent, WorldToken};
+use crate::models::{User, World, WorldEvent, WorldToken}; // Policy disabled
 use crate::schema::{
     login_two_factor_challenges, oauth_link_challenges, policies, user_oauth_accounts,
     user_sessions, users, world_events, world_tokens, worlds,
@@ -67,7 +67,7 @@ pub struct UserDataExport {
     pub worlds: Vec<World>,
     pub world_tokens: Vec<WorldToken>,
     pub world_events: Vec<WorldEvent>,
-    pub policies: Vec<Policy>,
+    pub policies: Vec<String>, // Policy disabled
     pub scenes: Vec<PlaceholderDomainExport>,
     pub actors: Vec<PlaceholderDomainExport>,
     pub asset_packs: Vec<PlaceholderDomainExport>,
@@ -189,11 +189,7 @@ pub async fn export_user_data_payload(
                 .select(WorldEvent::as_select())
                 .load::<WorldEvent>(&mut conn)?;
 
-            let owned_policies = policies::table
-                .filter(policies::created_by.eq(user_id))
-                .order(policies::created_at.asc())
-                .select(Policy::as_select())
-                .load::<Policy>(&mut conn)?;
+            let owned_policies: Vec<String> = vec![]; // Policies disabled
 
             Ok::<_, diesel::result::Error>((
                 user,
@@ -397,9 +393,9 @@ fn delete_user_data_sync(
             diesel::delete(world_tokens::table.filter(world_tokens::created_by.eq(user_id)))
                 .execute(conn)? as i64;
 
-        summary.policies_deleted +=
-            diesel::delete(policies::table.filter(policies::created_by.eq(user_id)))
-                .execute(conn)? as i64;
+        //         summary.policies_deleted +=
+        //             diesel::delete(policies::table.filter(policies::created_by.eq(user_id)))
+        //                 .execute(conn)? as i64;
 
         summary.oauth_link_challenges_deleted += diesel::delete(
             oauth_link_challenges::table.filter(oauth_link_challenges::user_id.eq(user_id)),

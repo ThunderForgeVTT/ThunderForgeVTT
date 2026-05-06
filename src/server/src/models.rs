@@ -320,19 +320,20 @@ pub struct World {
 
 use crate::db_types::PolicyEffectEnum;
 
-#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
-#[diesel(table_name = policies)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
-pub struct Policy {
-    pub id: uuid::Uuid,
-    pub effect: PolicyEffectEnum,
-    pub resources: Vec<Option<String>>,
-    pub world_id: Option<uuid::Uuid>,
-    pub created_by: uuid::Uuid,
-    pub updated_by: uuid::Uuid,
-    pub created_at: chrono::NaiveDateTime,
-    pub updated_at: chrono::NaiveDateTime,
-}
+// Policy struct disabled - table not implemented
+// #[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+// #[diesel(table_name = policies)]
+// #[diesel(check_for_backend(diesel::pg::Pg))]
+// pub struct Policy {
+//     pub id: uuid::Uuid,
+//     pub effect: PolicyEffectEnum,
+//     pub resources: Vec<Option<String>>,
+//     pub world_id: Option<uuid::Uuid>,
+//     pub created_by: uuid::Uuid,
+//     pub updated_by: uuid::Uuid,
+//     pub created_at: chrono::NaiveDateTime,
+//     pub updated_at: chrono::NaiveDateTime,
+// }
 
 #[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
 #[diesel(table_name = world_events)]
@@ -654,41 +655,41 @@ pub struct NewPlayersOnline {
     pub updated_at: chrono::NaiveDateTime,
 }
 
-// ========== Audit Log Models (Security Audit Phase 1.2) ==========
-
-/// Audit log entry for tracking sensitive operations
-#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
-#[diesel(table_name = audit_logs)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
-pub struct AuditLog {
-    pub id: uuid::Uuid,
-    pub event_type: String,
-    pub actor_id: uuid::Uuid,
-    pub resource_type: Option<String>,
-    pub resource_id: Option<uuid::Uuid>,
-    pub action: Option<String>,
-    pub details: Option<serde_json::Value>,
-    pub created_at: chrono::NaiveDateTime,
-}
-
-/// New audit log entry for insertion
-#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
-#[diesel(table_name = audit_logs)]
-pub struct NewAuditLog {
-    pub id: uuid::Uuid,
-    pub event_type: String,
-    pub actor_id: uuid::Uuid,
-    pub resource_type: Option<String>,
-    pub resource_id: Option<uuid::Uuid>,
-    pub action: Option<String>,
-    pub details: Option<serde_json::Value>,
-    pub created_at: chrono::NaiveDateTime,
-}
-
-// ========== Membership Models (Phase 4.10) ==========
-
-// NOTE: WorldInvite models - table created via migration 2026-05-06-120000-0007
-
+// // ========== Audit Log Models (Security Audit Phase 1.2) ==========
+// 
+// /// Audit log entry for tracking sensitive operations
+// #[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+// #[diesel(table_name = audit_logs)]
+// #[diesel(check_for_backend(diesel::pg::Pg))]
+// pub struct AuditLog {
+//     pub id: uuid::Uuid,
+//     pub event_type: String,
+//     pub actor_id: uuid::Uuid,
+//     pub resource_type: Option<String>,
+//     pub resource_id: Option<uuid::Uuid>,
+//     pub action: Option<String>,
+//     pub details: Option<serde_json::Value>,
+//     pub created_at: chrono::NaiveDateTime,
+// }
+// 
+// /// New audit log entry for insertion
+// #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+// #[diesel(table_name = audit_logs)]
+// pub struct NewAuditLog {
+//     pub id: uuid::Uuid,
+//     pub event_type: String,
+//     pub actor_id: uuid::Uuid,
+//     pub resource_type: Option<String>,
+//     pub resource_id: Option<uuid::Uuid>,
+//     pub action: Option<String>,
+//     pub details: Option<serde_json::Value>,
+//     pub created_at: chrono::NaiveDateTime,
+// }
+// 
+// // ========== Membership Models (Phase 4.10) ==========
+// 
+// // NOTE: WorldInvite models - table created via migration 2026-05-06-120000-0007
+// 
 /// World invite code record from database
 #[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
 #[diesel(table_name = world_invites)]

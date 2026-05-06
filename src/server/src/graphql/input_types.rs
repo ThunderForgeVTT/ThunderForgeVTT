@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::db_types::PolicyEffectEnum;
-use crate::models::Policy;
+// use crate::models::Policy; // Disabled - Policy table not implemented
 
 use super::{GraphQLUser, GraphQLWorld, GraphQLWorldToken, GraphQLWorldEvent};
 
@@ -93,19 +93,19 @@ pub struct GraphQLPolicy {
     pub updated_at: chrono::NaiveDateTime,
 }
 
-impl From<Policy> for GraphQLPolicy {
-    fn from(policy: Policy) -> Self {
-        Self {
-            id: policy.id,
-            effect: policy.effect.into(),
-            resources: policy.resources.into_iter().flatten().collect(),
-            created_by: policy.created_by,
-            updated_by: policy.updated_by,
-            created_at: policy.created_at,
-            updated_at: policy.updated_at,
-        }
-    }
-}
+// impl From<Policy> for GraphQLPolicy {
+//     fn from(policy: Policy) -> Self {
+//         Self {
+//             id: policy.id,
+//             effect: policy.effect.into(),
+//             resources: policy.resources.into_iter().flatten().collect(),
+//             created_by: policy.created_by,
+//             updated_by: policy.updated_by,
+//             created_at: policy.created_at,
+//             updated_at: policy.updated_at,
+//         }
+//     }
+// }
 
 // ========== Placeholder Domain Objects ==========
 

@@ -245,7 +245,7 @@ impl InviteMutation {
             })?;
 
         // Convert to core model to use validation
-        let core_invite: CoreWorldInvite = invite.clone().into();
+        let mut core_invite: CoreWorldInvite = invite.clone().into();
 
         // Validate invite
         if !core_invite.is_valid() {

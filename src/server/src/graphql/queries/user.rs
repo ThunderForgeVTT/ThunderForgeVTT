@@ -102,25 +102,27 @@ impl UserQuery {
             .map(|item| item.map(GraphQLWorldEvent::from))
     }
 
-    async fn my_policies(&self, ctx: &Context<'_>) -> GraphQLResult<Vec<GraphQLPolicy>> {
-        let state = app_state(ctx)?;
-        let auth_user = authenticated_user(ctx)?;
-        load_owned_policies(state, auth_user.user_id)
-            .await
-            .map(|items| items.into_iter().map(GraphQLPolicy::from).collect())
-    }
 
-    async fn policy(
-        &self,
-        ctx: &Context<'_>,
-        policy_id: uuid::Uuid,
-    ) -> GraphQLResult<Option<GraphQLPolicy>> {
-        let state = app_state(ctx)?;
-        let auth_user = authenticated_user(ctx)?;
-        load_owned_policy_by_id(state, auth_user.user_id, policy_id)
-            .await
-            .map(|item| item.map(GraphQLPolicy::from))
-    }
+    // async fn my_policies(&self, ctx: &Context<'_>) -> GraphQLResult<Vec<GraphQLPolicy>> {
+    //     let state = app_state(ctx)?;
+    //     let auth_user = authenticated_user(ctx)?;
+    //     load_owned_policies(state, auth_user.user_id)
+    //         .await
+    //         .map(|items| items.into_iter().map(GraphQLPolicy::from).collect())
+    // }
+    //
+    // async fn policy(
+    //     &self,
+    //     ctx: &Context<'_>,
+    //     policy_id: uuid::Uuid,
+    // ) -> GraphQLResult<Option<GraphQLPolicy>> {
+    //     let state = app_state(ctx)?;
+    //     let auth_user = authenticated_user(ctx)?;
+    //     load_owned_policy_by_id(state, auth_user.user_id, policy_id)
+    //         .await
+    //         .map(|item| item.map(GraphQLPolicy::from))
+    // }
+
 
     async fn export_my_data(&self, ctx: &Context<'_>) -> GraphQLResult<GraphQLExportMyDataPayload> {
         let state = app_state(ctx)?;

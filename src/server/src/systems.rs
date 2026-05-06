@@ -19,9 +19,9 @@ use pack_system_spec::{validate_system_manifest, SystemManifest};
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", get(list_systems))
-        .route("/:slug/manifest.json", get(get_system_manifest))
-        .route("/:slug/download", get(download_system_package))
-        .route("/:slug/*path", get(serve_system_file))
+        .route("/{slug}/manifest.json", get(get_system_manifest))
+        .route("/{slug}/download", get(download_system_package))
+        .route("/{slug}/{*path}", get(serve_system_file))
 }
 
 pub fn admin_router() -> Router<AppState> {
