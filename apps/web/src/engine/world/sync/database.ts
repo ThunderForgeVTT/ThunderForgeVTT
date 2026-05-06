@@ -2,7 +2,14 @@ import { createRxDatabase, addRxPlugin } from "rxdb/plugins/core";
 import { getRxStorageLocalstorage } from "rxdb/plugins/storage-localstorage";
 import { wrappedValidateAjvStorage } from "rxdb/plugins/validate-ajv";
 import { RxDBDevModePlugin } from "rxdb/plugins/dev-mode";
-import { worldSnapshotsSchema, worldTokensSchema, worldActorSystemDataSchema } from "./schemas";
+import {
+  worldSnapshotsSchema,
+  worldTokensSchema,
+  worldActorSystemDataSchema,
+  worldInvitesSchema,
+  worldMembersSchema,
+} from "./schemas";
+import type { WorldInviteDoc } from "@/db/collections/worldInvitesCollection";
 
 let devPluginRegistered = false;
 let worldDbPromise: Promise<WorldDatabase> | null = null;
@@ -35,6 +42,26 @@ export type WorldCollections = {
     findOne: (id: string) => {
       exec: () => Promise<{ remove: () => Promise<unknown>; update: (changes: any) => Promise<unknown> } | null>;
     };
+  };
+  world_invites: {
+    find: (query?: unknown) => {
+      $: AsyncIterable<WorldInviteDoc[]>;
+      sort: (config: { [key: string]: 1 | -1 }) => {
+        $: AsyncIterable<WorldInviteDoc[]>;
+      };
+    };
+    upsert: (doc: WorldInviteDoc) => Promise<unknown>;
+    bulkUpsert: (docs: WorldInviteDoc[]) => Promise<unknown>;
+  };
+  world_members: {
+    find: (query?: unknown) => {
+      $: AsyncIterable<WorldMemberDoc[]>;
+      sort: (config: { [key: string]: 1 | -1 }) => {
+        $: AsyncIterable<WorldMemberDoc[]>;
+      };
+    };
+    upsert: (doc: WorldMemberDoc) => Promise<unknown>;
+    bulkUpsert: (docs: WorldMemberDoc[]) => Promise<unknown>;
   };
 };
 
@@ -92,6 +119,8 @@ export async function getWorldDatabase(): Promise<WorldDatabase> {
         world_tokens: { schema: worldTokensSchema },
         world_snapshots: { schema: worldSnapshotsSchema },
         world_actor_system_data: { schema: worldActorSystemDataSchema },
+        world_invites: { schema: worldInvitesSchema },
+        world_members: { schema: worldMembersSchema },
       });
 
       return db as unknown as WorldDatabase;

@@ -155,3 +155,18 @@ export const worldActorSystemDataSchema = {
   ],
   indexes: ["actor_id", ["game_system_id", "updated_at"]],
 } as const;
+
+// Phase 4.10.C: Campaign invites and membership collections
+export { worldInvitesSchema, computeInviteDerivedData } from "@/db/collections/worldInvitesCollection";
+export type { WorldInviteDoc } from "@/db/collections/worldInvitesCollection";
+
+export {
+  worldMembersSchema,
+  canManageRole,
+  canGenerateInvites,
+  sortMembersByRole,
+  filterMembersByRole,
+  findMember,
+  isMemberWithRole,
+} from "@/db/collections/worldMembersCollection";
+export type { WorldMemberDoc } from "@/db/collections/worldMembersCollection";
