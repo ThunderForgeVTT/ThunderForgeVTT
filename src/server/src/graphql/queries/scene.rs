@@ -15,7 +15,17 @@ impl SceneQuery {
         world_id: uuid::Uuid,
     ) -> GraphQLResult<Vec<GraphQLScene>> {
         let state = app_state(ctx)?;
-        let _auth_user = authenticated_user(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        
+        // 🔐 SECURITY: Verify user has access to this world before returning scenes
+        let _ = load_visible_world_by_id(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            world_id,
+        )
+        .await?;
+
         let mut conn = state
             .db_pool
             .get()
@@ -41,7 +51,18 @@ impl SceneQuery {
         scene_id: uuid::Uuid,
     ) -> GraphQLResult<Option<GraphQLScene>> {
         let state = app_state(ctx)?;
-        let _auth_user = authenticated_user(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        
+        // 🔐 SECURITY: Get the world_id from the scene, then verify access
+        let world_id = get_world_id_from_scene(state, scene_id).await?;
+        let _ = load_visible_world_by_id(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            world_id,
+        )
+        .await?;
+
         let mut conn = state
             .db_pool
             .get()
@@ -68,7 +89,18 @@ impl SceneQuery {
         scene_id: uuid::Uuid,
     ) -> GraphQLResult<Vec<GraphQLToken>> {
         let state = app_state(ctx)?;
-        let _auth_user = authenticated_user(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        
+        // 🔐 SECURITY: Get the world_id from the scene, then verify access
+        let world_id = get_world_id_from_scene(state, scene_id).await?;
+        let _ = load_visible_world_by_id(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            world_id,
+        )
+        .await?;
+
         let mut conn = state
             .db_pool
             .get()
@@ -94,7 +126,18 @@ impl SceneQuery {
         scene_id: uuid::Uuid,
     ) -> GraphQLResult<Option<GraphQLFogMask>> {
         let state = app_state(ctx)?;
-        let _auth_user = authenticated_user(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        
+        // 🔐 SECURITY: Get the world_id from the scene, then verify access
+        let world_id = get_world_id_from_scene(state, scene_id).await?;
+        let _ = load_visible_world_by_id(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            world_id,
+        )
+        .await?;
+
         let mut conn = state
             .db_pool
             .get()

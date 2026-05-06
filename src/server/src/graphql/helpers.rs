@@ -470,3 +470,34 @@ pub async fn load_game_system_by_id(
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(|_| Error::new("Failed to query game system"))
 }
+
+/// Load world_id from a scene_id (used for permission checks).
+///
+/// # Returns
+/// Returns the world_id if the scene exists, otherwise returns an error.
+pub async fn get_world_id_from_scene(
+    state: &AppState,
+    scene_id: uuid::Uuid,
+) -> GraphQLResult<uuid::Uuid> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    let scene = tokio::task::spawn_blocking(move || {
+        use crate::schema::scenes;
+        scenes::table
+            .filter(scenes::scene_id.eq(scene_id))
+            .select((scenes::world_id,))
+            .first::<(uuid::Uuid,)>(&mut conn)
+            .optional()
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to load scene"))?;
+
+    match scene {
+        Some((world_id,)) => Ok(world_id),
+        None => Err(Error::new("Scene not found")),
+    }
+}

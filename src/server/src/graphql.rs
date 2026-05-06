@@ -64,7 +64,7 @@ pub use helpers::{
     load_game_systems, load_owned_worlds, load_all_worlds, load_owned_world_tokens,
     load_owned_world_events, load_owned_policies, load_visible_world_by_id,
     load_owned_world_token_by_id, load_owned_world_event_by_id, load_owned_policy_by_id,
-    load_game_system_by_id, PreparedWorldInput,
+    load_game_system_by_id, get_world_id_from_scene, PreparedWorldInput,
 };
 
 // Phase 4.9.Z Step 5: Query extraction into separate modules
