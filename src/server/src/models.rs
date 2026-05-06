@@ -1,8 +1,8 @@
 use crate::schema::{
     admin_bootstrap_oauth_sessions, admin_bootstrap_setup, audit_logs, auth_security_settings, fog_masks,
     game_systems, login_two_factor_challenges, oauth_authorization_sessions, oauth_link_challenges,
-    oauth_providers, policies, players_online, scenes, tokens, user_oauth_accounts, user_sessions,
-    users, world_actors, world_actor_system_data, world_events, world_tokens, worlds,
+    oauth_providers, permission_grants, policies, players_online, scenes, tokens, user_oauth_accounts, user_sessions,
+    users, world_actors, world_actor_system_data, world_collaborators, world_events, world_tokens, worlds,
 };
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -683,4 +683,58 @@ pub struct NewAuditLog {
     pub action: Option<String>,
     pub details: Option<serde_json::Value>,
     pub created_at: chrono::NaiveDateTime,
+}
+
+// ========== RBAC Models (Security Audit Phase 2.1) ==========
+
+/// World collaborator (user with access to a world)
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_collaborators)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct WorldCollaborator {
+    pub id: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub user_id: uuid::Uuid,
+    pub role: String, // OWNER, EDITOR, VIEWER
+    pub created_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+/// New world collaborator for insertion
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_collaborators)]
+pub struct NewWorldCollaborator {
+    pub id: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub user_id: uuid::Uuid,
+    pub role: String,
+    pub created_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+/// Permission grant for a collaborator
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = permission_grants)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct PermissionGrant {
+    pub id: uuid::Uuid,
+    pub collaborator_id: uuid::Uuid,
+    pub permission: String, // view, edit, delete
+    pub granted_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub expires_at: Option<chrono::NaiveDateTime>,
+}
+
+/// New permission grant for insertion
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = permission_grants)]
+pub struct NewPermissionGrant {
+    pub id: uuid::Uuid,
+    pub collaborator_id: uuid::Uuid,
+    pub permission: String,
+    pub granted_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub expires_at: Option<chrono::NaiveDateTime>,
 }

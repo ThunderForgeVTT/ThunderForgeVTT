@@ -331,6 +331,31 @@ diesel::table! {
     }
 }
 
+// Phase 2.1: RBAC - World Collaborators (users with access to worlds)
+diesel::table! {
+    world_collaborators (id) {
+        id -> Uuid,
+        world_id -> Uuid,
+        user_id -> Uuid,
+        role -> Varchar,
+        created_by -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+// Phase 2.1: RBAC - Granular Permissions for Collaborators
+diesel::table! {
+    permission_grants (id) {
+        id -> Uuid,
+        collaborator_id -> Uuid,
+        permission -> Varchar,
+        granted_by -> Uuid,
+        created_at -> Timestamp,
+        expires_at -> Nullable<Timestamp>,
+    }
+}
+
 diesel::joinable!(admin_bootstrap_oauth_sessions -> oauth_providers (provider_id));
 diesel::joinable!(fog_masks -> scenes (scene_id));
 diesel::joinable!(fog_masks -> users (updated_by));
@@ -361,6 +386,11 @@ diesel::joinable!(players_online -> users (player_id));
 diesel::joinable!(players_online -> worlds (world_id));
 diesel::joinable!(players_online -> scenes (scene_id));
 
+// Phase 2.1: RBAC joinables
+diesel::joinable!(world_collaborators -> worlds (world_id));
+diesel::joinable!(world_collaborators -> users (user_id));
+diesel::joinable!(permission_grants -> world_collaborators (collaborator_id));
+
 diesel::allow_tables_to_appear_in_same_query!(
     admin_bootstrap_oauth_sessions,
     admin_bootstrap_setup,
@@ -372,6 +402,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     oauth_authorization_sessions,
     oauth_link_challenges,
     oauth_providers,
+    permission_grants,
     policies,
     players_online,
     scenes,
@@ -381,6 +412,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     users,
     world_actors,
     world_actor_system_data,
+    world_collaborators,
     world_events,
     world_tokens,
     worlds,
