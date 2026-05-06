@@ -1,7 +1,7 @@
 use crate::config::{Config, Directories};
+use crate::models::WorldEvent;
 use crate::system_hooks::SystemHookRegistry;
 use axum::extract::FromRef;
-use thunderforge_core::events::WorldEvent;
 use tokio::sync::broadcast::Sender;
 use tower_cookies::Key;
 
@@ -15,6 +15,7 @@ pub struct AppState {
     pub config: Config,
     pub directories: Directories,
     pub world_event_sender: Sender<WorldEvent>,
+    pub presence_sender: Sender<serde_json::Value>, // Phase 4.9.B.3: Presence changes
     pub key: Key,
     pub db_pool: DbPool,
     pub system_hooks: std::sync::Arc<tokio::sync::RwLock<SystemHookRegistry>>,

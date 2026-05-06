@@ -1,5 +1,5 @@
 use crate::auth_middleware::AuthenticatedUser;
-use crate::models::World;
+use crate::models::{World, WorldEvent};
 use crate::schema::worlds;
 use crate::state::AppState;
 use axum::{
@@ -14,7 +14,6 @@ use axum::{
 use diesel::prelude::*;
 use futures_util::stream::{Stream, StreamExt};
 use std::convert::Infallible;
-use thunderforge_core::events::WorldEvent;
 use tokio_stream::wrappers::BroadcastStream;
 
 pub fn router() -> Router<AppState> {

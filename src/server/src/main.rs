@@ -11,6 +11,7 @@ mod network;
 mod pubsub;
 mod schema; // Add this line
 mod serve;
+mod session; // Phase 4.9.B.2: Session lifecycle management
 mod state;
 mod system_hooks;
 mod systems;
@@ -151,7 +152,9 @@ async fn main() {
     let directories = Directories::from(String::from(&config.data_path));
     directories.create_if_not_present();
 
-    let (world_event_sender, _) = broadcast::channel(1024);
+    // Use 10000 buffer size for broadcast channel to allow backpressure handling
+    let (world_event_sender, _) = broadcast::channel(10000);
+    let (presence_sender, _) = broadcast::channel(10000); // Phase 4.9.B.3: Presence changes
 
     let key = Key::from(&general_purpose::STANDARD.decode(&config.secret).unwrap());
 
@@ -165,6 +168,7 @@ async fn main() {
         config,
         directories: directories.clone(),
         world_event_sender: world_event_sender.clone(),
+        presence_sender: presence_sender.clone(),
         key,
         db_pool: db_pool.clone(),
         system_hooks: std::sync::Arc::new(tokio::sync::RwLock::new(system_hooks::SystemHookRegistry::new())),
@@ -172,7 +176,16 @@ async fn main() {
 
     // Spawn the PostgreSQL LISTEN background task
     eprintln!("[Server] 🚀 Starting PostgreSQL LISTEN background task");
-    network::spawn_listen_task(db_pool, world_event_sender);
+    network::spawn_listen_task(db_pool.clone(), world_event_sender);
+
+    // Spawn the presence listener task (Phase 4.9.B.3)
+    eprintln!("[Server] 🚀 Starting presence listener task");
+    network::spawn_presence_listener_task(presence_sender);
+
+    // Spawn the session cleanup task (Phase 4.9.B.2)
+    eprintln!("[Server] 🚀 Starting session cleanup task");
+    session::spawn_session_cleanup_task(db_pool.clone());
+
 
     let schema = Schema::build(
         QueryRoot::default(),
@@ -201,6 +214,7 @@ async fn main() {
     let graphql_router = Router::new()
         .route("/graphql", get(graphql_playground).post(graphql_handler))
         .route("/ws", get(graphql_ws_handler))
+        .route("/events/:world_id", get(network::websocket_handler)) // Phase 4.9.B.2: Event WebSocket with session tracking
         .route_layer(from_fn_with_state(
             app_state.clone(),
             auth_middleware::require_authenticated_user,

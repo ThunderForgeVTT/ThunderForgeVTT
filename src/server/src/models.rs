@@ -1,8 +1,8 @@
 use crate::schema::{
     admin_bootstrap_oauth_sessions, admin_bootstrap_setup, auth_security_settings, fog_masks,
     game_systems, login_two_factor_challenges, oauth_authorization_sessions, oauth_link_challenges,
-    oauth_providers, policies, scenes, tokens, user_oauth_accounts, user_sessions, users,
-    world_actors, world_actor_system_data, world_events, world_tokens, worlds,
+    oauth_providers, policies, players_online, scenes, tokens, user_oauth_accounts, user_sessions,
+    users, world_actors, world_actor_system_data, world_events, world_tokens, worlds,
 };
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -623,3 +623,33 @@ pub struct NewActorSystemData {
 }
 
 
+
+/// Player presence tracking (Phase 4.9.B.1)
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = players_online)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct PlayersOnline {
+    pub id: i64,
+    pub player_id: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub scene_id: Option<uuid::Uuid>,
+    pub connected_at: chrono::NaiveDateTime,
+    pub last_seen: chrono::NaiveDateTime,
+    pub idle_duration_secs: i32,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+/// New player online record for insertion
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = players_online)]
+pub struct NewPlayersOnline {
+    pub player_id: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub scene_id: Option<uuid::Uuid>,
+    pub connected_at: chrono::NaiveDateTime,
+    pub last_seen: chrono::NaiveDateTime,
+    pub idle_duration_secs: i32,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}

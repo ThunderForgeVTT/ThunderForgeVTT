@@ -3,41 +3,80 @@
 //! This module provides the HTTP upgrade handler that converts incoming WebSocket
 //! connections into GraphQL subscription channels. Connected clients can subscribe
 //! to worldEventCreated and receive real-time event updates from the broadcast channel.
+//!
+//! Phase 4.9.B.2: Enhanced with session lifecycle tracking (connect/disconnect)
 
 use axum::{
-    extract::ws::{WebSocket, WebSocketUpgrade},
+    extract::{ws::WebSocketUpgrade, Path, State},
     response::IntoResponse,
+    Extension,
 };
 use tokio::sync::broadcast;
-use thunderforge_core::events::WorldEvent;
+use uuid::Uuid;
+
+use crate::{
+    auth_middleware::AuthenticatedUser, models::WorldEvent, session, state::AppState,
+};
 
 /// Handles HTTP upgrade requests for WebSocket connections.
-/// 
+///
+/// Accepts world_id as a path parameter: `/ws/{world_id}`
+///
 /// This function is used as an Axum handler:
 /// ```ignore
-/// app.route("/ws", get(websocket_handler))
+/// app.route("/events/:world_id", get(websocket_handler))
 /// ```
-/// 
-/// When a client connects, it subscribes to the broadcast channel
-/// and sends real-time world events to the client.
+///
+/// When a client connects, it:
+/// 1. Records the player in players_online (Phase 4.9.B.2)
+/// 2. Subscribes to the broadcast channel
+/// 3. Sends real-time world events to the client
+/// 4. Removes the player on disconnect
 pub async fn websocket_handler(
+    State(app_state): State<AppState>,
+    Path(world_id): Path<Uuid>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
     ws: WebSocketUpgrade,
-    axum::extract::State(broadcast_rx): axum::extract::State<broadcast::Receiver<WorldEvent>>,
 ) -> impl IntoResponse {
-    eprintln!("[WS] New WebSocket connection attempt");
-    ws.on_upgrade(|socket| handle_socket(socket, broadcast_rx))
+    eprintln!(
+        "[WS] New WebSocket connection attempt: player={}, world={}",
+        auth_user.user_id, world_id
+    );
+
+    let player_id = auth_user.user_id;
+    let broadcast_rx = app_state.world_event_sender.subscribe();
+
+    ws.on_upgrade(move |socket| {
+        handle_socket(socket, broadcast_rx, app_state, player_id, world_id)
+    })
 }
 
 /// Handles the WebSocket connection lifecycle.
-/// 
-/// Once upgraded, this function:
-/// 1. Subscribes to the broadcast channel
-/// 2. Enters a loop sending events to the client
-/// 3. Handles client disconnection gracefully
+///
+/// Phase 4.9.B.2:
+/// 1. Record player in players_online on connect
+/// 2. Subscribe to broadcast and send events
+/// 3. Remove player on disconnect
 async fn handle_socket(
-    mut socket: WebSocket,
+    mut socket: axum::extract::ws::WebSocket,
     mut broadcast_rx: broadcast::Receiver<WorldEvent>,
+    app_state: AppState,
+    player_id: Uuid,
+    world_id: Uuid,
 ) {
+    // 1. Record player connection (Phase 4.9.B.2)
+    if let Err(e) = session::connect_player(
+        app_state.db_pool.clone(),
+        player_id,
+        world_id,
+        None, // Scene will be updated by client mutations
+    )
+    .await
+    {
+        eprintln!("[WS] ❌ Failed to record player connection: {}", e);
+        return;
+    }
+
     eprintln!("[WS] ✅ WebSocket connection established");
 
     // Send a welcome message
@@ -48,6 +87,9 @@ async fn handle_socket(
         .await
     {
         eprintln!("[WS] ❌ Failed to send ACK: {}", e);
+        session::disconnect_player(app_state.db_pool.clone(), player_id, world_id)
+            .await
+            .ok();
         return;
     }
 
@@ -55,14 +97,22 @@ async fn handle_socket(
     loop {
         match broadcast_rx.recv().await {
             Ok(event) => {
+                // Filter by world_id
+                if event.world_id != world_id {
+                    continue;
+                }
+
                 // Convert event to JSON payload
                 let payload = serde_json::json!({
                     "type": "data",
-                    "id": 1,  // Simplified for Phase 4.4; Phase 4.5 adds request ID tracking
+                    "id": 1,
                     "payload": {
                         "data": {
                             "worldEventCreated": {
+                                "id": event.id,
+                                "worldId": event.world_id,
                                 "eventCode": event.event_code,
+                                "createdBy": event.created_by,
                             }
                         }
                     }
@@ -70,7 +120,7 @@ async fn handle_socket(
 
                 let message = match serde_json::to_string(&payload) {
                     Ok(json) => {
-                        eprintln!("[WS] 📤 Sending event to client");
+                        eprintln!("[WS] 📤 Sending event to player {}", player_id);
                         axum::extract::ws::Message::Text(json.into())
                     }
                     Err(e) => {
@@ -81,7 +131,10 @@ async fn handle_socket(
 
                 // Send to client
                 if let Err(e) = socket.send(message).await {
-                    eprintln!("[WS] ❌ Failed to send event: {}. Closing connection.", e);
+                    eprintln!(
+                        "[WS] ❌ Failed to send event to {}: {}. Closing connection.",
+                        player_id, e
+                    );
                     break;
                 }
             }
@@ -106,7 +159,13 @@ async fn handle_socket(
         }
     }
 
-    eprintln!("[WS] 🔌 WebSocket connection closed");
+    // 3. Remove player on disconnect (Phase 4.9.B.2)
+    if let Err(e) = session::disconnect_player(app_state.db_pool.clone(), player_id, world_id).await
+    {
+        eprintln!("[WS] ❌ Failed to record player disconnect: {}", e);
+    }
+
+    eprintln!("[WS] 🔌 WebSocket connection closed for player {}", player_id);
 }
 
 #[cfg(test)]

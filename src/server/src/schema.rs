@@ -304,6 +304,20 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    players_online (id) {
+        id -> Int8,
+        player_id -> Uuid,
+        world_id -> Uuid,
+        scene_id -> Nullable<Uuid>,
+        connected_at -> Timestamp,
+        last_seen -> Timestamp,
+        idle_duration_secs -> Int4,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
 diesel::joinable!(admin_bootstrap_oauth_sessions -> oauth_providers (provider_id));
 diesel::joinable!(fog_masks -> scenes (scene_id));
 diesel::joinable!(fog_masks -> users (updated_by));
@@ -330,6 +344,9 @@ diesel::joinable!(world_actor_system_data -> world_actors (actor_id));
 // so joins with users must be written manually
 diesel::joinable!(world_events -> worlds (world_id));
 diesel::joinable!(world_tokens -> worlds (world_id));
+diesel::joinable!(players_online -> users (player_id));
+diesel::joinable!(players_online -> worlds (world_id));
+diesel::joinable!(players_online -> scenes (scene_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     admin_bootstrap_oauth_sessions,
@@ -342,6 +359,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     oauth_link_challenges,
     oauth_providers,
     policies,
+    players_online,
     scenes,
     tokens,
     user_oauth_accounts,
