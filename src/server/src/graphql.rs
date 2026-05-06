@@ -1872,4 +1872,64 @@ mod tests {
             );
         }
     }
+
+    // Phase 2.6: RBAC tests
+    #[test]
+    fn rbac_role_from_str_parses_all_variants() {
+        assert_eq!(crate::rbac::Role::from_str("OWNER"), Some(crate::rbac::Role::Owner));
+        assert_eq!(crate::rbac::Role::from_str("EDITOR"), Some(crate::rbac::Role::Editor));
+        assert_eq!(crate::rbac::Role::from_str("VIEWER"), Some(crate::rbac::Role::Viewer));
+        assert_eq!(crate::rbac::Role::from_str("INVALID"), None);
+        assert_eq!(crate::rbac::Role::from_str("owner"), None); // case-sensitive
+    }
+
+    #[test]
+    fn rbac_role_as_str_round_trips() {
+        let owner = crate::rbac::Role::Owner;
+        assert_eq!(crate::rbac::Role::from_str(owner.as_str()), Some(owner));
+
+        let editor = crate::rbac::Role::Editor;
+        assert_eq!(crate::rbac::Role::from_str(editor.as_str()), Some(editor));
+
+        let viewer = crate::rbac::Role::Viewer;
+        assert_eq!(crate::rbac::Role::from_str(viewer.as_str()), Some(viewer));
+    }
+
+    #[test]
+    fn rbac_owner_has_all_permissions() {
+        let owner = crate::rbac::Role::Owner;
+        assert!(owner.has_permission("view"));
+        assert!(owner.has_permission("edit"));
+        assert!(owner.has_permission("delete"));
+        assert!(owner.has_permission("invite"));
+        assert!(owner.has_permission("any_permission"));
+    }
+
+    #[test]
+    fn rbac_editor_has_view_and_edit_permissions() {
+        let editor = crate::rbac::Role::Editor;
+        assert!(editor.has_permission("view"));
+        assert!(editor.has_permission("edit"));
+        assert!(!editor.has_permission("delete"));
+        assert!(!editor.has_permission("invite"));
+    }
+
+    #[test]
+    fn rbac_viewer_has_only_view_permission() {
+        let viewer = crate::rbac::Role::Viewer;
+        assert!(viewer.has_permission("view"));
+        assert!(!viewer.has_permission("edit"));
+        assert!(!viewer.has_permission("delete"));
+        assert!(!viewer.has_permission("invite"));
+    }
+
+    #[test]
+    fn rbac_role_equality() {
+        let owner1 = crate::rbac::Role::Owner;
+        let owner2 = crate::rbac::Role::Owner;
+        let editor = crate::rbac::Role::Editor;
+
+        assert_eq!(owner1, owner2);
+        assert_ne!(owner1, editor);
+    }
 }
