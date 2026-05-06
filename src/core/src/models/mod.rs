@@ -10,10 +10,12 @@
 
 pub mod auth;
 pub mod errors;
+pub mod invites;
 pub mod version;
 pub mod world;
 
 pub use auth::*;
 pub use errors::*;
+pub use invites::*;
 pub use version::*;
 pub use world::*;

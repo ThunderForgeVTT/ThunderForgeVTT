@@ -259,3 +259,85 @@ mod tests {
         assert_eq!(core_user.email, "test@example.com");
     }
 }
+
+// NOTE: WorldInvite adapters - convert Diesel ↔ Core models
+
+/// Convert Diesel WorldInvite to Core WorldInvite
+impl From<crate::models::WorldInvite> for thunderforge_core::models::invites::WorldInvite {
+    fn from(db: crate::models::WorldInvite) -> Self {
+        thunderforge_core::models::invites::WorldInvite {
+            id: db.id,
+            world_id: db.world_id,
+            invite_code: db.invite_code,
+            max_uses: db.max_uses,
+            used_count: db.used_count,
+            expires_at: db.expires_at,
+            created_by: db.created_by,
+            created_at: db.created_at,
+            updated_at: db.updated_at,
+        }
+    }
+}
+
+/// Convert Core WorldInvite to Diesel WorldInvite
+impl From<thunderforge_core::models::invites::WorldInvite> for crate::models::WorldInvite {
+    fn from(core: thunderforge_core::models::invites::WorldInvite) -> Self {
+        crate::models::WorldInvite {
+            id: core.id,
+            world_id: core.world_id,
+            invite_code: core.invite_code,
+            max_uses: core.max_uses,
+            used_count: core.used_count,
+            expires_at: core.expires_at,
+            created_by: core.created_by,
+            created_at: core.created_at,
+            updated_at: core.updated_at,
+        }
+    }
+}
+
+// NOTE: WorldMember adapters - convert Diesel ↔ Core models
+
+/// Convert Diesel WorldMember to Core WorldMembership
+impl From<crate::models::WorldMember> for thunderforge_core::models::invites::WorldMembership {
+    fn from(db: crate::models::WorldMember) -> Self {
+        // Parse role string to enum
+        let role = match db.role.as_str() {
+            "Owner" => thunderforge_core::models::invites::WorldMemberRole::Owner,
+            "GM" => thunderforge_core::models::invites::WorldMemberRole::GM,
+            _ => thunderforge_core::models::invites::WorldMemberRole::Player, // Default to Player
+        };
+
+        thunderforge_core::models::invites::WorldMembership {
+            id: db.id,
+            world_id: db.world_id,
+            user_id: db.user_id,
+            role,
+            joined_at: db.joined_at,
+            created_at: db.created_at,
+            updated_at: db.updated_at,
+        }
+    }
+}
+
+/// Convert Core WorldMembership to Diesel WorldMember
+impl From<thunderforge_core::models::invites::WorldMembership> for crate::models::WorldMember {
+    fn from(core: thunderforge_core::models::invites::WorldMembership) -> Self {
+        // Convert role enum to string
+        let role = match core.role {
+            thunderforge_core::models::invites::WorldMemberRole::Owner => "Owner".to_string(),
+            thunderforge_core::models::invites::WorldMemberRole::GM => "GM".to_string(),
+            thunderforge_core::models::invites::WorldMemberRole::Player => "Player".to_string(),
+        };
+
+        crate::models::WorldMember {
+            id: core.id,
+            world_id: core.world_id,
+            user_id: core.user_id,
+            role,
+            joined_at: core.joined_at,
+            created_at: core.created_at,
+            updated_at: core.updated_at,
+        }
+    }
+}

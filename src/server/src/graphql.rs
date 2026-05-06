@@ -55,7 +55,8 @@ pub use input_types::{
     GraphQLPlaceholderDomainObject, GraphQLExportManifest, GraphQLExportMyDataPayload,
     GraphQLDeleteMyDataPayload, GraphQLDeleteWorldPayload, GraphQLCreateWorldTokenInput,
     GraphQLUpsertWorldTokenInput, GraphQLMoveTokenInput, GraphQLUpsertTokenInput,
-    GraphQLUpdateFogMaskInput,
+    GraphQLUpdateFogMaskInput, GraphQLGenerateInviteCodeInput, GraphQLJoinWorldInput,
+    GraphQLUpdateMemberRoleInput, GraphQLWorldInvite, GraphQLWorldMembership,
 };
 
 // Phase 4.9.Z Step 4a: Helper functions extracted to separate module

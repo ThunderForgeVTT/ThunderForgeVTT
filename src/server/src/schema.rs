@@ -131,6 +131,20 @@ diesel::table! {
 }
 
 diesel::table! {
+    players_online (id) {
+        id -> Int8,
+        player_id -> Uuid,
+        world_id -> Uuid,
+        scene_id -> Nullable<Uuid>,
+        connected_at -> Timestamp,
+        last_seen -> Timestamp,
+        idle_duration_secs -> Int4,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     use diesel::sql_types::*;
     use super::sql_types::PolicyEffect;
 
@@ -225,16 +239,19 @@ diesel::table! {
 }
 
 diesel::table! {
-    world_events (id) {
-        id -> Int8,
-        world_id -> Uuid,
-        event_code -> Int4,
-        token_event -> Nullable<Jsonb>,
-        created_at -> Timestamp,
-        schema_version -> Int4,
-        updated_at -> Timestamp,
+    world_actor_system_data (id) {
+        id -> Uuid,
+        actor_id -> Uuid,
+        game_system_id -> Varchar,
+        ability_data -> Nullable<Jsonb>,
+        resource_data -> Nullable<Jsonb>,
+        proficiency_data -> Nullable<Jsonb>,
+        trait_data -> Nullable<Jsonb>,
+        spell_data -> Nullable<Jsonb>,
         created_by -> Uuid,
         updated_by -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
     }
 }
 
@@ -256,17 +273,42 @@ diesel::table! {
 }
 
 diesel::table! {
-    world_actor_system_data (id) {
-        id -> Uuid,
-        actor_id -> Uuid,
-        game_system_id -> Varchar,
-        ability_data -> Nullable<Jsonb>,
-        resource_data -> Nullable<Jsonb>,
-        proficiency_data -> Nullable<Jsonb>,
-        trait_data -> Nullable<Jsonb>,
-        spell_data -> Nullable<Jsonb>,
+    world_events (id) {
+        id -> Int8,
+        world_id -> Uuid,
+        event_code -> Int4,
+        token_event -> Nullable<Jsonb>,
+        created_at -> Timestamp,
+        schema_version -> Int4,
+        updated_at -> Timestamp,
         created_by -> Uuid,
         updated_by -> Uuid,
+    }
+}
+
+diesel::table! {
+    world_invites (id) {
+        id -> Uuid,
+        world_id -> Uuid,
+        #[max_length = 32]
+        invite_code -> Varchar,
+        max_uses -> Int4,
+        used_count -> Int4,
+        expires_at -> Nullable<Timestamp>,
+        created_by -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    world_members (id) {
+        id -> Uuid,
+        world_id -> Uuid,
+        user_id -> Uuid,
+        #[max_length = 32]
+        role -> Varchar,
+        joined_at -> Timestamp,
         created_at -> Timestamp,
         updated_at -> Timestamp,
     }
@@ -304,58 +346,6 @@ diesel::table! {
     }
 }
 
-diesel::table! {
-    players_online (id) {
-        id -> Int8,
-        player_id -> Uuid,
-        world_id -> Uuid,
-        scene_id -> Nullable<Uuid>,
-        connected_at -> Timestamp,
-        last_seen -> Timestamp,
-        idle_duration_secs -> Int4,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
-    }
-}
-
-diesel::table! {
-    audit_logs (id) {
-        id -> Uuid,
-        event_type -> Varchar,
-        actor_id -> Uuid,
-        resource_type -> Nullable<Varchar>,
-        resource_id -> Nullable<Uuid>,
-        action -> Nullable<Varchar>,
-        details -> Nullable<Jsonb>,
-        created_at -> Timestamp,
-    }
-}
-
-// Phase 2.1: RBAC - World Collaborators (users with access to worlds)
-diesel::table! {
-    world_collaborators (id) {
-        id -> Uuid,
-        world_id -> Uuid,
-        user_id -> Uuid,
-        role -> Varchar,
-        created_by -> Uuid,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
-    }
-}
-
-// Phase 2.1: RBAC - Granular Permissions for Collaborators
-diesel::table! {
-    permission_grants (id) {
-        id -> Uuid,
-        collaborator_id -> Uuid,
-        permission -> Varchar,
-        granted_by -> Uuid,
-        created_at -> Timestamp,
-        expires_at -> Nullable<Timestamp>,
-    }
-}
-
 diesel::joinable!(admin_bootstrap_oauth_sessions -> oauth_providers (provider_id));
 diesel::joinable!(fog_masks -> scenes (scene_id));
 diesel::joinable!(fog_masks -> users (updated_by));
@@ -363,6 +353,9 @@ diesel::joinable!(login_two_factor_challenges -> users (user_id));
 diesel::joinable!(oauth_authorization_sessions -> oauth_providers (provider_id));
 diesel::joinable!(oauth_link_challenges -> oauth_providers (provider_id));
 diesel::joinable!(oauth_link_challenges -> users (user_id));
+diesel::joinable!(players_online -> scenes (scene_id));
+diesel::joinable!(players_online -> users (player_id));
+diesel::joinable!(players_online -> worlds (world_id));
 diesel::joinable!(policies -> worlds (world_id));
 diesel::joinable!(scenes -> users (owner_id));
 diesel::joinable!(scenes -> worlds (world_id));
@@ -370,31 +363,19 @@ diesel::joinable!(tokens -> scenes (scene_id));
 diesel::joinable!(user_oauth_accounts -> oauth_providers (provider_id));
 diesel::joinable!(user_oauth_accounts -> users (user_id));
 diesel::joinable!(user_sessions -> users (user_id));
+diesel::joinable!(world_actor_system_data -> world_actors (actor_id));
 diesel::joinable!(world_actors -> scenes (scene_id));
 diesel::joinable!(world_actors -> worlds (world_id));
-// Note: world_actors has two foreign keys to users (created_by, owned_by)
-// Diesel doesn't support multiple joinables for the same table pair,
-// so joins with users must be written manually
-
-diesel::joinable!(world_actor_system_data -> world_actors (actor_id));
-// Note: world_actor_system_data has two foreign keys to users (created_by, updated_by)
-// Diesel doesn't support multiple joinables for the same table pair,
-// so joins with users must be written manually
 diesel::joinable!(world_events -> worlds (world_id));
+diesel::joinable!(world_invites -> users (created_by));
+diesel::joinable!(world_invites -> worlds (world_id));
+diesel::joinable!(world_members -> users (user_id));
+diesel::joinable!(world_members -> worlds (world_id));
 diesel::joinable!(world_tokens -> worlds (world_id));
-diesel::joinable!(players_online -> users (player_id));
-diesel::joinable!(players_online -> worlds (world_id));
-diesel::joinable!(players_online -> scenes (scene_id));
-
-// Phase 2.1: RBAC joinables
-diesel::joinable!(world_collaborators -> worlds (world_id));
-diesel::joinable!(world_collaborators -> users (user_id));
-diesel::joinable!(permission_grants -> world_collaborators (collaborator_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     admin_bootstrap_oauth_sessions,
     admin_bootstrap_setup,
-    audit_logs,
     auth_security_settings,
     fog_masks,
     game_systems,
@@ -402,18 +383,18 @@ diesel::allow_tables_to_appear_in_same_query!(
     oauth_authorization_sessions,
     oauth_link_challenges,
     oauth_providers,
-    permission_grants,
-    policies,
     players_online,
+    policies,
     scenes,
     tokens,
     user_oauth_accounts,
     user_sessions,
     users,
-    world_actors,
     world_actor_system_data,
-    world_collaborators,
+    world_actors,
     world_events,
+    world_invites,
+    world_members,
     world_tokens,
     worlds,
 );

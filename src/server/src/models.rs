@@ -1,8 +1,8 @@
 use crate::schema::{
-    admin_bootstrap_oauth_sessions, admin_bootstrap_setup, audit_logs, auth_security_settings, fog_masks,
+    admin_bootstrap_oauth_sessions, admin_bootstrap_setup, auth_security_settings, fog_masks,
     game_systems, login_two_factor_challenges, oauth_authorization_sessions, oauth_link_challenges,
-    oauth_providers, permission_grants, policies, players_online, scenes, tokens, user_oauth_accounts, user_sessions,
-    users, world_actors, world_actor_system_data, world_collaborators, world_events, world_tokens, worlds,
+    oauth_providers, players_online, scenes, tokens, user_oauth_accounts, user_sessions,
+    users, world_actors, world_actor_system_data, world_events, world_invites, world_members, world_tokens, worlds,
 };
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -685,56 +685,66 @@ pub struct NewAuditLog {
     pub created_at: chrono::NaiveDateTime,
 }
 
-// ========== RBAC Models (Security Audit Phase 2.1) ==========
+// ========== Membership Models (Phase 4.10) ==========
 
-/// World collaborator (user with access to a world)
+// NOTE: WorldInvite models - table created via migration 2026-05-06-120000-0007
+
+/// World invite code record from database
 #[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
-#[diesel(table_name = world_collaborators)]
+#[diesel(table_name = world_invites)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
-pub struct WorldCollaborator {
+pub struct WorldInvite {
     pub id: uuid::Uuid,
     pub world_id: uuid::Uuid,
-    pub user_id: uuid::Uuid,
-    pub role: String, // OWNER, EDITOR, VIEWER
+    pub invite_code: String,
+    pub max_uses: i32,
+    pub used_count: i32,
+    pub expires_at: Option<chrono::NaiveDateTime>,
     pub created_by: uuid::Uuid,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
 }
 
-/// New world collaborator for insertion
+/// New world invite for insertion
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
-#[diesel(table_name = world_collaborators)]
-pub struct NewWorldCollaborator {
+#[diesel(table_name = world_invites)]
+pub struct NewWorldInvite {
+    pub id: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub invite_code: String,
+    pub max_uses: i32,
+    pub used_count: i32,
+    pub expires_at: Option<chrono::NaiveDateTime>,
+    pub created_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+// NOTE: WorldMember models - table created via migration 2026-05-06-120100-0008
+
+/// World membership record from database
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_members)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct WorldMember {
     pub id: uuid::Uuid,
     pub world_id: uuid::Uuid,
     pub user_id: uuid::Uuid,
     pub role: String,
-    pub created_by: uuid::Uuid,
+    pub joined_at: chrono::NaiveDateTime,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
 }
 
-/// Permission grant for a collaborator
-#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
-#[diesel(table_name = permission_grants)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
-pub struct PermissionGrant {
-    pub id: uuid::Uuid,
-    pub collaborator_id: uuid::Uuid,
-    pub permission: String, // view, edit, delete
-    pub granted_by: uuid::Uuid,
-    pub created_at: chrono::NaiveDateTime,
-    pub expires_at: Option<chrono::NaiveDateTime>,
-}
-
-/// New permission grant for insertion
+/// New world member for insertion
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
-#[diesel(table_name = permission_grants)]
-pub struct NewPermissionGrant {
+#[diesel(table_name = world_members)]
+pub struct NewWorldMember {
     pub id: uuid::Uuid,
-    pub collaborator_id: uuid::Uuid,
-    pub permission: String,
-    pub granted_by: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub user_id: uuid::Uuid,
+    pub role: String,
+    pub joined_at: chrono::NaiveDateTime,
     pub created_at: chrono::NaiveDateTime,
-    pub expires_at: Option<chrono::NaiveDateTime>,
+    pub updated_at: chrono::NaiveDateTime,
 }
