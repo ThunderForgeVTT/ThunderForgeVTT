@@ -1,0 +1,229 @@
+use async_graphql::{Enum, InputObject, SimpleObject, Json};
+use chrono::{DateTime, Utc};
+use uuid::Uuid;
+
+use crate::db_types::PolicyEffectEnum;
+use crate::models::Policy;
+
+use super::{GraphQLUser, GraphQLWorld, GraphQLWorldToken, GraphQLWorldEvent};
+
+// ========== World & Scene Creation/Update ==========
+
+/// Input for creating a new world
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLCreateWorldInput {
+    pub name: String,
+    pub description: Option<String>,
+    pub game_system_id: Option<String>,
+    pub interface_pack_id: Option<String>,
+}
+
+/// Input for creating a new scene
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLCreateSceneInput {
+    pub world_id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    #[graphql(name = "type")]
+    pub type_: Option<String>,
+    pub grid_size: Option<i32>,
+    pub grid_type: Option<String>,
+    pub width: Option<i32>,
+    pub height: Option<i32>,
+    pub metadata: Option<Json<serde_json::Value>>,
+}
+
+/// Input for updating scene properties
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLUpdateSceneInput {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub grid_size: Option<i32>,
+    pub grid_type: Option<String>,
+    pub width: Option<i32>,
+    pub height: Option<i32>,
+    pub metadata: Option<Json<serde_json::Value>>,
+}
+
+// ========== Player Presence (Phase 4.9.B.3) ==========
+
+/// Player presence data in world/scene
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLPlayerPresence {
+    pub player_id: Uuid,
+    pub world_id: Uuid,
+    pub scene_id: Option<Uuid>,
+    pub idle_duration_secs: i32,
+}
+
+/// List of players online in a world
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLPlayersOnlineList {
+    pub world_id: Uuid,
+    pub players: Vec<GraphQLPlayerPresence>,
+}
+
+// ========== Policies & Permissions ==========
+
+/// Policy effect (Allow or Deny)
+#[derive(Enum, Debug, Copy, Clone, Eq, PartialEq)]
+pub enum GraphQLPolicyEffect {
+    Allow,
+    Deny,
+}
+
+impl From<PolicyEffectEnum> for GraphQLPolicyEffect {
+    fn from(effect: PolicyEffectEnum) -> Self {
+        match effect {
+            PolicyEffectEnum::Allow => Self::Allow,
+            PolicyEffectEnum::Deny => Self::Deny,
+        }
+    }
+}
+
+/// Access control policy
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLPolicy {
+    pub id: Uuid,
+    pub effect: GraphQLPolicyEffect,
+    pub resources: Vec<String>,
+    pub created_by: Uuid,
+    pub updated_by: Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+impl From<Policy> for GraphQLPolicy {
+    fn from(policy: Policy) -> Self {
+        Self {
+            id: policy.id,
+            effect: policy.effect.into(),
+            resources: policy.resources.into_iter().flatten().collect(),
+            created_by: policy.created_by,
+            updated_by: policy.updated_by,
+            created_at: policy.created_at,
+            updated_at: policy.updated_at,
+        }
+    }
+}
+
+// ========== Placeholder Domain Objects ==========
+
+/// Placeholder for domain objects with minimal metadata
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLPlaceholderDomainObject {
+    pub schema_version: String,
+    pub status: String,
+}
+
+// ========== Data Export (GDPR Compliance) ==========
+
+/// Manifest for exported user data
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLExportManifest {
+    pub schema_version: String,
+    pub exported_at: DateTime<Utc>,
+    pub worlds: i32,
+    pub world_tokens: i32,
+    pub world_events: i32,
+    pub policies: i32,
+}
+
+/// Complete user data export payload
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLExportMyDataPayload {
+    pub manifest: GraphQLExportManifest,
+    pub user: GraphQLUser,
+    pub worlds: Vec<GraphQLWorld>,
+    pub world_tokens: Vec<GraphQLWorldToken>,
+    pub world_events: Vec<GraphQLWorldEvent>,
+    pub policies: Vec<GraphQLPolicy>,
+    pub scenes: Vec<GraphQLPlaceholderDomainObject>,
+    pub actors: Vec<GraphQLPlaceholderDomainObject>,
+    pub asset_packs: Vec<GraphQLPlaceholderDomainObject>,
+    pub game_systems: Vec<GraphQLPlaceholderDomainObject>,
+}
+
+/// Result of deleting user data (GDPR deleteMe request)
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLDeleteMyDataPayload {
+    pub status: String,
+    pub message: String,
+    pub worlds_deleted: i64,
+    pub world_tokens_deleted: i64,
+    pub world_events_deleted: i64,
+    pub policies_deleted: i64,
+    pub oauth_links_deleted: i64,
+    pub sessions_deleted: i64,
+    pub login_challenges_deleted: i64,
+    pub oauth_link_challenges_deleted: i64,
+    pub users_deleted: i64,
+}
+
+/// Result of deleting a world
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLDeleteWorldPayload {
+    pub id: Uuid,
+    pub status: String,
+    pub message: String,
+}
+
+// ========== Token Management ==========
+
+/// Input for creating a new world token
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLCreateWorldTokenInput {
+    pub world_id: Uuid,
+    pub label: Option<String>,
+    pub x: Option<f64>,
+    pub y: Option<f64>,
+    pub z: Option<f64>,
+    pub health: Option<i32>,
+    pub max_health: Option<i32>,
+}
+
+/// Input for upserting (create or update) a world token
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLUpsertWorldTokenInput {
+    pub world_id: Uuid,
+    pub token_id: Option<String>,
+    pub label: Option<String>,
+    pub x: Option<f64>,
+    pub y: Option<f64>,
+    pub z: Option<f64>,
+    pub health: Option<i32>,
+    pub max_health: Option<i32>,
+}
+
+/// Input for moving a token to new coordinates
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLMoveTokenInput {
+    pub token_id: String,
+    pub x: f64,
+    pub y: f64,
+    pub z: Option<f64>,
+}
+
+/// Input for upserting a token in a scene
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLUpsertTokenInput {
+    pub token_id: Option<Uuid>,
+    pub scene_id: Uuid,
+    pub actor_id: Option<Uuid>,
+    pub x: Option<f64>,
+    pub y: Option<f64>,
+    pub rotation: Option<f64>,
+    pub scale: Option<f64>,
+    pub metadata: Option<Json<serde_json::Value>>,
+}
+
+// ========== Fog of War Management ==========
+
+/// Input for updating fog of war mask
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLUpdateFogMaskInput {
+    pub scene_id: Uuid,
+    pub bitmap_data_base64: String,
+    pub width: i32,
+    pub height: i32,
+}
