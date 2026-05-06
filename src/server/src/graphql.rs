@@ -1145,6 +1145,11 @@ impl WorldMutation {
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
         .map_err(|error| world_write_error(error, "Failed to create world"))?;
 
+        // Phase 2.4: Auto-assign creator as OWNER for RBAC
+        crate::rbac::RbacEngine::assign_creator_as_owner(state, new_world.id, auth_user.user_id)
+            .await
+            .map_err(|e| Error::new(format!("Failed to assign owner role: {}", e)))?;
+
         // Phase 1.3: Log mutation to audit trail
         let _ = log_mutation(
             state,
