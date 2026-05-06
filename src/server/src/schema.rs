@@ -318,6 +318,19 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    audit_logs (id) {
+        id -> Uuid,
+        event_type -> Varchar,
+        actor_id -> Uuid,
+        resource_type -> Nullable<Varchar>,
+        resource_id -> Nullable<Uuid>,
+        action -> Nullable<Varchar>,
+        details -> Nullable<Jsonb>,
+        created_at -> Timestamp,
+    }
+}
+
 diesel::joinable!(admin_bootstrap_oauth_sessions -> oauth_providers (provider_id));
 diesel::joinable!(fog_masks -> scenes (scene_id));
 diesel::joinable!(fog_masks -> users (updated_by));
@@ -351,6 +364,7 @@ diesel::joinable!(players_online -> scenes (scene_id));
 diesel::allow_tables_to_appear_in_same_query!(
     admin_bootstrap_oauth_sessions,
     admin_bootstrap_setup,
+    audit_logs,
     auth_security_settings,
     fog_masks,
     game_systems,

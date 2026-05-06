@@ -1,5 +1,5 @@
 use crate::schema::{
-    admin_bootstrap_oauth_sessions, admin_bootstrap_setup, auth_security_settings, fog_masks,
+    admin_bootstrap_oauth_sessions, admin_bootstrap_setup, audit_logs, auth_security_settings, fog_masks,
     game_systems, login_two_factor_challenges, oauth_authorization_sessions, oauth_link_challenges,
     oauth_providers, policies, players_online, scenes, tokens, user_oauth_accounts, user_sessions,
     users, world_actors, world_actor_system_data, world_events, world_tokens, worlds,
@@ -652,4 +652,35 @@ pub struct NewPlayersOnline {
     pub idle_duration_secs: i32,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+}
+
+// ========== Audit Log Models (Security Audit Phase 1.2) ==========
+
+/// Audit log entry for tracking sensitive operations
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = audit_logs)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct AuditLog {
+    pub id: uuid::Uuid,
+    pub event_type: String,
+    pub actor_id: uuid::Uuid,
+    pub resource_type: Option<String>,
+    pub resource_id: Option<uuid::Uuid>,
+    pub action: Option<String>,
+    pub details: Option<serde_json::Value>,
+    pub created_at: chrono::NaiveDateTime,
+}
+
+/// New audit log entry for insertion
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = audit_logs)]
+pub struct NewAuditLog {
+    pub id: uuid::Uuid,
+    pub event_type: String,
+    pub actor_id: uuid::Uuid,
+    pub resource_type: Option<String>,
+    pub resource_id: Option<uuid::Uuid>,
+    pub action: Option<String>,
+    pub details: Option<serde_json::Value>,
+    pub created_at: chrono::NaiveDateTime,
 }
