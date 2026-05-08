@@ -159,6 +159,7 @@ pub fn start(canvas_selector: &str) {
         .insert_resource(GridConfig::default())
         .insert_resource(network::GraphQLClient::new("http://localhost:8080".to_string()))
         .insert_resource(network::websocket::WebSocketSubscription::new())
+        .insert_resource(network::WorldEventSubscription::new())
         .insert_resource(tracker)
         .insert_resource(CircularFlowTracer::new())
         .insert_resource(SystemHooksRegistry { hooks: None })

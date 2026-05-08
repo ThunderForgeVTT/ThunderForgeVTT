@@ -92,9 +92,9 @@ export default function WorldListPage() {
               </p>
             </div>
             <div className={styles.heroActions}>
-              <Button asChild icon="quill">
-                <Link to="/worlds/create">Create world</Link>
-              </Button>
+              <Link to="/worlds/create">
+                <Button icon="quill">Create world</Button>
+              </Link>
               {isAdmin ? (
                 <label className={styles.toggle}>
                   <input
@@ -129,9 +129,9 @@ export default function WorldListPage() {
                 Begin with a fresh realm and ThunderForge will carry its scenes,
                 actors, events, and interface hooks through later phases.
               </p>
-              <Button asChild variant="secondary" icon="worlds">
-                <Link to="/worlds/create">Found the first world</Link>
-              </Button>
+              <Link to="/worlds/create">
+                <Button variant="secondary" icon="worlds">Found the first world</Button>
+              </Link>
             </Card>
           )}
         </main>

@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use crate::resources::SceneData;
 
 pub struct TokenPlugin;
 
@@ -14,7 +13,8 @@ impl Plugin for TokenPlugin {
 #[derive(Component)]
 pub struct TokenRenderer;
 
-fn initialize_tokens(mut commands: Commands, scene: Res<SceneData>) {
+fn initialize_tokens(mut commands: Commands) {
     // Initialize with empty cache (will be populated by RxDB)
+    // SceneData is loaded by ScenePlugin before Update systems run
     commands.insert_resource(crate::systems::token_loader::TokenCache(vec![]));
 }

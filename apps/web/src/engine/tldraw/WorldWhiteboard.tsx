@@ -75,17 +75,13 @@ function upsertTokenShape(editor: Editor, token: WorldToken) {
 
   editor.createShape({
     id,
-    type: "geo",
+    type: "text",
     x: token.x,
     y: token.y,
     props: {
-      w: 120,
-      h: 70,
-      geo: "rectangle",
-      color: "violet",
-      fill: "semi",
+      size: "m",
+      color: "black",
       text: token.label ?? token.id,
-      dash: "draw",
     },
   });
 }
