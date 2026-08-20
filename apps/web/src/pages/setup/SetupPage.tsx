@@ -1,4 +1,4 @@
-import type { CSSProperties, FormEvent } from "react";
+import type { FormEvent } from "react";
 import { useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
@@ -6,6 +6,7 @@ import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import { Field } from "@/components/ui/field/Field";
+import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { Tabs } from "@/components/ui/tabs/Tabs";
 import { Tooltip } from "@/components/ui/tooltip/Tooltip";
@@ -13,12 +14,7 @@ import { AuthLayout } from "@/layouts/auth-layout/AuthLayout";
 import { setupBasic, startSetupOAuth } from "@/services/auth";
 import type { SetupStatus } from "@/types/auth";
 import type { SeoConfig } from "@/types/seo";
-import { cn } from "@/utils/cn";
-import { fantasyTheme } from "./fantasy-theme";
-import buttonStyles from "./SetupButton.module.scss";
-import inputStyles from "./SetupInput.module.scss";
-import panelStyles from "./SetupPanel.module.scss";
-import styles from "./SetupPage.module.scss";
+import { cn } from "@/lib/utils";
 
 export const setupPageSeo: SeoConfig = {
   title: "Secure first-run setup",
@@ -56,6 +52,13 @@ interface PasswordStrength {
   copy: string;
 }
 
+const STRENGTH_BAR_CLASSES: Record<PasswordStrengthTone, string> = {
+  weak: "bg-destructive",
+  fair: "bg-amber-500",
+  good: "bg-emerald-500",
+  strong: "bg-primary",
+};
+
 const emailPattern = /\S+@\S+\.\S+/;
 
 function evaluatePasswordStrength(password: string): PasswordStrength {
@@ -67,45 +70,45 @@ function evaluatePasswordStrength(password: string): PasswordStrength {
 
   if (password.length === 0) {
     return {
-      label: "Dormant",
+      label: "None",
       score: 0,
       tone: "weak",
-      copy: "A long passphrase with mixed character types makes the seal harder to break.",
+      copy: "A long passphrase with mixed character types is harder to break.",
     };
   }
 
   if (score <= 1) {
     return {
-      label: "Faint",
+      label: "Weak",
       score,
       tone: "weak",
-      copy: "Add more length and variety before entrusting the guild hall to this password.",
+      copy: "Add more length and variety before using this password.",
     };
   }
 
   if (score === 2) {
     return {
-      label: "Steady",
+      label: "Fair",
       score,
       tone: "fair",
-      copy: "A serviceable start. Add a number or symbol to reinforce the ward.",
+      copy: "A serviceable start. Add a number or symbol to strengthen it.",
     };
   }
 
   if (score === 3) {
     return {
-      label: "Warded",
+      label: "Good",
       score,
       tone: "good",
-      copy: "The protective sigils are taking hold. A longer phrase still improves resilience.",
+      copy: "Solid password. A longer phrase would improve it further.",
     };
   }
 
   return {
-    label: "Mythic",
+    label: "Strong",
     score,
     tone: "strong",
-    copy: "This passphrase carries strong entropy and fits the founding ritual well.",
+    copy: "This passphrase has strong entropy and is well suited for the founding account.",
   };
 }
 
@@ -173,7 +176,7 @@ export default function SetupPage({
     username:
       username.trim().length >= 3
         ? undefined
-        : "Choose a steward name with at least 3 characters.",
+        : "Choose a username with at least 3 characters.",
     email:
       emailPattern.test(email.trim())
         ? undefined
@@ -181,7 +184,7 @@ export default function SetupPage({
     password:
       password.length >= 12
         ? undefined
-        : "Use at least 12 characters to strengthen the ward.",
+        : "Use at least 12 characters for a stronger password.",
     passwordConfirmation:
       password === passwordConfirmation
         ? undefined
@@ -191,22 +194,22 @@ export default function SetupPage({
   const oauthErrors = {
     adminCode: resolvedAdminCode.trim()
       ? undefined
-      : "The OAuth bootstrap still requires the server's one-time admin code.",
+      : "OAuth bootstrap still requires the server's one-time admin code.",
     oauthUsername:
       oauthUsername.trim().length === 0 || oauthUsername.trim().length >= 3
         ? undefined
         : "If you override the provider identity, use at least 3 characters.",
   } as const;
 
-  const ritualSteps = [
+  const setupSteps = [
     {
-      label: "Receive the seal",
-      copy: "Present the one-time admin code from the server to unlock founding access.",
+      label: "Enter the code",
+      copy: "Provide the one-time admin code from the server to unlock setup.",
       state: resolvedAdminCode.trim() ? "complete" : "active",
     },
     {
-      label: "Choose the rite",
-      copy: "Select local credentials or summon a configured OAuth envoy.",
+      label: "Choose a method",
+      copy: "Select local credentials or a configured OAuth provider.",
       state:
         username.trim() || oauthUsername.trim() || isStartingOAuth
           ? "complete"
@@ -215,8 +218,8 @@ export default function SetupPage({
             : "idle",
     },
     {
-      label: "Consecrate the steward",
-      copy: "Finish with a secure password or federated identity and open the realm.",
+      label: "Finish setup",
+      copy: "Complete with a secure password or federated identity to open the instance.",
       state:
         passwordStrength.score >= 3 &&
         !localErrors.email &&
@@ -230,19 +233,19 @@ export default function SetupPage({
 
   const guideTabs = [
     {
-      value: "seal",
-      label: "Seal",
+      value: "code",
+      label: "Code",
       icon: "rune" as const,
       content: (
-        <div className={styles.guideContent}>
+        <div className="grid gap-3 text-sm text-muted-foreground">
           <p>
-            The bootstrap code is your one-use sigil. It binds this founding
-            session to the server instance before any account can claim it.
+            The bootstrap code is single-use. It binds this setup session to
+            the server instance before any account can claim it.
           </p>
-          <ul className={panelStyles.guideList}>
+          <ul className="grid list-disc gap-1.5 pl-4">
             <li>Paste the code exactly as issued by the server.</li>
-            <li>Use the local path if no OAuth envoys are configured yet.</li>
-            <li>Keep the code private until the ritual is complete.</li>
+            <li>Use the local path if no OAuth providers are configured yet.</li>
+            <li>Keep the code private until setup is complete.</li>
           </ul>
         </div>
       ),
@@ -252,13 +255,13 @@ export default function SetupPage({
       label: "Local",
       icon: "quill" as const,
       content: (
-        <div className={styles.guideContent}>
+        <div className="grid gap-3 text-sm text-muted-foreground">
           <p>
             Local bootstrap is the fastest route for a fresh deployment. You
-            define the username, recovery email, and password seal in one pass.
+            define the username, recovery email, and password in one pass.
           </p>
           <p>
-            Recommended when you want direct stewardship before enabling broader
+            Recommended when you want direct control before enabling broader
             federation.
           </p>
         </div>
@@ -269,9 +272,9 @@ export default function SetupPage({
       label: "OAuth",
       icon: "wand" as const,
       content: (
-        <div className={styles.guideContent}>
+        <div className="grid gap-3 text-sm text-muted-foreground">
           <p>
-            OAuth bootstrap consecrates the first administrator from a trusted
+            OAuth bootstrap creates the first administrator from a trusted
             provider already configured on the instance.
           </p>
           <p>
@@ -282,14 +285,6 @@ export default function SetupPage({
       ),
     },
   ];
-
-  const localPanelStyle = {
-    "--setup-panel-accent": fantasyTheme.colors.gold,
-  } as CSSProperties;
-
-  const oauthPanelStyle = {
-    "--setup-panel-accent": fantasyTheme.colors.violet,
-  } as CSSProperties;
 
   const markTouched = (...fields: SetupFieldName[]) => {
     setTouched((current) => ({
@@ -316,7 +311,7 @@ export default function SetupPage({
       localErrors.password ||
       localErrors.passwordConfirmation
     ) {
-      setStatus("The founding ritual is incomplete. Correct the marked sigils.");
+      setStatus("Setup is incomplete. Correct the marked fields.");
       return;
     }
 
@@ -350,12 +345,12 @@ export default function SetupPage({
     markTouched("adminCode", "oauthUsername");
 
     if (oauthErrors.adminCode || oauthErrors.oauthUsername) {
-      setStatus("The envoy gate cannot open yet. Restore the highlighted fields.");
+      setStatus("OAuth setup cannot start yet. Fix the highlighted fields.");
       return;
     }
 
     setIsStartingOAuth(providerKey);
-    setStatus(`Opening the envoy gate for ${displayName}...`);
+    setStatus(`Opening ${displayName}...`);
 
     try {
       await startSetupOAuth(
@@ -379,122 +374,115 @@ export default function SetupPage({
     <>
       <SEO {...setupPageSeo} />
       <AuthLayout
-        eyebrow="First-run ritual"
-        title="Open the guild tome and forge your first administrator."
-        description="ThunderForge is awaiting its founding steward. Present the one-time seal from the server, choose the rite that fits your instance, and complete the bootstrap with secure credentials or a sanctioned OAuth envoy."
+        eyebrow="First-run setup"
+        title="Set up your first administrator account."
+        description="ThunderForge is awaiting its first administrator. Enter the one-time code from the server, choose the method that fits your instance, and finish with secure credentials or a configured OAuth provider."
         aside={
-          <div className={styles.asideStack}>
-            <Card surface="parchment" className={cn(panelStyles.panel, panelStyles.asidePanel)}>
-              <div className={styles.asideHeading}>
-                <p className={panelStyles.sectionKicker}>
+          <div className="grid gap-4">
+            <Card surface="parchment" className="p-6">
+              <div className="grid gap-2">
+                <p className="flex items-center gap-2 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
                   <FantasyIcon name="spells" size={16} />
-                  Ritual steps
+                  Setup steps
                 </p>
-                <h2 className={panelStyles.sectionTitle}>Founding guidance</h2>
-                <p className={styles.asideCopy}>
-                  The setup rite is brief, but every step should feel deliberate
-                  and clear.
+                <h2 className="text-lg font-semibold">Getting started</h2>
+                <p className="text-sm text-muted-foreground">
+                  The setup flow is brief, but every step should feel clear.
                 </p>
               </div>
-              <ol className={styles.stepGuide}>
-                <li>Claim the bootstrap seal from the server logs or startup output.</li>
-                <li>Choose your path: local credentials or a configured OAuth envoy.</li>
-                <li>Complete the rite and enter the admin welcome hall as the first steward.</li>
+              <ol className="mt-4 grid list-decimal gap-2 pl-4 text-sm text-muted-foreground">
+                <li>Claim the bootstrap code from the server logs or startup output.</li>
+                <li>Choose your path: local credentials or a configured OAuth provider.</li>
+                <li>Finish setup and enter the admin welcome page as the first administrator.</li>
               </ol>
-              <p className={styles.ritualNote}>
+              <p className="mt-4 text-sm text-muted-foreground">
                 {hasConfiguredProviders
-                  ? `${setupStatus.configured_oauth_providers.length} OAuth envoy${setupStatus.configured_oauth_providers.length === 1 ? "" : "s"} stand ready for federation.`
-                  : "No OAuth envoys are configured yet, so the local rite remains the safest path."}
+                  ? `${setupStatus.configured_oauth_providers.length} OAuth provider${setupStatus.configured_oauth_providers.length === 1 ? "" : "s"} available.`
+                  : "No OAuth providers are configured yet, so the local path is the safest option."}
               </p>
             </Card>
 
-            <Card surface="stone" className={cn(panelStyles.panel, panelStyles.asidePanel)}>
-              <div className={styles.asideHeading}>
-                <p className={panelStyles.sectionKicker}>
+            <Card surface="stone" className="p-6">
+              <div className="grid gap-2">
+                <p className="flex items-center gap-2 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
                   <FantasyIcon name="rune" size={16} />
-                  Ritual atlas
+                  Reference
                 </p>
-                <h2 className={panelStyles.sectionTitle}>Quick reference</h2>
+                <h2 className="text-lg font-semibold">Quick reference</h2>
               </div>
-              <Tabs items={guideTabs} defaultValue="seal" className={styles.guideTabs} />
+              <Tabs items={guideTabs} defaultValue="code" className="mt-4" />
             </Card>
           </div>
         }
       >
-        <div className={styles.layout} data-setup-theme="fantasy">
-          <Card
-            surface="stone"
-            className={styles.headerBand}
-            data-ambient-sound={fantasyTheme.audioHooks.setupAmbience}
-          >
-            <div className={styles.headerTop}>
-              <div className={styles.heroHeader}>
-                <p className={styles.heroEyebrow}>Guild hall bootstrap</p>
-                <h2 className={styles.heroTitle}>
-                  Choose the bootstrap rite that will awaken your command tome.
+        <div className="grid gap-6">
+          <Card surface="stone" className="p-6">
+            <div className="flex flex-wrap items-start justify-between gap-6">
+              <div className="grid max-w-xl gap-2">
+                <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+                  Instance bootstrap
+                </p>
+                <h2 className="text-2xl font-semibold">
+                  Choose the setup method for this instance.
                 </h2>
-                <p className={styles.heroCopy}>
-                  Local credentials favor direct stewardship. OAuth bootstrap
-                  lets a trusted identity step through an already configured
-                  envoy gate. Both paths preserve the same server-approved
-                  first-run flow.
+                <p className="text-muted-foreground">
+                  Local credentials favor direct control. OAuth bootstrap lets
+                  a trusted identity step through an already configured
+                  provider. Both paths use the same server-approved first-run
+                  flow.
                 </p>
               </div>
-              <div className={styles.heroSeal}>
-                <span>First steward</span>
+              <div className="grid justify-items-end gap-1 text-right">
+                <span className="text-xs text-muted-foreground">
+                  First administrator
+                </span>
                 <strong>
-                  {hasConfiguredProviders ? "Two paths open" : "Local rite ready"}
+                  {hasConfiguredProviders ? "Two paths available" : "Local setup ready"}
                 </strong>
-                <small>
+                <small className="text-xs text-muted-foreground">
                   {hasConfiguredProviders
-                    ? `${setupStatus.configured_oauth_providers.length} configured envoys`
-                    : "Awaiting first consecration"}
+                    ? `${setupStatus.configured_oauth_providers.length} configured providers`
+                    : "Awaiting first setup"}
                 </small>
               </div>
             </div>
 
-            <div className={styles.stepList}>
-              {ritualSteps.map((step, index) => (
+            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+              {setupSteps.map((step, index) => (
                 <article
                   key={step.label}
                   className={cn(
-                    styles.step,
-                    step.state === "complete" && styles.stepComplete,
-                    step.state === "active" && styles.stepActive,
+                    "rounded-lg border border-border p-4",
+                    step.state === "complete" && "border-primary/40 bg-primary/5",
+                    step.state === "active" && "border-ring",
                   )}
                 >
-                  <span className={styles.stepMarker}>
+                  <span className="mb-2 inline-flex size-6 items-center justify-center rounded-full bg-muted text-xs font-semibold">
                     {step.state === "complete" ? "✓" : index + 1}
                   </span>
-                  <h3 className={styles.stepTitle}>{step.label}</h3>
-                  <p className={styles.stepCopy}>{step.copy}</p>
+                  <h3 className="font-semibold">{step.label}</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {step.copy}
+                  </p>
                 </article>
               ))}
             </div>
           </Card>
 
-          <div className={styles.pathGrid}>
-            <Card
-              surface="leather"
-              className={cn(panelStyles.panel, panelStyles.localPanel)}
-              style={localPanelStyle}
-            >
-              <form onSubmit={onSubmitBasic} className={styles.form}>
-                <header className={panelStyles.sectionHeader}>
-                  <p className={panelStyles.sectionKicker}>
-                    <FantasyIcon name="quill" size={16} />
-                    Local stewardship
-                  </p>
-                  <div className={styles.titleRow}>
-                    <h3 className={panelStyles.sectionTitle}>
-                      Create administrator account
-                    </h3>
-                    <Tooltip content="Use a long passphrase and matching recovery email so the first steward account is easy to preserve and hard to compromise.">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card surface="leather" className="p-6">
+              <form onSubmit={onSubmitBasic} className="grid gap-6">
+                <header className="grid gap-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="flex items-center gap-2 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+                      <FantasyIcon name="quill" size={16} />
+                      Local setup
+                    </p>
+                    <Tooltip content="Use a long passphrase and matching recovery email so the first administrator account is easy to preserve and hard to compromise.">
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className={buttonStyles.helpButton}
                         icon="spark"
                         aria-label="Password guidance"
                       >
@@ -502,33 +490,41 @@ export default function SetupPage({
                       </Button>
                     </Tooltip>
                   </div>
-                  <p className={panelStyles.sectionSubtitle}>
-                    Establish the first local steward with a readable identity,
-                    recovery email, and a resilient password seal.
+                  <h3 className="text-lg font-semibold">
+                    Create administrator account
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Set up the first local administrator with a username,
+                    recovery email, and a strong password.
                   </p>
-                  <div className={panelStyles.pillRow}>
-                    <span className={panelStyles.pill}>Immediate control</span>
-                    <span className={panelStyles.pill}>Recovery ready</span>
-                    <span className={panelStyles.pill}>Password warding</span>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+                      Immediate control
+                    </span>
+                    <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+                      Recovery ready
+                    </span>
+                    <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+                      Password strength check
+                    </span>
                   </div>
                 </header>
 
-                <div className={styles.fieldGrid}>
+                <div className="grid gap-4">
                   <Field
                     label="Bootstrap admin code"
                     htmlFor="setup-admin-code"
                     accent="Required"
                     error={localFieldError("adminCode")}
-                    hint="Use the one-time seal emitted by the server."
+                    hint="Use the one-time code emitted by the server."
                   >
-                    <input
+                    <Input
                       id="setup-admin-code"
                       name="adminCode"
                       autoComplete="one-time-code"
                       value={resolvedAdminCode}
                       onBlur={() => markTouched("adminCode")}
                       onChange={(event) => setAdminCode(event.target.value)}
-                      className={inputStyles.input}
                       placeholder="ABCD-EFGH-JKLM"
                     />
                   </Field>
@@ -538,16 +534,15 @@ export default function SetupPage({
                     htmlFor="setup-username"
                     accent="Required"
                     error={localFieldError("username")}
-                    hint="This name appears in the hall and future worlds."
+                    hint="This name appears throughout the app and future worlds."
                   >
-                    <input
+                    <Input
                       id="setup-username"
                       name="username"
                       autoComplete="username"
                       value={username}
                       onBlur={() => markTouched("username")}
                       onChange={(event) => setUsername(event.target.value)}
-                      className={inputStyles.input}
                       placeholder="founder"
                     />
                   </Field>
@@ -559,7 +554,7 @@ export default function SetupPage({
                     error={localFieldError("email")}
                     hint="Used for recovery, notices, and future account flows."
                   >
-                    <input
+                    <Input
                       id="setup-email"
                       name="email"
                       type="email"
@@ -567,7 +562,6 @@ export default function SetupPage({
                       value={email}
                       onBlur={() => markTouched("email")}
                       onChange={(event) => setEmail(event.target.value)}
-                      className={inputStyles.input}
                       placeholder="admin@example.com"
                     />
                   </Field>
@@ -578,7 +572,7 @@ export default function SetupPage({
                     accent="Required"
                     error={localFieldError("password")}
                   >
-                    <input
+                    <Input
                       id="setup-password"
                       name="password"
                       type="password"
@@ -586,23 +580,32 @@ export default function SetupPage({
                       value={password}
                       onBlur={() => markTouched("password")}
                       onChange={(event) => setPassword(event.target.value)}
-                      className={inputStyles.input}
                       placeholder="Create a strong password"
                     />
                   </Field>
 
-                  <div className={cn(inputStyles.strength, inputStyles[passwordStrength.tone])}>
-                    <div className={inputStyles.strengthHeader}>
-                      <span>Password strength</span>
+                  <div className="grid gap-2 rounded-lg border border-border p-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        Password strength
+                      </span>
                       <strong>{passwordStrength.label}</strong>
                     </div>
-                    <div className={inputStyles.strengthTrack} aria-hidden="true">
+                    <div
+                      className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+                      aria-hidden="true"
+                    >
                       <div
-                        className={inputStyles.strengthFill}
+                        className={cn(
+                          "h-full rounded-full transition-all",
+                          STRENGTH_BAR_CLASSES[passwordStrength.tone],
+                        )}
                         style={{ width: `${Math.max(passwordStrength.score, 0) * 25}%` }}
                       />
                     </div>
-                    <p className={inputStyles.strengthCopy}>{passwordStrength.copy}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {passwordStrength.copy}
+                    </p>
                   </div>
 
                   <Field
@@ -610,9 +613,9 @@ export default function SetupPage({
                     htmlFor="setup-password-confirmation"
                     accent="Required"
                     error={localFieldError("passwordConfirmation")}
-                    hint="The confirmation must match before the rite can finish."
+                    hint="The confirmation must match before setup can finish."
                   >
-                    <input
+                    <Input
                       id="setup-password-confirmation"
                       name="passwordConfirmation"
                       type="password"
@@ -622,76 +625,74 @@ export default function SetupPage({
                       onChange={(event) =>
                         setPasswordConfirmation(event.target.value)
                       }
-                      className={inputStyles.input}
                       placeholder="Confirm the password"
                     />
                   </Field>
                 </div>
 
-                <div className={styles.actions}>
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    size="lg"
-                    fullWidth
-                    disabled={isSubmitting}
-                    icon="shield"
-                    className={buttonStyles.primaryAction}
-                  >
-                    {isSubmitting
-                      ? "Consecrating administrator..."
-                      : "Create Administrator Account"}
-                  </Button>
-                </div>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  disabled={isSubmitting}
+                  icon="shield"
+                >
+                  {isSubmitting
+                    ? "Creating administrator..."
+                    : "Create Administrator Account"}
+                </Button>
 
-                <footer className={panelStyles.panelFooter}>
+                <footer className="border-t border-border pt-4 text-sm text-muted-foreground">
                   <p>
-                    The local rite stores credentials on this instance and opens
-                    the admin welcome hall immediately after a successful consecration.
+                    The local method stores credentials on this instance and
+                    opens the admin welcome page immediately after a
+                    successful setup.
                   </p>
                 </footer>
               </form>
             </Card>
 
-            <Card
-              surface="parchment"
-              className={cn(panelStyles.panel, panelStyles.oauthPanel)}
-              style={oauthPanelStyle}
-            >
-              <div className={styles.form}>
-                <header className={panelStyles.sectionHeader}>
-                  <p className={panelStyles.sectionKicker}>
+            <Card surface="parchment" className="p-6">
+              <div className="grid gap-6">
+                <header className="grid gap-2">
+                  <p className="flex items-center gap-2 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
                     <FantasyIcon name="wand" size={16} />
                     Federated bootstrap
                   </p>
-                  <h3 className={panelStyles.sectionTitle}>Use OAuth Bootstrap</h3>
-                  <p className={cn(panelStyles.sectionSubtitle, styles.lightDescription)}>
-                    Invite a configured provider to consecrate the first steward
-                    from a trusted external identity.
+                  <h3 className="text-lg font-semibold">Use OAuth Bootstrap</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Invite a configured provider to create the first
+                    administrator from a trusted external identity.
                   </p>
-                  <div className={panelStyles.pillRow}>
-                    <span className={panelStyles.pill}>Federated identity</span>
-                    <span className={panelStyles.pill}>Reduced password handling</span>
-                    <span className={panelStyles.pill}>Guided redirect flow</span>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+                      Federated identity
+                    </span>
+                    <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+                      Reduced password handling
+                    </span>
+                    <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+                      Guided redirect flow
+                    </span>
                   </div>
                 </header>
 
-                <div className={styles.fieldGrid}>
+                <div className="grid gap-4">
                   <Field
                     label="Bootstrap admin code"
                     htmlFor="setup-oauth-code"
                     accent="Required"
                     error={oauthFieldError("adminCode")}
-                    hint="The same one-time seal also governs OAuth bootstrap."
+                    hint="The same one-time code also governs OAuth bootstrap."
                   >
-                    <input
+                    <Input
                       id="setup-oauth-code"
                       name="oauthAdminCode"
                       autoComplete="one-time-code"
                       value={resolvedAdminCode}
                       onBlur={() => markTouched("adminCode")}
                       onChange={(event) => setAdminCode(event.target.value)}
-                      className={inputStyles.input}
                       placeholder="ABCD-EFGH-JKLM"
                     />
                   </Field>
@@ -703,20 +704,19 @@ export default function SetupPage({
                     error={oauthFieldError("oauthUsername")}
                     hint="Leave blank to inherit the provider's preferred identity."
                   >
-                    <input
+                    <Input
                       id="setup-oauth-username"
                       name="oauthUsername"
                       autoComplete="username"
                       value={oauthUsername}
                       onBlur={() => markTouched("oauthUsername")}
                       onChange={(event) => setOauthUsername(event.target.value)}
-                      className={inputStyles.input}
                       placeholder="Optional username override"
                     />
                   </Field>
                 </div>
 
-                <div className={styles.providerList}>
+                <div className="grid gap-3">
                   {hasConfiguredProviders ? (
                     setupStatus.configured_oauth_providers.map((provider) => (
                       <Button
@@ -725,7 +725,6 @@ export default function SetupPage({
                         icon="wand"
                         fullWidth
                         disabled={Boolean(isStartingOAuth)}
-                        className={buttonStyles.providerAction}
                         onClick={() =>
                           void onStartOAuth(
                             provider.provider_key,
@@ -739,17 +738,17 @@ export default function SetupPage({
                       </Button>
                     ))
                   ) : (
-                    <StatusBadge variant="warning" className={styles.oauthStatus}>
+                    <StatusBadge variant="warning">
                       No OAuth providers are configured yet.
                     </StatusBadge>
                   )}
                 </div>
 
-                <footer className={panelStyles.panelFooter}>
+                <footer className="border-t border-border pt-4 text-sm text-muted-foreground">
                   <p>
                     Recommended when your instance already trusts an external
-                    identity provider and you want the founding steward to begin
-                    with federation.
+                    identity provider and you want the founding administrator
+                    to begin with federation.
                   </p>
                 </footer>
               </div>
@@ -757,10 +756,7 @@ export default function SetupPage({
           </div>
 
           {resolvedStatus ? (
-            <StatusBadge
-              variant={statusVariant(resolvedStatus)}
-              className={styles.statusBanner}
-            >
+            <StatusBadge variant={statusVariant(resolvedStatus)}>
               {resolvedStatus}
             </StatusBadge>
           ) : null}

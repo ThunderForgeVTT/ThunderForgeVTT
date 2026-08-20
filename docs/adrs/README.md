@@ -32,7 +32,20 @@ This directory contains architecture decisions for ThunderForgeVTT, captured usi
 | [20260504-022](./20260504-022-world_routing_rules.md)                            | Accepted | World Routing Rules                                                                           |
 | [20260504-023](./20260504-023-world_ownership_rules.md)                          | Accepted | World Ownership Rules                                                                         |
 | [20260504-024](./20260504-024-world_placeholder_domain_objects.md)               | Accepted | World Placeholder Domain Objects                                                              |
+| [20260504-025](./20260504-025-pack_crate_naming_convention.md)                   | Stub     | Pack Crate Naming Convention *(file is empty — content not yet written)*                      |
+| [20260504-026](./20260504-026-pack_architecture_and_pack_type_standard.md)       | Stub     | Pack Architecture and Pack Type Standard *(file is empty — content not yet written)*           |
+| [20260504-027](./20260504-027-game_system_packaging_and_manifest_contract.md)    | Stub     | Game System Packaging and Manifest Contract *(file is empty — content not yet written)*        |
+| [20260504-028](./20260504-028-game_systems_db_model_and_ownership_rules.md)      | Stub     | Game Systems DB Model and Ownership Rules *(file is empty — content not yet written)*          |
+| [20260504-029](./20260504-029-runtime_module_loading_and_security.md)           | Stub     | Runtime Module Loading and Security *(file is empty — content not yet written)*                |
+| [20260504-030](./20260504-030-compendium_pack_format.md)                        | Stub     | Compendium Pack Format *(file is empty — content not yet written)*                             |
+| [20260505-031](./20260505-031-scene_domain_model.md)                            | Accepted | Scene Domain Model                                                                             |
+| [20260505-032](./20260505-032-canvas_rendering_strategy_bevy.md)                | Accepted | Canvas Rendering Strategy (Bevy)                                                                |
+| [20260505-033](./20260505-033-token_data_model_and_ownership.md)                | Accepted | Token Data Model & Ownership                                                                    |
+| [20260505-034](./20260505-034-fog_of_war_implementation.md)                     | Accepted | Fog of War Implementation                                                                       |
+| [20260505-035](./20260505-035-player_view_architecture.md)                      | Accepted | Player View Architecture                                                                        |
 | [20260505-036](./20260505-036-extensible_system_agnostic_actor_data_architecture.md) | Accepted | Extensible System-Agnostic Actor Data Architecture (Type-Indexed JSONB)                      |
+
+> **Note (2026-08-19):** ADRs 020–024 originally collided with an unrelated "pack system" batch that reused the same day-020 through day-024 numbers. The world-domain ADRs (020–024 above) were committed first and are documented here; the colliding pack-system ADRs were renumbered to 026–030. See `docs/SYSTEM_HOOKS_API_GUIDE.md` and ADR-036's "Related Decisions" for the corrected references.
 
 ## Guidelines
 

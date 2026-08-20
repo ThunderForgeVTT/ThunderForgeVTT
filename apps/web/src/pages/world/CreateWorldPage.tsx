@@ -5,19 +5,25 @@ import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { Container } from "@/components/ui/container/Container";
 import { Field } from "@/components/ui/field/Field";
+import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import type { SeoConfig } from "@/types/seo";
-import styles from "./CreateWorldPage.module.scss";
 
 const GAME_SYSTEM_OPTIONS = [
-  { value: "", label: "Choose a placeholder game system" },
   { value: "systemless-sandbox", label: "Systemless Sandbox" },
   { value: "dnd5e-preview", label: "Fifth Age Preview" },
   { value: "pathfinder2e-preview", label: "Second Chronicle Preview" },
 ] as const;
 
 const INTERFACE_PACK_OPTIONS = [
-  { value: "", label: "Choose a placeholder interface pack" },
   { value: "guild-hall-default", label: "Guild Hall Default" },
   { value: "starlit-vault-preview", label: "Starlit Vault Preview" },
   { value: "emberkeep-tome-preview", label: "Emberkeep Tome Preview" },
@@ -60,7 +66,7 @@ export default function CreateWorldPage() {
       void navigate(`/world/${world.id}`);
     } catch (error) {
       setStatus(
-        error instanceof Error ? error.message : "Failed to found world.",
+        error instanceof Error ? error.message : "Failed to create world.",
       );
       setIsSaving(false);
     }
@@ -70,39 +76,45 @@ export default function CreateWorldPage() {
     <>
       <SEO {...createWorldPageSeo} />
       <Container narrow>
-        <main className={styles.shell}>
-          <section className={styles.hero}>
-            <p className={styles.eyebrow}>Realm charter</p>
-            <h1>Found a new world inside the ThunderForge atlas.</h1>
-            <p>
-              Give the realm a name, record its first lore, and bind placeholder
-              contracts for its future game system and interface pack.
+        <main className="grid gap-8 pb-16">
+          <section className="grid gap-3">
+            <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+              New world
+            </p>
+            <h1 className="text-3xl font-semibold">
+              Create a new world in your ThunderForge library.
+            </h1>
+            <p className="text-muted-foreground">
+              Give the world a name, record its first description, and bind
+              placeholder contracts for its future game system and interface
+              pack.
             </p>
           </section>
 
           <form
-            className={styles.formPanel}
+            className="grid gap-6 rounded-xl border border-border bg-card p-6"
             onSubmit={(event) => void handleSubmit(event)}
           >
-            <div className={styles.formHeader}>
+            <div className="flex items-start justify-between gap-4">
               <div>
-                <p className={styles.sectionKicker}>Parchment seal</p>
-                <h2>World metadata</h2>
+                <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+                  Details
+                </p>
+                <h2 className="text-xl font-semibold">World metadata</h2>
               </div>
               <Button asChild variant="ghost" icon="arrow-left">
-                <Link to="/worlds">Back to archive</Link>
+                <Link to="/worlds">Back to worlds</Link>
               </Button>
             </div>
 
-            <div className={styles.fieldStack}>
+            <div className="grid gap-4">
               <Field
                 label="World name"
                 htmlFor="world-name"
                 hint="Use 3-64 characters. Spaces and simple punctuation are welcome."
               >
-                <input
+                <Input
                   id="world-name"
-                  className={styles.input}
                   name="name"
                   autoComplete="off"
                   value={name}
@@ -118,9 +130,8 @@ export default function CreateWorldPage() {
                 htmlFor="world-description"
                 hint={`${descriptionCount}/600 characters`}
               >
-                <textarea
+                <Textarea
                   id="world-description"
-                  className={styles.textarea}
                   name="description"
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
@@ -131,24 +142,24 @@ export default function CreateWorldPage() {
               </Field>
             </div>
 
-            <div className={styles.selectGrid}>
+            <div className="grid gap-4 sm:grid-cols-2">
               <Field
                 label="Game system"
                 htmlFor="world-game-system"
                 hint="Placeholder until deeper system contracts arrive."
               >
-                <select
-                  id="world-game-system"
-                  className={styles.select}
-                  value={gameSystemId}
-                  onChange={(event) => setGameSystemId(event.target.value)}
-                >
-                  {GAME_SYSTEM_OPTIONS.map((option) => (
-                    <option key={option.value || "blank"} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                <Select value={gameSystemId} onValueChange={setGameSystemId}>
+                  <SelectTrigger id="world-game-system" className="w-full">
+                    <SelectValue placeholder="Choose a placeholder game system" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {GAME_SYSTEM_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Field>
 
               <Field
@@ -156,18 +167,21 @@ export default function CreateWorldPage() {
                 htmlFor="world-interface-pack"
                 hint="Placeholder until Phase 3.5 ships the full selector."
               >
-                <select
-                  id="world-interface-pack"
-                  className={styles.select}
+                <Select
                   value={interfacePackId}
-                  onChange={(event) => setInterfacePackId(event.target.value)}
+                  onValueChange={setInterfacePackId}
                 >
-                  {INTERFACE_PACK_OPTIONS.map((option) => (
-                    <option key={option.value || "blank"} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger id="world-interface-pack" className="w-full">
+                    <SelectValue placeholder="Choose a placeholder interface pack" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INTERFACE_PACK_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Field>
             </div>
 
@@ -175,18 +189,13 @@ export default function CreateWorldPage() {
               <StatusBadge variant="danger">{status}</StatusBadge>
             ) : null}
 
-            <div className={styles.footer}>
-              <p>
+            <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border pt-4">
+              <p className="text-sm text-muted-foreground">
                 Ownership is bound automatically to your authenticated session
                 at creation time.
               </p>
-              <Button
-                type="submit"
-                icon="spark"
-                className={styles.submitButton}
-                disabled={isSaving}
-              >
-                {isSaving ? "Binding the realm..." : "Create world"}
+              <Button type="submit" icon="spark" disabled={isSaving}>
+                {isSaving ? "Creating world..." : "Create world"}
               </Button>
             </div>
           </form>

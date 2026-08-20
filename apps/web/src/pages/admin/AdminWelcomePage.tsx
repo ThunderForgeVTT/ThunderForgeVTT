@@ -11,7 +11,6 @@ import { useAuth } from "@/hooks/useAuth";
 import type { AdminWelcomeSummary } from "@/types/admin";
 import type { SeoConfig } from "@/types/seo";
 import { MetricsCard } from "./components/MetricsCard";
-import styles from "./AdminWelcomePage.module.scss";
 
 export const adminWelcomePageSeo: SeoConfig = {
   title: "Admin welcome",
@@ -58,16 +57,20 @@ export default function AdminWelcomePage() {
     <>
       <SEO {...adminWelcomePageSeo} />
       <Container>
-        <main className={styles.shell}>
-          <section className={styles.hero}>
-            <p className={styles.eyebrow}>Administrator landing</p>
-            <h1>Welcome, Administrator of ThunderForge.</h1>
-            <p>
-              {user?.username ?? "Steward"}, the guild hall is ready. Review the
-              realm at a glance, then move into settings, OAuth provider setup,
-              analytics, or system policy.
+        <main className="grid gap-6 pb-12">
+          <section className="grid gap-3 rounded-xl border border-border bg-card p-6">
+            <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+              Administrator landing
             </p>
-            <div className={styles.actions}>
+            <h1 className="text-2xl font-semibold">
+              Welcome, Administrator of ThunderForge.
+            </h1>
+            <p className="max-w-[60ch] text-muted-foreground">
+              {user?.username ?? "Admin"}, here&apos;s the current state of the
+              system. Review it at a glance, then move into settings, OAuth
+              provider setup, analytics, or system policy.
+            </p>
+            <div className="flex flex-wrap gap-3">
               <Button asChild icon="settings">
                 <Link to="/admin/settings">System Settings</Link>
               </Button>
@@ -84,7 +87,7 @@ export default function AdminWelcomePage() {
 
           {summary ? (
             <>
-              <section className={styles.metricsGrid}>
+              <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
                 <MetricsCard
                   title="Users"
                   value={summary.totalUsers.toLocaleString()}
@@ -120,19 +123,27 @@ export default function AdminWelcomePage() {
                 />
               </section>
 
-              <section className={styles.quickGrid}>
-                <Card surface="parchment" className={styles.quickCard}>
-                  <h2>Quick links</h2>
-                  <div className={styles.linkList}>
-                    <Link to="/admin/settings">System Settings</Link>
-                    <Link to="/admin/oauth">OAuth Providers</Link>
-                    <Link to="/admin/analytics">Analytics Dashboard</Link>
-                    <Link to="/admin/system">Manifest Configuration</Link>
+              <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <Card surface="parchment" className="grid gap-3 p-6">
+                  <h2 className="text-lg font-semibold">Quick links</h2>
+                  <div className="grid gap-2">
+                    <Link to="/admin/settings" className="font-semibold text-primary hover:underline">
+                      System Settings
+                    </Link>
+                    <Link to="/admin/oauth" className="font-semibold text-primary hover:underline">
+                      OAuth Providers
+                    </Link>
+                    <Link to="/admin/analytics" className="font-semibold text-primary hover:underline">
+                      Analytics Dashboard
+                    </Link>
+                    <Link to="/admin/system" className="font-semibold text-primary hover:underline">
+                      Manifest Configuration
+                    </Link>
                   </div>
                 </Card>
-                <Card surface="leather" className={styles.quickCard}>
-                  <h2>Realm notes</h2>
-                  <p>
+                <Card surface="leather" className="grid gap-3 p-6">
+                  <h2 className="text-lg font-semibold">Notes</h2>
+                  <p className="text-muted-foreground">
                     Admin metrics here are sourced from persisted tables and live
                     data-directory inspection, so they reflect the current state
                     without relying on mock counters.

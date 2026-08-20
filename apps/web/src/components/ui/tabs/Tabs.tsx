@@ -1,9 +1,13 @@
-import * as RadixTabs from "@radix-ui/react-tabs";
 import type { ReactNode } from "react";
-import { cn } from "@/utils/cn";
+import {
+  Tabs as ShadcnTabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
 import type { FantasyIconName } from "@/components/ui/fantasy-icon/FantasyIcon";
-import styles from "./Tabs.module.scss";
 
 export interface TabsItem {
   value: string;
@@ -20,32 +24,21 @@ export interface TabsProps {
 
 export function Tabs({ items, defaultValue, className }: TabsProps) {
   return (
-    <RadixTabs.Root
-      className={cn(styles.tabs, className)}
-      defaultValue={defaultValue}
-    >
-      <RadixTabs.List className={styles.list} aria-label="Sections">
+    <ShadcnTabs defaultValue={defaultValue} className={cn(className)}>
+      <TabsList aria-label="Sections">
         {items.map((item) => (
-          <RadixTabs.Trigger
-            key={item.value}
-            className={styles.trigger}
-            value={item.value}
-          >
+          <TabsTrigger key={item.value} value={item.value}>
             {item.icon ? <FantasyIcon name={item.icon} size={16} /> : null}
             <span>{item.label}</span>
-          </RadixTabs.Trigger>
+          </TabsTrigger>
         ))}
-      </RadixTabs.List>
+      </TabsList>
 
       {items.map((item) => (
-        <RadixTabs.Content
-          key={item.value}
-          className={styles.content}
-          value={item.value}
-        >
+        <TabsContent key={item.value} value={item.value}>
           {item.content}
-        </RadixTabs.Content>
+        </TabsContent>
       ))}
-    </RadixTabs.Root>
+    </ShadcnTabs>
   );
 }

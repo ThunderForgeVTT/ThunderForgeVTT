@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button/Button";
 import { Field } from "@/components/ui/field/Field";
+import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
+import { Switch } from "@/components/ui/switch";
 import type { OAuthProviderConfig, UpdateOAuthProviderInput } from "@/types/admin";
-import styles from "./OAuthProviderForm.module.scss";
 
 interface OAuthProviderFormProps {
   provider: OAuthProviderConfig;
@@ -29,7 +30,7 @@ export function OAuthProviderForm({
   const providerSubtitle = useMemo(
     () =>
       provider.configured
-        ? "Configured envoy"
+        ? "Configured provider"
         : "Awaiting credentials",
     [provider.configured],
   );
@@ -60,25 +61,24 @@ export function OAuthProviderForm({
   };
 
   return (
-    <article className={styles.formCard}>
-      <div className={styles.header}>
+    <article className="grid gap-4 rounded-lg border border-border bg-secondary/40 p-4">
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h3>{displayName}</h3>
-          <p>{providerSubtitle}</p>
+          <h3 className="font-semibold">{displayName}</h3>
+          <p className="text-muted-foreground">{providerSubtitle}</p>
         </div>
-        <label className={styles.toggle}>
-          <input
-            type="checkbox"
+        <label className="flex items-center gap-2 text-sm">
+          <Switch
             checked={enabled}
-            onChange={(event) => setEnabled(event.target.checked)}
+            onCheckedChange={(checked) => setEnabled(checked)}
           />
           <span>{enabled ? "Enabled" : "Disabled"}</span>
         </label>
       </div>
 
-      <div className={styles.fields}>
+      <div className="grid gap-4">
         <Field label="Display name" htmlFor={`${provider.id}-display-name`}>
-          <input
+          <Input
             id={`${provider.id}-display-name`}
             value={displayName}
             onChange={(event) => setDisplayName(event.target.value)}
@@ -86,7 +86,7 @@ export function OAuthProviderForm({
           />
         </Field>
         <Field label="Client ID" htmlFor={`${provider.id}-client-id`}>
-          <input
+          <Input
             id={`${provider.id}-client-id`}
             value={oauthClientId}
             onChange={(event) => setOauthClientId(event.target.value)}
@@ -96,9 +96,9 @@ export function OAuthProviderForm({
         <Field
           label="Client secret"
           htmlFor={`${provider.id}-client-secret`}
-          hint={provider.hasClientSecret ? "Leave blank to keep the stored secret." : "Add the first client secret for this envoy."}
+          hint={provider.hasClientSecret ? "Leave blank to keep the stored secret." : "Add the first client secret for this provider."}
         >
-          <input
+          <Input
             id={`${provider.id}-client-secret`}
             type="password"
             value={oauthClientSecret}
@@ -107,7 +107,7 @@ export function OAuthProviderForm({
           />
         </Field>
         <Field label="Userinfo URL" htmlFor={`${provider.id}-userinfo-url`}>
-          <input
+          <Input
             id={`${provider.id}-userinfo-url`}
             value={userinfoUrl}
             onChange={(event) => setUserinfoUrl(event.target.value)}
@@ -119,7 +119,7 @@ export function OAuthProviderForm({
           htmlFor={`${provider.id}-scopes`}
           hint="Use space-separated OAuth scopes."
         >
-          <input
+          <Input
             id={`${provider.id}-scopes`}
             value={scopes}
             onChange={(event) => setScopes(event.target.value)}
@@ -128,7 +128,7 @@ export function OAuthProviderForm({
         </Field>
       </div>
 
-      <div className={styles.footer}>
+      <div className="flex flex-wrap items-center gap-3">
         <Button
           type="button"
           variant="secondary"

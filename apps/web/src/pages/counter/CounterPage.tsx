@@ -21,7 +21,6 @@ import { Tooltip } from "@/components/ui/tooltip/Tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { useAvatar } from "@/hooks/useAvatar";
 import type { SeoConfig } from "@/types/seo";
-import styles from "./CounterPage.module.scss";
 
 export const counterPageSeo: SeoConfig = {
   title: "Dashboard preview",
@@ -57,7 +56,7 @@ export default function CounterPage() {
       },
       {
         title: "Permissions",
-        body: "Role controls can slot into themed sidebars and dialogs while the sync contract remains unchanged.",
+        body: "Role controls can slot into sidebars and dialogs while the sync contract remains unchanged.",
       },
     ],
     [],
@@ -69,9 +68,9 @@ export default function CounterPage() {
         label: "Worlds",
         icon: "worlds" as const,
         content: (
-          <Panel variant="parchment" className={styles.tabPanel}>
-            <h3>Guild atlas</h3>
-            <p>
+          <Panel variant="parchment" className="grid gap-2">
+            <h3 className="text-lg font-semibold">World index</h3>
+            <p className="text-muted-foreground">
               Use this surface for world discovery, invitations, ownership
               transfer, and world summaries.
             </p>
@@ -83,9 +82,9 @@ export default function CounterPage() {
         label: "Tokens",
         icon: "tokens" as const,
         content: (
-          <Panel variant="parchment" className={styles.tabPanel}>
-            <h3>Token forge</h3>
-            <p>
+          <Panel variant="parchment" className="grid gap-2">
+            <h3 className="text-lg font-semibold">Token generation</h3>
+            <p className="text-muted-foreground">
               Dicebear portraits and token exports are ready for scene
               placement, actor linking, and faction theming.
             </p>
@@ -97,11 +96,11 @@ export default function CounterPage() {
         label: "Permissions",
         icon: "shield" as const,
         content: (
-          <Panel variant="parchment" className={styles.tabPanel}>
-            <h3>Ward sigils</h3>
-            <p>
-              Permissions can map onto Radix dialogs, dropdowns, and scroll
-              areas as the policy surface expands.
+          <Panel variant="parchment" className="grid gap-2">
+            <h3 className="text-lg font-semibold">Permissions</h3>
+            <p className="text-muted-foreground">
+              Permissions can map onto dialogs, dropdowns, and scroll areas as
+              the policy surface expands.
             </p>
           </Panel>
         ),
@@ -160,16 +159,20 @@ export default function CounterPage() {
     <>
       <SEO {...counterPageSeo} />
       <Container>
-        <main className={styles.shell}>
-          <section className={styles.hero}>
-            <p className={styles.eyebrow}>Design system showcase</p>
-            <h1>The fantasy command deck for ThunderForge.</h1>
-            <p>
-              This page now acts as the UI guild hall: Radix primitives, themed
-              panels, Dicebear identity previews, and integration notes for the
-              next content phases.
+        <main className="grid gap-8 pb-12">
+          <section className="grid gap-3">
+            <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+              Design system showcase
             </p>
-            <div className={styles.heroActions}>
+            <h1 className="text-3xl font-semibold">
+              The ThunderForge command deck.
+            </h1>
+            <p className="max-w-2xl text-muted-foreground">
+              This page acts as the UI showcase: shadcn primitives, themed
+              panels, Dicebear identity previews, and integration notes for
+              the next content phases.
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
               <Tooltip content="Preview the scene shell with Bevy and tldraw still mounted beneath the new chrome.">
                 <Button asChild icon="worlds">
                   <Link to="/world/demo-world/play">Open demo world</Link>
@@ -182,11 +185,11 @@ export default function CounterPage() {
                   </Button>
                 }
               >
-                <div className={styles.popoverCopy}>
-                  <strong>Fantasy palette</strong>
-                  <p>
-                    Parchment, umber, forest, violet, gold, and candlelight
-                    compose the shared token language for every page.
+                <div className="grid gap-1">
+                  <strong>Design tokens</strong>
+                  <p className="text-sm text-muted-foreground">
+                    A neutral shadcn palette composes the shared token
+                    language for every page.
                   </p>
                 </div>
               </Popover>
@@ -197,7 +200,7 @@ export default function CounterPage() {
                   </Button>
                 }
                 items={[
-                  { label: "Login chamber", icon: "shield", href: "/login" },
+                  { label: "Login", icon: "shield", href: "/login" },
                   {
                     label: "Bootstrap setup",
                     icon: "settings",
@@ -220,19 +223,23 @@ export default function CounterPage() {
           ) : null}
 
           <Grid columns="two">
-            <Card surface="leather" className={styles.counterPanel}>
-              <div className={styles.counterRow}>
+            <Card surface="leather" className="grid gap-4 p-6">
+              <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className={styles.panelEyebrow}>Motion and controls</p>
-                  <h2>Command rune counter</h2>
-                  <p>
+                  <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+                    Motion and controls
+                  </p>
+                  <h2 className="text-xl font-semibold">Counter demo</h2>
+                  <p className="text-muted-foreground">
                     Keep one lightweight interactive element around as a
                     regression harness.
                   </p>
                 </div>
-                <span className={styles.counterValue}>{value}</span>
+                <span className="text-4xl font-semibold tabular-nums">
+                  {value}
+                </span>
               </div>
-              <div className={styles.counterRow}>
+              <div className="flex gap-3">
                 <Button
                   variant="secondary"
                   icon="rune"
@@ -250,23 +257,27 @@ export default function CounterPage() {
               </div>
             </Card>
 
-            <Card surface="parchment" className={styles.stack}>
-              <div className={styles.avatarStrip}>
+            <Card surface="parchment" className="grid gap-4 p-6">
+              <div className="flex items-center gap-4">
                 <Avatar
                   seed="demo-world-builder"
                   name="World builder"
                   size="lg"
                 />
                 <div>
-                  <p className={styles.panelEyebrow}>Dicebear integration</p>
-                  <h2>Avatars and token exports</h2>
-                  <p>
+                  <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+                    Dicebear integration
+                  </p>
+                  <h2 className="text-xl font-semibold">
+                    Avatars and token exports
+                  </h2>
+                  <p className="text-muted-foreground">
                     Player profiles, NPC portraits, and scene tokens can all
                     derive from seeds.
                   </p>
                 </div>
               </div>
-              <div className={styles.avatarActions}>
+              <div className="flex flex-wrap gap-3">
                 <Button
                   variant="secondary"
                   icon="actors"
@@ -282,7 +293,7 @@ export default function CounterPage() {
                   Export token PNG
                 </Button>
               </div>
-              <div className={styles.tokenPreview}>
+              <div className="flex flex-wrap gap-4">
                 <TokenAvatar seed="player" label="Player" />
                 <TokenAvatar seed="npc" label="NPC" />
                 <TokenAvatar seed="dragon-keeper" label="Warden" />
@@ -290,19 +301,21 @@ export default function CounterPage() {
             </Card>
           </Grid>
 
-          <Card surface="stone" className={styles.notesCard}>
-            <div className={styles.notesHeader}>
-              <div>
-                <p className={styles.panelEyebrow}>Account controls</p>
-                <h2>Data ownership and privacy</h2>
-              </div>
+          <Card surface="stone" className="grid gap-4 p-6">
+            <div>
+              <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+                Account controls
+              </p>
+              <h2 className="text-xl font-semibold">
+                Data ownership and privacy
+              </h2>
             </div>
-            <p>
+            <p className="text-muted-foreground">
               Manage the authenticated account for{" "}
               <strong>{user?.username ?? "this session"}</strong> with
               self-service export and permanent deletion actions.
             </p>
-            <div className={styles.counterRow}>
+            <div className="flex flex-wrap gap-3">
               <Button
                 variant="secondary"
                 icon="actors"
@@ -358,22 +371,22 @@ export default function CounterPage() {
 
           <Grid columns="three">
             {insights.map((insight) => (
-              <Card
-                key={insight.title}
-                surface="stone"
-                className={styles.metaList}
-              >
-                <h2>{insight.title}</h2>
-                <p>{insight.body}</p>
+              <Card key={insight.title} surface="stone" className="grid gap-2 p-6">
+                <h2 className="text-lg font-semibold">{insight.title}</h2>
+                <p className="text-muted-foreground">{insight.body}</p>
               </Card>
             ))}
           </Grid>
 
-          <Card surface="leather" className={styles.notesCard}>
-            <div className={styles.notesHeader}>
+          <Card surface="leather" className="grid gap-4 p-6">
+            <div className="flex items-center justify-between gap-4">
               <div>
-                <p className={styles.panelEyebrow}>Scene editor notes</p>
-                <h2>Fantasy UI primitives in one place</h2>
+                <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+                  Scene editor notes
+                </p>
+                <h2 className="text-xl font-semibold">
+                  UI primitives in one place
+                </h2>
               </div>
               <Dialog
                 trigger={
@@ -381,8 +394,8 @@ export default function CounterPage() {
                     Open release notes
                   </Button>
                 }
-                title="Fantasy overhaul package"
-                description="This modal demonstrates the Radix dialog wrapper with the new parchment styling."
+                title="UI overhaul package"
+                description="This modal demonstrates the dialog wrapper with the new shadcn styling."
                 footer={
                   <Button variant="primary" icon="spark">
                     Bound to future changelog flows
@@ -391,13 +404,13 @@ export default function CounterPage() {
               >
                 <p>
                   The current pass establishes theme tokens, layouts,
-                  navigation, avatar plumbing, and a skinned world workspace
+                  navigation, avatar plumbing, and a restyled world workspace
                   while leaving engine bindings untouched.
                 </p>
               </Dialog>
             </div>
-            <ScrollArea className={styles.notesScroll}>
-              <div className={styles.notesList}>
+            <ScrollArea className="h-64">
+              <div className="grid gap-3">
                 {[
                   "Worlds: add index cards, ownership badges, and party summaries.",
                   "Scenes: attach scene metadata to the world shell and expand toolbar actions.",
@@ -405,7 +418,7 @@ export default function CounterPage() {
                   "Actors: use tabs, dialogs, and scroll areas for sheets and inventories.",
                   "Permissions: add dropdown and dialog flows for role assignment.",
                 ].map((note) => (
-                  <div key={note} className={styles.noteItem}>
+                  <div key={note} className="flex items-start gap-2 text-sm">
                     <FantasyIcon name="spark" size={16} tone="gold" />
                     <span>{note}</span>
                   </div>

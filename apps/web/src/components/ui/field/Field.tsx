@@ -1,6 +1,5 @@
-import * as Label from "@radix-ui/react-label";
 import type { ReactNode } from "react";
-import styles from "./Field.module.scss";
+import { Label } from "@/components/ui/label";
 
 export interface FieldProps {
   label: string;
@@ -20,14 +19,23 @@ export function Field({
   children,
 }: FieldProps) {
   return (
-    <div className={styles.field}>
-      <Label.Root className={styles.label} htmlFor={htmlFor}>
+    <div className="grid gap-2">
+      <Label
+        htmlFor={htmlFor}
+        className="flex items-center justify-between gap-3 text-xs font-semibold tracking-wider text-muted-foreground uppercase"
+      >
         {label}
-        {accent ? <span className={styles.accent}>{accent}</span> : null}
-      </Label.Root>
+        {accent ? (
+          <span className="text-[0.7rem] text-primary">{accent}</span>
+        ) : null}
+      </Label>
       {children}
-      {error ? <span className={styles.error}>{error}</span> : null}
-      {hint && !error ? <span className={styles.hint}>{hint}</span> : null}
+      {error ? (
+        <span className="text-sm text-destructive">{error}</span>
+      ) : null}
+      {hint && !error ? (
+        <span className="text-sm text-muted-foreground">{hint}</span>
+      ) : null}
     </div>
   );
 }

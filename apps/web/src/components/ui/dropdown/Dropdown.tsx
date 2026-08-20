@@ -1,9 +1,14 @@
-import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import type { ReactNode } from "react";
-import { cn } from "@/utils/cn";
+import {
+  DropdownMenu as ShadcnDropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuShortcut,
+} from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
 import type { FantasyIconName } from "@/components/ui/fantasy-icon/FantasyIcon";
-import styles from "./Dropdown.module.scss";
 
 export interface DropdownItem {
   label: string;
@@ -29,61 +34,48 @@ export function Dropdown({
   className,
 }: DropdownProps) {
   return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>{trigger}</DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content
-          align={align}
-          className={cn(styles.content, className)}
-          sideOffset={10}
-        >
-          {items.map((item) => {
-            const body = (
-              <span
-                className={cn(
-                  styles.item,
-                  item.tone === "danger" && styles.danger,
-                )}
-              >
-                <span className={styles.itemLabel}>
-                  {item.icon ? (
-                    <FantasyIcon name={item.icon} size={16} />
-                  ) : null}
-                  {item.label}
-                </span>
-                {item.shortcut ? (
-                  <span className={styles.shortcut}>{item.shortcut}</span>
-                ) : null}
-              </span>
-            );
+    <ShadcnDropdownMenu>
+      <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+      <DropdownMenuContent align={align} className={cn(className)}>
+        {items.map((item) => {
+          const body = (
+            <>
+              {item.icon ? <FantasyIcon name={item.icon} size={16} /> : null}
+              <span>{item.label}</span>
+              {item.shortcut ? (
+                <DropdownMenuShortcut>{item.shortcut}</DropdownMenuShortcut>
+              ) : null}
+            </>
+          );
 
-            if (item.href) {
-              return (
-                <DropdownMenu.Item
-                  key={item.label}
-                  asChild
-                  disabled={item.disabled}
-                >
-                  <a className={styles.rootItem} href={item.href}>
-                    {body}
-                  </a>
-                </DropdownMenu.Item>
-              );
-            }
+          const toneClass =
+            item.tone === "danger" ? "text-destructive" : undefined;
 
+          if (item.href) {
             return (
-              <DropdownMenu.Item
+              <DropdownMenuItem
                 key={item.label}
-                className={styles.rootItem}
+                asChild
                 disabled={item.disabled}
-                onSelect={item.onSelect}
+                className={toneClass}
               >
-                {body}
-              </DropdownMenu.Item>
+                <a href={item.href}>{body}</a>
+              </DropdownMenuItem>
             );
-          })}
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
+          }
+
+          return (
+            <DropdownMenuItem
+              key={item.label}
+              disabled={item.disabled}
+              onSelect={item.onSelect}
+              className={toneClass}
+            >
+              {body}
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </ShadcnDropdownMenu>
   );
 }

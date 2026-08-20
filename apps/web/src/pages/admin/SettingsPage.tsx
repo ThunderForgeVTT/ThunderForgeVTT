@@ -14,6 +14,7 @@ import { Container } from "@/components/ui/container/Container";
 import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
 import { Loader } from "@/components/ui/loader/Loader";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
+import { cn } from "@/lib/utils";
 import type {
   AdminBootstrapSettings,
   AdminSettingsData,
@@ -28,7 +29,6 @@ import { ManifestEditor } from "./components/ManifestEditor";
 import { MetricsCard } from "./components/MetricsCard";
 import { OAuthProviderForm } from "./components/OAuthProviderForm";
 import { SecurityPanel } from "./components/SecurityPanel";
-import styles from "./SettingsPage.module.scss";
 
 type AdminSettingsSection = "overview" | "configuration" | "storage" | "security";
 
@@ -98,14 +98,14 @@ export default function SettingsPage({
             {
               title: "Users",
               value: data.adminStats.totalUsers.toLocaleString(),
-              subtitle: "Total stewards recorded in persisted auth state.",
+              subtitle: "Total accounts recorded in persisted auth state.",
               icon: "actors" as const,
               emphasis: "gold" as const,
             },
             {
               title: "Worlds",
               value: data.adminStats.totalWorlds.toLocaleString(),
-              subtitle: "Durable realms currently tracked in PostgreSQL.",
+              subtitle: "Durable worlds currently tracked in PostgreSQL.",
               icon: "worlds" as const,
               emphasis: "violet" as const,
             },
@@ -126,7 +126,7 @@ export default function SettingsPage({
             {
               title: "Policies",
               value: data.adminStats.totalPolicies.toLocaleString(),
-              subtitle: "Permission wards currently stored in policy tables.",
+              subtitle: "Permission rules currently stored in policy tables.",
               icon: "shield" as const,
               emphasis: "violet" as const,
             },
@@ -150,12 +150,12 @@ export default function SettingsPage({
     {
       section: "overview",
       path: "/admin",
-      description: "Realm analytics and live system counts",
+      description: "System analytics and live counts",
     },
     {
       section: "configuration",
       path: "/admin/configuration",
-      description: "OAuth envoys and manifest editing",
+      description: "OAuth providers and manifest editing",
     },
     {
       section: "storage",
@@ -244,7 +244,7 @@ export default function SettingsPage({
   if (!data) {
     return (
       <Container>
-        <main className={styles.errorShell}>
+        <main className="py-8">
           <StatusBadge variant="danger">
             {pageStatus ?? "Admin settings are unavailable."}
           </StatusBadge>
@@ -257,92 +257,108 @@ export default function SettingsPage({
     <>
       <SEO {...settingsPageSeo} />
       <Container>
-        <main className={styles.shell}>
-          <section className={styles.hero}>
-            <div className={styles.heroCopy}>
-              <p className={styles.eyebrow}>Admin control center</p>
-              <h1>Oversee analytics, configuration, and realm stewardship.</h1>
-              <p>
-                This page binds together persisted metrics, OAuth provider state,
-                manifest metadata, disk usage, and security policy inside a
-                single fantasy command surface.
+        <main className="grid gap-6 pb-12">
+          <section className="grid grid-cols-1 gap-4 rounded-xl border border-border bg-card p-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(13rem,0.7fr)]">
+            <div className="grid gap-2.5">
+              <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+                Admin control center
+              </p>
+              <h1 className="text-2xl font-semibold">
+                Oversee analytics, configuration, and system administration.
+              </h1>
+              <p className="max-w-[62ch] text-muted-foreground">
+                This page binds together persisted metrics, OAuth provider
+                state, manifest metadata, disk usage, and security policy in
+                a single command surface.
               </p>
             </div>
-            <div className={styles.heroBadge}>
-              <span>Active chapter</span>
-              <strong>{sectionLabel(section)}</strong>
-              <small>Live persisted state</small>
+            <div className="grid content-start gap-1 rounded-lg border border-border bg-secondary p-4">
+              <span className="text-xs tracking-widest text-muted-foreground uppercase">
+                Active section
+              </span>
+              <strong className="text-xl font-semibold text-primary">
+                {sectionLabel(section)}
+              </strong>
+              <small className="text-xs tracking-widest text-muted-foreground uppercase">
+                Live persisted state
+              </small>
             </div>
           </section>
 
-          <div className={styles.layout}>
-            <aside className={styles.sidebar}>
-              <Card surface="leather" className={styles.sidebarCard}>
-                <div className={styles.sidebarHeader}>
-                  <p className={styles.sidebarEyebrow}>Admin navigation</p>
-                  <h2>Command chapters</h2>
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(15rem,0.8fr)_minmax(0,2fr)]">
+            <aside className="min-w-0">
+              <Card surface="leather" className="grid gap-4 p-5">
+                <div className="grid gap-1">
+                  <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+                    Admin navigation
+                  </p>
+                  <h2 className="text-lg font-semibold">Sections</h2>
                 </div>
-                <nav className={styles.sidebarNav}>
+                <nav className="grid gap-3">
                   {sectionLinks.map((item) => (
                     <Link
-                        key={item.section}
-                        to={item.path}
-                        className={styles.sidebarLink}
-                        data-active={section === item.section}
-                      >
+                      key={item.section}
+                      to={item.path}
+                      className={cn(
+                        "grid gap-1 rounded-md border border-border bg-background/40 p-4",
+                        section === item.section &&
+                          "border-primary/40 ring-1 ring-primary/30",
+                      )}
+                    >
                       <span>{sectionLabel(item.section)}</span>
-                      <small>{item.description}</small>
+                      <small className="text-muted-foreground">
+                        {item.description}
+                      </small>
                     </Link>
                   ))}
                 </nav>
               </Card>
             </aside>
 
-            <div className={styles.content}>
-              <section className={styles.section} id="overview">
-                <div className={styles.sectionHeader}>
+            <div className="grid gap-5">
+              <section className="grid gap-3" id="overview">
+                <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className={styles.sectionKicker}>
+                    <p className="inline-flex items-center gap-2 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
                       <FantasyIcon name="scene" size={16} />
                       Overview
                     </p>
-                      <h2>Realm analytics</h2>
+                    <h2 className="text-xl font-semibold">System analytics</h2>
                   </div>
                   {section !== "overview" ? (
-                    <Button
-                      asChild
-                      variant="secondary"
-                      size="sm"
-                      icon="crown"
-                    >
+                    <Button asChild variant="secondary" size="sm" icon="crown">
                       <Link to="/admin">Return to admin overview</Link>
                     </Button>
                   ) : null}
                 </div>
-                <div className={styles.metricsGrid}>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {metricItems.map((item) => (
                     <MetricsCard key={item.title} {...item} />
                   ))}
                 </div>
               </section>
 
-              <section className={styles.section} id="configuration">
-                <div className={styles.sectionHeader}>
+              <section className="grid gap-3" id="configuration">
+                <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className={styles.sectionKicker}>
+                    <p className="inline-flex items-center gap-2 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
                       <FantasyIcon name="wand" size={16} />
                       Configuration
                     </p>
-                    <h2>OAuth providers and manifest</h2>
+                    <h2 className="text-xl font-semibold">
+                      OAuth providers and manifest
+                    </h2>
                   </div>
                 </div>
-                <div className={styles.stack}>
-                  <Card surface="parchment" className={styles.panel}>
-                    <div className={styles.panelHeader}>
-                      <h3>OAuth envoys</h3>
-                      <p>Edit stored provider credentials and availability.</p>
+                <div className="grid gap-4">
+                  <Card surface="parchment" className="grid gap-4 p-6">
+                    <div className="grid gap-1">
+                      <h3 className="text-lg font-semibold">OAuth providers</h3>
+                      <p className="text-muted-foreground">
+                        Edit stored provider credentials and availability.
+                      </p>
                     </div>
-                    <div className={styles.stack}>
+                    <div className="grid gap-4">
                       {data.oauthProviders.length ? (
                         data.oauthProviders.map((provider) => (
                           <OAuthProviderForm
@@ -359,10 +375,12 @@ export default function SettingsPage({
                     </div>
                   </Card>
 
-                  <Card surface="parchment" className={styles.panel}>
-                    <div className={styles.panelHeader}>
-                      <h3>Manifest viewer</h3>
-                      <p>Adjust editable MVP keys stored in the system manifest.</p>
+                  <Card surface="parchment" className="grid gap-4 p-6">
+                    <div className="grid gap-1">
+                      <h3 className="text-lg font-semibold">Manifest viewer</h3>
+                      <p className="text-muted-foreground">
+                        Adjust editable MVP keys stored in the system manifest.
+                      </p>
                     </div>
                     <ManifestEditor
                       manifest={data.systemManifest}
@@ -372,17 +390,19 @@ export default function SettingsPage({
                 </div>
               </section>
 
-              <section className={styles.section} id="storage">
-                <div className={styles.sectionHeader}>
+              <section className="grid gap-3" id="storage">
+                <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className={styles.sectionKicker}>
+                    <p className="inline-flex items-center gap-2 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
                       <FantasyIcon name="inventory" size={16} />
                       Storage
                     </p>
-                    <h2>Disk usage visualization</h2>
+                    <h2 className="text-xl font-semibold">
+                      Disk usage visualization
+                    </h2>
                   </div>
                 </div>
-                <Card surface="stone" className={styles.panel}>
+                <Card surface="stone" className="grid gap-4 p-6">
                   <DiskUsageChart
                     usage={data.adminStats.diskUsage}
                     onRefresh={refreshDiskUsage}
@@ -391,17 +411,19 @@ export default function SettingsPage({
                 </Card>
               </section>
 
-              <section className={styles.section} id="security">
-                <div className={styles.sectionHeader}>
+              <section className="grid gap-3" id="security">
+                <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className={styles.sectionKicker}>
+                    <p className="inline-flex items-center gap-2 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
                       <FantasyIcon name="shield" size={16} />
                       Security
                     </p>
-                    <h2>2FA and bootstrap governance</h2>
+                    <h2 className="text-xl font-semibold">
+                      2FA and bootstrap governance
+                    </h2>
                   </div>
                 </div>
-                <Card surface="stone" className={styles.panel}>
+                <Card surface="stone" className="grid gap-4 p-6">
                   <SecurityPanel
                     settings={data.authSecuritySettings}
                     bootstrapSettings={data.adminBootstrapSettings as AdminBootstrapSettings | null}

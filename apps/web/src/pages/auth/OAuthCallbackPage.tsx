@@ -11,13 +11,13 @@ import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import { Field } from "@/components/ui/field/Field";
+import { Input } from "@/components/ui/input";
 import { RuneDivider } from "@/components/ui/rune-divider/RuneDivider";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { useAuth } from "@/hooks/useAuth";
 import { AuthLayout } from "@/layouts/auth-layout/AuthLayout";
 import type { OAuthActionResponse } from "@/types/auth";
 import type { SeoConfig } from "@/types/seo";
-import styles from "./AuthPage.module.scss";
 
 export const oauthCallbackPageSeo: SeoConfig = {
   title: "OAuth callback",
@@ -154,28 +154,35 @@ export default function OAuthCallbackPage() {
         title="Completing your sign-in ritual."
         description="ThunderForge exchanges the provider code server-side, then either restores your session, asks for local account confirmation, or requires a 2FA proof."
       >
-        <Card surface="leather">
-          <div className={styles.form}>
-            <div className={styles.header}>
-              <h2>{providerKey ? `Provider: ${providerKey}` : "OAuth callback"}</h2>
-              <p>Keep this page open while the callback is processed.</p>
+        <Card>
+          <div className="grid gap-4">
+            <div className="grid gap-1.5">
+              <h2 className="text-lg font-semibold">
+                {providerKey ? `Provider: ${providerKey}` : "OAuth callback"}
+              </h2>
+              <p className="text-muted-foreground">
+                Keep this page open while the callback is processed.
+              </p>
             </div>
 
             {status ? <StatusBadge>{status}</StatusBadge> : null}
 
             {isWorking ? (
-              <p>Resolving provider identity and restoring your ThunderForge session...</p>
+              <p className="text-muted-foreground">
+                Resolving provider identity and restoring your ThunderForge
+                session...
+              </p>
             ) : null}
 
             {linkChallengeId ? (
-              <form onSubmit={onConfirmLink} className={styles.form}>
+              <form onSubmit={onConfirmLink} className="grid gap-4">
                 <RuneDivider label="Link existing account" />
                 <Field
                   label="Local account password"
                   htmlFor="oauth-link-password"
                   hint="ThunderForge requires explicit confirmation before linking a provider to an existing local account."
                 >
-                  <input
+                  <Input
                     id="oauth-link-password"
                     type="password"
                     autoComplete="current-password"
@@ -191,10 +198,10 @@ export default function OAuthCallbackPage() {
             ) : null}
 
             {twoFactorChallengeId ? (
-              <form onSubmit={onVerifyTwoFactor} className={styles.form}>
+              <form onSubmit={onVerifyTwoFactor} className="grid gap-4">
                 <RuneDivider label="Two-factor verification" />
                 <Field label="2FA code" htmlFor="oauth-two-factor-code">
-                  <input
+                  <Input
                     id="oauth-two-factor-code"
                     inputMode="numeric"
                     value={twoFactorCode}
@@ -208,9 +215,13 @@ export default function OAuthCallbackPage() {
               </form>
             ) : null}
 
-            <div className={styles.linkList}>
-              <Link to="/login">Return to login</Link>
-              <Link to="/register">Create a local account</Link>
+            <div className="grid gap-2">
+              <Link to="/login" className="font-medium text-primary hover:underline">
+                Return to login
+              </Link>
+              <Link to="/register" className="font-medium text-primary hover:underline">
+                Create a local account
+              </Link>
             </div>
           </div>
         </Card>

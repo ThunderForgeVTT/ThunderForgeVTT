@@ -15,8 +15,7 @@
 
 import type { ReactNode } from "react";
 import { Card } from "@/components/ui/card/Card";
-import { cn } from "@/utils/cn";
-import styles from "./AbilityScores.module.scss";
+import { cn } from "@/lib/utils";
 
 export interface AbilityScoresProps {
   data?: Record<string, any>;
@@ -36,6 +35,15 @@ const ABILITIES = [
 function calculateModifier(score: number): number {
   return Math.floor((score - 10) / 2);
 }
+
+const SCORE_COLOR_CLASSES: Record<string, string> = {
+  critical: "border-red-500 bg-red-500/10",
+  poor: "border-orange-500 bg-orange-500/10",
+  average: "border-amber-500 bg-amber-500/10",
+  good: "border-green-500 bg-green-500/10",
+  excellent: "border-blue-500 bg-blue-500/10",
+  legendary: "border-purple-500 bg-purple-500/10",
+};
 
 function getScoreColor(score: number): string {
   if (score <= 3) return "critical";
@@ -62,13 +70,22 @@ function AbilityScore({
   const modifierText = modifier >= 0 ? `+${modifier}` : `${modifier}`;
 
   return (
-    <div className={cn(styles.abilityScore, styles[color])}>
-      <div className={styles.header}>
-        <span className={styles.short}>{ability.short}</span>
-        <span className={styles.full}>{ability.name}</span>
+    <div
+      className={cn(
+        "grid gap-2 rounded-lg border-2 p-3 text-center",
+        SCORE_COLOR_CLASSES[color],
+      )}
+    >
+      <div className="grid gap-0.5">
+        <span className="text-xs font-semibold tracking-widest uppercase">
+          {ability.short}
+        </span>
+        <span className="text-[0.7rem] text-muted-foreground">
+          {ability.name}
+        </span>
       </div>
 
-      <div className={styles.scoreDisplay}>
+      <div>
         {editable && onUpdate ? (
           <input
             type="number"
@@ -76,16 +93,18 @@ function AbilityScore({
             max="20"
             value={score}
             onChange={(e) => onUpdate(ability.id, parseInt(e.target.value, 10))}
-            className={styles.scoreInput}
+            className="w-full rounded-md border border-input bg-transparent py-1 text-center text-2xl font-semibold outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             aria-label={`${ability.name} score`}
           />
         ) : (
-          <div className={styles.score}>{score}</div>
+          <div className="text-2xl font-semibold">{score}</div>
         )}
       </div>
 
-      <div className={styles.modifier}>
-        <span className={styles.modifierText}>{modifierText}</span>
+      <div>
+        <span className="text-sm font-medium text-muted-foreground">
+          {modifierText}
+        </span>
       </div>
     </div>
   );
@@ -109,15 +128,15 @@ export function AbilityScores({
   onUpdate,
 }: AbilityScoresProps) {
   return (
-    <Card surface="parchment" className={styles.container}>
-      <div className={styles.header}>
-        <h3>Ability Scores</h3>
-        <p className={styles.subtitle}>
+    <Card surface="parchment" className="grid gap-4 p-6">
+      <div>
+        <h3 className="text-lg font-semibold">Ability Scores</h3>
+        <p className="text-sm text-muted-foreground">
           Core attributes that define your character
         </p>
       </div>
 
-      <div className={styles.grid}>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
         {ABILITIES.map((ability) => (
           <AbilityScore
             key={ability.id}
@@ -130,7 +149,7 @@ export function AbilityScores({
       </div>
 
       {editable && (
-        <div className={styles.hint}>
+        <div className="text-center text-xs text-muted-foreground">
           Click any score to modify. Range: 1-20
         </div>
       )}

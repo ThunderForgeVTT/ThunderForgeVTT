@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
 import type { WorldRecord } from "@/types/world";
-import styles from "./WorldCard.module.scss";
 
 interface WorldCardProps {
   world: WorldRecord;
@@ -20,49 +19,67 @@ function shortenId(value: string) {
 
 export function WorldCard({ world, showOwner = false }: WorldCardProps) {
   return (
-    <Card surface="parchment" className={styles.card}>
-      <div className={styles.header}>
-        <div className={styles.titleGroup}>
-          <span className={styles.icon}>
-            <FantasyIcon name="worlds" size={18} tone="gold" />
+    <Card surface="parchment" className="grid gap-4 p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="inline-grid size-9 shrink-0 place-items-center rounded-full border border-border bg-secondary">
+            <FantasyIcon name="worlds" size={16} />
           </span>
           <div>
-            <p className={styles.kicker}>Guild atlas</p>
-            <h2>{world.name}</h2>
+            <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+              World
+            </p>
+            <h2 className="text-lg font-semibold">{world.name}</h2>
           </div>
         </div>
-        <span className={styles.updated}>
+        <span className="text-xs text-muted-foreground">
           Updated {formatTimestamp(world.updatedAt)}
         </span>
       </div>
 
-      <p className={styles.description}>
+      <p className="text-sm text-muted-foreground">
         {world.description ??
-          "This realm has been chartered, but its deeper lore will be written in a later phase."}
+          "This world has been created, but its deeper lore will be written in a later phase."}
       </p>
 
-      <div className={styles.metaGrid}>
+      <div className="grid grid-cols-2 gap-3 text-sm">
         <div>
-          <span>Game system</span>
-          <strong>{world.gameSystemId ?? "Unbound placeholder"}</strong>
+          <span className="block text-xs text-muted-foreground">
+            Game system
+          </span>
+          <strong className="font-medium">
+            {world.gameSystemId ?? "Unbound placeholder"}
+          </strong>
         </div>
         <div>
-          <span>Interface pack</span>
-          <strong>{world.interfacePackId ?? "Unbound placeholder"}</strong>
+          <span className="block text-xs text-muted-foreground">
+            Interface pack
+          </span>
+          <strong className="font-medium">
+            {world.interfacePackId ?? "Unbound placeholder"}
+          </strong>
         </div>
         <div>
-          <span>Created</span>
-          <strong>{formatTimestamp(world.createdAt)}</strong>
+          <span className="block text-xs text-muted-foreground">
+            Created
+          </span>
+          <strong className="font-medium">
+            {formatTimestamp(world.createdAt)}
+          </strong>
         </div>
         {showOwner ? (
           <div>
-            <span>Owner</span>
-            <strong>{shortenId(world.createdBy)}</strong>
+            <span className="block text-xs text-muted-foreground">
+              Owner
+            </span>
+            <strong className="font-medium">
+              {shortenId(world.createdBy)}
+            </strong>
           </div>
         ) : null}
       </div>
 
-      <div className={styles.actions}>
+      <div className="flex flex-wrap gap-2">
         <Button asChild icon="worlds">
           <Link to={`/world/${world.id}`}>Open dashboard</Link>
         </Button>

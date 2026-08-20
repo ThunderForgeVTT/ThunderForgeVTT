@@ -1,12 +1,20 @@
 import type { CSSProperties, HTMLAttributes, ReactNode } from "react";
-import { cn } from "@/utils/cn";
-import styles from "./Card.module.scss";
+import { Card as ShadcnCard } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 export interface CardProps extends HTMLAttributes<HTMLElement> {
   children: ReactNode;
   surface?: "default" | "strong" | "parchment" | "stone" | "leather";
   style?: CSSProperties;
 }
+
+const SURFACE_CLASSES: Record<NonNullable<CardProps["surface"]>, string> = {
+  default: "",
+  strong: "bg-secondary",
+  parchment: "bg-card",
+  stone: "bg-muted",
+  leather: "bg-accent",
+};
 
 export function Card({
   children,
@@ -15,8 +23,11 @@ export function Card({
   ...props
 }: CardProps) {
   return (
-    <section className={cn(styles.card, styles[surface], className)} {...props}>
+    <ShadcnCard
+      className={cn(SURFACE_CLASSES[surface], className)}
+      {...props}
+    >
       {children}
-    </section>
+    </ShadcnCard>
   );
 }

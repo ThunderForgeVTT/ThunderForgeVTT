@@ -1,8 +1,14 @@
-import * as RadixDialog from "@radix-ui/react-dialog";
 import type { ReactNode } from "react";
-import { cn } from "@/utils/cn";
-import { Button } from "@/components/ui/button/Button";
-import styles from "./Dialog.module.scss";
+import {
+  Dialog as ShadcnDialog,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 export interface DialogProps {
   trigger: ReactNode;
@@ -26,32 +32,18 @@ export function Dialog({
   className,
 }: DialogProps) {
   return (
-    <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
-      <RadixDialog.Trigger asChild>{trigger}</RadixDialog.Trigger>
-      <RadixDialog.Portal>
-        <RadixDialog.Overlay className={styles.overlay} />
-        <RadixDialog.Content className={cn(styles.content, className)}>
-          <div className={styles.header}>
-            <div>
-              <RadixDialog.Title className={styles.title}>
-                {title}
-              </RadixDialog.Title>
-              {description ? (
-                <RadixDialog.Description className={styles.description}>
-                  {description}
-                </RadixDialog.Description>
-              ) : null}
-            </div>
-            <RadixDialog.Close asChild>
-              <Button variant="ghost" size="sm">
-                Close
-              </Button>
-            </RadixDialog.Close>
-          </div>
-          <div className={styles.body}>{children}</div>
-          {footer ? <div className={styles.footer}>{footer}</div> : null}
-        </RadixDialog.Content>
-      </RadixDialog.Portal>
-    </RadixDialog.Root>
+    <ShadcnDialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogContent className={cn(className)}>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          {description ? (
+            <DialogDescription>{description}</DialogDescription>
+          ) : null}
+        </DialogHeader>
+        <div>{children}</div>
+        {footer ? <DialogFooter>{footer}</DialogFooter> : null}
+      </DialogContent>
+    </ShadcnDialog>
   );
 }

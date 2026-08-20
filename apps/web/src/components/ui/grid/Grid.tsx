@@ -1,6 +1,5 @@
 import type { HTMLAttributes, ReactNode } from "react";
-import { cn } from "@/utils/cn";
-import styles from "./Grid.module.scss";
+import { cn } from "@/lib/utils";
 
 type GridColumns = "two" | "three";
 
@@ -9,6 +8,11 @@ export interface GridProps extends HTMLAttributes<HTMLDivElement> {
   columns?: GridColumns;
 }
 
+const COLUMN_CLASSES: Record<GridColumns, string> = {
+  two: "grid-cols-[repeat(auto-fit,minmax(280px,1fr))]",
+  three: "grid-cols-[repeat(auto-fit,minmax(220px,1fr))]",
+};
+
 export function Grid({
   children,
   className,
@@ -16,7 +20,10 @@ export function Grid({
   ...props
 }: GridProps) {
   return (
-    <div className={cn(styles.grid, styles[columns], className)} {...props}>
+    <div
+      className={cn("grid gap-6", COLUMN_CLASSES[columns], className)}
+      {...props}
+    >
       {children}
     </div>
   );
