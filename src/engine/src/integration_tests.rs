@@ -321,6 +321,89 @@ mod integration_system_tests {
 }
 
 #[cfg(test)]
+mod plugin_independence_tests {
+    //! T064: proves Constitution Principle II ("each plugin is
+    //! independently addable/removable") for `WallPlugin`, `LightingPlugin`,
+    //! and `ShapePlugin` — each test below builds a headless `App` with
+    //! `MinimalPlugins` + `CanvasLayerPlugin` (the one fixed, shared
+    //! dependency all three read `CanvasLayers` from) + *only* the plugin
+    //! under test, deliberately leaving the other two out of the builder.
+    //! `app.update()` must run without panicking and the plugin's own
+    //! resource must exist and be queryable afterward.
+    //!
+    //! `MinimalPlugins` doesn't provide `ButtonInput<KeyCode>`/
+    //! `ButtonInput<MouseButton>` (those come from `bevy::input::InputPlugin`,
+    //! part of `DefaultPlugins`) or a real window/camera (from
+    //! `bevy_window`/`bevy_render`'s plugins), all of which each plugin's
+    //! input systems read. Per the module doc above, driving mouse-based
+    //! selection/drag needs a real camera projection and isn't feasible
+    //! headlessly — so these tests insert the missing input resources
+    //! manually (cheap, and enough for the systems to run without a missing-
+    //! resource panic) but do NOT spawn a window or camera, which means
+    //! `cursor_world_position` in each plugin's input system always resolves
+    //! to `None` and every input system is a no-op passthrough for the
+    //! `app.update()` calls here. That's fine for this test's purpose: it
+    //! proves the plugin *builds and runs standalone*, not that its mouse-
+    //! driven authoring flow works (that's out of scope for a headless test,
+    //! same carve-out as `handle_token_drag`).
+
+    use bevy::prelude::*;
+    use crate::plugins::{CanvasLayerPlugin, WallPlugin, LightingPlugin, ShapePlugin};
+    use crate::resources::{WallSet, LightSet, ShapeSet};
+
+    fn headless_app_with_inputs() -> App {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        app.init_resource::<ButtonInput<KeyCode>>();
+        app.init_resource::<ButtonInput<MouseButton>>();
+        app
+    }
+
+    #[test]
+    fn wall_plugin_builds_and_runs_independently() {
+        let mut app = headless_app_with_inputs();
+        app.add_plugins(CanvasLayerPlugin);
+        app.add_plugins(WallPlugin);
+        // Deliberately no LightingPlugin/ShapePlugin.
+
+        // Should not panic across a couple of frames.
+        app.update();
+        app.update();
+
+        let wall_set = app.world().resource::<WallSet>();
+        assert!(wall_set.walls().is_empty());
+    }
+
+    #[test]
+    fn lighting_plugin_builds_and_runs_independently() {
+        let mut app = headless_app_with_inputs();
+        app.add_plugins(CanvasLayerPlugin);
+        app.add_plugins(LightingPlugin);
+        // Deliberately no WallPlugin/ShapePlugin.
+
+        app.update();
+        app.update();
+
+        let light_set = app.world().resource::<LightSet>();
+        assert!(light_set.lights().is_empty());
+    }
+
+    #[test]
+    fn shape_plugin_builds_and_runs_independently() {
+        let mut app = headless_app_with_inputs();
+        app.add_plugins(CanvasLayerPlugin);
+        app.add_plugins(ShapePlugin);
+        // Deliberately no WallPlugin/LightingPlugin.
+
+        app.update();
+        app.update();
+
+        let shape_set = app.world().resource::<ShapeSet>();
+        assert!(shape_set.shapes().is_empty());
+    }
+}
+
+#[cfg(test)]
 mod manual_browser_test_scenarios {
     // Manual browser testing checklist — mouse-driven selection/drag and full
     // rendering can't be exercised headlessly (see module doc comment above),
