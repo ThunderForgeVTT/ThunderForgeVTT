@@ -142,12 +142,12 @@ the occlusion check).
 
 ### Backend (Rust/GraphQL)
 
-- [ ] T030 [P] [US3] Add `LightSource`/`NewLightSource`/`LightSourceUpdate` structs (incl. `casts_shadows`) to `src/server/src/models.rs` per data-model.md
-- [ ] T031 [P] [US3] Add `light_sources` table to `src/server/src/schema.rs`
-- [ ] T032 [US3] Add `GraphQLLightSource` type + `CreateLightSourceInput`/`UpdateLightSourceInput` to `src/server/src/graphql/input_types.rs` and `src/server/src/graphql.rs` per contracts/graphql.md
-- [ ] T033 [US3] Create `LightSourceMutation` (create/update/delete, scene-ownership enforced, CHECK-constraint errors surfaced) in `src/server/src/graphql/mutations_lighting.rs`, using `mutations_walls.rs` as the direct template
-- [ ] T034 [US3] Add `lightSources(sceneId: ID!)` query to `src/server/src/graphql/queries/scene.rs`; register the query type into the `QueryRoot` `MergedObject` tuple and `LightSourceMutation` into the `MutationRoot` `MergedObject` tuple, both in `src/server/src/graphql.rs` (~L1633-1644) — **not** `src/server/src/schema.rs`, which is the unrelated Diesel table-macro file
-- [ ] T035 [US3] Add NOTIFY emission to the light mutations from T033, same pattern as T006
+- [X] T030 [P] [US3] Add `LightSource`/`NewLightSource`/`LightSourceUpdate` structs (incl. `casts_shadows`) to `src/server/src/models.rs` per data-model.md
+- [X] T031 [P] [US3] Add `light_sources` table to `src/server/src/schema.rs`
+- [X] T032 [US3] Add `GraphQLLightSource` type + `CreateLightSourceInput`/`UpdateLightSourceInput` to `src/server/src/graphql/input_types.rs` and `src/server/src/graphql.rs` per contracts/graphql.md
+- [X] T033 [US3] Create `LightSourceMutation` (create/update/delete, scene-ownership enforced, CHECK-constraint errors surfaced) in `src/server/src/graphql/mutations_lighting.rs`, using `mutations_walls.rs` as the direct template
+- [X] T034 [US3] Add `lightSources(sceneId: ID!)` query to `src/server/src/graphql/queries/scene.rs`; register the query type into the `QueryRoot` `MergedObject` tuple and `LightSourceMutation` into the `MutationRoot` `MergedObject` tuple, both in `src/server/src/graphql.rs` (~L1633-1644) — **not** `src/server/src/schema.rs`, which is the unrelated Diesel table-macro file
+- [X] T035 [US3] Add NOTIFY emission to the light mutations from T033, same pattern as T006
 
 ### Engine (Rust/Bevy, wasm32 target)
 

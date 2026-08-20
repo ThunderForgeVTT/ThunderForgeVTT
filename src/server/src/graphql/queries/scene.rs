@@ -194,4 +194,44 @@ impl SceneQuery {
 
         Ok(walls.into_iter().map(GraphQLWall::from).collect())
     }
+
+    /// Returns all light sources for the scene. Light effects are
+    /// player-visible by nature (FR-005) — there is no GM-only light data,
+    /// so any authenticated scene participant may read this list.
+    async fn light_sources(
+        &self,
+        ctx: &Context<'_>,
+        scene_id: uuid::Uuid,
+    ) -> GraphQLResult<Vec<GraphQLLightSource>> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+
+        // 🔐 SECURITY: Get the world_id from the scene, then verify access
+        let world_id = get_world_id_from_scene(state, scene_id).await?;
+        let _ = load_visible_world_by_id(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            world_id,
+        )
+        .await?;
+
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        let lights = tokio::task::spawn_blocking(move || {
+            use crate::schema::light_sources;
+            light_sources::table
+                .filter(light_sources::scene_id.eq(scene_id))
+                .select(crate::models::LightSource::as_select())
+                .load::<crate::models::LightSource>(&mut conn)
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to load light sources"))?;
+
+        Ok(lights.into_iter().map(GraphQLLightSource::from).collect())
+    }
 }

@@ -103,6 +103,35 @@ pub struct GraphQLUpdateWallInput {
     pub metadata: Option<Json<serde_json::Value>>,
 }
 
+// ========== Light Sources (native canvas authoring) ==========
+
+/// Input for creating a new light source
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLCreateLightSourceInput {
+    pub scene_id: Uuid,
+    pub x: f64,
+    pub y: f64,
+    pub radius: f64,
+    pub intensity: Option<f64>,
+    pub color: Option<String>,
+    pub attached_token_id: Option<Uuid>,
+    pub casts_shadows: Option<bool>,
+    pub metadata: Option<Json<serde_json::Value>>,
+}
+
+/// Input for updating light source properties
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLUpdateLightSourceInput {
+    pub x: Option<f64>,
+    pub y: Option<f64>,
+    pub radius: Option<f64>,
+    pub intensity: Option<f64>,
+    pub color: Option<String>,
+    pub attached_token_id: Option<Uuid>,
+    pub casts_shadows: Option<bool>,
+    pub metadata: Option<Json<serde_json::Value>>,
+}
+
 // ========== Player Presence (Phase 4.9.B.3) ==========
 
 /// Player presence data in world/scene
