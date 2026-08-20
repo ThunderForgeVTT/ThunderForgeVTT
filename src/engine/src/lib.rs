@@ -30,7 +30,8 @@ use movement::{PlayerControlled, handle_keyboard_movement, sync_grid_to_transfor
 use derived_data::*;
 use sync_test::*;
 use systems::*;
-use plugins::{ScenePlugin, GridPlugin, TokenPlugin, CameraPlugin, SelectionPlugin, SystemRegistrationPlugin, CanvasLayerPlugin};
+use plugins::{ScenePlugin, GridPlugin, TokenPlugin, CameraPlugin, SelectionPlugin, SystemRegistrationPlugin, CanvasLayerPlugin, WallPlugin};
+use resources::{DoorState, Wall as EngineWall, WallSet};
 
 static ENGINE_STARTED: AtomicBool = AtomicBool::new(false);
 static EVENT_CALLBACK: OnceLock<Mutex<Option<Function>>> = OnceLock::new();
@@ -80,11 +81,30 @@ struct WorldTokenPayload {
     label: Option<String>,
 }
 
+/// Confirmed/authoritative wall state from the server (T008), matching
+/// the `upsert_wall` inbound command's `wall` payload shape.
+#[derive(Debug, Clone, Deserialize)]
+struct WorldWallPayload {
+    id: String,
+    x1: f32,
+    y1: f32,
+    x2: f32,
+    y2: f32,
+    #[serde(rename = "blocksVision")]
+    blocks_vision: bool,
+    #[serde(rename = "blocksMovement")]
+    blocks_movement: bool,
+    #[serde(rename = "doorState")]
+    door_state: String,
+}
+
 #[derive(Debug, Clone)]
 enum ExternalCommand {
     SetWorld { world_id: String },
     UpsertToken { token: WorldTokenPayload },
     RemoveToken { token_id: String },
+    UpsertWall { wall: WorldWallPayload },
+    RemoveWall { wall_id: String },
 }
 
 fn event_callback_slot() -> &'static Mutex<Option<Function>> {
@@ -120,6 +140,14 @@ fn parse_command(input: &str) -> Option<ExternalCommand> {
         }
         "remove_token" => Some(ExternalCommand::RemoveToken {
             token_id: value.get("tokenId")?.as_str()?.to_owned(),
+        }),
+        "upsert_wall" => {
+            let wall_value = value.get("wall")?.clone();
+            let wall: WorldWallPayload = serde_json::from_value(wall_value).ok()?;
+            Some(ExternalCommand::UpsertWall { wall })
+        }
+        "remove_wall" => Some(ExternalCommand::RemoveWall {
+            wall_id: value.get("wallId")?.as_str()?.to_owned(),
         }),
         _ => None,
     }
@@ -186,6 +214,9 @@ pub fn start(canvas_selector: &str) {
         // layer-ordering resource, must be added before Wall/Lighting/Shape
         // plugins so it exists when they build (Constitution Principle II)
         .add_plugins(CanvasLayerPlugin)
+        // T015: wall authoring (specs/001-bevy-canvas-authoring). Depends
+        // on CanvasLayerPlugin (above) for the `CanvasLayers` resource.
+        .add_plugins(WallPlugin)
         .add_systems(Startup, setup_scene)
         .add_systems(
             Update,
@@ -353,12 +384,19 @@ fn apply_external_commands(
     mut active_world: ResMut<ActiveWorld>,
     mut token_entities: ResMut<TokenEntities>,
     mut token_query: Query<(Entity, &mut Transform, &TokenIdentity)>,
+    // `WallSet` only exists once `WallPlugin` is registered (Constitution
+    // Principle II: plugins are independently addable) — `Option` so this
+    // core command loop degrades gracefully (wall commands are simply
+    // dropped) if the wall plugin isn't present.
+    wall_set: Option<ResMut<WallSet>>,
 ) {
     let drained = if let Ok(mut queue) = external_command_queue().lock() {
         queue.drain(..).collect::<Vec<_>>()
     } else {
         Vec::new()
     };
+
+    let mut wall_set = wall_set;
 
     for command in drained {
         match command {
@@ -388,6 +426,25 @@ fn apply_external_commands(
             ExternalCommand::RemoveToken { token_id } => {
                 if let Some(entity) = token_entities.0.remove(&token_id) {
                     commands.entity(entity).despawn();
+                }
+            }
+            ExternalCommand::UpsertWall { wall } => {
+                if let Some(wall_set) = wall_set.as_deref_mut() {
+                    wall_set.upsert(EngineWall {
+                        id: wall.id,
+                        x1: wall.x1,
+                        y1: wall.y1,
+                        x2: wall.x2,
+                        y2: wall.y2,
+                        blocks_vision: wall.blocks_vision,
+                        blocks_movement: wall.blocks_movement,
+                        door_state: DoorState::from_str_loose(&wall.door_state),
+                    });
+                }
+            }
+            ExternalCommand::RemoveWall { wall_id } => {
+                if let Some(wall_set) = wall_set.as_deref_mut() {
+                    wall_set.remove(&wall_id);
                 }
             }
         }

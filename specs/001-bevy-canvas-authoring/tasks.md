@@ -56,7 +56,7 @@ rendering system in this feature consumes (FR-016).
 
 - [X] T006 Add NOTIFY emission to `create_wall`/`update_wall`/`delete_wall` in `src/server/src/graphql/mutations_walls.rs`, following the existing LISTEN/NOTIFY channel/payload convention used elsewhere in `src/server/src/graphql.rs`
 - [ ] T007 Extend `apps/web/src/engine/world/sync` to subscribe to and dispatch wall change events into the world store, mirroring the existing token event dispatch path
-- [ ] T008 Add `Wall` variant handling to the engine-side world-command dispatch in `src/engine/src/lib.rs` (`ExternalCommand`/`apply_external_commands`) so wall events reach the engine, following the existing `UpsertToken`/`RemoveToken` pattern
+- [X] T008 Add `Wall` variant handling to the engine-side world-command dispatch in `src/engine/src/lib.rs` (`ExternalCommand`/`apply_external_commands`) so wall events reach the engine, following the existing `UpsertToken`/`RemoveToken` pattern
 - [X] T009 [P] Create `CanvasLayers` resource (ordered layer list: background, grid, walls, lighting, shapes, tokens, fog + GM/player visibility rule per layer) in `src/engine/src/resources/canvas_layer.rs`, re-exported via `resources/mod.rs`
 - [X] T010 [P] Create `CanvasLayerPlugin` in `src/engine/src/plugins/canvas_layer.rs` registering `CanvasLayers`; register it in `src/engine/src/lib.rs` before the wall/lighting/shape plugins added in later phases (data-model.md's Canvas Layer section)
 
@@ -77,12 +77,12 @@ the tool.
 
 ### Engine (Rust/Bevy, wasm32 target)
 
-- [ ] T011 [P] [US1] Create `WallSet` resource (segment list + simple spatial index + door state + a bounded per-session undo stack, research.md §4) in `src/engine/src/resources/wall.rs`, re-exported via `src/engine/src/resources/mod.rs`
-- [ ] T012 [P] [US1] Create wall input systems (click-drag create, endpoint drag to move, select+delete, blocks_vision/blocks_movement toggle, door-state toggle) in `src/engine/src/systems/wall.rs`, re-exported via `src/engine/src/systems/mod.rs`
-- [ ] T013 [US1] Implement 2D shadow-casting vision occlusion against `WallSet` (research.md §3), treating an `'open'` door as non-blocking regardless of its stored flags (data-model.md door semantics), as a system in `src/engine/src/systems/wall.rs`, triggered on `WallSet` change and on token movement, feeding the existing fog rendering slot reserved by ADR-032
-- [ ] T014 [US1] Implement wall undo (FR-012): re-issue the inverse mutation (e.g. undo of "move wall" re-issues `updateWall` with prior coordinates; undo of a door toggle re-issues the prior `doorState`) through the same GraphQL path as a normal edit, wired to `WallSet`'s undo stack from T011 — same approach as research.md §4, applied to walls
-- [ ] T015 [US1] Create `WallPlugin` in `src/engine/src/plugins/wall.rs` wiring T011-T014's systems/resources, rendering into the walls layer from `CanvasLayers` (T009); register it in `src/engine/src/lib.rs` alongside the existing `SelectionPlugin`/`TokenPlugin` registrations, independently addable per Constitution Principle II
-- [ ] T016 [US1] Reject/ignore zero-length wall creation (edge case from spec.md) in the create system from T012
+- [X] T011 [P] [US1] Create `WallSet` resource (segment list + simple spatial index + door state + a bounded per-session undo stack, research.md §4) in `src/engine/src/resources/wall.rs`, re-exported via `src/engine/src/resources/mod.rs`
+- [X] T012 [P] [US1] Create wall input systems (click-drag create, endpoint drag to move, select+delete, blocks_vision/blocks_movement toggle, door-state toggle) in `src/engine/src/systems/wall.rs`, re-exported via `src/engine/src/systems/mod.rs`
+- [X] T013 [US1] Implement 2D shadow-casting vision occlusion against `WallSet` (research.md §3), treating an `'open'` door as non-blocking regardless of its stored flags (data-model.md door semantics), as a system in `src/engine/src/systems/wall.rs`, triggered on `WallSet` change and on token movement, feeding the existing fog rendering slot reserved by ADR-032
+- [X] T014 [US1] Implement wall undo (FR-012): re-issue the inverse mutation (e.g. undo of "move wall" re-issues `updateWall` with prior coordinates; undo of a door toggle re-issues the prior `doorState`) through the same GraphQL path as a normal edit, wired to `WallSet`'s undo stack from T011 — same approach as research.md §4, applied to walls
+- [X] T015 [US1] Create `WallPlugin` in `src/engine/src/plugins/wall.rs` wiring T011-T014's systems/resources, rendering into the walls layer from `CanvasLayers` (T009); register it in `src/engine/src/lib.rs` alongside the existing `SelectionPlugin`/`TokenPlugin` registrations, independently addable per Constitution Principle II
+- [X] T016 [US1] Reject/ignore zero-length wall creation (edge case from spec.md) in the create system from T012
 
 ### Backend (Rust/GraphQL)
 

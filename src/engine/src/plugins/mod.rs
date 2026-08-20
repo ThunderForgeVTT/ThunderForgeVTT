@@ -5,6 +5,7 @@ pub mod camera;
 pub mod selection;
 pub mod system_registration;
 pub mod canvas_layer;
+pub mod wall;
 
 pub use scene::ScenePlugin;
 pub use grid::GridPlugin;
@@ -13,3 +14,4 @@ pub use camera::CameraPlugin;
 pub use selection::SelectionPlugin;
 pub use system_registration::SystemRegistrationPlugin;
 pub use canvas_layer::CanvasLayerPlugin;
+pub use wall::WallPlugin;
