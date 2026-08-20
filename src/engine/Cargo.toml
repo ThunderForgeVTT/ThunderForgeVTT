@@ -21,6 +21,10 @@ bevy = { version = "0.18.1", default-features = false, features = [
   "bevy_winit",
   "default_font",
   "png",
+  # Native canvas authoring: DungeonDraft's Universal VTT exporter uses
+  # WebP for background map art (verified against examples/maps/demo.dd2vtt),
+  # not just PNG — src/server/src/map_import.rs accepts and saves both.
+  "webp",
   "webgl2",
 ] }
 console_error_panic_hook = "0.1.7"

@@ -13,7 +13,7 @@
 //! section and `research.md` §7-9 for the design this implements, and
 //! `examples/maps/README.md` for the exact source JSON shape.
 
-use axum::extract::{Multipart, Path, State};
+use axum::extract::{DefaultBodyLimit, Multipart, Path, State};
 use axum::http::StatusCode;
 use axum::response::Json;
 use axum::routing::post;
@@ -37,6 +37,14 @@ const MAX_UPLOAD_BYTES: usize = 50 * 1024 * 1024;
 /// PNG file signature, used to sanity-check the decoded `image` field
 /// without pulling in a full image-decoding crate (T025).
 const PNG_MAGIC: [u8; 8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+/// WebP's container is a RIFF chunk (`RIFF????WEBP`) — bytes 0-3 are
+/// "RIFF", bytes 4-7 are a little-endian file-size field (varies per
+/// file, not checked), bytes 8-11 are "WEBP". DungeonDraft's own UVTT
+/// exporter uses WebP for the background image (verified against
+/// examples/maps/demo.dd2vtt, ~4.2MB, vs. chamber-of-echoing-grief.dd2vtt's
+/// genuine PNG) — both are valid per the format, so both must be accepted.
+const RIFF_MAGIC: [u8; 4] = [0x52, 0x49, 0x46, 0x46];
+const WEBP_MAGIC: [u8; 4] = [0x57, 0x45, 0x42, 0x50];
 
 // ---------------------------------------------------------------------
 // T023: UVTT JSON shape + parser
@@ -301,11 +309,27 @@ pub fn lights_from_uvtt(lights: &[UvttLight], target_grid_size: f64) -> Vec<Ligh
 // T025: background image decode + save
 // ---------------------------------------------------------------------
 
+/// Returns the file extension to save with (`"png"`/`"webp"`) if `bytes`
+/// starts with a recognized image magic-byte signature, or `None` if it
+/// looks like neither. Extension matters here beyond cosmetics: Bevy's
+/// `AssetServer` (the engine-side background renderer) picks its decoder
+/// by file extension, so saving WebP bytes under a `.png` name would
+/// fail to load correctly downstream.
+fn detect_image_extension(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.len() >= PNG_MAGIC.len() && bytes[..PNG_MAGIC.len()] == PNG_MAGIC {
+        return Some("png");
+    }
+    if bytes.len() >= 12 && bytes[0..4] == RIFF_MAGIC && bytes[8..12] == WEBP_MAGIC {
+        return Some("webp");
+    }
+    None
+}
+
 /// Decode the UVTT file's base64 `image` field, sanity-check it looks
-/// like a PNG, and save it under `asset_directory` at a scene-scoped,
-/// collision-safe relative path. Returns the path relative to
-/// `asset_directory` (suitable for `scenes::background_image_path`,
-/// servable at `/assets/<that path>`).
+/// like a PNG or WebP file (both are valid per the format), and save it
+/// under `asset_directory` at a scene-scoped, collision-safe relative
+/// path. Returns the path relative to `asset_directory` (suitable for
+/// `scenes::background_image_path`, servable at `/assets/<that path>`).
 pub async fn save_background_image(
     asset_directory: &str,
     scene_id: Uuid,
@@ -315,11 +339,9 @@ pub async fn save_background_image(
         .decode(image_base64)
         .map_err(|e| MapImportError::InvalidImageBase64(e.to_string()))?;
 
-    if bytes.len() < PNG_MAGIC.len() || bytes[..PNG_MAGIC.len()] != PNG_MAGIC {
-        return Err(MapImportError::InvalidImageMagicBytes);
-    }
+    let extension = detect_image_extension(&bytes).ok_or(MapImportError::InvalidImageMagicBytes)?;
 
-    let relative_path = format!("map-imports/{scene_id}/{}.png", Uuid::now_v7());
+    let relative_path = format!("map-imports/{scene_id}/{}.{extension}", Uuid::now_v7());
     let full_path = std::path::Path::new(asset_directory).join(&relative_path);
 
     if let Some(parent) = full_path.parent() {
@@ -339,7 +361,17 @@ pub async fn save_background_image(
 // ---------------------------------------------------------------------
 
 pub fn router() -> Router<AppState> {
-    Router::new().route("/scenes/{scene_id}/import/uvtt", post(import_uvtt))
+    // Axum's `Multipart` extractor applies its own default body-size limit
+    // (2MB) ahead of any handler code — well under MAX_UPLOAD_BYTES (50MB)
+    // and under real-world map file sizes (examples/maps/demo.dd2vtt alone
+    // is ~4.2MB), so without raising it here every non-trivial import fails
+    // with a generic "error parsing multipart/form-data request" before
+    // T026b's own size check ever runs. Cap it at MAX_UPLOAD_BYTES so our
+    // own check (which returns a clean 413 with a real error body) is what
+    // actually rejects oversized uploads.
+    Router::new()
+        .route("/scenes/{scene_id}/import/uvtt", post(import_uvtt))
+        .layer(DefaultBodyLimit::max(MAX_UPLOAD_BYTES))
 }
 
 fn error_response(err: &MapImportError) -> (StatusCode, Json<serde_json::Value>) {
@@ -542,6 +574,40 @@ mod tests {
             .join("../../examples/maps")
             .join(name);
         std::fs::read(&path).unwrap_or_else(|e| panic!("failed to read fixture {path:?}: {e}"))
+    }
+
+    /// Regression test: examples/maps/demo.dd2vtt's `image` field is
+    /// genuinely WebP (DungeonDraft's own exporter choice), not PNG —
+    /// discovered when a PNG-only magic-byte check rejected it with
+    /// "decoded image does not look like a PNG file" during a real
+    /// end-to-end import. chamber-of-echoing-grief.dd2vtt's image is a
+    /// genuine PNG, so both fixtures together cover both accepted formats.
+    #[test]
+    fn detect_image_extension_accepts_both_real_fixture_formats() {
+        let demo = parse_uvtt(&read_fixture("demo.dd2vtt")).expect("demo.dd2vtt should parse");
+        let demo_bytes = BASE64_STANDARD
+            .decode(&demo.file.image)
+            .expect("demo.dd2vtt image should be valid base64");
+        assert_eq!(detect_image_extension(&demo_bytes), Some("webp"));
+
+        let chamber = parse_uvtt(&read_fixture("chamber-of-echoing-grief.dd2vtt"))
+            .expect("chamber fixture should parse");
+        let chamber_bytes = BASE64_STANDARD
+            .decode(&chamber.file.image)
+            .expect("chamber fixture image should be valid base64");
+        assert_eq!(detect_image_extension(&chamber_bytes), Some("png"));
+    }
+
+    #[test]
+    fn detect_image_extension_rejects_garbage() {
+        assert_eq!(detect_image_extension(b"not an image"), None);
+        assert_eq!(detect_image_extension(b""), None);
+        // RIFF container present but not WEBP (e.g. a WAV file) must not
+        // be misdetected as an image.
+        assert_eq!(
+            detect_image_extension(b"RIFF\x00\x00\x00\x00WAVEfmt "),
+            None
+        );
     }
 
     #[test]

@@ -4,8 +4,14 @@ Fixtures for `specs/001-bevy-canvas-authoring`'s map-import capability.
 Both files are the JSON-based Universal VTT export format (`format` field
 `0.3`) produced by DungeonDraft and consumed by most VTTs (Foundry,
 Owlbear Rodeo, etc.). Despite the `.dd2vtt` extension, the payload is
-plain JSON with one large base64-encoded PNG string — not a binary
-DungeonDraft project file.
+plain JSON with one large base64-encoded image string — not a binary
+DungeonDraft project file. **That image is not always a PNG**: `demo.dd2vtt`'s
+is genuinely WebP (verified via magic bytes: `RIFF....WEBP`), while
+`chamber-of-echoing-grief.dd2vtt`'s is a genuine PNG (`\x89PNG\r\n\x1a\n`) —
+an earlier draft of this doc assumed PNG-only, which broke real imports
+(`src/server/src/map_import.rs`'s `detect_image_extension` now accepts
+both, and `src/engine/Cargo.toml` enables Bevy's `"webp"` feature to
+render either).
 
 **Provenance / license note**: these two files were pulled from a local,
 personal map-asset collection for use as parser test fixtures. DungeonDraft
@@ -60,7 +66,7 @@ original license. Treat this directory as dev/test-only.
       "shadows":   true                     // occluded by line_of_sight walls
     }
   ],
-  "image": "<base64 PNG, no data: prefix>"
+  "image": "<base64 PNG or WebP, no data: prefix>"
 }
 ```
 

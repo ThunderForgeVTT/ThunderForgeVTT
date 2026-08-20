@@ -352,14 +352,26 @@ export default function WorldPage() {
                 <p style={{ fontSize: "0.9em" }}>{engineError.message}</p>
               </div>
             )}
-            {scenes.length > 0 ? (
+            {scenes.length > 0 || isSceneOwner ? (
+              // Not gated on scenes.length alone: a brand-new world has
+              // zero scenes, and the "New scene" affordance (the only way
+              // to create the first one) needs to render precisely then.
+              // SceneSwitcher itself hides the scene picker when the list
+              // is empty and hides "New scene" when canCreateScene is false.
               <div
                 style={{
                   position: "absolute",
                   top: "1rem",
                   left: "50%",
                   transform: "translateX(-50%)",
-                  zIndex: 900,
+                  // Higher than the GM tool panels (zIndex 900 below):
+                  // the ShapeTool panel's row of sub-tool buttons can run
+                  // wide enough to visually/pointer-overlap this
+                  // top-center control at common viewport widths, and
+                  // scene selection needs to stay reliably clickable
+                  // regardless of which tool panel happens to paint on
+                  // top of it.
+                  zIndex: 950,
                   width: "14rem",
                 }}
               >
@@ -386,6 +398,12 @@ export default function WorldPage() {
                 }}
               >
                 <MapImportTool
+                  // Remount on scene switch: MapImportTool tracks its last
+                  // import result as local state, which otherwise persists
+                  // stale across scenes (e.g. still showing "Scene One"'s
+                  // import summary after switching to a scene with no
+                  // imports of its own yet).
+                  key={sceneId}
                   sceneId={sceneId}
                   onImportComplete={handleMapImportComplete}
                 />
