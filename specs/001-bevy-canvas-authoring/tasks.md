@@ -42,11 +42,11 @@ is independently verifiable per quickstart.md's scenarios.
 
 ## Phase 1: Setup
 
-- [ ] T001 [P] Add `door_state` column migration (`ALTER TABLE walls ADD COLUMN door_state TEXT NOT NULL DEFAULT 'none' CHECK (door_state IN ('none','open','closed'))`) in `src/server/migrations/<timestamp>_add_door_fields_to_walls/{up,down}.sql`
-- [ ] T002 [P] Add `background_image_path` column migration (`ALTER TABLE scenes ADD COLUMN background_image_path TEXT`) in `src/server/migrations/<timestamp>_add_background_image_to_scenes/{up,down}.sql`
-- [ ] T003 [P] Add `light_sources` migration in `src/server/migrations/<timestamp>_create_light_sources_table/{up,down}.sql` per data-model.md (columns incl. `casts_shadows`, CHECK constraints, FK to `scenes`/`tokens`, `idx_light_sources_scene_id` index)
-- [ ] T004 [P] Add `shapes` migration in `src/server/migrations/<timestamp>_create_shapes_table/{up,down}.sql` per data-model.md (columns, `kind` CHECK constraint incl. `rect`/`ellipse`/`line`, FK to `scenes`, `idx_shapes_scene_id` index)
-- [ ] T005 Run `diesel migration run` against the dev database and confirm all four `down.sql` scripts cleanly reverse via `diesel migration redo` for each
+- [X] T001 [P] Add `door_state` column migration (`ALTER TABLE walls ADD COLUMN door_state TEXT NOT NULL DEFAULT 'none' CHECK (door_state IN ('none','open','closed'))`) in `src/server/migrations/<timestamp>_add_door_fields_to_walls/{up,down}.sql`
+- [X] T002 [P] Add `background_image_path` column migration (`ALTER TABLE scenes ADD COLUMN background_image_path TEXT`) in `src/server/migrations/<timestamp>_add_background_image_to_scenes/{up,down}.sql`
+- [X] T003 [P] Add `light_sources` migration in `src/server/migrations/<timestamp>_create_light_sources_table/{up,down}.sql` per data-model.md (columns incl. `casts_shadows`, CHECK constraints, FK to `scenes`/`tokens`, `idx_light_sources_scene_id` index)
+- [X] T004 [P] Add `shapes` migration in `src/server/migrations/<timestamp>_create_shapes_table/{up,down}.sql` per data-model.md (columns, `kind` CHECK constraint incl. `rect`/`ellipse`/`line`, FK to `scenes`, `idx_shapes_scene_id` index)
+- [X] T005 Run `diesel migration run` against the dev database and confirm all four `down.sql` scripts cleanly reverse via `diesel migration redo` for each
 
 ## Phase 2: Foundational (blocking prerequisites)
 
