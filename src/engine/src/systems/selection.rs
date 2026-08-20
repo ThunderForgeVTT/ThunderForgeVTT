@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
-use crate::components::Token;
-use crate::resources::{SelectedToken, SceneData, CameraManager};
-use crate::transforms::coordinate::{pixel_to_grid};
+use crate::resources::{SelectedToken, DraggingToken, SceneData};
+use crate::{TokenIdentity, ActiveWorld, TOKEN_SIZE, emit_event};
+use serde_json::json;
 
 /// Hit-test: Check if point is within rectangle bounds
 /// Used for token selection based on mouse click
@@ -19,60 +19,101 @@ fn is_point_in_rect(
         && point.y >= min.y && point.y <= max.y
 }
 
-/// Handle token selection on mouse click
-/// Checks for token hit-test and updates SelectedToken resource
-pub fn handle_token_selection(
+/// Convert the cursor's window-pixel position into Bevy world space using the
+/// active camera's real transform/projection (accounts for pan and zoom).
+/// Using `Camera::viewport_to_world_2d` instead of hand-rolling the inverse
+/// transform avoids the coordinate mismatch that made the old hit-test only
+/// work by coincidence at an identity camera.
+fn cursor_world_position(
+    windows: &Query<&Window, With<PrimaryWindow>>,
+    camera_query: &Query<(&Camera, &GlobalTransform)>,
+) -> Option<Vec2> {
+    let window = windows.iter().next()?;
+    let (camera, camera_transform) = camera_query.iter().next()?;
+    let cursor_px = window.cursor_position()?;
+    camera.viewport_to_world_2d(camera_transform, cursor_px).ok()
+}
+
+/// Click-to-select and click-drag-to-move for tokens on the live
+/// `TokenIdentity` pipeline (the one that's actually wired to the server via
+/// `emit_event`/`apply_external_commands` — see lib.rs).
+///
+/// - Press on a token: select it and begin dragging.
+/// - Press on empty space: deselect.
+/// - Hold + move: token follows the cursor, preserving the original
+///   grab-point offset.
+/// - Release while dragging: emit an `upsert_token` event with the final
+///   position so the move persists to the server, mirroring how
+///   `emit_player_state` pushes state out for the WASD demo token.
+pub(crate) fn handle_token_drag(
     windows: Query<&Window, With<PrimaryWindow>>,
+    camera_query: Query<(&Camera, &GlobalTransform)>,
     mouse_button: Res<ButtonInput<MouseButton>>,
-    token_query: Query<(&Transform, &Token)>,
+    mut token_query: Query<(&mut Transform, &TokenIdentity)>,
     mut selected_token: ResMut<SelectedToken>,
-    scene: Res<SceneData>,
+    mut dragging: ResMut<DraggingToken>,
+    active_world: Res<ActiveWorld>,
 ) {
-    // Only on left-click release
-    if !mouse_button.just_released(MouseButton::Left) {
+    let Some(cursor_world) = cursor_world_position(&windows, &camera_query) else {
         return;
-    }
+    };
 
-    let window = windows.iter().next();
-    if window.is_none() {
-        return;
-    }
-    let window = window.unwrap();
+    if mouse_button.just_pressed(MouseButton::Left) {
+        let mut hit: Option<(String, Vec2)> = None;
 
-    // Get mouse position in window coordinates
-    if let Some(mouse_px) = window.cursor_position() {
-        let mut hit_token: Option<String> = None;
-
-        // Hit-test all tokens
-        for (transform, token) in token_query.iter() {
-            if !token.is_visible {
-                continue;
-            }
-
-            let token_pixel_pos = transform.translation.truncate();
-            let token_pixel_size = Vec2::new(
-                (token.size_x as f32) * scene.grid_size,
-                (token.size_y as f32) * scene.grid_size,
-            );
-
-            // AABB hit test
-            if is_point_in_rect(
-                mouse_px,
-                token_pixel_pos,
-                token_pixel_size,
-            ) {
-                hit_token = Some(token.id.clone());
-                break;  // First hit wins (topmost token)
+        for (transform, identity) in token_query.iter() {
+            let token_pos = transform.translation.truncate();
+            if is_point_in_rect(cursor_world, token_pos, TOKEN_SIZE) {
+                hit = Some((identity.0.clone(), token_pos - cursor_world));
+                break; // First hit wins (topmost token)
             }
         }
 
-        // Update selection
-        match hit_token {
-            Some(token_id) => {
-                selected_token.select(token_id);
+        match hit {
+            Some((token_id, offset)) => {
+                selected_token.select(token_id.clone());
+                dragging.0 = Some((token_id, offset));
             }
             None => {
                 selected_token.deselect();
+                dragging.0 = None;
+            }
+        }
+        return;
+    }
+
+    if mouse_button.pressed(MouseButton::Left) {
+        let Some((token_id, offset)) = dragging.0.clone() else {
+            return;
+        };
+        let new_pos = cursor_world + offset;
+        for (mut transform, identity) in token_query.iter_mut() {
+            if identity.0 == token_id {
+                transform.translation.x = new_pos.x;
+                transform.translation.y = new_pos.y;
+                break;
+            }
+        }
+        return;
+    }
+
+    if mouse_button.just_released(MouseButton::Left) {
+        let Some((token_id, _offset)) = dragging.0.take() else {
+            return;
+        };
+        for (transform, identity) in token_query.iter() {
+            if identity.0 == token_id {
+                emit_event(json!({
+                    "type": "upsert_token",
+                    "token": {
+                        "id": token_id,
+                        "x": transform.translation.x,
+                        "y": transform.translation.y,
+                        "z": transform.translation.z,
+                    },
+                    "worldId": active_world.0,
+                }));
+                break;
             }
         }
     }
@@ -81,12 +122,12 @@ pub fn handle_token_selection(
 /// Update token visual feedback based on selection state
 /// Currently: Opacity feedback, Z-order bump
 /// Deferred: Glow/border effects to Phase 4.8 (shader-based)
-pub fn render_selection_feedback(
-    mut sprite_query: Query<(&Token, &mut Sprite, &mut Transform)>,
+pub(crate) fn render_selection_feedback(
+    mut sprite_query: Query<(&TokenIdentity, &mut Sprite, &mut Transform)>,
     selected_token: Res<SelectedToken>,
 ) {
-    for (token, mut sprite, mut transform) in sprite_query.iter_mut() {
-        if selected_token.is_selected(&token.id) {
+    for (identity, mut sprite, mut transform) in sprite_query.iter_mut() {
+        if selected_token.is_selected(&identity.0) {
             // Selected token: opaque, on top
             sprite.color = sprite.color.with_alpha(1.0);
             transform.translation.z = 2.0;
@@ -102,50 +143,47 @@ pub fn render_selection_feedback(
 /// If a token is selected and an arrow key is pressed, move the token 1 grid cell
 /// in that direction. Triggers optimistic update (visual feedback immediately)
 /// with rollback placeholder for server rejection (Phase 4.6 integration).
-pub fn handle_keyboard_token_movement(
+pub(crate) fn handle_keyboard_token_movement(
     keyboard: Res<ButtonInput<KeyCode>>,
-    mut token_query: Query<&mut Token>,
+    mut token_query: Query<(&mut Transform, &TokenIdentity)>,
     selected_token: Res<SelectedToken>,
     scene: Res<SceneData>,
+    active_world: Res<ActiveWorld>,
 ) {
     // Get selected token ID
     let Some(selected_id) = selected_token.get_selected() else {
         return;
     };
 
-    // Determine movement direction
+    // Determine movement direction (one grid cell per key press)
     let (dx, dy) = if keyboard.just_pressed(KeyCode::ArrowUp) {
-        (0, 1)  // Up (Y increases in grid coords)
+        (0.0, 1.0) // Up (Y increases in Bevy world space)
     } else if keyboard.just_pressed(KeyCode::ArrowDown) {
-        (0, -1)  // Down
+        (0.0, -1.0) // Down
     } else if keyboard.just_pressed(KeyCode::ArrowLeft) {
-        (-1, 0)  // Left
+        (-1.0, 0.0) // Left
     } else if keyboard.just_pressed(KeyCode::ArrowRight) {
-        (1, 0)  // Right
+        (1.0, 0.0) // Right
     } else {
-        return;  // No movement key pressed
+        return; // No movement key pressed
     };
 
     // Find and update selected token
-    for mut token in token_query.iter_mut() {
-        if token.id == *selected_id {
-            // Store old position for rollback (Phase 4.6)
-            let old_x = token.base_x;
-            let old_y = token.base_y;
+    for (mut transform, identity) in token_query.iter_mut() {
+        if identity.0 == *selected_id {
+            transform.translation.x += dx * scene.grid_size;
+            transform.translation.y += dy * scene.grid_size;
 
-            // Apply movement (optimistic)
-            token.base_x += dx;
-            token.base_y += dy;
-
-            // TODO: Phase 4.6 Integration
-            // Queue mutation: upsertToken({ id, base_x: token.base_x, base_y: token.base_y })
-            // On server rejection event: token.base_x = old_x; token.base_y = old_y;
-
-            // Log for debugging
-            eprintln!(
-                "📤 Token movement: {} moved from ({},{}) to ({},{}) via keyboard",
-                token.id, old_x, old_y, token.base_x, token.base_y
-            );
+            emit_event(json!({
+                "type": "upsert_token",
+                "token": {
+                    "id": identity.0,
+                    "x": transform.translation.x,
+                    "y": transform.translation.y,
+                    "z": transform.translation.z,
+                },
+                "worldId": active_world.0,
+            }));
             break;
         }
     }
@@ -204,12 +242,35 @@ mod tests {
     fn test_keyboard_token_movement_basic() {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins);
+        app.insert_resource(SceneData::new(
+            "test".to_string(),
+            "world-test".to_string(),
+            crate::resources::GridType::Square,
+            32.0,
+            20,
+            20,
+            None,
+        ));
+        app.insert_resource(ActiveWorld("world-test".to_string()));
         app.init_resource::<SelectedToken>();
         app.init_resource::<ButtonInput<KeyCode>>();
-        app.init_resource::<SceneData>();
+        app.add_systems(Update, handle_keyboard_token_movement);
 
-        // Verify system can be added without errors
-        // Note: Full integration test deferred to G2 (E2E testing)
+        let token = app
+            .world_mut()
+            .spawn((Transform::from_xyz(0.0, 0.0, 0.0), TokenIdentity("token-1".to_string())))
+            .id();
+
+        app.world_mut().resource_mut::<SelectedToken>().select("token-1".to_string());
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::ArrowRight);
+
+        app.update();
+
+        let transform = app.world().get::<Transform>(token).unwrap();
+        assert_eq!(transform.translation.x, 32.0);
+        assert_eq!(transform.translation.y, 0.0);
     }
 
     // Phase 4.7.G1: Additional selection hit-testing tests for precision

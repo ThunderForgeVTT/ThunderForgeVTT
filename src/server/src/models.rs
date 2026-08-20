@@ -2,7 +2,7 @@ use crate::schema::{
     admin_bootstrap_oauth_sessions, admin_bootstrap_setup, auth_security_settings, fog_masks,
     game_systems, login_two_factor_challenges, oauth_authorization_sessions, oauth_link_challenges,
     oauth_providers, players_online, scenes, tokens, user_oauth_accounts, user_sessions,
-    users, world_actors, world_actor_system_data, world_events, world_invites, world_members, world_tokens, worlds,
+    users, walls, world_actors, world_actor_system_data, world_events, world_invites, world_members, world_tokens, worlds,
 };
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -435,6 +435,55 @@ pub struct SceneUpdate {
     pub width: Option<i32>,
     pub height: Option<i32>,
     pub metadata: Option<serde_json::Value>,
+}
+
+// ========== Wall Models (Phase 6) ==========
+
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = walls)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct Wall {
+    pub wall_id: uuid::Uuid,
+    pub scene_id: uuid::Uuid,
+    pub x1: f64,
+    pub y1: f64,
+    pub x2: f64,
+    pub y2: f64,
+    pub blocks_vision: bool,
+    pub blocks_movement: bool,
+    pub metadata: Option<serde_json::Value>,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = walls)]
+pub struct NewWall {
+    pub scene_id: uuid::Uuid,
+    pub x1: f64,
+    pub y1: f64,
+    pub x2: f64,
+    pub y2: f64,
+    pub blocks_vision: bool,
+    pub blocks_movement: bool,
+    pub metadata: Option<serde_json::Value>,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+}
+
+#[derive(AsChangeset, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = walls)]
+pub struct WallUpdate {
+    pub x1: Option<f64>,
+    pub y1: Option<f64>,
+    pub x2: Option<f64>,
+    pub y2: Option<f64>,
+    pub blocks_vision: Option<bool>,
+    pub blocks_movement: Option<bool>,
+    pub metadata: Option<serde_json::Value>,
+    pub updated_by: uuid::Uuid,
 }
 
 // ========== Token Models (Phase 3.5) ==========

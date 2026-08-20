@@ -14,7 +14,7 @@ pub struct TokenId(pub String);
 
 /// Base token data (transmitted from server)
 /// Contains only core game data, never derived/computed values
-#[derive(Component, Clone, Debug, Serialize, Deserialize)]
+#[derive(Component, Clone, Debug, Serialize, Deserialize, Default)]
 pub struct Token {
     /// Server-side token ID (UUID)
     pub id: String,
@@ -289,8 +289,9 @@ mod tests {
                 ..Default::default()
             },
             schema_version: 1,
+            ..Default::default()
         };
-        
+
         let stats = DerivedStats::calculate(&token);
         
         assert_eq!(stats.health_percentage, Some(50.0));

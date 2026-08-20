@@ -76,15 +76,11 @@ fn handle_keyboard_camera_shortcuts(
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_handle_keyboard_camera_shortcuts_pan_up() {
-        let mut camera_mgr = CameraManager::default();
-        let mut keyboard_input = ButtonInput::default();
-        keyboard_input.press(KeyCode::ArrowUp);
-
-        handle_keyboard_camera_shortcuts(camera_mgr.into(), keyboard_input.into());
-        // Note: Direct test limited due to Res<> requirement. Integration test below.
-    }
+    // A prior version of this test tried to call `handle_keyboard_camera_shortcuts`
+    // directly with `.into()`-converted `Res`/`ResMut` values, which isn't
+    // constructible outside a running `App` — it asserted nothing and always
+    // passed. `test_camera_keyboard_integration` below exercises the same
+    // behavior through a real `App`, which is the only way to drive `Res<>`.
 
     #[test]
     fn test_camera_keyboard_integration() {

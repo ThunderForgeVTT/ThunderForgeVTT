@@ -157,4 +157,41 @@ impl SceneQuery {
 
         Ok(fog_mask.map(GraphQLFogMask::from))
     }
+
+    async fn walls(
+        &self,
+        ctx: &Context<'_>,
+        scene_id: uuid::Uuid,
+    ) -> GraphQLResult<Vec<GraphQLWall>> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+
+        // 🔐 SECURITY: Get the world_id from the scene, then verify access
+        let world_id = get_world_id_from_scene(state, scene_id).await?;
+        let _ = load_visible_world_by_id(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            world_id,
+        )
+        .await?;
+
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        let walls = tokio::task::spawn_blocking(move || {
+            use crate::schema::walls;
+            walls::table
+                .filter(walls::scene_id.eq(scene_id))
+                .select(crate::models::Wall::as_select())
+                .load::<crate::models::Wall>(&mut conn)
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to load walls"))?;
+
+        Ok(walls.into_iter().map(GraphQLWall::from).collect())
+    }
 }

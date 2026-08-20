@@ -11,7 +11,6 @@ import {
 } from "@/engine/world/sync";
 import type { WorldSyncSession } from "@/engine/world/sync/types";
 import { useCanvasEngine } from "@/engine/bevy/useCanvasEngine";
-import { useTokenSync } from "@/engine/bevy/useTokenSync";
 
 export const worldPageSeo: SeoConfig = {
   title: "World workspace",
@@ -38,16 +37,13 @@ export default function WorldPage() {
   const [worldState, setWorldState] = useState(() => worldStore.getState());
 
   // 🎮 Phase 4.7.F1: Use canvas engine hook for responsive sizing
-  const { containerRef, engine, engineReady, error: engineError } = useCanvasEngine({
+  const { containerRef, engineReady, error: engineError } = useCanvasEngine({
     worldId: id,
     canvasSelector: `#${canvasContainerId}`,
     onError: (err) => {
       console.error("Bevy engine failed to mount:", err);
     },
   });
-
-  // 🎮 Phase 4.7.C2: Sync RxDB tokens to Bevy engine
-  useTokenSync(engine, id);
 
   useEffect(
     () => worldStore.subscribe((event) => setWorldState(event.state)),

@@ -9,7 +9,6 @@ pub mod builtin;
 pub mod sync;
 pub mod optimistic;
 pub mod token_loader;
-pub mod token_sync;
 pub mod selection;
 
 pub use core::{GameSystem, SkillDefinition, DerivedStats, SystemRegistry};
@@ -21,8 +20,6 @@ pub use optimistic::{
     PendingMutation,
 };
 pub use token_loader::{TokenCache, load_test_tokens};
-pub use token_sync::{TokenJson, ColorJson, sync_tokens_from_rxdb, set_pending_tokens};
-pub use selection::{handle_token_selection, render_selection_feedback, handle_keyboard_token_movement};
 
 // Stub for Phase 4.7 compatibility
 #[derive(bevy::prelude::Event, Clone, Debug)]

@@ -45,6 +45,33 @@ pub struct GraphQLUpdateSceneInput {
     pub metadata: Option<Json<serde_json::Value>>,
 }
 
+// ========== Walls (Phase 6) ==========
+
+/// Input for creating a new wall
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLCreateWallInput {
+    pub scene_id: Uuid,
+    pub x1: f64,
+    pub y1: f64,
+    pub x2: f64,
+    pub y2: f64,
+    pub blocks_vision: Option<bool>,
+    pub blocks_movement: Option<bool>,
+    pub metadata: Option<Json<serde_json::Value>>,
+}
+
+/// Input for updating wall properties
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLUpdateWallInput {
+    pub x1: Option<f64>,
+    pub y1: Option<f64>,
+    pub x2: Option<f64>,
+    pub y2: Option<f64>,
+    pub blocks_vision: Option<bool>,
+    pub blocks_movement: Option<bool>,
+    pub metadata: Option<Json<serde_json::Value>>,
+}
+
 // ========== Player Presence (Phase 4.9.B.3) ==========
 
 /// Player presence data in world/scene

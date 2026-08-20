@@ -278,8 +278,9 @@ mod tests {
                 ..Default::default()
             },
             schema_version: 1,
+            ..Default::default()
         };
-        
+
         let stats = compute_derived_stats(&token, None);
         
         assert_eq!(stats.health_percentage, Some(100.0));

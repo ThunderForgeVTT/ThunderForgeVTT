@@ -239,6 +239,24 @@ diesel::table! {
 }
 
 diesel::table! {
+    walls (wall_id) {
+        wall_id -> Uuid,
+        scene_id -> Uuid,
+        x1 -> Float8,
+        y1 -> Float8,
+        x2 -> Float8,
+        y2 -> Float8,
+        blocks_vision -> Bool,
+        blocks_movement -> Bool,
+        metadata -> Nullable<Jsonb>,
+        created_by -> Uuid,
+        updated_by -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     world_actor_system_data (id) {
         id -> Uuid,
         actor_id -> Uuid,
@@ -363,6 +381,7 @@ diesel::joinable!(tokens -> scenes (scene_id));
 diesel::joinable!(user_oauth_accounts -> oauth_providers (provider_id));
 diesel::joinable!(user_oauth_accounts -> users (user_id));
 diesel::joinable!(user_sessions -> users (user_id));
+diesel::joinable!(walls -> scenes (scene_id));
 diesel::joinable!(world_actor_system_data -> world_actors (actor_id));
 diesel::joinable!(world_actors -> scenes (scene_id));
 diesel::joinable!(world_actors -> worlds (world_id));
@@ -390,6 +409,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     user_oauth_accounts,
     user_sessions,
     users,
+    walls,
     world_actor_system_data,
     world_actors,
     world_events,

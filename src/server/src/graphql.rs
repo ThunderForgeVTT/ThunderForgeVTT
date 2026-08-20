@@ -58,6 +58,7 @@ pub use input_types::{
     GraphQLUpsertWorldTokenInput, GraphQLMoveTokenInput, GraphQLUpsertTokenInput,
     GraphQLUpdateFogMaskInput, GraphQLGenerateInviteCodeInput, GraphQLJoinWorldInput,
     GraphQLUpdateMemberRoleInput, GraphQLWorldInvite, GraphQLWorldMembership,
+    GraphQLCreateWallInput, GraphQLUpdateWallInput,
 };
 
 // Phase 4.9.Z Step 4a: Helper functions extracted to separate module
@@ -78,6 +79,10 @@ pub use queries::{AdminQuery, HealthcheckQuery, SceneQuery, UserQuery, InviteQue
 // Phase 4.10.B: Invite & Membership mutations for multiplayer campaigns
 pub mod mutations_invites;
 pub use mutations_invites::{InviteMutation, WorldInvitePayload, WorldMembershipPayload};
+
+// Phase 6: Wall mutations (vision-blocking scene geometry)
+pub mod mutations_walls;
+pub use mutations_walls::WallMutation;
 
 
 
@@ -220,6 +225,43 @@ impl From<crate::models::Scene> for GraphQLScene {
 }
 
 // Scene input types moved to input_types.rs (Phase 4.9.Z Step 3)
+
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLWall {
+    wall_id: uuid::Uuid,
+    scene_id: uuid::Uuid,
+    x1: f64,
+    y1: f64,
+    x2: f64,
+    y2: f64,
+    blocks_vision: bool,
+    blocks_movement: bool,
+    metadata: Option<Json<serde_json::Value>>,
+    created_by: uuid::Uuid,
+    updated_by: uuid::Uuid,
+    created_at: chrono::NaiveDateTime,
+    updated_at: chrono::NaiveDateTime,
+}
+
+impl From<crate::models::Wall> for GraphQLWall {
+    fn from(wall: crate::models::Wall) -> Self {
+        Self {
+            wall_id: wall.wall_id,
+            scene_id: wall.scene_id,
+            x1: wall.x1,
+            y1: wall.y1,
+            x2: wall.x2,
+            y2: wall.y2,
+            blocks_vision: wall.blocks_vision,
+            blocks_movement: wall.blocks_movement,
+            metadata: wall.metadata.map(Json),
+            created_by: wall.created_by,
+            updated_by: wall.updated_by,
+            created_at: wall.created_at,
+            updated_at: wall.updated_at,
+        }
+    }
+}
 
 #[derive(SimpleObject, Debug, Clone)]
 pub struct GraphQLToken {
@@ -1600,6 +1642,7 @@ pub struct MutationRoot(
     ActorSystemDataMutation,
     CollaboratorMutation,
     InviteMutation,
+    WallMutation,
 );
 
 pub type AppSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;

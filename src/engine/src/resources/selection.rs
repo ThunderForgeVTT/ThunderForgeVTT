@@ -1,5 +1,11 @@
 use bevy::prelude::*;
 
+/// Token currently being dragged by the mouse, with the grab-point offset
+/// (token center minus cursor world position at drag start) so the token
+/// doesn't jump to re-center under the cursor on the first move frame.
+#[derive(Resource, Default)]
+pub struct DraggingToken(pub Option<(String, Vec2)>);
+
 /// Currently selected token ID
 /// Only one token can be selected at a time (Phase 4.7.E1)
 /// Deferred: Multi-select (Shift+click) to Phase 4.8

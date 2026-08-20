@@ -39,16 +39,16 @@ static EXTERNAL_COMMANDS: OnceLock<Mutex<Vec<ExternalCommand>>> = OnceLock::new(
 const ARENA_WIDTH: f32 = 1280.0;
 const ARENA_HEIGHT: f32 = 720.0;
 const PLAYER_SPEED: f32 = 320.0;
-const TOKEN_SIZE: Vec2 = Vec2::new(96.0, 96.0);
+pub(crate) const TOKEN_SIZE: Vec2 = Vec2::new(96.0, 96.0);
 
 #[derive(Component)]
 struct PlayerToken;
 
 #[derive(Component)]
-struct TokenIdentity(String);
+pub(crate) struct TokenIdentity(pub(crate) String);
 
 #[derive(Resource, Default)]
-struct ActiveWorld(String);
+pub(crate) struct ActiveWorld(pub(crate) String);
 
 #[derive(Resource, Default)]
 struct TokenEntities(HashMap<String, Entity>);
@@ -95,7 +95,7 @@ fn external_command_queue() -> &'static Mutex<Vec<ExternalCommand>> {
     EXTERNAL_COMMANDS.get_or_init(|| Mutex::new(Vec::new()))
 }
 
-fn emit_event(event: Value) {
+pub(crate) fn emit_event(event: Value) {
     let event_text = event.to_string();
 
     if let Ok(callback_guard) = event_callback_slot().lock()
@@ -267,7 +267,7 @@ fn setup_scene(mut commands: Commands, mut token_entities: ResMut<TokenEntities>
     token_entities.0.insert("npc".to_string(), npc_entity);
 
     commands.spawn((
-        Text::new("Bevy wasm: move red token with WASD or arrows. Changes sync to tldraw."),
+        Text::new("Bevy wasm: move red token with WASD/arrows, or click-drag any token."),
         TextFont {
             font_size: 24.0,
             ..default()
@@ -388,11 +388,4 @@ fn apply_external_commands(
             }
         }
     }
-}
-
-/// WASM export: Called from React when RxDB tokens change
-/// Stores token JSON which will be picked up by sync_tokens_from_rxdb system
-#[wasm_bindgen]
-pub fn update_world_tokens(tokens_json: &str) {
-    crate::systems::token_sync::set_pending_tokens(tokens_json);
 }
