@@ -122,8 +122,8 @@ see Dependencies).
 
 ### Frontend (React)
 
-- [ ] T028 [P] [US2] Create `apps/web/src/components/canvas-tools/MapImportTool/` (file picker, upload progress, error display for 400/403/413 responses), GM-only rendered
-- [ ] T029 [US2] Mount `MapImportTool` from `apps/web/src/pages/world/WorldPage.tsx`; on success, trigger a re-fetch of `walls`/`lightSources`/scene queries so the imported content appears without a manual reload
+- [X] T028 [P] [US2] Create `apps/web/src/components/canvas-tools/MapImportTool/` (file picker, upload progress, error display for 400/403/413 responses), GM-only rendered
+- [X] T029 [US2] Mount `MapImportTool` from `apps/web/src/pages/world/WorldPage.tsx`; on success, trigger a re-fetch of `walls`/`lightSources`/scene queries so the imported content appears without a manual reload
 
 **Checkpoint**: quickstart.md Scenario 2 passes on top of Scenario 1 and
 US3's `LightSource` model/table (T030-T031). SC-007's <30s target is
