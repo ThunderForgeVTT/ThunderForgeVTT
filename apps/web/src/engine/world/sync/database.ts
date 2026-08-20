@@ -8,8 +8,10 @@ import {
   worldActorSystemDataSchema,
   worldInvitesSchema,
   worldMembersSchema,
+  worldWallsSchema,
 } from "./schemas";
 import type { WorldInviteDoc } from "@/db/collections/worldInvitesCollection";
+import type { WorldWallDoc } from "@/db/collections/worldWallsCollection";
 
 let devPluginRegistered = false;
 let worldDbPromise: Promise<WorldDatabase> | null = null;
@@ -62,6 +64,15 @@ export type WorldCollections = {
     };
     upsert: (doc: WorldMemberDoc) => Promise<unknown>;
     bulkUpsert: (docs: WorldMemberDoc[]) => Promise<unknown>;
+  };
+  world_walls: {
+    find: (query?: unknown) => {
+      exec: () => Promise<Array<Record<string, unknown>>>;
+    };
+    upsert: (doc: WorldWallDoc) => Promise<unknown>;
+    findOne: (id: string) => {
+      exec: () => Promise<{ remove: () => Promise<unknown>; update: (changes: any) => Promise<unknown> } | null>;
+    };
   };
 };
 
@@ -121,6 +132,7 @@ export async function getWorldDatabase(): Promise<WorldDatabase> {
         world_actor_system_data: { schema: worldActorSystemDataSchema },
         world_invites: { schema: worldInvitesSchema },
         world_members: { schema: worldMembersSchema },
+        world_walls: { schema: worldWallsSchema },
       });
 
       return db as unknown as WorldDatabase;

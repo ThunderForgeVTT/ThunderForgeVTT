@@ -55,7 +55,7 @@ FR-003/SC-001) and establish the shared layer-ordering resource every
 rendering system in this feature consumes (FR-016).
 
 - [X] T006 Add NOTIFY emission to `create_wall`/`update_wall`/`delete_wall` in `src/server/src/graphql/mutations_walls.rs`, following the existing LISTEN/NOTIFY channel/payload convention used elsewhere in `src/server/src/graphql.rs`
-- [ ] T007 Extend `apps/web/src/engine/world/sync` to subscribe to and dispatch wall change events into the world store, mirroring the existing token event dispatch path
+- [X] T007 Extend `apps/web/src/engine/world/sync` to subscribe to and dispatch wall change events into the world store, mirroring the existing token event dispatch path
 - [ ] T008 Add `Wall` variant handling to the engine-side world-command dispatch in `src/engine/src/lib.rs` (`ExternalCommand`/`apply_external_commands`) so wall events reach the engine, following the existing `UpsertToken`/`RemoveToken` pattern
 - [X] T009 [P] Create `CanvasLayers` resource (ordered layer list: background, grid, walls, lighting, shapes, tokens, fog + GM/player visibility rule per layer) in `src/engine/src/resources/canvas_layer.rs`, re-exported via `resources/mod.rs`
 - [X] T010 [P] Create `CanvasLayerPlugin` in `src/engine/src/plugins/canvas_layer.rs` registering `CanvasLayers`; register it in `src/engine/src/lib.rs` before the wall/lighting/shape plugins added in later phases (data-model.md's Canvas Layer section)
@@ -91,10 +91,10 @@ the tool.
 
 ### Frontend (React/RxDB)
 
-- [ ] T019 [P] [US1] Create `apps/web/src/db/collections/worldWallsCollection.ts` mirroring `worldTokensCollection.ts` (schema incl. `doorState`, replication pull/push)
-- [ ] T020 [US1] Wire wall create/update/delete GraphQL calls into `apps/web/src/engine/world/sync`, dispatching into the RxDB collection from T019
-- [ ] T021 [US1] Create `apps/web/src/components/canvas-tools/WallTool/` (toolbar button + blocks_vision/blocks_movement/door-toggle property panel), GM-only rendered (hidden entirely for non-owners per FR-009)
-- [ ] T022 [US1] Mount `WallTool` from `apps/web/src/pages/world/WorldPage.tsx`, gated on the existing GM/scene-owner check already used elsewhere on that page
+- [X] T019 [P] [US1] Create `apps/web/src/db/collections/worldWallsCollection.ts` mirroring `worldTokensCollection.ts` (schema incl. `doorState`, replication pull/push)
+- [X] T020 [US1] Wire wall create/update/delete GraphQL calls into `apps/web/src/engine/world/sync`, dispatching into the RxDB collection from T019
+- [X] T021 [US1] Create `apps/web/src/components/canvas-tools/WallTool/` (toolbar button + blocks_vision/blocks_movement/door-toggle property panel), GM-only rendered (hidden entirely for non-owners per FR-009)
+- [X] T022 [US1] Mount `WallTool` from `apps/web/src/pages/world/WorldPage.tsx`, gated on the existing GM/scene-owner check already used elsewhere on that page
 
 **Checkpoint**: quickstart.md Scenario 1 and Scenario 5 (wall portion)
 pass. Ship-able MVP increment.
