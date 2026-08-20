@@ -30,7 +30,7 @@ use movement::{PlayerControlled, handle_keyboard_movement, sync_grid_to_transfor
 use derived_data::*;
 use sync_test::*;
 use systems::*;
-use plugins::{ScenePlugin, GridPlugin, TokenPlugin, CameraPlugin, SelectionPlugin, SystemRegistrationPlugin};
+use plugins::{ScenePlugin, GridPlugin, TokenPlugin, CameraPlugin, SelectionPlugin, SystemRegistrationPlugin, CanvasLayerPlugin};
 
 static ENGINE_STARTED: AtomicBool = AtomicBool::new(false);
 static EVENT_CALLBACK: OnceLock<Mutex<Option<Function>>> = OnceLock::new();
@@ -182,6 +182,10 @@ pub fn start(canvas_selector: &str) {
         .add_plugins(TokenPlugin)
         .add_plugins(CameraPlugin)
         .add_plugins(SelectionPlugin)  // Phase 4.7.E1: Token Selection
+        // Native canvas authoring (specs/001-bevy-canvas-authoring): shared
+        // layer-ordering resource, must be added before Wall/Lighting/Shape
+        // plugins so it exists when they build (Constitution Principle II)
+        .add_plugins(CanvasLayerPlugin)
         .add_systems(Startup, setup_scene)
         .add_systems(
             Update,

@@ -57,8 +57,8 @@ rendering system in this feature consumes (FR-016).
 - [X] T006 Add NOTIFY emission to `create_wall`/`update_wall`/`delete_wall` in `src/server/src/graphql/mutations_walls.rs`, following the existing LISTEN/NOTIFY channel/payload convention used elsewhere in `src/server/src/graphql.rs`
 - [ ] T007 Extend `apps/web/src/engine/world/sync` to subscribe to and dispatch wall change events into the world store, mirroring the existing token event dispatch path
 - [ ] T008 Add `Wall` variant handling to the engine-side world-command dispatch in `src/engine/src/lib.rs` (`ExternalCommand`/`apply_external_commands`) so wall events reach the engine, following the existing `UpsertToken`/`RemoveToken` pattern
-- [ ] T009 [P] Create `CanvasLayers` resource (ordered layer list: background, grid, walls, lighting, shapes, tokens, fog + GM/player visibility rule per layer) in `src/engine/src/resources/canvas_layer.rs`, re-exported via `resources/mod.rs`
-- [ ] T010 [P] Create `CanvasLayerPlugin` in `src/engine/src/plugins/canvas_layer.rs` registering `CanvasLayers`; register it in `src/engine/src/lib.rs` before the wall/lighting/shape plugins added in later phases (data-model.md's Canvas Layer section)
+- [X] T009 [P] Create `CanvasLayers` resource (ordered layer list: background, grid, walls, lighting, shapes, tokens, fog + GM/player visibility rule per layer) in `src/engine/src/resources/canvas_layer.rs`, re-exported via `resources/mod.rs`
+- [X] T010 [P] Create `CanvasLayerPlugin` in `src/engine/src/plugins/canvas_layer.rs` registering `CanvasLayers`; register it in `src/engine/src/lib.rs` before the wall/lighting/shape plugins added in later phases (data-model.md's Canvas Layer section)
 
 **Checkpoint**: Wall create/move/delete now round-trips server → all
 connected clients within a few seconds, with no UI yet, and a shared
