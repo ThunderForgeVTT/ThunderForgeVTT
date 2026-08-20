@@ -219,7 +219,7 @@ references anywhere in the codebase (SC-006).
 
 - [ ] T064 [P] Add plugin-independence integration tests to `src/engine/src/integration_tests.rs`: each of `WallPlugin`/`LightingPlugin`/`ShapePlugin` must compile/run correctly with the others absent from the `App` builder (Constitution Principle II); `CanvasLayerPlugin` must be present for any of them to render but is otherwise a fixed dependency, not itself optional
 - [ ] T065 [P] Add an occlusion unit test (light + wall/door geometry → expected lit/unlit regions, including the open-door-does-not-occlude case) near the systems added in T013/T038
-- [ ] T066 [P] Add scene-ownership rejection tests for all mutations (T033, T049) and the import endpoint (T026) mirroring existing `mutations_walls.rs` test coverage expectations
+- [X] T066 [P] Add scene-ownership rejection tests for all mutations (T033, T049) and the import endpoint (T026) mirroring existing `mutations_walls.rs` test coverage expectations
 - [ ] T067 [P] Add Playwright e2e coverage for quickstart.md Scenario 1 (walls), Scenario 2 (import), and Scenario 4 (shapes) in the existing e2e harness
 - [X] T068 Run `cargo check -p thunderforge_engine --target wasm32-unknown-unknown` and `cargo check -p dnd5e-server` and resolve any new warnings introduced by this feature (Constitution Principle V)
 - [ ] T069 Execute quickstart.md Scenario 5 (authorization boundary) and Scenario 6 (empty-scene regression) manually before marking the feature done

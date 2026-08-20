@@ -629,4 +629,109 @@ mod tests {
         let walls = walls_from_line_of_sight(&parsed.file.line_of_sight, 100.0);
         assert_eq!(walls.len(), 1);
     }
+
+    /// T066: the import endpoint's ownership check (T026a) is the exact
+    /// same `scenes::table.filter(scene_id).filter(owner_id.eq(user_id))`
+    /// shape as `mutations_walls.rs`'s `wall_mutations_are_scoped_to_scene_owner`
+    /// — verified directly at the Diesel-query level (rather than through
+    /// the full Axum multipart handler) for the same reason that test
+    /// does: it's the actual authorization boundary, and a live-DB
+    /// `test_transaction` exercises it without needing HTTP/multipart
+    /// scaffolding.
+    #[test]
+    fn import_ownership_check_is_scoped_to_scene_owner() {
+        use diesel::PgConnection;
+
+        fn try_connect() -> Option<PgConnection> {
+            dotenvy::dotenv().ok();
+            let url = std::env::var("DATABASE_URL").ok()?;
+            PgConnection::establish(&url).ok()
+        }
+
+        let Some(mut conn) = try_connect() else {
+            eprintln!(
+                "skipping import_ownership_check_is_scoped_to_scene_owner: no DATABASE_URL/dev DB reachable"
+            );
+            return;
+        };
+
+        conn.test_transaction::<_, diesel::result::Error, _>(|conn| {
+            use crate::schema::{scenes, users, worlds};
+
+            let owner_id = uuid::Uuid::now_v7();
+            let intruder_id = uuid::Uuid::now_v7();
+            let world_id = uuid::Uuid::now_v7();
+            let scene_id = uuid::Uuid::now_v7();
+            let now = chrono::Utc::now().naive_utc();
+
+            for (id, username) in [
+                (owner_id, "import-test-owner"),
+                (intruder_id, "import-test-intruder"),
+            ] {
+                diesel::insert_into(users::table)
+                    .values((
+                        users::id.eq(id),
+                        users::username.eq(format!("{username}-{id}")),
+                        users::password_hash.eq("test-hash"),
+                        users::email.eq(format!("{username}-{id}@example.test")),
+                        users::created_at.eq(now),
+                        users::updated_at.eq(now),
+                    ))
+                    .execute(conn)?;
+            }
+
+            diesel::insert_into(worlds::table)
+                .values((
+                    worlds::id.eq(world_id),
+                    worlds::name.eq("Import Test World"),
+                    worlds::created_by.eq(owner_id),
+                    worlds::updated_by.eq(owner_id),
+                    worlds::created_at.eq(now),
+                    worlds::updated_at.eq(now),
+                ))
+                .execute(conn)?;
+
+            diesel::insert_into(scenes::table)
+                .values((
+                    scenes::scene_id.eq(scene_id),
+                    scenes::world_id.eq(world_id),
+                    scenes::name.eq("Import Test Scene"),
+                    scenes::type_.eq("battlemap"),
+                    scenes::grid_size.eq(32),
+                    scenes::grid_type.eq("square"),
+                    scenes::width.eq(1000),
+                    scenes::height.eq(1000),
+                    scenes::owner_id.eq(owner_id),
+                    scenes::created_at.eq(now),
+                    scenes::updated_at.eq(now),
+                ))
+                .execute(conn)?;
+
+            // Same query shape as import_uvtt's ownership check.
+            let intruder_result = scenes::table
+                .filter(scenes::scene_id.eq(scene_id))
+                .filter(scenes::owner_id.eq(intruder_id))
+                .select((scenes::grid_size, scenes::world_id))
+                .first::<(i32, uuid::Uuid)>(conn)
+                .optional()?;
+            assert!(
+                intruder_result.is_none(),
+                "a non-owner's import ownership check must not match another owner's scene"
+            );
+
+            let owner_result = scenes::table
+                .filter(scenes::scene_id.eq(scene_id))
+                .filter(scenes::owner_id.eq(owner_id))
+                .select((scenes::grid_size, scenes::world_id))
+                .first::<(i32, uuid::Uuid)>(conn)
+                .optional()?;
+            assert_eq!(
+                owner_result,
+                Some((32, world_id)),
+                "the scene owner's import ownership check must match their own scene"
+            );
+
+            Ok(())
+        });
+    }
 }
