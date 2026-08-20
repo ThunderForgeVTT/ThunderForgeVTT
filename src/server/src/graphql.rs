@@ -55,12 +55,13 @@ pub use input_types::{
     GraphQLPlayerPresence, GraphQLPlayersOnlineList, GraphQLPolicyEffect, GraphQLPolicy,
     GraphQLPlaceholderDomainObject, GraphQLExportManifest, GraphQLExportMyDataPayload,
     GraphQLDeleteMyDataPayload, GraphQLDeleteWorldPayload, GraphQLCreateWorldTokenInput,
-    GraphQLUpsertWorldTokenInput, GraphQLMoveTokenInput, GraphQLUpsertTokenInput,
+    GraphQLUpsertWorldTokenInput, GraphQLMoveTokenInput,
     GraphQLUpdateFogMaskInput, GraphQLGenerateInviteCodeInput, GraphQLJoinWorldInput,
     GraphQLUpdateMemberRoleInput, GraphQLWorldInvite, GraphQLWorldMembership,
     GraphQLCreateWallInput, GraphQLUpdateWallInput, GraphQLDoorState,
     GraphQLCreateLightSourceInput, GraphQLUpdateLightSourceInput,
     GraphQLCreateShapeInput, GraphQLUpdateShapeInput, GraphQLShapeKind,
+    GraphQLCreateTokenInput, GraphQLUpdateTokenInput,
 };
 
 // Phase 4.9.Z Step 4a: Helper functions extracted to separate module
@@ -93,6 +94,10 @@ pub use mutations_lighting::LightSourceMutation;
 // Native canvas authoring: shape (stroke/rect/ellipse/line/text) mutations
 pub mod mutations_shapes;
 pub use mutations_shapes::ShapeMutation;
+
+// Native canvas authoring: scene-scoped token mutations
+pub mod mutations_tokens;
+pub use mutations_tokens::TokenMutation;
 
 
 
@@ -1094,90 +1099,10 @@ impl SceneMutation {
         Ok(deleted > 0)
     }
 
-    async fn upsert_token(
-        &self,
-        ctx: &Context<'_>,
-        input: GraphQLUpsertTokenInput,
-    ) -> GraphQLResult<GraphQLToken> {
-        let state = app_state(ctx)?;
-        let _auth_user = authenticated_user(ctx)?;
-        let mut conn = state
-            .db_pool
-            .get()
-            .map_err(|_| Error::new("Failed to get DB connection"))?;
-        let now = Utc::now().naive_utc();
-
-        let token_id = input.token_id.unwrap_or_else(uuid::Uuid::now_v7);
-        let scene_id = input.scene_id;
-        let actor_id = input.actor_id;
-        let x = input.x.unwrap_or(0.0);
-        let y = input.y.unwrap_or(0.0);
-        let rotation = input.rotation.unwrap_or(0.0);
-        let scale = input.scale.unwrap_or(1.0);
-        let metadata = input.metadata.map(|j| j.0);
-
-        let upserted_token = tokio::task::spawn_blocking(move || {
-            use crate::schema::tokens;
-            use diesel::prelude::*;
-            
-            diesel::insert_into(tokens::table)
-                .values((
-                    tokens::token_id.eq(token_id),
-                    tokens::scene_id.eq(scene_id),
-                    tokens::actor_id.eq(actor_id),
-                    tokens::x.eq(x),
-                    tokens::y.eq(y),
-                    tokens::rotation.eq(rotation),
-                    tokens::scale.eq(scale),
-                    tokens::metadata.eq(&metadata),
-                    tokens::created_at.eq(now),
-                    tokens::updated_at.eq(now),
-                ))
-                .on_conflict(tokens::token_id)
-                .do_update()
-                .set((
-                    tokens::actor_id.eq(actor_id),
-                    tokens::x.eq(x),
-                    tokens::y.eq(y),
-                    tokens::rotation.eq(rotation),
-                    tokens::scale.eq(scale),
-                    tokens::metadata.eq(&metadata),
-                    tokens::updated_at.eq(now),
-                ))
-                .returning(crate::models::Token::as_returning())
-                .get_result(&mut conn)
-        })
-        .await
-        .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to upsert token"))?;
-
-        Ok(GraphQLToken::from(upserted_token))
-    }
-
-    async fn delete_token(
-        &self,
-        ctx: &Context<'_>,
-        token_id: uuid::Uuid,
-    ) -> GraphQLResult<bool> {
-        let state = app_state(ctx)?;
-        let _auth_user = authenticated_user(ctx)?;
-        let mut conn = state
-            .db_pool
-            .get()
-            .map_err(|_| Error::new("Failed to get DB connection"))?;
-
-        let deleted = tokio::task::spawn_blocking(move || {
-            use crate::schema::tokens;
-            use diesel::prelude::*;
-            diesel::delete(tokens::table.filter(tokens::token_id.eq(token_id)))
-                .execute(&mut conn)
-        })
-        .await
-        .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to delete token"))?;
-
-        Ok(deleted > 0)
-    }
+    // NOTE: scene-scoped token mutations (create_token/update_token/delete_token) live in
+    // `mutations_tokens::TokenMutation` — that replaces an earlier `upsert_token`/`delete_token`
+    // pair that lived here with no scene-ownership check at all. See TokenMutation for the
+    // ownership-enforced, NOTIFY-synced replacement.
 
     async fn update_fog_mask(
         &self,
@@ -1737,6 +1662,7 @@ pub struct MutationRoot(
     WallMutation,
     LightSourceMutation,
     ShapeMutation,
+    TokenMutation,
 );
 
 pub type AppSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;

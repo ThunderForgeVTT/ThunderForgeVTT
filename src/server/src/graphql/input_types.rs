@@ -348,11 +348,23 @@ pub struct GraphQLMoveTokenInput {
     pub z: Option<f64>,
 }
 
-/// Input for upserting a token in a scene
+// ========== Scene-Scoped Tokens (native canvas authoring) ==========
+
+/// Input for creating a new token on a scene
 #[derive(InputObject, Debug, Clone)]
-pub struct GraphQLUpsertTokenInput {
-    pub token_id: Option<Uuid>,
+pub struct GraphQLCreateTokenInput {
     pub scene_id: Uuid,
+    pub actor_id: Option<Uuid>,
+    pub x: f64,
+    pub y: f64,
+    pub rotation: Option<f64>,
+    pub scale: Option<f64>,
+    pub metadata: Option<Json<serde_json::Value>>,
+}
+
+/// Input for updating an existing token's position/properties
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLUpdateTokenInput {
     pub actor_id: Option<Uuid>,
     pub x: Option<f64>,
     pub y: Option<f64>,

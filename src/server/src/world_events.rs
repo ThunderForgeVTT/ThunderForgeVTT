@@ -22,6 +22,7 @@ pub const EVENT_CODE_WALL_CHANGED: i32 = 10;
 pub const EVENT_CODE_LIGHT_SOURCE_CHANGED: i32 = 11;
 pub const EVENT_CODE_SHAPE_CHANGED: i32 = 12;
 pub const EVENT_CODE_MAP_IMPORTED: i32 = 13;
+pub const EVENT_CODE_TOKEN_CHANGED: i32 = 14;
 
 /// Record a world event to the audit trail and trigger NOTIFY for real-time sync.
 pub fn record_world_event(

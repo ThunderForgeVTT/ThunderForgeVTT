@@ -182,3 +182,8 @@ export type { WorldLightDoc } from "@/db/collections/worldLightsCollection";
 // Native canvas authoring (specs/001-bevy-canvas-authoring): shapes (T057)
 export { worldShapesSchema } from "@/db/collections/worldShapesCollection";
 export type { WorldShapeDoc, ShapeKind as WorldShapeKind } from "@/db/collections/worldShapesCollection";
+
+// Scene-scoped token persistence: the modern `tokens` table, distinct from
+// the legacy world-scoped `world_tokens` collection above.
+export { worldSceneTokensSchema } from "@/db/collections/worldTokensSceneCollection";
+export type { WorldSceneTokenDoc } from "@/db/collections/worldTokensSceneCollection";

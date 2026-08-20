@@ -9,9 +9,11 @@ import {
   createGraphQLWorldSyncTransport,
   loadLightsIntoStore,
   loadShapesIntoStore,
+  loadTokensIntoStore,
   loadWallsIntoStore,
   startLightMutationBridge,
   startShapeMutationBridge,
+  startTokenMutationBridge,
   startWallMutationBridge,
   startWorldSync,
 } from "@/engine/world/sync";
@@ -41,13 +43,14 @@ export default function WorldPage() {
   const loaded = useRef(false);
   const canvasContainerId = "game-canvas-container";
   const worldSyncSessionRef = useRef<WorldSyncSession | null>(null);
+  // Scene-scoped tokens are loaded from the server (tokens(sceneId)) once
+  // a scene is selected — see the loadTokensIntoStore/startTokenMutationBridge
+  // effect below — rather than seeded here with fixture data. The engine's
+  // own demo "player"/"npc" tokens still spawn independently at Bevy
+  // startup (src/engine/src/lib.rs) regardless of what's loaded here.
   const [worldStore] = useState(() =>
     createWorldStore({
       worldId: id,
-      initialTokens: [
-        { id: "player", x: 140, y: 140, z: 0, label: "Player" },
-        { id: "npc", x: 360, y: 220, z: 0, label: "NPC" },
-      ],
     }),
   );
   const [worldState, setWorldState] = useState(() => worldStore.getState());
@@ -223,6 +226,22 @@ export default function WorldPage() {
     });
 
     const stopBridge = startWallMutationBridge(worldStore, sceneId);
+
+    return () => {
+      stopBridge();
+    };
+  }, [sceneId, worldStore]);
+
+  useEffect(() => {
+    if (!sceneId) {
+      return;
+    }
+
+    void loadTokensIntoStore(worldStore, sceneId).catch((error) => {
+      console.error("Failed to load scene tokens:", error);
+    });
+
+    const stopBridge = startTokenMutationBridge(worldStore, sceneId);
 
     return () => {
       stopBridge();
