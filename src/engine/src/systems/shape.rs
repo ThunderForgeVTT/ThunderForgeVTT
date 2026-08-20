@@ -4,13 +4,22 @@
 //! Wiring: see `plugins/shape.rs`'s `ShapePlugin`.
 //!
 //! **Scope simplifications (called out per the task brief)**:
-//! - Ellipse rendering is a rectangle placeholder (`Sprite::from_color`
-//!   scaled to `w`/`h`), not true curve/mesh geometry — acceptable for a
-//!   v1 first pass per the task brief.
+//! - Ellipse rendering (T018 of specs/002-canvas-authoring-asset-storage)
+//!   draws a real ellipse outline as an N-segment polygon approximation,
+//!   reusing the same `segment_sprite` sprite-chain technique `Stroke`
+//!   already uses — deliberately not a `Mesh2d`/`ColorMaterial` asset,
+//!   since `sync_shape_visuals` fully despawns and respawns every shape
+//!   every pass (no change-detection guard) and per-frame `Assets<Mesh>`/
+//!   `Assets<ColorMaterial>` inserts would leak without a much larger
+//!   asset-caching change than this fix warrants.
 //! - Text *input* (the on-canvas typing UI) is a frontend/UI concern, not
-//!   built here. The engine only renders a `Text2d` for a `Text` shape
-//!   whose `text` field arrives already filled in via `create_shape`/
-//!   `upsert_shape` — there is no in-canvas text-entry system in Bevy.
+//!   built here. `ShapeTool.tsx`'s `TextPlacement` popover already handles
+//!   this end-to-end (click the canvas container while the text sub-tool
+//!   is active -> popover -> `createShape` mutation -> `upsert_shape`
+//!   dispatch), confirmed during T019 of
+//!   specs/002-canvas-authoring-asset-storage — no engine-side gap here.
+//!   The engine only renders a `Text2d` for a `Text` shape whose `text`
+//!   field arrives already filled in; it never needs to collect it.
 //! - Restyling in v1 is a small hardcoded color-palette cycle (a `KeyC`
 //!   keybind on the selected shape), matching the task brief's "read from
 //!   a simple resource or hardcode a small palette cycle for v1, style
@@ -193,6 +202,18 @@ fn translate_geometry(kind: ShapeKind, geometry: &Value, delta: Vec2) -> Value {
     }
 }
 
+/// Notifies the frontend of a selection change — same gap and same fix as
+/// `systems/wall.rs`'s `emit_wall_selection` (T014/T015/T020,
+/// specs/002-canvas-authoring-asset-storage): `SelectedShape` previously
+/// only ever changed locally, so `ShapeTool.tsx`'s "Selected shape" panel
+/// could never appear for a shape selected by clicking the canvas.
+fn emit_shape_selection(shape_id: Option<&str>) {
+    emit_event(json!({
+        "type": "select_shape",
+        "shapeId": shape_id,
+    }));
+}
+
 fn shape_color(shape: &Shape, selected: bool) -> Color {
     if selected {
         return SELECTED_COLOR;
@@ -277,6 +298,7 @@ pub(crate) fn handle_shape_input(
                 return;
             }
             selected_shape.deselect();
+            emit_shape_selection(None);
             drag.mode = ShapeDragMode::Creating {
                 kind,
                 start: cursor,
@@ -290,6 +312,7 @@ pub(crate) fn handle_shape_input(
         for shape in shape_set.shapes() {
             if cursor.distance(shape_anchor(shape)) <= SHAPE_SELECT_DISTANCE {
                 selected_shape.select(shape.id.clone());
+                emit_shape_selection(Some(&shape.id));
                 drag.mode = ShapeDragMode::Moving {
                     shape_id: shape.id.clone(),
                     origin: cursor,
@@ -299,6 +322,7 @@ pub(crate) fn handle_shape_input(
             }
         }
         selected_shape.deselect();
+        emit_shape_selection(None);
         drag.mode = ShapeDragMode::Idle;
         return;
     }
@@ -471,6 +495,7 @@ pub(crate) fn handle_shape_keyboard_toggles(
         if let Some(deleted) = shape_set.remove(&shape_id) {
             shape_set.push_undo(ShapeEdit::Delete { deleted });
             selected_shape.deselect();
+            emit_shape_selection(None);
             emit_event(json!({
                 "type": "delete_shape",
                 "shapeId": shape_id,
@@ -624,7 +649,7 @@ pub(crate) fn sync_shape_visuals(
         let translation_z = if selected { z + 1.0 } else { z };
 
         let entity = match shape.kind {
-            ShapeKind::Rect | ShapeKind::Ellipse => {
+            ShapeKind::Rect => {
                 let g = &shape.geometry;
                 let x = g["x"].as_f64().unwrap_or(0.0) as f32;
                 let y = g["y"].as_f64().unwrap_or(0.0) as f32;
@@ -638,6 +663,26 @@ pub(crate) fn sync_shape_visuals(
                         ShapeVisual,
                     ))
                     .id()
+            }
+            ShapeKind::Ellipse => {
+                let g = &shape.geometry;
+                let x = g["x"].as_f64().unwrap_or(0.0) as f32;
+                let y = g["y"].as_f64().unwrap_or(0.0) as f32;
+                let w = g["w"].as_f64().unwrap_or(1.0).max(1.0) as f32;
+                let h = g["h"].as_f64().unwrap_or(1.0).max(1.0) as f32;
+                let center = Vec2::new(x + w / 2.0, y + h / 2.0);
+                let points = ellipse_outline_points(center, w / 2.0, h / 2.0, ELLIPSE_SEGMENTS);
+
+                let parent = commands
+                    .spawn((Transform::default(), Visibility::Inherited, ShapeVisual))
+                    .id();
+                for pair in points.windows(2) {
+                    let child = commands
+                        .spawn(segment_sprite(pair[0], pair[1], color, translation_z))
+                        .id();
+                    commands.entity(parent).add_child(child);
+                }
+                parent
             }
             ShapeKind::Line => {
                 let g = &shape.geometry;
@@ -702,9 +747,29 @@ pub(crate) fn sync_shape_visuals(
     }
 }
 
+/// Segment count for the ellipse polygon approximation (T018). High enough
+/// to read as a smooth curve at typical scene zoom levels, low enough to
+/// stay well within the per-shape entity counts `Stroke` already produces.
+const ELLIPSE_SEGMENTS: usize = 32;
+
+/// Closed-loop points tracing an ellipse centered at `center` with
+/// semi-axes `rx`/`ry`, `segments` points around the loop plus the
+/// closing point back to the start (T018: real ellipse geometry instead
+/// of the old rectangle placeholder, rendered via the same
+/// sprite-segment-chain technique `Stroke` uses).
+fn ellipse_outline_points(center: Vec2, rx: f32, ry: f32, segments: usize) -> Vec<Vec2> {
+    (0..=segments)
+        .map(|i| {
+            let t = (i as f32 / segments as f32) * std::f32::consts::TAU;
+            center + Vec2::new(rx * t.cos(), ry * t.sin())
+        })
+        .collect()
+}
+
 /// A thin rotated sprite spanning `start`-`end`, same technique
 /// `systems/wall.rs`'s `sync_wall_visuals` uses for wall segments —
-/// shared here by both `Line` shapes and each segment of a `Stroke`.
+/// shared here by `Line` shapes, each segment of a `Stroke`, and each
+/// segment of an `Ellipse`'s polygon outline.
 fn segment_sprite(
     start: Vec2,
     end: Vec2,
@@ -744,6 +809,18 @@ mod tests {
             text: None,
             style: None,
             visible_to_players: false,
+        }
+    }
+
+    #[test]
+    fn ellipse_outline_points_are_closed_and_on_the_ellipse() {
+        let points = ellipse_outline_points(Vec2::new(10.0, 20.0), 4.0, 2.0, 8);
+        assert_eq!(points.len(), 9); // 8 segments + closing point back to start
+        assert_eq!(points[0], points[8]); // closed loop
+        for p in &points {
+            let dx = (p.x - 10.0) / 4.0;
+            let dy = (p.y - 20.0) / 2.0;
+            assert!((dx * dx + dy * dy - 1.0).abs() < 1e-4);
         }
     }
 

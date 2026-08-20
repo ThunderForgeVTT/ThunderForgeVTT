@@ -14,4 +14,4 @@ pub use canvas_layer::{CanvasLayer, CanvasLayers};
 pub use wall::{DoorState, IsGameMaster, SelectedWall, Wall, WallEdit, WallSet, is_visible};
 pub use lighting::{LightEdit, LightSet, LightSource, SelectedLight};
 pub use shape::{ActiveShapeTool, SelectedShape, Shape, ShapeEdit, ShapeKind, ShapeSet};
-pub use background::SceneBackground;
+pub use background::{PlacedCanvasImage, PlacedCanvasImages, SceneBackground};

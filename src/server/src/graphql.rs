@@ -21,7 +21,6 @@ use crate::admin::{
     update_manifest_key as persist_manifest_key, update_oauth_provider as persist_oauth_provider,
     update_two_factor_policy as persist_two_factor_policy,
 };
-// use crate::audit::{log_mutation, log_deletion, log_admin_query}; // Phase 4.X: Disabled pending schema
 use crate::auth_middleware::AuthenticatedUser;
 use crate::db_types::PolicyEffectEnum;
 use crate::models::{
@@ -70,7 +69,7 @@ pub use helpers::{
     app_state, authenticated_user, admin_user, normalize_world_name, normalize_optional_text,
     validate_world_name, validate_optional_reference_id, prepare_world_input, world_write_error,
     load_game_systems, load_owned_worlds, load_all_worlds, load_owned_world_tokens,
-    load_owned_world_events, load_visible_world_by_id,
+    load_owned_world_events, load_visible_world_by_id, require_visible_world,
     load_owned_world_token_by_id, load_owned_world_event_by_id,
     load_game_system_by_id, get_world_id_from_scene, PreparedWorldInput,
 };
@@ -98,6 +97,10 @@ pub use mutations_shapes::ShapeMutation;
 // Native canvas authoring: scene-scoped token mutations
 pub mod mutations_tokens;
 pub use mutations_tokens::TokenMutation;
+
+// Spec 002: canvas image asset storage (RustFS)
+pub mod mutations_assets;
+pub use mutations_assets::{AssetMutation, AssetQuery};
 
 
 
@@ -219,8 +222,12 @@ pub struct GraphQLScene {
     updated_at: chrono::NaiveDateTime,
     /// Native canvas authoring: set by map import (data-model.md's Scene
     /// section); resolves against the existing `/assets/<path>` static
-    /// route. `None` = no background art.
+    /// route. `None` = no background art. Superseded by
+    /// `background_asset_id` (spec 002, FR-018).
     background_image_path: Option<String>,
+    /// Spec 002 (FR-018): the RustFS-backed `canvas_image_assets` row
+    /// for this scene's background, when migrated.
+    background_asset_id: Option<uuid::Uuid>,
 }
 
 impl From<crate::models::Scene> for GraphQLScene {
@@ -240,6 +247,7 @@ impl From<crate::models::Scene> for GraphQLScene {
             created_at: scene.created_at,
             updated_at: scene.updated_at,
             background_image_path: scene.background_image_path,
+            background_asset_id: scene.background_asset_id,
         }
     }
 }
@@ -488,18 +496,6 @@ impl WorldTokenMutation {
         {
             eprintln!("⚠️  Failed to update session: {}", e);
         }
-
-        // Phase 1.3: Log mutation to audit trail - disabled
-        // if let Ok(token_uuid) = uuid::Uuid::parse_str(&created_token.id) {
-        //     let _ = log_mutation(
-        //         state,
-        //         "create",
-        //         user_id,
-        //         "world_token",
-        //         token_uuid,
-        //     )
-        //     .await;
-        // }
 
         Ok(GraphQLWorldToken::from(created_token))
     }
@@ -990,6 +986,7 @@ impl SceneMutation {
             created_at: now,
             updated_at: now,
             background_image_path: None,
+            background_asset_id: None,
         };
 
         let inserted_scene = tokio::task::spawn_blocking(move || {
@@ -1208,21 +1205,12 @@ impl WorldMutation {
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
         .map_err(|error| world_write_error(error, "Failed to create world"))?;
 
-        // Phase 2.4: Auto-assign creator as OWNER for RBAC - disabled pending schema
-        // crate::rbac::RbacEngine::assign_creator_as_owner(state, new_world.id, auth_user.user_id)
-        //     .await
-        //     .map_err(|e| Error::new(format!("Failed to assign owner role: {}", e)))?;
-
-        // Phase 1.3: Log mutation to audit trail - disabled
-        // let _ = log_mutation(
-        //     state,
-        //     "create",
-        //     auth_user.user_id,
-        //     "world",
-        //     new_world.id,
-        // )
-        // .await;
-
+        // NOTE: world creation does not insert a world_members owner row.
+        // require_world_member() (src/server/src/auth/world_membership.rs,
+        // spec 002) falls back to worlds.created_by to compensate for this
+        // gap. See that module's doc comment for the full story — fixing it
+        // at the source (inserting an owner world_members row here) is a
+        // separate, deliberate follow-up, not done as part of this cleanup.
         Ok(GraphQLWorld::from(new_world))
     }
 
@@ -1296,16 +1284,6 @@ impl WorldMutation {
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
         .map_err(|_| Error::new("Failed to delete world"))?;
 
-        // Phase 1.3: Log deletion to audit trail - disabled
-        // let _ = log_deletion(
-        //     state,
-        //     auth_user.user_id,
-        //     "world",
-        //     world.id,
-        //     None,
-        // )
-        // .await;
-
         Ok(GraphQLDeleteWorldPayload {
             id: world.id,
             status: "deleted".to_string(),
@@ -1341,20 +1319,11 @@ impl AdminMutation {
         config: GraphQLOAuthProviderConfigInput,
     ) -> GraphQLResult<GraphQLOAuthProvider> {
         let state = app_state(ctx)?;
-        let admin_user_id = admin_user(ctx)?.user_id;
+        let _ = admin_user(ctx)?;
         let result = persist_oauth_provider(state, provider_id, config.into())
             .await
             .map(GraphQLOAuthProvider::from)
             .map_err(Error::new)?;
-
-        // Phase 1.3: Log admin action to audit trail - disabled
-        // let _ = log_admin_query(
-        //     state,
-        //     admin_user_id,
-        //     "update_oauth_provider",
-        //     None,
-        // )
-        // .await;
 
         Ok(result)
     }
@@ -1366,7 +1335,7 @@ impl AdminMutation {
         value: String,
     ) -> GraphQLResult<GraphQLSystemManifest> {
         let state = app_state(ctx)?;
-        let admin_user_id = admin_user(ctx)?.user_id;
+        let _ = admin_user(ctx)?;
         let result = persist_manifest_key(state, &key, &value)
             .map(|manifest| {
                 GraphQLSystemManifest::from_document(
@@ -1375,15 +1344,6 @@ impl AdminMutation {
                 )
             })
             .map_err(Error::new)?;
-
-        // Phase 1.3: Log admin action to audit trail - disabled
-        // let _ = log_admin_query(
-        //     state,
-        //     admin_user_id,
-        //     "update_manifest_key",
-        //     None,
-        // )
-        // .await;
 
         Ok(result)
     }
@@ -1411,20 +1371,11 @@ impl AdminMutation {
         required_for_all_users: bool,
     ) -> GraphQLResult<GraphQLAuthSecuritySettings> {
         let state = app_state(ctx)?;
-        let admin_user_id = admin_user(ctx)?.user_id;
+        let _ = admin_user(ctx)?;
         let result = persist_two_factor_policy(state, required_for_all_users)
             .await
             .map(GraphQLAuthSecuritySettings::from)
             .map_err(Error::new)?;
-
-        // Phase 1.3: Log admin action to audit trail - disabled
-        // let _ = log_admin_query(
-        //     state,
-        //     admin_user_id,
-        //     "update_two_factor_policy",
-        //     None,
-        // )
-        // .await;
 
         Ok(result)
     }
@@ -1635,19 +1586,22 @@ impl SubscriptionRoot {
     }
 }
 
-// Phase 2.5: RBAC Collaborator Management - DISABLED pending schema completion
-// #[derive(Default)]
-// pub struct CollaboratorMutation;
-
-// #[async_graphql::Object]
-// impl CollaboratorMutation { ... }
-
-// Re-define CollaboratorMutation as empty for now
+// Empty placeholder in the mutation root — the world_collaborators-based
+// RBAC mutations this was meant to hold were never built; world/scene
+// authorization instead runs through world_members (see
+// src/server/src/auth/world_membership.rs).
 #[derive(async_graphql::MergedObject, Default)]
 pub struct CollaboratorMutation;
 
 #[derive(MergedObject, Default)]
-pub struct QueryRoot(HealthcheckQuery, UserQuery, AdminQuery, SceneQuery, InviteQuery);
+pub struct QueryRoot(
+    HealthcheckQuery,
+    UserQuery,
+    AdminQuery,
+    SceneQuery,
+    InviteQuery,
+    AssetQuery,
+);
 
 #[derive(MergedObject, Default)]
 pub struct MutationRoot(
@@ -1663,6 +1617,7 @@ pub struct MutationRoot(
     LightSourceMutation,
     ShapeMutation,
     TokenMutation,
+    AssetMutation,
 );
 
 pub type AppSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;
@@ -1773,66 +1728,5 @@ mod tests {
             );
         }
     }
-// 
-//     // Phase 2.6: RBAC tests
-//     #[test]
-//     fn rbac_role_from_str_parses_all_variants() {
-//         assert_eq!(crate::rbac::Role::from_str("OWNER"), Some(crate::rbac::Role::Owner));
-//         assert_eq!(crate::rbac::Role::from_str("EDITOR"), Some(crate::rbac::Role::Editor));
-//         assert_eq!(crate::rbac::Role::from_str("VIEWER"), Some(crate::rbac::Role::Viewer));
-//         assert_eq!(crate::rbac::Role::from_str("INVALID"), None);
-//         assert_eq!(crate::rbac::Role::from_str("owner"), None); // case-sensitive
-//     }
-// 
-//     #[test]
-//     fn rbac_role_as_str_round_trips() {
-//         let owner = crate::rbac::Role::Owner;
-//         assert_eq!(crate::rbac::Role::from_str(owner.as_str()), Some(owner));
-// 
-//         let editor = crate::rbac::Role::Editor;
-//         assert_eq!(crate::rbac::Role::from_str(editor.as_str()), Some(editor));
-// 
-//         let viewer = crate::rbac::Role::Viewer;
-//         assert_eq!(crate::rbac::Role::from_str(viewer.as_str()), Some(viewer));
-//     }
-// 
-//     #[test]
-//     fn rbac_owner_has_all_permissions() {
-//         let owner = crate::rbac::Role::Owner;
-//         assert!(owner.has_permission("view"));
-//         assert!(owner.has_permission("edit"));
-//         assert!(owner.has_permission("delete"));
-//         assert!(owner.has_permission("invite"));
-//         assert!(owner.has_permission("any_permission"));
-//     }
-// 
-//     #[test]
-//     fn rbac_editor_has_view_and_edit_permissions() {
-//         let editor = crate::rbac::Role::Editor;
-//         assert!(editor.has_permission("view"));
-//         assert!(editor.has_permission("edit"));
-//         assert!(!editor.has_permission("delete"));
-//         assert!(!editor.has_permission("invite"));
-//     }
-// 
-//     #[test]
-//     fn rbac_viewer_has_only_view_permission() {
-//         let viewer = crate::rbac::Role::Viewer;
-//         assert!(viewer.has_permission("view"));
-//         assert!(!viewer.has_permission("edit"));
-//         assert!(!viewer.has_permission("delete"));
-//         assert!(!viewer.has_permission("invite"));
-//     }
-// 
-//     #[test]
-//     fn rbac_role_equality() {
-//         let owner1 = crate::rbac::Role::Owner;
-//         let owner2 = crate::rbac::Role::Owner;
-//         let editor = crate::rbac::Role::Editor;
-// 
-//         assert_eq!(owner1, owner2);
-//         assert_ne!(owner1, editor);
-//     }
-// }
 }
 

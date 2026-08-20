@@ -1,12 +1,17 @@
 // @generated automatically by Diesel CLI.
 
 pub mod sql_types {
-    // NOTE: `Clone` intentionally omitted here despite diesel.toml's
-    // custom_type_derives — diesel-derive-enum's `DbEnum` on
-    // `db_types::PolicyEffectEnum` (`#[ExistingTypePath = "..."]`)
-    // already generates a `Clone` impl for this type; both together is
-    // E0119 (conflicting implementations). If `diesel print-schema`
-    // regenerates this file, re-remove `Clone` from the derive list.
+    // NOTE: `Clone` intentionally omitted on both types below despite
+    // diesel.toml's custom_type_derives — diesel-derive-enum's `DbEnum`
+    // on `db_types::PolicyEffectEnum`/`CanvasImageAssetKindEnum`
+    // (`#[ExistingTypePath = "..."]`) already generates a `Clone` impl
+    // for each; both together is E0119 (conflicting implementations).
+    // If `diesel print-schema` regenerates this file, re-remove `Clone`
+    // from the derive list for both.
+    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "CanvasImageAssetKind"))]
+    pub struct CanvasImageAssetKind;
+
     #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "PolicyEffect"))]
     pub struct PolicyEffect;
@@ -44,6 +49,28 @@ diesel::table! {
     auth_security_settings (id) {
         id -> Int4,
         two_factor_required_for_all_users -> Bool,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::CanvasImageAssetKind;
+
+    canvas_image_assets (asset_id) {
+        asset_id -> Uuid,
+        world_id -> Uuid,
+        scene_id -> Nullable<Uuid>,
+        owner_user_id -> Uuid,
+        storage_path -> Text,
+        original_format -> Text,
+        width_px -> Int4,
+        height_px -> Int4,
+        byte_size -> Int8,
+        kind -> CanvasImageAssetKind,
+        created_by -> Uuid,
+        updated_by -> Uuid,
+        created_at -> Timestamp,
         updated_at -> Timestamp,
     }
 }
@@ -202,6 +229,7 @@ diesel::table! {
         created_at -> Timestamp,
         updated_at -> Timestamp,
         background_image_path -> Nullable<Text>,
+        background_asset_id -> Nullable<Uuid>,
     }
 }
 
@@ -409,6 +437,7 @@ diesel::table! {
 }
 
 diesel::joinable!(admin_bootstrap_oauth_sessions -> oauth_providers (provider_id));
+diesel::joinable!(canvas_image_assets -> worlds (world_id));
 diesel::joinable!(fog_masks -> scenes (scene_id));
 diesel::joinable!(fog_masks -> users (updated_by));
 diesel::joinable!(light_sources -> scenes (scene_id));
@@ -443,6 +472,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     admin_bootstrap_oauth_sessions,
     admin_bootstrap_setup,
     auth_security_settings,
+    canvas_image_assets,
     fog_masks,
     game_systems,
     light_sources,

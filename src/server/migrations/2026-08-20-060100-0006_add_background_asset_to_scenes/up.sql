@@ -1,0 +1,14 @@
+-- Spec 002 (FR-018): scenes.background_image_path (bare local-filesystem
+-- path string) is superseded by a canvas_image_assets row (kind =
+-- 'Background'), so map-import and paste-to-canvas share one storage
+-- mechanism. background_asset_id is added nullable and alongside the old
+-- column rather than as an atomic swap: existing rows point at files on
+-- local disk that a raw SQL migration cannot upload to RustFS, so the
+-- actual backfill (upload existing background_image_path files into
+-- RustFS, insert the corresponding canvas_image_assets rows, populate
+-- this column) is done as application-code work in
+-- src/server/src/map_import.rs, not here. New scenes populate
+-- background_asset_id going forward; background_image_path is left in
+-- place, unused by new writes, until a follow-up migration can drop it
+-- once every existing row has been backfilled.
+ALTER TABLE scenes ADD COLUMN background_asset_id UUID REFERENCES canvas_image_assets(asset_id) ON DELETE SET NULL;

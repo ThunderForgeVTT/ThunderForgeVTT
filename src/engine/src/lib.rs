@@ -31,7 +31,7 @@ use derived_data::*;
 use sync_test::*;
 use systems::*;
 use plugins::{ScenePlugin, GridPlugin, TokenPlugin, CameraPlugin, SelectionPlugin, SystemRegistrationPlugin, CanvasLayerPlugin, WallPlugin, LightingPlugin, ShapePlugin, BackgroundPlugin};
-use resources::{DoorState, Wall as EngineWall, WallSet, LightSource as EngineLight, LightSet, Shape as EngineShape, ShapeKind, ShapeSet, SceneBackground};
+use resources::{DoorState, Wall as EngineWall, WallSet, LightSource as EngineLight, LightSet, Shape as EngineShape, ShapeKind, ShapeSet, SceneBackground, IsGameMaster, PlacedCanvasImage, PlacedCanvasImages};
 
 static ENGINE_STARTED: AtomicBool = AtomicBool::new(false);
 static EVENT_CALLBACK: OnceLock<Mutex<Option<Function>>> = OnceLock::new();
@@ -150,6 +150,26 @@ enum ExternalCommand {
         width: f32,
         height: f32,
     },
+    /// FR-010: whether the local session may author walls/shapes
+    /// (`WallPlugin`/`ShapePlugin` gate all authoring input on
+    /// `IsGameMaster`). Previously nothing ever sent this — the resource
+    /// defaulted to `false` and stayed there for every session, so no GM
+    /// could hand-draw a wall or shape through the real app at all. The
+    /// frontend now sends this once on scene-owner status becoming known
+    /// and whenever it changes (`WorldPage.tsx`).
+    SetIsGameMaster { is_game_master: bool },
+    /// Spec 002 (US3): adds or updates one pasted canvas image on the
+    /// active scene. `asset_id` is the `CanvasImageAsset.id` from
+    /// `uploadCanvasImage`'s response.
+    UpsertCanvasImageAsset {
+        asset_id: String,
+        path: String,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+    },
+    RemoveCanvasImageAsset { asset_id: String },
 }
 
 fn event_callback_slot() -> &'static Mutex<Option<Function>> {
@@ -219,6 +239,20 @@ fn parse_command(input: &str) -> Option<ExternalCommand> {
             let height = value.get("height")?.as_f64()? as f32;
             Some(ExternalCommand::SetSceneBackground { path, width, height })
         }
+        "set_is_game_master" => Some(ExternalCommand::SetIsGameMaster {
+            is_game_master: value.get("isGameMaster")?.as_bool()?,
+        }),
+        "upsert_canvas_image_asset" => Some(ExternalCommand::UpsertCanvasImageAsset {
+            asset_id: value.get("assetId")?.as_str()?.to_owned(),
+            path: value.get("path")?.as_str()?.to_owned(),
+            x: value.get("x")?.as_f64()? as f32,
+            y: value.get("y")?.as_f64()? as f32,
+            width: value.get("width")?.as_f64()? as f32,
+            height: value.get("height")?.as_f64()? as f32,
+        }),
+        "remove_canvas_image_asset" => Some(ExternalCommand::RemoveCanvasImageAsset {
+            asset_id: value.get("assetId")?.as_str()?.to_owned(),
+        }),
         _ => None,
     }
 }
@@ -481,6 +515,14 @@ fn apply_external_commands(
     // `SceneBackground` only exists once `BackgroundPlugin` is registered,
     // same graceful-degradation rationale as `wall_set` above.
     background: Option<ResMut<SceneBackground>>,
+    // `PlacedCanvasImages` only exists once `BackgroundPlugin` is
+    // registered (spec 002 added it alongside `SceneBackground` in that
+    // same plugin), same graceful-degradation rationale as `wall_set`.
+    placed_canvas_images: Option<ResMut<PlacedCanvasImages>>,
+    // `IsGameMaster` exists once either `WallPlugin` or `ShapePlugin` is
+    // registered (both `init_resource` it idempotently) — same
+    // graceful-degradation rationale as `wall_set` above.
+    is_game_master: Option<ResMut<IsGameMaster>>,
 ) {
     let drained = if let Ok(mut queue) = external_command_queue().lock() {
         queue.drain(..).collect::<Vec<_>>()
@@ -492,6 +534,8 @@ fn apply_external_commands(
     let mut light_set = light_set;
     let mut shape_set = shape_set;
     let mut background = background;
+    let mut placed_canvas_images = placed_canvas_images;
+    let mut is_game_master = is_game_master;
 
     for command in drained {
         match command {
@@ -583,6 +627,30 @@ fn apply_external_commands(
                     background.path = path;
                     background.width = width;
                     background.height = height;
+                }
+            }
+            ExternalCommand::SetIsGameMaster { is_game_master: value } => {
+                if let Some(is_game_master) = is_game_master.as_deref_mut() {
+                    is_game_master.0 = value;
+                }
+            }
+            ExternalCommand::UpsertCanvasImageAsset {
+                asset_id,
+                path,
+                x,
+                y,
+                width,
+                height,
+            } => {
+                if let Some(placed_canvas_images) = placed_canvas_images.as_deref_mut() {
+                    placed_canvas_images
+                        .0
+                        .insert(asset_id, PlacedCanvasImage { path, x, y, width, height });
+                }
+            }
+            ExternalCommand::RemoveCanvasImageAsset { asset_id } => {
+                if let Some(placed_canvas_images) = placed_canvas_images.as_deref_mut() {
+                    placed_canvas_images.0.remove(&asset_id);
                 }
             }
         }

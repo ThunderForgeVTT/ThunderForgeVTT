@@ -170,6 +170,8 @@ pub enum MapImportError {
     PayloadTooLarge,
     #[error("no file field found in multipart upload")]
     MissingFileField,
+    #[error("storage error: {0}")]
+    Storage(String),
 }
 
 /// T023: parse and validate a raw UVTT JSON payload.
@@ -325,35 +327,59 @@ fn detect_image_extension(bytes: &[u8]) -> Option<&'static str> {
     None
 }
 
+/// One saved background image, ready to be inserted as a
+/// `canvas_image_assets` row (`kind = Background`) and referenced from
+/// `scenes::background_asset_id` (FR-018 migration).
+pub struct SavedBackgroundImage {
+    pub asset_id: Uuid,
+    pub storage_path: String,
+    pub original_format: String,
+    pub width_px: i32,
+    pub height_px: i32,
+    pub byte_size: i64,
+}
+
 /// Decode the UVTT file's base64 `image` field, sanity-check it looks
-/// like a PNG or WebP file (both are valid per the format), and save it
-/// under `asset_directory` at a scene-scoped, collision-safe relative
-/// path. Returns the path relative to `asset_directory` (suitable for
-/// `scenes::background_image_path`, servable at `/assets/<that path>`).
+/// like a PNG or WebP file (both are valid per the format), transcode it
+/// to WebP, and write it to RustFS via a single-object-scoped,
+/// server-held credential (spec 002, FR-018 — the same
+/// `storage/transcode.rs` + `storage/rustfs.rs` path `uploadCanvasImage`
+/// uses, so map-import and paste-to-canvas share one storage mechanism,
+/// not two). Superseded the earlier local-filesystem write this
+/// function did in spec 001.
 pub async fn save_background_image(
-    asset_directory: &str,
+    owner_user_id: Uuid,
+    world_id: Uuid,
     scene_id: Uuid,
     image_base64: &str,
-) -> Result<String, MapImportError> {
+) -> Result<SavedBackgroundImage, MapImportError> {
     let bytes = BASE64_STANDARD
         .decode(image_base64)
         .map_err(|e| MapImportError::InvalidImageBase64(e.to_string()))?;
 
-    let extension = detect_image_extension(&bytes).ok_or(MapImportError::InvalidImageMagicBytes)?;
+    // Still sanity-checked up front (T025's original intent) before the
+    // more expensive decode/transcode path runs.
+    detect_image_extension(&bytes).ok_or(MapImportError::InvalidImageMagicBytes)?;
 
-    let relative_path = format!("map-imports/{scene_id}/{}.{extension}", Uuid::now_v7());
-    let full_path = std::path::Path::new(asset_directory).join(&relative_path);
+    let transcoded = crate::storage::transcode::transcode_to_webp(&bytes)
+        .map_err(|e| MapImportError::Storage(e.to_string()))?;
 
-    if let Some(parent) = full_path.parent() {
-        tokio::fs::create_dir_all(parent)
-            .await
-            .map_err(|e| MapImportError::Io(e.to_string()))?;
-    }
-    tokio::fs::write(&full_path, &bytes)
+    let asset_id = Uuid::now_v7();
+    let key = crate::storage::rustfs::object_key(owner_user_id, world_id, Some(scene_id), asset_id);
+    let byte_size = transcoded.webp_bytes.len() as i64;
+    let cfg = crate::storage::rustfs::RustFsConfig::from_env();
+    crate::storage::rustfs::write_object(&cfg, &key, transcoded.webp_bytes, "image/webp")
         .await
-        .map_err(|e| MapImportError::Io(e.to_string()))?;
+        .map_err(|e| MapImportError::Storage(e.to_string()))?;
 
-    Ok(relative_path)
+    Ok(SavedBackgroundImage {
+        asset_id,
+        storage_path: key,
+        original_format: transcoded.original_format,
+        width_px: transcoded.width as i32,
+        height_px: transcoded.height as i32,
+        byte_size,
+    })
 }
 
 // ---------------------------------------------------------------------
@@ -383,7 +409,9 @@ fn error_response(err: &MapImportError) -> (StatusCode, Json<serde_json::Value>)
         MapImportError::SceneNotOwned => StatusCode::FORBIDDEN,
         MapImportError::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
         MapImportError::MissingFileField => StatusCode::BAD_REQUEST,
-        MapImportError::Database(_) | MapImportError::Io(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        MapImportError::Database(_) | MapImportError::Io(_) | MapImportError::Storage(_) => {
+            StatusCode::INTERNAL_SERVER_ERROR
+        }
     };
     (status, Json(json!({ "error": err.to_string() })))
 }
@@ -422,7 +450,6 @@ async fn import_uvtt(
     // Parse + validate the whole file before touching the DB (T026c).
     let parsed = parse_uvtt(&file_bytes).map_err(|e| error_response(&e))?;
 
-    let asset_directory = state.directories.asset_directory.clone();
     let db_pool = state.db_pool.clone();
 
     // Ownership check (T026a) — resolve the scene's grid_size + world_id
@@ -453,10 +480,10 @@ async fn import_uvtt(
     let (grid_size, world_id) = scene_row;
     let target_grid_size = grid_size as f64;
 
-    // Decode + save the background image outside the DB transaction
-    // (filesystem writes aren't transactional anyway); if it fails we
-    // bail before any DB writes happen.
-    let background_path = save_background_image(&asset_directory, scene_id, &parsed.file.image)
+    // Decode + transcode + write the background image to RustFS outside
+    // the DB transaction (the RustFS write isn't transactional with
+    // Postgres anyway); if it fails we bail before any DB writes happen.
+    let saved_background = save_background_image(user_id, world_id, scene_id, &parsed.file.image)
         .await
         .map_err(|e| error_response(&e))?;
 
@@ -521,8 +548,28 @@ async fn import_uvtt(
                     .execute(conn)?;
             }
 
+            use crate::schema::canvas_image_assets;
+            diesel::insert_into(canvas_image_assets::table)
+                .values((
+                    canvas_image_assets::asset_id.eq(saved_background.asset_id),
+                    canvas_image_assets::world_id.eq(world_id),
+                    canvas_image_assets::scene_id.eq(Some(scene_id)),
+                    canvas_image_assets::owner_user_id.eq(user_id),
+                    canvas_image_assets::storage_path.eq(&saved_background.storage_path),
+                    canvas_image_assets::original_format.eq(&saved_background.original_format),
+                    canvas_image_assets::width_px.eq(saved_background.width_px),
+                    canvas_image_assets::height_px.eq(saved_background.height_px),
+                    canvas_image_assets::byte_size.eq(saved_background.byte_size),
+                    canvas_image_assets::kind.eq(crate::db_types::CanvasImageAssetKindEnum::Background),
+                    canvas_image_assets::created_by.eq(user_id),
+                    canvas_image_assets::updated_by.eq(user_id),
+                    canvas_image_assets::created_at.eq(now),
+                    canvas_image_assets::updated_at.eq(now),
+                ))
+                .execute(conn)?;
+
             diesel::update(scenes::table.filter(scenes::scene_id.eq(scene_id)))
-                .set(scenes::background_image_path.eq(&background_path))
+                .set(scenes::background_asset_id.eq(saved_background.asset_id))
                 .execute(conn)?;
 
             // T027: best-effort NOTIFY for the whole batch — do not fail
@@ -799,5 +846,68 @@ mod tests {
 
             Ok(())
         });
+    }
+
+    /// T025 (FR-018): map-import's background image path now produces a
+    /// WebP object in RustFS via the same `storage/transcode.rs` +
+    /// `storage/rustfs.rs` mechanism `uploadCanvasImage` uses — not a
+    /// write to the local filesystem — using the real `demo.dd2vtt`
+    /// fixture's embedded image. Requires DATABASE_URL is unused here
+    /// (save_background_image doesn't touch Postgres); requires a
+    /// reachable RustFS (`docker compose up -d rustfs`).
+    #[tokio::test]
+    async fn save_background_image_writes_webp_to_rustfs_not_filesystem() {
+        let demo = parse_uvtt(&read_fixture("demo.dd2vtt")).expect("demo.dd2vtt should parse");
+        let owner_user_id = Uuid::now_v7();
+        let world_id = Uuid::now_v7();
+        let scene_id = Uuid::now_v7();
+
+        let saved = save_background_image(owner_user_id, world_id, scene_id, &demo.file.image)
+            .await
+            .expect("save_background_image should succeed against a reachable RustFS");
+
+        assert!(saved.storage_path.ends_with(".webp"));
+        assert_eq!(
+            saved.storage_path,
+            crate::storage::rustfs::object_key(owner_user_id, world_id, Some(scene_id), saved.asset_id)
+        );
+        // demo.dd2vtt's source image is WebP already (see the regression
+        // test above); either way the *stored* format must be WebP.
+        assert!(saved.width_px > 0 && saved.height_px > 0);
+        assert!(saved.byte_size > 0);
+
+        // Confirm it's really in RustFS (not a local file) by reading it
+        // back with the same S3 client machinery, using the root
+        // credential directly (proving the object exists at that key —
+        // T025's "produces ... a RustFS object, not a local-filesystem
+        // file").
+        let cfg = crate::storage::rustfs::RustFsConfig::from_env();
+        let creds = aws_sdk_s3::config::Credentials::new(
+            &cfg.root_access_key,
+            &cfg.root_secret_key,
+            None,
+            None,
+            "test-root",
+        );
+        let conf = aws_sdk_s3::config::Builder::new()
+            .behavior_version(aws_sdk_s3::config::BehaviorVersion::latest())
+            .region(aws_sdk_s3::config::Region::new(cfg.region.clone()))
+            .endpoint_url(&cfg.endpoint)
+            .credentials_provider(creds)
+            .force_path_style(true)
+            .build();
+        let client = aws_sdk_s3::Client::from_conf(conf);
+        let head = client
+            .head_object()
+            .bucket(&cfg.bucket)
+            .key(&saved.storage_path)
+            .send()
+            .await
+            .expect("uploaded object should exist in RustFS");
+        assert_eq!(head.content_type(), Some("image/webp"));
+
+        // And that no local-filesystem write happened under the old
+        // map-imports/ convention.
+        assert!(!std::path::Path::new("map-imports").exists());
     }
 }

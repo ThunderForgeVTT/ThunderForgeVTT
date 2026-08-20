@@ -57,6 +57,25 @@ export default function WorldPage() {
   const [world, setWorld] = useState<WorldRecord | null>(null);
   const [scenes, setScenes] = useState<SceneRecord[]>([]);
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
+  // True once `bindWorldStore` has actually finished registering its
+  // store subscription (the thing that forwards "sync"-sourced dispatches
+  // — e.g. loadWallsIntoStore's confirmed wall rows — into the engine via
+  // apply_world_command). NOT the same as `engineReady`: bindWorldStore is
+  // reached through its own `import("@/engine/bevy")` dynamic-chunk hop,
+  // which `useCanvasEngine`'s static-imported `mountEngine` doesn't pay,
+  // so `engineReady` can and does flip true before this subscription
+  // exists. Without gating on this specifically (found via
+  // specs/002-canvas-authoring-asset-storage T014's live debugging),
+  // walls/tokens/lights/shapes fetched on mount/reload can lose the race:
+  // the GraphQL fetch resolves and dispatches "upsert_wall" (etc.) before
+  // anyone is listening to relay it into the engine's WallSet/TokenSet/
+  // etc. — the dispatch still updates React state correctly, so nothing
+  // looks broken in the UI's data, but the engine-side resource silently
+  // stays empty (e.g. no wall is selectable-by-click after a reload, even
+  // though it's genuinely persisted and the property panel would show it
+  // if selection worked). Every effect that dispatches something meant to
+  // reach the engine gates on this now.
+  const [bridgeReady, setBridgeReady] = useState(false);
 
   // GM/scene-owner check: same `createdBy === user.id` ownership
   // comparison already used to gate GM-only affordances on
@@ -177,12 +196,28 @@ export default function WorldPage() {
     // Engine is now mounted via useCanvasEngine hook
     // Still need to bind world store for mutations
     void import("@/engine/bevy").then(({ bindWorldStore }) =>
-      bindWorldStore(worldStore),
+      bindWorldStore(worldStore).then(() => setBridgeReady(true)),
     );
   }, [worldStore]);
 
+  // FR-010: tell the engine whether this session may author walls/shapes.
+  // Without this, WallPlugin/ShapePlugin's IsGameMaster resource stays at
+  // its `false` default forever and no click/keyboard authoring input is
+  // ever accepted, regardless of `isSceneOwner`. Re-sent whenever
+  // ownership resolves/changes or the engine (re)becomes ready, since a
+  // fresh `start()` always resets the wasm side back to the default.
   useEffect(() => {
-    if (!id) {
+    if (!engineReady) {
+      return;
+    }
+
+    void import("@/engine/bevy").then(({ setIsGameMaster }) =>
+      setIsGameMaster(isSceneOwner),
+    );
+  }, [engineReady, isSceneOwner]);
+
+  useEffect(() => {
+    if (!id || !bridgeReady) {
       return;
     }
 
@@ -191,10 +226,10 @@ export default function WorldPage() {
     void import("@/engine/bevy").then(({ setActiveWorld }) =>
       setActiveWorld(id),
     );
-  }, [id, worldStore]);
+  }, [id, worldStore, bridgeReady]);
 
   useEffect(() => {
-    if (!selectedScene) {
+    if (!selectedScene || !bridgeReady) {
       return;
     }
 
@@ -203,6 +238,8 @@ export default function WorldPage() {
     // with no import). worldStore.dispatch's generic bindWorldStore
     // forwarder relays this to the engine the same way every other
     // WorldCommand is relayed — no direct engine-bridge call needed.
+    // Gated on `bridgeReady` (see its declaration) so this dispatch isn't
+    // lost to the bindWorldStore-registration race.
     worldStore.dispatch(
       {
         type: "set_scene_background",
@@ -213,13 +250,33 @@ export default function WorldPage() {
       },
       "ui",
     );
-  }, [selectedScene, worldStore, id]);
+  }, [selectedScene, worldStore, id, bridgeReady]);
 
   useEffect(() => {
-    if (!sceneId) {
+    if (!sceneId || !bridgeReady) {
       return;
     }
 
+    // Switching scenes must clear the *previous* scene's walls first:
+    // loadWallsIntoStore only ever upserts, so without this, a
+    // previously-visited scene's walls (and a stale selection pointing
+    // at one of them) stay rendered/selectable on top of whichever scene
+    // is now active, indefinitely accumulating across scene switches for
+    // the life of the session (found while investigating spec 002 T017 —
+    // the equivalent gap for shapes below reproduced as a real, visible
+    // bug, not just a stale-selection artifact: an old scene's shape was
+    // still spawned and hit-testable in the engine after switching
+    // scenes). `"sync"` source: a confirmed-state correction, not a
+    // delete intent — startWallMutationBridge below ignores
+    // `source: "sync"` dispatches, so this never calls deleteWall.
+    for (const wallId of Object.keys(worldStore.getState().walls)) {
+      worldStore.dispatch({ type: "remove_wall", wallId }, "sync");
+    }
+
+    // Gated on `bridgeReady` (see its declaration): without it, this can
+    // fire and dispatch the confirmed walls before bindWorldStore has
+    // registered its forwarding subscription, silently losing them from
+    // the engine's WallSet even though they're genuinely persisted.
     void loadWallsIntoStore(worldStore, sceneId).catch((error) => {
       console.error("Failed to load scene walls:", error);
     });
@@ -229,10 +286,10 @@ export default function WorldPage() {
     return () => {
       stopBridge();
     };
-  }, [sceneId, worldStore]);
+  }, [sceneId, worldStore, bridgeReady]);
 
   useEffect(() => {
-    if (!sceneId) {
+    if (!sceneId || !bridgeReady) {
       return;
     }
 
@@ -245,10 +302,10 @@ export default function WorldPage() {
     return () => {
       stopBridge();
     };
-  }, [sceneId, worldStore]);
+  }, [sceneId, worldStore, bridgeReady]);
 
   useEffect(() => {
-    if (!sceneId) {
+    if (!sceneId || !bridgeReady) {
       return;
     }
 
@@ -261,11 +318,21 @@ export default function WorldPage() {
     return () => {
       stopBridge();
     };
-  }, [sceneId, worldStore]);
+  }, [sceneId, worldStore, bridgeReady]);
 
   useEffect(() => {
-    if (!sceneId) {
+    if (!sceneId || !bridgeReady) {
       return;
+    }
+
+    // Clear the previous scene's shapes before loading this scene's —
+    // see the matching comment on the walls effect above for why. This
+    // is the fix for the real bug behind spec 002 T017's failure: without
+    // it, a shape drawn on scene A stayed spawned (and hit-testable) in
+    // the engine after switching to scene B, so a click on B's empty
+    // canvas at the same on-screen position re-selected A's shape.
+    for (const shapeId of Object.keys(worldStore.getState().shapes)) {
+      worldStore.dispatch({ type: "remove_shape", shapeId }, "sync");
     }
 
     void loadShapesIntoStore(worldStore, sceneId).catch((error) => {
@@ -277,7 +344,7 @@ export default function WorldPage() {
     return () => {
       stopBridge();
     };
-  }, [sceneId, worldStore]);
+  }, [sceneId, worldStore, bridgeReady]);
 
   const handleMapImportComplete = useCallback(() => {
     if (!sceneId || !id) {

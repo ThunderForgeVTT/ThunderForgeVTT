@@ -18,13 +18,7 @@ impl SceneQuery {
         let auth_user = authenticated_user(ctx)?;
         
         // 🔐 SECURITY: Verify user has access to this world before returning scenes
-        let _ = load_visible_world_by_id(
-            state,
-            auth_user.user_id,
-            auth_user.is_admin,
-            world_id,
-        )
-        .await?;
+        require_visible_world(state, auth_user.user_id, auth_user.is_admin, world_id).await?;
 
         let mut conn = state
             .db_pool
@@ -55,13 +49,12 @@ impl SceneQuery {
         
         // 🔐 SECURITY: Get the world_id from the scene, then verify access
         let world_id = get_world_id_from_scene(state, scene_id).await?;
-        let _ = load_visible_world_by_id(
-            state,
-            auth_user.user_id,
-            auth_user.is_admin,
-            world_id,
-        )
-        .await?;
+        if load_visible_world_by_id(state, auth_user.user_id, auth_user.is_admin, world_id)
+            .await?
+            .is_none()
+        {
+            return Ok(None);
+        }
 
         let mut conn = state
             .db_pool
@@ -93,13 +86,7 @@ impl SceneQuery {
         
         // 🔐 SECURITY: Get the world_id from the scene, then verify access
         let world_id = get_world_id_from_scene(state, scene_id).await?;
-        let _ = load_visible_world_by_id(
-            state,
-            auth_user.user_id,
-            auth_user.is_admin,
-            world_id,
-        )
-        .await?;
+        require_visible_world(state, auth_user.user_id, auth_user.is_admin, world_id).await?;
 
         let mut conn = state
             .db_pool
@@ -130,13 +117,12 @@ impl SceneQuery {
         
         // 🔐 SECURITY: Get the world_id from the scene, then verify access
         let world_id = get_world_id_from_scene(state, scene_id).await?;
-        let _ = load_visible_world_by_id(
-            state,
-            auth_user.user_id,
-            auth_user.is_admin,
-            world_id,
-        )
-        .await?;
+        if load_visible_world_by_id(state, auth_user.user_id, auth_user.is_admin, world_id)
+            .await?
+            .is_none()
+        {
+            return Ok(None);
+        }
 
         let mut conn = state
             .db_pool
@@ -168,13 +154,7 @@ impl SceneQuery {
 
         // 🔐 SECURITY: Get the world_id from the scene, then verify access
         let world_id = get_world_id_from_scene(state, scene_id).await?;
-        let _ = load_visible_world_by_id(
-            state,
-            auth_user.user_id,
-            auth_user.is_admin,
-            world_id,
-        )
-        .await?;
+        require_visible_world(state, auth_user.user_id, auth_user.is_admin, world_id).await?;
 
         let mut conn = state
             .db_pool
@@ -208,13 +188,7 @@ impl SceneQuery {
 
         // 🔐 SECURITY: Get the world_id from the scene, then verify access
         let world_id = get_world_id_from_scene(state, scene_id).await?;
-        let _ = load_visible_world_by_id(
-            state,
-            auth_user.user_id,
-            auth_user.is_admin,
-            world_id,
-        )
-        .await?;
+        require_visible_world(state, auth_user.user_id, auth_user.is_admin, world_id).await?;
 
         let mut conn = state
             .db_pool
@@ -250,13 +224,7 @@ impl SceneQuery {
 
         // 🔐 SECURITY: Get the world_id from the scene, then verify access
         let world_id = get_world_id_from_scene(state, scene_id).await?;
-        let _ = load_visible_world_by_id(
-            state,
-            auth_user.user_id,
-            auth_user.is_admin,
-            world_id,
-        )
-        .await?;
+        require_visible_world(state, auth_user.user_id, auth_user.is_admin, world_id).await?;
 
         let mut conn = state
             .db_pool

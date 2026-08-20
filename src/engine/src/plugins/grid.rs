@@ -14,8 +14,25 @@ pub struct GridLine;
 
 fn spawn_grid_lines(
     mut commands: Commands,
-    scene: Res<SceneData>,
+    // Pre-existing, unrelated bug fixed in passing (specs/002-canvas-
+    // authoring-asset-storage T014): nothing in this crate ever inserts
+    // `SceneData` (its own doc comment says it's meant to be "inserted at
+    // startup" by something else, which was never wired up), so this
+    // system — registered unconditionally in `Startup` — panicked with
+    // "Resource does not exist" on every single page load, before any
+    // canvas element was ever created. That blocked the entire canvas
+    // from rendering at all, which in turn blocked every e2e scenario in
+    // this feature (verified: reproduces identically on this branch with
+    // all of today's wall/shape changes stashed out). Graceful
+    // `Option`-degradation matches the pattern already used everywhere
+    // else in this crate (e.g. `apply_external_commands` in lib.rs) for a
+    // plugin/resource that may not exist yet.
+    scene: Option<Res<SceneData>>,
 ) {
+    let Some(scene) = scene else {
+        return;
+    };
+
     match scene.grid_type {
         GridType::Gridless => return,
         GridType::Hexagonal => return, // TODO: Phase 4.8

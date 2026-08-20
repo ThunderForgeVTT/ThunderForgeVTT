@@ -78,6 +78,17 @@ pub(crate) struct WallDragState {
     mode: WallDragMode,
 }
 
+/// FR-001/FR-002: session-local, not-yet-persisted points of an
+/// in-progress multi-point wall chain ("click three points, end the
+/// chain -> one wall per consecutive pair"). Empty = no chain active.
+/// Nothing here is emitted as a `create_wall` event until the chain ends
+/// (`Enter`, see `handle_wall_keyboard_toggles`); `Escape` clears this
+/// with no persistence at all (Acceptance Scenario 4).
+#[derive(Resource, Default)]
+pub(crate) struct WallChainState {
+    points: Vec<Vec2>,
+}
+
 /// Convert the cursor's window-pixel position into Bevy world space,
 /// mirroring `systems/selection.rs`'s private `cursor_world_position`
 /// helper (not exported from that module, so duplicated here rather than
@@ -105,6 +116,24 @@ fn distance_point_to_segment(point: Vec2, a: Vec2, b: Vec2) -> f32 {
     point.distance(projection)
 }
 
+/// Notifies the frontend of a selection change. `SelectedWall` (Bevy-side)
+/// previously only ever changed locally — nothing told React's
+/// `worldState.selectedWallId`, so `WallTool.tsx`'s "Selected wall" panel
+/// (door toggle, blocks-vision/movement checkboxes, delete button) could
+/// never appear for a wall selected by clicking the canvas, only via
+/// WallTool's own `select_wall: null` dispatch after a UI-driven delete.
+/// Fixed here (T014/T015, specs/002-canvas-authoring-asset-storage) by
+/// emitting the same `select_wall` command type `WallTool.tsx` already
+/// dispatches — a bevy-sourced event never gets re-forwarded back into the
+/// engine (`bindWorldStore` skips `event.source === "bevy"`), so this
+/// can't loop.
+fn emit_wall_selection(wall_id: Option<&str>) {
+    emit_event(json!({
+        "type": "select_wall",
+        "wallId": wall_id,
+    }));
+}
+
 fn wall_color(wall: &Wall, selected: bool) -> Color {
     if selected {
         SELECTED_COLOR
@@ -127,6 +156,7 @@ pub(crate) fn handle_wall_input(
     mut wall_set: ResMut<WallSet>,
     mut selected_wall: ResMut<SelectedWall>,
     mut drag: ResMut<WallDragState>,
+    mut chain: ResMut<WallChainState>,
     is_gm: Res<IsGameMaster>,
     active_world: Res<ActiveWorld>,
 ) {
@@ -139,10 +169,20 @@ pub(crate) fn handle_wall_input(
     };
 
     if mouse_button.just_pressed(MouseButton::Left) {
+        // FR-001: once a wall-point chain is in progress, every click
+        // feeds it directly — bypassing endpoint-grab/body-select so an
+        // accidental near-miss over an existing wall doesn't hijack the
+        // chain into a move/select instead of adding the next point.
+        if !chain.points.is_empty() {
+            drag.mode = WallDragMode::Creating { start: cursor };
+            return;
+        }
+
         // Endpoint grab takes priority over body-select/create.
         for wall in wall_set.walls() {
             if cursor.distance(wall.start()) <= ENDPOINT_GRAB_RADIUS {
                 selected_wall.select(wall.id.clone());
+                emit_wall_selection(Some(&wall.id));
                 drag.mode = WallDragMode::MovingEndpoint {
                     wall_id: wall.id.clone(),
                     is_start: true,
@@ -155,6 +195,7 @@ pub(crate) fn handle_wall_input(
             }
             if cursor.distance(wall.end()) <= ENDPOINT_GRAB_RADIUS {
                 selected_wall.select(wall.id.clone());
+                emit_wall_selection(Some(&wall.id));
                 drag.mode = WallDragMode::MovingEndpoint {
                     wall_id: wall.id.clone(),
                     is_start: false,
@@ -172,6 +213,7 @@ pub(crate) fn handle_wall_input(
             if distance_point_to_segment(cursor, wall.start(), wall.end()) <= WALL_SELECT_DISTANCE
             {
                 selected_wall.select(wall.id.clone());
+                emit_wall_selection(Some(&wall.id));
                 drag.mode = WallDragMode::Idle;
                 return;
             }
@@ -179,6 +221,7 @@ pub(crate) fn handle_wall_input(
 
         // Neither an endpoint nor a body: start creating a new wall.
         selected_wall.deselect();
+        emit_wall_selection(None);
         drag.mode = WallDragMode::Creating { start: cursor };
         return;
     }
@@ -211,7 +254,21 @@ pub(crate) fn handle_wall_input(
             WallDragMode::Creating { start } => {
                 let end = cursor;
                 if start.distance(end) < MIN_WALL_LENGTH {
-                    // T016: reject zero-length (click without drag).
+                    // FR-001: a plain click (no drag) adds/continues a
+                    // wall-point chain instead of being a no-op. The
+                    // first click seeds the chain; nothing is emitted
+                    // until it explicitly ends (Enter) or is cancelled
+                    // (Escape) — see `handle_wall_keyboard_toggles`.
+                    chain.points.push(end);
+                    return;
+                }
+
+                if !chain.points.is_empty() {
+                    // A real drag while a chain is active still just
+                    // extends the chain by one point (from wherever the
+                    // chain currently ends) rather than creating a
+                    // standalone segment.
+                    chain.points.push(end);
                     return;
                 }
 
@@ -281,11 +338,45 @@ pub(crate) fn handle_wall_keyboard_toggles(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut wall_set: ResMut<WallSet>,
     mut selected_wall: ResMut<SelectedWall>,
+    mut chain: ResMut<WallChainState>,
     is_gm: Res<IsGameMaster>,
     active_world: Res<ActiveWorld>,
 ) {
     if !is_gm.0 {
         return;
+    }
+
+    // FR-001/FR-002: end (Enter) or cancel (Escape) an in-progress
+    // wall-point chain. While a chain is active it takes over these keys
+    // entirely — a chain with only one point placed still gets no wall
+    // out of Enter (nothing to connect), matching "nothing partial is
+    // persisted" for anything short of two points.
+    if !chain.points.is_empty() {
+        if keyboard.just_pressed(KeyCode::Escape) {
+            chain.points.clear();
+            return;
+        }
+        if keyboard.just_pressed(KeyCode::Enter) || keyboard.just_pressed(KeyCode::NumpadEnter) {
+            let points = std::mem::take(&mut chain.points);
+            for pair in points.windows(2) {
+                emit_event(json!({
+                    "type": "create_wall",
+                    "wall": {
+                        "x1": pair[0].x,
+                        "y1": pair[0].y,
+                        "x2": pair[1].x,
+                        "y2": pair[1].y,
+                        "blocksVision": true,
+                        "blocksMovement": false,
+                        "doorState": "none",
+                    },
+                    "worldId": active_world.0,
+                }));
+            }
+            return;
+        }
+        // Any other key while chaining falls through to the
+        // selected-wall toggles below, same as before.
     }
 
     let Some(wall_id) = selected_wall.get_selected().cloned() else {
@@ -365,6 +456,7 @@ pub(crate) fn handle_wall_keyboard_toggles(
         if let Some(deleted) = wall_set.remove(&wall_id) {
             wall_set.push_undo(WallEdit::Delete { deleted });
             selected_wall.deselect();
+            emit_wall_selection(None);
             emit_event(json!({
                 "type": "delete_wall",
                 "wallId": wall_id,
@@ -591,6 +683,7 @@ pub(crate) fn apply_vision_occlusion(
 
 pub(crate) fn init_wall_systems_resources(app: &mut App) {
     app.init_resource::<WallDragState>()
+        .init_resource::<WallChainState>()
         .init_resource::<WallEntities>();
 }
 

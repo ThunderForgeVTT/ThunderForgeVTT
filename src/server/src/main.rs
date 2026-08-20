@@ -1,7 +1,5 @@
 mod adapters;
 mod admin;
-// mod audit; // Phase 4.X: Audit logging - disabled pending schema completion
-// mod rbac; // Phase 4.X: RBAC - disabled pending schema completion
 mod auth;
 mod auth_middleware;
 mod config;
@@ -16,6 +14,9 @@ mod schema; // Add this line
 mod serve;
 mod session; // Phase 4.9.B.2: Session lifecycle management
 mod state;
+mod storage; // Spec 002: RustFS canvas image asset storage
+#[cfg(test)]
+mod test_support; // Spec 002: shared fixtures for tests/tests requiring a live DB + RustFS
 mod system_hooks;
 mod systems;
 mod users;
@@ -31,7 +32,7 @@ use async_graphql::{Data, Schema}; // Added Data
 use async_graphql_axum::{GraphQLProtocol, GraphQLRequest, GraphQLResponse, GraphQLWebSocket}; // Added GraphQLWebSocket
 use axum::{
     Extension, Router,
-    extract::{State, WebSocketUpgrade},
+    extract::{DefaultBodyLimit, State, WebSocketUpgrade},
     http::StatusCode,
     middleware::{from_fn, from_fn_with_state},
     response::{Html, IntoResponse, Response},
@@ -206,6 +207,19 @@ async fn main() {
         .await
         .expect("Failed to initialize admin configuration state");
 
+    // Spec 002 (FR-020): bootstrap the RustFS bucket so `docker compose
+    // up` + this one command is the whole local-dev provisioning story,
+    // no manual bucket-creation step. Non-fatal: a server started before
+    // RustFS is reachable (or in a deployment without asset storage
+    // configured yet) should still come up; the first asset write will
+    // surface a clear storage error instead.
+    {
+        let rustfs_cfg = storage::rustfs::RustFsConfig::from_env();
+        if let Err(e) = storage::rustfs::ensure_bucket(&rustfs_cfg).await {
+            eprintln!("[Server] ⚠️  RustFS bucket bootstrap failed (asset uploads will fail until this is resolved): {e}");
+        }
+    }
+
     let world_router = world::router().route_layer(from_fn_with_state(
         app_state.clone(),
         auth_middleware::require_authenticated_user,
@@ -220,7 +234,18 @@ async fn main() {
     ));
 
     let graphql_router = Router::new()
-        .route("/graphql", get(graphql_playground).post(graphql_handler))
+        .route(
+            "/graphql",
+            get(graphql_playground)
+                .post(graphql_handler)
+                // Spec 002: uploadCanvasImage sends multipart-encoded
+                // image bytes through this endpoint (GraphQL multipart
+                // request spec) — axum's default 2MB body limit would
+                // reject any real image well before storage/transcode's
+                // own MAX_UPLOAD_BYTES check ever runs, mirroring the
+                // same fix already applied to map_import's REST route.
+                .route_layer(DefaultBodyLimit::max(storage::transcode::MAX_UPLOAD_BYTES)),
+        )
         .route("/ws", get(graphql_ws_handler))
         .route("/events/{world_id}", get(network::websocket_handler)) // Phase 4.9.B.2: Event WebSocket with session tracking
         .route_layer(from_fn_with_state(
