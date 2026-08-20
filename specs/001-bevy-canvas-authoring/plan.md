@@ -85,10 +85,10 @@ same order of magnitude, not a step-change requiring different indexing.
 
 | Principle | Check | Status |
 |---|---|---|
-| I. ECS Owns Simulation | Walls/lights/annotations are authored, stored, and rendered as Bevy ECS entities/resources; React only supplies toolbar chrome and dispatches commands into the engine, mirroring the existing token/selection boundary. | PASS |
+| I. ECS Owns Simulation | Walls/lights/shapes are authored, stored, and rendered as Bevy ECS entities/resources; React only supplies toolbar chrome and dispatches commands into the engine, mirroring the existing token/selection boundary. | PASS |
 | II. Plugin-Modular Engine Architecture | Five new plugins (`WallPlugin`, `MapImportPlugin`, `LightingPlugin`, `ShapePlugin`, `CanvasLayerPlugin`), each with its own `systems/*` and `resources/*` module, addable/removable independently in `lib.rs`, matching the existing `SelectionPlugin`/`TokenPlugin` pattern. `MapImportPlugin` reads/writes `WallSet`/`LightSet` (owned by `WallPlugin`/`LightingPlugin`) but is itself still independently removable — a build without it simply has no import command; walls/lighting still work standalone. | PASS |
 | III. Ownership & Authorization at the Data Boundary | New `light_sources` and `shapes` tables carry `created_by`/`updated_by`; `walls` gains door fields under the same existing check; the import endpoint applies the identical scene-ownership check as `mutations_walls.rs`, once for the whole batch rather than per row. | PASS |
-| IV. Real ADRs and Specs Before Divergent Implementation | This spec + plan supersede ADR-004's tldraw decision; a superseding ADR entry will be added recording that decision at implementation time (Phase 1 output references it). | PASS (tracked) |
+| IV. Real ADRs and Specs Before Divergent Implementation | This spec + plan supersede ADR-004's tldraw decision; ADR-037 (`docs/adrs/20260820-037-native_canvas_authoring_supersedes_tldraw.md`) already records that decision. | PASS |
 | V. Verify Before Claiming Done | Plan's Testing section specifies the correct per-crate check (wasm32 target for engine, native for server); quickstart.md defines the end-to-end validation scenario. | PASS |
 
 No violations requiring Complexity Tracking justification.
@@ -139,6 +139,10 @@ src/server/src/graphql/
 ├── mutations_shapes.rs       # NEW — ShapeMutation (create/update/delete)
 └── queries/scene.rs          # MODIFIED — expose lightSources/shapes alongside walls;
                                #            scene payload includes background image reference
+
+# New query/mutation types are registered into the QueryRoot/MutationRoot
+# MergedObject tuples in src/server/src/graphql.rs (~L1633-1644) — NOT
+# src/server/src/schema.rs, which is the unrelated Diesel table-macro file.
 
 src/server/src/
 └── map_import.rs             # NEW — Axum multipart handler (reuses the upload pattern in

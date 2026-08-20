@@ -192,8 +192,9 @@ or imported map data exist on that scene.
 **Lighting (User Story 3)**
 
 - **FR-004**: The system MUST allow a GM to create, reposition, resize (radius/intensity), and delete light sources directly on the scene canvas.
-- **FR-005**: The system MUST occlude light from a source by any wall segment configured to block vision (including a closed door, per FR-017), consistent with how player vision is occluded.
+- **FR-005**: The system MUST occlude light from a source by any wall segment configured to block vision (including a closed door, per FR-017), consistent with how player vision is occluded, unless the GM has explicitly marked that light as non-shadow-casting (FR-027).
 - **FR-006**: The system MUST support attaching a light source to a token so that the light's position follows the token's position.
+- **FR-027**: The system MUST allow a GM to mark a light source as non-shadow-casting (an ambient/ubiquitous light that ignores wall occlusion), matching the equivalent flag on imported Universal VTT light sources (FR-022).
 
 **Shapes / Annotations (User Story 4)**
 
@@ -230,7 +231,7 @@ or imported map data exist on that scene.
 - **SC-005**: A scene with zero walls, lights, shapes, or imported content continues to render and support token movement with no errors or degraded performance.
 - **SC-006**: After this feature ships, zero remaining product surfaces depend on the previously wrapped third-party whiteboard editor.
 - **SC-007**: A GM can import a representative `.dd2vtt` sample map (e.g. `examples/maps/demo.dd2vtt`, which contains background art, 8 wall polygons, 2 doors, and 12 lights) and have all of it appear correctly positioned on the scene in under 30 seconds, with zero manual retracing.
-- **SC-008**: A GM can complete the same "wall + light" task as SC-003 using only shape/drawing tools that match tldraw's prior tool set (freehand, rectangle, ellipse, line/arrow, text) with no loss of capability a GM previously relied on.
+- **SC-008**: A GM can, using only this feature's shape tools, reproduce each of the five drawing operations tldraw's wrapper previously exposed (freehand stroke, rectangle, ellipse, line/arrow, text label) — verified against a fixed checklist of those five operations, one GM session, zero operations unreproducible.
 
 ## Assumptions
 

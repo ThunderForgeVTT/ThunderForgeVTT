@@ -46,7 +46,7 @@ iteration).
 | `intensity` | double precision, default `1.0`, `CHECK (intensity >= 0)` | 0 = off, relative brightness |
 | `color` | text, nullable | e.g. `"#ffcc66"`; nullable = engine default warm-white |
 | `attached_token_id` | UUID, nullable, FK → `tokens` | when set, `x`/`y` are ignored by the engine in favor of the token's live position; `ON DELETE SET NULL` so deleting a token doesn't cascade-delete the light |
-| `casts_shadows` | bool, default true | **NEW**. Maps UVTT `lights[].shadows`; when false, the light ignores wall occlusion (matches UVTT semantics for ambient/non-shadowed lights). |
+| `casts_shadows` | bool, default true | **NEW**, FR-027. Maps UVTT `lights[].shadows`; when false, the light ignores wall occlusion (matches UVTT semantics for ambient/non-shadowed lights). |
 | `metadata` | jsonb, nullable | |
 | `created_by`, `updated_by` | UUID FK → `users` | |
 | `created_at`, `updated_at` | timestamp | |

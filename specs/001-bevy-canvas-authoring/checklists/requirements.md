@@ -40,3 +40,10 @@
   story (Universal VTT / `.dd2vtt`). Re-validated against this checklist:
   all items still pass. New assumptions (format version scope, door
   toggle ownership, import-as-one-shot-ingestion) recorded in spec.md.
+- **2026-08-20 `/speckit-analyze` remediation**: added FR-027 (light
+  non-shadow-casting flag, previously an undocumented data-model field
+  with no backing FR) and reworded SC-008 to be independently measurable
+  (previously "no loss of capability", a qualitative, non-testable
+  phrase). Corresponding fixes in plan.md/tasks.md (GraphQL registration
+  file reference, wall/light undo task coverage, an SC-007 timing check)
+  did not require spec.md changes beyond these two.
