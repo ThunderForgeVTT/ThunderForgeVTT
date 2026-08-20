@@ -18,12 +18,15 @@ import {
 import type { WorldSyncSession } from "@/engine/world/sync/types";
 import { useCanvasEngine } from "@/engine/bevy/useCanvasEngine";
 import { getWorld } from "@/api/world";
+import { getScenes } from "@/api/scenes";
 import { useAuth } from "@/hooks/useAuth";
 import { WallTool } from "@/components/canvas-tools/WallTool";
 import { LightingTool } from "@/components/canvas-tools/LightingTool";
 import { ShapeTool } from "@/components/canvas-tools/ShapeTool";
 import { MapImportTool } from "@/components/canvas-tools/MapImportTool";
+import { SceneSwitcher } from "@/components/world/SceneSwitcher";
 import type { WorldRecord } from "@/types/world";
+import type { SceneRecord } from "@/types/scene";
 
 export const worldPageSeo: SeoConfig = {
   title: "World workspace",
@@ -50,16 +53,16 @@ export default function WorldPage() {
   const [worldState, setWorldState] = useState(() => worldStore.getState());
   const { user } = useAuth();
   const [world, setWorld] = useState<WorldRecord | null>(null);
+  const [scenes, setScenes] = useState<SceneRecord[]>([]);
+  const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
 
   // GM/scene-owner check: same `createdBy === user.id` ownership
   // comparison already used to gate GM-only affordances on
   // WorldDashboardPage.tsx. Wall authoring tools (FR-009) are hidden
   // entirely for non-owners, never merely disabled.
   const isSceneOwner = Boolean(world && user && world.createdBy === user.id);
-  // Scenes aren't independently selectable in the shell yet, so the
-  // world's first scene id is used as a best-effort "current scene" for
-  // wall authoring until real scene-selection UI exists.
-  const sceneId = world?.scenes?.[0] ?? null;
+  const sceneId = selectedSceneId;
+  const selectedScene = scenes.find((scene) => scene.sceneId === sceneId) ?? null;
 
   useEffect(() => {
     if (!id) {
@@ -77,6 +80,39 @@ export default function WorldPage() {
       .catch(() => {
         if (active) {
           setWorld(null);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) {
+      return;
+    }
+
+    let active = true;
+
+    void getScenes(id)
+      .then((response) => {
+        if (!active) {
+          return;
+        }
+        setScenes(response);
+        // Default to the first scene once scenes load, but don't clobber
+        // a scene the user (or a previous load) already picked.
+        setSelectedSceneId((current) =>
+          current && response.some((scene) => scene.sceneId === current)
+            ? current
+            : (response[0]?.sceneId ?? null),
+        );
+      })
+      .catch((error) => {
+        console.error("Failed to load world scenes:", error);
+        if (active) {
+          setScenes([]);
         }
       });
 
@@ -156,6 +192,28 @@ export default function WorldPage() {
   }, [id, worldStore]);
 
   useEffect(() => {
+    if (!selectedScene) {
+      return;
+    }
+
+    // Switching scenes re-points the engine's background sprite at the
+    // newly-selected scene's imported map art (null clears it for a scene
+    // with no import). worldStore.dispatch's generic bindWorldStore
+    // forwarder relays this to the engine the same way every other
+    // WorldCommand is relayed — no direct engine-bridge call needed.
+    worldStore.dispatch(
+      {
+        type: "set_scene_background",
+        backgroundImagePath: selectedScene.backgroundImagePath,
+        width: selectedScene.width,
+        height: selectedScene.height,
+        worldId: id,
+      },
+      "ui",
+    );
+  }, [selectedScene, worldStore, id]);
+
+  useEffect(() => {
     if (!sceneId) {
       return;
     }
@@ -204,7 +262,7 @@ export default function WorldPage() {
   }, [sceneId, worldStore]);
 
   const handleMapImportComplete = useCallback(() => {
-    if (!sceneId) {
+    if (!sceneId || !id) {
       return;
     }
 
@@ -221,7 +279,14 @@ export default function WorldPage() {
     void loadShapesIntoStore(worldStore, sceneId).catch((error) => {
       console.error("Failed to reload scene shapes after map import:", error);
     });
-  }, [sceneId, worldStore]);
+    // Import also sets the scene's backgroundImagePath — refetch scenes so
+    // the background-dispatch effect above picks up the new art.
+    void getScenes(id)
+      .then(setScenes)
+      .catch((error) => {
+        console.error("Failed to reload scenes after map import:", error);
+      });
+  }, [sceneId, id, worldStore]);
 
   const seo = useMemo<SeoConfig>(
     () => ({
@@ -268,6 +333,24 @@ export default function WorldPage() {
                 <p style={{ fontSize: "0.9em" }}>{engineError.message}</p>
               </div>
             )}
+            {scenes.length > 0 ? (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "1rem",
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  zIndex: 900,
+                  width: "14rem",
+                }}
+              >
+                <SceneSwitcher
+                  scenes={scenes}
+                  sceneId={sceneId}
+                  onSceneChange={setSelectedSceneId}
+                />
+              </div>
+            ) : null}
             {isSceneOwner && sceneId ? (
               <div
                 style={{

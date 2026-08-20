@@ -86,6 +86,15 @@ export default defineConfig({
         changeOrigin: true,
         ws: true,
       },
+      // Native canvas authoring: imported map background images are
+      // served by the backend's static /assets route (src/server/src/serve/mod.rs).
+      // Bevy's default AssetServer resolves relative "assets/..." loads
+      // against the page's own origin, so without this proxy rule those
+      // fetches 404 in dev (the app itself is served from vite, not the backend).
+      "/assets": {
+        target: "http://127.0.0.1:30000",
+        changeOrigin: true,
+      },
     },
   },
 });

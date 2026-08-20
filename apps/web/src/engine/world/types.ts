@@ -72,6 +72,20 @@ export type SetWorldCommand = {
   worldId: string;
 };
 
+// Switching scenes (SceneSwitcher) re-points the engine's background
+// sprite at the newly-selected scene's imported map art (or clears it, if
+// that scene has none). This is engine-signaling only — WorldState
+// doesn't track it, `bindWorldStore`'s generic forwarder relays it to the
+// engine's `set_scene_background` command the same way every other
+// WorldCommand is relayed.
+export type SetSceneBackgroundCommand = {
+  type: "set_scene_background";
+  backgroundImagePath: string | null;
+  width: number;
+  height: number;
+  worldId?: string;
+};
+
 export type UpsertTokenCommand = {
   type: "upsert_token";
   token: WorldToken;
@@ -268,6 +282,7 @@ export type DeleteShapeCommand = {
 
 export type WorldCommand =
   | SetWorldCommand
+  | SetSceneBackgroundCommand
   | UpsertTokenCommand
   | RemoveTokenCommand
   | UpsertWallCommand
