@@ -30,6 +30,12 @@ export {
   loadLightsIntoStore,
   startLightMutationBridge,
 } from "./lights";
+export {
+  applyShapeWorldEvent,
+  startShapeEventSync,
+  loadShapesIntoStore,
+  startShapeMutationBridge,
+} from "./shapes";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;

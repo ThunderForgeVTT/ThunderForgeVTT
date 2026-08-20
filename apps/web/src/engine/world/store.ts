@@ -2,6 +2,7 @@ import type {
   EngineCommandSource,
   WorldCommand,
   WorldLight,
+  WorldShape,
   WorldState,
   WorldStoreEvent,
   WorldStoreSubscriber,
@@ -14,6 +15,7 @@ type CreateWorldStoreOptions = {
   initialTokens?: WorldToken[];
   initialWalls?: WorldWall[];
   initialLights?: WorldLight[];
+  initialShapes?: WorldShape[];
 };
 
 export type WorldStore = {
@@ -47,6 +49,16 @@ function normalizeLights(lights: WorldLight[]): Record<string, WorldLight> {
 
   for (const light of lights) {
     byId[light.id] = light;
+  }
+
+  return byId;
+}
+
+function normalizeShapes(shapes: WorldShape[]): Record<string, WorldShape> {
+  const byId: Record<string, WorldShape> = {};
+
+  for (const shape of shapes) {
+    byId[shape.id] = shape;
   }
 
   return byId;
@@ -133,13 +145,39 @@ function reduceState(state: WorldState, command: WorldCommand): WorldState {
         selectedLightId: command.lightId,
       };
 
-    // create_wall/update_wall/delete_wall and create_light/update_light/
-    // delete_light are intents, not confirmed state: a sync-layer
-    // subscriber (engine/world/sync/walls.ts, engine/world/sync/lights.ts)
-    // turns them into GraphQL mutations and dispatches
-    // upsert_wall/remove_wall or upsert_light/remove_light once the
-    // server confirms. They pass through the store unchanged so both the
-    // sync subscriber and the Bevy bridge can observe them.
+    case "upsert_shape":
+      return {
+        ...state,
+        shapes: {
+          ...state.shapes,
+          [command.shape.id]: command.shape,
+        },
+      };
+
+    case "remove_shape": {
+      const nextShapes = { ...state.shapes };
+      delete nextShapes[command.shapeId];
+
+      return {
+        ...state,
+        shapes: nextShapes,
+        selectedShapeId:
+          state.selectedShapeId === command.shapeId ? null : state.selectedShapeId,
+      };
+    }
+
+    case "select_shape":
+      return {
+        ...state,
+        selectedShapeId: command.shapeId,
+      };
+
+    // create_wall/update_wall/delete_wall and the equivalent light/shape
+    // intents are intents, not confirmed state: a sync-layer subscriber
+    // (engine/world/sync/{walls,lights,shapes}.ts) turns them into
+    // GraphQL mutations and dispatches upsert_*/remove_* once the server
+    // confirms. They pass through the store unchanged so both the sync
+    // subscriber and the Bevy bridge can observe them.
     default:
       return state;
   }
@@ -153,6 +191,8 @@ export function createWorldStore(options: CreateWorldStoreOptions): WorldStore {
     selectedWallId: null,
     lights: normalizeLights(options.initialLights ?? []),
     selectedLightId: null,
+    shapes: normalizeShapes(options.initialShapes ?? []),
+    selectedShapeId: null,
   };
 
   const subscribers = new Set<WorldStoreSubscriber>();
