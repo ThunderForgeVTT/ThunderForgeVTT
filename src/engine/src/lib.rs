@@ -30,8 +30,8 @@ use movement::{PlayerControlled, handle_keyboard_movement, sync_grid_to_transfor
 use derived_data::*;
 use sync_test::*;
 use systems::*;
-use plugins::{ScenePlugin, GridPlugin, TokenPlugin, CameraPlugin, SelectionPlugin, SystemRegistrationPlugin, CanvasLayerPlugin, WallPlugin};
-use resources::{DoorState, Wall as EngineWall, WallSet};
+use plugins::{ScenePlugin, GridPlugin, TokenPlugin, CameraPlugin, SelectionPlugin, SystemRegistrationPlugin, CanvasLayerPlugin, WallPlugin, LightingPlugin};
+use resources::{DoorState, Wall as EngineWall, WallSet, LightSource as EngineLight, LightSet};
 
 static ENGINE_STARTED: AtomicBool = AtomicBool::new(false);
 static EVENT_CALLBACK: OnceLock<Mutex<Option<Function>>> = OnceLock::new();
@@ -98,6 +98,22 @@ struct WorldWallPayload {
     door_state: String,
 }
 
+/// Confirmed/authoritative light state from the server (T036-T040),
+/// matching the `upsert_light` inbound command's `light` payload shape.
+#[derive(Debug, Clone, Deserialize)]
+struct WorldLightPayload {
+    id: String,
+    x: f32,
+    y: f32,
+    radius: f32,
+    intensity: f32,
+    color: Option<String>,
+    #[serde(rename = "attachedTokenId")]
+    attached_token_id: Option<String>,
+    #[serde(rename = "castsShadows")]
+    casts_shadows: bool,
+}
+
 #[derive(Debug, Clone)]
 enum ExternalCommand {
     SetWorld { world_id: String },
@@ -105,6 +121,8 @@ enum ExternalCommand {
     RemoveToken { token_id: String },
     UpsertWall { wall: WorldWallPayload },
     RemoveWall { wall_id: String },
+    UpsertLight { light: WorldLightPayload },
+    RemoveLight { light_id: String },
 }
 
 fn event_callback_slot() -> &'static Mutex<Option<Function>> {
@@ -148,6 +166,14 @@ fn parse_command(input: &str) -> Option<ExternalCommand> {
         }
         "remove_wall" => Some(ExternalCommand::RemoveWall {
             wall_id: value.get("wallId")?.as_str()?.to_owned(),
+        }),
+        "upsert_light" => {
+            let light_value = value.get("light")?.clone();
+            let light: WorldLightPayload = serde_json::from_value(light_value).ok()?;
+            Some(ExternalCommand::UpsertLight { light })
+        }
+        "remove_light" => Some(ExternalCommand::RemoveLight {
+            light_id: value.get("lightId")?.as_str()?.to_owned(),
         }),
         _ => None,
     }
@@ -217,6 +243,10 @@ pub fn start(canvas_selector: &str) {
         // T015: wall authoring (specs/001-bevy-canvas-authoring). Depends
         // on CanvasLayerPlugin (above) for the `CanvasLayers` resource.
         .add_plugins(WallPlugin)
+        // T040: light authoring (specs/001-bevy-canvas-authoring). Depends
+        // on CanvasLayerPlugin (above) for the `CanvasLayers` resource, and
+        // reads WallPlugin's `WallSet`/`is_visible` for occlusion.
+        .add_plugins(LightingPlugin)
         .add_systems(Startup, setup_scene)
         .add_systems(
             Update,
@@ -389,6 +419,8 @@ fn apply_external_commands(
     // core command loop degrades gracefully (wall commands are simply
     // dropped) if the wall plugin isn't present.
     wall_set: Option<ResMut<WallSet>>,
+    // Same rationale as `wall_set`, for `LightingPlugin`/`LightSet`.
+    light_set: Option<ResMut<LightSet>>,
 ) {
     let drained = if let Ok(mut queue) = external_command_queue().lock() {
         queue.drain(..).collect::<Vec<_>>()
@@ -397,6 +429,7 @@ fn apply_external_commands(
     };
 
     let mut wall_set = wall_set;
+    let mut light_set = light_set;
 
     for command in drained {
         match command {
@@ -445,6 +478,25 @@ fn apply_external_commands(
             ExternalCommand::RemoveWall { wall_id } => {
                 if let Some(wall_set) = wall_set.as_deref_mut() {
                     wall_set.remove(&wall_id);
+                }
+            }
+            ExternalCommand::UpsertLight { light } => {
+                if let Some(light_set) = light_set.as_deref_mut() {
+                    light_set.upsert(EngineLight {
+                        id: light.id,
+                        x: light.x,
+                        y: light.y,
+                        radius: light.radius,
+                        intensity: light.intensity,
+                        color: light.color,
+                        attached_token_id: light.attached_token_id,
+                        casts_shadows: light.casts_shadows,
+                    });
+                }
+            }
+            ExternalCommand::RemoveLight { light_id } => {
+                if let Some(light_set) = light_set.as_deref_mut() {
+                    light_set.remove(&light_id);
                 }
             }
         }
