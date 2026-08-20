@@ -170,3 +170,7 @@ export {
   isMemberWithRole,
 } from "@/db/collections/worldMembersCollection";
 export type { WorldMemberDoc } from "@/db/collections/worldMembersCollection";
+
+// Native canvas authoring (specs/001-bevy-canvas-authoring): walls (T019)
+export { worldWallsSchema } from "@/db/collections/worldWallsCollection";
+export type { WorldWallDoc, WallDoorState } from "@/db/collections/worldWallsCollection";

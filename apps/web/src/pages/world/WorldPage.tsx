@@ -7,10 +7,16 @@ import { WorldWhiteboard } from "@/engine/tldraw/WorldWhiteboard";
 import { createWorldStore } from "@/engine/world/store";
 import {
   createGraphQLWorldSyncTransport,
+  loadWallsIntoStore,
+  startWallMutationBridge,
   startWorldSync,
 } from "@/engine/world/sync";
 import type { WorldSyncSession } from "@/engine/world/sync/types";
 import { useCanvasEngine } from "@/engine/bevy/useCanvasEngine";
+import { getWorld } from "@/api/world";
+import { useAuth } from "@/hooks/useAuth";
+import { WallTool } from "@/components/canvas-tools/WallTool";
+import type { WorldRecord } from "@/types/world";
 
 export const worldPageSeo: SeoConfig = {
   title: "World workspace",
@@ -35,6 +41,42 @@ export default function WorldPage() {
     }),
   );
   const [worldState, setWorldState] = useState(() => worldStore.getState());
+  const { user } = useAuth();
+  const [world, setWorld] = useState<WorldRecord | null>(null);
+
+  // GM/scene-owner check: same `createdBy === user.id` ownership
+  // comparison already used to gate GM-only affordances on
+  // WorldDashboardPage.tsx. Wall authoring tools (FR-009) are hidden
+  // entirely for non-owners, never merely disabled.
+  const isSceneOwner = Boolean(world && user && world.createdBy === user.id);
+  // Scenes aren't independently selectable in the shell yet, so the
+  // world's first scene id is used as a best-effort "current scene" for
+  // wall authoring until real scene-selection UI exists.
+  const sceneId = world?.scenes?.[0] ?? null;
+
+  useEffect(() => {
+    if (!id) {
+      return;
+    }
+
+    let active = true;
+
+    void getWorld(id)
+      .then((response) => {
+        if (active) {
+          setWorld(response);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setWorld(null);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [id]);
 
   // 🎮 Phase 4.7.F1: Use canvas engine hook for responsive sizing
   const { containerRef, engineReady, error: engineError } = useCanvasEngine({
@@ -106,6 +148,22 @@ export default function WorldPage() {
     );
   }, [id, worldStore]);
 
+  useEffect(() => {
+    if (!sceneId) {
+      return;
+    }
+
+    void loadWallsIntoStore(worldStore, sceneId).catch((error) => {
+      console.error("Failed to load scene walls:", error);
+    });
+
+    const stopBridge = startWallMutationBridge(worldStore, sceneId);
+
+    return () => {
+      stopBridge();
+    };
+  }, [sceneId, worldStore]);
+
   const seo = useMemo<SeoConfig>(
     () => ({
       ...worldPageSeo,
@@ -151,6 +209,23 @@ export default function WorldPage() {
                 <p style={{ fontSize: "0.9em" }}>{engineError.message}</p>
               </div>
             )}
+            {isSceneOwner && sceneId ? (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "1rem",
+                  left: "1rem",
+                  zIndex: 900,
+                  width: "16rem",
+                }}
+              >
+                <WallTool
+                  worldStore={worldStore}
+                  walls={worldState.walls}
+                  selectedWallId={worldState.selectedWallId}
+                />
+              </div>
+            ) : null}
           </div>
         }
         whiteboard={<WorldWhiteboard worldId={id} worldStore={worldStore} />}
