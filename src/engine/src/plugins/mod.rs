@@ -8,6 +8,7 @@ pub mod canvas_layer;
 pub mod wall;
 pub mod lighting;
 pub mod shape;
+pub mod background;
 
 pub use scene::ScenePlugin;
 pub use grid::GridPlugin;
@@ -19,3 +20,4 @@ pub use canvas_layer::CanvasLayerPlugin;
 pub use wall::WallPlugin;
 pub use lighting::LightingPlugin;
 pub use shape::ShapePlugin;
+pub use background::BackgroundPlugin;

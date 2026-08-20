@@ -30,8 +30,8 @@ use movement::{PlayerControlled, handle_keyboard_movement, sync_grid_to_transfor
 use derived_data::*;
 use sync_test::*;
 use systems::*;
-use plugins::{ScenePlugin, GridPlugin, TokenPlugin, CameraPlugin, SelectionPlugin, SystemRegistrationPlugin, CanvasLayerPlugin, WallPlugin, LightingPlugin, ShapePlugin};
-use resources::{DoorState, Wall as EngineWall, WallSet, LightSource as EngineLight, LightSet, Shape as EngineShape, ShapeKind, ShapeSet};
+use plugins::{ScenePlugin, GridPlugin, TokenPlugin, CameraPlugin, SelectionPlugin, SystemRegistrationPlugin, CanvasLayerPlugin, WallPlugin, LightingPlugin, ShapePlugin, BackgroundPlugin};
+use resources::{DoorState, Wall as EngineWall, WallSet, LightSource as EngineLight, LightSet, Shape as EngineShape, ShapeKind, ShapeSet, SceneBackground};
 
 static ENGINE_STARTED: AtomicBool = AtomicBool::new(false);
 static EVENT_CALLBACK: OnceLock<Mutex<Option<Function>>> = OnceLock::new();
@@ -140,6 +140,16 @@ enum ExternalCommand {
     RemoveLight { light_id: String },
     UpsertShape { shape: WorldShapePayload },
     RemoveShape { shape_id: String },
+    /// Switches the active scene's background image (map import), or
+    /// clears it (`path: None`) when the newly active scene has none.
+    /// `width`/`height` are the scene's pixel dimensions, already computed
+    /// server-side from `Scene.width`/`Scene.height` — this command does
+    /// not fetch scene metadata itself.
+    SetSceneBackground {
+        path: Option<String>,
+        width: f32,
+        height: f32,
+    },
 }
 
 fn event_callback_slot() -> &'static Mutex<Option<Function>> {
@@ -200,6 +210,15 @@ fn parse_command(input: &str) -> Option<ExternalCommand> {
         "remove_shape" => Some(ExternalCommand::RemoveShape {
             shape_id: value.get("shapeId")?.as_str()?.to_owned(),
         }),
+        "set_scene_background" => {
+            let path = match value.get("backgroundImagePath") {
+                None | Some(Value::Null) => None,
+                Some(v) => Some(v.as_str()?.to_owned()),
+            };
+            let width = value.get("width")?.as_f64()? as f32;
+            let height = value.get("height")?.as_f64()? as f32;
+            Some(ExternalCommand::SetSceneBackground { path, width, height })
+        }
         _ => None,
     }
 }
@@ -277,6 +296,11 @@ pub fn start(canvas_selector: &str) {
         // resource; order relative to WallPlugin/LightingPlugin doesn't
         // matter (Constitution Principle II: independently addable).
         .add_plugins(ShapePlugin)
+        // Scene background (map import art): renders into
+        // `CanvasLayer::Background`, the lowest/furthest-back layer.
+        // Depends on CanvasLayerPlugin (above); order relative to
+        // WallPlugin/LightingPlugin/ShapePlugin doesn't matter.
+        .add_plugins(BackgroundPlugin)
         .add_systems(Startup, setup_scene)
         .add_systems(
             Update,
@@ -454,6 +478,9 @@ fn apply_external_commands(
     // `ShapeSet` only exists once `ShapePlugin` is registered, same
     // graceful-degradation rationale as `wall_set` above.
     shape_set: Option<ResMut<ShapeSet>>,
+    // `SceneBackground` only exists once `BackgroundPlugin` is registered,
+    // same graceful-degradation rationale as `wall_set` above.
+    background: Option<ResMut<SceneBackground>>,
 ) {
     let drained = if let Ok(mut queue) = external_command_queue().lock() {
         queue.drain(..).collect::<Vec<_>>()
@@ -464,6 +491,7 @@ fn apply_external_commands(
     let mut wall_set = wall_set;
     let mut light_set = light_set;
     let mut shape_set = shape_set;
+    let mut background = background;
 
     for command in drained {
         match command {
@@ -548,6 +576,13 @@ fn apply_external_commands(
             ExternalCommand::RemoveShape { shape_id } => {
                 if let Some(shape_set) = shape_set.as_deref_mut() {
                     shape_set.remove(&shape_id);
+                }
+            }
+            ExternalCommand::SetSceneBackground { path, width, height } => {
+                if let Some(background) = background.as_deref_mut() {
+                    background.path = path;
+                    background.width = width;
+                    background.height = height;
                 }
             }
         }
