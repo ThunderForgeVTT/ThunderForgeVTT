@@ -20,6 +20,7 @@ mod systems;
 mod users;
 mod utils;
 mod world;
+mod world_events;
 
 use crate::config::{Config, Directories};
 use crate::graphql::{AppSchema, MutationRoot, QueryRoot, SubscriptionRoot}; // Added SubscriptionRoot

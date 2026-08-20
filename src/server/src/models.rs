@@ -451,6 +451,7 @@ pub struct Wall {
     pub y2: f64,
     pub blocks_vision: bool,
     pub blocks_movement: bool,
+    pub door_state: String,
     pub metadata: Option<serde_json::Value>,
     pub created_by: uuid::Uuid,
     pub updated_by: uuid::Uuid,
@@ -468,6 +469,7 @@ pub struct NewWall {
     pub y2: f64,
     pub blocks_vision: bool,
     pub blocks_movement: bool,
+    pub door_state: String,
     pub metadata: Option<serde_json::Value>,
     pub created_by: uuid::Uuid,
     pub updated_by: uuid::Uuid,
@@ -482,6 +484,7 @@ pub struct WallUpdate {
     pub y2: Option<f64>,
     pub blocks_vision: Option<bool>,
     pub blocks_movement: Option<bool>,
+    pub door_state: Option<String>,
     pub metadata: Option<serde_json::Value>,
     pub updated_by: uuid::Uuid,
 }

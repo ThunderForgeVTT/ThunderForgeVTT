@@ -45,7 +45,36 @@ pub struct GraphQLUpdateSceneInput {
     pub metadata: Option<Json<serde_json::Value>>,
 }
 
-// ========== Walls (Phase 6) ==========
+// ========== Walls (Phase 6; door semantics: native canvas authoring FR-017) ==========
+
+/// Door state for a wall segment. "None" means the wall is not a door at
+/// all (its blocks_vision/blocks_movement flags always apply). "Open"
+/// means the door does not block vision/movement regardless of those
+/// flags. "Closed" means the flags apply as stored.
+#[derive(Enum, Debug, Copy, Clone, Eq, PartialEq)]
+pub enum GraphQLDoorState {
+    None,
+    Open,
+    Closed,
+}
+
+impl GraphQLDoorState {
+    pub fn as_db_str(self) -> &'static str {
+        match self {
+            GraphQLDoorState::None => "none",
+            GraphQLDoorState::Open => "open",
+            GraphQLDoorState::Closed => "closed",
+        }
+    }
+
+    pub fn from_db_str(value: &str) -> Self {
+        match value {
+            "open" => GraphQLDoorState::Open,
+            "closed" => GraphQLDoorState::Closed,
+            _ => GraphQLDoorState::None,
+        }
+    }
+}
 
 /// Input for creating a new wall
 #[derive(InputObject, Debug, Clone)]
@@ -57,6 +86,7 @@ pub struct GraphQLCreateWallInput {
     pub y2: f64,
     pub blocks_vision: Option<bool>,
     pub blocks_movement: Option<bool>,
+    pub door_state: Option<GraphQLDoorState>,
     pub metadata: Option<Json<serde_json::Value>>,
 }
 
@@ -69,6 +99,7 @@ pub struct GraphQLUpdateWallInput {
     pub y2: Option<f64>,
     pub blocks_vision: Option<bool>,
     pub blocks_movement: Option<bool>,
+    pub door_state: Option<GraphQLDoorState>,
     pub metadata: Option<Json<serde_json::Value>>,
 }
 

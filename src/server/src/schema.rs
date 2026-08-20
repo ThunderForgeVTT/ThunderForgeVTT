@@ -1,7 +1,13 @@
 // @generated automatically by Diesel CLI.
 
 pub mod sql_types {
-    #[derive(diesel::query_builder::QueryId, Clone, diesel::sql_types::SqlType)]
+    // NOTE: `Clone` intentionally omitted here despite diesel.toml's
+    // custom_type_derives — diesel-derive-enum's `DbEnum` on
+    // `db_types::PolicyEffectEnum` (`#[ExistingTypePath = "..."]`)
+    // already generates a `Clone` impl for this type; both together is
+    // E0119 (conflicting implementations). If `diesel print-schema`
+    // regenerates this file, re-remove `Clone` from the derive list.
+    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "PolicyEffect"))]
     pub struct PolicyEffect;
 }

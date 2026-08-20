@@ -54,7 +54,7 @@ is independently verifiable per quickstart.md's scenarios.
 FR-003/SC-001) and establish the shared layer-ordering resource every
 rendering system in this feature consumes (FR-016).
 
-- [ ] T006 Add NOTIFY emission to `create_wall`/`update_wall`/`delete_wall` in `src/server/src/graphql/mutations_walls.rs`, following the existing LISTEN/NOTIFY channel/payload convention used elsewhere in `src/server/src/graphql.rs`
+- [X] T006 Add NOTIFY emission to `create_wall`/`update_wall`/`delete_wall` in `src/server/src/graphql/mutations_walls.rs`, following the existing LISTEN/NOTIFY channel/payload convention used elsewhere in `src/server/src/graphql.rs`
 - [ ] T007 Extend `apps/web/src/engine/world/sync` to subscribe to and dispatch wall change events into the world store, mirroring the existing token event dispatch path
 - [ ] T008 Add `Wall` variant handling to the engine-side world-command dispatch in `src/engine/src/lib.rs` (`ExternalCommand`/`apply_external_commands`) so wall events reach the engine, following the existing `UpsertToken`/`RemoveToken` pattern
 - [ ] T009 [P] Create `CanvasLayers` resource (ordered layer list: background, grid, walls, lighting, shapes, tokens, fog + GM/player visibility rule per layer) in `src/engine/src/resources/canvas_layer.rs`, re-exported via `resources/mod.rs`
@@ -86,8 +86,8 @@ the tool.
 
 ### Backend (Rust/GraphQL)
 
-- [ ] T017 [US1] Add `door_state` to `Wall`/`WallUpdate` in `src/server/src/models.rs` and `GraphQLWall`/`GraphQLUpdateWallInput` in `src/server/src/graphql.rs`/`input_types.rs`, implementing the door semantics from data-model.md
-- [ ] T018 [US1] Add a scene-ownership assertion test for `create_wall`/`update_wall`/`delete_wall` (including door-state updates) in `src/server/src/graphql/mutations_walls.rs` if not already covered
+- [X] T017 [US1] Add `door_state` to `Wall`/`WallUpdate` in `src/server/src/models.rs` and `GraphQLWall`/`GraphQLUpdateWallInput` in `src/server/src/graphql.rs`/`input_types.rs`, implementing the door semantics from data-model.md
+- [X] T018 [US1] Add a scene-ownership assertion test for `create_wall`/`update_wall`/`delete_wall` (including door-state updates) in `src/server/src/graphql/mutations_walls.rs` if not already covered
 
 ### Frontend (React/RxDB)
 

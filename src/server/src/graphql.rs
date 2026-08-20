@@ -58,7 +58,7 @@ pub use input_types::{
     GraphQLUpsertWorldTokenInput, GraphQLMoveTokenInput, GraphQLUpsertTokenInput,
     GraphQLUpdateFogMaskInput, GraphQLGenerateInviteCodeInput, GraphQLJoinWorldInput,
     GraphQLUpdateMemberRoleInput, GraphQLWorldInvite, GraphQLWorldMembership,
-    GraphQLCreateWallInput, GraphQLUpdateWallInput,
+    GraphQLCreateWallInput, GraphQLUpdateWallInput, GraphQLDoorState,
 };
 
 // Phase 4.9.Z Step 4a: Helper functions extracted to separate module
@@ -236,6 +236,7 @@ pub struct GraphQLWall {
     y2: f64,
     blocks_vision: bool,
     blocks_movement: bool,
+    door_state: GraphQLDoorState,
     metadata: Option<Json<serde_json::Value>>,
     created_by: uuid::Uuid,
     updated_by: uuid::Uuid,
@@ -254,6 +255,7 @@ impl From<crate::models::Wall> for GraphQLWall {
             y2: wall.y2,
             blocks_vision: wall.blocks_vision,
             blocks_movement: wall.blocks_movement,
+            door_state: GraphQLDoorState::from_db_str(&wall.door_state),
             metadata: wall.metadata.map(Json),
             created_by: wall.created_by,
             updated_by: wall.updated_by,
