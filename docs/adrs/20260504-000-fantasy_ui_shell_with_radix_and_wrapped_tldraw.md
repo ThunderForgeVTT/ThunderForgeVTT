@@ -1,6 +1,6 @@
 # ADR-004: Fantasy UI Shell with Radix Primitives, Dicebear Identity Surfaces, and Wrapped tldraw Chrome
 
-**Status:** Accepted
+**Status:** Partially Superseded — see [ADR-037](./20260820-037-native_canvas_authoring_supersedes_tldraw.md), which supersedes the "wrapped tldraw" decision below. The Radix/Dicebear/fantasy-shell decisions remain in force.
 
 **Decision Date:** 2026-05-04
 
