@@ -182,12 +182,12 @@ and `WorldWhiteboard.tsx` are removed once this reaches that parity.
 
 ### Backend (Rust/GraphQL)
 
-- [ ] T046 [P] [US4] Add `Shape`/`NewShape`/`ShapeUpdate` structs to `src/server/src/models.rs` per data-model.md
-- [ ] T047 [P] [US4] Add `shapes` table to `src/server/src/schema.rs`
-- [ ] T048 [US4] Add `GraphQLShape`/`ShapeKind` type + `CreateShapeInput`/`UpdateShapeInput` to `src/server/src/graphql/input_types.rs` and `src/server/src/graphql.rs` per contracts/graphql.md
-- [ ] T049 [US4] Create `ShapeMutation` (create/update/delete, scene-ownership enforced) in `src/server/src/graphql/mutations_shapes.rs`
-- [ ] T050 [US4] Add `shapes(sceneId: ID!)` query to `src/server/src/graphql/queries/scene.rs`, filtering to `visible_to_players = true` for non-owner callers (FR-009); register the query type into the `QueryRoot` `MergedObject` tuple and `ShapeMutation` into the `MutationRoot` `MergedObject` tuple, both in `src/server/src/graphql.rs` (~L1633-1644) — same correction as T034, not `schema.rs`
-- [ ] T051 [US4] Add NOTIFY emission to the shape mutations from T049, same pattern as T006
+- [X] T046 [P] [US4] Add `Shape`/`NewShape`/`ShapeUpdate` structs to `src/server/src/models.rs` per data-model.md
+- [X] T047 [P] [US4] Add `shapes` table to `src/server/src/schema.rs`
+- [X] T048 [US4] Add `GraphQLShape`/`ShapeKind` type + `CreateShapeInput`/`UpdateShapeInput` to `src/server/src/graphql/input_types.rs` and `src/server/src/graphql.rs` per contracts/graphql.md
+- [X] T049 [US4] Create `ShapeMutation` (create/update/delete, scene-ownership enforced) in `src/server/src/graphql/mutations_shapes.rs`
+- [X] T050 [US4] Add `shapes(sceneId: ID!)` query to `src/server/src/graphql/queries/scene.rs`, filtering to `visible_to_players = true` for non-owner callers (FR-009); register the query type into the `QueryRoot` `MergedObject` tuple and `ShapeMutation` into the `MutationRoot` `MergedObject` tuple, both in `src/server/src/graphql.rs` (~L1633-1644) — same correction as T034, not `schema.rs`
+- [X] T051 [US4] Add NOTIFY emission to the shape mutations from T049, same pattern as T006
 
 ### Engine (Rust/Bevy, wasm32 target)
 

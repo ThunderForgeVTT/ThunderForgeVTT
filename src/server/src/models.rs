@@ -1,7 +1,7 @@
 use crate::schema::{
     admin_bootstrap_oauth_sessions, admin_bootstrap_setup, auth_security_settings, fog_masks,
     game_systems, login_two_factor_challenges, oauth_authorization_sessions, oauth_link_challenges,
-    oauth_providers, players_online, scenes, tokens, user_oauth_accounts, user_sessions,
+    oauth_providers, players_online, scenes, shapes, tokens, user_oauth_accounts, user_sessions,
     users, walls, world_actors, world_actor_system_data, world_events, world_invites, world_members, world_tokens, worlds,
 };
 use diesel::prelude::*;
@@ -485,6 +485,51 @@ pub struct WallUpdate {
     pub blocks_vision: Option<bool>,
     pub blocks_movement: Option<bool>,
     pub door_state: Option<String>,
+    pub metadata: Option<serde_json::Value>,
+    pub updated_by: uuid::Uuid,
+}
+
+// ========== Shape Models (native canvas authoring) ==========
+
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = shapes)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct Shape {
+    pub shape_id: uuid::Uuid,
+    pub scene_id: uuid::Uuid,
+    pub kind: String,
+    pub geometry: serde_json::Value,
+    pub text: Option<String>,
+    pub style: Option<serde_json::Value>,
+    pub visible_to_players: bool,
+    pub metadata: Option<serde_json::Value>,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = shapes)]
+pub struct NewShape {
+    pub scene_id: uuid::Uuid,
+    pub kind: String,
+    pub geometry: serde_json::Value,
+    pub text: Option<String>,
+    pub style: Option<serde_json::Value>,
+    pub visible_to_players: bool,
+    pub metadata: Option<serde_json::Value>,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+}
+
+#[derive(AsChangeset, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = shapes)]
+pub struct ShapeUpdate {
+    pub geometry: Option<serde_json::Value>,
+    pub text: Option<String>,
+    pub style: Option<serde_json::Value>,
+    pub visible_to_players: Option<bool>,
     pub metadata: Option<serde_json::Value>,
     pub updated_by: uuid::Uuid,
 }
