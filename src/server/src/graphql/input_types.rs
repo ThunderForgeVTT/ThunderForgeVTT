@@ -132,6 +132,63 @@ pub struct GraphQLUpdateLightSourceInput {
     pub metadata: Option<Json<serde_json::Value>>,
 }
 
+// ========== Shapes (native canvas authoring) ==========
+
+/// Kind of freehand/drawn shape on a scene's canvas (native canvas
+/// authoring: stroke, rect, ellipse, line, text).
+#[derive(Enum, Debug, Copy, Clone, Eq, PartialEq)]
+pub enum GraphQLShapeKind {
+    Stroke,
+    Rect,
+    Ellipse,
+    Line,
+    Text,
+}
+
+impl GraphQLShapeKind {
+    pub fn as_db_str(self) -> &'static str {
+        match self {
+            GraphQLShapeKind::Stroke => "stroke",
+            GraphQLShapeKind::Rect => "rect",
+            GraphQLShapeKind::Ellipse => "ellipse",
+            GraphQLShapeKind::Line => "line",
+            GraphQLShapeKind::Text => "text",
+        }
+    }
+
+    pub fn from_db_str(value: &str) -> Self {
+        match value {
+            "rect" => GraphQLShapeKind::Rect,
+            "ellipse" => GraphQLShapeKind::Ellipse,
+            "line" => GraphQLShapeKind::Line,
+            "text" => GraphQLShapeKind::Text,
+            _ => GraphQLShapeKind::Stroke,
+        }
+    }
+}
+
+/// Input for creating a new shape
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLCreateShapeInput {
+    pub scene_id: Uuid,
+    pub kind: GraphQLShapeKind,
+    pub geometry: Json<serde_json::Value>,
+    pub text: Option<String>,
+    pub style: Option<Json<serde_json::Value>>,
+    pub visible_to_players: Option<bool>,
+    pub metadata: Option<Json<serde_json::Value>>,
+}
+
+/// Input for updating shape properties
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLUpdateShapeInput {
+    pub geometry: Option<Json<serde_json::Value>>,
+    pub text: Option<String>,
+    pub style: Option<Json<serde_json::Value>>,
+    pub visible_to_players: Option<bool>,
+    pub metadata: Option<Json<serde_json::Value>>,
+}
+
 // ========== Player Presence (Phase 4.9.B.3) ==========
 
 /// Player presence data in world/scene

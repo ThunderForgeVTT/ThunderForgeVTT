@@ -60,6 +60,7 @@ pub use input_types::{
     GraphQLUpdateMemberRoleInput, GraphQLWorldInvite, GraphQLWorldMembership,
     GraphQLCreateWallInput, GraphQLUpdateWallInput, GraphQLDoorState,
     GraphQLCreateLightSourceInput, GraphQLUpdateLightSourceInput,
+    GraphQLCreateShapeInput, GraphQLUpdateShapeInput, GraphQLShapeKind,
 };
 
 // Phase 4.9.Z Step 4a: Helper functions extracted to separate module
@@ -88,6 +89,10 @@ pub use mutations_walls::WallMutation;
 // Native canvas authoring: light source mutations
 pub mod mutations_lighting;
 pub use mutations_lighting::LightSourceMutation;
+
+// Native canvas authoring: shape (stroke/rect/ellipse/line/text) mutations
+pub mod mutations_shapes;
+pub use mutations_shapes::ShapeMutation;
 
 
 
@@ -305,6 +310,41 @@ impl From<crate::models::LightSource> for GraphQLLightSource {
             updated_by: light.updated_by,
             created_at: light.created_at,
             updated_at: light.updated_at,
+        }
+    }
+}
+
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLShape {
+    shape_id: uuid::Uuid,
+    scene_id: uuid::Uuid,
+    kind: GraphQLShapeKind,
+    geometry: Json<serde_json::Value>,
+    text: Option<String>,
+    style: Option<Json<serde_json::Value>>,
+    visible_to_players: bool,
+    metadata: Option<Json<serde_json::Value>>,
+    created_by: uuid::Uuid,
+    updated_by: uuid::Uuid,
+    created_at: chrono::NaiveDateTime,
+    updated_at: chrono::NaiveDateTime,
+}
+
+impl From<crate::models::Shape> for GraphQLShape {
+    fn from(shape: crate::models::Shape) -> Self {
+        Self {
+            shape_id: shape.shape_id,
+            scene_id: shape.scene_id,
+            kind: GraphQLShapeKind::from_db_str(&shape.kind),
+            geometry: Json(shape.geometry),
+            text: shape.text,
+            style: shape.style.map(Json),
+            visible_to_players: shape.visible_to_players,
+            metadata: shape.metadata.map(Json),
+            created_by: shape.created_by,
+            updated_by: shape.updated_by,
+            created_at: shape.created_at,
+            updated_at: shape.updated_at,
         }
     }
 }
@@ -1690,6 +1730,7 @@ pub struct MutationRoot(
     InviteMutation,
     WallMutation,
     LightSourceMutation,
+    ShapeMutation,
 );
 
 pub type AppSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;

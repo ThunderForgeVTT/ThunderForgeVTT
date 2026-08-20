@@ -234,4 +234,65 @@ impl SceneQuery {
 
         Ok(lights.into_iter().map(GraphQLLightSource::from).collect())
     }
+
+    /// Shapes drawn on a scene's canvas (native canvas authoring). Returns
+    /// every shape to the scene owner/GM; returns only
+    /// `visible_to_players = true` shapes to any other authenticated
+    /// scene participant (FR-009: players never see GM-only shapes).
+    async fn shapes(
+        &self,
+        ctx: &Context<'_>,
+        scene_id: uuid::Uuid,
+    ) -> GraphQLResult<Vec<GraphQLShape>> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        let user_id = auth_user.user_id;
+
+        // 🔐 SECURITY: Get the world_id from the scene, then verify access
+        let world_id = get_world_id_from_scene(state, scene_id).await?;
+        let _ = load_visible_world_by_id(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            world_id,
+        )
+        .await?;
+
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        let shapes = tokio::task::spawn_blocking(move || {
+            use crate::schema::{scenes, shapes};
+
+            // The scene owner (GM) sees every shape; anyone else only sees
+            // shapes explicitly flagged visible to players.
+            let is_owner = scenes::table
+                .filter(scenes::scene_id.eq(scene_id))
+                .filter(scenes::owner_id.eq(user_id))
+                .select(scenes::scene_id)
+                .first::<uuid::Uuid>(&mut conn)
+                .optional()?
+                .is_some();
+
+            if is_owner {
+                shapes::table
+                    .filter(shapes::scene_id.eq(scene_id))
+                    .select(crate::models::Shape::as_select())
+                    .load::<crate::models::Shape>(&mut conn)
+            } else {
+                shapes::table
+                    .filter(shapes::scene_id.eq(scene_id))
+                    .filter(shapes::visible_to_players.eq(true))
+                    .select(crate::models::Shape::as_select())
+                    .load::<crate::models::Shape>(&mut conn)
+            }
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to load shapes"))?;
+
+        Ok(shapes.into_iter().map(GraphQLShape::from).collect())
+    }
 }
