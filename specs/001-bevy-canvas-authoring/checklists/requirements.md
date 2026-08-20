@@ -32,6 +32,11 @@
 ## Notes
 
 - All items pass. Reasonable defaults were used for undo scope, light falloff
-  fidelity, and annotation content richness (see spec's Assumptions section)
+  fidelity, and shape content richness (see spec's Assumptions section)
   rather than raising [NEEDS CLARIFICATION] markers, since none of these
   choices materially change feature scope or carry security/UX risk.
+- **2026-08-20 revision**: scope expanded to a full tldraw replacement
+  (shape/drawing parity, not just annotations) plus a new Map Import user
+  story (Universal VTT / `.dd2vtt`). Re-validated against this checklist:
+  all items still pass. New assumptions (format version scope, door
+  toggle ownership, import-as-one-shot-ingestion) recorded in spec.md.

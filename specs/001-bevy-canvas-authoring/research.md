@@ -110,3 +110,75 @@ replacement.
 annotations first — rejected because it inverts the spec's stated
 priority order (walls are P1 for a reason: the backend already exists and
 is the highest-value gap).
+
+## 7. Universal VTT (`.dd2vtt`) format scope and parsing location
+
+**Decision**: Support format version `0.3` only (verified against both
+fixtures in `examples/maps/`, both of which declare `"format": 0.3`).
+Parse the file entirely server-side, inside the new `POST
+/api/scenes/{scene_id}/import/uvtt` handler (contracts/graphql.md), not in
+the browser/engine — the file is plain JSON with a large base64 image
+payload; parsing/decoding server-side avoids shipping that work (and a
+JSON+image-decode dependency) into the WASM bundle, and lets the import
+run as one DB transaction close to the database.
+
+**Rationale**: `examples/maps/README.md` documents the exact shape
+verified by inspecting both fixture files with `python3 -m json.tool`
+equivalent tooling (top-level keys: `format`, `resolution`,
+`line_of_sight`, `objects_line_of_sight`, `portals`, `environment`,
+`lights`, `image`). One fixture (`chamber-of-echoing-grief.dd2vtt`) uses
+an older exporter for some fields but still declares `format: 0.3`,
+confirming 0.3 is the correct version to target, not a moving target per
+file.
+
+**Alternatives considered**: Supporting older format versions (0.1/0.2,
+referenced in some public UVTT documentation) — rejected for v1 scope;
+FR-024 requires rejecting unsupported versions with a clear error rather
+than guessing at a compatible shape, so adding versions later is additive,
+not a breaking change. Parsing in the engine/WASM — rejected due to
+bundle-size and transaction-locality concerns above.
+
+## 8. Coordinate scaling between import and target scene
+
+**Decision**: `resolution.pixels_per_grid` in the source file is the
+source's px-per-grid-cell; all `line_of_sight`/`portals`/`lights`
+coordinates are in grid units. Convert to the target scene's pixel space
+with `scene_px = grid_units * pixels_per_grid * (target_scene.grid_size /
+pixels_per_grid)`, which simplifies to `scene_px = grid_units *
+target_scene.grid_size` — i.e. once normalized to grid units, the source
+file's own `pixels_per_grid` cancels out and only the *target* scene's
+`grid_size` matters. `resolution.map_size` (in grid cells) ×
+`target_scene.grid_size` gives the scene's `width`/`height` in pixels.
+
+**Rationale**: This is the simplest correct mapping and matches
+data-model.md's "Map Import" section; it also means importing the same
+file into scenes with different `grid_size` values naturally produces
+correctly-scaled results without per-import configuration, addressing the
+"resolution mismatch" edge case in spec.md directly.
+
+**Alternatives considered**: Always adopting the source file's
+`pixels_per_grid` as the scene's `grid_size` (i.e. resize the scene to
+fit the import instead of fitting the import to the scene) — rejected
+because it would silently change an existing scene's grid to match
+whatever was last imported, which is surprising when importing into a
+scene that already has hand-drawn content at a specific scale.
+
+## 9. Background image storage
+
+**Decision**: Decode and re-save the imported base64 PNG under the
+server's existing `state.directories.asset_directory`
+(`src/server/src/config/mod.rs`), the same directory already used for
+other served assets, and store only the relative path in
+`scenes.background_image_path` (data-model.md) — not the base64 blob
+itself in Postgres.
+
+**Rationale**: Reuses infrastructure that already exists (directory
+creation, static-file serving) rather than introducing object storage or
+storing multi-megabyte blobs in the database, which would bloat every
+`scenes` row read/replicated to RxDB even when the background image
+isn't needed.
+
+**Alternatives considered**: Storing the base64 string in a `scenes`
+column or a dedicated `scene_assets` table — rejected as unnecessary
+database bloat and slower replication for something the existing static
+asset directory already serves well.
