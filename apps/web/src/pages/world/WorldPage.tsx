@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { SEO } from "@/components/seo/SEO";
 import { WorldLayout } from "@/layouts/world-layout/WorldLayout";
@@ -22,6 +22,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { WallTool } from "@/components/canvas-tools/WallTool";
 import { LightingTool } from "@/components/canvas-tools/LightingTool";
 import { ShapeTool } from "@/components/canvas-tools/ShapeTool";
+import { MapImportTool } from "@/components/canvas-tools/MapImportTool";
 import type { WorldRecord } from "@/types/world";
 
 export const worldPageSeo: SeoConfig = {
@@ -202,6 +203,26 @@ export default function WorldPage() {
     };
   }, [sceneId, worldStore]);
 
+  const handleMapImportComplete = useCallback(() => {
+    if (!sceneId) {
+      return;
+    }
+
+    // Map import creates walls/doors/lights directly in Postgres (via the
+    // REST endpoint, not the GraphQL mutation bridge), so re-run the same
+    // loaders used on initial mount to pull the newly imported content into
+    // the world store without requiring a manual page reload.
+    void loadWallsIntoStore(worldStore, sceneId).catch((error) => {
+      console.error("Failed to reload scene walls after map import:", error);
+    });
+    void loadLightsIntoStore(worldStore, sceneId).catch((error) => {
+      console.error("Failed to reload scene lights after map import:", error);
+    });
+    void loadShapesIntoStore(worldStore, sceneId).catch((error) => {
+      console.error("Failed to reload scene shapes after map import:", error);
+    });
+  }, [sceneId, worldStore]);
+
   const seo = useMemo<SeoConfig>(
     () => ({
       ...worldPageSeo,
@@ -257,6 +278,10 @@ export default function WorldPage() {
                   width: "16rem",
                 }}
               >
+                <MapImportTool
+                  sceneId={sceneId}
+                  onImportComplete={handleMapImportComplete}
+                />
                 <WallTool
                   worldStore={worldStore}
                   walls={worldState.walls}
