@@ -212,6 +212,10 @@ pub struct GraphQLScene {
     owner_id: uuid::Uuid,
     created_at: chrono::NaiveDateTime,
     updated_at: chrono::NaiveDateTime,
+    /// Native canvas authoring: set by map import (data-model.md's Scene
+    /// section); resolves against the existing `/assets/<path>` static
+    /// route. `None` = no background art.
+    background_image_path: Option<String>,
 }
 
 impl From<crate::models::Scene> for GraphQLScene {
@@ -230,6 +234,7 @@ impl From<crate::models::Scene> for GraphQLScene {
             owner_id: scene.owner_id,
             created_at: scene.created_at,
             updated_at: scene.updated_at,
+            background_image_path: scene.background_image_path,
         }
     }
 }
@@ -979,6 +984,7 @@ impl SceneMutation {
             owner_id: user_id,
             created_at: now,
             updated_at: now,
+            background_image_path: None,
         };
 
         let inserted_scene = tokio::task::spawn_blocking(move || {

@@ -407,6 +407,10 @@ pub struct Scene {
     pub owner_id: uuid::Uuid,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// Relative path under `state.directories.asset_directory`, servable
+    /// at `/assets/<path>` (native canvas authoring: map import sets
+    /// this; `NULL` = no background art).
+    pub background_image_path: Option<String>,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
