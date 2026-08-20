@@ -3,7 +3,6 @@ import { useParams } from "react-router-dom";
 import { SEO } from "@/components/seo/SEO";
 import { WorldLayout } from "@/layouts/world-layout/WorldLayout";
 import type { SeoConfig } from "@/types/seo";
-import { WorldWhiteboard } from "@/engine/tldraw/WorldWhiteboard";
 import { createWorldStore } from "@/engine/world/store";
 import {
   createGraphQLWorldSyncTransport,
@@ -33,7 +32,7 @@ import type { SceneRecord } from "@/types/scene";
 export const worldPageSeo: SeoConfig = {
   title: "World workspace",
   description:
-    "Launch the ThunderForge VTT collaborative world canvas powered by Bevy, tldraw, and synchronized world state.",
+    "Launch the ThunderForge VTT collaborative world canvas powered by Bevy and synchronized world state.",
   canonicalPath: "/world/play",
   noindex: true,
 };
@@ -441,7 +440,6 @@ export default function WorldPage() {
             ) : null}
           </div>
         }
-        whiteboard={<WorldWhiteboard worldId={id} worldStore={worldStore} />}
       />
     </>
   );

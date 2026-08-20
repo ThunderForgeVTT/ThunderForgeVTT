@@ -73,5 +73,15 @@ without becoming a second simulation authority.
   multi-select, undo history depth) — v1 shape scope matches tldraw's
   core tool set but not every refinement; import is one-shot ingestion,
   not a live/two-way sync with the source file (spec Assumptions).
-- **Follow-up**: `tldraw` package dependency and `engine/tldraw/` removed
-  from `apps/web` once quickstart.md Scenario 4 passes.
+- **Follow-up**: done, 2026-08-20 (T061-T063). `tldraw` package dependency
+  and `engine/tldraw/` (`WorldWhiteboard.tsx` + its stylesheet) removed
+  from `apps/web`; `WorldLayout`'s dedicated whiteboard panel column
+  removed too (the Bevy canvas now fills that reclaimed space), and every
+  remaining prose reference to tldraw across the shell (SEO copy,
+  dashboard/layout descriptions, the `EngineCommandSource` union's dead
+  `"tldraw"` variant) was swept out — confirmed zero repo-wide matches for
+  "tldraw" outside this ADR's own history. Full e2e coverage
+  (`apps/web/e2e/canvas-authoring.spec.ts`) passing throughout the
+  removal, including immediately after, confirms this wasn't done on
+  faith — this superseded ADR-004's tldraw decision without regressing
+  the feature it replaced.

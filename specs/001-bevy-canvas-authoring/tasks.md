@@ -206,9 +206,9 @@ and `WorldWhiteboard.tsx` are removed once this reaches that parity.
 
 ### tldraw removal (only after T046-T060 pass quickstart Scenario 4)
 
-- [ ] T061 [US4] Remove `<WorldWhiteboard />` usage and the component itself: delete `apps/web/src/engine/tldraw/WorldWhiteboard.tsx` and its usages in `apps/web/src/pages/world/WorldPage.tsx`
-- [ ] T062 [US4] Remove the `tldraw` package dependency from `apps/web/package.json` and run the package manager's lockfile update
-- [ ] T063 [US4] Update ADR-004's status note and ADR-037's Consequences section to record removal completion date
+- [X] T061 [US4] Remove `<WorldWhiteboard />` usage and the component itself: delete `apps/web/src/engine/tldraw/WorldWhiteboard.tsx` and its usages in `apps/web/src/pages/world/WorldPage.tsx`
+- [X] T062 [US4] Remove the `tldraw` package dependency from `apps/web/package.json` and run the package manager's lockfile update
+- [X] T063 [US4] Update ADR-004's status note and ADR-037's Consequences section to record removal completion date
 
 **Checkpoint**: quickstart.md Scenario 4 passes; zero remaining tldraw
 references anywhere in the codebase (SC-006).

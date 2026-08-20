@@ -11,14 +11,12 @@ import type { WorldToken } from "@/engine/world/types";
 interface WorldLayoutProps {
   worldId: string;
   canvas: ReactNode;
-  whiteboard: ReactNode;
   tokens: WorldToken[];
 }
 
 export function WorldLayout({
   worldId,
   canvas,
-  whiteboard,
   tokens,
 }: WorldLayoutProps) {
   return (
@@ -35,8 +33,9 @@ export function WorldLayout({
             {worldId || "Untitled realm"}
           </h1>
           <p className="mt-2 max-w-3xl text-muted-foreground">
-            Bevy remains the authority for the 3D stage while the shell layers
-            in navigation, party rosters, and whiteboard controls.
+            Bevy remains the authority for the game canvas — walls, lighting,
+            shapes, and map import are all native canvas tools — while the
+            shell layers in navigation and party rosters around it.
           </p>
         </div>
         <div className="grid justify-items-end gap-3">
@@ -47,7 +46,7 @@ export function WorldLayout({
         </div>
       </header>
 
-      <section className="grid min-h-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(260px,0.9fr)_minmax(0,1.25fr)_minmax(320px,0.95fr)]">
+      <section className="grid min-h-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(260px,0.9fr)_minmax(0,2.2fr)]">
         <aside className="grid min-h-0 gap-4">
           <Panel variant="leather" className="overflow-hidden rounded-xl border border-border">
             <p className="mb-3 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
@@ -109,8 +108,7 @@ export function WorldLayout({
                   content: (
                     <p className="text-muted-foreground">
                       Player roles and world governance can layer onto this
-                      shell without rewriting the whiteboard or Bevy
-                      entrypoints.
+                      shell without rewriting the Bevy entrypoints.
                     </p>
                   ),
                 },
@@ -119,12 +117,9 @@ export function WorldLayout({
           </Panel>
         </aside>
 
-        <div className="min-h-0 overflow-hidden rounded-xl border border-border bg-background/60 p-3">
+        <div className="min-h-[32rem] overflow-hidden rounded-xl border border-border bg-background/60 p-3 lg:min-h-0">
           {canvas}
         </div>
-        <aside className="min-h-[32rem] overflow-hidden rounded-xl border border-border bg-secondary lg:min-h-0">
-          {whiteboard}
-        </aside>
       </section>
     </main>
   );

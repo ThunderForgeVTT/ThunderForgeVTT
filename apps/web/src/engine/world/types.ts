@@ -1,4 +1,4 @@
-export type EngineCommandSource = "bevy" | "tldraw" | "ui" | "sync";
+export type EngineCommandSource = "bevy" | "ui" | "sync";
 
 export type WorldToken = {
   id: string;

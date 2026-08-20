@@ -52,7 +52,7 @@ export default function CounterPage() {
       },
       {
         title: "Scenes",
-        body: "Scene chrome is isolated around the tldraw editor, so future whiteboard tools stay swappable.",
+        body: "Scene chrome is isolated around the native Bevy canvas tools (walls, lighting, shapes), so future authoring tools stay swappable.",
       },
       {
         title: "Permissions",
@@ -173,7 +173,7 @@ export default function CounterPage() {
               the next content phases.
             </p>
             <div className="flex flex-wrap items-center gap-3">
-              <Tooltip content="Preview the scene shell with Bevy and tldraw still mounted beneath the new chrome.">
+              <Tooltip content="Preview the scene shell with the Bevy canvas still mounted beneath the new chrome.">
                 <Button asChild icon="worlds">
                   <Link to="/world/demo-world/play">Open demo world</Link>
                 </Button>

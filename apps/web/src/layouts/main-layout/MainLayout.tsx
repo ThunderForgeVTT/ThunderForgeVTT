@@ -35,8 +35,8 @@ export function MainLayout({ brandHref, navItems }: MainLayoutProps) {
       <footer className="pb-8">
         <Container>
           <p className="border-t border-border pt-4 text-sm text-muted-foreground">
-            ThunderForge keeps Bevy, tldraw, and world sync aligned beneath a
-            single UI shell.
+            ThunderForge keeps Bevy and world sync aligned beneath a single UI
+            shell.
           </p>
         </Container>
       </footer>

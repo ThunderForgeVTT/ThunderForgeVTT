@@ -1,6 +1,6 @@
 # ADR-004: Fantasy UI Shell with Radix Primitives, Dicebear Identity Surfaces, and Wrapped tldraw Chrome
 
-**Status:** Partially Superseded — see [ADR-037](./20260820-037-native_canvas_authoring_supersedes_tldraw.md), which supersedes the "wrapped tldraw" decision below. The Radix/Dicebear/fantasy-shell decisions remain in force.
+**Status:** Partially Superseded — see [ADR-037](./20260820-037-native_canvas_authoring_supersedes_tldraw.md), which supersedes the "wrapped tldraw" decision below. The Radix/Dicebear/fantasy-shell decisions remain in force. The `tldraw` removal itself (T061-T063) completed 2026-08-20: `WorldWhiteboard.tsx` and the `tldraw` package dependency are gone, and `WorldLayout` no longer reserves a separate whiteboard panel — the Bevy canvas is now the sole drawing/annotation surface.
 
 **Decision Date:** 2026-05-04
 
