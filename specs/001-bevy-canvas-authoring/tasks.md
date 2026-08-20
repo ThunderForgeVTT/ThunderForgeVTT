@@ -160,10 +160,10 @@ the occlusion check).
 
 ### Frontend (React/RxDB)
 
-- [ ] T042 [P] [US3] Create `apps/web/src/db/collections/worldLightsCollection.ts` mirroring `worldTokensCollection.ts`
-- [ ] T043 [US3] Wire light create/update/delete GraphQL calls into `apps/web/src/engine/world/sync`
-- [ ] T044 [US3] Create `apps/web/src/components/canvas-tools/LightingTool/` (toolbar button + radius/intensity/color/attach-to-token property panel), GM-only rendered
-- [ ] T045 [US3] Mount `LightingTool` from `apps/web/src/pages/world/WorldPage.tsx` alongside `WallTool`/`MapImportTool`
+- [X] T042 [P] [US3] Create `apps/web/src/db/collections/worldLightsCollection.ts` mirroring `worldTokensCollection.ts`
+- [X] T043 [US3] Wire light create/update/delete GraphQL calls into `apps/web/src/engine/world/sync`
+- [X] T044 [US3] Create `apps/web/src/components/canvas-tools/LightingTool/` (toolbar button + radius/intensity/color/attach-to-token property panel), GM-only rendered
+- [X] T045 [US3] Mount `LightingTool` from `apps/web/src/pages/world/WorldPage.tsx` alongside `WallTool`/`MapImportTool`
 
 **Checkpoint**: quickstart.md Scenario 3 passes on top of Scenario 1.
 T030-T031 (model struct + Diesel table only) are the actual dependency

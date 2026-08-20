@@ -24,11 +24,28 @@ export type WorldWall = {
   doorState: DoorState;
 };
 
+// Confirmed light source state, as it exists in the world store (mirrors
+// the server's LightSource/GraphQLLightSource shape once a create/update
+// has round-tripped).
+export type WorldLight = {
+  id: string;
+  sceneId: string;
+  x: number;
+  y: number;
+  radius: number;
+  intensity: number;
+  color: string | null;
+  attachedTokenId: string | null;
+  castsShadows: boolean;
+};
+
 export type WorldState = {
   worldId: string;
   tokens: Record<string, WorldToken>;
   walls: Record<string, WorldWall>;
   selectedWallId: string | null;
+  lights: Record<string, WorldLight>;
+  selectedLightId: string | null;
 };
 
 export type SetWorldCommand = {
@@ -109,6 +126,69 @@ export type DeleteWallCommand = {
   worldId?: string;
 };
 
+// Confirmed light upsert/remove: dispatched once a light's state is known
+// (after a successful mutation response, or after a world_events NOTIFY
+// refetch). Consumed by the reducer and forwarded to the engine the same
+// way upsert_wall/remove_wall are.
+export type UpsertLightCommand = {
+  type: "upsert_light";
+  light: WorldLight;
+};
+
+export type RemoveLightCommand = {
+  type: "remove_light";
+  lightId: string;
+};
+
+export type SelectLightCommand = {
+  type: "select_light";
+  lightId: string | null;
+};
+
+export type LightFieldChanges = Partial<{
+  x: number;
+  y: number;
+  radius: number;
+  intensity: number;
+  color: string | null;
+  attachedTokenId: string | null;
+  castsShadows: boolean;
+}>;
+
+// Light *intents*: requests to create/update/delete a light source that
+// have not yet round-tripped the server. These can originate from the UI
+// (the LightingTool property panel) or from the Bevy engine (in-canvas
+// placement/editing, per the engine's apply_world_command contract). A
+// subscriber in engine/world/sync/lights.ts turns these into GraphQL
+// mutation calls and, on success, dispatches the confirmed
+// upsert_light/remove_light commands above.
+export type CreateLightCommand = {
+  type: "create_light";
+  light: {
+    x: number;
+    y: number;
+    radius: number;
+    intensity: number;
+    color: string | null;
+    attachedTokenId: string | null;
+    castsShadows: boolean;
+  };
+  worldId?: string;
+};
+
+export type UpdateLightCommand = {
+  type: "update_light";
+  lightId: string;
+  changes: LightFieldChanges;
+  worldId?: string;
+};
+
+export type DeleteLightCommand = {
+  type: "delete_light";
+  lightId: string;
+  worldId?: string;
+};
+
 export type WorldCommand =
   | SetWorldCommand
   | UpsertTokenCommand
@@ -118,7 +198,13 @@ export type WorldCommand =
   | SelectWallCommand
   | CreateWallCommand
   | UpdateWallCommand
-  | DeleteWallCommand;
+  | DeleteWallCommand
+  | UpsertLightCommand
+  | RemoveLightCommand
+  | SelectLightCommand
+  | CreateLightCommand
+  | UpdateLightCommand
+  | DeleteLightCommand;
 
 export type WorldStoreEvent = {
   command: WorldCommand;

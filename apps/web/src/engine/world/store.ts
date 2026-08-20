@@ -1,6 +1,7 @@
 import type {
   EngineCommandSource,
   WorldCommand,
+  WorldLight,
   WorldState,
   WorldStoreEvent,
   WorldStoreSubscriber,
@@ -12,6 +13,7 @@ type CreateWorldStoreOptions = {
   worldId: string;
   initialTokens?: WorldToken[];
   initialWalls?: WorldWall[];
+  initialLights?: WorldLight[];
 };
 
 export type WorldStore = {
@@ -35,6 +37,16 @@ function normalizeWalls(walls: WorldWall[]): Record<string, WorldWall> {
 
   for (const wall of walls) {
     byId[wall.id] = wall;
+  }
+
+  return byId;
+}
+
+function normalizeLights(lights: WorldLight[]): Record<string, WorldLight> {
+  const byId: Record<string, WorldLight> = {};
+
+  for (const light of lights) {
+    byId[light.id] = light;
   }
 
   return byId;
@@ -94,11 +106,40 @@ function reduceState(state: WorldState, command: WorldCommand): WorldState {
         selectedWallId: command.wallId,
       };
 
-    // create_wall/update_wall/delete_wall are intents, not confirmed
-    // state: a sync-layer subscriber (engine/world/sync/walls.ts) turns
-    // them into GraphQL mutations and dispatches upsert_wall/remove_wall
-    // once the server confirms. They pass through the store unchanged so
-    // both the sync subscriber and the Bevy bridge can observe them.
+    case "upsert_light":
+      return {
+        ...state,
+        lights: {
+          ...state.lights,
+          [command.light.id]: command.light,
+        },
+      };
+
+    case "remove_light": {
+      const nextLights = { ...state.lights };
+      delete nextLights[command.lightId];
+
+      return {
+        ...state,
+        lights: nextLights,
+        selectedLightId:
+          state.selectedLightId === command.lightId ? null : state.selectedLightId,
+      };
+    }
+
+    case "select_light":
+      return {
+        ...state,
+        selectedLightId: command.lightId,
+      };
+
+    // create_wall/update_wall/delete_wall and create_light/update_light/
+    // delete_light are intents, not confirmed state: a sync-layer
+    // subscriber (engine/world/sync/walls.ts, engine/world/sync/lights.ts)
+    // turns them into GraphQL mutations and dispatches
+    // upsert_wall/remove_wall or upsert_light/remove_light once the
+    // server confirms. They pass through the store unchanged so both the
+    // sync subscriber and the Bevy bridge can observe them.
     default:
       return state;
   }
@@ -110,6 +151,8 @@ export function createWorldStore(options: CreateWorldStoreOptions): WorldStore {
     tokens: normalizeTokens(options.initialTokens ?? []),
     walls: normalizeWalls(options.initialWalls ?? []),
     selectedWallId: null,
+    lights: normalizeLights(options.initialLights ?? []),
+    selectedLightId: null,
   };
 
   const subscribers = new Set<WorldStoreSubscriber>();

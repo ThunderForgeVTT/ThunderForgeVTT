@@ -9,9 +9,11 @@ import {
   worldInvitesSchema,
   worldMembersSchema,
   worldWallsSchema,
+  worldLightsSchema,
 } from "./schemas";
 import type { WorldInviteDoc } from "@/db/collections/worldInvitesCollection";
 import type { WorldWallDoc } from "@/db/collections/worldWallsCollection";
+import type { WorldLightDoc } from "@/db/collections/worldLightsCollection";
 
 let devPluginRegistered = false;
 let worldDbPromise: Promise<WorldDatabase> | null = null;
@@ -70,6 +72,15 @@ export type WorldCollections = {
       exec: () => Promise<Array<Record<string, unknown>>>;
     };
     upsert: (doc: WorldWallDoc) => Promise<unknown>;
+    findOne: (id: string) => {
+      exec: () => Promise<{ remove: () => Promise<unknown>; update: (changes: any) => Promise<unknown> } | null>;
+    };
+  };
+  world_lights: {
+    find: (query?: unknown) => {
+      exec: () => Promise<Array<Record<string, unknown>>>;
+    };
+    upsert: (doc: WorldLightDoc) => Promise<unknown>;
     findOne: (id: string) => {
       exec: () => Promise<{ remove: () => Promise<unknown>; update: (changes: any) => Promise<unknown> } | null>;
     };
@@ -133,6 +144,7 @@ export async function getWorldDatabase(): Promise<WorldDatabase> {
         world_invites: { schema: worldInvitesSchema },
         world_members: { schema: worldMembersSchema },
         world_walls: { schema: worldWallsSchema },
+        world_lights: { schema: worldLightsSchema },
       });
 
       return db as unknown as WorldDatabase;
