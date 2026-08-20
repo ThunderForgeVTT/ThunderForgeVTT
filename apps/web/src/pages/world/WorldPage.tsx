@@ -7,7 +7,9 @@ import { WorldWhiteboard } from "@/engine/tldraw/WorldWhiteboard";
 import { createWorldStore } from "@/engine/world/store";
 import {
   createGraphQLWorldSyncTransport,
+  loadShapesIntoStore,
   loadWallsIntoStore,
+  startShapeMutationBridge,
   startWallMutationBridge,
   startWorldSync,
 } from "@/engine/world/sync";
@@ -16,6 +18,7 @@ import { useCanvasEngine } from "@/engine/bevy/useCanvasEngine";
 import { getWorld } from "@/api/world";
 import { useAuth } from "@/hooks/useAuth";
 import { WallTool } from "@/components/canvas-tools/WallTool";
+import { ShapeTool } from "@/components/canvas-tools/ShapeTool";
 import type { WorldRecord } from "@/types/world";
 
 export const worldPageSeo: SeoConfig = {
@@ -164,6 +167,22 @@ export default function WorldPage() {
     };
   }, [sceneId, worldStore]);
 
+  useEffect(() => {
+    if (!sceneId) {
+      return;
+    }
+
+    void loadShapesIntoStore(worldStore, sceneId).catch((error) => {
+      console.error("Failed to load scene shapes:", error);
+    });
+
+    const stopBridge = startShapeMutationBridge(worldStore, sceneId);
+
+    return () => {
+      stopBridge();
+    };
+  }, [sceneId, worldStore]);
+
   const seo = useMemo<SeoConfig>(
     () => ({
       ...worldPageSeo,
@@ -223,6 +242,25 @@ export default function WorldPage() {
                   worldStore={worldStore}
                   walls={worldState.walls}
                   selectedWallId={worldState.selectedWallId}
+                />
+              </div>
+            ) : null}
+            {isSceneOwner && sceneId ? (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "1rem",
+                  right: "1rem",
+                  zIndex: 900,
+                  width: "16rem",
+                }}
+              >
+                <ShapeTool
+                  worldStore={worldStore}
+                  shapes={worldState.shapes}
+                  selectedShapeId={worldState.selectedShapeId}
+                  sceneId={sceneId}
+                  canvasContainerRef={containerRef}
                 />
               </div>
             ) : null}

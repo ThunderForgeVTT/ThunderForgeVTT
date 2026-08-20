@@ -24,11 +24,30 @@ export type WorldWall = {
   doorState: DoorState;
 };
 
+export type ShapeKind = "stroke" | "rect" | "ellipse" | "line" | "text";
+
+// Confirmed shape state, as it exists in the world store (mirrors the
+// server's Shape/GraphQLShape shape once a create/update has
+// round-tripped). `geometry` and `style` are opaque JSON blobs — the
+// engine (Bevy) interprets `geometry`'s contents per `kind`; this store
+// never inspects them.
+export type WorldShape = {
+  id: string;
+  sceneId: string;
+  kind: ShapeKind;
+  geometry: Record<string, unknown>;
+  text: string | null;
+  style: Record<string, unknown> | null;
+  visibleToPlayers: boolean;
+};
+
 export type WorldState = {
   worldId: string;
   tokens: Record<string, WorldToken>;
   walls: Record<string, WorldWall>;
   selectedWallId: string | null;
+  shapes: Record<string, WorldShape>;
+  selectedShapeId: string | null;
 };
 
 export type SetWorldCommand = {
@@ -109,6 +128,64 @@ export type DeleteWallCommand = {
   worldId?: string;
 };
 
+// Confirmed shape upsert/remove: dispatched once a shape's state is known
+// (after a successful mutation response, or after a world_events NOTIFY
+// refetch). Consumed by the reducer and forwarded to the engine the same
+// way upsert_wall/remove_wall does for walls.
+export type UpsertShapeCommand = {
+  type: "upsert_shape";
+  shape: WorldShape;
+};
+
+export type RemoveShapeCommand = {
+  type: "remove_shape";
+  shapeId: string;
+};
+
+export type SelectShapeCommand = {
+  type: "select_shape";
+  shapeId: string | null;
+};
+
+export type ShapeFieldChanges = Partial<{
+  geometry: Record<string, unknown>;
+  text: string | null;
+  style: Record<string, unknown> | null;
+  visibleToPlayers: boolean;
+}>;
+
+// Shape *intents*: requests to create/update/delete a shape that have not
+// yet round-tripped the server. These can originate from the UI (the
+// ShapeTool toolbar/style panel) or from the Bevy engine (in-canvas
+// drawing, per the engine's apply_world_command contract). A subscriber
+// in engine/world/sync/shapes.ts turns these into GraphQL mutation calls
+// and, on success, dispatches the confirmed upsert_shape/remove_shape
+// commands above.
+export type CreateShapeCommand = {
+  type: "create_shape";
+  shape: {
+    kind: ShapeKind;
+    geometry: Record<string, unknown>;
+    text?: string | null;
+    style?: Record<string, unknown> | null;
+    visibleToPlayers: boolean;
+  };
+  worldId?: string;
+};
+
+export type UpdateShapeCommand = {
+  type: "update_shape";
+  shapeId: string;
+  changes: ShapeFieldChanges;
+  worldId?: string;
+};
+
+export type DeleteShapeCommand = {
+  type: "delete_shape";
+  shapeId: string;
+  worldId?: string;
+};
+
 export type WorldCommand =
   | SetWorldCommand
   | UpsertTokenCommand
@@ -118,7 +195,13 @@ export type WorldCommand =
   | SelectWallCommand
   | CreateWallCommand
   | UpdateWallCommand
-  | DeleteWallCommand;
+  | DeleteWallCommand
+  | UpsertShapeCommand
+  | RemoveShapeCommand
+  | SelectShapeCommand
+  | CreateShapeCommand
+  | UpdateShapeCommand
+  | DeleteShapeCommand;
 
 export type WorldStoreEvent = {
   command: WorldCommand;

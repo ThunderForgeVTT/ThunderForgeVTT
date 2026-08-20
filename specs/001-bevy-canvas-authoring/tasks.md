@@ -199,10 +199,10 @@ and `WorldWhiteboard.tsx` are removed once this reaches that parity.
 
 ### Frontend (React/RxDB)
 
-- [ ] T057 [P] [US4] Create `apps/web/src/db/collections/worldShapesCollection.ts` mirroring `worldTokensCollection.ts`
-- [ ] T058 [US4] Wire shape create/update/delete GraphQL calls into `apps/web/src/engine/world/sync`
-- [ ] T059 [US4] Create `apps/web/src/components/canvas-tools/ShapeTool/` (five sub-tools + GM-only/player-visible toggle + style panel), GM-only rendered
-- [ ] T060 [US4] Mount `ShapeTool` from `apps/web/src/pages/world/WorldPage.tsx` alongside `WallTool`/`MapImportTool`/`LightingTool`
+- [X] T057 [P] [US4] Create `apps/web/src/db/collections/worldShapesCollection.ts` mirroring `worldTokensCollection.ts`
+- [X] T058 [US4] Wire shape create/update/delete GraphQL calls into `apps/web/src/engine/world/sync`
+- [X] T059 [US4] Create `apps/web/src/components/canvas-tools/ShapeTool/` (five sub-tools + GM-only/player-visible toggle + style panel), GM-only rendered
+- [X] T060 [US4] Mount `ShapeTool` from `apps/web/src/pages/world/WorldPage.tsx` alongside `WallTool`/`MapImportTool`/`LightingTool`
 
 ### tldraw removal (only after T046-T060 pass quickstart Scenario 4)
 

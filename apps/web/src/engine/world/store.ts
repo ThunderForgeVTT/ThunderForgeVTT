@@ -1,6 +1,7 @@
 import type {
   EngineCommandSource,
   WorldCommand,
+  WorldShape,
   WorldState,
   WorldStoreEvent,
   WorldStoreSubscriber,
@@ -12,6 +13,7 @@ type CreateWorldStoreOptions = {
   worldId: string;
   initialTokens?: WorldToken[];
   initialWalls?: WorldWall[];
+  initialShapes?: WorldShape[];
 };
 
 export type WorldStore = {
@@ -35,6 +37,16 @@ function normalizeWalls(walls: WorldWall[]): Record<string, WorldWall> {
 
   for (const wall of walls) {
     byId[wall.id] = wall;
+  }
+
+  return byId;
+}
+
+function normalizeShapes(shapes: WorldShape[]): Record<string, WorldShape> {
+  const byId: Record<string, WorldShape> = {};
+
+  for (const shape of shapes) {
+    byId[shape.id] = shape;
   }
 
   return byId;
@@ -94,11 +106,39 @@ function reduceState(state: WorldState, command: WorldCommand): WorldState {
         selectedWallId: command.wallId,
       };
 
-    // create_wall/update_wall/delete_wall are intents, not confirmed
-    // state: a sync-layer subscriber (engine/world/sync/walls.ts) turns
-    // them into GraphQL mutations and dispatches upsert_wall/remove_wall
-    // once the server confirms. They pass through the store unchanged so
-    // both the sync subscriber and the Bevy bridge can observe them.
+    case "upsert_shape":
+      return {
+        ...state,
+        shapes: {
+          ...state.shapes,
+          [command.shape.id]: command.shape,
+        },
+      };
+
+    case "remove_shape": {
+      const nextShapes = { ...state.shapes };
+      delete nextShapes[command.shapeId];
+
+      return {
+        ...state,
+        shapes: nextShapes,
+        selectedShapeId:
+          state.selectedShapeId === command.shapeId ? null : state.selectedShapeId,
+      };
+    }
+
+    case "select_shape":
+      return {
+        ...state,
+        selectedShapeId: command.shapeId,
+      };
+
+    // create_wall/update_wall/delete_wall (and the equivalent shape
+    // intents) are intents, not confirmed state: a sync-layer subscriber
+    // (engine/world/sync/walls.ts, engine/world/sync/shapes.ts) turns
+    // them into GraphQL mutations and dispatches upsert_*/remove_* once
+    // the server confirms. They pass through the store unchanged so both
+    // the sync subscriber and the Bevy bridge can observe them.
     default:
       return state;
   }
@@ -110,6 +150,8 @@ export function createWorldStore(options: CreateWorldStoreOptions): WorldStore {
     tokens: normalizeTokens(options.initialTokens ?? []),
     walls: normalizeWalls(options.initialWalls ?? []),
     selectedWallId: null,
+    shapes: normalizeShapes(options.initialShapes ?? []),
+    selectedShapeId: null,
   };
 
   const subscribers = new Set<WorldStoreSubscriber>();
