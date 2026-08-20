@@ -10,10 +10,13 @@
     "lint": "eslint . --ext .ts,.tsx --max-warnings=0",
     "format": "prettier --check \"{index.html,vite.config.mts,eslint.config.mjs,.prettierrc.json,src/**/*.{ts,tsx,scss},scripts/**/*.mjs}\"",
     "start:vite": "vite build --watch",
-    "dev": "vite"
+    "dev": "vite",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/vite": "^4.2.4",
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.14",

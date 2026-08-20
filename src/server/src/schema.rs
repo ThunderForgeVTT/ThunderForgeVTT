@@ -229,12 +229,12 @@ diesel::table! {
         last_name -> Nullable<Varchar>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
-        email -> Varchar,
         two_factor_enabled -> Bool,
         two_factor_secret_encrypted -> Nullable<Text>,
         two_factor_confirmed_at -> Nullable<Timestamp>,
         two_factor_admin_required -> Bool,
         is_admin -> Bool,
+        email -> Varchar,
     }
 }
 
