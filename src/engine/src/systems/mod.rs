@@ -13,6 +13,7 @@ pub mod selection;
 pub mod wall;
 pub mod lighting;
 pub mod shape;
+pub mod background;
 
 pub use core::{GameSystem, SkillDefinition, DerivedStats, SystemRegistry};
 pub use builtin::BasicSystem;
