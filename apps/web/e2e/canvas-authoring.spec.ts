@@ -73,13 +73,15 @@ async function importMap(
   page: Page,
   filePath: string,
   expectedSummary: string,
-): Promise<void> {
+): Promise<number> {
   const tool = page.getByTestId("map-import-tool");
+  const startedAt = Date.now();
   await tool.locator('input[type="file"]').setInputFiles(filePath);
 
   const success = page.getByTestId("map-import-success");
-  await expect(success).toBeVisible({ timeout: 20_000 });
+  await expect(success).toBeVisible({ timeout: 30_000 });
   await expect(success).toContainText(expectedSummary);
+  return Date.now() - startedAt;
 }
 
 async function switchToScene(page: Page, name: string): Promise<void> {
@@ -104,7 +106,16 @@ test.describe("Native canvas authoring: map import and scene switching", () => {
     // --- Scene One: import the rich demo map ---
     await createScene(page, "Scene One");
     await expect(page.getByTestId("map-import-tool")).toBeVisible();
-    await importMap(page, DEMO_MAP, "31 walls, 2 doors, 12 lights");
+    // SC-007: importing demo.dd2vtt (background art + 8 wall polygons + 2
+    // doors + 12 lights) end-to-end through the real UI must complete in
+    // under 30 seconds.
+    const importDurationMs = await importMap(
+      page,
+      DEMO_MAP,
+      "31 walls, 2 doors, 12 lights",
+    );
+    expect(importDurationMs).toBeLessThan(30_000);
+    console.log(`SC-007: demo.dd2vtt import took ${importDurationMs}ms`);
 
     // --- Scene Two: import the simpler chamber map ---
     await createScene(page, "Scene Two");
