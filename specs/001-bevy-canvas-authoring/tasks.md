@@ -114,11 +114,11 @@ see Dependencies).
 
 ### Backend (Rust)
 
-- [ ] T023 [P] [US2] Write the UVTT (format 0.3) JSON parser (deserialize `resolution`/`line_of_sight`/`objects_line_of_sight`/`portals`/`environment`/`lights`/`image`; reject unsupported `format` values; skip/report degenerate `line_of_sight` polygons with <2 points) as a standalone module `src/server/src/map_import.rs`, unit-tested directly against both `examples/maps/*.dd2vtt` fixtures
-- [ ] T024 [US2] Implement coordinate scaling (research.md §8: `scene_px = grid_units * target_scene.grid_size`) and the polygon→wall-segment / portal→door-wall / light→LightSource conversion functions in `src/server/src/map_import.rs` (light conversion depends on T030-T031's `NewLightSource` struct/table existing)
-- [ ] T025 [US2] Implement background-image decode + save under `state.directories.asset_directory` (research.md §9), writing the relative path, in `src/server/src/map_import.rs`
-- [ ] T026 [US2] Add the `POST /api/scenes/{scene_id}/import/uvtt` Axum multipart handler in `src/server/src/map_import.rs` per contracts/graphql.md: scene-ownership check, request size cap, parse-and-validate-before-write, single DB transaction wrapping T024/T025's writes plus bulk `Wall`/`LightSource` inserts, response counts; register the route in `src/server/src/serve/mod.rs`
-- [ ] T027 [US2] Add NOTIFY emission for the import transaction (one event for the whole batch, per contracts/graphql.md), reusing T006's pattern
+- [X] T023 [P] [US2] Write the UVTT (format 0.3) JSON parser (deserialize `resolution`/`line_of_sight`/`objects_line_of_sight`/`portals`/`environment`/`lights`/`image`; reject unsupported `format` values; skip/report degenerate `line_of_sight` polygons with <2 points) as a standalone module `src/server/src/map_import.rs`, unit-tested directly against both `examples/maps/*.dd2vtt` fixtures
+- [X] T024 [US2] Implement coordinate scaling (research.md §8: `scene_px = grid_units * target_scene.grid_size`) and the polygon→wall-segment / portal→door-wall / light→LightSource conversion functions in `src/server/src/map_import.rs` (light conversion depends on T030-T031's `NewLightSource` struct/table existing)
+- [X] T025 [US2] Implement background-image decode + save under `state.directories.asset_directory` (research.md §9), writing the relative path, in `src/server/src/map_import.rs`
+- [X] T026 [US2] Add the `POST /api/scenes/{scene_id}/import/uvtt` Axum multipart handler in `src/server/src/map_import.rs` per contracts/graphql.md: scene-ownership check, request size cap, parse-and-validate-before-write, single DB transaction wrapping T024/T025's writes plus bulk `Wall`/`LightSource` inserts, response counts; register the route in `src/server/src/serve/mod.rs`
+- [X] T027 [US2] Add NOTIFY emission for the import transaction (one event for the whole batch, per contracts/graphql.md), reusing T006's pattern
 
 ### Frontend (React)
 
