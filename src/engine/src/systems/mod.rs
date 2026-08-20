@@ -10,6 +10,7 @@ pub mod sync;
 pub mod optimistic;
 pub mod token_loader;
 pub mod selection;
+pub mod wall;
 
 pub use core::{GameSystem, SkillDefinition, DerivedStats, SystemRegistry};
 pub use builtin::BasicSystem;
