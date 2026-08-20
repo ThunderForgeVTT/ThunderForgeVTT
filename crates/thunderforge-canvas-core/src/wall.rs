@@ -414,6 +414,55 @@ mod tests {
     }
 
     #[test]
+    fn is_visible_light_occlusion_combined_wall_and_door_scenario() {
+        // T065: a combined light+wall+door geometry scenario. `is_visible`
+        // is shared verbatim between vision occlusion (systems/wall.rs) and
+        // light occlusion (systems/lighting.rs's `apply_light_illumination`
+        // calls it as `is_visible(light_position, target, &wall_set)`), so
+        // this framing uses `observer` as a light source's position and
+        // `target` as an illuminated point, alongside an irrelevant
+        // non-blocking wall and an irrelevant open door elsewhere in the
+        // scene, then flips the blocking wall's door state on the *same*
+        // `WallSet` (rather than two separate fixtures, unlike the existing
+        // `is_visible_true/false_when_blocking_wall_is_open/closed_door`
+        // tests above) to prove a door opening dynamically restores light
+        // through a previously-blocked path.
+        let light_position = Vec2::new(0.0, 0.0);
+        let illuminated_point = Vec2::new(100.0, 0.0);
+
+        let mut walls = WallSet::default();
+        // Directly between the light and the point, closed: should block.
+        let mut blocking_door = wall("door-1", 50.0, -10.0, 50.0, 10.0);
+        blocking_door.door_state = DoorState::Closed;
+        walls.upsert(blocking_door);
+        // Off to the side: irrelevant to this light/target pair, blocks
+        // vision in general but doesn't cross this particular segment.
+        walls.upsert(wall("w-decoy", 50.0, 20.0, 50.0, 40.0));
+        // Another open door elsewhere: also irrelevant, present to prove
+        // the check isn't accidentally short-circuiting on "any door".
+        let mut decoy_open_door = wall("door-2", 20.0, 20.0, 20.0, 40.0);
+        decoy_open_door.door_state = DoorState::Open;
+        walls.upsert(decoy_open_door);
+
+        assert!(
+            !is_visible(light_position, illuminated_point, &walls),
+            "closed door directly between light and target should block illumination"
+        );
+
+        // Same WallSet, same wall id: open the door and re-check. This is
+        // the "door opens" transition a live session would produce via
+        // `handle_wall_keyboard_toggles`'s `O` keybind + `WallSet::upsert`.
+        let mut reopened = walls.get("door-1").cloned().unwrap();
+        reopened.door_state = DoorState::Open;
+        walls.upsert(reopened);
+
+        assert!(
+            is_visible(light_position, illuminated_point, &walls),
+            "opening the same door should restore illumination through it"
+        );
+    }
+
+    #[test]
     fn upsert_inserts_then_updates_by_id() {
         let mut walls = WallSet::default();
         walls.upsert(wall("w1", 0.0, 0.0, 1.0, 1.0));

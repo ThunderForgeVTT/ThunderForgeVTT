@@ -641,4 +641,119 @@ mod tests {
         // `thunderforge_canvas_core::wall`).
         assert_eq!(DoorState::default(), DoorState::None);
     }
+
+    // T065: `apply_light_illumination`'s door-state-aware occlusion itself
+    // just calls `thunderforge_canvas_core::wall::is_visible`, already
+    // exhaustively covered (open/closed door, combined scenarios) in that
+    // crate's own tests. What's untested anywhere is the branch *before*
+    // that call: `if !light.casts_shadows { return true; }` — a light with
+    // `casts_shadows == false` is defined (FR-027) to illuminate everything
+    // in radius regardless of walls, short-circuiting `is_visible` entirely.
+    // These drive the real Bevy system end to end (not just the pure
+    // geometry) to prove that short-circuit actually takes effect. Per this
+    // crate's module doc (see `resources/wall.rs`), tests here only
+    // compile-check under `cargo check --target wasm32-unknown-unknown
+    // --tests`, they don't execute in this environment — the equivalent
+    // pure-geometry coverage that DOES execute lives in
+    // `thunderforge_canvas_core::wall`'s tests.
+    mod apply_light_illumination_tests {
+        use super::*;
+        use crate::resources::wall::WallSet as EngineWallSet;
+        use crate::resources::lighting::LightSet as EngineLightSet;
+        use crate::TokenIdentity;
+        use thunderforge_canvas_core::wall::{DoorState as CoreDoorState, Wall as CoreWall};
+
+        fn app_with_blocking_wall_and_token(token_pos: Vec2) -> App {
+            let mut app = App::new();
+            app.add_plugins(MinimalPlugins);
+
+            let mut wall_set = EngineWallSet::default();
+            wall_set.upsert(CoreWall {
+                id: "w1".to_string(),
+                x1: 50.0,
+                y1: -10.0,
+                x2: 50.0,
+                y2: 10.0,
+                blocks_vision: true,
+                blocks_movement: false,
+                door_state: CoreDoorState::Closed,
+            });
+            app.insert_resource(wall_set);
+            app.init_resource::<EngineLightSet>();
+
+            app.world_mut().spawn((
+                Transform::from_translation(token_pos.extend(0.0)),
+                TokenIdentity("token-1".to_string()),
+                Visibility::Inherited,
+            ));
+
+            app.add_systems(Update, apply_light_illumination);
+            app
+        }
+
+        fn token_visibility(app: &mut App) -> Visibility {
+            let mut query = app.world_mut().query::<(&TokenIdentity, &Visibility)>();
+            let (_, visibility) = query.iter(app.world()).next().unwrap();
+            *visibility
+        }
+
+        #[test]
+        fn shadow_casting_light_is_occluded_by_closed_wall() {
+            // Light and token on opposite sides of a closed, vision-blocking
+            // wall: the light casts shadows, so `is_visible` should apply
+            // and the token should end up unlit.
+            let target = Vec2::new(100.0, 0.0);
+            let mut app = app_with_blocking_wall_and_token(target);
+
+            let mut light_set = app.world_mut().resource_mut::<EngineLightSet>();
+            light_set.0.upsert(LightSource {
+                id: "l1".to_string(),
+                x: 0.0,
+                y: 0.0,
+                radius: 500.0,
+                intensity: 1.0,
+                color: None,
+                attached_token_id: None,
+                casts_shadows: true,
+            });
+
+            app.update();
+
+            assert_eq!(
+                token_visibility(&mut app),
+                UNLIT_VISIBILITY,
+                "a shadow-casting light blocked by a closed wall must not light the token"
+            );
+        }
+
+        #[test]
+        fn non_shadow_casting_light_ignores_closed_wall() {
+            // Same geometry as above (light and token split by the same
+            // closed wall), but `casts_shadows: false` — FR-027 says this
+            // light illuminates anything within radius unconditionally,
+            // short-circuiting the `is_visible` occlusion check entirely.
+            let target = Vec2::new(100.0, 0.0);
+            let mut app = app_with_blocking_wall_and_token(target);
+
+            let mut light_set = app.world_mut().resource_mut::<EngineLightSet>();
+            light_set.0.upsert(LightSource {
+                id: "l1".to_string(),
+                x: 0.0,
+                y: 0.0,
+                radius: 500.0,
+                intensity: 1.0,
+                color: None,
+                attached_token_id: None,
+                casts_shadows: false,
+            });
+
+            app.update();
+
+            assert_eq!(
+                token_visibility(&mut app),
+                Visibility::Inherited,
+                "a non-shadow-casting light must light the token even behind a closed wall"
+            );
+        }
+    }
 }
