@@ -9,6 +9,7 @@ license = "BSD 3-Clause License"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+thunderforge_canvas_core = { path = "../../crates/thunderforge-canvas-core" }
 bevy = { version = "0.18.1", default-features = false, features = [
   "bevy_asset",
   "bevy_core_pipeline",

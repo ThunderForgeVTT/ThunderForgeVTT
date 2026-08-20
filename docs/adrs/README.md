@@ -45,6 +45,7 @@ This directory contains architecture decisions for ThunderForgeVTT, captured usi
 | [20260505-035](./20260505-035-player_view_architecture.md)                      | Accepted | Player View Architecture                                                                        |
 | [20260505-036](./20260505-036-extensible_system_agnostic_actor_data_architecture.md) | Accepted | Extensible System-Agnostic Actor Data Architecture (Type-Indexed JSONB)                      |
 | [20260820-037](./20260820-037-native_canvas_authoring_supersedes_tldraw.md)     | Accepted | Native Bevy Canvas Authoring Supersedes Wrapped tldraw                                         |
+| [20260820-038](./20260820-038-canvas_core_crate_split_for_native_testability.md) | Accepted | Split Canvas-Authoring Logic into a Native-Testable Core Crate                                |
 
 > **Note (2026-08-19):** ADRs 020–024 originally collided with an unrelated "pack system" batch that reused the same day-020 through day-024 numbers. The world-domain ADRs (020–024 above) were committed first and are documented here; the colliding pack-system ADRs were renumbered to 026–030. See `docs/SYSTEM_HOOKS_API_GUIDE.md` and ADR-036's "Related Decisions" for the corrected references.
 

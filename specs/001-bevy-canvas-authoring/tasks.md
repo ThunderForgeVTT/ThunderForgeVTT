@@ -151,7 +151,7 @@ the occlusion check).
 
 ### Engine (Rust/Bevy, wasm32 target)
 
-- [ ] T036 [P] [US3] Create `LightSet` resource (incl. a bounded per-session undo stack, research.md §4) in `src/engine/src/resources/lighting.rs`, re-exported via `resources/mod.rs`
+- [ ] T036 [P] [US3] Per ADR-038: put the pure `LightSet` data (segments/entries + a bounded per-session undo stack, research.md §4) and any geometry (occlusion sampling helpers) in `crates/thunderforge-canvas-core/src/lighting.rs` with its own `#[cfg(test)] mod tests` (mirror `crates/thunderforge-canvas-core/src/wall.rs`'s `WallSet`/`is_visible` pattern — no Bevy/wasm-bindgen dependency, only `glam`, so tests actually execute via `cargo test -p thunderforge_canvas_core`); then create a thin `LightSet` `Resource` newtype wrapping it (`Deref`/`DerefMut`) in `src/engine/src/resources/lighting.rs`, re-exported via `resources/mod.rs` — mirror `src/engine/src/resources/wall.rs`
 - [ ] T037 [P] [US3] Create light input systems (place, drag-reposition, resize radius/intensity, select+delete, attach-to-token) in `src/engine/src/systems/lighting.rs`, re-exported via `systems/mod.rs`
 - [ ] T038 [US3] Implement occlusion-aware illumination sampling: for each `LightSet` entry with `casts_shadows = true`, apply the shadow-casting result from T013 against `WallSet` (treating open doors as non-blocking) to determine the lit region; resolve token-attached light position from the attached entity's live `Transform` each frame; lights with `casts_shadows = false` skip occlusion entirely
 - [ ] T039 [US3] Implement light undo (FR-012): re-issue the inverse mutation (e.g. undo of "resize light" re-issues `updateLightSource` with the prior radius/intensity) through the same GraphQL path as a normal edit, wired to `LightSet`'s undo stack from T036 — same approach as T014 for walls
@@ -191,7 +191,7 @@ and `WorldWhiteboard.tsx` are removed once this reaches that parity.
 
 ### Engine (Rust/Bevy, wasm32 target)
 
-- [ ] T052 [P] [US4] Create `ShapeSet` resource + bounded per-session undo stack (research.md §4) in `src/engine/src/resources/shape.rs`, re-exported via `resources/mod.rs`
+- [ ] T052 [P] [US4] Per ADR-038: put the pure `ShapeSet` data + bounded per-session undo stack (research.md §4) in `crates/thunderforge-canvas-core/src/shape.rs` with its own `#[cfg(test)] mod tests` (mirror `crates/thunderforge-canvas-core/src/wall.rs`'s pattern — no Bevy/wasm-bindgen dependency, only `glam`); then create a thin `ShapeSet` `Resource` newtype wrapping it (`Deref`/`DerefMut`) in `src/engine/src/resources/shape.rs`, re-exported via `resources/mod.rs` — mirror `src/engine/src/resources/wall.rs`
 - [ ] T053 [P] [US4] Create draw/edit input systems for all five shape kinds (freehand stroke, rectangle, ellipse, line/arrow, text) — create, move, resize, restyle, select+delete — in `src/engine/src/systems/shape.rs`, re-exported via `systems/mod.rs`
 - [ ] T054 [US4] Implement shape undo: re-issue the inverse mutation through the same GraphQL path as a normal edit (research.md §4), wired to the undo stack from T052 — same approach as T014/T039
 - [ ] T055 [US4] Implement visibility filtering so GM-only shapes never render for non-GM sessions (defense in depth on top of T050's server-side filter)

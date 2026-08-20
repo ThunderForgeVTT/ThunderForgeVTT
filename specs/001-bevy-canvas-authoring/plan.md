@@ -109,27 +109,47 @@ specs/001-bevy-canvas-authoring/
 
 ### Source Code (repository root)
 
+**Native-testable core (ADR-038)**: pure data/geometry for each
+capability lives in `crates/thunderforge-canvas-core` (package
+`thunderforge_canvas_core`) — **no Bevy/wasm-bindgen dependency**, only
+`glam` (identical type to `bevy::prelude::Vec2`, zero-conversion). This
+crate's tests run for real via native `cargo test`, unlike
+`thunderforge_engine`'s wasm32-only tests, which only compile-check in
+this environment. Built for walls already (`crates/thunderforge-canvas-core/src/wall.rs`,
+18 passing tests); lighting and shapes follow the same pattern:
+
+```text
+crates/thunderforge-canvas-core/src/
+├── lib.rs
+├── wall.rs      # DONE — Wall, DoorState, WallEdit, WallSet, is_visible + tests
+├── lighting.rs  # TODO — LightSource data + occlusion-aware illumination sampling + tests
+└── shape.rs     # TODO — Shape data, undo-edit types + tests
+```
+
 ```text
 src/engine/src/
 ├── plugins/
-│   ├── wall.rs            # NEW — WallPlugin: authoring input, door toggle, occlusion trigger
+│   ├── wall.rs            # DONE — WallPlugin: authoring input, door toggle, occlusion trigger
 │   ├── map_import.rs       # NEW — MapImportPlugin: consumes parsed import batch, spawns
 │   │                        #       wall/light/background entities
 │   ├── lighting.rs         # NEW — LightingPlugin: light placement, occlusion-aware illumination
 │   ├── shape.rs             # NEW — ShapePlugin: freehand/rect/ellipse/line/text draw+edit
-│   └── canvas_layer.rs      # NEW — CanvasLayerPlugin: shared z-order + GM/player visibility
+│   └── canvas_layer.rs      # DONE — CanvasLayerPlugin: shared z-order + GM/player visibility
 │                            #       resource consumed by all of the above (FR-016)
 ├── systems/
-│   ├── wall.rs             # NEW — wall create/move/delete/door-toggle, vision recompute
+│   ├── wall.rs             # DONE — wall create/move/delete/door-toggle, vision recompute
 │   ├── map_import.rs        # NEW — apply an already-parsed import batch to WallSet/LightSet
 │   ├── lighting.rs          # NEW — light create/move/resize systems, occlusion sampling
 │   ├── shape.rs              # NEW — shape draw/move/resize/restyle, undo stack, visibility
-│   └── canvas_layer.rs       # NEW — layer ordering/visibility application
+│   └── canvas_layer.rs       # DONE — layer ordering/visibility application
 ├── resources/
-│   ├── wall.rs              # NEW — WallSet resource (segments + spatial index, door state)
-│   ├── lighting.rs           # NEW — LightSet resource
-│   ├── shape.rs               # NEW — ShapeSet resource, per-session undo stack
-│   └── canvas_layer.rs        # NEW — CanvasLayers resource (ordered layer list + visibility)
+│   ├── wall.rs              # DONE — thin Bevy `Resource` newtype over
+│   │                        #        `thunderforge_canvas_core::wall::WallSet` (Deref/DerefMut,
+│   │                        #        no logic of its own — see ADR-038)
+│   ├── lighting.rs           # NEW — same pattern: thin Resource newtype over
+│   │                          #       `thunderforge_canvas_core::lighting::LightSet`
+│   ├── shape.rs               # NEW — same pattern over `thunderforge_canvas_core::shape::ShapeSet`
+│   └── canvas_layer.rs        # DONE — CanvasLayers resource (ordered layer list + visibility)
 └── lib.rs                   # MODIFIED — register the five plugins (additive, no reordering
                               #             of existing plugins per Principle II)
 

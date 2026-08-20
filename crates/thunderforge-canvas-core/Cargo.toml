@@ -1,0 +1,20 @@
+[package]
+name = "thunderforge_canvas_core"
+version = "0.1.0"
+edition = "2024"
+repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
+license = "BSD 3-Clause License"
+
+[lib]
+crate-type = ["rlib"]
+
+# Deliberately no `bevy`/`wasm-bindgen` dependency (Constitution Principle
+# II: modular, independently testable). `glam` is Bevy's own math crate —
+# `bevy::prelude::Vec2` is a re-export of `glam::Vec2`, the identical type,
+# so engine code can pass Bevy `Vec2` values into this crate's functions
+# with zero conversion, as long as the glam version here matches the one
+# the workspace's `bevy` pulls in (currently 0.30.x).
+[dependencies]
+glam = "0.30"
+
+[dev-dependencies]
