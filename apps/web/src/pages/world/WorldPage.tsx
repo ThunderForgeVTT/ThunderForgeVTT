@@ -345,9 +345,14 @@ export default function WorldPage() {
                 }}
               >
                 <SceneSwitcher
+                  worldId={id}
                   scenes={scenes}
                   sceneId={sceneId}
                   onSceneChange={setSelectedSceneId}
+                  onSceneCreated={(scene) =>
+                    setScenes((current) => [...current, scene])
+                  }
+                  canCreateScene={isSceneOwner}
                 />
               </div>
             ) : null}

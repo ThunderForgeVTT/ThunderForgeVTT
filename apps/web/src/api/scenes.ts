@@ -83,3 +83,35 @@ export function getScenes(worldId: string): Promise<SceneRecord[]> {
     { worldId },
   ).then((data) => data.scenes);
 }
+
+export type CreateSceneInput = {
+  worldId: string;
+  name: string;
+  description?: string;
+  gridSize?: number;
+  gridType?: string;
+  width?: number;
+  height?: number;
+};
+
+type CreateSceneMutation = {
+  createScene: SceneRecord;
+};
+
+/**
+ * Create a new scene in a world (scene owner = the caller, enforced
+ * server-side). Used by the SceneSwitcher's "New scene" flow — the
+ * primary way a GM gets a second map to switch to.
+ */
+export function createScene(input: CreateSceneInput): Promise<SceneRecord> {
+  return postGraphQL<CreateSceneMutation>(
+    `
+      mutation CreateScene($input: GraphQLCreateSceneInput!) {
+        createScene(input: $input) {
+          ${SCENE_FIELDS}
+        }
+      }
+    `,
+    { input },
+  ).then((data) => data.createScene);
+}
