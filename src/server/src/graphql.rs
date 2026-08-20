@@ -59,6 +59,7 @@ pub use input_types::{
     GraphQLUpdateFogMaskInput, GraphQLGenerateInviteCodeInput, GraphQLJoinWorldInput,
     GraphQLUpdateMemberRoleInput, GraphQLWorldInvite, GraphQLWorldMembership,
     GraphQLCreateWallInput, GraphQLUpdateWallInput, GraphQLDoorState,
+    GraphQLCreateLightSourceInput, GraphQLUpdateLightSourceInput,
 };
 
 // Phase 4.9.Z Step 4a: Helper functions extracted to separate module
@@ -83,6 +84,10 @@ pub use mutations_invites::{InviteMutation, WorldInvitePayload, WorldMembershipP
 // Phase 6: Wall mutations (vision-blocking scene geometry)
 pub mod mutations_walls;
 pub use mutations_walls::WallMutation;
+
+// Native canvas authoring: light source mutations
+pub mod mutations_lighting;
+pub use mutations_lighting::LightSourceMutation;
 
 
 
@@ -261,6 +266,45 @@ impl From<crate::models::Wall> for GraphQLWall {
             updated_by: wall.updated_by,
             created_at: wall.created_at,
             updated_at: wall.updated_at,
+        }
+    }
+}
+
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLLightSource {
+    light_id: uuid::Uuid,
+    scene_id: uuid::Uuid,
+    x: f64,
+    y: f64,
+    radius: f64,
+    intensity: f64,
+    color: Option<String>,
+    attached_token_id: Option<uuid::Uuid>,
+    casts_shadows: bool,
+    metadata: Option<Json<serde_json::Value>>,
+    created_by: uuid::Uuid,
+    updated_by: uuid::Uuid,
+    created_at: chrono::NaiveDateTime,
+    updated_at: chrono::NaiveDateTime,
+}
+
+impl From<crate::models::LightSource> for GraphQLLightSource {
+    fn from(light: crate::models::LightSource) -> Self {
+        Self {
+            light_id: light.light_id,
+            scene_id: light.scene_id,
+            x: light.x,
+            y: light.y,
+            radius: light.radius,
+            intensity: light.intensity,
+            color: light.color,
+            attached_token_id: light.attached_token_id,
+            casts_shadows: light.casts_shadows,
+            metadata: light.metadata.map(Json),
+            created_by: light.created_by,
+            updated_by: light.updated_by,
+            created_at: light.created_at,
+            updated_at: light.updated_at,
         }
     }
 }
@@ -1645,6 +1689,7 @@ pub struct MutationRoot(
     CollaboratorMutation,
     InviteMutation,
     WallMutation,
+    LightSourceMutation,
 );
 
 pub type AppSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;
