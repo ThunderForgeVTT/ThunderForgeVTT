@@ -7,7 +7,9 @@ import { WorldWhiteboard } from "@/engine/tldraw/WorldWhiteboard";
 import { createWorldStore } from "@/engine/world/store";
 import {
   createGraphQLWorldSyncTransport,
+  loadLightsIntoStore,
   loadWallsIntoStore,
+  startLightMutationBridge,
   startWallMutationBridge,
   startWorldSync,
 } from "@/engine/world/sync";
@@ -16,6 +18,7 @@ import { useCanvasEngine } from "@/engine/bevy/useCanvasEngine";
 import { getWorld } from "@/api/world";
 import { useAuth } from "@/hooks/useAuth";
 import { WallTool } from "@/components/canvas-tools/WallTool";
+import { LightingTool } from "@/components/canvas-tools/LightingTool";
 import type { WorldRecord } from "@/types/world";
 
 export const worldPageSeo: SeoConfig = {
@@ -164,6 +167,22 @@ export default function WorldPage() {
     };
   }, [sceneId, worldStore]);
 
+  useEffect(() => {
+    if (!sceneId) {
+      return;
+    }
+
+    void loadLightsIntoStore(worldStore, sceneId).catch((error) => {
+      console.error("Failed to load scene lights:", error);
+    });
+
+    const stopBridge = startLightMutationBridge(worldStore, sceneId);
+
+    return () => {
+      stopBridge();
+    };
+  }, [sceneId, worldStore]);
+
   const seo = useMemo<SeoConfig>(
     () => ({
       ...worldPageSeo,
@@ -223,6 +242,12 @@ export default function WorldPage() {
                   worldStore={worldStore}
                   walls={worldState.walls}
                   selectedWallId={worldState.selectedWallId}
+                />
+                <LightingTool
+                  worldStore={worldStore}
+                  lights={worldState.lights}
+                  selectedLightId={worldState.selectedLightId}
+                  tokens={worldState.tokens}
                 />
               </div>
             ) : null}

@@ -24,6 +24,12 @@ export {
   loadWallsIntoStore,
   startWallMutationBridge,
 } from "./walls";
+export {
+  applyLightWorldEvent,
+  startLightEventSync,
+  loadLightsIntoStore,
+  startLightMutationBridge,
+} from "./lights";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;

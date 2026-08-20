@@ -174,3 +174,7 @@ export type { WorldMemberDoc } from "@/db/collections/worldMembersCollection";
 // Native canvas authoring (specs/001-bevy-canvas-authoring): walls (T019)
 export { worldWallsSchema } from "@/db/collections/worldWallsCollection";
 export type { WorldWallDoc, WallDoorState } from "@/db/collections/worldWallsCollection";
+
+// Native canvas authoring (specs/001-bevy-canvas-authoring): light sources (T042)
+export { worldLightsSchema } from "@/db/collections/worldLightsCollection";
+export type { WorldLightDoc } from "@/db/collections/worldLightsCollection";
