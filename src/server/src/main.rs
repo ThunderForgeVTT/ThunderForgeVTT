@@ -8,6 +8,7 @@ mod config;
 mod db_types;
 mod errors;
 mod graphql;
+mod map_import;
 mod models;
 mod network;
 mod pubsub;
@@ -213,6 +214,10 @@ async fn main() {
         app_state.clone(),
         auth_middleware::require_authenticated_user,
     ));
+    let map_import_router = map_import::router().route_layer(from_fn_with_state(
+        app_state.clone(),
+        auth_middleware::require_authenticated_user,
+    ));
 
     let graphql_router = Router::new()
         .route("/graphql", get(graphql_playground).post(graphql_handler))
@@ -229,7 +234,8 @@ async fn main() {
         .merge(graphql_router)
         .merge(auth::router())
         .merge(user_router)
-        .merge(world_router);
+        .merge(world_router)
+        .merge(map_import_router);
 
     let systems_admin_router = systems::admin_router().route_layer(from_fn_with_state(
         app_state.clone(),
