@@ -40,6 +40,15 @@ const PNG_MAGIC: [u8; 8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
 
 // ---------------------------------------------------------------------
 // T023: UVTT JSON shape + parser
+//
+// These structs deliberately mirror the full documented UVTT shape
+// (examples/maps/README.md), including fields not yet consumed by T024's
+// conversion logic (`map_origin`, `resolution`/`environment` as wholes,
+// a portal's `position`/`rotation`/`freestanding`) — kept for parser
+// correctness/round-tripping and as the natural place to add
+// ambient-light or portal-orientation handling later, rather than
+// silently dropping fields the source format defines. `#[allow(dead_code)]`
+// documents that gap instead of hiding it behind an `_`-prefixed name.
 // ---------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -48,7 +57,10 @@ pub struct UvttPoint {
     pub y: f64,
 }
 
+/// Parsed for shape/round-trip fidelity; not read downstream (see
+/// `UvttFile::resolution`'s doc comment for why).
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct UvttResolution {
     #[serde(default)]
     pub map_origin: Option<UvttPoint>,
@@ -59,18 +71,22 @@ pub struct UvttResolution {
 #[derive(Debug, Deserialize)]
 pub struct UvttPortal {
     #[serde(default)]
+    #[allow(dead_code)]
     pub position: Option<UvttPoint>,
     /// Expected to hold exactly two points (the door's endpoints).
     pub bounds: Vec<UvttPoint>,
     #[serde(default)]
+    #[allow(dead_code)]
     pub rotation: f64,
     #[serde(default)]
     pub closed: bool,
     #[serde(default)]
+    #[allow(dead_code)]
     pub freestanding: bool,
 }
 
 #[derive(Debug, Default, Deserialize)]
+#[allow(dead_code)] // not yet wired to a scene-level ambient-light concept
 pub struct UvttEnvironment {
     #[serde(default)]
     pub baked_lighting: bool,
@@ -96,6 +112,11 @@ pub struct UvttLight {
 #[derive(Debug, Deserialize)]
 pub struct UvttFile {
     pub format: f64,
+    /// Not read by T024's conversion math: `grid_units_to_scene_px` takes
+    /// the *target* scene's grid_size directly, so the source's own
+    /// `pixels_per_grid` cancels out per research.md §8 and is never
+    /// needed here.
+    #[allow(dead_code)]
     pub resolution: UvttResolution,
     #[serde(default)]
     pub line_of_sight: Vec<Vec<UvttPoint>>,
@@ -103,7 +124,9 @@ pub struct UvttFile {
     pub objects_line_of_sight: Vec<Vec<UvttPoint>>,
     #[serde(default)]
     pub portals: Vec<UvttPortal>,
+    /// Parsed but not yet wired to a scene-level ambient-light concept.
     #[serde(default)]
+    #[allow(dead_code)]
     pub environment: UvttEnvironment,
     #[serde(default)]
     pub lights: Vec<UvttLight>,
@@ -504,6 +527,7 @@ async fn import_uvtt(
         "doorsCreated": doors_created,
         "lightsCreated": lights_created,
         "backgroundImageSet": true,
+        "skippedDegeneratePolygons": parsed.skipped_degenerate_polygons,
     })))
 }
 

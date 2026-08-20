@@ -221,7 +221,7 @@ references anywhere in the codebase (SC-006).
 - [ ] T065 [P] Add an occlusion unit test (light + wall/door geometry → expected lit/unlit regions, including the open-door-does-not-occlude case) near the systems added in T013/T038
 - [ ] T066 [P] Add scene-ownership rejection tests for all mutations (T033, T049) and the import endpoint (T026) mirroring existing `mutations_walls.rs` test coverage expectations
 - [ ] T067 [P] Add Playwright e2e coverage for quickstart.md Scenario 1 (walls), Scenario 2 (import), and Scenario 4 (shapes) in the existing e2e harness
-- [ ] T068 Run `cargo check -p thunderforge_engine --target wasm32-unknown-unknown` and `cargo check -p dnd5e-server` and resolve any new warnings introduced by this feature (Constitution Principle V)
+- [X] T068 Run `cargo check -p thunderforge_engine --target wasm32-unknown-unknown` and `cargo check -p dnd5e-server` and resolve any new warnings introduced by this feature (Constitution Principle V)
 - [ ] T069 Execute quickstart.md Scenario 5 (authorization boundary) and Scenario 6 (empty-scene regression) manually before marking the feature done
 - [ ] T070 Verify SC-007: time a full import of `examples/maps/demo.dd2vtt` (quickstart.md Scenario 2, steps 2-6) end-to-end and confirm it completes in under 30 seconds; record the measurement in the PR/commit description
 
