@@ -6,6 +6,7 @@ pub mod selection;
 pub mod system_registration;
 pub mod canvas_layer;
 pub mod wall;
+pub mod shape;
 
 pub use scene::ScenePlugin;
 pub use grid::GridPlugin;
@@ -15,3 +16,4 @@ pub use selection::SelectionPlugin;
 pub use system_registration::SystemRegistrationPlugin;
 pub use canvas_layer::CanvasLayerPlugin;
 pub use wall::WallPlugin;
+pub use shape::ShapePlugin;
