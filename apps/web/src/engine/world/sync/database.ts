@@ -11,11 +11,13 @@ import {
   worldWallsSchema,
   worldLightsSchema,
   worldShapesSchema,
+  worldSceneTokensSchema,
 } from "./schemas";
 import type { WorldInviteDoc } from "@/db/collections/worldInvitesCollection";
 import type { WorldWallDoc } from "@/db/collections/worldWallsCollection";
 import type { WorldLightDoc } from "@/db/collections/worldLightsCollection";
 import type { WorldShapeDoc } from "@/db/collections/worldShapesCollection";
+import type { WorldSceneTokenDoc } from "@/db/collections/worldTokensSceneCollection";
 
 let devPluginRegistered = false;
 let worldDbPromise: Promise<WorldDatabase> | null = null;
@@ -96,6 +98,15 @@ export type WorldCollections = {
       exec: () => Promise<{ remove: () => Promise<unknown>; update: (changes: any) => Promise<unknown> } | null>;
     };
   };
+  world_scene_tokens: {
+    find: (query?: unknown) => {
+      exec: () => Promise<Array<Record<string, unknown>>>;
+    };
+    upsert: (doc: WorldSceneTokenDoc) => Promise<unknown>;
+    findOne: (id: string) => {
+      exec: () => Promise<{ remove: () => Promise<unknown>; update: (changes: any) => Promise<unknown> } | null>;
+    };
+  };
 };
 
 export type WorldDatabase = {
@@ -157,6 +168,7 @@ export async function getWorldDatabase(): Promise<WorldDatabase> {
         world_walls: { schema: worldWallsSchema },
         world_lights: { schema: worldLightsSchema },
         world_shapes: { schema: worldShapesSchema },
+        world_scene_tokens: { schema: worldSceneTokensSchema },
       });
 
       return db as unknown as WorldDatabase;

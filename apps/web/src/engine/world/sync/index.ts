@@ -36,6 +36,12 @@ export {
   loadShapesIntoStore,
   startShapeMutationBridge,
 } from "./shapes";
+export {
+  applyTokenWorldEvent,
+  startTokenEventSync,
+  loadTokensIntoStore,
+  startTokenMutationBridge,
+} from "./tokens";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;

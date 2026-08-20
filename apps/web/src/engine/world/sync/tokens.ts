@@ -1,0 +1,312 @@
+/**
+ * tokens.ts
+ * Scene-scoped token sync: mirrors walls.ts's shape (inbound NOTIFY-refetch,
+ * outbound mutation bridge) but for the modern `tokens` table
+ * (src/server/src/graphql/mutations_tokens.rs), which is what actually
+ * persists tokens across a page reload — the legacy `world_tokens` path
+ * (this directory's index.ts#startWorldSync, driven by
+ * engine/world/types.ts's generic `upsert_token`/`remove_token` commands)
+ * is left untouched and keeps running alongside this.
+ *
+ * Two independent responsibilities, matching walls.ts:
+ *
+ * 1. Inbound: the server emits a generic `world_events` NOTIFY
+ *    (subscription field `worldEventsCreated(worldId)`) with
+ *    `eventCode = 14` for any token create/update/delete
+ *    (src/server/src/world_events.rs::EVENT_CODE_TOKEN_CHANGED). The
+ *    notify payload only carries `{ action, tokenId, sceneId }` — not the
+ *    full token — so `applyTokenWorldEvent` re-fetches the scene's tokens
+ *    via GraphQL (api/tokens.ts#getTokens) and dispatches `upsert_token`/
+ *    `remove_token` into the world store.
+ *
+ * 2. Outbound: unlike walls/lights/shapes, the Bevy engine already owns
+ *    click-drag-to-move for tokens end-to-end (engine's
+ *    `handle_token_drag` in src/engine/src/systems/selection.rs) and
+ *    emits *generic* `upsert_token`/`remove_token` commands directly —
+ *    there is no separate "create_token intent" vs "confirmed upsert"
+ *    distinction the way there is for walls/lights/shapes, because the
+ *    engine has owned tokens' live-drag UX since before scene-scoped
+ *    persistence existed. Note also that the engine's two demo tokens
+ *    ("player"/"npc", spawned unconditionally at Bevy startup —
+ *    src/engine/src/lib.rs's setup — not from any command) use fixed
+ *    non-UUID engine ids, which can't be used directly as the `tokens`
+ *    table's UUID primary key. `startTokenMutationBridge` therefore keeps
+ *    an in-memory `engineIdToTokenId` map: the first `upsert_token` seen
+ *    for a given engine id calls `createToken` (server mints the UUID)
+ *    and remembers the mapping; every later drag of that same engine id
+ *    calls `updateToken` against the remembered server id. The map is
+ *    seeded from the scene's current tokens on start (identity-mapped,
+ *    since `loadTokensIntoStore` dispatches reloaded tokens using their
+ *    server `tokenId` as the engine id), so reloading a scene with
+ *    already-persisted tokens routes straight to `updateToken` for them.
+ */
+
+import { createToken, deleteToken, getTokens, updateToken } from "@/api/tokens";
+import type { TokenRecord } from "@/types/token";
+import type { WorldStore } from "../store";
+import type { WorldToken } from "../types";
+import { getWorldDatabase } from "./database";
+
+async function persistTokenDoc(token: TokenRecord): Promise<void> {
+  try {
+    const db = await getWorldDatabase();
+    await db.collections.world_scene_tokens.upsert({
+      tokenId: token.tokenId,
+      sceneId: token.sceneId,
+      actorId: token.actorId,
+      x: token.x,
+      y: token.y,
+      rotation: token.rotation,
+      scale: token.scale,
+      metadata: token.metadata,
+      createdAt: token.createdAt,
+      updatedAt: token.updatedAt,
+    });
+  } catch (error) {
+    // RxDB persistence is a best-effort offline cache; the world store
+    // dispatch is the source of truth for the live session.
+    console.error("Failed to persist token to RxDB:", error);
+  }
+}
+
+async function removeTokenDoc(tokenId: string): Promise<void> {
+  try {
+    const db = await getWorldDatabase();
+    const doc = await db.collections.world_scene_tokens.findOne(tokenId).exec();
+    await doc?.remove();
+  } catch (error) {
+    console.error("Failed to remove token from RxDB:", error);
+  }
+}
+
+type WorldEventLike = {
+  event_code?: number;
+  eventCode?: number;
+  token_event?: unknown;
+  tokenEvent?: unknown;
+};
+
+const TOKEN_EVENT_CODE = 14;
+
+function tokenRecordToWorldToken(record: TokenRecord): WorldToken {
+  const label =
+    record.metadata && typeof record.metadata.label === "string"
+      ? (record.metadata.label as string)
+      : undefined;
+
+  return {
+    id: record.tokenId,
+    x: record.x,
+    y: record.y,
+    z: 0,
+    label,
+  };
+}
+
+/**
+ * Apply a single `world_events` NOTIFY payload to the world store,
+ * re-fetching the affected scene's tokens when it's a token event
+ * (eventCode 14). No-ops for any other event code.
+ */
+export async function applyTokenWorldEvent(
+  worldStore: WorldStore,
+  sceneId: string,
+  event: WorldEventLike,
+): Promise<void> {
+  const eventCode = event.event_code ?? event.eventCode;
+  if (eventCode !== TOKEN_EVENT_CODE) {
+    return;
+  }
+
+  const payload = (event.token_event ?? event.tokenEvent) as
+    | { action?: string; token_id?: string; tokenId?: string; scene_id?: string; sceneId?: string }
+    | undefined;
+
+  const eventSceneId = payload?.scene_id ?? payload?.sceneId;
+  if (eventSceneId && eventSceneId !== sceneId) {
+    return;
+  }
+
+  const tokenId = payload?.token_id ?? payload?.tokenId;
+  const action = payload?.action;
+
+  if (action === "deleted") {
+    if (tokenId) {
+      worldStore.dispatch({ type: "remove_token", tokenId }, "sync");
+      await removeTokenDoc(tokenId);
+    }
+    return;
+  }
+
+  // created/updated: the notify payload doesn't carry the full token, so
+  // re-fetch the scene's tokens rather than reconstructing one from it.
+  const tokens = await getTokens(sceneId);
+  for (const token of tokens) {
+    worldStore.dispatch(
+      { type: "upsert_token", token: tokenRecordToWorldToken(token) },
+      "sync",
+    );
+    await persistTokenDoc(token);
+  }
+}
+
+/**
+ * Drive applyTokenWorldEvent from a `worldEventsCreated` GraphQL
+ * subscription async iterable. Returns a cleanup function that stops
+ * consuming the subscription.
+ */
+export function startTokenEventSync(
+  worldStore: WorldStore,
+  sceneId: string,
+  graphqlSubscription: AsyncIterable<WorldEventLike>,
+): () => void {
+  const abortController = new AbortController();
+
+  (async () => {
+    try {
+      for await (const event of graphqlSubscription) {
+        if (abortController.signal.aborted) break;
+        await applyTokenWorldEvent(worldStore, sceneId, event);
+      }
+    } catch (error) {
+      console.error("World scene tokens event sync error:", error);
+    }
+  })();
+
+  return () => {
+    abortController.abort();
+  };
+}
+
+/**
+ * Load a scene's current tokens and seed the world store with them,
+ * replacing the previous hardcoded WorldPage.tsx `initialTokens` fixture.
+ * Call once when a scene is opened, before/alongside the live event sync
+ * above.
+ */
+export async function loadTokensIntoStore(
+  worldStore: WorldStore,
+  sceneId: string,
+): Promise<void> {
+  const tokens = await getTokens(sceneId);
+  for (const token of tokens) {
+    worldStore.dispatch(
+      { type: "upsert_token", token: tokenRecordToWorldToken(token) },
+      "sync",
+    );
+    await persistTokenDoc(token);
+  }
+}
+
+/**
+ * Bridge the engine's generic `upsert_token`/`remove_token` commands
+ * (emitted directly by click-drag-to-move, see module docstring above)
+ * into GraphQL mutations against the scene-scoped `tokens` table.
+ *
+ * `engineIdToTokenId` maps the engine's token id (which for the demo
+ * "player"/"npc" tokens is a fixed non-UUID string, and for
+ * previously-persisted tokens is the server's own UUID `tokenId` — see
+ * module docstring) to the server-assigned `tokenId` used for
+ * `updateToken`/`deleteToken`. It's seeded from the scene's current
+ * tokens (identity-mapped) so a reload routes straight to `updateToken`
+ * for tokens that already exist server-side; an engine id never seen
+ * before for this scene routes to `createToken` once, and the returned
+ * `tokenId` is remembered for every later drag/removal of that same
+ * engine id. Returns an unsubscribe function.
+ */
+export function startTokenMutationBridge(
+  worldStore: WorldStore,
+  sceneId: string,
+): () => void {
+  const engineIdToTokenId = new Map<string, string>();
+  const creating = new Set<string>();
+
+  const ready = getTokens(sceneId)
+    .then((tokens) => {
+      for (const token of tokens) {
+        engineIdToTokenId.set(token.tokenId, token.tokenId);
+      }
+    })
+    .catch((error) => {
+      console.error("Failed to seed known scene tokens for mutation bridge:", error);
+    });
+
+  const unsubscribe = worldStore.subscribe((event) => {
+    // Avoid reacting to our own confirmed dispatches.
+    if (event.source === "sync") {
+      return;
+    }
+
+    const { command } = event;
+
+    if (command.type === "upsert_token") {
+      const { token } = command;
+
+      void ready.then(() => {
+        const knownTokenId = engineIdToTokenId.get(token.id);
+
+        if (knownTokenId) {
+          void updateToken(knownTokenId, { x: token.x, y: token.y })
+            .then((updated) => {
+              void persistTokenDoc(updated);
+            })
+            .catch((error) => {
+              console.error("Failed to update token:", error);
+            });
+          return;
+        }
+
+        // First time this engine id has been seen for this scene: create
+        // it. Guard against a second drag firing before this request
+        // resolves (createToken always mints a fresh server tokenId, so a
+        // duplicate call here would create a duplicate row).
+        if (creating.has(token.id)) {
+          return;
+        }
+        creating.add(token.id);
+
+        void createToken({
+          sceneId,
+          x: token.x,
+          y: token.y,
+          metadata: token.label ? { label: token.label } : undefined,
+        })
+          .then((created) => {
+            engineIdToTokenId.set(token.id, created.tokenId);
+            void persistTokenDoc(created);
+          })
+          .catch((error) => {
+            console.error("Failed to create token:", error);
+          })
+          .finally(() => {
+            creating.delete(token.id);
+          });
+      });
+      return;
+    }
+
+    if (command.type === "remove_token") {
+      const { tokenId: engineId } = command;
+
+      void ready.then(() => {
+        const knownTokenId = engineIdToTokenId.get(engineId);
+        if (!knownTokenId) {
+          return;
+        }
+
+        void deleteToken(knownTokenId)
+          .then((ok) => {
+            if (ok) {
+              engineIdToTokenId.delete(engineId);
+              void removeTokenDoc(knownTokenId);
+            }
+          })
+          .catch((error) => {
+            console.error("Failed to delete token:", error);
+          });
+      });
+    }
+  });
+
+  return unsubscribe;
+}
