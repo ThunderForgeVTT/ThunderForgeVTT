@@ -191,11 +191,11 @@ and `WorldWhiteboard.tsx` are removed once this reaches that parity.
 
 ### Engine (Rust/Bevy, wasm32 target)
 
-- [ ] T052 [P] [US4] Per ADR-038: put the pure `ShapeSet` data + bounded per-session undo stack (research.md §4) in `crates/thunderforge-canvas-core/src/shape.rs` with its own `#[cfg(test)] mod tests` (mirror `crates/thunderforge-canvas-core/src/wall.rs`'s pattern — no Bevy/wasm-bindgen dependency, only `glam`); then create a thin `ShapeSet` `Resource` newtype wrapping it (`Deref`/`DerefMut`) in `src/engine/src/resources/shape.rs`, re-exported via `resources/mod.rs` — mirror `src/engine/src/resources/wall.rs`
-- [ ] T053 [P] [US4] Create draw/edit input systems for all five shape kinds (freehand stroke, rectangle, ellipse, line/arrow, text) — create, move, resize, restyle, select+delete — in `src/engine/src/systems/shape.rs`, re-exported via `systems/mod.rs`
-- [ ] T054 [US4] Implement shape undo: re-issue the inverse mutation through the same GraphQL path as a normal edit (research.md §4), wired to the undo stack from T052 — same approach as T014/T039
-- [ ] T055 [US4] Implement visibility filtering so GM-only shapes never render for non-GM sessions (defense in depth on top of T050's server-side filter)
-- [ ] T056 [US4] Create `ShapePlugin` in `src/engine/src/plugins/shape.rs` wiring T052-T055, rendering into the shapes layer from `CanvasLayers` (T009); register independently in `src/engine/src/lib.rs` per Constitution Principle II
+- [X] T052 [P] [US4] Per ADR-038: put the pure `ShapeSet` data + bounded per-session undo stack (research.md §4) in `crates/thunderforge-canvas-core/src/shape.rs` with its own `#[cfg(test)] mod tests` (mirror `crates/thunderforge-canvas-core/src/wall.rs`'s pattern — no Bevy/wasm-bindgen dependency, only `glam`); then create a thin `ShapeSet` `Resource` newtype wrapping it (`Deref`/`DerefMut`) in `src/engine/src/resources/shape.rs`, re-exported via `resources/mod.rs` — mirror `src/engine/src/resources/wall.rs`
+- [X] T053 [P] [US4] Create draw/edit input systems for all five shape kinds (freehand stroke, rectangle, ellipse, line/arrow, text) — create, move, resize, restyle, select+delete — in `src/engine/src/systems/shape.rs`, re-exported via `systems/mod.rs`
+- [X] T054 [US4] Implement shape undo: re-issue the inverse mutation through the same GraphQL path as a normal edit (research.md §4), wired to the undo stack from T052 — same approach as T014/T039
+- [X] T055 [US4] Implement visibility filtering so GM-only shapes never render for non-GM sessions (defense in depth on top of T050's server-side filter)
+- [X] T056 [US4] Create `ShapePlugin` in `src/engine/src/plugins/shape.rs` wiring T052-T055, rendering into the shapes layer from `CanvasLayers` (T009); register independently in `src/engine/src/lib.rs` per Constitution Principle II
 
 ### Frontend (React/RxDB)
 

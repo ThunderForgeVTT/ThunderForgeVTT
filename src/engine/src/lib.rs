@@ -30,8 +30,8 @@ use movement::{PlayerControlled, handle_keyboard_movement, sync_grid_to_transfor
 use derived_data::*;
 use sync_test::*;
 use systems::*;
-use plugins::{ScenePlugin, GridPlugin, TokenPlugin, CameraPlugin, SelectionPlugin, SystemRegistrationPlugin, CanvasLayerPlugin, WallPlugin};
-use resources::{DoorState, Wall as EngineWall, WallSet};
+use plugins::{ScenePlugin, GridPlugin, TokenPlugin, CameraPlugin, SelectionPlugin, SystemRegistrationPlugin, CanvasLayerPlugin, WallPlugin, ShapePlugin};
+use resources::{DoorState, Wall as EngineWall, WallSet, Shape as EngineShape, ShapeKind, ShapeSet};
 
 static ENGINE_STARTED: AtomicBool = AtomicBool::new(false);
 static EVENT_CALLBACK: OnceLock<Mutex<Option<Function>>> = OnceLock::new();
@@ -98,6 +98,21 @@ struct WorldWallPayload {
     door_state: String,
 }
 
+/// Confirmed/authoritative shape state from the server (T053), matching
+/// the `upsert_shape` inbound command's `shape` payload shape
+/// (contracts/graphql.md's `geometry`/`style` blobs are opaque JSON, so
+/// they're kept as raw `serde_json::Value` rather than typed fields).
+#[derive(Debug, Clone, Deserialize)]
+struct WorldShapePayload {
+    id: String,
+    kind: String,
+    geometry: Value,
+    text: Option<String>,
+    style: Option<Value>,
+    #[serde(rename = "visibleToPlayers")]
+    visible_to_players: bool,
+}
+
 #[derive(Debug, Clone)]
 enum ExternalCommand {
     SetWorld { world_id: String },
@@ -105,6 +120,8 @@ enum ExternalCommand {
     RemoveToken { token_id: String },
     UpsertWall { wall: WorldWallPayload },
     RemoveWall { wall_id: String },
+    UpsertShape { shape: WorldShapePayload },
+    RemoveShape { shape_id: String },
 }
 
 fn event_callback_slot() -> &'static Mutex<Option<Function>> {
@@ -148,6 +165,14 @@ fn parse_command(input: &str) -> Option<ExternalCommand> {
         }
         "remove_wall" => Some(ExternalCommand::RemoveWall {
             wall_id: value.get("wallId")?.as_str()?.to_owned(),
+        }),
+        "upsert_shape" => {
+            let shape_value = value.get("shape")?.clone();
+            let shape: WorldShapePayload = serde_json::from_value(shape_value).ok()?;
+            Some(ExternalCommand::UpsertShape { shape })
+        }
+        "remove_shape" => Some(ExternalCommand::RemoveShape {
+            shape_id: value.get("shapeId")?.as_str()?.to_owned(),
         }),
         _ => None,
     }
@@ -217,6 +242,11 @@ pub fn start(canvas_selector: &str) {
         // T015: wall authoring (specs/001-bevy-canvas-authoring). Depends
         // on CanvasLayerPlugin (above) for the `CanvasLayers` resource.
         .add_plugins(WallPlugin)
+        // T056: shape/annotation authoring (specs/001-bevy-canvas-authoring).
+        // Depends on CanvasLayerPlugin (above) for the `CanvasLayers`
+        // resource; order relative to WallPlugin/LightingPlugin doesn't
+        // matter (Constitution Principle II: independently addable).
+        .add_plugins(ShapePlugin)
         .add_systems(Startup, setup_scene)
         .add_systems(
             Update,
@@ -389,6 +419,9 @@ fn apply_external_commands(
     // core command loop degrades gracefully (wall commands are simply
     // dropped) if the wall plugin isn't present.
     wall_set: Option<ResMut<WallSet>>,
+    // `ShapeSet` only exists once `ShapePlugin` is registered, same
+    // graceful-degradation rationale as `wall_set` above.
+    shape_set: Option<ResMut<ShapeSet>>,
 ) {
     let drained = if let Ok(mut queue) = external_command_queue().lock() {
         queue.drain(..).collect::<Vec<_>>()
@@ -397,6 +430,7 @@ fn apply_external_commands(
     };
 
     let mut wall_set = wall_set;
+    let mut shape_set = shape_set;
 
     for command in drained {
         match command {
@@ -445,6 +479,23 @@ fn apply_external_commands(
             ExternalCommand::RemoveWall { wall_id } => {
                 if let Some(wall_set) = wall_set.as_deref_mut() {
                     wall_set.remove(&wall_id);
+                }
+            }
+            ExternalCommand::UpsertShape { shape } => {
+                if let Some(shape_set) = shape_set.as_deref_mut() {
+                    shape_set.upsert(EngineShape {
+                        id: shape.id,
+                        kind: ShapeKind::from_str_loose(&shape.kind),
+                        geometry: shape.geometry,
+                        text: shape.text,
+                        style: shape.style,
+                        visible_to_players: shape.visible_to_players,
+                    });
+                }
+            }
+            ExternalCommand::RemoveShape { shape_id } => {
+                if let Some(shape_set) = shape_set.as_deref_mut() {
+                    shape_set.remove(&shape_id);
                 }
             }
         }
