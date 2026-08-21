@@ -12,6 +12,7 @@ use crate::schema::world_members;
 use crate::schema::world_events;
 use crate::state::AppState;
 use crate::auth_middleware::AuthenticatedUser;
+use crate::auth::world_membership::{require_world_member, WorldMembershipError};
 use thunderforge_core::models::invites::{WorldMemberRole, WorldInvite as CoreWorldInvite};
 
 // Event codes for world_events audit trail
@@ -151,24 +152,38 @@ impl InviteMutation {
             return Err(Error::new("max_uses must be greater than 0"));
         }
 
-        // Verify user is Owner/GM of the world
-        let member: Option<WorldMember> = world_members::table
-            .filter(world_members::world_id.eq(world_id))
-            .filter(world_members::user_id.eq(user_id))
-            .select(WorldMember::as_select())
-            .first::<WorldMember>(&mut conn)
-            .optional()
-            .map_err(|e| Error::new(format!("Database error: {}", e)))?;
+        // Verify user is Owner/GM of the world. `require_world_member` (spec
+        // 002, src/server/src/auth/world_membership.rs) falls back to
+        // `worlds.created_by` when no `world_members` row exists yet, which
+        // is exactly the case for a world's own owner today (`create_world`
+        // does not insert an owner row — see that function's own comment).
+        // Previously this used a raw `world_members` lookup with no such
+        // fallback, so a world's own owner could never generate an invite
+        // for their own world (spec 003 found this live; spec 005 US4
+        // fixes it here rather than by inserting a row in `create_world`,
+        // reusing the already-built, already-tested compensating helper
+        // instead of introducing a second authorization path).
+        let role = require_world_member(&mut conn, user_id, world_id).map_err(|e| match e {
+            WorldMembershipError::NotAMember => Error::new("User is not a member of this world"),
+            WorldMembershipError::Database(msg) => Error::new(format!("Database error: {}", msg)),
+        })?;
 
-        let member = member.ok_or_else(|| Error::new("User is not a member of this world"))?;
-
-        if member.role != "Owner" && member.role != "GM" {
+        if role != "Owner" && role != "GM" {
             return Err(Error::new("Only Owners and GMs can generate invite codes"));
         }
 
-        // Generate invite code
+        // Generate invite code. `invite_id` (the row's primary key) stays a
+        // v7 UUID for index locality, but the human-facing code MUST NOT be
+        // derived from it: v7 UUIDs front-load a millisecond timestamp, so
+        // taking the first 8 hex characters captures mostly that timestamp
+        // — two invites created within the same millisecond (trivially
+        // possible under any real concurrent load, and reliably reproduced
+        // by this file's own rapid-succession e2e test, spec 005 US4)
+        // collide on `world_invites_invite_code_key`. Deriving the code
+        // from an independent, fully-random v4 UUID instead removes that
+        // collision class entirely.
         let invite_id = Uuid::now_v7();
-        let invite_code = format!("{}", invite_id.to_string().replace("-", "").chars().take(8).collect::<String>())
+        let invite_code = format!("{}", Uuid::new_v4().to_string().replace("-", "").chars().take(8).collect::<String>())
             .to_uppercase();
 
         let now = Utc::now().naive_utc();
@@ -485,5 +500,66 @@ impl InviteMutation {
         )?;
 
         Ok(true)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use diesel::{Connection, PgConnection};
+
+    /// Establishes a connection to the dev database configured via
+    /// DATABASE_URL (same source main.rs uses). Skips (rather than fails)
+    /// when no dev database is reachable, since this is a real-DB
+    /// integration test, not a unit test.
+    fn try_connect() -> Option<PgConnection> {
+        dotenvy::dotenv().ok();
+        let url = std::env::var("DATABASE_URL").ok()?;
+        diesel::Connection::establish(&url).ok()
+    }
+
+    /// Spec 005 US4 regression test (T020): before this fix,
+    /// `generate_invite_code`'s own inline `world_members` lookup had no
+    /// fallback, so a world's own owner — who has no `world_members` row
+    /// today (`create_world` doesn't insert one; see
+    /// `auth::world_membership::require_world_member`'s doc comment) —
+    /// could never generate an invite for their own world. The fix routes
+    /// `generate_invite_code` (and `world_invites`, the query
+    /// `CampaignSettingsPanel.tsx` calls on mount) through
+    /// `require_world_member` instead, which already falls back to
+    /// `worlds.created_by`. This test exercises that shared primitive
+    /// directly against a freshly created world with no `world_members`
+    /// row, which is exactly the state `generate_invite_code` now sees.
+    #[test]
+    fn owner_can_be_authorized_for_invites_immediately_after_world_creation() {
+        let Some(mut conn) = try_connect() else {
+            eprintln!(
+                "skipping owner_can_be_authorized_for_invites_immediately_after_world_creation: no DATABASE_URL/dev DB reachable"
+            );
+            return;
+        };
+
+        conn.test_transaction::<_, diesel::result::Error, _>(|conn| {
+            let owner_id = crate::test_support::insert_test_user(conn);
+            let world_id = crate::test_support::insert_test_world(conn, owner_id);
+
+            // No insert_test_world_member call here — deliberately, since
+            // this is exactly the state `create_world` leaves a fresh
+            // world in today.
+            let role = crate::auth::world_membership::require_world_member(conn, owner_id, world_id)
+                .expect("owner must be authorized immediately, with no separate membership step");
+            assert_eq!(role, "Owner");
+
+            // A non-owner, non-member user must still be rejected — this
+            // fix must not have loosened the check for anyone else.
+            let intruder_id = crate::test_support::insert_test_user(conn);
+            let intruder_result =
+                crate::auth::world_membership::require_world_member(conn, intruder_id, world_id);
+            assert!(
+                intruder_result.is_err(),
+                "a non-member/non-owner must still be rejected"
+            );
+
+            Ok(())
+        });
     }
 }

@@ -99,8 +99,8 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
       setInvitesLoading(true);
       const data = await postGraphQL<{ worldInvites: Invite[] }>(
         `
-          query worldInvites($world_id: ID!) {
-            worldInvites(world_id: $world_id) {
+          query worldInvites($worldId: ID!) {
+            worldInvites(worldId: $worldId) {
               id
               inviteCode
               maxUses
@@ -110,7 +110,7 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
             }
           }
         `,
-        { world_id: worldId },
+        { worldId },
       );
       setInvites(data.worldInvites || []);
     } catch (err) {
@@ -125,8 +125,8 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
       setMembersLoading(true);
       const data = await postGraphQL<{ worldMembers: Member[] }>(
         `
-          query worldMembers($world_id: ID!) {
-            worldMembers(world_id: $world_id) {
+          query worldMembers($worldId: ID!) {
+            worldMembers(worldId: $worldId) {
               id
               userId
               role
@@ -134,7 +134,7 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
             }
           }
         `,
-        { world_id: worldId },
+        { worldId },
       );
       setMembers(data.worldMembers || []);
 
@@ -162,15 +162,17 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
         };
       }>(
         `
-          mutation generateInviteCode($worldId: ID!, $maxUses: Int!) {
-            generateInviteCode(worldId: $worldId, maxUses: $maxUses) {
+          mutation generateInviteCode($input: GenerateInviteCodeInput!) {
+            generateInviteCode(input: $input) {
               inviteCode
             }
           }
         `,
         {
-          worldId,
-          maxUses: 5,
+          input: {
+            worldId,
+            maxUses: 5,
+          },
         },
       );
 
@@ -232,17 +234,19 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
 
       await postGraphQL(
         `
-          mutation updateMemberRole($world_id: ID!, $user_id: ID!, $role: String!) {
-            updateMemberRole(world_id: $world_id, user_id: $user_id, role: $role) {
+          mutation updateMemberRole($input: UpdateMemberRoleInput!) {
+            updateMemberRole(input: $input) {
               id
               role
             }
           }
         `,
         {
-          world_id: worldId,
-          user_id: member.userId,
-          role: newRole,
+          input: {
+            worldId,
+            userId: member.userId,
+            role: newRole,
+          },
         },
       );
 
@@ -266,13 +270,13 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
 
       await postGraphQL(
         `
-          mutation removeMember($world_id: ID!, $user_id: ID!) {
-            removeMember(world_id: $world_id, user_id: $user_id)
+          mutation removeMember($worldId: ID!, $userId: ID!) {
+            removeMember(worldId: $worldId, userId: $userId)
           }
         `,
         {
-          world_id: worldId,
-          user_id: member.userId,
+          worldId,
+          userId: member.userId,
         },
       );
       

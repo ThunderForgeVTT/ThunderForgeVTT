@@ -161,14 +161,14 @@ export default function JoinWorldPage() {
 
       await postGraphQL(
         `
-          mutation joinWorld($code: String!) {
-            joinWorld(code: $code) {
+          mutation joinWorld($input: JoinWorldInput!) {
+            joinWorld(input: $input) {
               id
               role
             }
           }
         `,
-        { code },
+        { input: { inviteCode: code } },
       );
 
       // Redirect to world dashboard
