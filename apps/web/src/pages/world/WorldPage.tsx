@@ -25,6 +25,8 @@ import { WallTool } from "@/components/canvas-tools/WallTool";
 import { LightingTool } from "@/components/canvas-tools/LightingTool";
 import { ShapeTool } from "@/components/canvas-tools/ShapeTool";
 import { MapImportTool } from "@/components/canvas-tools/MapImportTool";
+import { AssetPasteTool } from "@/components/canvas-tools/AssetPasteTool";
+import type { CanvasImageAsset } from "@/api/assets";
 import { SceneSwitcher } from "@/components/world/SceneSwitcher";
 import type { WorldRecord } from "@/types/world";
 import type { SceneRecord } from "@/types/scene";
@@ -373,6 +375,34 @@ export default function WorldPage() {
       });
   }, [sceneId, id, worldStore]);
 
+  // T023/T030 (specs/002-canvas-authoring-asset-storage): a pasted image
+  // is already persisted by the time AssetPasteTool calls this (the
+  // GraphQL mutation already succeeded) — this just tells the engine to
+  // spawn it. `path` points at the authenticated `/canvas-assets/{id}`
+  // proxy route (src/server/src/canvas_assets_serve.rs), not RustFS
+  // directly: RustFS is private per-campaign storage, so the browser can
+  // never fetch from it directly — this proxy is what makes a pasted
+  // image (or, latently, a migrated background) actually renderable at
+  // all, a gap that existed silently until this was wired up (nothing
+  // previously exercised the read path end-to-end).
+  const handleAssetPasted = useCallback(
+    (asset: CanvasImageAsset) => {
+      worldStore.dispatch(
+        {
+          type: "upsert_canvas_image_asset",
+          assetId: asset.id,
+          path: `/api/canvas-assets/${asset.id}`,
+          x: 0,
+          y: 0,
+          width: asset.widthPx,
+          height: asset.heightPx,
+        },
+        "ui",
+      );
+    },
+    [worldStore],
+  );
+
   const seo = useMemo<SeoConfig>(
     () => ({
       ...worldPageSeo,
@@ -504,6 +534,14 @@ export default function WorldPage() {
                   canvasContainerRef={containerRef}
                 />
               </div>
+            ) : null}
+            {isSceneOwner && sceneId ? (
+              <AssetPasteTool
+                worldId={id}
+                sceneId={sceneId}
+                active={true}
+                onPasted={handleAssetPasted}
+              />
             ) : null}
           </div>
         }

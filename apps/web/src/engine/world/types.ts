@@ -280,6 +280,29 @@ export type DeleteShapeCommand = {
   worldId?: string;
 };
 
+// Spec 002 (US3): a pasted (or, latently, migrated-background) canvas
+// image asset. Not tracked in WorldState (no reducer case — see
+// store.ts's default case) since nothing currently reads a
+// canvas-image-asset slice of store state; bindWorldStore's generic
+// forwarder still relays this to the engine's apply_world_command the
+// same way create_wall/etc. intents are, which is all spawning the
+// placed-image sprite needs (src/engine/src/systems/background.rs's
+// sync_placed_canvas_images).
+export type UpsertCanvasImageAssetCommand = {
+  type: "upsert_canvas_image_asset";
+  assetId: string;
+  path: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type RemoveCanvasImageAssetCommand = {
+  type: "remove_canvas_image_asset";
+  assetId: string;
+};
+
 export type WorldCommand =
   | SetWorldCommand
   | SetSceneBackgroundCommand
@@ -302,7 +325,9 @@ export type WorldCommand =
   | SelectShapeCommand
   | CreateShapeCommand
   | UpdateShapeCommand
-  | DeleteShapeCommand;
+  | DeleteShapeCommand
+  | UpsertCanvasImageAssetCommand
+  | RemoveCanvasImageAssetCommand;
 
 export type WorldStoreEvent = {
   command: WorldCommand;

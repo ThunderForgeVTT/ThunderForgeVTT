@@ -48,6 +48,8 @@ pub enum StorageError {
     AssumeRole(String),
     #[error("S3 PutObject failed: {0}")]
     PutObject(String),
+    #[error("S3 GetObject failed: {0}")]
+    GetObject(String),
     #[error("S3 CreateBucket failed: {0}")]
     CreateBucket(String),
     #[error("STS AssumeRole response was missing credentials")]
@@ -165,6 +167,72 @@ pub fn scoped_write_policy(bucket: &str, key: &str) -> String {
     .to_string()
 }
 
+/// Builds the inline STS session policy scoping a credential to exactly
+/// one `GetObject` on `key` — the read-side counterpart of
+/// `scoped_write_policy`, same single-key-only rationale.
+pub fn scoped_read_policy(bucket: &str, key: &str) -> String {
+    json!({
+        "Version": "2012-10-17",
+        "Statement": [{
+            "Effect": "Allow",
+            "Action": ["s3:GetObject"],
+            "Resource": [format!("arn:aws:s3:::{bucket}/{key}")]
+        }]
+    })
+    .to_string()
+}
+
+/// Mints an STS credential scoped to exactly one `GetObject` on `key`,
+/// uses it immediately to fetch the object's bytes, then lets the
+/// credential fall out of scope — never returned to the caller. This is
+/// the read counterpart of `write_object`, used by the authenticated
+/// `/canvas-assets/{asset_id}` proxy route (never by a GraphQL client
+/// directly — the browser fetches image bytes through that route, not
+/// from RustFS itself, so this credential stays exactly as
+/// server-side-only as the write one does).
+pub async fn read_object(cfg: &RustFsConfig, key: &str) -> Result<Vec<u8>, StorageError> {
+    let sts = sts_client(cfg);
+    let policy = scoped_read_policy(&cfg.bucket, key);
+
+    let assumed = sts
+        .assume_role()
+        .role_arn("arn:aws:iam::000000000000:role/thunderforge-canvas-asset-reader")
+        .role_session_name(format!("read-{}", Uuid::now_v7()))
+        .policy(policy)
+        .duration_seconds(CREDENTIAL_TTL_SECONDS)
+        .send()
+        .await
+        .map_err(|e| StorageError::AssumeRole(e.to_string()))?;
+
+    let creds = assumed
+        .credentials()
+        .ok_or(StorageError::MissingCredentials)?;
+    let s3 = s3_client_with_credentials(
+        cfg,
+        creds.access_key_id().to_string(),
+        creds.secret_access_key().to_string(),
+        creds.session_token().to_string(),
+    );
+
+    let output = s3
+        .get_object()
+        .bucket(&cfg.bucket)
+        .key(key)
+        .send()
+        .await
+        .map_err(|e| StorageError::GetObject(e.to_string()))?;
+
+    let bytes = output
+        .body
+        .collect()
+        .await
+        .map_err(|e| StorageError::GetObject(e.to_string()))?
+        .into_bytes()
+        .to_vec();
+
+    Ok(bytes)
+}
+
 /// Mints an STS credential scoped to exactly one `PutObject` on `key`,
 /// uses it immediately to write `bytes`, then lets the credential fall
 /// out of scope when this function returns — it is never returned to
@@ -241,5 +309,18 @@ mod tests {
         assert!(!resources[0].as_str().unwrap().contains('*'));
         let actions = parsed["Statement"][0]["Action"].as_array().unwrap();
         assert_eq!(actions, &vec![serde_json::json!("s3:PutObject")]);
+    }
+
+    /// Read-side counterpart of `scoped_write_policy_names_exactly_one_key`.
+    #[test]
+    fn scoped_read_policy_names_exactly_one_key() {
+        let policy_json = scoped_read_policy("my-bucket", "a/b/c/d.webp");
+        let parsed: serde_json::Value = serde_json::from_str(&policy_json).unwrap();
+        let resources = parsed["Statement"][0]["Resource"].as_array().unwrap();
+        assert_eq!(resources.len(), 1);
+        assert_eq!(resources[0], "arn:aws:s3:::my-bucket/a/b/c/d.webp");
+        assert!(!resources[0].as_str().unwrap().contains('*'));
+        let actions = parsed["Statement"][0]["Action"].as_array().unwrap();
+        assert_eq!(actions, &vec![serde_json::json!("s3:GetObject")]);
     }
 }

@@ -2,6 +2,7 @@ mod adapters;
 mod admin;
 mod auth;
 mod auth_middleware;
+mod canvas_assets_serve;
 mod config;
 mod db_types;
 mod errors;
@@ -232,6 +233,10 @@ async fn main() {
         app_state.clone(),
         auth_middleware::require_authenticated_user,
     ));
+    let canvas_assets_router = canvas_assets_serve::router().route_layer(from_fn_with_state(
+        app_state.clone(),
+        auth_middleware::require_authenticated_user,
+    ));
 
     let graphql_router = Router::new()
         .route(
@@ -260,7 +265,8 @@ async fn main() {
         .merge(auth::router())
         .merge(user_router)
         .merge(world_router)
-        .merge(map_import_router);
+        .merge(map_import_router)
+        .merge(canvas_assets_router);
 
     let systems_admin_router = systems::admin_router().route_layer(from_fn_with_state(
         app_state.clone(),
