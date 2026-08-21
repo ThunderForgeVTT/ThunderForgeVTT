@@ -4,6 +4,7 @@ use async_graphql::Context;
 use diesel::prelude::*;
 use uuid::Uuid;
 
+use crate::auth::world_membership::{require_world_member, WorldMembershipError};
 use crate::graphql::*;
 use crate::models::{WorldInvite, WorldMember};
 use crate::schema::{world_invites, world_members};
@@ -27,18 +28,18 @@ impl InviteQuery {
             .get()
             .map_err(|_| Error::new("Failed to get DB connection"))?;
 
-        // Verify user is Owner/GM of the world
-        let member: Option<WorldMember> = world_members::table
-            .filter(world_members::world_id.eq(world_id))
-            .filter(world_members::user_id.eq(user_id))
-            .select(WorldMember::as_select())
-            .first::<WorldMember>(&mut conn)
-            .optional()
-            .map_err(|e| Error::new(format!("Database error: {}", e)))?;
+        // Verify user is Owner/GM of the world. Uses `require_world_member`
+        // (falls back to `worlds.created_by` when no `world_members` row
+        // exists) rather than a raw lookup, matching the fix applied to
+        // `generate_invite_code` (spec 005 US4) — otherwise a world's own
+        // owner could not even list their own world's invites, which broke
+        // `CampaignSettingsPanel.tsx`'s invite list on mount.
+        let role = require_world_member(&mut conn, user_id, world_id).map_err(|e| match e {
+            WorldMembershipError::NotAMember => Error::new("User is not a member of this world"),
+            WorldMembershipError::Database(msg) => Error::new(format!("Database error: {}", msg)),
+        })?;
 
-        let member = member.ok_or_else(|| Error::new("User is not a member of this world"))?;
-
-        if member.role != "Owner" && member.role != "GM" {
+        if role != "Owner" && role != "GM" {
             return Err(Error::new("Only Owners and GMs can view invite codes"));
         }
 

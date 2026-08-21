@@ -371,6 +371,11 @@ pub struct GraphQLUpdateTokenInput {
     pub rotation: Option<f64>,
     pub scale: Option<f64>,
     pub metadata: Option<Json<serde_json::Value>>,
+    pub owner_user_id: Option<Uuid>,
+    pub is_primary: Option<bool>,
+    pub photo_url: Option<String>,
+    pub health: Option<i32>,
+    pub max_health: Option<i32>,
 }
 
 // ========== Fog of War Management ==========

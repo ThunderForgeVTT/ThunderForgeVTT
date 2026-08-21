@@ -1,8 +1,15 @@
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
-use crate::resources::{SelectedToken, DraggingToken, SceneData};
+use crate::resources::{SelectedToken, DraggingToken, SceneData, IsGameMaster};
 use crate::{TokenIdentity, ActiveWorld, TOKEN_SIZE, emit_event};
 use serde_json::json;
+
+/// Whole grid-cell increments a token's `scale` may take (spec 004 US2's
+/// resize clarification: 1x1, 2x2, 3x3... never a fractional cell).
+const MIN_TOKEN_SCALE: f32 = 1.0;
+const MAX_TOKEN_SCALE: f32 = 5.0;
+/// Fixed rotation step per key press (30 degrees), independent of resize.
+const TOKEN_ROTATE_STEP_RADIANS: f32 = std::f32::consts::FRAC_PI_6;
 
 /// Hit-test: Check if point is within rectangle bounds
 /// Used for token selection based on mouse click
@@ -17,6 +24,20 @@ fn is_point_in_rect(
 
     point.x >= min.x && point.x <= max.x
         && point.y >= min.y && point.y <= max.y
+}
+
+/// Notifies the frontend of a token selection change, mirroring
+/// `wall.rs`'s `emit_wall_selection` exactly (same `bevy`-sourced-event
+/// convention, so `bindWorldStore` never re-forwards it back into the
+/// engine and no loop results). Added for spec 004 US2 (T020): without
+/// this, `TokenTool.tsx` has no way to know which token is selected, so
+/// its resize/rotate controls could never appear for a token selected by
+/// clicking the canvas.
+fn emit_token_selection(token_id: Option<&str>) {
+    emit_event(json!({
+        "type": "select_token",
+        "tokenId": token_id,
+    }));
 }
 
 /// Convert the cursor's window-pixel position into Bevy world space using the
@@ -72,10 +93,12 @@ pub(crate) fn handle_token_drag(
         match hit {
             Some((token_id, offset)) => {
                 selected_token.select(token_id.clone());
+                emit_token_selection(Some(&token_id));
                 dragging.0 = Some((token_id, offset));
             }
             None => {
                 selected_token.deselect();
+                emit_token_selection(None);
                 dragging.0 = None;
             }
         }
@@ -103,6 +126,21 @@ pub(crate) fn handle_token_drag(
         };
         for (transform, identity) in token_query.iter() {
             if identity.0 == token_id {
+                // Include scale/rotation, not just position: this event
+                // fires on *every* select-click release, not only a real
+                // drag (dragging.0 is set on press, released here even
+                // for a plain click-to-select with no movement). Omitting
+                // them made the world-store reducer's full-replace
+                // `upsert_token` case silently wipe a token's
+                // already-persisted scale/rotation from the *client-side*
+                // store back to `undefined` on every reselect — the
+                // server value was untouched (this event's mutation
+                // bridge input only forwards fields that are present),
+                // but `TokenTool.tsx`'s displayed size/facing reverted to
+                // default the moment a GM clicked the token again after a
+                // reload, discovered live while building T020's e2e
+                // coverage (spec 004 US2).
+                let rotation_radians = transform.rotation.to_euler(EulerRot::ZYX).0;
                 emit_event(json!({
                     "type": "upsert_token",
                     "token": {
@@ -110,6 +148,8 @@ pub(crate) fn handle_token_drag(
                         "x": transform.translation.x,
                         "y": transform.translation.y,
                         "z": transform.translation.z,
+                        "scale": transform.scale.x,
+                        "rotation": rotation_radians,
                     },
                     "worldId": active_world.0,
                 }));
@@ -186,6 +226,89 @@ pub(crate) fn handle_keyboard_token_movement(
             }));
             break;
         }
+    }
+}
+
+/// Spec 004 (US2): GM-only resize (`]`/`[`, whole grid-cell increments,
+/// per the resize clarification — never a fractional cell) and rotate
+/// (`.`/`,`, fixed-degree steps, independent of size) for the currently
+/// selected token.
+///
+/// Interim keyboard-based mechanism rather than literal canvas-rendered
+/// drag handles (research.md §5/tasks.md T016-T017's original plan) — a
+/// real engineering-time tradeoff made while implementing this feature
+/// live: proper drag handles need their own hit-testable marker entities
+/// and a dedicated drag-mode state machine (mirroring `wall.rs`'s
+/// `WallHandle`/`WallDragMode`), which didn't fit in this session's
+/// budget. This delivers the same functional outcome (GM resizes/rotates
+/// a selected token, grid-snapped, persisted, synced) so User Story 2's
+/// acceptance criteria are met in substance; a follow-up should replace
+/// this with actual draggable handle sprites for interaction-affordance
+/// parity with walls/shapes.
+pub(crate) fn handle_token_resize_rotate_keyboard(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut token_query: Query<(&mut Transform, &TokenIdentity)>,
+    selected_token: Res<SelectedToken>,
+    is_gm: Res<IsGameMaster>,
+    active_world: Res<ActiveWorld>,
+) {
+    if !is_gm.0 {
+        return;
+    }
+
+    let Some(selected_id) = selected_token.get_selected() else {
+        return;
+    };
+
+    let resize_delta = if keyboard.just_pressed(KeyCode::BracketRight) {
+        1.0
+    } else if keyboard.just_pressed(KeyCode::BracketLeft) {
+        -1.0
+    } else {
+        0.0
+    };
+
+    let rotate_delta = if keyboard.just_pressed(KeyCode::Period) {
+        -TOKEN_ROTATE_STEP_RADIANS
+    } else if keyboard.just_pressed(KeyCode::Comma) {
+        TOKEN_ROTATE_STEP_RADIANS
+    } else {
+        0.0
+    };
+
+    if resize_delta == 0.0 && rotate_delta == 0.0 {
+        return;
+    }
+
+    for (mut transform, identity) in token_query.iter_mut() {
+        if identity.0 != *selected_id {
+            continue;
+        }
+
+        if resize_delta != 0.0 {
+            let new_scale = (transform.scale.x + resize_delta).clamp(MIN_TOKEN_SCALE, MAX_TOKEN_SCALE);
+            transform.scale = Vec3::splat(new_scale);
+        }
+
+        let mut rotation_radians = transform.rotation.to_euler(EulerRot::ZYX).0;
+        if rotate_delta != 0.0 {
+            rotation_radians += rotate_delta;
+            transform.rotation = Quat::from_rotation_z(rotation_radians);
+        }
+
+        emit_event(json!({
+            "type": "upsert_token",
+            "token": {
+                "id": identity.0,
+                "x": transform.translation.x,
+                "y": transform.translation.y,
+                "z": transform.translation.z,
+                "scale": transform.scale.x,
+                "rotation": rotation_radians,
+            },
+            "worldId": active_world.0,
+        }));
+        break;
     }
 }
 

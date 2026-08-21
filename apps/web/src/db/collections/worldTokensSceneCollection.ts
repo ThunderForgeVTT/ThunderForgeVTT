@@ -81,6 +81,32 @@ export const worldSceneTokensSchema: RxJsonSchema<any> = {
       description: 'ISO 8601 last update timestamp',
       maxLength: 64,
     },
+    ownerUserId: {
+      type: 'string',
+      description: 'Spec 004: the player who controls this token (primary or GM-granted)',
+      maxLength: 36,
+      nullable: true,
+    },
+    isPrimary: {
+      type: 'boolean',
+      description: 'Spec 004: true for exactly one token per (sceneId, ownerUserId)',
+      default: false,
+    },
+    photoUrl: {
+      type: 'string',
+      description: 'Spec 004: player-/GM-editable avatar override; falls back to Dicebear when null',
+      nullable: true,
+    },
+    health: {
+      type: 'number',
+      description: 'Spec 004 (ported from legacy world_tokens): current HP',
+      nullable: true,
+    },
+    maxHealth: {
+      type: 'number',
+      description: 'Spec 004 (ported from legacy world_tokens): max HP',
+      nullable: true,
+    },
 
     // Client-side extensions (not sent to server)
     _optimistic: {
@@ -116,6 +142,11 @@ export interface WorldSceneTokenDoc {
   metadata?: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
+  ownerUserId?: string | null;
+  isPrimary?: boolean;
+  photoUrl?: string | null;
+  health?: number | null;
+  maxHealth?: number | null;
 
   // Client extensions
   _optimistic?: boolean;

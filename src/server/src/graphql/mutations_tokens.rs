@@ -124,39 +124,84 @@ impl TokenMutation {
             rotation: input.rotation,
             scale: input.scale,
             metadata: input.metadata.map(|j| j.0),
+            owner_user_id: input.owner_user_id,
+            is_primary: input.is_primary,
+            photo_url: input.photo_url,
+            health: input.health,
+            max_health: input.max_health,
         };
+        let setting_primary = input.is_primary == Some(true);
+        let input_owner_user_id = input.owner_user_id;
 
         let updated_token = tokio::task::spawn_blocking(move || {
             use crate::schema::{scenes, tokens};
 
-            let token = diesel::update(
-                tokens::table.filter(tokens::token_id.eq(token_id)).filter(
-                    tokens::scene_id.eq_any(
-                        scenes::table
-                            .filter(scenes::owner_id.eq(user_id))
-                            .select(scenes::scene_id),
+            conn.transaction(|conn| {
+                if setting_primary {
+                    // Determine the (scene_id, owner_user_id) this update
+                    // will apply to: the input's owner_user_id if provided,
+                    // else the token's current one. Scoped to scenes this
+                    // caller owns, same as the update below.
+                    let (existing_scene, existing_owner): (uuid::Uuid, Option<uuid::Uuid>) =
+                        tokens::table
+                            .filter(tokens::token_id.eq(token_id))
+                            .filter(
+                                tokens::scene_id.eq_any(
+                                    scenes::table
+                                        .filter(scenes::owner_id.eq(user_id))
+                                        .select(scenes::scene_id),
+                                ),
+                            )
+                            .select((tokens::scene_id, tokens::owner_user_id))
+                            .first(conn)?;
+                    let target_owner = input_owner_user_id.or(existing_owner);
+
+                    if let Some(target_owner) = target_owner {
+                        // Clear any other primary token for this
+                        // (scene_id, owner_user_id) before setting this
+                        // one, so the partial unique index never sees two
+                        // primaries at once.
+                        diesel::update(
+                            tokens::table
+                                .filter(tokens::scene_id.eq(existing_scene))
+                                .filter(tokens::owner_user_id.eq(target_owner))
+                                .filter(tokens::is_primary.eq(true))
+                                .filter(tokens::token_id.ne(token_id)),
+                        )
+                        .set(tokens::is_primary.eq(false))
+                        .execute(conn)?;
+                    }
+                }
+
+                let token = diesel::update(
+                    tokens::table.filter(tokens::token_id.eq(token_id)).filter(
+                        tokens::scene_id.eq_any(
+                            scenes::table
+                                .filter(scenes::owner_id.eq(user_id))
+                                .select(scenes::scene_id),
+                        ),
                     ),
-                ),
-            )
-            .set(update_data)
-            .returning(crate::models::Token::as_returning())
-            .get_result(&mut conn)?;
+                )
+                .set(update_data)
+                .returning(crate::models::Token::as_returning())
+                .get_result(conn)?;
 
-            if let Ok(world_id) = world_id_for_scene(&mut conn, token.scene_id) {
-                let _ = record_world_event(
-                    &mut conn,
-                    world_id,
-                    EVENT_CODE_TOKEN_CHANGED,
-                    Some(serde_json::json!({
-                        "action": "updated",
-                        "token_id": token_id,
-                        "scene_id": token.scene_id,
-                    })),
-                    user_id,
-                );
-            }
+                if let Ok(world_id) = world_id_for_scene(conn, token.scene_id) {
+                    let _ = record_world_event(
+                        conn,
+                        world_id,
+                        EVENT_CODE_TOKEN_CHANGED,
+                        Some(serde_json::json!({
+                            "action": "updated",
+                            "token_id": token_id,
+                            "scene_id": token.scene_id,
+                        })),
+                        user_id,
+                    );
+                }
 
-            Ok::<_, DieselError>(token)
+                Ok::<_, DieselError>(token)
+            })
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -227,6 +272,112 @@ impl TokenMutation {
         .map_err(|_| Error::new("Failed to delete token"))?;
 
         Ok(deleted > 0)
+    }
+
+    /// Move a token the caller controls (their primary token, or one the GM
+    /// granted them) — position only, no scene-ownership required. Spec 004
+    /// FR-009: a player may drag any token whose `owner_user_id` is them.
+    async fn move_own_token(
+        &self,
+        ctx: &Context<'_>,
+        token_id: uuid::Uuid,
+        x: f64,
+        y: f64,
+    ) -> GraphQLResult<GraphQLToken> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        let user_id = auth_user.user_id;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        let updated_token = tokio::task::spawn_blocking(move || {
+            use crate::schema::tokens;
+
+            let token = diesel::update(
+                tokens::table
+                    .filter(tokens::token_id.eq(token_id))
+                    .filter(tokens::owner_user_id.eq(user_id)),
+            )
+            .set((tokens::x.eq(x), tokens::y.eq(y)))
+            .returning(crate::models::Token::as_returning())
+            .get_result(&mut conn)?;
+
+            if let Ok(world_id) = world_id_for_scene(&mut conn, token.scene_id) {
+                let _ = record_world_event(
+                    &mut conn,
+                    world_id,
+                    EVENT_CODE_TOKEN_CHANGED,
+                    Some(serde_json::json!({
+                        "action": "updated",
+                        "token_id": token_id,
+                        "scene_id": token.scene_id,
+                    })),
+                    user_id,
+                );
+            }
+
+            Ok::<_, DieselError>(token)
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to move token (not found or not controlled by you)"))?;
+
+        Ok(GraphQLToken::from(updated_token))
+    }
+
+    /// Change the photo/avatar of the caller's own primary token. Spec 004
+    /// FR-009a: only the token marked `is_primary` for this caller may have
+    /// its photo set this way — not any other token they control.
+    async fn set_own_primary_token_photo(
+        &self,
+        ctx: &Context<'_>,
+        token_id: uuid::Uuid,
+        photo_url: String,
+    ) -> GraphQLResult<GraphQLToken> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        let user_id = auth_user.user_id;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        let updated_token = tokio::task::spawn_blocking(move || {
+            use crate::schema::tokens;
+
+            let token = diesel::update(
+                tokens::table
+                    .filter(tokens::token_id.eq(token_id))
+                    .filter(tokens::owner_user_id.eq(user_id))
+                    .filter(tokens::is_primary.eq(true)),
+            )
+            .set(tokens::photo_url.eq(photo_url))
+            .returning(crate::models::Token::as_returning())
+            .get_result(&mut conn)?;
+
+            if let Ok(world_id) = world_id_for_scene(&mut conn, token.scene_id) {
+                let _ = record_world_event(
+                    &mut conn,
+                    world_id,
+                    EVENT_CODE_TOKEN_CHANGED,
+                    Some(serde_json::json!({
+                        "action": "updated",
+                        "token_id": token_id,
+                        "scene_id": token.scene_id,
+                    })),
+                    user_id,
+                );
+            }
+
+            Ok::<_, DieselError>(token)
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to set photo (not your primary token)"))?;
+
+        Ok(GraphQLToken::from(updated_token))
     }
 }
 
@@ -370,6 +521,238 @@ mod tests {
                 intruder_delete_count, 0,
                 "a non-owner's delete filter must not match another owner's token"
             );
+
+            Ok(())
+        });
+    }
+
+    /// Spec 004 T026: a non-owning player's `move_own_token`-shaped filter
+    /// (owner_user_id = requester) must not match a token owned by someone
+    /// else, and the token's position must be unchanged afterward.
+    #[test]
+    fn move_own_token_filter_rejects_non_owner() {
+        let Some(mut conn) = try_connect() else {
+            eprintln!("skipping move_own_token_filter_rejects_non_owner: no DATABASE_URL/dev DB reachable");
+            return;
+        };
+
+        conn.test_transaction::<_, diesel::result::Error, _>(|conn| {
+            use crate::schema::{scenes, tokens, users, worlds};
+
+            let scene_owner_id = uuid::Uuid::now_v7();
+            let controller_id = uuid::Uuid::now_v7();
+            let intruder_id = uuid::Uuid::now_v7();
+            let world_id = uuid::Uuid::now_v7();
+            let scene_id = uuid::Uuid::now_v7();
+            let token_id = uuid::Uuid::now_v7();
+            let now = chrono::Utc::now().naive_utc();
+
+            for (id, username) in [
+                (scene_owner_id, "move-own-scene-owner"),
+                (controller_id, "move-own-controller"),
+                (intruder_id, "move-own-intruder"),
+            ] {
+                diesel::insert_into(users::table)
+                    .values((
+                        users::id.eq(id),
+                        users::username.eq(format!("{username}-{id}")),
+                        users::password_hash.eq("test-hash"),
+                        users::email.eq(format!("{username}-{id}@example.test")),
+                        users::created_at.eq(now),
+                        users::updated_at.eq(now),
+                    ))
+                    .execute(conn)?;
+            }
+
+            diesel::insert_into(worlds::table)
+                .values((
+                    worlds::id.eq(world_id),
+                    worlds::name.eq("Move Own Token Test World"),
+                    worlds::created_by.eq(scene_owner_id),
+                    worlds::updated_by.eq(scene_owner_id),
+                    worlds::created_at.eq(now),
+                    worlds::updated_at.eq(now),
+                ))
+                .execute(conn)?;
+
+            diesel::insert_into(scenes::table)
+                .values((
+                    scenes::scene_id.eq(scene_id),
+                    scenes::world_id.eq(world_id),
+                    scenes::name.eq("Move Own Token Test Scene"),
+                    scenes::type_.eq("battlemap"),
+                    scenes::grid_size.eq(32),
+                    scenes::grid_type.eq("square"),
+                    scenes::width.eq(1000),
+                    scenes::height.eq(1000),
+                    scenes::owner_id.eq(scene_owner_id),
+                    scenes::created_at.eq(now),
+                    scenes::updated_at.eq(now),
+                ))
+                .execute(conn)?;
+
+            diesel::insert_into(tokens::table)
+                .values((
+                    tokens::token_id.eq(token_id),
+                    tokens::scene_id.eq(scene_id),
+                    tokens::x.eq(5.0),
+                    tokens::y.eq(5.0),
+                    tokens::rotation.eq(0.0),
+                    tokens::scale.eq(1.0),
+                    tokens::owner_user_id.eq(controller_id),
+                    tokens::created_at.eq(now),
+                    tokens::updated_at.eq(now),
+                ))
+                .execute(conn)?;
+
+            // The intruder's move_own_token-shaped filter must match zero rows.
+            let intruder_move_count = diesel::update(
+                tokens::table
+                    .filter(tokens::token_id.eq(token_id))
+                    .filter(tokens::owner_user_id.eq(intruder_id)),
+            )
+            .set((tokens::x.eq(99.0), tokens::y.eq(99.0)))
+            .execute(conn)?;
+            assert_eq!(
+                intruder_move_count, 0,
+                "a non-controller's move filter must not match another player's token"
+            );
+
+            let (x, y): (f64, f64) = tokens::table
+                .filter(tokens::token_id.eq(token_id))
+                .select((tokens::x, tokens::y))
+                .first(conn)?;
+            assert_eq!((x, y), (5.0, 5.0), "position must be unchanged after a rejected move");
+
+            // The real controller's filter must match exactly one row.
+            let controller_move_count = diesel::update(
+                tokens::table
+                    .filter(tokens::token_id.eq(token_id))
+                    .filter(tokens::owner_user_id.eq(controller_id)),
+            )
+            .set((tokens::x.eq(10.0), tokens::y.eq(10.0)))
+            .execute(conn)?;
+            assert_eq!(controller_move_count, 1, "the token's controller must be able to move it");
+
+            Ok(())
+        });
+    }
+
+    /// Spec 004 T027: setting `is_primary = true` for a second token under
+    /// the same (scene_id, owner_user_id) must leave exactly one primary,
+    /// respecting the partial unique index `tokens_one_primary_per_owner_per_scene`.
+    #[test]
+    fn setting_second_primary_replaces_the_first() {
+        let Some(mut conn) = try_connect() else {
+            eprintln!("skipping setting_second_primary_replaces_the_first: no DATABASE_URL/dev DB reachable");
+            return;
+        };
+
+        conn.test_transaction::<_, diesel::result::Error, _>(|conn| {
+            use crate::schema::{scenes, tokens, users, worlds};
+
+            let scene_owner_id = uuid::Uuid::now_v7();
+            let player_id = uuid::Uuid::now_v7();
+            let world_id = uuid::Uuid::now_v7();
+            let scene_id = uuid::Uuid::now_v7();
+            let token_a_id = uuid::Uuid::now_v7();
+            let token_b_id = uuid::Uuid::now_v7();
+            let now = chrono::Utc::now().naive_utc();
+
+            for (id, username) in [
+                (scene_owner_id, "primary-test-scene-owner"),
+                (player_id, "primary-test-player"),
+            ] {
+                diesel::insert_into(users::table)
+                    .values((
+                        users::id.eq(id),
+                        users::username.eq(format!("{username}-{id}")),
+                        users::password_hash.eq("test-hash"),
+                        users::email.eq(format!("{username}-{id}@example.test")),
+                        users::created_at.eq(now),
+                        users::updated_at.eq(now),
+                    ))
+                    .execute(conn)?;
+            }
+
+            diesel::insert_into(worlds::table)
+                .values((
+                    worlds::id.eq(world_id),
+                    worlds::name.eq("Primary Token Test World"),
+                    worlds::created_by.eq(scene_owner_id),
+                    worlds::updated_by.eq(scene_owner_id),
+                    worlds::created_at.eq(now),
+                    worlds::updated_at.eq(now),
+                ))
+                .execute(conn)?;
+
+            diesel::insert_into(scenes::table)
+                .values((
+                    scenes::scene_id.eq(scene_id),
+                    scenes::world_id.eq(world_id),
+                    scenes::name.eq("Primary Token Test Scene"),
+                    scenes::type_.eq("battlemap"),
+                    scenes::grid_size.eq(32),
+                    scenes::grid_type.eq("square"),
+                    scenes::width.eq(1000),
+                    scenes::height.eq(1000),
+                    scenes::owner_id.eq(scene_owner_id),
+                    scenes::created_at.eq(now),
+                    scenes::updated_at.eq(now),
+                ))
+                .execute(conn)?;
+
+            for token_id in [token_a_id, token_b_id] {
+                diesel::insert_into(tokens::table)
+                    .values((
+                        tokens::token_id.eq(token_id),
+                        tokens::scene_id.eq(scene_id),
+                        tokens::x.eq(0.0),
+                        tokens::y.eq(0.0),
+                        tokens::rotation.eq(0.0),
+                        tokens::scale.eq(1.0),
+                        tokens::owner_user_id.eq(player_id),
+                        tokens::created_at.eq(now),
+                        tokens::updated_at.eq(now),
+                    ))
+                    .execute(conn)?;
+            }
+
+            // Mark token A primary first.
+            diesel::update(tokens::table.filter(tokens::token_id.eq(token_a_id)))
+                .set(tokens::is_primary.eq(true))
+                .execute(conn)?;
+
+            // Now replicate update_token's "clear prior primary" step before
+            // marking token B primary (the actual mutation does this inside
+            // one DB transaction; here we exercise the same two statements).
+            diesel::update(
+                tokens::table
+                    .filter(tokens::scene_id.eq(scene_id))
+                    .filter(tokens::owner_user_id.eq(player_id))
+                    .filter(tokens::is_primary.eq(true))
+                    .filter(tokens::token_id.ne(token_b_id)),
+            )
+            .set(tokens::is_primary.eq(false))
+            .execute(conn)?;
+
+            diesel::update(tokens::table.filter(tokens::token_id.eq(token_b_id)))
+                .set(tokens::is_primary.eq(true))
+                .execute(conn)?;
+
+            let primary_count: i64 = tokens::table
+                .filter(tokens::scene_id.eq(scene_id))
+                .filter(tokens::owner_user_id.eq(player_id))
+                .filter(tokens::is_primary.eq(true))
+                .count()
+                .get_result(conn)?;
+            assert_eq!(primary_count, 1, "exactly one primary token must remain for this owner");
+
+            let token_b_is_primary: bool = tokens::table
+                .filter(tokens::token_id.eq(token_b_id))
+                .select(tokens::is_primary)
+                .first(conn)?;
+            assert!(token_b_is_primary, "token B must be the surviving primary");
 
             Ok(())
         });

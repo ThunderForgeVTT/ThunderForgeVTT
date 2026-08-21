@@ -379,6 +379,11 @@ pub struct GraphQLToken {
     metadata: Option<Json<serde_json::Value>>,
     created_at: chrono::NaiveDateTime,
     updated_at: chrono::NaiveDateTime,
+    owner_user_id: Option<uuid::Uuid>,
+    is_primary: bool,
+    photo_url: Option<String>,
+    health: Option<i32>,
+    max_health: Option<i32>,
 }
 
 impl From<crate::models::Token> for GraphQLToken {
@@ -394,6 +399,11 @@ impl From<crate::models::Token> for GraphQLToken {
             metadata: token.metadata.map(Json),
             created_at: token.created_at,
             updated_at: token.updated_at,
+            owner_user_id: token.owner_user_id,
+            is_primary: token.is_primary,
+            photo_url: token.photo_url,
+            health: token.health,
+            max_health: token.max_health,
         }
     }
 }

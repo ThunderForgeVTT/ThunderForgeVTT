@@ -23,6 +23,11 @@ const TOKEN_FIELDS = `
   metadata
   createdAt
   updatedAt
+  ownerUserId
+  isPrimary
+  photoUrl
+  health
+  maxHealth
 `;
 
 async function postGraphQL<TData>(
@@ -131,4 +136,54 @@ export function deleteToken(tokenId: string): Promise<boolean> {
     `,
     { tokenId },
   ).then((data) => data.deleteToken);
+}
+
+type MoveOwnTokenMutation = {
+  moveOwnToken: TokenRecord;
+};
+
+type SetOwnPrimaryTokenPhotoMutation = {
+  setOwnPrimaryTokenPhoto: TokenRecord;
+};
+
+/**
+ * Player-facing move: succeeds only when the caller is this token's
+ * `ownerUserId` (their primary token, or one the GM granted them). Spec
+ * 004 FR-009 — position only, no scene-ownership required.
+ */
+export function moveOwnToken(
+  tokenId: string,
+  x: number,
+  y: number,
+): Promise<TokenRecord> {
+  return postGraphQL<MoveOwnTokenMutation>(
+    `
+      mutation MoveOwnToken($tokenId: UUID!, $x: Float!, $y: Float!) {
+        moveOwnToken(tokenId: $tokenId, x: $x, y: $y) {
+          ${TOKEN_FIELDS}
+        }
+      }
+    `,
+    { tokenId, x, y },
+  ).then((data) => data.moveOwnToken);
+}
+
+/**
+ * Player-facing photo edit: succeeds only for the caller's own primary
+ * token. Spec 004 FR-009a.
+ */
+export function setOwnPrimaryTokenPhoto(
+  tokenId: string,
+  photoUrl: string,
+): Promise<TokenRecord> {
+  return postGraphQL<SetOwnPrimaryTokenPhotoMutation>(
+    `
+      mutation SetOwnPrimaryTokenPhoto($tokenId: UUID!, $photoUrl: String!) {
+        setOwnPrimaryTokenPhoto(tokenId: $tokenId, photoUrl: $photoUrl) {
+          ${TOKEN_FIELDS}
+        }
+      }
+    `,
+    { tokenId, photoUrl },
+  ).then((data) => data.setOwnPrimaryTokenPhoto);
 }
