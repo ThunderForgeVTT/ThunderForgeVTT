@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { SEO } from "@/components/seo/SEO";
+import { Button } from "@/components/ui/button/Button";
 import { WorldLayout } from "@/layouts/world-layout/WorldLayout";
 import type { SeoConfig } from "@/types/seo";
 import { createWorldStore } from "@/engine/world/store";
@@ -26,6 +27,7 @@ import { LightingTool } from "@/components/canvas-tools/LightingTool";
 import { ShapeTool } from "@/components/canvas-tools/ShapeTool";
 import { MapImportTool } from "@/components/canvas-tools/MapImportTool";
 import { AssetPasteTool } from "@/components/canvas-tools/AssetPasteTool";
+import { TokenTool } from "@/components/canvas-tools/TokenTool";
 import { TokenPanel } from "@/components/TokenPanel";
 import type { CanvasImageAsset } from "@/api/assets";
 import { SceneSwitcher } from "@/components/world/SceneSwitcher";
@@ -92,6 +94,88 @@ export default function WorldPage() {
   // entirely for non-owners, never merely disabled.
   const isSceneOwner = Boolean(world && user && world.createdBy === user.id);
   const sceneId = selectedSceneId;
+
+  // Spec 004 (US4, T034-T036): scene-switch loading/error feedback. Before
+  // this, the four per-scene loaders below (walls/tokens/lights/shapes)
+  // plus the background-image dispatch had zero UI signal on failure —
+  // just a `console.error`, per contracts/scene-load-state.md's
+  // documented gap. `sceneLoadGeneration` is the "retry"/"latest wins"
+  // mechanism (T036): bumping it both re-triggers every loader effect
+  // below (added to each one's dependency array) and invalidates any
+  // in-flight response from a stale scene/attempt via
+  // `sceneLoadGenerationRef` — a loader that resolves after the user has
+  // already switched scenes or hit retry again must not resurrect a
+  // finished "loading" state or overwrite a newer error.
+  const [sceneLoadGeneration, setSceneLoadGeneration] = useState(0);
+  const sceneLoadGenerationRef = useRef(0);
+  useEffect(() => {
+    sceneLoadGenerationRef.current = sceneLoadGeneration;
+  }, [sceneLoadGeneration]);
+
+  type SceneLoadResource = "background" | "walls" | "tokens" | "lights" | "shapes";
+  type SceneLoadState =
+    | { status: "loading" }
+    | { status: "ready" }
+    | { status: "error"; failedResource: SceneLoadResource };
+
+  const [sceneLoadState, setSceneLoadState] = useState<SceneLoadState>({ status: "loading" });
+  const pendingSceneResourcesRef = useRef<Set<SceneLoadResource>>(new Set());
+
+  // Reset to "loading" whenever the active scene or the retry generation
+  // changes — mirrors the walls/shapes "clear the previous scene's stale
+  // data" effects below, but for load-status rather than store contents.
+  useEffect(() => {
+    if (!sceneId) {
+      return;
+    }
+    pendingSceneResourcesRef.current = new Set<SceneLoadResource>([
+      "background",
+      "walls",
+      "tokens",
+      "lights",
+      "shapes",
+    ]);
+    setSceneLoadState({ status: "loading" });
+  }, [sceneId, sceneLoadGeneration]);
+
+  const markSceneResourceLoaded = useCallback(
+    (resource: SceneLoadResource, generation: number) => {
+      if (generation !== sceneLoadGenerationRef.current) {
+        return;
+      }
+      pendingSceneResourcesRef.current.delete(resource);
+      if (pendingSceneResourcesRef.current.size === 0) {
+        setSceneLoadState((current) =>
+          current.status === "error" ? current : { status: "ready" },
+        );
+      }
+    },
+    [],
+  );
+
+  const markSceneResourceFailed = useCallback(
+    (resource: SceneLoadResource, generation: number) => {
+      if (generation !== sceneLoadGenerationRef.current) {
+        return;
+      }
+      // Background-image failure takes priority in the reported
+      // `failedResource` if multiple fail simultaneously, per
+      // contracts/scene-load-state.md — it's the most visually
+      // disruptive, so don't let a later walls/lights/shapes/tokens
+      // failure downgrade an already-reported background failure.
+      setSceneLoadState((current) => {
+        if (current.status === "error" && current.failedResource === "background") {
+          return current;
+        }
+        return { status: "error", failedResource: resource };
+      });
+    },
+    [],
+  );
+
+  const retrySceneLoad = useCallback(() => {
+    setSceneLoadGeneration((generation) => generation + 1);
+  }, []);
   const selectedScene = scenes.find((scene) => scene.sceneId === sceneId) ?? null;
 
   useEffect(() => {
@@ -259,7 +343,52 @@ export default function WorldPage() {
       },
       "ui",
     );
-  }, [selectedScene, worldStore, id, bridgeReady]);
+
+    // Spec 004 (US4): a scene with no imported art has nothing to fail —
+    // mark "background" satisfied immediately. A scene with art gets a
+    // real reachability check (the engine loads the sprite itself with no
+    // JS-visible success/failure signal, so this is the only way to
+    // surface "the background asset is unreachable" per FR-013 rather
+    // than leaving the canvas silently blank).
+    const generation = sceneLoadGeneration;
+    if (!selectedScene.backgroundImagePath) {
+      markSceneResourceLoaded("background", generation);
+      return;
+    }
+
+    let cancelled = false;
+    void fetch(selectedScene.backgroundImagePath, {
+      method: "HEAD",
+      credentials: "same-origin",
+    })
+      .then((response) => {
+        if (cancelled) {
+          return;
+        }
+        if (response.ok) {
+          markSceneResourceLoaded("background", generation);
+        } else {
+          markSceneResourceFailed("background", generation);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          markSceneResourceFailed("background", generation);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    selectedScene,
+    worldStore,
+    id,
+    bridgeReady,
+    sceneLoadGeneration,
+    markSceneResourceLoaded,
+    markSceneResourceFailed,
+  ]);
 
   useEffect(() => {
     if (!sceneId || !bridgeReady) {
@@ -286,48 +415,82 @@ export default function WorldPage() {
     // fire and dispatch the confirmed walls before bindWorldStore has
     // registered its forwarding subscription, silently losing them from
     // the engine's WallSet even though they're genuinely persisted.
-    void loadWallsIntoStore(worldStore, sceneId).catch((error) => {
-      console.error("Failed to load scene walls:", error);
-    });
+    const generation = sceneLoadGeneration;
+    void loadWallsIntoStore(worldStore, sceneId)
+      .then(() => markSceneResourceLoaded("walls", generation))
+      .catch((error) => {
+        console.error("Failed to load scene walls:", error);
+        markSceneResourceFailed("walls", generation);
+      });
 
     const stopBridge = startWallMutationBridge(worldStore, sceneId);
 
     return () => {
       stopBridge();
     };
-  }, [sceneId, worldStore, bridgeReady]);
+  }, [
+    sceneId,
+    worldStore,
+    bridgeReady,
+    sceneLoadGeneration,
+    markSceneResourceLoaded,
+    markSceneResourceFailed,
+  ]);
 
   useEffect(() => {
     if (!sceneId || !bridgeReady) {
       return;
     }
 
-    void loadTokensIntoStore(worldStore, sceneId).catch((error) => {
-      console.error("Failed to load scene tokens:", error);
-    });
+    const tokensGeneration = sceneLoadGeneration;
+    void loadTokensIntoStore(worldStore, sceneId)
+      .then(() => markSceneResourceLoaded("tokens", tokensGeneration))
+      .catch((error) => {
+        console.error("Failed to load scene tokens:", error);
+        markSceneResourceFailed("tokens", tokensGeneration);
+      });
 
     const stopBridge = startTokenMutationBridge(worldStore, sceneId, isSceneOwner);
 
     return () => {
       stopBridge();
     };
-  }, [sceneId, worldStore, bridgeReady, isSceneOwner]);
+  }, [
+    sceneId,
+    worldStore,
+    bridgeReady,
+    isSceneOwner,
+    sceneLoadGeneration,
+    markSceneResourceLoaded,
+    markSceneResourceFailed,
+  ]);
 
   useEffect(() => {
     if (!sceneId || !bridgeReady) {
       return;
     }
 
-    void loadLightsIntoStore(worldStore, sceneId).catch((error) => {
-      console.error("Failed to load scene lights:", error);
-    });
+    const lightsGeneration = sceneLoadGeneration;
+    void loadLightsIntoStore(worldStore, sceneId)
+      .then(() => markSceneResourceLoaded("lights", lightsGeneration))
+      .catch((error) => {
+        console.error("Failed to load scene lights:", error);
+        markSceneResourceFailed("lights", lightsGeneration);
+      });
 
     const stopBridge = startLightMutationBridge(worldStore, sceneId);
 
     return () => {
       stopBridge();
     };
-  }, [sceneId, worldStore, bridgeReady]);
+  }, [
+    sceneId,
+    worldStore,
+    bridgeReady,
+    sceneLoadGeneration,
+    markSceneResourceLoaded,
+    markSceneResourceFailed,
+  ]);
 
   useEffect(() => {
     if (!sceneId || !bridgeReady) {
@@ -344,16 +507,27 @@ export default function WorldPage() {
       worldStore.dispatch({ type: "remove_shape", shapeId }, "sync");
     }
 
-    void loadShapesIntoStore(worldStore, sceneId).catch((error) => {
-      console.error("Failed to load scene shapes:", error);
-    });
+    const shapesGeneration = sceneLoadGeneration;
+    void loadShapesIntoStore(worldStore, sceneId)
+      .then(() => markSceneResourceLoaded("shapes", shapesGeneration))
+      .catch((error) => {
+        console.error("Failed to load scene shapes:", error);
+        markSceneResourceFailed("shapes", shapesGeneration);
+      });
 
     const stopBridge = startShapeMutationBridge(worldStore, sceneId);
 
     return () => {
       stopBridge();
     };
-  }, [sceneId, worldStore, bridgeReady]);
+  }, [
+    sceneId,
+    worldStore,
+    bridgeReady,
+    sceneLoadGeneration,
+    markSceneResourceLoaded,
+    markSceneResourceFailed,
+  ]);
 
   const handleMapImportComplete = useCallback(() => {
     if (!sceneId || !id) {
@@ -455,6 +629,53 @@ export default function WorldPage() {
                 <p style={{ fontSize: "0.9em" }}>{engineError.message}</p>
               </div>
             )}
+            {sceneId && sceneLoadState.status === "loading" ? (
+              <div
+                data-testid="scene-load-indicator"
+                style={{
+                  position: "absolute",
+                  top: "50%",
+                  left: "50%",
+                  transform: "translate(-50%, -50%)",
+                  color: "white",
+                  textAlign: "center",
+                  zIndex: 1000,
+                }}
+              >
+                <p>Loading scene…</p>
+              </div>
+            ) : null}
+            {sceneId && sceneLoadState.status === "error" ? (
+              <div
+                data-testid="scene-load-error"
+                style={{
+                  position: "absolute",
+                  top: "50%",
+                  left: "50%",
+                  transform: "translate(-50%, -50%)",
+                  color: "white",
+                  textAlign: "center",
+                  zIndex: 1000,
+                }}
+              >
+                <p>
+                  Failed to load{" "}
+                  {sceneLoadState.failedResource === "background"
+                    ? "the scene's background image"
+                    : `the scene's ${sceneLoadState.failedResource}`}
+                  .
+                </p>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  data-testid="scene-load-retry"
+                  onClick={retrySceneLoad}
+                >
+                  Retry
+                </Button>
+              </div>
+            ) : null}
             {scenes.length > 0 || isSceneOwner ? (
               // Not gated on scenes.length alone: a brand-new world has
               // zero scenes, and the "New scene" affordance (the only way
@@ -520,6 +741,11 @@ export default function WorldPage() {
                   lights={worldState.lights}
                   selectedLightId={worldState.selectedLightId}
                   tokens={worldState.tokens}
+                />
+                <TokenTool
+                  worldStore={worldStore}
+                  tokens={worldState.tokens}
+                  selectedTokenId={worldState.selectedTokenId}
                 />
               </div>
             ) : null}

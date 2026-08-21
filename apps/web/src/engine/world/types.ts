@@ -67,6 +67,7 @@ export type WorldShape = {
 export type WorldState = {
   worldId: string;
   tokens: Record<string, WorldToken>;
+  selectedTokenId: string | null;
   walls: Record<string, WorldWall>;
   selectedWallId: string | null;
   lights: Record<string, WorldLight>;
@@ -102,6 +103,15 @@ export type UpsertTokenCommand = {
 export type RemoveTokenCommand = {
   type: "remove_token";
   tokenId: string;
+};
+
+// Spec 004 (US2, T020): the engine emits this whenever a token is
+// selected/deselected on the canvas (mirroring `select_wall`'s identical
+// convention), so `TokenTool.tsx`'s resize/rotate panel knows which token
+// (if any) to show controls for.
+export type SelectTokenCommand = {
+  type: "select_token";
+  tokenId: string | null;
 };
 
 // Confirmed wall upsert/remove: dispatched once a wall's state is known
@@ -316,6 +326,7 @@ export type WorldCommand =
   | SetSceneBackgroundCommand
   | UpsertTokenCommand
   | RemoveTokenCommand
+  | SelectTokenCommand
   | UpsertWallCommand
   | RemoveWallCommand
   | SelectWallCommand

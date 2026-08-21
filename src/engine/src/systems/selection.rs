@@ -26,6 +26,20 @@ fn is_point_in_rect(
         && point.y >= min.y && point.y <= max.y
 }
 
+/// Notifies the frontend of a token selection change, mirroring
+/// `wall.rs`'s `emit_wall_selection` exactly (same `bevy`-sourced-event
+/// convention, so `bindWorldStore` never re-forwards it back into the
+/// engine and no loop results). Added for spec 004 US2 (T020): without
+/// this, `TokenTool.tsx` has no way to know which token is selected, so
+/// its resize/rotate controls could never appear for a token selected by
+/// clicking the canvas.
+fn emit_token_selection(token_id: Option<&str>) {
+    emit_event(json!({
+        "type": "select_token",
+        "tokenId": token_id,
+    }));
+}
+
 /// Convert the cursor's window-pixel position into Bevy world space using the
 /// active camera's real transform/projection (accounts for pan and zoom).
 /// Using `Camera::viewport_to_world_2d` instead of hand-rolling the inverse
@@ -79,10 +93,12 @@ pub(crate) fn handle_token_drag(
         match hit {
             Some((token_id, offset)) => {
                 selected_token.select(token_id.clone());
+                emit_token_selection(Some(&token_id));
                 dragging.0 = Some((token_id, offset));
             }
             None => {
                 selected_token.deselect();
+                emit_token_selection(None);
                 dragging.0 = None;
             }
         }
@@ -110,6 +126,21 @@ pub(crate) fn handle_token_drag(
         };
         for (transform, identity) in token_query.iter() {
             if identity.0 == token_id {
+                // Include scale/rotation, not just position: this event
+                // fires on *every* select-click release, not only a real
+                // drag (dragging.0 is set on press, released here even
+                // for a plain click-to-select with no movement). Omitting
+                // them made the world-store reducer's full-replace
+                // `upsert_token` case silently wipe a token's
+                // already-persisted scale/rotation from the *client-side*
+                // store back to `undefined` on every reselect — the
+                // server value was untouched (this event's mutation
+                // bridge input only forwards fields that are present),
+                // but `TokenTool.tsx`'s displayed size/facing reverted to
+                // default the moment a GM clicked the token again after a
+                // reload, discovered live while building T020's e2e
+                // coverage (spec 004 US2).
+                let rotation_radians = transform.rotation.to_euler(EulerRot::ZYX).0;
                 emit_event(json!({
                     "type": "upsert_token",
                     "token": {
@@ -117,6 +148,8 @@ pub(crate) fn handle_token_drag(
                         "x": transform.translation.x,
                         "y": transform.translation.y,
                         "z": transform.translation.z,
+                        "scale": transform.scale.x,
+                        "rotation": rotation_radians,
                     },
                     "worldId": active_world.0,
                 }));

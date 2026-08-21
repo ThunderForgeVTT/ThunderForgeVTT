@@ -88,8 +88,16 @@ function reduceState(state: WorldState, command: WorldCommand): WorldState {
       return {
         ...state,
         tokens: nextTokens,
+        selectedTokenId:
+          state.selectedTokenId === command.tokenId ? null : state.selectedTokenId,
       };
     }
+
+    case "select_token":
+      return {
+        ...state,
+        selectedTokenId: command.tokenId,
+      };
 
     case "upsert_wall":
       return {
@@ -187,6 +195,7 @@ export function createWorldStore(options: CreateWorldStoreOptions): WorldStore {
   let state: WorldState = {
     worldId: options.worldId,
     tokens: normalizeTokens(options.initialTokens ?? []),
+    selectedTokenId: null,
     walls: normalizeWalls(options.initialWalls ?? []),
     selectedWallId: null,
     lights: normalizeLights(options.initialLights ?? []),
