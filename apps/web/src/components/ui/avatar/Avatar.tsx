@@ -1,8 +1,11 @@
-import * as RadixAvatar from "@radix-ui/react-avatar";
 import { useMemo } from "react";
-import { cn } from "@/utils/cn";
+import {
+  Avatar as ShadcnAvatar,
+  AvatarImage,
+  AvatarFallback,
+} from "@/components/ui/avatar";
+import { cn } from "@/lib/utils";
 import { useAvatar } from "@/hooks/useAvatar";
-import styles from "./Avatar.module.scss";
 
 export interface AvatarProps {
   seed: string;
@@ -10,6 +13,12 @@ export interface AvatarProps {
   size?: "sm" | "md" | "lg";
   className?: string;
 }
+
+const SIZE_CLASSES: Record<NonNullable<AvatarProps["size"]>, string> = {
+  sm: "size-6",
+  md: "size-8",
+  lg: "size-12",
+};
 
 export function Avatar({ seed, name, size = "md", className }: AvatarProps) {
   const { avatarSvgUrl } = useAvatar(seed);
@@ -25,15 +34,9 @@ export function Avatar({ seed, name, size = "md", className }: AvatarProps) {
   );
 
   return (
-    <RadixAvatar.Root className={cn(styles.avatar, styles[size], className)}>
-      <RadixAvatar.Image
-        alt={name ?? seed}
-        className={styles.image}
-        src={avatarSvgUrl}
-      />
-      <RadixAvatar.Fallback className={styles.fallback} delayMs={250}>
-        {initials}
-      </RadixAvatar.Fallback>
-    </RadixAvatar.Root>
+    <ShadcnAvatar className={cn(SIZE_CLASSES[size], className)}>
+      <AvatarImage alt={name ?? seed} src={avatarSvgUrl} />
+      <AvatarFallback>{initials}</AvatarFallback>
+    </ShadcnAvatar>
   );
 }

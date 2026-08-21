@@ -1,6 +1,5 @@
-import { cn } from "@/utils/cn";
-import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
-import styles from "./Loader.module.scss";
+import { Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export interface LoaderProps {
   label?: string;
@@ -15,11 +14,13 @@ export function Loader({
 }: LoaderProps) {
   return (
     <div
-      className={cn(styles.loader, fullScreen && styles.fullScreen, className)}
+      className={cn(
+        "flex items-center justify-center gap-2 text-sm text-muted-foreground",
+        fullScreen && "min-h-screen w-full",
+        className,
+      )}
     >
-      <span className={styles.spinner} aria-hidden="true">
-        <FantasyIcon name="spark" size={20} />
-      </span>
+      <Loader2 className="size-5 animate-spin" aria-hidden="true" />
       <span>{label}</span>
     </div>
   );

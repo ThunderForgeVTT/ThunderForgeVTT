@@ -170,3 +170,20 @@ export {
   isMemberWithRole,
 } from "@/db/collections/worldMembersCollection";
 export type { WorldMemberDoc } from "@/db/collections/worldMembersCollection";
+
+// Native canvas authoring (specs/001-bevy-canvas-authoring): walls (T019)
+export { worldWallsSchema } from "@/db/collections/worldWallsCollection";
+export type { WorldWallDoc, WallDoorState } from "@/db/collections/worldWallsCollection";
+
+// Native canvas authoring (specs/001-bevy-canvas-authoring): light sources (T042)
+export { worldLightsSchema } from "@/db/collections/worldLightsCollection";
+export type { WorldLightDoc } from "@/db/collections/worldLightsCollection";
+
+// Native canvas authoring (specs/001-bevy-canvas-authoring): shapes (T057)
+export { worldShapesSchema } from "@/db/collections/worldShapesCollection";
+export type { WorldShapeDoc, ShapeKind as WorldShapeKind } from "@/db/collections/worldShapesCollection";
+
+// Scene-scoped token persistence: the modern `tokens` table, distinct from
+// the legacy world-scoped `world_tokens` collection above.
+export { worldSceneTokensSchema } from "@/db/collections/worldTokensSceneCollection";
+export type { WorldSceneTokenDoc } from "@/db/collections/worldTokensSceneCollection";

@@ -8,7 +8,7 @@
 
 use crate::auth_middleware::AuthenticatedUser;
 use crate::models::*;
-use async_graphql::{Context, Error, Result as GraphQLResult};
+use async_graphql::{Context, Error, ErrorExtensions, Result as GraphQLResult};
 use diesel::prelude::*;
 use diesel::result::DatabaseErrorKind;
 use diesel::result::Error as DieselError;
@@ -325,38 +325,77 @@ pub async fn load_owned_world_events(
 /// Load a single world by ID with permission checks.
 ///
 /// # Permissions
-/// - If the user is an admin: Returns the world if it exists
-/// - If the user is not an admin: Returns the world only if they own it (created_by match)
-/// - Otherwise: Returns Forbidden error
+/// - If the user is an admin: returns the world if it exists.
+/// - Otherwise: returns the world only if the caller is its owner
+///   (`worlds.created_by`) or has an accepted `world_members` row for
+///   `(world_id, user_id)` — enforced via `require_world_member`, the
+///   same guard spec 002's canvas-asset reads/writes use
+///   (`auth/world_membership.rs`).
+/// - A caller with no access gets `Ok(None)`, identical to "world does
+///   not exist" — this deliberately does not distinguish the two cases,
+///   so an unauthorized caller can't use this to probe which world IDs
+///   exist.
+///
+/// Previously this check was a no-op (`if !is_admin { /* TODO */ }`,
+/// left over from an abandoned RBAC module) — every authenticated user
+/// could read any world and, via callers like `SceneQuery::scenes`, any
+/// world's scenes/tokens/walls, regardless of ownership. Every call site
+/// in `graphql/queries/scene.rs` already carried a
+/// `// 🔐 SECURITY: ...` comment asserting this check happened; fixing
+/// this function alone was not sufficient — see the accompanying changes
+/// in `queries/scene.rs`, which previously discarded this function's
+/// return value (`let _ = load_visible_world_by_id(...).await?;`) and so
+/// would not have enforced even a correct check.
 pub async fn load_visible_world_by_id(
     state: &AppState,
     user_id: uuid::Uuid,
     is_admin: bool,
     world_id: uuid::Uuid,
 ) -> GraphQLResult<Option<World>> {
-    // Phase 2.3: RBAC check disabled (module not implemented)
-    // For now, allow all users to view worlds
-    if !is_admin {
-        // TODO: Implement proper RBAC check when rbac module is complete
-    }
-
     let mut conn = state
         .db_pool
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
-    let found = tokio::task::spawn_blocking(move || {
+    let found = tokio::task::spawn_blocking(move || -> Result<Option<World>, String> {
+        if !is_admin {
+            use crate::auth::world_membership::{require_world_member, WorldMembershipError};
+            match require_world_member(&mut conn, user_id, world_id) {
+                Ok(_role) => {}
+                Err(WorldMembershipError::NotAMember) => return Ok(None),
+                Err(WorldMembershipError::Database(msg)) => return Err(msg),
+            }
+        }
+
         worlds::table
             .filter(worlds::id.eq(world_id))
             .select(World::as_select())
             .first::<World>(&mut conn)
             .optional()
+            .map_err(|e| e.to_string())
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(|_| Error::new("Failed to query world"))?;
 
     Ok(found)
+}
+
+/// Convenience wrapper around `load_visible_world_by_id` for resolvers
+/// that return a `Vec<T>` rather than `Option<T>` (e.g. `scenes`,
+/// `tokens`, `walls` under a world) and so can't express "not visible"
+/// by returning `None` — returns a `FORBIDDEN` GraphQL error instead.
+pub async fn require_visible_world(
+    state: &AppState,
+    user_id: uuid::Uuid,
+    is_admin: bool,
+    world_id: uuid::Uuid,
+) -> GraphQLResult<()> {
+    match load_visible_world_by_id(state, user_id, is_admin, world_id).await? {
+        Some(_) => Ok(()),
+        None => Err(Error::new("You do not have access to this world")
+            .extend_with(|_, ext| ext.set("code", "FORBIDDEN"))),
+    }
 }
 
 /// Load a single world token by ID with ownership verification.
@@ -502,5 +541,96 @@ pub async fn get_world_id_from_scene(
     match scene {
         Some((world_id,)) => Ok(world_id),
         None => Err(Error::new("Scene not found")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::*;
+
+    /// Regression guard for a real, previously-shipped bug:
+    /// `load_visible_world_by_id` used to have no authorization check at
+    /// all (`if !is_admin { /* TODO: rbac module not implemented */ }`),
+    /// so any authenticated user could read any other user's world — and,
+    /// via `SceneQuery`'s callers in `graphql/queries/scene.rs`, that
+    /// world's scenes/tokens/walls/etc — despite every call site carrying
+    /// a `// 🔐 SECURITY` comment asserting a check happened.
+    #[tokio::test]
+    async fn load_visible_world_by_id_rejects_non_member_non_owner() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let outsider_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let result = load_visible_world_by_id(&state, outsider_id, false, world_id)
+            .await
+            .expect("query itself should not error");
+
+        assert!(
+            result.is_none(),
+            "a user with no ownership or world_members row must not see the world"
+        );
+    }
+
+    #[tokio::test]
+    async fn load_visible_world_by_id_allows_owner_via_created_by_fallback() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let result = load_visible_world_by_id(&state, owner_id, false, world_id)
+            .await
+            .expect("query should not error");
+
+        assert!(result.is_some(), "the world's creator must see it");
+    }
+
+    #[tokio::test]
+    async fn load_visible_world_by_id_allows_accepted_world_member() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let member_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        insert_test_world_member(&mut conn, world_id, member_id, "Player");
+        drop(conn);
+
+        let result = load_visible_world_by_id(&state, member_id, false, world_id)
+            .await
+            .expect("query should not error");
+
+        assert!(
+            result.is_some(),
+            "an accepted world_members row must grant visibility"
+        );
+    }
+
+    #[tokio::test]
+    async fn require_visible_world_rejects_non_member_with_forbidden() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let outsider_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let err = require_visible_world(&state, outsider_id, false, world_id)
+            .await
+            .expect_err("non-member must be rejected");
+
+        let code = err
+            .extensions
+            .as_ref()
+            .and_then(|e| e.get("code"))
+            .expect("FORBIDDEN error must carry a code extension");
+        assert_eq!(
+            serde_json::to_value(code).unwrap(),
+            serde_json::json!("FORBIDDEN")
+        );
     }
 }

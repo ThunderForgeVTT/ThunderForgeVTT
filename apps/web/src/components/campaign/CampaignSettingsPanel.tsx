@@ -2,9 +2,9 @@ import { useState, useEffect } from "react";
 import { withCsrf } from "@/api/auth";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
+import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/loader/Loader";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
-import styles from "./CampaignSettingsPanel.module.scss";
 
 interface Invite {
   id: string;
@@ -286,21 +286,21 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
   };
 
   return (
-    <section className={styles.container}>
-      <Card surface="parchment" className={styles.card}>
-        <div className={styles.header}>
-          <div>
-            <h2>Campaign Settings</h2>
-            <p className={styles.subtitle}>Manage invites and player roster</p>
-          </div>
+    <section>
+      <Card surface="parchment" className="grid gap-6 p-6">
+        <div>
+          <h2 className="text-xl font-semibold">Campaign Settings</h2>
+          <p className="text-muted-foreground">
+            Manage invites and player roster
+          </p>
         </div>
 
         {error && <StatusBadge variant="danger">{error}</StatusBadge>}
 
         {/* Invite Players Section */}
-        <div className={styles.section}>
-          <h3>Invite Players</h3>
-          <p className={styles.sectionDescription}>
+        <div className="grid gap-3">
+          <h3 className="font-semibold">Invite Players</h3>
+          <p className="text-sm text-muted-foreground">
             Generate invite codes to share with other players. Each code allows a specific number of joins.
           </p>
 
@@ -308,6 +308,7 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
             onClick={() => void handleGenerateInvite()}
             disabled={isGenerating}
             icon="link"
+            className="justify-self-start"
           >
             {isGenerating ? "Generating..." : "Generate Invite Code"}
           </Button>
@@ -315,14 +316,21 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
           {invitesLoading ? (
             <Loader label="Loading invites..." />
           ) : invites.length === 0 ? (
-            <p className={styles.emptyState}>No active invites yet. Generate one to get started.</p>
+            <p className="text-sm text-muted-foreground">
+              No active invites yet. Generate one to get started.
+            </p>
           ) : (
-            <div className={styles.invitesList}>
+            <div className="grid gap-3">
               {invites.map((invite) => (
-                <div key={invite.id} className={styles.inviteCard}>
-                  <div className={styles.inviteHeader}>
-                    <code className={styles.inviteCode}>{invite.inviteCode}</code>
-                    <span className={styles.inviteStatus}>
+                <div
+                  key={invite.id}
+                  className="grid gap-3 rounded-lg border border-border p-4"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <code className="rounded bg-muted px-2 py-1 text-sm">
+                      {invite.inviteCode}
+                    </code>
+                    <span className="text-sm text-muted-foreground">
                       {getInviteStatus(invite)}
                     </span>
                     {!isInviteValid(invite) && (
@@ -330,12 +338,11 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
                     )}
                   </div>
 
-                  <div className={styles.inviteUrl}>
-                    <input
+                  <div className="flex gap-2">
+                    <Input
                       type="text"
                       readOnly
                       value={generateInviteUrl(invite.inviteCode)}
-                      className={styles.urlInput}
                     />
                     <Button
                       variant="secondary"
@@ -347,7 +354,7 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
                     </Button>
                   </div>
 
-                  <div className={styles.inviteMeta}>
+                  <div className="flex gap-4 text-xs text-muted-foreground">
                     <span>Created: {new Date(invite.createdAt).toLocaleDateString()}</span>
                     {invite.expiresAt && (
                       <span>Expires: {new Date(invite.expiresAt).toLocaleDateString()}</span>
@@ -360,31 +367,36 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
         </div>
 
         {/* Player Roster Section */}
-        <div className={styles.section}>
-          <h3>Player Roster ({members.length})</h3>
-          <p className={styles.sectionDescription}>
+        <div className="grid gap-3">
+          <h3 className="font-semibold">Player Roster ({members.length})</h3>
+          <p className="text-sm text-muted-foreground">
             View all players currently joined to this campaign.
           </p>
 
           {membersLoading ? (
             <Loader label="Loading roster..." />
           ) : members.length === 0 ? (
-            <p className={styles.emptyState}>No players yet. Invite someone to join!</p>
+            <p className="text-sm text-muted-foreground">
+              No players yet. Invite someone to join!
+            </p>
           ) : (
-            <div className={styles.membersList}>
+            <div className="grid gap-3">
               {members.map((member) => (
-                <div key={member.id} className={styles.memberRow}>
-                  <span className={styles.memberRole}>{member.role}</span>
-                  <span className={styles.memberJoinDate}>
+                <div
+                  key={member.id}
+                  className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3"
+                >
+                  <span className="font-medium">{member.role}</span>
+                  <span className="text-sm text-muted-foreground">
                     Joined: {new Date(member.joinedAt).toLocaleDateString()}
                   </span>
                   {canChangeRole(member) && (
-                    <div className={styles.memberActions}>
+                    <div className="ml-auto flex items-center gap-2">
                       <select
                         value={member.role}
                         onChange={(e) => void handleChangeRole(member, e.target.value)}
                         disabled={changingRoleFor === member.id}
-                        className={styles.roleSelect}
+                        className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                       >
                         <option value="Owner">Owner</option>
                         <option value="GM">GM</option>

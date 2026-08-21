@@ -165,3 +165,12 @@ Cargo.lock
 # End of https://www.toptal.com/developers/gitignore/api/rust,node
 docs/IMPLEMENTATION_GUIDE.md
 .aider*
+
+### Playwright ###
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/e2e/screenshots/
+apps/web/.playwright/
+
+### graphify ###
+graphify-out/

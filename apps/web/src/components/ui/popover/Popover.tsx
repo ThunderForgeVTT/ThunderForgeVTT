@@ -1,7 +1,10 @@
-import * as RadixPopover from "@radix-ui/react-popover";
 import type { ReactNode } from "react";
-import { cn } from "@/utils/cn";
-import styles from "./Popover.module.scss";
+import {
+  Popover as ShadcnPopover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 export interface PopoverProps {
   trigger: ReactNode;
@@ -11,17 +14,11 @@ export interface PopoverProps {
 
 export function Popover({ trigger, children, className }: PopoverProps) {
   return (
-    <RadixPopover.Root>
-      <RadixPopover.Trigger asChild>{trigger}</RadixPopover.Trigger>
-      <RadixPopover.Portal>
-        <RadixPopover.Content
-          className={cn(styles.content, className)}
-          sideOffset={12}
-        >
-          {children}
-          <RadixPopover.Arrow className={styles.arrow} />
-        </RadixPopover.Content>
-      </RadixPopover.Portal>
-    </RadixPopover.Root>
+    <ShadcnPopover>
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+      <PopoverContent className={cn(className)} sideOffset={12}>
+        {children}
+      </PopoverContent>
+    </ShadcnPopover>
   );
 }

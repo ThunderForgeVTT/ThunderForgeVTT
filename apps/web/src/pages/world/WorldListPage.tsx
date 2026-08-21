@@ -4,6 +4,7 @@ import { getAllWorlds, getMyWorlds } from "@/api/world";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Container } from "@/components/ui/container/Container";
 import { Loader } from "@/components/ui/loader/Loader";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
@@ -11,12 +12,11 @@ import { useAuth } from "@/hooks/useAuth";
 import type { SeoConfig } from "@/types/seo";
 import type { WorldRecord } from "@/types/world";
 import { WorldCard } from "./components/WorldCard";
-import styles from "./WorldListPage.module.scss";
 
 export const worldListPageSeo: SeoConfig = {
   title: "World archive",
   description:
-    "Browse your ThunderForge worlds, charter new realms, and inspect the guild archive through a fantasy-themed dashboard.",
+    "Browse your ThunderForge worlds, create new ones, and inspect the full archive from a clean dashboard.",
   canonicalPath: "/worlds",
   noindex: true,
 };
@@ -81,26 +81,31 @@ export default function WorldListPage() {
     <>
       <SEO {...worldListPageSeo} />
       <Container>
-        <main className={styles.shell}>
-          <section className={styles.hero}>
+        <main className="grid gap-6 pb-16">
+          <section className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className={styles.eyebrow}>World archive</p>
-              <h1>Chart every realm in your guild ledger.</h1>
-              <p>
+              <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+                World archive
+              </p>
+              <h1 className="text-3xl font-semibold">
+                Every world in your library.
+              </h1>
+              <p className="mt-1 max-w-2xl text-muted-foreground">
                 Create a new world, revisit an existing one, or inspect the
                 wider archive when administrator privileges permit it.
               </p>
             </div>
-            <div className={styles.heroActions}>
+            <div className="grid gap-3">
               <Link to="/worlds/create">
                 <Button icon="quill">Create world</Button>
               </Link>
               {isAdmin ? (
-                <label className={styles.toggle}>
-                  <input
-                    type="checkbox"
+                <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Checkbox
                     checked={includeAll}
-                    onChange={(event) => setIncludeAll(event.target.checked)}
+                    onCheckedChange={(checked) =>
+                      setIncludeAll(checked === true)
+                    }
                   />
                   <span>Show every world in the archive</span>
                 </label>
@@ -113,7 +118,7 @@ export default function WorldListPage() {
           {isLoading ? (
             <Loader label="Opening world archive" />
           ) : worlds.length > 0 ? (
-            <section className={styles.grid}>
+            <section className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-6">
               {worlds.map((world) => (
                 <WorldCard
                   key={world.id}
@@ -123,14 +128,22 @@ export default function WorldListPage() {
               ))}
             </section>
           ) : (
-            <Card surface="leather" className={styles.emptyState}>
-              <h2>No worlds are chartered yet.</h2>
-              <p>
-                Begin with a fresh realm and ThunderForge will carry its scenes,
-                actors, events, and interface hooks through later phases.
+            <Card
+              surface="leather"
+              className="grid gap-3 p-8 text-center"
+            >
+              <h2 className="text-xl font-semibold">
+                No worlds have been created yet.
+              </h2>
+              <p className="text-muted-foreground">
+                Begin with a fresh world and ThunderForge will carry its
+                scenes, actors, events, and interface hooks through later
+                phases.
               </p>
-              <Link to="/worlds/create">
-                <Button variant="secondary" icon="worlds">Found the first world</Button>
+              <Link to="/worlds/create" className="mx-auto">
+                <Button variant="secondary" icon="worlds">
+                  Create the first world
+                </Button>
               </Link>
             </Card>
           )}

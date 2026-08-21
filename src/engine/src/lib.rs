@@ -30,7 +30,8 @@ use movement::{PlayerControlled, handle_keyboard_movement, sync_grid_to_transfor
 use derived_data::*;
 use sync_test::*;
 use systems::*;
-use plugins::{ScenePlugin, GridPlugin, TokenPlugin, CameraPlugin, SelectionPlugin, SystemRegistrationPlugin};
+use plugins::{ScenePlugin, GridPlugin, TokenPlugin, CameraPlugin, SelectionPlugin, SystemRegistrationPlugin, CanvasLayerPlugin, WallPlugin, LightingPlugin, ShapePlugin, BackgroundPlugin};
+use resources::{DoorState, Wall as EngineWall, WallSet, LightSource as EngineLight, LightSet, Shape as EngineShape, ShapeKind, ShapeSet, SceneBackground, IsGameMaster, PlacedCanvasImage, PlacedCanvasImages};
 
 static ENGINE_STARTED: AtomicBool = AtomicBool::new(false);
 static EVENT_CALLBACK: OnceLock<Mutex<Option<Function>>> = OnceLock::new();
@@ -39,16 +40,16 @@ static EXTERNAL_COMMANDS: OnceLock<Mutex<Vec<ExternalCommand>>> = OnceLock::new(
 const ARENA_WIDTH: f32 = 1280.0;
 const ARENA_HEIGHT: f32 = 720.0;
 const PLAYER_SPEED: f32 = 320.0;
-const TOKEN_SIZE: Vec2 = Vec2::new(96.0, 96.0);
+pub(crate) const TOKEN_SIZE: Vec2 = Vec2::new(96.0, 96.0);
 
 #[derive(Component)]
 struct PlayerToken;
 
 #[derive(Component)]
-struct TokenIdentity(String);
+pub(crate) struct TokenIdentity(pub(crate) String);
 
 #[derive(Resource, Default)]
-struct ActiveWorld(String);
+pub(crate) struct ActiveWorld(pub(crate) String);
 
 #[derive(Resource, Default)]
 struct TokenEntities(HashMap<String, Entity>);
@@ -80,11 +81,95 @@ struct WorldTokenPayload {
     label: Option<String>,
 }
 
+/// Confirmed/authoritative wall state from the server (T008), matching
+/// the `upsert_wall` inbound command's `wall` payload shape.
+#[derive(Debug, Clone, Deserialize)]
+struct WorldWallPayload {
+    id: String,
+    x1: f32,
+    y1: f32,
+    x2: f32,
+    y2: f32,
+    #[serde(rename = "blocksVision")]
+    blocks_vision: bool,
+    #[serde(rename = "blocksMovement")]
+    blocks_movement: bool,
+    #[serde(rename = "doorState")]
+    door_state: String,
+}
+
+/// Confirmed/authoritative light state from the server (T036-T040),
+/// matching the `upsert_light` inbound command's `light` payload shape.
+#[derive(Debug, Clone, Deserialize)]
+struct WorldLightPayload {
+    id: String,
+    x: f32,
+    y: f32,
+    radius: f32,
+    intensity: f32,
+    color: Option<String>,
+    #[serde(rename = "attachedTokenId")]
+    attached_token_id: Option<String>,
+    #[serde(rename = "castsShadows")]
+    casts_shadows: bool,
+}
+
+/// Confirmed/authoritative shape state from the server (T053), matching
+/// the `upsert_shape` inbound command's `shape` payload shape
+/// (contracts/graphql.md's `geometry`/`style` blobs are opaque JSON, so
+/// they're kept as raw `serde_json::Value` rather than typed fields).
+#[derive(Debug, Clone, Deserialize)]
+struct WorldShapePayload {
+    id: String,
+    kind: String,
+    geometry: Value,
+    text: Option<String>,
+    style: Option<Value>,
+    #[serde(rename = "visibleToPlayers")]
+    visible_to_players: bool,
+}
+
 #[derive(Debug, Clone)]
 enum ExternalCommand {
     SetWorld { world_id: String },
     UpsertToken { token: WorldTokenPayload },
     RemoveToken { token_id: String },
+    UpsertWall { wall: WorldWallPayload },
+    RemoveWall { wall_id: String },
+    UpsertLight { light: WorldLightPayload },
+    RemoveLight { light_id: String },
+    UpsertShape { shape: WorldShapePayload },
+    RemoveShape { shape_id: String },
+    /// Switches the active scene's background image (map import), or
+    /// clears it (`path: None`) when the newly active scene has none.
+    /// `width`/`height` are the scene's pixel dimensions, already computed
+    /// server-side from `Scene.width`/`Scene.height` — this command does
+    /// not fetch scene metadata itself.
+    SetSceneBackground {
+        path: Option<String>,
+        width: f32,
+        height: f32,
+    },
+    /// FR-010: whether the local session may author walls/shapes
+    /// (`WallPlugin`/`ShapePlugin` gate all authoring input on
+    /// `IsGameMaster`). Previously nothing ever sent this — the resource
+    /// defaulted to `false` and stayed there for every session, so no GM
+    /// could hand-draw a wall or shape through the real app at all. The
+    /// frontend now sends this once on scene-owner status becoming known
+    /// and whenever it changes (`WorldPage.tsx`).
+    SetIsGameMaster { is_game_master: bool },
+    /// Spec 002 (US3): adds or updates one pasted canvas image on the
+    /// active scene. `asset_id` is the `CanvasImageAsset.id` from
+    /// `uploadCanvasImage`'s response.
+    UpsertCanvasImageAsset {
+        asset_id: String,
+        path: String,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+    },
+    RemoveCanvasImageAsset { asset_id: String },
 }
 
 fn event_callback_slot() -> &'static Mutex<Option<Function>> {
@@ -95,7 +180,7 @@ fn external_command_queue() -> &'static Mutex<Vec<ExternalCommand>> {
     EXTERNAL_COMMANDS.get_or_init(|| Mutex::new(Vec::new()))
 }
 
-fn emit_event(event: Value) {
+pub(crate) fn emit_event(event: Value) {
     let event_text = event.to_string();
 
     if let Ok(callback_guard) = event_callback_slot().lock()
@@ -120,6 +205,53 @@ fn parse_command(input: &str) -> Option<ExternalCommand> {
         }
         "remove_token" => Some(ExternalCommand::RemoveToken {
             token_id: value.get("tokenId")?.as_str()?.to_owned(),
+        }),
+        "upsert_wall" => {
+            let wall_value = value.get("wall")?.clone();
+            let wall: WorldWallPayload = serde_json::from_value(wall_value).ok()?;
+            Some(ExternalCommand::UpsertWall { wall })
+        }
+        "remove_wall" => Some(ExternalCommand::RemoveWall {
+            wall_id: value.get("wallId")?.as_str()?.to_owned(),
+        }),
+        "upsert_light" => {
+            let light_value = value.get("light")?.clone();
+            let light: WorldLightPayload = serde_json::from_value(light_value).ok()?;
+            Some(ExternalCommand::UpsertLight { light })
+        }
+        "remove_light" => Some(ExternalCommand::RemoveLight {
+            light_id: value.get("lightId")?.as_str()?.to_owned(),
+        }),
+        "upsert_shape" => {
+            let shape_value = value.get("shape")?.clone();
+            let shape: WorldShapePayload = serde_json::from_value(shape_value).ok()?;
+            Some(ExternalCommand::UpsertShape { shape })
+        }
+        "remove_shape" => Some(ExternalCommand::RemoveShape {
+            shape_id: value.get("shapeId")?.as_str()?.to_owned(),
+        }),
+        "set_scene_background" => {
+            let path = match value.get("backgroundImagePath") {
+                None | Some(Value::Null) => None,
+                Some(v) => Some(v.as_str()?.to_owned()),
+            };
+            let width = value.get("width")?.as_f64()? as f32;
+            let height = value.get("height")?.as_f64()? as f32;
+            Some(ExternalCommand::SetSceneBackground { path, width, height })
+        }
+        "set_is_game_master" => Some(ExternalCommand::SetIsGameMaster {
+            is_game_master: value.get("isGameMaster")?.as_bool()?,
+        }),
+        "upsert_canvas_image_asset" => Some(ExternalCommand::UpsertCanvasImageAsset {
+            asset_id: value.get("assetId")?.as_str()?.to_owned(),
+            path: value.get("path")?.as_str()?.to_owned(),
+            x: value.get("x")?.as_f64()? as f32,
+            y: value.get("y")?.as_f64()? as f32,
+            width: value.get("width")?.as_f64()? as f32,
+            height: value.get("height")?.as_f64()? as f32,
+        }),
+        "remove_canvas_image_asset" => Some(ExternalCommand::RemoveCanvasImageAsset {
+            asset_id: value.get("assetId")?.as_str()?.to_owned(),
         }),
         _ => None,
     }
@@ -182,6 +314,27 @@ pub fn start(canvas_selector: &str) {
         .add_plugins(TokenPlugin)
         .add_plugins(CameraPlugin)
         .add_plugins(SelectionPlugin)  // Phase 4.7.E1: Token Selection
+        // Native canvas authoring (specs/001-bevy-canvas-authoring): shared
+        // layer-ordering resource, must be added before Wall/Lighting/Shape
+        // plugins so it exists when they build (Constitution Principle II)
+        .add_plugins(CanvasLayerPlugin)
+        // T015: wall authoring (specs/001-bevy-canvas-authoring). Depends
+        // on CanvasLayerPlugin (above) for the `CanvasLayers` resource.
+        .add_plugins(WallPlugin)
+        // T040: light authoring (specs/001-bevy-canvas-authoring). Depends
+        // on CanvasLayerPlugin (above) for the `CanvasLayers` resource, and
+        // reads WallPlugin's `WallSet`/`is_visible` for occlusion.
+        .add_plugins(LightingPlugin)
+        // T056: shape/annotation authoring (specs/001-bevy-canvas-authoring).
+        // Depends on CanvasLayerPlugin (above) for the `CanvasLayers`
+        // resource; order relative to WallPlugin/LightingPlugin doesn't
+        // matter (Constitution Principle II: independently addable).
+        .add_plugins(ShapePlugin)
+        // Scene background (map import art): renders into
+        // `CanvasLayer::Background`, the lowest/furthest-back layer.
+        // Depends on CanvasLayerPlugin (above); order relative to
+        // WallPlugin/LightingPlugin/ShapePlugin doesn't matter.
+        .add_plugins(BackgroundPlugin)
         .add_systems(Startup, setup_scene)
         .add_systems(
             Update,
@@ -267,7 +420,7 @@ fn setup_scene(mut commands: Commands, mut token_entities: ResMut<TokenEntities>
     token_entities.0.insert("npc".to_string(), npc_entity);
 
     commands.spawn((
-        Text::new("Bevy wasm: move red token with WASD or arrows. Changes sync to tldraw."),
+        Text::new("Bevy wasm: move red token with WASD/arrows, or click-drag any token."),
         TextFont {
             font_size: 24.0,
             ..default()
@@ -349,12 +502,40 @@ fn apply_external_commands(
     mut active_world: ResMut<ActiveWorld>,
     mut token_entities: ResMut<TokenEntities>,
     mut token_query: Query<(Entity, &mut Transform, &TokenIdentity)>,
+    // `WallSet` only exists once `WallPlugin` is registered (Constitution
+    // Principle II: plugins are independently addable) — `Option` so this
+    // core command loop degrades gracefully (wall commands are simply
+    // dropped) if the wall plugin isn't present.
+    wall_set: Option<ResMut<WallSet>>,
+    // Same rationale as `wall_set`, for `LightingPlugin`/`LightSet`.
+    light_set: Option<ResMut<LightSet>>,
+    // `ShapeSet` only exists once `ShapePlugin` is registered, same
+    // graceful-degradation rationale as `wall_set` above.
+    shape_set: Option<ResMut<ShapeSet>>,
+    // `SceneBackground` only exists once `BackgroundPlugin` is registered,
+    // same graceful-degradation rationale as `wall_set` above.
+    background: Option<ResMut<SceneBackground>>,
+    // `PlacedCanvasImages` only exists once `BackgroundPlugin` is
+    // registered (spec 002 added it alongside `SceneBackground` in that
+    // same plugin), same graceful-degradation rationale as `wall_set`.
+    placed_canvas_images: Option<ResMut<PlacedCanvasImages>>,
+    // `IsGameMaster` exists once either `WallPlugin` or `ShapePlugin` is
+    // registered (both `init_resource` it idempotently) — same
+    // graceful-degradation rationale as `wall_set` above.
+    is_game_master: Option<ResMut<IsGameMaster>>,
 ) {
     let drained = if let Ok(mut queue) = external_command_queue().lock() {
         queue.drain(..).collect::<Vec<_>>()
     } else {
         Vec::new()
     };
+
+    let mut wall_set = wall_set;
+    let mut light_set = light_set;
+    let mut shape_set = shape_set;
+    let mut background = background;
+    let mut placed_canvas_images = placed_canvas_images;
+    let mut is_game_master = is_game_master;
 
     for command in drained {
         match command {
@@ -386,13 +567,92 @@ fn apply_external_commands(
                     commands.entity(entity).despawn();
                 }
             }
+            ExternalCommand::UpsertWall { wall } => {
+                if let Some(wall_set) = wall_set.as_deref_mut() {
+                    wall_set.upsert(EngineWall {
+                        id: wall.id,
+                        x1: wall.x1,
+                        y1: wall.y1,
+                        x2: wall.x2,
+                        y2: wall.y2,
+                        blocks_vision: wall.blocks_vision,
+                        blocks_movement: wall.blocks_movement,
+                        door_state: DoorState::from_str_loose(&wall.door_state),
+                    });
+                }
+            }
+            ExternalCommand::RemoveWall { wall_id } => {
+                if let Some(wall_set) = wall_set.as_deref_mut() {
+                    wall_set.remove(&wall_id);
+                }
+            }
+            ExternalCommand::UpsertLight { light } => {
+                if let Some(light_set) = light_set.as_deref_mut() {
+                    light_set.upsert(EngineLight {
+                        id: light.id,
+                        x: light.x,
+                        y: light.y,
+                        radius: light.radius,
+                        intensity: light.intensity,
+                        color: light.color,
+                        attached_token_id: light.attached_token_id,
+                        casts_shadows: light.casts_shadows,
+                    });
+                }
+            }
+            ExternalCommand::RemoveLight { light_id } => {
+                if let Some(light_set) = light_set.as_deref_mut() {
+                    light_set.remove(&light_id);
+                }
+            }
+            ExternalCommand::UpsertShape { shape } => {
+                if let Some(shape_set) = shape_set.as_deref_mut() {
+                    shape_set.upsert(EngineShape {
+                        id: shape.id,
+                        kind: ShapeKind::from_str_loose(&shape.kind),
+                        geometry: shape.geometry,
+                        text: shape.text,
+                        style: shape.style,
+                        visible_to_players: shape.visible_to_players,
+                    });
+                }
+            }
+            ExternalCommand::RemoveShape { shape_id } => {
+                if let Some(shape_set) = shape_set.as_deref_mut() {
+                    shape_set.remove(&shape_id);
+                }
+            }
+            ExternalCommand::SetSceneBackground { path, width, height } => {
+                if let Some(background) = background.as_deref_mut() {
+                    background.path = path;
+                    background.width = width;
+                    background.height = height;
+                }
+            }
+            ExternalCommand::SetIsGameMaster { is_game_master: value } => {
+                if let Some(is_game_master) = is_game_master.as_deref_mut() {
+                    is_game_master.0 = value;
+                }
+            }
+            ExternalCommand::UpsertCanvasImageAsset {
+                asset_id,
+                path,
+                x,
+                y,
+                width,
+                height,
+            } => {
+                if let Some(placed_canvas_images) = placed_canvas_images.as_deref_mut() {
+                    placed_canvas_images
+                        .0
+                        .insert(asset_id, PlacedCanvasImage { path, x, y, width, height });
+                }
+            }
+            ExternalCommand::RemoveCanvasImageAsset { asset_id } => {
+                if let Some(placed_canvas_images) = placed_canvas_images.as_deref_mut() {
+                    placed_canvas_images.0.remove(&asset_id);
+                }
+            }
         }
     }
-}
-
-/// WASM export: Called from React when RxDB tokens change
-/// Stores token JSON which will be picked up by sync_tokens_from_rxdb system
-#[wasm_bindgen]
-pub fn update_world_tokens(tokens_json: &str) {
-    crate::systems::token_sync::set_pending_tokens(tokens_json);
 }

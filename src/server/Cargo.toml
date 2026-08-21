@@ -65,6 +65,9 @@ totp-rs = { version = "5.7.0", features = ["otpauth"] }
 data-encoding = "2.9.0"
 zip = { version = "4.6.1", default-features = false, features = ["deflate"] }
 tempfile = "3.27.0"
+aws-sdk-s3 = "1.143.0"
+aws-sdk-sts = "1.112.0"
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp", "gif", "bmp"] }
 
 [dependencies.thunderforge_core]
 path = "../core"

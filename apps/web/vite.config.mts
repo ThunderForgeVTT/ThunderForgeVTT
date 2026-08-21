@@ -86,6 +86,16 @@ export default defineConfig({
         changeOrigin: true,
         ws: true,
       },
+      // Backend-served imported assets (e.g. map-import background images
+      // at scenes.background_image_path), mounted at /assets by
+      // src/server/src/serve/mod.rs's `ServeDir::new(&directories.asset_directory)`.
+      // Bevy's default `AssetPlugin` root is the literal string "assets",
+      // resolved against the page origin on wasm32, so this proxy is what
+      // makes `AssetServer::load("map-imports/.../uuid.png")` resolve in dev.
+      "/assets": {
+        target: "http://127.0.0.1:30000",
+        changeOrigin: true,
+      },
     },
   },
 });

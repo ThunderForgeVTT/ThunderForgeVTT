@@ -85,6 +85,23 @@ export function setActiveWorld(worldId: string): void {
   state.worldId = worldId;
 }
 
+/**
+ * FR-010: tells the engine whether the local session may author
+ * walls/shapes (`WallPlugin`/`ShapePlugin` gate all pointer/keyboard
+ * authoring input on this). Not modeled as a `WorldCommand` — it's local
+ * session state, not something to sync into `WorldState` or broadcast —
+ * so this calls the wasm bridge directly rather than going through
+ * `worldStore.dispatch`, same shape as `bindWorldStore`'s direct
+ * `apply_world_command` calls.
+ */
+export async function setIsGameMaster(isGameMaster: boolean): Promise<void> {
+  const module = await getWasmModule();
+  if (!module.apply_world_command) {
+    return;
+  }
+  module.apply_world_command(JSON.stringify({ type: "set_is_game_master", isGameMaster }));
+}
+
 export function getEngineState(): Readonly<EngineState> {
   return state;
 }

@@ -5,7 +5,6 @@ import { Card } from "@/components/ui/card/Card";
 import { Container } from "@/components/ui/container/Container";
 import { useAuth } from "@/hooks/useAuth";
 import type { SeoConfig } from "@/types/seo";
-import styles from "./WelcomePage.module.scss";
 
 export const welcomePageSeo: SeoConfig = {
   title: "Welcome",
@@ -22,42 +21,46 @@ export default function WelcomePage() {
     <>
       <SEO {...welcomePageSeo} />
       <Container>
-        <main className={styles.shell}>
-          <section className={styles.hero}>
-            <p className={styles.eyebrow}>Realm foyer</p>
-            <h1>Welcome back to ThunderForge.</h1>
-            <p>
-              {user?.username ?? "Steward"}, your next ritual begins here.
-              Choose a world to enter, create a fresh realm, or gather your
+        <main className="grid gap-8 py-8">
+          <section className="grid gap-3">
+            <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+              Welcome
+            </p>
+            <h1 className="text-3xl font-semibold">
+              Welcome back to ThunderForge.
+            </h1>
+            <p className="max-w-2xl text-muted-foreground">
+              {user?.username ?? "Welcome"}, your next step begins here.
+              Choose a world to enter, create a fresh world, or gather your
               party through an invite code.
             </p>
           </section>
 
-          <section className={styles.grid}>
-            <Card surface="parchment" className={styles.card}>
-              <h2>Enter a world</h2>
-              <p>
-                Resume collaborative scenecraft inside the current guild atlas.
+          <section className="grid gap-4 sm:grid-cols-3">
+            <Card surface="parchment" className="grid gap-3 p-6">
+              <h2 className="text-lg font-semibold">Enter a world</h2>
+              <p className="text-muted-foreground">
+                Resume collaborative scenecraft inside your world index.
               </p>
               <Button asChild icon="worlds">
                 <Link to="/worlds">Enter a World</Link>
               </Button>
             </Card>
 
-            <Card surface="leather" className={styles.card}>
-              <h2>Create a world</h2>
-              <p>
-                Start a fresh tabletop chapter from the dashboard preview shell.
+            <Card surface="leather" className="grid gap-3 p-6">
+              <h2 className="text-lg font-semibold">Create a world</h2>
+              <p className="text-muted-foreground">
+                Start a fresh tabletop chapter from the dashboard.
               </p>
               <Button asChild variant="secondary" icon="quill">
                 <Link to="/worlds/create">Create a World</Link>
               </Button>
             </Card>
 
-            <Card surface="stone" className={styles.card}>
-              <h2>Join via invite code</h2>
-              <p>
-                Use the existing dashboard chrome while invite rituals are
+            <Card surface="stone" className="grid gap-3 p-6">
+              <h2 className="text-lg font-semibold">Join via invite code</h2>
+              <p className="text-muted-foreground">
+                Use the existing dashboard chrome while invite flows are
                 staged.
               </p>
               <Button asChild variant="ghost" icon="spark">

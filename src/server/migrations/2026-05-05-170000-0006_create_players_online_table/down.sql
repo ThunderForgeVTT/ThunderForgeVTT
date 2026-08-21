@@ -7,6 +7,7 @@ DROP TRIGGER IF EXISTS players_online_notify_trigger ON players_online;
 DROP FUNCTION IF EXISTS notify_players_online_change();
 
 DROP TRIGGER IF EXISTS players_online_updated_at_trigger ON players_online;
+DROP FUNCTION IF EXISTS update_updated_at_column();
 
 DROP INDEX IF EXISTS idx_players_online_last_seen;
 DROP INDEX IF EXISTS idx_players_online_player_id;

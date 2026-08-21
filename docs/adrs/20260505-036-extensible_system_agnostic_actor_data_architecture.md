@@ -541,7 +541,7 @@ We need to support 20+ game systems simultaneously **without bloating memory or 
 - **ADR-000**: Durable Objects via GraphQL Event-Driven Synchronization (parent architecture)
 - **ADR-010**: Ownership Fields on Persisted Tables (created_by/updated_by enforcement)
 - **ADR-009**: Created-By / Updated-By Enforcement (ownership validation)
-- **ADR-021**: Game System Packaging and Manifest Contract (system manifest standard)
+- **ADR-027**: Game System Packaging and Manifest Contract (system manifest standard)
 
 ---
 

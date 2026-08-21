@@ -1,0 +1,66 @@
+"""
+Contract sketch for the new asset-storage GraphQL surface (Phase 1).
+Follows the existing async-graphql mutation-object conventions used by
+mutations_walls.rs / mutations_shapes.rs / mutations_tokens.rs. Field/type
+names here are illustrative for planning purposes; exact Rust struct names
+are decided during /speckit-tasks + implementation.
+"""
+
+type CanvasImageAsset {
+  id: UUID!
+  worldId: UUID!
+  sceneId: UUID
+  ownerUserId: UUID!
+  storagePath: String!
+  kind: CanvasImageAssetKind!
+  widthPx: Int!
+  heightPx: Int!
+  byteSize: Int!
+  createdAt: DateTime!
+}
+
+enum CanvasImageAssetKind {
+  BACKGROUND
+  PASTED
+}
+
+"""
+Note: there is no client-facing "mint a credential" mutation. Per
+research.md §3, the RustFS STS credential is minted and consumed entirely
+server-side within `uploadCanvasImage`'s resolver (and, for the migrated
+map-import path, within the equivalent internal call in `map_import.rs` —
+see `storage/rustfs.rs`) — no GraphQL client, and no client-facing
+operation of any kind, ever receives an RustFS credential, scoped or
+otherwise. This is a strictly narrower surface than a client-PUT model
+would be, since the client never handles storage credentials at all.
+"""
+
+extend type Mutation {
+  """
+  FR-011, FR-012, FR-013, FR-015, FR-016: authorizes the requesting user
+  against world_members for `worldId` (owner or accepted member), rejecting
+  with FORBIDDEN before any object is created if not (FR-016). On success:
+  multipart bytes-in-request path (mirrors map_import.rs's existing
+  Multipart handler) — server validates size against MAX_UPLOAD_BYTES,
+  decodes, transcodes to WebP (FR-012), mints a single-object-scoped
+  short-lived RustFS credential and uses it server-side to write the
+  object (FR-017), then persists the CanvasImageAsset row.
+  """
+  uploadCanvasImage(
+    worldId: UUID!
+    sceneId: UUID!
+    kind: CanvasImageAssetKind!
+    file: Upload!
+  ): CanvasImageAsset!
+}
+
+extend type Query {
+  """
+  FR-014, FR-019: calls the same require_world_member guard as
+  uploadCanvasImage (read side, not just write side) — rejects with
+  FORBIDDEN before returning any rows if the caller is not an
+  owner/accepted member of the scene's owning world. Readable by any
+  owner/accepted member of the owning world.
+  """
+  canvasImageAssetsForScene(sceneId: UUID!): [CanvasImageAsset!]!
+}

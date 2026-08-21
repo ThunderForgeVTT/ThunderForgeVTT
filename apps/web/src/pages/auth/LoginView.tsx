@@ -1,4 +1,4 @@
-import type { CSSProperties, FormEvent } from "react";
+import type { FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { getSetupStatus, startOAuthLogin } from "@/api/auth";
@@ -7,17 +7,15 @@ import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
 import { Field } from "@/components/ui/field/Field";
+import { Input } from "@/components/ui/input";
 import { RuneDivider } from "@/components/ui/rune-divider/RuneDivider";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { AuthLayout } from "@/layouts/auth-layout/AuthLayout";
 import { useAuth } from "@/hooks/useAuth";
 import type { SetupProvider } from "@/types/auth";
-import { cn } from "@/utils/cn";
-import { fantasyAuthTheme } from "./fantasy-auth-theme";
-import styles from "./LoginView.module.scss";
-import ritualStyles from "./TwoFactorPanel.module.scss";
+import { cn } from "@/lib/utils";
 
-type RitualStep = "credentials" | "twoFactor";
+type LoginStep = "credentials" | "twoFactor";
 type LoginField = "identifier" | "password" | "twoFactorCode";
 
 const twoFactorCodePattern = /^\d{6}$/;
@@ -67,7 +65,7 @@ export function LoginView() {
   const [twoFactorChallengeId, setTwoFactorChallengeId] = useState<string | null>(
     null,
   );
-  const [ritualStep, setRitualStep] = useState<RitualStep>("credentials");
+  const [loginStep, setLoginStep] = useState<LoginStep>("credentials");
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -98,7 +96,7 @@ export function LoginView() {
   }, []);
 
   useEffect(() => {
-    if (ritualStep === "twoFactor") {
+    if (loginStep === "twoFactor") {
       const timer = window.setTimeout(() => {
         twoFactorInputRef.current?.focus();
       }, 20);
@@ -107,7 +105,7 @@ export function LoginView() {
     }
 
     return undefined;
-  }, [ritualStep]);
+  }, [loginStep]);
 
   const markTouched = (...fields: LoginField[]) => {
     setTouched((current) => ({
@@ -119,10 +117,8 @@ export function LoginView() {
   const credentialErrors = {
     identifier: identifier.trim()
       ? undefined
-      : "Enter the steward name or email bound to this realm.",
-    password: password
-      ? undefined
-      : "Enter the password seal to begin the sign-in ritual.",
+      : "Enter the username or email for this account.",
+    password: password ? undefined : "Enter your password.",
   } as const;
 
   const twoFactorErrors = {
@@ -145,7 +141,7 @@ export function LoginView() {
     markTouched("identifier", "password");
 
     if (credentialErrors.identifier || credentialErrors.password) {
-      setStatus("The first seal is incomplete. Restore the highlighted fields.");
+      setStatus("Fix the highlighted fields before continuing.");
       return;
     }
 
@@ -162,8 +158,8 @@ export function LoginView() {
         setTwoFactorChallengeId(response.loginTwoFactorChallengeId);
         setTwoFactorCode("");
         setTwoFactorAttempted(false);
-        setRitualStep("twoFactor");
-        setStatus("The outer seal opens. Complete the second seal to finalize access.");
+        setLoginStep("twoFactor");
+        setStatus("Credentials accepted. Enter your two-factor code to finish signing in.");
         return;
       }
 
@@ -187,13 +183,13 @@ export function LoginView() {
     markTouched("twoFactorCode");
 
     if (!twoFactorChallengeId) {
-      setStatus("The second seal is missing. Restart the sign-in ritual.");
-      setRitualStep("credentials");
+      setStatus("Your two-factor challenge expired. Sign in again.");
+      setLoginStep("credentials");
       return;
     }
 
     if (twoFactorErrors.twoFactorCode) {
-      setStatus("The second seal needs a valid 6-digit token.");
+      setStatus("Enter a valid 6-digit code.");
       return;
     }
 
@@ -221,8 +217,8 @@ export function LoginView() {
     markTouched("identifier", "password");
 
     if (credentialErrors.identifier || credentialErrors.password) {
-      setStatus("Return to the first seal and restore your credentials before renewing the challenge.");
-      setRitualStep("credentials");
+      setStatus("Fix your credentials before requesting a new code.");
+      setLoginStep("credentials");
       return;
     }
 
@@ -238,7 +234,7 @@ export function LoginView() {
       if (response.loginTwoFactorChallengeId) {
         setTwoFactorChallengeId(response.loginTwoFactorChallengeId);
         setTwoFactorCode("");
-        setStatus("A fresh second seal has formed. Enter the latest authenticator code.");
+        setStatus("A new two-factor challenge was issued. Enter the latest code.");
         return;
       }
 
@@ -250,357 +246,343 @@ export function LoginView() {
         );
       }
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Failed to refresh the second seal.");
+      setStatus(error instanceof Error ? error.message : "Failed to refresh the challenge.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const onReturnToCredentials = () => {
-    setRitualStep("credentials");
+    setLoginStep("credentials");
     setTwoFactorChallengeId(null);
     setTwoFactorCode("");
     setTwoFactorAttempted(false);
-    setStatus("Adjust your primary credentials, then invoke the second seal again.");
+    setStatus("Adjust your credentials, then sign in again.");
   };
 
-  const ritualSteps = [
+  const loginSteps = [
     {
-      label: "First seal",
-      copy: "Offer your identity and password to begin the guild hall access rite.",
-      state: ritualStep === "credentials" ? "active" : "complete",
+      label: "Step 1",
+      copy: "Enter your username or email and password.",
+      state: loginStep === "credentials" ? "active" : "complete",
     },
     {
-      label: "Second seal",
-      copy: "Only summoned when the account is warded with two-factor protection.",
-      state: ritualStep === "twoFactor" ? "active" : "idle",
+      label: "Step 2",
+      copy: "Only shown if this account has two-factor authentication enabled.",
+      state: loginStep === "twoFactor" ? "active" : "idle",
     },
   ] as const;
 
   return (
     <AuthLayout
       eyebrow="Access"
-      title="Enter ThunderForge through a progressive signing ritual."
-      description="Credentials open the hall. If this steward is warded with two-factor protection, the second seal appears as the final confirmation instead of crowding the first step."
+      title="Sign in to ThunderForge."
+      description="Enter your credentials to continue. If this account has two-factor authentication enabled, you'll be asked for a code as a second step."
       aside={
-        <div className={styles.aside}>
-          <Card surface="parchment">
-            <div className={styles.asideCard}>
-              <h2>Ritual cadence</h2>
-              <p className={styles.asideCopy}>
-                The login flow now resolves in stages so attention stays on the
-                current decision instead of every possible requirement at once.
+        <div className="grid gap-4">
+          <Card>
+            <div className="grid gap-3">
+              <h2 className="text-lg font-semibold">How sign-in works</h2>
+              <p className="text-muted-foreground">
+                Login resolves in stages so you only see what's relevant right
+                now.
               </p>
-              <ol className={styles.asideList}>
-                <li>Present username or email with the password seal.</li>
-                <li>Only then, if required, complete the second seal with TOTP.</li>
-                <li>Return straight to the proper welcome hall once the ward accepts you.</li>
+              <ol className="grid list-decimal gap-1.5 pl-4 text-sm text-muted-foreground">
+                <li>Enter your username or email with your password.</li>
+                <li>If required, complete a 6-digit two-factor code.</li>
+                <li>You're redirected straight to your account.</li>
               </ol>
             </div>
           </Card>
 
-          <Card surface="parchment">
-            <div className={styles.asideCard}>
-              <div className={styles.header}>
-                <p className={styles.sectionKicker}>
+          <Card>
+            <div className="grid gap-3">
+              <div className="grid gap-1.5">
+                <p className="inline-flex items-center gap-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
                   <FantasyIcon name="wand" size={16} />
-                  Alternate paths
+                  Other options
                 </p>
-                <h2>Other routes</h2>
+                <h2 className="text-lg font-semibold">Other routes</h2>
               </div>
-              <div className={styles.linkList}>
-                <Link to="/register">Create a local account</Link>
-                <Link to="/welcome">Review the welcome hall</Link>
+              <div className="grid gap-2">
+                <Link to="/register" className="font-medium text-primary hover:underline">
+                  Create a local account
+                </Link>
+                <Link to="/welcome" className="font-medium text-primary hover:underline">
+                  Review the welcome hall
+                </Link>
               </div>
-              <div className={styles.asideCopy}>
-                <div className={styles.actionRow}>
-                  <Avatar seed="guild-warden" name="Guild warden" />
-                  <Avatar seed="map-smith" name="Map smith" />
-                </div>
+              <div className="mt-2 inline-flex items-center [&>*:not(:first-child)]:-ml-2">
+                <Avatar seed="guild-warden" name="Guild warden" />
+                <Avatar seed="map-smith" name="Map smith" />
               </div>
             </div>
           </Card>
         </div>
       }
     >
-      <div
-        className={styles.layout}
-        data-auth-theme="fantasy"
-        style={
-          {
-            "--auth-rune-glow": fantasyAuthTheme.colors.goldBright,
-          } as CSSProperties
-        }
-      >
-        <Card surface="stone" className={styles.heroBand}>
-          <div className={styles.heroContent}>
-            <p className={styles.eyebrow}>Guild hall authentication</p>
-            <h2 className={styles.heroTitle}>Advance one seal at a time.</h2>
-            <p className={styles.heroCopy}>
-              Two-factor verification appears only when the account demands it,
-              preserving a calm first step while keeping the warding ceremony
-              elegant, readable, and secure.
-            </p>
-          </div>
-          <div className={styles.stepList}>
-            {ritualSteps.map((step, index) => (
-              <article
-                key={step.label}
-                className={cn(
-                  styles.stepCard,
-                  step.state === "active" && styles.stepActive,
-                  step.state === "complete" && styles.stepComplete,
-                )}
-              >
-                <span className={styles.stepMarker}>
-                  {step.state === "complete" ? "✓" : index + 1}
-                </span>
-                <h3 className={styles.stepTitle}>{step.label}</h3>
-                <p className={styles.stepCopy}>{step.copy}</p>
-              </article>
-            ))}
+      <div className="grid gap-6">
+        <Card>
+          <div className="grid gap-6">
+            <div className="grid gap-1.5">
+              <p className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                Sign in
+              </p>
+              <h2 className="text-2xl font-semibold">
+                One step at a time.
+              </h2>
+              <p className="text-muted-foreground">
+                Two-factor verification only appears if your account requires
+                it, keeping the first step focused and quick.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {loginSteps.map((step, index) => (
+                <article
+                  key={step.label}
+                  className={cn(
+                    "rounded-lg border border-border p-4",
+                    step.state === "active" && "border-primary bg-secondary",
+                    step.state === "complete" && "opacity-70",
+                  )}
+                >
+                  <span className="mb-2 inline-flex size-6 items-center justify-center rounded-full bg-muted text-xs font-semibold">
+                    {step.state === "complete" ? "✓" : index + 1}
+                  </span>
+                  <h3 className="font-semibold">{step.label}</h3>
+                  <p className="text-sm text-muted-foreground">{step.copy}</p>
+                </article>
+              ))}
+            </div>
           </div>
         </Card>
 
-        <div className={styles.ritualShell}>
-          <div className={styles.panelStack}>
-            <Card
-              surface="parchment"
-              className={cn(
-                styles.credentialsPanel,
-                ritualStep === "twoFactor" && styles.credentialsPanelSealed,
-              )}
-              data-ambient-sound="guild-hall-candles"
-            >
-              <form onSubmit={onSubmitCredentials} className={styles.form}>
-                <div className={styles.header}>
-                  <p className={styles.sectionKicker}>
-                    <FantasyIcon name="shield" size={16} />
-                    Primary login
-                  </p>
-                  <h2 className={styles.sectionTitle}>Present your first seal.</h2>
-                  <p className={styles.sectionCopy}>
-                    Sign in with the email address or username tied to your local
-                    ThunderForge account.
-                  </p>
-                </div>
+        <div className="relative grid gap-4">
+          <Card
+            className={cn(loginStep === "twoFactor" && "opacity-60")}
+            data-ambient-sound="guild-hall-candles"
+          >
+            <form onSubmit={onSubmitCredentials} className="grid gap-4">
+              <div className="grid gap-1.5">
+                <p className="inline-flex items-center gap-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                  <FantasyIcon name="shield" size={16} />
+                  Primary login
+                </p>
+                <h2 className="text-lg font-semibold">Enter your credentials.</h2>
+                <p className="text-muted-foreground">
+                  Sign in with the email address or username tied to your
+                  local ThunderForge account.
+                </p>
+              </div>
 
-                {ritualStep === "twoFactor" ? (
-                  <div className={styles.credentialsSummary}>
-                    <div className={styles.summaryRow}>
-                      <span className={styles.summaryPill}>
-                        <FantasyIcon name="spark" size={14} />
-                        Credentials accepted
-                      </span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className={styles.secondaryButton}
-                        onClick={onReturnToCredentials}
-                      >
-                        Edit first seal
-                      </Button>
-                    </div>
-                    <p>
-                      The hall recognizes <strong>{identifier.trim()}</strong>.
-                      Finish the second seal to enter.
-                    </p>
+              {loginStep === "twoFactor" ? (
+                <div className="grid gap-2 rounded-lg border border-border bg-secondary p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="inline-flex items-center gap-2 text-sm font-medium">
+                      <FantasyIcon name="spark" size={14} />
+                      Credentials accepted
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={onReturnToCredentials}
+                    >
+                      Edit
+                    </Button>
                   </div>
-                ) : null}
+                  <p className="text-sm text-muted-foreground">
+                    Signed in as <strong>{identifier.trim()}</strong>. Finish
+                    the two-factor step to enter.
+                  </p>
+                </div>
+              ) : null}
 
-                <div className={styles.fieldGrid}>
-                  <Field
-                    label="Email address or username"
-                    htmlFor="login-identifier"
-                    accent="Required"
-                    error={credentialFieldError("identifier")}
-                  >
-                    <input
-                      id="login-identifier"
-                      name="identifier"
-                      autoComplete="username"
-                      value={identifier}
-                      onBlur={() => markTouched("identifier")}
-                      onChange={(event) => setIdentifier(event.target.value)}
-                      className={styles.input}
-                      placeholder="founder@thunderforge.app"
-                      disabled={isSubmitting || ritualStep === "twoFactor"}
+              <div className="grid gap-4">
+                <Field
+                  label="Email address or username"
+                  htmlFor="login-identifier"
+                  accent="Required"
+                  error={credentialFieldError("identifier")}
+                >
+                  <Input
+                    id="login-identifier"
+                    name="identifier"
+                    autoComplete="username"
+                    value={identifier}
+                    onBlur={() => markTouched("identifier")}
+                    onChange={(event) => setIdentifier(event.target.value)}
+                    placeholder="founder@thunderforge.app"
+                    disabled={isSubmitting || loginStep === "twoFactor"}
+                  />
+                </Field>
+
+                <Field
+                  label="Password"
+                  htmlFor="login-password"
+                  accent="Required"
+                  error={credentialFieldError("password")}
+                >
+                  <div className="relative">
+                    <Input
+                      id="login-password"
+                      name="password"
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="current-password"
+                      value={password}
+                      onBlur={() => markTouched("password")}
+                      onChange={(event) => setPassword(event.target.value)}
+                      className="pr-16"
+                      placeholder="Enter your password"
+                      disabled={isSubmitting || loginStep === "twoFactor"}
                     />
-                  </Field>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute top-1/2 right-1 -translate-y-1/2"
+                      onClick={() => setShowPassword((current) => !current)}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? "Hide" : "Show"}
+                    </Button>
+                  </div>
+                </Field>
+              </div>
 
-                  <Field
-                    label="Password"
-                    htmlFor="login-password"
-                    accent="Required"
-                    error={credentialFieldError("password")}
-                  >
-                    <div className={styles.passwordWrap}>
-                      <input
-                        id="login-password"
-                        name="password"
-                        type={showPassword ? "text" : "password"}
-                        autoComplete="current-password"
-                        value={password}
-                        onBlur={() => markTouched("password")}
-                        onChange={(event) => setPassword(event.target.value)}
-                        className={cn(styles.input, styles.passwordInput)}
-                        placeholder="Enter your password"
-                        disabled={isSubmitting || ritualStep === "twoFactor"}
-                      />
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="lg"
+                  disabled={isSubmitting || loginStep === "twoFactor"}
+                  icon="shield"
+                >
+                  {isSubmitting && loginStep === "credentials"
+                    ? "Signing in..."
+                    : "Sign In"}
+                </Button>
+              </div>
+
+              {loginStep === "credentials" && providers.length ? (
+                <div className="grid gap-3">
+                  <RuneDivider label="OAuth sign-in" />
+                  <div className="flex flex-wrap gap-3">
+                    {providers.map((provider) => (
                       <Button
+                        key={provider.provider_key}
                         type="button"
-                        variant="ghost"
-                        size="sm"
-                        className={styles.passwordToggle}
-                        onClick={() => setShowPassword((current) => !current)}
-                        aria-label={showPassword ? "Hide password" : "Show password"}
+                        variant="secondary"
+                        icon="wand"
+                        onClick={() =>
+                          startOAuthLogin(
+                            provider.provider_key,
+                            redirectTarget(location.search) ?? "/welcome",
+                          )
+                        }
                       >
-                        {showPassword ? "Hide" : "Show"}
+                        Continue with {provider.display_name}
                       </Button>
-                    </div>
-                  </Field>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </form>
+          </Card>
+
+          {loginStep === "twoFactor" ? (
+            <Card
+              className={cn(
+                "border-2",
+                currentStatusVariant === "danger" && "border-destructive",
+                currentStatusVariant === "success" && "border-emerald-600",
+              )}
+            >
+              <form onSubmit={onSubmitTwoFactor} className="grid gap-4">
+                <div className="grid gap-1.5">
+                  <p className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                    Two-factor verification
+                  </p>
+                  <h3 className="text-lg font-semibold">Enter your code.</h3>
+                  <p className="text-muted-foreground">
+                    Enter the code from your authenticator app to finish
+                    signing in.
+                  </p>
                 </div>
 
-                <div className={styles.actionRow}>
+                <Field
+                  label="Authentication code"
+                  htmlFor="login-two-factor"
+                  accent="Required"
+                  error={twoFactorFieldError("twoFactorCode")}
+                  hint="Use the latest 6-digit code from your authenticator."
+                >
+                  <Input
+                    ref={twoFactorInputRef}
+                    id="login-two-factor"
+                    name="twoFactorCode"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    value={twoFactorCode}
+                    onBlur={() => markTouched("twoFactorCode")}
+                    onChange={(event) =>
+                      setTwoFactorCode(
+                        event.target.value.replace(/\D/g, "").slice(0, 6),
+                      )
+                    }
+                    className="text-center text-lg tracking-[0.3em]"
+                    placeholder="123456"
+                    aria-describedby="login-two-factor-hint"
+                  />
+                </Field>
+
+                <div className="flex flex-wrap gap-3">
                   <Button
                     type="submit"
                     variant="primary"
                     size="lg"
-                    disabled={isSubmitting || ritualStep === "twoFactor"}
-                    icon="shield"
-                    className={styles.primaryButton}
+                    disabled={isSubmitting}
+                    icon="spark"
                   >
-                    {isSubmitting && ritualStep === "credentials"
-                      ? "Opening hall..."
-                      : "Sign In"}
+                    {isSubmitting ? "Verifying..." : "Verify"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="lg"
+                    disabled={isSubmitting}
+                    onClick={() => void onRefreshSecondSeal()}
+                  >
+                    Resend code
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="lg"
+                    disabled={isSubmitting}
+                    onClick={onReturnToCredentials}
+                  >
+                    Back to credentials
                   </Button>
                 </div>
 
-                {ritualStep === "credentials" && providers.length ? (
-                  <div className={styles.oauthSection}>
-                    <RuneDivider label="OAuth sign-in" />
-                    <div className={styles.oauthList}>
-                      {providers.map((provider) => (
-                        <Button
-                          key={provider.provider_key}
-                          type="button"
-                          variant="secondary"
-                          icon="wand"
-                          className={styles.oauthButton}
-                          onClick={() =>
-                            startOAuthLogin(
-                              provider.provider_key,
-                              redirectTarget(location.search) ?? "/welcome",
-                            )
-                          }
-                        >
-                          Continue with {provider.display_name}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-              </form>
-
-              {ritualStep === "twoFactor" ? (
-                <Card
-                  surface="parchment"
-                  className={cn(
-                    ritualStyles.panel,
-                    currentStatusVariant === "danger" && ritualStyles.errorState,
-                    currentStatusVariant === "success" && ritualStyles.successState,
-                  )}
+                <p
+                  id="login-two-factor-hint"
+                  className="text-sm text-muted-foreground"
                 >
-                  <form onSubmit={onSubmitTwoFactor} className={styles.form}>
-                    <div className={ritualStyles.header}>
-                      <p className={ritualStyles.kicker}>
-                        <FantasyIcon name="rune" size={16} />
-                        Two-factor ritual
-                      </p>
-                      <h3 className={ritualStyles.title}>Complete the second seal.</h3>
-                      <p className={ritualStyles.copy}>
-                        Enter your arcane token to finalize access.
-                      </p>
-                    </div>
-
-                    <Field
-                      label="Arcane token"
-                      htmlFor="login-two-factor"
-                      accent="Required"
-                      error={twoFactorFieldError("twoFactorCode")}
-                      hint="Use the latest 6-digit code from your authenticator."
-                    >
-                      <input
-                        ref={twoFactorInputRef}
-                        id="login-two-factor"
-                        name="twoFactorCode"
-                        inputMode="numeric"
-                        autoComplete="one-time-code"
-                        maxLength={6}
-                        value={twoFactorCode}
-                        onBlur={() => markTouched("twoFactorCode")}
-                        onChange={(event) =>
-                          setTwoFactorCode(
-                            event.target.value.replace(/\D/g, "").slice(0, 6),
-                          )
-                        }
-                        className={ritualStyles.input}
-                        placeholder="123456"
-                        aria-describedby="login-two-factor-hint"
-                      />
-                    </Field>
-
-                    <div className={ritualStyles.actionRow}>
-                      <Button
-                        type="submit"
-                        variant="primary"
-                        size="lg"
-                        disabled={isSubmitting}
-                        icon="spark"
-                        className={ritualStyles.verifyButton}
-                      >
-                        {isSubmitting ? "Verifying seal..." : "Verify"}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="lg"
-                        disabled={isSubmitting}
-                        className={ritualStyles.utilityButton}
-                        onClick={() => void onRefreshSecondSeal()}
-                      >
-                        Renew challenge
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="lg"
-                        disabled={isSubmitting}
-                        className={ritualStyles.utilityButton}
-                        onClick={onReturnToCredentials}
-                      >
-                        Back to credentials
-                      </Button>
-                    </div>
-
-                    <p id="login-two-factor-hint" className={ritualStyles.hint}>
-                      Authenticator codes refresh naturally. Renew the challenge
-                      only if this seal expires before you can submit the next code.
-                    </p>
-                  </form>
-                </Card>
-              ) : null}
+                  Codes refresh automatically. Only request a new one if this
+                  code expires before you can submit it.
+                </p>
+              </form>
             </Card>
-          </div>
+          ) : null}
+        </div>
 
-          <div className={styles.statusRegion} aria-live="polite">
-            {status ? (
-              <StatusBadge variant={currentStatusVariant} className={styles.statusBadge}>
-                {status}
-              </StatusBadge>
-            ) : null}
-          </div>
+        <div aria-live="polite">
+          {status ? (
+            <StatusBadge variant={currentStatusVariant}>{status}</StatusBadge>
+          ) : null}
         </div>
       </div>
     </AuthLayout>

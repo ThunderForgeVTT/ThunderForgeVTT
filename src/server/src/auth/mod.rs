@@ -37,6 +37,10 @@ use tower_cookies::cookie::SameSite;
 use tower_cookies::{Cookie, Cookies};
 use url::Url;
 
+/// Spec 002: `require_world_member` — the shared world_members-based
+/// authorization guard for canvas asset reads/writes.
+pub mod world_membership;
+
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/authentication/setup/status", get(setup_status))

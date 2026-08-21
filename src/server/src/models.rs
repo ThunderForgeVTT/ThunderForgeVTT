@@ -1,8 +1,8 @@
 use crate::schema::{
-    admin_bootstrap_oauth_sessions, admin_bootstrap_setup, auth_security_settings, fog_masks,
-    game_systems, login_two_factor_challenges, oauth_authorization_sessions, oauth_link_challenges,
-    oauth_providers, players_online, scenes, tokens, user_oauth_accounts, user_sessions,
-    users, world_actors, world_actor_system_data, world_events, world_invites, world_members, world_tokens, worlds,
+    admin_bootstrap_oauth_sessions, admin_bootstrap_setup, auth_security_settings, canvas_image_assets, fog_masks,
+    game_systems, light_sources, login_two_factor_challenges, oauth_authorization_sessions, oauth_link_challenges,
+    oauth_providers, players_online, scenes, shapes, tokens, user_oauth_accounts, user_sessions,
+    users, walls, world_actors, world_actor_system_data, world_events, world_invites, world_members, world_tokens, worlds,
 };
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -407,6 +407,16 @@ pub struct Scene {
     pub owner_id: uuid::Uuid,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// Relative path under `state.directories.asset_directory`, servable
+    /// at `/assets/<path>` (native canvas authoring: map import sets
+    /// this; `NULL` = no background art). Superseded by
+    /// `background_asset_id` (spec 002, FR-018) — kept until every
+    /// existing row is backfilled, see the 0006 migration's comment.
+    pub background_image_path: Option<String>,
+    /// Spec 002 (FR-018): the `canvas_image_assets` row (kind =
+    /// `Background`) backing this scene's background image via RustFS,
+    /// replacing `background_image_path`'s bare filesystem path.
+    pub background_asset_id: Option<uuid::Uuid>,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
@@ -435,6 +445,196 @@ pub struct SceneUpdate {
     pub width: Option<i32>,
     pub height: Option<i32>,
     pub metadata: Option<serde_json::Value>,
+}
+
+// ========== Canvas Image Asset Models (Spec 002) ==========
+
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = canvas_image_assets)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct CanvasImageAsset {
+    pub asset_id: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub scene_id: Option<uuid::Uuid>,
+    pub owner_user_id: uuid::Uuid,
+    pub storage_path: String,
+    pub original_format: String,
+    pub width_px: i32,
+    pub height_px: i32,
+    pub byte_size: i64,
+    pub kind: crate::db_types::CanvasImageAssetKindEnum,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = canvas_image_assets)]
+pub struct NewCanvasImageAsset {
+    pub asset_id: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub scene_id: Option<uuid::Uuid>,
+    pub owner_user_id: uuid::Uuid,
+    pub storage_path: String,
+    pub original_format: String,
+    pub width_px: i32,
+    pub height_px: i32,
+    pub byte_size: i64,
+    pub kind: crate::db_types::CanvasImageAssetKindEnum,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+// ========== Wall Models (Phase 6) ==========
+
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = walls)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct Wall {
+    pub wall_id: uuid::Uuid,
+    pub scene_id: uuid::Uuid,
+    pub x1: f64,
+    pub y1: f64,
+    pub x2: f64,
+    pub y2: f64,
+    pub blocks_vision: bool,
+    pub blocks_movement: bool,
+    pub door_state: String,
+    pub metadata: Option<serde_json::Value>,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = walls)]
+pub struct NewWall {
+    pub scene_id: uuid::Uuid,
+    pub x1: f64,
+    pub y1: f64,
+    pub x2: f64,
+    pub y2: f64,
+    pub blocks_vision: bool,
+    pub blocks_movement: bool,
+    pub door_state: String,
+    pub metadata: Option<serde_json::Value>,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+}
+
+#[derive(AsChangeset, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = walls)]
+pub struct WallUpdate {
+    pub x1: Option<f64>,
+    pub y1: Option<f64>,
+    pub x2: Option<f64>,
+    pub y2: Option<f64>,
+    pub blocks_vision: Option<bool>,
+    pub blocks_movement: Option<bool>,
+    pub door_state: Option<String>,
+    pub metadata: Option<serde_json::Value>,
+    pub updated_by: uuid::Uuid,
+}
+
+// ========== LightSource Models (native canvas authoring) ==========
+
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = light_sources)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct LightSource {
+    pub light_id: uuid::Uuid,
+    pub scene_id: uuid::Uuid,
+    pub x: f64,
+    pub y: f64,
+    pub radius: f64,
+    pub intensity: f64,
+    pub color: Option<String>,
+    pub attached_token_id: Option<uuid::Uuid>,
+    pub casts_shadows: bool,
+    pub metadata: Option<serde_json::Value>,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = light_sources)]
+pub struct NewLightSource {
+    pub scene_id: uuid::Uuid,
+    pub x: f64,
+    pub y: f64,
+    pub radius: f64,
+    pub intensity: f64,
+    pub color: Option<String>,
+    pub attached_token_id: Option<uuid::Uuid>,
+    pub casts_shadows: bool,
+    pub metadata: Option<serde_json::Value>,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+}
+
+#[derive(AsChangeset, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = light_sources)]
+pub struct LightSourceUpdate {
+    pub x: Option<f64>,
+    pub y: Option<f64>,
+    pub radius: Option<f64>,
+    pub intensity: Option<f64>,
+    pub color: Option<String>,
+    pub attached_token_id: Option<uuid::Uuid>,
+    pub casts_shadows: Option<bool>,
+    pub metadata: Option<serde_json::Value>,
+    pub updated_by: uuid::Uuid,
+}
+
+// ========== Shape Models (native canvas authoring) ==========
+
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = shapes)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct Shape {
+    pub shape_id: uuid::Uuid,
+    pub scene_id: uuid::Uuid,
+    pub kind: String,
+    pub geometry: serde_json::Value,
+    pub text: Option<String>,
+    pub style: Option<serde_json::Value>,
+    pub visible_to_players: bool,
+    pub metadata: Option<serde_json::Value>,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = shapes)]
+pub struct NewShape {
+    pub scene_id: uuid::Uuid,
+    pub kind: String,
+    pub geometry: serde_json::Value,
+    pub text: Option<String>,
+    pub style: Option<serde_json::Value>,
+    pub visible_to_players: bool,
+    pub metadata: Option<serde_json::Value>,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+}
+
+#[derive(AsChangeset, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = shapes)]
+pub struct ShapeUpdate {
+    pub geometry: Option<serde_json::Value>,
+    pub text: Option<String>,
+    pub style: Option<serde_json::Value>,
+    pub visible_to_players: Option<bool>,
+    pub metadata: Option<serde_json::Value>,
+    pub updated_by: uuid::Uuid,
 }
 
 // ========== Token Models (Phase 3.5) ==========
@@ -655,41 +855,10 @@ pub struct NewPlayersOnline {
     pub updated_at: chrono::NaiveDateTime,
 }
 
-// // ========== Audit Log Models (Security Audit Phase 1.2) ==========
-// 
-// /// Audit log entry for tracking sensitive operations
-// #[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
-// #[diesel(table_name = audit_logs)]
-// #[diesel(check_for_backend(diesel::pg::Pg))]
-// pub struct AuditLog {
-//     pub id: uuid::Uuid,
-//     pub event_type: String,
-//     pub actor_id: uuid::Uuid,
-//     pub resource_type: Option<String>,
-//     pub resource_id: Option<uuid::Uuid>,
-//     pub action: Option<String>,
-//     pub details: Option<serde_json::Value>,
-//     pub created_at: chrono::NaiveDateTime,
-// }
-// 
-// /// New audit log entry for insertion
-// #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
-// #[diesel(table_name = audit_logs)]
-// pub struct NewAuditLog {
-//     pub id: uuid::Uuid,
-//     pub event_type: String,
-//     pub actor_id: uuid::Uuid,
-//     pub resource_type: Option<String>,
-//     pub resource_id: Option<uuid::Uuid>,
-//     pub action: Option<String>,
-//     pub details: Option<serde_json::Value>,
-//     pub created_at: chrono::NaiveDateTime,
-// }
-// 
-// // ========== Membership Models (Phase 4.10) ==========
-// 
-// // NOTE: WorldInvite models - table created via migration 2026-05-06-120000-0007
-// 
+// ========== Membership Models (Phase 4.10) ==========
+
+// NOTE: WorldInvite models - table created via migration 2026-05-06-120000-0007
+
 /// World invite code record from database
 #[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
 #[diesel(table_name = world_invites)]

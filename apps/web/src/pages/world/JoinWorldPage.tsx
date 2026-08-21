@@ -9,7 +9,6 @@ import { Loader } from "@/components/ui/loader/Loader";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { useAuth } from "@/hooks/useAuth";
 import type { SeoConfig } from "@/types/seo";
-import styles from "./JoinWorldPage.module.scss";
 
 interface WorldInfo {
   id: string;
@@ -200,68 +199,77 @@ export default function JoinWorldPage() {
     return <Loader fullScreen label="Loading campaign preview" />;
   }
 
+  const world = worldState.world;
+
   return (
     <>
       <SEO
         {...joinWorldPageSeo}
         title={
-          worldState.world
-            ? `Join ${worldState.world.name} | ThunderForge`
-            : joinWorldPageSeo.title
+          world ? `Join ${world.name} | ThunderForge` : joinWorldPageSeo.title
         }
       />
       <Container>
-        <main className={styles.shell}>
+        <main className="grid min-h-[60vh] place-items-center py-16">
           {worldState.status ? (
-            <Card surface="stone" className={styles.errorState}>
+            <Card
+              surface="stone"
+              className="grid w-full max-w-lg gap-4 p-6 text-center"
+            >
               <StatusBadge variant="danger">{worldState.status}</StatusBadge>
-              <h1>Could not load campaign</h1>
-              <p>This invite code may be invalid, expired, or already used.</p>
+              <h1 className="text-2xl font-semibold">
+                Could not load campaign
+              </h1>
+              <p className="text-muted-foreground">
+                This invite code may be invalid, expired, or already used.
+              </p>
               <Button onClick={() => navigate("/worlds")}>
                 Return to my campaigns
               </Button>
             </Card>
-          ) : !worldState.world ? (
-            <Card surface="stone" className={styles.errorState}>
-              <h1>Campaign not found</h1>
-              <p>This invite code does not exist or has expired.</p>
+          ) : !world ? (
+            <Card
+              surface="stone"
+              className="grid w-full max-w-lg gap-4 p-6 text-center"
+            >
+              <h1 className="text-2xl font-semibold">Campaign not found</h1>
+              <p className="text-muted-foreground">
+                This invite code does not exist or has expired.
+              </p>
               <Button onClick={() => navigate("/worlds")}>
                 Return to my campaigns
               </Button>
             </Card>
           ) : worldState.alreadyMember ? (
-            <Card surface="leather" className={styles.previewCard}>
-              <div className={styles.header}>
-                <h1>{worldState.world.name}</h1>
-                <p className={styles.subtitle}>You are already a member</p>
+            <Card surface="leather" className="grid w-full max-w-lg gap-4 p-6">
+              <div>
+                <h1 className="text-2xl font-semibold">{world.name}</h1>
+                <p className="text-muted-foreground">
+                  You are already a member
+                </p>
               </div>
-              <p className={styles.description}>
-                {worldState.world.description ??
-                  "A shared realm awaits your return."}
+              <p className="text-muted-foreground">
+                {world.description ?? "A shared realm awaits your return."}
               </p>
-              <div className={styles.actions}>
-                <Button onClick={() => navigate(`/world/${worldState.world.id}`)}>
+              <div className="flex flex-wrap gap-3">
+                <Button onClick={() => navigate(`/world/${world.id}`)}>
                   Enter campaign
                 </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => navigate("/worlds")}
-                >
+                <Button variant="secondary" onClick={() => navigate("/worlds")}>
                   Back to campaigns
                 </Button>
               </div>
             </Card>
           ) : (
-            <Card surface="leather" className={styles.previewCard}>
-              <div className={styles.header}>
-                <h1>{worldState.world.name}</h1>
-                <p className={styles.subtitle}>Campaign Invitation</p>
+            <Card surface="leather" className="grid w-full max-w-lg gap-4 p-6">
+              <div>
+                <h1 className="text-2xl font-semibold">{world.name}</h1>
+                <p className="text-muted-foreground">Campaign Invitation</p>
               </div>
-              <p className={styles.description}>
-                {worldState.world.description ??
-                  "A shared realm awaits your arrival."}
+              <p className="text-muted-foreground">
+                {world.description ?? "A shared realm awaits your arrival."}
               </p>
-              <div className={styles.actions}>
+              <div className="flex flex-wrap gap-3">
                 <Button
                   onClick={() => void handleJoin()}
                   disabled={isJoining}

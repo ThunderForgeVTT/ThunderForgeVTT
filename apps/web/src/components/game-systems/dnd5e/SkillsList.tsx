@@ -16,8 +16,7 @@
 
 import type { ReactNode } from "react";
 import { Card } from "@/components/ui/card/Card";
-import { cn } from "@/utils/cn";
-import styles from "./SkillsList.module.scss";
+import { cn } from "@/lib/utils";
 
 export interface SkillsListProps {
   abilityData?: Record<string, number>;
@@ -91,38 +90,44 @@ function SkillRow({
   const passiveCheck = 10 + skillModifier;
 
   const modifierText = skillModifier >= 0 ? `+${skillModifier}` : `${skillModifier}`;
-  const proficiencyClass = isProficient ? styles.proficient : "";
 
   return (
-    <div className={cn(styles.skillRow, proficiencyClass)}>
-      <div className={styles.skillName}>
-        <span className={styles.name}>{skill.name}</span>
-        <span className={styles.ability}>{skill.abilityShort}</span>
+    <div
+      className={cn(
+        "grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 rounded-md px-3 py-2 text-sm",
+        isProficient && "bg-primary/5",
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <span>{skill.name}</span>
+        <span className="text-xs text-muted-foreground">
+          {skill.abilityShort}
+        </span>
       </div>
 
       {editable ? (
-        <label className={styles.proficiencyCheckbox}>
+        <label className="inline-flex items-center">
           <input
             type="checkbox"
             checked={isProficient}
             onChange={(e) => onToggleProficiency?.(skill.id, e.target.checked)}
             aria-label={`${skill.name} proficiency`}
+            className="size-4 rounded border-input accent-primary"
           />
-          <span className={styles.checkmark} />
         </label>
       ) : (
-        <div className={styles.proficiencyIndicator}>
-          {isProficient && <span className={styles.dot}>●</span>}
+        <div className="w-4 text-center">
+          {isProficient && <span className="text-primary">●</span>}
         </div>
       )}
 
-      <div className={styles.modifierDisplay}>
-        <span className={styles.modifier}>{modifierText}</span>
+      <div>
+        <span className="font-medium">{modifierText}</span>
       </div>
 
-      <div className={styles.passiveDisplay}>
-        <span className={styles.passiveLabel}>Passive:</span>
-        <span className={styles.passive}>{passiveCheck}</span>
+      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+        <span>Passive:</span>
+        <span className="font-medium text-foreground">{passiveCheck}</span>
       </div>
     </div>
   );
@@ -169,26 +174,26 @@ export function SkillsList({
   ];
 
   return (
-    <Card surface="parchment" className={styles.container}>
-      <div className={styles.header}>
-        <h3>Skills</h3>
-        <p className={styles.subtitle}>
+    <Card surface="parchment" className="grid gap-4 p-6">
+      <div>
+        <h3 className="text-lg font-semibold">Skills</h3>
+        <p className="text-sm text-muted-foreground">
           Trained abilities derived from your abilities
         </p>
       </div>
 
-      <div className={styles.skillsContainer}>
+      <div className="grid gap-4">
         {abilityOrder.map((ability) => {
           const skillsForAbility = skillsByAbility[ability];
           if (!skillsForAbility) return null;
 
           return (
-            <div key={ability} className={styles.abilityGroup}>
-              <div className={styles.abilityHeader}>
-                <h4>{ability.charAt(0).toUpperCase() + ability.slice(1)}</h4>
-              </div>
+            <div key={ability} className="grid gap-1">
+              <h4 className="px-3 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+                {ability.charAt(0).toUpperCase() + ability.slice(1)}
+              </h4>
 
-              <div className={styles.skillsList}>
+              <div className="grid">
                 {skillsForAbility.map((skill) => (
                   <SkillRow
                     key={skill.id}
@@ -206,7 +211,7 @@ export function SkillsList({
       </div>
 
       {editable && (
-        <div className={styles.hint}>
+        <div className="text-xs text-muted-foreground">
           Click proficiency circle to toggle skill proficiency. Modifiers update automatically.
         </div>
       )}

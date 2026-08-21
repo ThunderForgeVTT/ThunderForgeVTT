@@ -8,8 +8,16 @@ import {
   worldActorSystemDataSchema,
   worldInvitesSchema,
   worldMembersSchema,
+  worldWallsSchema,
+  worldLightsSchema,
+  worldShapesSchema,
+  worldSceneTokensSchema,
 } from "./schemas";
 import type { WorldInviteDoc } from "@/db/collections/worldInvitesCollection";
+import type { WorldWallDoc } from "@/db/collections/worldWallsCollection";
+import type { WorldLightDoc } from "@/db/collections/worldLightsCollection";
+import type { WorldShapeDoc } from "@/db/collections/worldShapesCollection";
+import type { WorldSceneTokenDoc } from "@/db/collections/worldTokensSceneCollection";
 
 let devPluginRegistered = false;
 let worldDbPromise: Promise<WorldDatabase> | null = null;
@@ -62,6 +70,42 @@ export type WorldCollections = {
     };
     upsert: (doc: WorldMemberDoc) => Promise<unknown>;
     bulkUpsert: (docs: WorldMemberDoc[]) => Promise<unknown>;
+  };
+  world_walls: {
+    find: (query?: unknown) => {
+      exec: () => Promise<Array<Record<string, unknown>>>;
+    };
+    upsert: (doc: WorldWallDoc) => Promise<unknown>;
+    findOne: (id: string) => {
+      exec: () => Promise<{ remove: () => Promise<unknown>; update: (changes: any) => Promise<unknown> } | null>;
+    };
+  };
+  world_lights: {
+    find: (query?: unknown) => {
+      exec: () => Promise<Array<Record<string, unknown>>>;
+    };
+    upsert: (doc: WorldLightDoc) => Promise<unknown>;
+    findOne: (id: string) => {
+      exec: () => Promise<{ remove: () => Promise<unknown>; update: (changes: any) => Promise<unknown> } | null>;
+    };
+  };
+  world_shapes: {
+    find: (query?: unknown) => {
+      exec: () => Promise<Array<Record<string, unknown>>>;
+    };
+    upsert: (doc: WorldShapeDoc) => Promise<unknown>;
+    findOne: (id: string) => {
+      exec: () => Promise<{ remove: () => Promise<unknown>; update: (changes: any) => Promise<unknown> } | null>;
+    };
+  };
+  world_scene_tokens: {
+    find: (query?: unknown) => {
+      exec: () => Promise<Array<Record<string, unknown>>>;
+    };
+    upsert: (doc: WorldSceneTokenDoc) => Promise<unknown>;
+    findOne: (id: string) => {
+      exec: () => Promise<{ remove: () => Promise<unknown>; update: (changes: any) => Promise<unknown> } | null>;
+    };
   };
 };
 
@@ -121,6 +165,10 @@ export async function getWorldDatabase(): Promise<WorldDatabase> {
         world_actor_system_data: { schema: worldActorSystemDataSchema },
         world_invites: { schema: worldInvitesSchema },
         world_members: { schema: worldMembersSchema },
+        world_walls: { schema: worldWallsSchema },
+        world_lights: { schema: worldLightsSchema },
+        world_shapes: { schema: worldShapesSchema },
+        world_scene_tokens: { schema: worldSceneTokensSchema },
       });
 
       return db as unknown as WorldDatabase;

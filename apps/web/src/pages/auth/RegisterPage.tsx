@@ -7,13 +7,13 @@ import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import { Field } from "@/components/ui/field/Field";
+import { Input } from "@/components/ui/input";
 import { RuneDivider } from "@/components/ui/rune-divider/RuneDivider";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { AuthLayout } from "@/layouts/auth-layout/AuthLayout";
 import { useAuth } from "@/hooks/useAuth";
 import type { SetupProvider } from "@/types/auth";
 import type { SeoConfig } from "@/types/seo";
-import styles from "./AuthPage.module.scss";
 
 export const registerPageSeo: SeoConfig = {
   title: "Create account",
@@ -106,35 +106,48 @@ export default function RegisterPage() {
         title="Create a local ThunderForge account."
         description="Phase 1 uses secure cookie sessions backed by the existing Rust auth stack, leaving room for worlds, actors, permissions, and multiplayer ownership later."
         aside={
-          <Card surface="parchment">
-            <div className={styles.auxiliary}>
-              <h2>Already have access?</h2>
-              <p>Return to login or review the welcome hall this session unlocks.</p>
-              <div className={styles.avatarGroup}>
-                <div className={styles.avatarRow}>
+          <Card>
+            <div className="grid gap-4">
+              <h2 className="text-lg font-semibold">Already have access?</h2>
+              <p className="text-muted-foreground">
+                Return to login or review the welcome hall this session
+                unlocks.
+              </p>
+              <div className="grid gap-3">
+                <div className="inline-flex gap-3">
                   <Avatar seed="archivist" name="Archivist" />
                   <Avatar seed="summoner" name="Summoner" />
                 </div>
-                <p>Accounts created here can later attach to worlds, actors, invites, and policy scopes.</p>
+                <p className="text-sm text-muted-foreground">
+                  Accounts created here can later attach to worlds, actors,
+                  invites, and policy scopes.
+                </p>
               </div>
               <RuneDivider label="Return paths" />
-              <div className={styles.linkList}>
-                <Link to="/login">Return to login</Link>
-                <Link to="/welcome">Open the welcome hall</Link>
+              <div className="grid gap-2">
+                <Link to="/login" className="font-medium text-primary hover:underline">
+                  Return to login
+                </Link>
+                <Link to="/welcome" className="font-medium text-primary hover:underline">
+                  Open the welcome hall
+                </Link>
               </div>
             </div>
           </Card>
         }
       >
-        <Card surface="leather">
-          <form onSubmit={onSubmit} className={styles.form}>
-            <div className={styles.header}>
-              <h2>Create credentials</h2>
-              <p>Registration stores Argon2 password hashes and starts a database-backed session immediately.</p>
+        <Card>
+          <form onSubmit={onSubmit} className="grid gap-4">
+            <div className="grid gap-1.5">
+              <h2 className="text-lg font-semibold">Create credentials</h2>
+              <p className="text-muted-foreground">
+                Registration stores Argon2 password hashes and starts a
+                database-backed session immediately.
+              </p>
             </div>
 
             <Field label="Username" htmlFor="register-username">
-              <input
+              <Input
                 id="register-username"
                 name="username"
                 autoComplete="username"
@@ -145,7 +158,7 @@ export default function RegisterPage() {
             </Field>
 
             <Field label="Email address" htmlFor="register-email">
-              <input
+              <Input
                 id="register-email"
                 name="email"
                 type="email"
@@ -156,8 +169,12 @@ export default function RegisterPage() {
               />
             </Field>
 
-            <Field label="Password" htmlFor="register-password" hint="Use at least 12 characters.">
-              <input
+            <Field
+              label="Password"
+              htmlFor="register-password"
+              hint="Use at least 12 characters."
+            >
+              <Input
                 id="register-password"
                 name="password"
                 type="password"
@@ -168,8 +185,11 @@ export default function RegisterPage() {
               />
             </Field>
 
-            <Field label="Confirm password" htmlFor="register-password-confirmation">
-              <input
+            <Field
+              label="Confirm password"
+              htmlFor="register-password-confirmation"
+            >
+              <Input
                 id="register-password-confirmation"
                 name="passwordConfirmation"
                 type="password"
@@ -180,7 +200,7 @@ export default function RegisterPage() {
               />
             </Field>
 
-            <div className={styles.actions}>
+            <div className="flex flex-wrap gap-3">
               <Button
                 type="submit"
                 variant="success"
@@ -197,7 +217,7 @@ export default function RegisterPage() {
             {providers.length ? (
               <>
                 <RuneDivider label="Existing linked provider" />
-                <div className={styles.actions}>
+                <div className="flex flex-wrap gap-3">
                   {providers.map((provider) => (
                     <Button
                       key={provider.provider_key}

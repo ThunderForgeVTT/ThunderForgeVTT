@@ -11,6 +11,23 @@ services:
       - "5432:5432"
     volumes:
       - db:/var/lib/postgresql
+  # Spec 002: object storage for canvas image assets (paste-to-canvas +
+  # migrated map-import backgrounds). Dev-only root credentials — the
+  # server never hands these out; see docs/adrs/20260820-039-*.md and
+  # src/server/src/storage/rustfs.rs.
+  rustfs:
+    container_name: thunderforge-rustfs
+    image: rustfs/rustfs:1.0.0-rc.2
+    restart: always
+    environment:
+      - RUSTFS_ACCESS_KEY=${RUSTFS_ROOT_ACCESS_KEY:-thunderforge-rustfs-root}
+      - RUSTFS_SECRET_KEY=${RUSTFS_ROOT_SECRET_KEY:-thunderforge-rustfs-root-secret}
+    ports:
+      - "9000:9000"
+    volumes:
+      - rustfs_data:/data
 volumes:
   db:
+    driver: local
+  rustfs_data:
     driver: local

@@ -45,6 +45,150 @@ pub struct GraphQLUpdateSceneInput {
     pub metadata: Option<Json<serde_json::Value>>,
 }
 
+// ========== Walls (Phase 6; door semantics: native canvas authoring FR-017) ==========
+
+/// Door state for a wall segment. "None" means the wall is not a door at
+/// all (its blocks_vision/blocks_movement flags always apply). "Open"
+/// means the door does not block vision/movement regardless of those
+/// flags. "Closed" means the flags apply as stored.
+#[derive(Enum, Debug, Copy, Clone, Eq, PartialEq)]
+pub enum GraphQLDoorState {
+    None,
+    Open,
+    Closed,
+}
+
+impl GraphQLDoorState {
+    pub fn as_db_str(self) -> &'static str {
+        match self {
+            GraphQLDoorState::None => "none",
+            GraphQLDoorState::Open => "open",
+            GraphQLDoorState::Closed => "closed",
+        }
+    }
+
+    pub fn from_db_str(value: &str) -> Self {
+        match value {
+            "open" => GraphQLDoorState::Open,
+            "closed" => GraphQLDoorState::Closed,
+            _ => GraphQLDoorState::None,
+        }
+    }
+}
+
+/// Input for creating a new wall
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLCreateWallInput {
+    pub scene_id: Uuid,
+    pub x1: f64,
+    pub y1: f64,
+    pub x2: f64,
+    pub y2: f64,
+    pub blocks_vision: Option<bool>,
+    pub blocks_movement: Option<bool>,
+    pub door_state: Option<GraphQLDoorState>,
+    pub metadata: Option<Json<serde_json::Value>>,
+}
+
+/// Input for updating wall properties
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLUpdateWallInput {
+    pub x1: Option<f64>,
+    pub y1: Option<f64>,
+    pub x2: Option<f64>,
+    pub y2: Option<f64>,
+    pub blocks_vision: Option<bool>,
+    pub blocks_movement: Option<bool>,
+    pub door_state: Option<GraphQLDoorState>,
+    pub metadata: Option<Json<serde_json::Value>>,
+}
+
+// ========== Light Sources (native canvas authoring) ==========
+
+/// Input for creating a new light source
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLCreateLightSourceInput {
+    pub scene_id: Uuid,
+    pub x: f64,
+    pub y: f64,
+    pub radius: f64,
+    pub intensity: Option<f64>,
+    pub color: Option<String>,
+    pub attached_token_id: Option<Uuid>,
+    pub casts_shadows: Option<bool>,
+    pub metadata: Option<Json<serde_json::Value>>,
+}
+
+/// Input for updating light source properties
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLUpdateLightSourceInput {
+    pub x: Option<f64>,
+    pub y: Option<f64>,
+    pub radius: Option<f64>,
+    pub intensity: Option<f64>,
+    pub color: Option<String>,
+    pub attached_token_id: Option<Uuid>,
+    pub casts_shadows: Option<bool>,
+    pub metadata: Option<Json<serde_json::Value>>,
+}
+
+// ========== Shapes (native canvas authoring) ==========
+
+/// Kind of freehand/drawn shape on a scene's canvas (native canvas
+/// authoring: stroke, rect, ellipse, line, text).
+#[derive(Enum, Debug, Copy, Clone, Eq, PartialEq)]
+pub enum GraphQLShapeKind {
+    Stroke,
+    Rect,
+    Ellipse,
+    Line,
+    Text,
+}
+
+impl GraphQLShapeKind {
+    pub fn as_db_str(self) -> &'static str {
+        match self {
+            GraphQLShapeKind::Stroke => "stroke",
+            GraphQLShapeKind::Rect => "rect",
+            GraphQLShapeKind::Ellipse => "ellipse",
+            GraphQLShapeKind::Line => "line",
+            GraphQLShapeKind::Text => "text",
+        }
+    }
+
+    pub fn from_db_str(value: &str) -> Self {
+        match value {
+            "rect" => GraphQLShapeKind::Rect,
+            "ellipse" => GraphQLShapeKind::Ellipse,
+            "line" => GraphQLShapeKind::Line,
+            "text" => GraphQLShapeKind::Text,
+            _ => GraphQLShapeKind::Stroke,
+        }
+    }
+}
+
+/// Input for creating a new shape
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLCreateShapeInput {
+    pub scene_id: Uuid,
+    pub kind: GraphQLShapeKind,
+    pub geometry: Json<serde_json::Value>,
+    pub text: Option<String>,
+    pub style: Option<Json<serde_json::Value>>,
+    pub visible_to_players: Option<bool>,
+    pub metadata: Option<Json<serde_json::Value>>,
+}
+
+/// Input for updating shape properties
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLUpdateShapeInput {
+    pub geometry: Option<Json<serde_json::Value>>,
+    pub text: Option<String>,
+    pub style: Option<Json<serde_json::Value>>,
+    pub visible_to_players: Option<bool>,
+    pub metadata: Option<Json<serde_json::Value>>,
+}
+
 // ========== Player Presence (Phase 4.9.B.3) ==========
 
 /// Player presence data in world/scene
@@ -204,11 +348,23 @@ pub struct GraphQLMoveTokenInput {
     pub z: Option<f64>,
 }
 
-/// Input for upserting a token in a scene
+// ========== Scene-Scoped Tokens (native canvas authoring) ==========
+
+/// Input for creating a new token on a scene
 #[derive(InputObject, Debug, Clone)]
-pub struct GraphQLUpsertTokenInput {
-    pub token_id: Option<Uuid>,
+pub struct GraphQLCreateTokenInput {
     pub scene_id: Uuid,
+    pub actor_id: Option<Uuid>,
+    pub x: f64,
+    pub y: f64,
+    pub rotation: Option<f64>,
+    pub scale: Option<f64>,
+    pub metadata: Option<Json<serde_json::Value>>,
+}
+
+/// Input for updating an existing token's position/properties
+#[derive(InputObject, Debug, Clone)]
+pub struct GraphQLUpdateTokenInput {
     pub actor_id: Option<Uuid>,
     pub x: Option<f64>,
     pub y: Option<f64>,

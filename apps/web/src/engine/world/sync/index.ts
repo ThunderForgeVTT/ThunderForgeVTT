@@ -18,6 +18,30 @@ export {
   type ReplicationOptions,
   type ActorSystemDataEvent,
 } from "./replication";
+export {
+  applyWallWorldEvent,
+  startWallEventSync,
+  loadWallsIntoStore,
+  startWallMutationBridge,
+} from "./walls";
+export {
+  applyLightWorldEvent,
+  startLightEventSync,
+  loadLightsIntoStore,
+  startLightMutationBridge,
+} from "./lights";
+export {
+  applyShapeWorldEvent,
+  startShapeEventSync,
+  loadShapesIntoStore,
+  startShapeMutationBridge,
+} from "./shapes";
+export {
+  applyTokenWorldEvent,
+  startTokenEventSync,
+  loadTokensIntoStore,
+  startTokenMutationBridge,
+} from "./tokens";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;

@@ -4,9 +4,7 @@ pub struct TokenPlugin;
 
 impl Plugin for TokenPlugin {
     fn build(&self, app: &mut App) {
-        app
-            .add_systems(Startup, initialize_tokens)
-            .add_systems(Update, crate::systems::token_sync::sync_tokens_from_rxdb);
+        app.add_systems(Startup, initialize_tokens);
     }
 }
 

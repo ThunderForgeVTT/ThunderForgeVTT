@@ -1,22 +1,40 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { SEO } from "@/components/seo/SEO";
 import { WorldLayout } from "@/layouts/world-layout/WorldLayout";
 import type { SeoConfig } from "@/types/seo";
-import { WorldWhiteboard } from "@/engine/tldraw/WorldWhiteboard";
 import { createWorldStore } from "@/engine/world/store";
 import {
   createGraphQLWorldSyncTransport,
+  loadLightsIntoStore,
+  loadShapesIntoStore,
+  loadTokensIntoStore,
+  loadWallsIntoStore,
+  startLightMutationBridge,
+  startShapeMutationBridge,
+  startTokenMutationBridge,
+  startWallMutationBridge,
   startWorldSync,
 } from "@/engine/world/sync";
 import type { WorldSyncSession } from "@/engine/world/sync/types";
 import { useCanvasEngine } from "@/engine/bevy/useCanvasEngine";
-import { useTokenSync } from "@/engine/bevy/useTokenSync";
+import { getWorld } from "@/api/world";
+import { getScenes } from "@/api/scenes";
+import { useAuth } from "@/hooks/useAuth";
+import { WallTool } from "@/components/canvas-tools/WallTool";
+import { LightingTool } from "@/components/canvas-tools/LightingTool";
+import { ShapeTool } from "@/components/canvas-tools/ShapeTool";
+import { MapImportTool } from "@/components/canvas-tools/MapImportTool";
+import { AssetPasteTool } from "@/components/canvas-tools/AssetPasteTool";
+import type { CanvasImageAsset } from "@/api/assets";
+import { SceneSwitcher } from "@/components/world/SceneSwitcher";
+import type { WorldRecord } from "@/types/world";
+import type { SceneRecord } from "@/types/scene";
 
 export const worldPageSeo: SeoConfig = {
   title: "World workspace",
   description:
-    "Launch the ThunderForge VTT collaborative world canvas powered by Bevy, tldraw, and synchronized world state.",
+    "Launch the ThunderForge VTT collaborative world canvas powered by Bevy and synchronized world state.",
   canonicalPath: "/world/play",
   noindex: true,
 };
@@ -26,28 +44,114 @@ export default function WorldPage() {
   const loaded = useRef(false);
   const canvasContainerId = "game-canvas-container";
   const worldSyncSessionRef = useRef<WorldSyncSession | null>(null);
+  // Scene-scoped tokens are loaded from the server (tokens(sceneId)) once
+  // a scene is selected — see the loadTokensIntoStore/startTokenMutationBridge
+  // effect below — rather than seeded here with fixture data. The engine's
+  // own demo "player"/"npc" tokens still spawn independently at Bevy
+  // startup (src/engine/src/lib.rs) regardless of what's loaded here.
   const [worldStore] = useState(() =>
     createWorldStore({
       worldId: id,
-      initialTokens: [
-        { id: "player", x: 140, y: 140, z: 0, label: "Player" },
-        { id: "npc", x: 360, y: 220, z: 0, label: "NPC" },
-      ],
     }),
   );
   const [worldState, setWorldState] = useState(() => worldStore.getState());
+  const { user } = useAuth();
+  const [world, setWorld] = useState<WorldRecord | null>(null);
+  const [scenes, setScenes] = useState<SceneRecord[]>([]);
+  const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
+  // True once `bindWorldStore` has actually finished registering its
+  // store subscription (the thing that forwards "sync"-sourced dispatches
+  // — e.g. loadWallsIntoStore's confirmed wall rows — into the engine via
+  // apply_world_command). NOT the same as `engineReady`: bindWorldStore is
+  // reached through its own `import("@/engine/bevy")` dynamic-chunk hop,
+  // which `useCanvasEngine`'s static-imported `mountEngine` doesn't pay,
+  // so `engineReady` can and does flip true before this subscription
+  // exists. Without gating on this specifically (found via
+  // specs/002-canvas-authoring-asset-storage T014's live debugging),
+  // walls/tokens/lights/shapes fetched on mount/reload can lose the race:
+  // the GraphQL fetch resolves and dispatches "upsert_wall" (etc.) before
+  // anyone is listening to relay it into the engine's WallSet/TokenSet/
+  // etc. — the dispatch still updates React state correctly, so nothing
+  // looks broken in the UI's data, but the engine-side resource silently
+  // stays empty (e.g. no wall is selectable-by-click after a reload, even
+  // though it's genuinely persisted and the property panel would show it
+  // if selection worked). Every effect that dispatches something meant to
+  // reach the engine gates on this now.
+  const [bridgeReady, setBridgeReady] = useState(false);
+
+  // GM/scene-owner check: same `createdBy === user.id` ownership
+  // comparison already used to gate GM-only affordances on
+  // WorldDashboardPage.tsx. Wall authoring tools (FR-009) are hidden
+  // entirely for non-owners, never merely disabled.
+  const isSceneOwner = Boolean(world && user && world.createdBy === user.id);
+  const sceneId = selectedSceneId;
+  const selectedScene = scenes.find((scene) => scene.sceneId === sceneId) ?? null;
+
+  useEffect(() => {
+    if (!id) {
+      return;
+    }
+
+    let active = true;
+
+    void getWorld(id)
+      .then((response) => {
+        if (active) {
+          setWorld(response);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setWorld(null);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) {
+      return;
+    }
+
+    let active = true;
+
+    void getScenes(id)
+      .then((response) => {
+        if (!active) {
+          return;
+        }
+        setScenes(response);
+        // Default to the first scene once scenes load, but don't clobber
+        // a scene the user (or a previous load) already picked.
+        setSelectedSceneId((current) =>
+          current && response.some((scene) => scene.sceneId === current)
+            ? current
+            : (response[0]?.sceneId ?? null),
+        );
+      })
+      .catch((error) => {
+        console.error("Failed to load world scenes:", error);
+        if (active) {
+          setScenes([]);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [id]);
 
   // 🎮 Phase 4.7.F1: Use canvas engine hook for responsive sizing
-  const { containerRef, engine, engineReady, error: engineError } = useCanvasEngine({
+  const { containerRef, engineReady, error: engineError } = useCanvasEngine({
     worldId: id,
     canvasSelector: `#${canvasContainerId}`,
     onError: (err) => {
       console.error("Bevy engine failed to mount:", err);
     },
   });
-
-  // 🎮 Phase 4.7.C2: Sync RxDB tokens to Bevy engine
-  useTokenSync(engine, id);
 
   useEffect(
     () => worldStore.subscribe((event) => setWorldState(event.state)),
@@ -94,12 +198,28 @@ export default function WorldPage() {
     // Engine is now mounted via useCanvasEngine hook
     // Still need to bind world store for mutations
     void import("@/engine/bevy").then(({ bindWorldStore }) =>
-      bindWorldStore(worldStore),
+      bindWorldStore(worldStore).then(() => setBridgeReady(true)),
     );
   }, [worldStore]);
 
+  // FR-010: tell the engine whether this session may author walls/shapes.
+  // Without this, WallPlugin/ShapePlugin's IsGameMaster resource stays at
+  // its `false` default forever and no click/keyboard authoring input is
+  // ever accepted, regardless of `isSceneOwner`. Re-sent whenever
+  // ownership resolves/changes or the engine (re)becomes ready, since a
+  // fresh `start()` always resets the wasm side back to the default.
   useEffect(() => {
-    if (!id) {
+    if (!engineReady) {
+      return;
+    }
+
+    void import("@/engine/bevy").then(({ setIsGameMaster }) =>
+      setIsGameMaster(isSceneOwner),
+    );
+  }, [engineReady, isSceneOwner]);
+
+  useEffect(() => {
+    if (!id || !bridgeReady) {
       return;
     }
 
@@ -108,7 +228,180 @@ export default function WorldPage() {
     void import("@/engine/bevy").then(({ setActiveWorld }) =>
       setActiveWorld(id),
     );
-  }, [id, worldStore]);
+  }, [id, worldStore, bridgeReady]);
+
+  useEffect(() => {
+    if (!selectedScene || !bridgeReady) {
+      return;
+    }
+
+    // Switching scenes re-points the engine's background sprite at the
+    // newly-selected scene's imported map art (null clears it for a scene
+    // with no import). worldStore.dispatch's generic bindWorldStore
+    // forwarder relays this to the engine the same way every other
+    // WorldCommand is relayed — no direct engine-bridge call needed.
+    // Gated on `bridgeReady` (see its declaration) so this dispatch isn't
+    // lost to the bindWorldStore-registration race.
+    worldStore.dispatch(
+      {
+        type: "set_scene_background",
+        backgroundImagePath: selectedScene.backgroundImagePath,
+        width: selectedScene.width,
+        height: selectedScene.height,
+        worldId: id,
+      },
+      "ui",
+    );
+  }, [selectedScene, worldStore, id, bridgeReady]);
+
+  useEffect(() => {
+    if (!sceneId || !bridgeReady) {
+      return;
+    }
+
+    // Switching scenes must clear the *previous* scene's walls first:
+    // loadWallsIntoStore only ever upserts, so without this, a
+    // previously-visited scene's walls (and a stale selection pointing
+    // at one of them) stay rendered/selectable on top of whichever scene
+    // is now active, indefinitely accumulating across scene switches for
+    // the life of the session (found while investigating spec 002 T017 —
+    // the equivalent gap for shapes below reproduced as a real, visible
+    // bug, not just a stale-selection artifact: an old scene's shape was
+    // still spawned and hit-testable in the engine after switching
+    // scenes). `"sync"` source: a confirmed-state correction, not a
+    // delete intent — startWallMutationBridge below ignores
+    // `source: "sync"` dispatches, so this never calls deleteWall.
+    for (const wallId of Object.keys(worldStore.getState().walls)) {
+      worldStore.dispatch({ type: "remove_wall", wallId }, "sync");
+    }
+
+    // Gated on `bridgeReady` (see its declaration): without it, this can
+    // fire and dispatch the confirmed walls before bindWorldStore has
+    // registered its forwarding subscription, silently losing them from
+    // the engine's WallSet even though they're genuinely persisted.
+    void loadWallsIntoStore(worldStore, sceneId).catch((error) => {
+      console.error("Failed to load scene walls:", error);
+    });
+
+    const stopBridge = startWallMutationBridge(worldStore, sceneId);
+
+    return () => {
+      stopBridge();
+    };
+  }, [sceneId, worldStore, bridgeReady]);
+
+  useEffect(() => {
+    if (!sceneId || !bridgeReady) {
+      return;
+    }
+
+    void loadTokensIntoStore(worldStore, sceneId).catch((error) => {
+      console.error("Failed to load scene tokens:", error);
+    });
+
+    const stopBridge = startTokenMutationBridge(worldStore, sceneId);
+
+    return () => {
+      stopBridge();
+    };
+  }, [sceneId, worldStore, bridgeReady]);
+
+  useEffect(() => {
+    if (!sceneId || !bridgeReady) {
+      return;
+    }
+
+    void loadLightsIntoStore(worldStore, sceneId).catch((error) => {
+      console.error("Failed to load scene lights:", error);
+    });
+
+    const stopBridge = startLightMutationBridge(worldStore, sceneId);
+
+    return () => {
+      stopBridge();
+    };
+  }, [sceneId, worldStore, bridgeReady]);
+
+  useEffect(() => {
+    if (!sceneId || !bridgeReady) {
+      return;
+    }
+
+    // Clear the previous scene's shapes before loading this scene's —
+    // see the matching comment on the walls effect above for why. This
+    // is the fix for the real bug behind spec 002 T017's failure: without
+    // it, a shape drawn on scene A stayed spawned (and hit-testable) in
+    // the engine after switching to scene B, so a click on B's empty
+    // canvas at the same on-screen position re-selected A's shape.
+    for (const shapeId of Object.keys(worldStore.getState().shapes)) {
+      worldStore.dispatch({ type: "remove_shape", shapeId }, "sync");
+    }
+
+    void loadShapesIntoStore(worldStore, sceneId).catch((error) => {
+      console.error("Failed to load scene shapes:", error);
+    });
+
+    const stopBridge = startShapeMutationBridge(worldStore, sceneId);
+
+    return () => {
+      stopBridge();
+    };
+  }, [sceneId, worldStore, bridgeReady]);
+
+  const handleMapImportComplete = useCallback(() => {
+    if (!sceneId || !id) {
+      return;
+    }
+
+    // Map import creates walls/doors/lights directly in Postgres (via the
+    // REST endpoint, not the GraphQL mutation bridge), so re-run the same
+    // loaders used on initial mount to pull the newly imported content into
+    // the world store without requiring a manual page reload.
+    void loadWallsIntoStore(worldStore, sceneId).catch((error) => {
+      console.error("Failed to reload scene walls after map import:", error);
+    });
+    void loadLightsIntoStore(worldStore, sceneId).catch((error) => {
+      console.error("Failed to reload scene lights after map import:", error);
+    });
+    void loadShapesIntoStore(worldStore, sceneId).catch((error) => {
+      console.error("Failed to reload scene shapes after map import:", error);
+    });
+    // Import also sets the scene's backgroundImagePath — refetch scenes so
+    // the background-dispatch effect above picks up the new art.
+    void getScenes(id)
+      .then(setScenes)
+      .catch((error) => {
+        console.error("Failed to reload scenes after map import:", error);
+      });
+  }, [sceneId, id, worldStore]);
+
+  // T023/T030 (specs/002-canvas-authoring-asset-storage): a pasted image
+  // is already persisted by the time AssetPasteTool calls this (the
+  // GraphQL mutation already succeeded) — this just tells the engine to
+  // spawn it. `path` points at the authenticated `/canvas-assets/{id}`
+  // proxy route (src/server/src/canvas_assets_serve.rs), not RustFS
+  // directly: RustFS is private per-campaign storage, so the browser can
+  // never fetch from it directly — this proxy is what makes a pasted
+  // image (or, latently, a migrated background) actually renderable at
+  // all, a gap that existed silently until this was wired up (nothing
+  // previously exercised the read path end-to-end).
+  const handleAssetPasted = useCallback(
+    (asset: CanvasImageAsset) => {
+      worldStore.dispatch(
+        {
+          type: "upsert_canvas_image_asset",
+          assetId: asset.id,
+          path: `/api/canvas-assets/${asset.id}`,
+          x: 0,
+          y: 0,
+          width: asset.widthPx,
+          height: asset.heightPx,
+        },
+        "ui",
+      );
+    },
+    [worldStore],
+  );
 
   const seo = useMemo<SeoConfig>(
     () => ({
@@ -155,9 +448,103 @@ export default function WorldPage() {
                 <p style={{ fontSize: "0.9em" }}>{engineError.message}</p>
               </div>
             )}
+            {scenes.length > 0 || isSceneOwner ? (
+              // Not gated on scenes.length alone: a brand-new world has
+              // zero scenes, and the "New scene" affordance (the only way
+              // to create the first one) needs to render precisely then.
+              // SceneSwitcher itself hides the scene picker when the list
+              // is empty and hides "New scene" when canCreateScene is false.
+              <div
+                style={{
+                  position: "absolute",
+                  top: "1rem",
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  // Higher than the GM tool panels (zIndex 900 below):
+                  // the ShapeTool panel's row of sub-tool buttons can run
+                  // wide enough to visually/pointer-overlap this
+                  // top-center control at common viewport widths, and
+                  // scene selection needs to stay reliably clickable
+                  // regardless of which tool panel happens to paint on
+                  // top of it.
+                  zIndex: 950,
+                  width: "14rem",
+                }}
+              >
+                <SceneSwitcher
+                  worldId={id}
+                  scenes={scenes}
+                  sceneId={sceneId}
+                  onSceneChange={setSelectedSceneId}
+                  onSceneCreated={(scene) =>
+                    setScenes((current) => [...current, scene])
+                  }
+                  canCreateScene={isSceneOwner}
+                />
+              </div>
+            ) : null}
+            {isSceneOwner && sceneId ? (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "1rem",
+                  left: "1rem",
+                  zIndex: 900,
+                  width: "16rem",
+                }}
+              >
+                <MapImportTool
+                  // Remount on scene switch: MapImportTool tracks its last
+                  // import result as local state, which otherwise persists
+                  // stale across scenes (e.g. still showing "Scene One"'s
+                  // import summary after switching to a scene with no
+                  // imports of its own yet).
+                  key={sceneId}
+                  sceneId={sceneId}
+                  onImportComplete={handleMapImportComplete}
+                />
+                <WallTool
+                  worldStore={worldStore}
+                  walls={worldState.walls}
+                  selectedWallId={worldState.selectedWallId}
+                />
+                <LightingTool
+                  worldStore={worldStore}
+                  lights={worldState.lights}
+                  selectedLightId={worldState.selectedLightId}
+                  tokens={worldState.tokens}
+                />
+              </div>
+            ) : null}
+            {isSceneOwner && sceneId ? (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "1rem",
+                  right: "1rem",
+                  zIndex: 900,
+                  width: "16rem",
+                }}
+              >
+                <ShapeTool
+                  worldStore={worldStore}
+                  shapes={worldState.shapes}
+                  selectedShapeId={worldState.selectedShapeId}
+                  sceneId={sceneId}
+                  canvasContainerRef={containerRef}
+                />
+              </div>
+            ) : null}
+            {isSceneOwner && sceneId ? (
+              <AssetPasteTool
+                worldId={id}
+                sceneId={sceneId}
+                active={true}
+                onPasted={handleAssetPasted}
+              />
+            ) : null}
           </div>
         }
-        whiteboard={<WorldWhiteboard worldId={id} worldStore={worldStore} />}
       />
     </>
   );

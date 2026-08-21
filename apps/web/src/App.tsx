@@ -59,7 +59,6 @@ export default function App() {
           "virtual tabletop",
           "React Vite",
           "Bevy",
-          "tldraw",
           "ThunderForge",
         ]}
         prefetchHrefs={

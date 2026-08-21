@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button/Button";
 import type { DiskUsageBreakdown } from "@/types/admin";
-import styles from "./DiskUsageChart.module.scss";
 
 interface DiskUsageChartProps {
   usage: DiskUsageBreakdown;
@@ -41,11 +40,13 @@ export function DiskUsageChart({
   const total = Math.max(usage.totalBytes, 1);
 
   return (
-    <div className={styles.chart}>
-      <div className={styles.header}>
+    <div className="grid gap-4">
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h3>Data footprint</h3>
-          <p>Total persisted storage: {formatBytes(usage.totalBytes)}</p>
+          <h3 className="text-lg font-semibold">Data footprint</h3>
+          <p className="text-muted-foreground">
+            Total persisted storage: {formatBytes(usage.totalBytes)}
+          </p>
         </div>
         <Button
           type="button"
@@ -58,16 +59,19 @@ export function DiskUsageChart({
         </Button>
       </div>
 
-      <div className={styles.stack}>
+      <div className="grid gap-3.5">
         {segments.map((segment) => (
-          <div key={segment.label} className={styles.segment}>
-            <div className={styles.segmentHeader}>
+          <div key={segment.label} className="grid gap-1.5">
+            <div className="flex items-center justify-between gap-3 text-sm">
               <span>{segment.label}</span>
               <strong>{formatBytes(segment.value)}</strong>
             </div>
-            <div className={styles.track} aria-hidden="true">
+            <div
+              className="h-3 overflow-hidden rounded-full bg-muted"
+              aria-hidden="true"
+            >
               <div
-                className={styles.fill}
+                className="h-full rounded-[inherit] bg-primary"
                 style={{ width: `${Math.max((segment.value / total) * 100, 3)}%` }}
               />
             </div>

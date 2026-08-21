@@ -5,6 +5,7 @@ members = [
     "src/core", 
     "src/engine", 
     "crates/pack_system_spec",
+    "crates/thunderforge-canvas-core",
     "packs/systems/dnd5e/server",
     "packs/systems/dnd5e/engine"
 ]

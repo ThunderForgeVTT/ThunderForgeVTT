@@ -1,6 +1,5 @@
 import type { HTMLAttributes, ReactNode } from "react";
-import { cn } from "@/utils/cn";
-import styles from "./Container.module.scss";
+import { cn } from "@/lib/utils";
 
 export interface ContainerProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
@@ -15,7 +14,11 @@ export function Container({
 }: ContainerProps) {
   return (
     <div
-      className={cn(styles.container, narrow && styles.narrow, className)}
+      className={cn(
+        "mx-auto w-[calc(100%-2rem)] max-w-[1160px]",
+        narrow && "max-w-[780px]",
+        className,
+      )}
       {...props}
     >
       {children}

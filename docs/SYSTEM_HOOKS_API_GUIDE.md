@@ -654,6 +654,6 @@ See `/tmp/d20-5e/` for a complete minimal D&D 5e system.
 
 ## References
 
-- [ADR-023: Runtime Module Loading & Security](../adrs/20260504-023-runtime_module_loading_and_security.md)
+- [ADR-029: Runtime Module Loading & Security](../adrs/20260504-029-runtime_module_loading_and_security.md)
 - [System Hooks TypeScript Types](../hooks/useSystemHooks.ts)
 - [SystemHooksProvider React Component](../providers/SystemHooksProvider.tsx)

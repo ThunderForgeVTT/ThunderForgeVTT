@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button/Button";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
+import { Switch } from "@/components/ui/switch";
 import type {
   AdminBootstrapSettings,
   AuthSecuritySettings,
 } from "@/types/admin";
-import styles from "./SecurityPanel.module.scss";
 
 interface SecurityPanelProps {
   settings: AuthSecuritySettings;
@@ -39,17 +39,19 @@ export function SecurityPanel({
   };
 
   return (
-    <div className={styles.panel}>
-      <div className={styles.section}>
-        <div className={styles.header}>
-          <h3>Two-factor enforcement</h3>
-          <p>Decide whether every steward must complete the second seal.</p>
+    <div className="grid gap-6">
+      <div className="grid gap-3">
+        <div>
+          <h3 className="font-semibold">Two-factor enforcement</h3>
+          <p className="text-muted-foreground">
+            Decide whether every user must complete two-factor
+            authentication.
+          </p>
         </div>
-        <label className={styles.toggle}>
-          <input
-            type="checkbox"
+        <label className="flex items-center gap-2 text-sm">
+          <Switch
             checked={requiredForAllUsers}
-            onChange={(event) => setRequiredForAllUsers(event.target.checked)}
+            onCheckedChange={(checked) => setRequiredForAllUsers(checked)}
           />
           <span>
             {requiredForAllUsers
@@ -68,25 +70,28 @@ export function SecurityPanel({
         </Button>
       </div>
 
-      <div className={styles.section}>
-        <div className={styles.header}>
-          <h3>Bootstrap record</h3>
-          <p>Inspect the persisted first-run state that founded this realm.</p>
+      <div className="grid gap-3">
+        <div>
+          <h3 className="font-semibold">Bootstrap record</h3>
+          <p className="text-muted-foreground">
+            Inspect the persisted first-run state that initialized this
+            instance.
+          </p>
         </div>
         {bootstrapSettings ? (
-          <div className={styles.bootstrapMeta}>
-            <p>
-              <strong>Setup completed:</strong>{" "}
+          <div className="grid gap-1">
+            <p className="text-muted-foreground">
+              <strong className="text-foreground">Setup completed:</strong>{" "}
               {bootstrapSettings.setupCompleted ? "Yes" : "No"}
             </p>
-            <p>
-              <strong>Admin code generated:</strong>{" "}
+            <p className="text-muted-foreground">
+              <strong className="text-foreground">Admin code generated:</strong>{" "}
               {bootstrapSettings.adminCodeGeneratedAt
                 ? new Date(bootstrapSettings.adminCodeGeneratedAt).toLocaleString()
                 : "Not recorded"}
             </p>
-            <p>
-              <strong>Setup completed at:</strong>{" "}
+            <p className="text-muted-foreground">
+              <strong className="text-foreground">Setup completed at:</strong>{" "}
               {bootstrapSettings.setupCompletedAt
                 ? new Date(bootstrapSettings.setupCompletedAt).toLocaleString()
                 : "Pending"}

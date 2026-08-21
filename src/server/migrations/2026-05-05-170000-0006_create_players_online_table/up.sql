@@ -21,7 +21,7 @@ CREATE TABLE players_online (
     UNIQUE(player_id, world_id),
     FOREIGN KEY (player_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (world_id) REFERENCES worlds(id) ON DELETE CASCADE,
-    FOREIGN KEY (scene_id) REFERENCES scenes(id) ON DELETE SET NULL
+    FOREIGN KEY (scene_id) REFERENCES scenes(scene_id) ON DELETE SET NULL
 );
 
 -- Indexes for fast lookups
@@ -30,6 +30,14 @@ CREATE INDEX idx_players_online_player_id ON players_online(player_id);
 CREATE INDEX idx_players_online_last_seen ON players_online(last_seen);
 
 -- Trigger to update updated_at
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 CREATE TRIGGER players_online_updated_at_trigger
 BEFORE UPDATE ON players_online
 FOR EACH ROW

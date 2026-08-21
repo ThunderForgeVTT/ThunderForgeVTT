@@ -1,6 +1,6 @@
 import type { HTMLAttributes, ReactNode } from "react";
-import { cn } from "@/utils/cn";
-import styles from "./Panel.module.scss";
+import { Card } from "@/components/ui/card/Card";
+import { cn } from "@/lib/utils";
 
 type PanelVariant = "parchment" | "stone" | "leather" | "veil";
 
@@ -9,6 +9,13 @@ export interface PanelProps extends HTMLAttributes<HTMLDivElement> {
   variant?: PanelVariant;
 }
 
+const VARIANT_TO_SURFACE = {
+  parchment: "parchment",
+  stone: "stone",
+  leather: "leather",
+  veil: "default",
+} as const;
+
 export function Panel({
   children,
   variant = "parchment",
@@ -16,11 +23,12 @@ export function Panel({
   ...props
 }: PanelProps) {
   return (
-    <section
-      className={cn(styles.panel, styles[variant], className)}
+    <Card
+      surface={VARIANT_TO_SURFACE[variant]}
+      className={cn("p-6", className)}
       {...props}
     >
       {children}
-    </section>
+    </Card>
   );
 }

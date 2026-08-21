@@ -12,7 +12,6 @@ import { CampaignSettingsPanel } from "@/components/campaign/CampaignSettingsPan
 import type { SeoConfig } from "@/types/seo";
 import type { WorldRecord } from "@/types/world";
 import { WorldPlaceholderPanel } from "./components/WorldPlaceholderPanel";
-import styles from "./WorldDashboardPage.module.scss";
 
 const PLACEHOLDER_COPY = {
   scenes:
@@ -22,7 +21,7 @@ const PLACEHOLDER_COPY = {
   tokens:
     "Token orchestration exists elsewhere in the engine, but the world dashboard keeps this placeholder until world-bound management is wired in.",
   events:
-    "Event audit trails and realm timelines will surface here once world history graduates from placeholder status.",
+    "Event audit trails and world timelines will surface here once world history graduates from placeholder status.",
   gameSystem:
     "The selected placeholder ID is stored now, while full game system metadata remains intentionally deferred.",
   interfacePack:
@@ -133,32 +132,36 @@ export default function WorldDashboardPage() {
         }
       />
       <Container>
-        <main className={styles.shell}>
+        <main className="grid gap-8 pb-16">
           {status ? <StatusBadge variant="danger">{status}</StatusBadge> : null}
 
           {!world ? (
-            <Card surface="stone" className={styles.emptyState}>
-              <h1>This world could not be opened.</h1>
-              <p>
-                The realm may be missing, or your stewardship does not permit
-                access to this dashboard.
+            <Card surface="stone" className="grid gap-3 p-8 text-center">
+              <h1 className="text-2xl font-semibold">
+                This world could not be opened.
+              </h1>
+              <p className="text-muted-foreground">
+                The world may be missing, or your access does not permit
+                viewing this dashboard.
               </p>
-              <Button asChild variant="secondary" icon="arrow-left">
+              <Button asChild variant="secondary" icon="arrow-left" className="mx-auto">
                 <Link to="/worlds">Return to archive</Link>
               </Button>
             </Card>
           ) : (
             <>
-              <section className={styles.hero}>
+              <section className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <p className={styles.eyebrow}>Guild hall table</p>
-                  <h1>{world.name}</h1>
-                  <p>
+                  <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+                    World dashboard
+                  </p>
+                  <h1 className="text-3xl font-semibold">{world.name}</h1>
+                  <p className="mt-1 max-w-2xl text-muted-foreground">
                     {world.description ??
-                      "The realm has been founded. Its scenes, actors, tokens, and events will gather around this table in later phases."}
+                      "The world has been created. Its scenes, actors, tokens, and events will gather here in later phases."}
                   </p>
                 </div>
-                <div className={styles.heroActions}>
+                <div className="flex flex-wrap gap-2">
                   <Button asChild icon="worlds">
                     <Link to={`/world/${world.id}/play`}>Enter world</Link>
                   </Button>
@@ -182,56 +185,88 @@ export default function WorldDashboardPage() {
                 </StatusBadge>
               ) : null}
 
-              <section className={styles.metadataGrid}>
-                <Card surface="parchment" className={styles.metadataCard}>
-                  <h2>World metadata</h2>
-                  <dl className={styles.metadataList}>
+              <section className="grid gap-6 md:grid-cols-2">
+                <Card surface="parchment" className="grid gap-4 p-6">
+                  <h2 className="text-xl font-semibold">World metadata</h2>
+                  <dl className="grid grid-cols-2 gap-4 text-sm">
                     <div>
-                      <dt>Game system ID</dt>
-                      <dd>{world.gameSystemId ?? "Not yet assigned"}</dd>
+                      <dt className="text-xs text-muted-foreground">
+                        Game system ID
+                      </dt>
+                      <dd className="font-medium">
+                        {world.gameSystemId ?? "Not yet assigned"}
+                      </dd>
                     </div>
                     <div>
-                      <dt>Interface pack ID</dt>
-                      <dd>{world.interfacePackId ?? "Not yet assigned"}</dd>
+                      <dt className="text-xs text-muted-foreground">
+                        Interface pack ID
+                      </dt>
+                      <dd className="font-medium">
+                        {world.interfacePackId ?? "Not yet assigned"}
+                      </dd>
                     </div>
                     <div>
-                      <dt>Created by</dt>
-                      <dd>{world.createdBy}</dd>
+                      <dt className="text-xs text-muted-foreground">
+                        Created by
+                      </dt>
+                      <dd className="font-medium">{world.createdBy}</dd>
                     </div>
                     <div>
-                      <dt>Updated by</dt>
-                      <dd>{world.updatedBy}</dd>
+                      <dt className="text-xs text-muted-foreground">
+                        Updated by
+                      </dt>
+                      <dd className="font-medium">{world.updatedBy}</dd>
                     </div>
                     <div>
-                      <dt>Created at</dt>
-                      <dd>{formatTimestamp(world.createdAt)}</dd>
+                      <dt className="text-xs text-muted-foreground">
+                        Created at
+                      </dt>
+                      <dd className="font-medium">
+                        {formatTimestamp(world.createdAt)}
+                      </dd>
                     </div>
                     <div>
-                      <dt>Updated at</dt>
-                      <dd>{formatTimestamp(world.updatedAt)}</dd>
+                      <dt className="text-xs text-muted-foreground">
+                        Updated at
+                      </dt>
+                      <dd className="font-medium">
+                        {formatTimestamp(world.updatedAt)}
+                      </dd>
                     </div>
                   </dl>
                 </Card>
 
-                <Card surface="leather" className={styles.metadataCard}>
-                  <h2>Quick actions</h2>
-                  <p className={styles.quickCopy}>
+                <Card surface="leather" className="grid gap-4 p-6">
+                  <h2 className="text-xl font-semibold">Quick actions</h2>
+                  <p className="text-sm text-muted-foreground">
                     The dashboard remains the ownership-safe control room for
-                    the realm while deeper management flows come online.
+                    the world while deeper management flows come online.
                   </p>
-                  <div className={styles.quickList}>
-                    <Link to={`/world/${world.id}/play`}>
+                  <div className="grid gap-2 text-sm">
+                    <Link
+                      to={`/world/${world.id}/play`}
+                      className="text-primary underline-offset-4 hover:underline"
+                    >
                       Enter the live workspace
                     </Link>
-                    <Link to="/worlds/create">Charter another world</Link>
-                    <button type="button" onClick={() => void handleDelete()}>
-                      Permanently delete this realm
+                    <Link
+                      to="/worlds/create"
+                      className="text-primary underline-offset-4 hover:underline"
+                    >
+                      Create another world
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => void handleDelete()}
+                      className="text-left text-destructive underline-offset-4 hover:underline"
+                    >
+                      Permanently delete this world
                     </button>
                   </div>
                 </Card>
               </section>
 
-              <section className={styles.panelGrid}>
+              <section className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
                 <WorldPlaceholderPanel
                   title="Scenes"
                   icon="map"
