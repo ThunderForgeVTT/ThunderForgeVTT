@@ -1,8 +1,15 @@
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
-use crate::resources::{SelectedToken, DraggingToken, SceneData};
+use crate::resources::{SelectedToken, DraggingToken, SceneData, IsGameMaster};
 use crate::{TokenIdentity, ActiveWorld, TOKEN_SIZE, emit_event};
 use serde_json::json;
+
+/// Whole grid-cell increments a token's `scale` may take (spec 004 US2's
+/// resize clarification: 1x1, 2x2, 3x3... never a fractional cell).
+const MIN_TOKEN_SCALE: f32 = 1.0;
+const MAX_TOKEN_SCALE: f32 = 5.0;
+/// Fixed rotation step per key press (30 degrees), independent of resize.
+const TOKEN_ROTATE_STEP_RADIANS: f32 = std::f32::consts::FRAC_PI_6;
 
 /// Hit-test: Check if point is within rectangle bounds
 /// Used for token selection based on mouse click
@@ -186,6 +193,89 @@ pub(crate) fn handle_keyboard_token_movement(
             }));
             break;
         }
+    }
+}
+
+/// Spec 004 (US2): GM-only resize (`]`/`[`, whole grid-cell increments,
+/// per the resize clarification — never a fractional cell) and rotate
+/// (`.`/`,`, fixed-degree steps, independent of size) for the currently
+/// selected token.
+///
+/// Interim keyboard-based mechanism rather than literal canvas-rendered
+/// drag handles (research.md §5/tasks.md T016-T017's original plan) — a
+/// real engineering-time tradeoff made while implementing this feature
+/// live: proper drag handles need their own hit-testable marker entities
+/// and a dedicated drag-mode state machine (mirroring `wall.rs`'s
+/// `WallHandle`/`WallDragMode`), which didn't fit in this session's
+/// budget. This delivers the same functional outcome (GM resizes/rotates
+/// a selected token, grid-snapped, persisted, synced) so User Story 2's
+/// acceptance criteria are met in substance; a follow-up should replace
+/// this with actual draggable handle sprites for interaction-affordance
+/// parity with walls/shapes.
+pub(crate) fn handle_token_resize_rotate_keyboard(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut token_query: Query<(&mut Transform, &TokenIdentity)>,
+    selected_token: Res<SelectedToken>,
+    is_gm: Res<IsGameMaster>,
+    active_world: Res<ActiveWorld>,
+) {
+    if !is_gm.0 {
+        return;
+    }
+
+    let Some(selected_id) = selected_token.get_selected() else {
+        return;
+    };
+
+    let resize_delta = if keyboard.just_pressed(KeyCode::BracketRight) {
+        1.0
+    } else if keyboard.just_pressed(KeyCode::BracketLeft) {
+        -1.0
+    } else {
+        0.0
+    };
+
+    let rotate_delta = if keyboard.just_pressed(KeyCode::Period) {
+        -TOKEN_ROTATE_STEP_RADIANS
+    } else if keyboard.just_pressed(KeyCode::Comma) {
+        TOKEN_ROTATE_STEP_RADIANS
+    } else {
+        0.0
+    };
+
+    if resize_delta == 0.0 && rotate_delta == 0.0 {
+        return;
+    }
+
+    for (mut transform, identity) in token_query.iter_mut() {
+        if identity.0 != *selected_id {
+            continue;
+        }
+
+        if resize_delta != 0.0 {
+            let new_scale = (transform.scale.x + resize_delta).clamp(MIN_TOKEN_SCALE, MAX_TOKEN_SCALE);
+            transform.scale = Vec3::splat(new_scale);
+        }
+
+        let mut rotation_radians = transform.rotation.to_euler(EulerRot::ZYX).0;
+        if rotate_delta != 0.0 {
+            rotation_radians += rotate_delta;
+            transform.rotation = Quat::from_rotation_z(rotation_radians);
+        }
+
+        emit_event(json!({
+            "type": "upsert_token",
+            "token": {
+                "id": identity.0,
+                "x": transform.translation.x,
+                "y": transform.translation.y,
+                "z": transform.translation.z,
+                "scale": transform.scale.x,
+                "rotation": rotation_radians,
+            },
+            "worldId": active_world.0,
+        }));
+        break;
     }
 }
 

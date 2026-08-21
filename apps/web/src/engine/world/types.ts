@@ -6,6 +6,14 @@ export type WorldToken = {
   y: number;
   z: number;
   label?: string;
+  // Spec 004: canvas-native resize/rotate + per-player ownership.
+  rotation?: number;
+  scale?: number;
+  ownerUserId?: string | null;
+  isPrimary?: boolean;
+  photoUrl?: string | null;
+  health?: number | null;
+  maxHealth?: number | null;
 };
 
 export type DoorState = "none" | "open" | "closed";

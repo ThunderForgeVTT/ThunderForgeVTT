@@ -26,6 +26,7 @@ import { LightingTool } from "@/components/canvas-tools/LightingTool";
 import { ShapeTool } from "@/components/canvas-tools/ShapeTool";
 import { MapImportTool } from "@/components/canvas-tools/MapImportTool";
 import { AssetPasteTool } from "@/components/canvas-tools/AssetPasteTool";
+import { TokenPanel } from "@/components/TokenPanel";
 import type { CanvasImageAsset } from "@/api/assets";
 import { SceneSwitcher } from "@/components/world/SceneSwitcher";
 import type { WorldRecord } from "@/types/world";
@@ -78,6 +79,12 @@ export default function WorldPage() {
   // if selection worked). Every effect that dispatches something meant to
   // reach the engine gates on this now.
   const [bridgeReady, setBridgeReady] = useState(false);
+  // T006/T009: TokenPanel is mounted for both GM and player (a player needs
+  // it to edit their own primary token's photo — FR-009a) via a toggle
+  // button always visible once a scene is selected; the panel's own
+  // internal isSceneOwner check (see TokenPanel.tsx) restricts create/
+  // delete/ownership-assignment controls to the GM.
+  const [tokenPanelOpen, setTokenPanelOpen] = useState(false);
 
   // GM/scene-owner check: same `createdBy === user.id` ownership
   // comparison already used to gate GM-only affordances on
@@ -299,12 +306,12 @@ export default function WorldPage() {
       console.error("Failed to load scene tokens:", error);
     });
 
-    const stopBridge = startTokenMutationBridge(worldStore, sceneId);
+    const stopBridge = startTokenMutationBridge(worldStore, sceneId, isSceneOwner);
 
     return () => {
       stopBridge();
     };
-  }, [sceneId, worldStore, bridgeReady]);
+  }, [sceneId, worldStore, bridgeReady, isSceneOwner]);
 
   useEffect(() => {
     if (!sceneId || !bridgeReady) {
@@ -542,6 +549,32 @@ export default function WorldPage() {
                 active={true}
                 onPasted={handleAssetPasted}
               />
+            ) : null}
+            {sceneId ? (
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: "1rem",
+                  right: "1rem",
+                  zIndex: 900,
+                }}
+              >
+                <button
+                  type="button"
+                  data-testid="token-panel-toggle-button"
+                  onClick={() => setTokenPanelOpen(true)}
+                  className="token-panel-toggle-button"
+                >
+                  Tokens
+                </button>
+                <TokenPanel
+                  sceneId={sceneId}
+                  currentUserId={user?.id ?? null}
+                  isSceneOwner={isSceneOwner}
+                  isOpen={tokenPanelOpen}
+                  onOpenChange={setTokenPanelOpen}
+                />
+              </div>
             ) : null}
           </div>
         }

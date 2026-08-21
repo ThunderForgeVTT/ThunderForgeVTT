@@ -43,7 +43,7 @@ This section provides a high-level overview of the core objects and concepts tha
   - Users can create tokens of different types (NPC, player, vehicle, etc.).
   - Different token types should have distinct visual representations.
   - Users can add tokens to a scene.
-  - Implemented: token placement/movement on a scene, `actor_id` binding to an actor. **Missing**: no distinct token "type" field or type-specific visual representation was found (`npc`/`vehicle`-style differentiation is not implemented — every token appears to render the same way regardless of what it represents).
+  - Implemented: token placement/movement on a scene, `actor_id` binding to an actor. Spec 004 (partial, in progress) unified the token backing store onto the scene-scoped `tokens` table (ADR-040), added per-player ownership/primary-token/photo/health columns, and gated player- vs. GM-initiated moves through separate mutations (`move_own_token` vs. `update_token`). **Missing**: no distinct token "type" field or type-specific visual representation (`npc`/`vehicle`-style differentiation is not implemented — every token appears to render the same way regardless of what it represents); canvas resize/rotate handles (spec 004 US2) not yet built; a legacy parallel `world_tokens` RxDB sync path (`engine/world/sync/index.ts#startWorldSync`) is still wired into `WorldPage.tsx` alongside the modern per-scene sync and should be investigated/retired in a follow-up (found during spec 004, not fixed).
 
 - [~] **Phase 5: Actor Stats and Customization** — Partial
 

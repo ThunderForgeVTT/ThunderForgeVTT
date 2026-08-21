@@ -653,6 +653,11 @@ pub struct Token {
     pub metadata: Option<serde_json::Value>,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    pub owner_user_id: Option<uuid::Uuid>,
+    pub is_primary: bool,
+    pub photo_url: Option<String>,
+    pub health: Option<i32>,
+    pub max_health: Option<i32>,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
@@ -665,6 +670,11 @@ pub struct NewToken {
     pub rotation: Option<f64>,
     pub scale: Option<f64>,
     pub metadata: Option<serde_json::Value>,
+    pub owner_user_id: Option<uuid::Uuid>,
+    pub is_primary: Option<bool>,
+    pub photo_url: Option<String>,
+    pub health: Option<i32>,
+    pub max_health: Option<i32>,
 }
 
 #[derive(AsChangeset, Debug, Clone, Serialize, Deserialize)]
@@ -676,6 +686,11 @@ pub struct TokenUpdate {
     pub rotation: Option<f64>,
     pub scale: Option<f64>,
     pub metadata: Option<serde_json::Value>,
+    pub owner_user_id: Option<uuid::Uuid>,
+    pub is_primary: Option<bool>,
+    pub photo_url: Option<String>,
+    pub health: Option<i32>,
+    pub max_health: Option<i32>,
 }
 
 // ========== Fog Mask Models (Phase 3.5) ==========

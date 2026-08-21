@@ -79,6 +79,15 @@ struct WorldTokenPayload {
     y: f32,
     z: f32,
     label: Option<String>,
+    // Spec 004 (US2): resize/rotate. Optional so the pre-existing
+    // position-only `upsert_token` events (e.g. the WASD demo token, or a
+    // plain drag that doesn't touch either) keep working unchanged —
+    // `None` means "don't touch this token's current scale/rotation",
+    // mirroring the server's own `TokenUpdate` partial-update semantics.
+    #[serde(default)]
+    rotation: Option<f32>,
+    #[serde(default)]
+    scale: Option<f32>,
 }
 
 /// Confirmed/authoritative wall state from the server (T008), matching
@@ -548,14 +557,34 @@ fn apply_external_commands(
                         transform.translation.x = token.x;
                         transform.translation.y = token.y;
                         transform.translation.z = token.z;
+                        // Spec 004 (US2): apply scale/rotation only when
+                        // present — `None` leaves the entity's current
+                        // Transform.scale/rotation untouched, matching the
+                        // "don't touch what wasn't sent" partial-update
+                        // semantics `WorldTokenPayload`'s doc comment
+                        // describes.
+                        if let Some(scale) = token.scale {
+                            transform.scale = Vec3::splat(scale);
+                        }
+                        if let Some(rotation) = token.rotation {
+                            transform.rotation = Quat::from_rotation_z(rotation);
+                        }
                     }
                     continue;
+                }
+
+                let mut transform = Transform::from_xyz(token.x, token.y, token.z);
+                if let Some(scale) = token.scale {
+                    transform.scale = Vec3::splat(scale);
+                }
+                if let Some(rotation) = token.rotation {
+                    transform.rotation = Quat::from_rotation_z(rotation);
                 }
 
                 let entity = commands
                     .spawn((
                         Sprite::from_color(Color::srgb(0.282, 0.565, 0.996), TOKEN_SIZE),
-                        Transform::from_xyz(token.x, token.y, token.z),
+                        transform,
                         TokenIdentity(token.id.clone()),
                     ))
                     .id();

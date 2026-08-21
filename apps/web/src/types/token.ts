@@ -15,6 +15,11 @@ export interface TokenRecord {
   metadata: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
+  ownerUserId: string | null;
+  isPrimary: boolean;
+  photoUrl: string | null;
+  health: number | null;
+  maxHealth: number | null;
 }
 
 export interface CreateTokenInput {
@@ -25,6 +30,11 @@ export interface CreateTokenInput {
   rotation?: number;
   scale?: number;
   metadata?: Record<string, unknown>;
+  ownerUserId?: string;
+  isPrimary?: boolean;
+  photoUrl?: string;
+  health?: number;
+  maxHealth?: number;
 }
 
 export interface UpdateTokenInput {
@@ -34,4 +44,9 @@ export interface UpdateTokenInput {
   rotation?: number;
   scale?: number;
   metadata?: Record<string, unknown>;
+  ownerUserId?: string;
+  isPrimary?: boolean;
+  photoUrl?: string;
+  health?: number;
+  maxHealth?: number;
 }

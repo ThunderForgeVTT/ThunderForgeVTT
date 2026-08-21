@@ -41,7 +41,7 @@
  *    already-persisted tokens routes straight to `updateToken` for them.
  */
 
-import { createToken, deleteToken, getTokens, updateToken } from "@/api/tokens";
+import { createToken, deleteToken, getTokens, moveOwnToken, updateToken } from "@/api/tokens";
 import type { TokenRecord } from "@/types/token";
 import type { WorldStore } from "../store";
 import type { WorldToken } from "../types";
@@ -61,6 +61,11 @@ async function persistTokenDoc(token: TokenRecord): Promise<void> {
       metadata: token.metadata,
       createdAt: token.createdAt,
       updatedAt: token.updatedAt,
+      ownerUserId: token.ownerUserId,
+      isPrimary: token.isPrimary,
+      photoUrl: token.photoUrl,
+      health: token.health,
+      maxHealth: token.maxHealth,
     });
   } catch (error) {
     // RxDB persistence is a best-effort offline cache; the world store
@@ -100,6 +105,13 @@ function tokenRecordToWorldToken(record: TokenRecord): WorldToken {
     y: record.y,
     z: 0,
     label,
+    rotation: record.rotation,
+    scale: record.scale,
+    ownerUserId: record.ownerUserId,
+    isPrimary: record.isPrimary,
+    photoUrl: record.photoUrl,
+    health: record.health,
+    maxHealth: record.maxHealth,
   };
 }
 
@@ -213,10 +225,20 @@ export async function loadTokensIntoStore(
  * before for this scene routes to `createToken` once, and the returned
  * `tokenId` is remembered for every later drag/removal of that same
  * engine id. Returns an unsubscribe function.
+ *
+ * `isSceneOwner` (spec 004, FR-009/FR-009b): a non-GM caller never creates
+ * tokens and never has full-field update rights — every drag they make
+ * routes through `moveOwnToken` (position only; the server enforces
+ * `owner_user_id = requester`, so a drag on a token they don't control is
+ * rejected server-side with no effect, satisfying SC-003) rather than
+ * `createToken`/`updateToken`. Resize/rotate are GM-only client-side (no
+ * handles rendered for non-GMs, per FR-010), so a non-GM's `upsert_token`
+ * commands are position-only by construction.
  */
 export function startTokenMutationBridge(
   worldStore: WorldStore,
   sceneId: string,
+  isSceneOwner: boolean,
 ): () => void {
   const engineIdToTokenId = new Map<string, string>();
   const creating = new Set<string>();
@@ -246,13 +268,46 @@ export function startTokenMutationBridge(
         const knownTokenId = engineIdToTokenId.get(token.id);
 
         if (knownTokenId) {
-          void updateToken(knownTokenId, { x: token.x, y: token.y })
-            .then((updated) => {
-              void persistTokenDoc(updated);
-            })
-            .catch((error) => {
-              console.error("Failed to update token:", error);
-            });
+          const persistAndSave = (updated: Awaited<ReturnType<typeof updateToken>>) => {
+            void persistTokenDoc(updated);
+          };
+
+          if (isSceneOwner) {
+            // Resize/rotate (US2, FR-006/FR-007) are GM-only and travel
+            // through this same generic `upsert_token` engine event —
+            // forwarded only when present so a plain move doesn't churn
+            // scale/rotation on every drag.
+            const input: { x: number; y: number; rotation?: number; scale?: number } = {
+              x: token.x,
+              y: token.y,
+            };
+            if (token.rotation !== undefined) {
+              input.rotation = token.rotation;
+            }
+            if (token.scale !== undefined) {
+              input.scale = token.scale;
+            }
+            void updateToken(knownTokenId, input)
+              .then(persistAndSave)
+              .catch((error) => {
+                console.error("Failed to update token:", error);
+              });
+          } else {
+            // Spec 004 FR-009: non-GM callers only ever move a token they
+            // control; the server enforces owner_user_id = requester and
+            // rejects anything else with no effect.
+            void moveOwnToken(knownTokenId, token.x, token.y)
+              .then(persistAndSave)
+              .catch((error) => {
+                console.error("Failed to move own token:", error);
+              });
+          }
+          return;
+        }
+
+        // Non-GM callers never create tokens (FR-009b) — only ever move
+        // one already known to this scene.
+        if (!isSceneOwner) {
           return;
         }
 
