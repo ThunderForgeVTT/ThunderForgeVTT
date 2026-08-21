@@ -13,12 +13,13 @@ an earlier draft of this doc assumed PNG-only, which broke real imports
 both, and `src/engine/Cargo.toml` enables Bevy's `"webp"` feature to
 render either).
 
-**Provenance / license note**: these two files were pulled from a local,
-personal map-asset collection for use as parser test fixtures. DungeonDraft
-map packs are frequently sold/licensed for personal use and are not
-generally redistributable — do not assume these are safe to publish,
-re-share, or ship inside a public release artifact without confirming the
-original license. Treat this directory as dev/test-only.
+**Provenance / license note**: all files in this directory were pulled
+from a local, personal map-asset collection (`vtt-maps`, cherry-picked
+2026-08-21 for spec 003) for use as parser/editor test fixtures.
+DungeonDraft map packs are frequently sold/licensed for personal use and
+are not generally redistributable — do not assume these are safe to
+publish, re-share, or ship inside a public release artifact without
+confirming the original license. Treat this directory as dev/test-only.
 
 ## Files
 
@@ -28,6 +29,37 @@ original license. Treat this directory as dev/test-only.
 - `chamber-of-echoing-grief.dd2vtt` — a single dungeon room: 1
   line-of-sight polygon, no portals/lights. Use this to validate the
   walls-only import path without lighting/portal handling in the way.
+- `grassy-path-ambush.dd2vtt` — **the project's default "blank scene"
+  gold-standard fixture** (spec 003). Zero walls, zero portals, zero
+  lights — background art only. This is the reference fixture for
+  from-scratch map authoring: import it for the background, then build
+  every wall/door/window/torch by hand via edit mode (spec 003 US-new),
+  rather than relying on pre-baked UVTT geometry. New scenes' default
+  starting point should match this fixture's shape (image, no
+  geometry), not necessarily this exact file.
+- `azheim-meeting.dd2vtt` — smallest fixture (388KB), also zero
+  geometry (background-only, same shape as `grassy-path-ambush.dd2vtt`).
+  Use this one for fast unit tests that need a real-but-tiny
+  background-only file and don't care which background art it shows.
+- `road-side-in.dd2vtt` — richest real-world fixture in this set: 24
+  line-of-sight polygons, 16 portals (doors), 4 lights. Use this to
+  stress-test import/round-trip fidelity against a genuinely complex,
+  multi-room building.
+- `dwarven-forge.dd2vtt` — walls-only dungeon (13 line-of-sight
+  polygons, no portals/lights) at a size between
+  `chamber-of-echoing-grief.dd2vtt` and `road-side-in.dd2vtt`.
+- `little-fish-academy.dd2vtt` — 27 walls, 24 portals, **non-default
+  `environment.ambient_light`** (`fffff7e4`) with `baked_lighting: true`
+  and zero explicit `lights[]` entries. The only fixture in this set
+  that exercises the currently-parsed-but-unused `ambient_light` field
+  (spec 003 US2) — every other fixture here uses the default
+  `ffffffff` or omits it.
+
+None of the 64 source files surveyed when picking this set had a
+`freestanding: true` portal or a non-empty `objects_line_of_sight[]`
+array — real DungeonDraft exports don't appear to populate either field
+in practice. Testing those two spec-003 US2 field categories will need
+a hand-crafted/synthetic fixture, not a real-world file.
 
 ## Top-level JSON shape (format 0.3)
 

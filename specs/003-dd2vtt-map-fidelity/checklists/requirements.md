@@ -1,4 +1,4 @@
-# Specification Quality Checklist: Universal VTT (.dd2vtt) Map Import Fidelity & Round-Trip Verification
+# Specification Quality Checklist: Universal VTT (.dd2vtt) Map Import Fidelity & From-Scratch Map Editor Tooling
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-08-21
@@ -31,5 +31,6 @@
 
 ## Notes
 
-- Two of the three explicitly-requested scope decisions (map export in/out of scope; field-gap closure vs. disclosure) were resolved directly in the Assumptions section per the user's own framing ("or explicitly document them as out of scope") rather than raised as [NEEDS CLARIFICATION] markers — both have a clear reasonable default and don't block planning.
-- This is a verification/robustness spec, not a new-capability spec — Key Entities section reuses spec 001/002 entities rather than introducing new ones, by design.
+- Extended once (same session) to add User Story 1 (from-scratch map editor tooling: walls/doors/windows/torches, GM-only, live mid-session) per follow-up user direction, plus the 5 cherry-picked reference map fixtures under `examples/maps/`. Original scope (round-trip verification, field-gap disclosure) is retained as User Stories 2-3.
+- Three scope decisions were resolved directly in the Assumptions section rather than raised as [NEEDS CLARIFICATION] markers, each with a clear reasonable default: map export (deferred, out of scope), field-gap closure (detect-and-disclose, not full implementation), and whether `grassy-path-ambush.dd2vtt` becomes a real production default background (no — kept dev/test-only, consistent with `examples/maps/README.md`'s existing licensing caveat, and used instead as the canonical reference/demo fixture).
+- Key Entities mostly reuses spec 001/002 entities by design (this is largely a verification + tooling-completion spec); the one net-new addition is a third wall state ("window") on the existing wall-segment entity, not a new table.
