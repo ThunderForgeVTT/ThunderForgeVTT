@@ -122,6 +122,30 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
     async (tokenId: string, ownerUserId: string | null, isPrimary: boolean) => {
       setLoading(true);
       setError(null);
+      // Optimistic local update: `checked`/`value` below are fully
+      // server-state-controlled with no local buffer, so without this
+      // there is a real (if brief) window — the network round trip
+      // between click and `refresh()` resolving — where the checkbox
+      // visibly reverts to its old state before snapping to the new
+      // one. Found live while writing this feature's e2e coverage
+      // (spec 004 T022): a real user could plausibly click again during
+      // that window, thinking the first click didn't register.
+      let rollbackTokens: TokenRecord[] | null = null;
+      setTokens((prev) => {
+        rollbackTokens = prev;
+        return prev.map((t) => {
+          if (t.tokenId === tokenId) {
+            return { ...t, ownerUserId, isPrimary };
+          }
+          // Mirror the server's "exactly one primary per (scene, owner)"
+          // invariant locally too, so a second token belonging to the
+          // same owner doesn't transiently also show as primary.
+          if (isPrimary && ownerUserId && t.ownerUserId === ownerUserId) {
+            return { ...t, isPrimary: false };
+          }
+          return t;
+        });
+      });
       try {
         await updateToken(tokenId, {
           ownerUserId: ownerUserId ?? undefined,
@@ -129,6 +153,7 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
         });
         refresh();
       } catch (err) {
+        if (rollbackTokens) setTokens(rollbackTokens);
         setError(err instanceof Error ? err.message : 'Unknown error updating ownership');
       } finally {
         setLoading(false);
