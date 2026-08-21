@@ -1,4 +1,4 @@
-use async_graphql::{InputObject, SimpleObject};
+use async_graphql::{Enum, InputObject, SimpleObject};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
@@ -78,6 +78,25 @@ impl From<AdminWelcomeSummarySnapshot> for GraphQLAdminWelcomeSummary {
     }
 }
 
+/// Where an OAuth provider instance's configuration comes from (ADR-041).
+/// `Env` rows are materialized and kept in sync by the server's startup
+/// env-var scan; only `enabled` is writable on them through
+/// `updateOauthProvider` (see that mutation's source-aware write guard).
+#[derive(Enum, Debug, Copy, Clone, Eq, PartialEq)]
+pub enum GraphQLOAuthConfigSource {
+    Admin,
+    Env,
+}
+
+impl From<&str> for GraphQLOAuthConfigSource {
+    fn from(value: &str) -> Self {
+        match value {
+            "env" => GraphQLOAuthConfigSource::Env,
+            _ => GraphQLOAuthConfigSource::Admin,
+        }
+    }
+}
+
 /// OAuth provider configuration
 #[derive(SimpleObject, Debug, Clone)]
 pub struct GraphQLOAuthProvider {
@@ -93,6 +112,7 @@ pub struct GraphQLOAuthProvider {
     pub enabled: bool,
     pub has_client_secret: bool,
     pub updated_at: chrono::NaiveDateTime,
+    pub config_source: GraphQLOAuthConfigSource,
 }
 
 impl From<OAuthProvider> for GraphQLOAuthProvider {
@@ -110,6 +130,7 @@ impl From<OAuthProvider> for GraphQLOAuthProvider {
             enabled: value.enabled,
             has_client_secret: value.oauth_client_secret.is_some(),
             updated_at: value.updated_at,
+            config_source: value.config_source.as_str().into(),
         }
     }
 }

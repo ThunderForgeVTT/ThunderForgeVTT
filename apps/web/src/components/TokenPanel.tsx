@@ -45,6 +45,24 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
   const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Root cause of the primary-checkbox hang (spec 006 US2, found via
+  // live instrumentation — see research.md §3): the checkbox's `disabled`
+  // was gated on `token.ownerUserId`, which only flips (via `refresh()`)
+  // after the owner-assignment mutation's network round trip resolves.
+  // Tabbing from the owner input to the checkbox happens synchronously,
+  // in the same tick as that Tab keypress — well before the round trip
+  // resolves. A *disabled* element is not in the native tab order, so
+  // the browser's real Tab traversal skipped straight past the
+  // still-disabled checkbox to whatever came after it in the DOM,
+  // handing focus to something outside `Popover.Content` (e.g. the next
+  // token's own trigger). Radix's default outside-focus dismissal then
+  // read that as "focus left the popover" and closed it — with the
+  // checkbox's own click/check event never reaching an element the
+  // popover still considered live, hence the hang. Tracking each
+  // owner-input's live typed value here (independent of the
+  // mutation/refetch cycle) lets the checkbox enable itself the instant
+  // there's a non-empty value, well before Tab is ever pressed.
+  const [ownerDrafts, setOwnerDrafts] = useState<Record<string, string>>({});
 
   const refresh = useCallback(() => {
     if (!sceneId) return;
@@ -259,6 +277,10 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
                               type="text"
                               defaultValue={token.ownerUserId ?? ''}
                               placeholder="(unassigned)"
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setOwnerDrafts((prev) => ({ ...prev, [token.tokenId]: value }));
+                              }}
                               onBlur={(e) => {
                                 const value = e.target.value.trim();
                                 void handleSetOwnership(token.tokenId, value || null, token.isPrimary);
@@ -269,7 +291,9 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
                                 type="checkbox"
                                 data-testid={`token-primary-checkbox-${token.tokenId}`}
                                 checked={token.isPrimary}
-                                disabled={!token.ownerUserId}
+                                disabled={
+                                  !(ownerDrafts[token.tokenId] ?? token.ownerUserId ?? '').trim()
+                                }
                                 onChange={(e) =>
                                   void handleSetOwnership(token.tokenId, token.ownerUserId, e.target.checked)
                                 }

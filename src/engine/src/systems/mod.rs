@@ -9,6 +9,7 @@ pub mod builtin;
 pub mod sync;
 pub mod optimistic;
 pub mod token_loader;
+pub mod token;
 pub mod selection;
 pub mod wall;
 pub mod lighting;

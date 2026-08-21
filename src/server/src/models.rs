@@ -161,6 +161,10 @@ pub struct OAuthProvider {
     pub enabled: bool,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// `"admin"` or `"env"` — see ADR-041. `"env"` rows are materialized and
+    /// kept in sync by the startup env-var scan; only `enabled` is writable
+    /// on them through the admin GraphQL mutation.
+    pub config_source: String,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
@@ -179,6 +183,7 @@ pub struct NewOAuthProvider {
     pub enabled: bool,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    pub config_source: String,
 }
 
 #[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]

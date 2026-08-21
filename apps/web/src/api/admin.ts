@@ -65,7 +65,7 @@ type AdminSettingsQuery = {
 };
 
 type UpdateOAuthProviderMutation = {
-  updateOAuthProvider: OAuthProviderConfig;
+  updateOauthProvider: OAuthProviderConfig;
 };
 
 type UpdateManifestKeyMutation = {
@@ -136,6 +136,7 @@ export function getAdminSettingsData(): Promise<AdminSettingsData> {
         enabled
         hasClientSecret
         updatedAt
+        configSource
       }
       authSecuritySettings {
         twoFactorRequiredForAllUsers
@@ -164,7 +165,7 @@ export function updateOAuthProvider(
   return postGraphQL<UpdateOAuthProviderMutation>(
     `
       mutation UpdateOAuthProvider($providerId: UUID!, $config: GraphQLOAuthProviderConfigInput!) {
-        updateOAuthProvider(providerId: $providerId, config: $config) {
+        updateOauthProvider(providerId: $providerId, config: $config) {
           id
           providerKey
           displayName
@@ -177,6 +178,7 @@ export function updateOAuthProvider(
           enabled
           hasClientSecret
           updatedAt
+          configSource
         }
       }
     `,
@@ -184,7 +186,7 @@ export function updateOAuthProvider(
       providerId,
       config,
     },
-  ).then((data) => data.updateOAuthProvider);
+  ).then((data) => data.updateOauthProvider);
 }
 
 export function updateManifestKey(

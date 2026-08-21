@@ -209,6 +209,58 @@ async function dragCanvas(
   await page.mouse.up();
 }
 
+/** Screen-space offset (from canvas center) of the selected token's
+ * resize handle at a given `scale`, matching
+ * `src/engine/src/systems/token.rs`'s `resize_handle_world_pos` exactly:
+ * the token's bottom-right corner (`(half.x, -half.y)` in world space at
+ * rotation 0), converted to screen space per `worldToScreenOffset`'s sign
+ * convention (screen dy is the negation of world y). `TOKEN_SIZE` (96)
+ * is duplicated from `lib.rs` — this file has no way to import Rust
+ * consts, matching every other magic-number duplication already in this
+ * suite (e.g. `screenOffsetToWorld`'s own coordinate-sign note).
+ */
+function resizeHandleScreenOffset(scale: number): { dx: number; dy: number } {
+  const half = (96 / 2) * scale;
+  return { dx: half, dy: half };
+}
+
+/** Screen-space offset (from canvas center) of the selected token's
+ * rotate handle at a given `scale` and `rotationRadians`, matching
+ * `resize_handle_world_pos`'s sibling `rotate_handle_world_pos`: offset
+ * `(TOKEN_SIZE/2 + 24) * scale` along the token's local +Y, rotated by
+ * its current facing, then converted to screen space.
+ */
+function rotateHandleScreenOffset(
+  scale: number,
+  rotationRadians: number,
+): { dx: number; dy: number } {
+  const offset = (96 / 2 + 24) * scale;
+  // Vec2::from_angle(theta).rotate((0, offset)) = offset * (-sin(theta), cos(theta)).
+  const worldX = offset * -Math.sin(rotationRadians);
+  const worldY = offset * Math.cos(rotationRadians);
+  return { dx: worldX, dy: -worldY };
+}
+
+/** Presses on `from` (a screen offset from canvas center), drags to `to`,
+ * and releases — real press/move/release timing, mirroring `dragCanvas`,
+ * for grabbing and dragging a token's resize/rotate handle sprite. */
+async function dragTokenHandle(
+  page: Page,
+  from: { dx: number; dy: number },
+  to: { dx: number; dy: number },
+): Promise<void> {
+  const box = await canvasBox(page);
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  await page.mouse.move(cx + from.dx, cy + from.dy);
+  await page.mouse.down();
+  await page.waitForTimeout(80);
+  await page.mouse.move(cx + to.dx, cy + to.dy, { steps: 8 });
+  await page.waitForTimeout(150);
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+}
+
 /** Opens a second, independent browser context reusing the first
  * session's login via `storageState` (same pattern as
  * map-editor-tooling.spec.ts / canvas-authoring.spec.ts's "sync across
@@ -326,6 +378,16 @@ async function readTokenPosition(
   const [, xStr, yStr] = match;
   await page.keyboard.press("Escape");
   await page.keyboard.press("Escape");
+  // Small settle delay: this helper is often called several times in a
+  // row (once per token) with no gap between the prior call's closing
+  // Escapes and the next call's immediate toggle-button click. Found
+  // live (spec 006 US2 live-verification pass) — occasionally the next
+  // open raced Radix's still-in-flight close animation/portal teardown
+  // for the previous Popover, leaving the panel toggle's very next click
+  // landing on a transitional state and stalling the following
+  // assertion. A brief wait lets that teardown finish before the caller
+  // (or this function, on repeated calls) interacts with the panel again.
+  await page.waitForTimeout(300);
   return { x: Number(xStr), y: Number(yStr) };
 }
 
@@ -523,28 +585,24 @@ test.describe("Canvas-native token drag (US1, T008/T009)", () => {
 });
 
 /**
- * User Story 2 (T013/T014): GM resizes a selected token in whole
- * grid-cell increments and rotates its facing independently.
- *
- * Interim mechanism note (see `selection.rs`'s
- * `handle_token_resize_rotate_keyboard` doc comment for the full
- * rationale): resize/rotate are keyboard shortcuts on the selected token
- * (`]`/`[` to grow/shrink by one grid cell, `,`/`.` to rotate by a fixed
- * step) rather than literal canvas-rendered drag handles — a real
- * engineering-time tradeoff made while implementing this feature live,
- * not what research.md originally planned. Functionally this still
- * satisfies FR-006/FR-007 (GM-only, grid-snapped resize, independent
- * rotate, persisted, synced) — a follow-up should replace the mechanism
- * with actual draggable handle sprites for interaction-affordance parity
- * with walls/shapes, without changing the underlying `scale`/`rotation`
- * data path this session wired end-to-end (WorldTokenPayload ->
- * apply_external_commands -> Transform -> upsert_token ->
- * startTokenMutationBridge -> updateToken).
+ * User Story 1 (spec 006, T001-T003): GM resizes a selected token by
+ * dragging its real canvas-rendered resize handle in whole grid-cell
+ * increments, and rotates its facing continuously by dragging a separate
+ * rotate handle, independently. Replaces spec 004's keyboard-shortcut
+ * stand-in (`]`/`[`/`,`/`.`, still available as a secondary path per
+ * `handle_token_resize_rotate_keyboard`'s doc comment) with actual
+ * draggable handle sprites (`TokenResizeHandle`/`TokenRotateHandle` in
+ * `src/engine/src/systems/token.rs`), closing the interaction-affordance
+ * gap with walls/shapes.
  */
-test.describe("Token resize/rotate (US2, T013/T014)", () => {
-  test.setTimeout(90_000);
+test.describe("Token resize/rotate (US1, spec 006 T001-T003)", () => {
+  // 90s was too tight for a live run: each test does 1-2 full page reloads,
+  // and reloading re-instantiates the ~190MB Bevy/WASM bundle from scratch
+  // (same root cause documented on the US2 ownership test's setTimeout,
+  // which needed 300s -> 480s for its ~9 reloads).
+  test.setTimeout(180_000);
 
-  test("GM resizes a selected token in whole grid-cell increments, independent of rotation, and both persist", async ({
+  test("GM resizes a selected token by dragging its resize handle in whole grid-cell increments, and rotates via a separate handle independently, and both persist", async ({
     page,
   }) => {
     await registerAndCreateWorld(page, `E2E Token Resize ${uniqueSuffix()}`);
@@ -557,8 +615,7 @@ test.describe("Token resize/rotate (US2, T013/T014)", () => {
     await page.waitForTimeout(1_500);
 
     // Select the token by clicking it (world origin, per every other test
-    // in this file), then resize it twice (+2 grid cells) and rotate it
-    // twice, independently.
+    // in this file).
     const box = await canvasBox(page);
     const cx = box.x + box.width / 2;
     const cy = box.y + box.height / 2;
@@ -571,13 +628,20 @@ test.describe("Token resize/rotate (US2, T013/T014)", () => {
     await page.mouse.up();
     await page.waitForTimeout(300);
 
-    await page.keyboard.press("BracketRight");
-    await page.waitForTimeout(150);
-    await page.keyboard.press("BracketRight");
-    await page.waitForTimeout(150);
-    await page.keyboard.press("Comma");
-    await page.waitForTimeout(150);
-    await page.keyboard.press("Comma");
+    // T001/FR-001: the resize handle is now rendered at the token's
+    // corner (scale 1) — grab it and drag out to the distance
+    // corresponding to scale 3 (whole grid-cell increments, +2 cells).
+    const resizeStart = resizeHandleScreenOffset(1);
+    const resizeEnd = resizeHandleScreenOffset(3);
+    await dragTokenHandle(page, resizeStart, resizeEnd);
+
+    // T001/FR-003: the rotate handle sits at a separate offset (scaled
+    // with the token, per `rotate_handle_world_pos`) — grab it and drag
+    // to the angle corresponding to a 60-degree (PI/3) rotation,
+    // independent of the resize above.
+    const rotateStart = rotateHandleScreenOffset(3, 0);
+    const rotateEnd = rotateHandleScreenOffset(3, Math.PI / 3);
+    await dragTokenHandle(page, rotateStart, rotateEnd);
     await page.waitForTimeout(1_000);
 
     await page.reload();
@@ -645,6 +709,108 @@ test.describe("Token resize/rotate (US2, T013/T014)", () => {
     expect(tokens[0].scale).toBeCloseTo(3.0, 5); // 1.0 default + 2 increments
     // Two 30-degree steps = 60 degrees = PI/3 radians.
     expect(tokens[0].rotation).toBeCloseTo(Math.PI / 3, 2);
+  });
+
+  /**
+   * T002/FR-001: confirms the resize and rotate handles are real,
+   * distinct, hit-testable sprites rendered at their documented
+   * positions for a selected token — not just that *some* drag on the
+   * token changes scale/rotation. `waitForEngineReady`'s environment
+   * cannot pixel-inspect the Bevy canvas directly (WebGL context here
+   * doesn't preserve its drawing buffer — see canvas-authoring.spec.ts's
+   * `Wall sync across sessions` doc comment for the same documented
+   * limitation), so this is the behavioral proxy this codebase already
+   * establishes as the convention for verifying Bevy-rendered elements
+   * exist: each handle, dragged in isolation, changes only its own
+   * property (scale xor rotation), never the token's position — proving
+   * two separate, precisely-positioned hit targets exist, not one
+   * ambiguous "drag the token" region.
+   */
+  test("resize and rotate handles are separate, precisely-positioned hit targets that each change only their own property", async ({
+    page,
+  }) => {
+    await registerAndCreateWorld(page, `E2E Token Handles ${uniqueSuffix()}`);
+    await createScene(page, "Token Handles Scene");
+    await waitForEngineReady(page);
+
+    await createTokenViaPanel(page);
+    await page.reload();
+    await waitForEngineReady(page);
+    await page.waitForTimeout(1_500);
+
+    const box = await canvasBox(page);
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await page.waitForTimeout(80);
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+
+    // Drag only the resize handle: scale changes, position and rotation
+    // don't.
+    await dragTokenHandle(
+      page,
+      resizeHandleScreenOffset(1),
+      resizeHandleScreenOffset(2),
+    );
+    await page.waitForTimeout(500);
+
+    // Drag only the rotate handle (now at scale 2's offset): rotation
+    // changes, position and scale don't.
+    await dragTokenHandle(
+      page,
+      rotateHandleScreenOffset(2, 0),
+      rotateHandleScreenOffset(2, Math.PI / 2),
+    );
+    await page.waitForTimeout(500);
+
+    await page.reload();
+    await waitForEngineReady(page);
+
+    const sceneId = /[?&]sceneId=([^&]+)/.exec(page.url())?.[1];
+    const tokens: { x: number; y: number; rotation: number; scale: number }[] =
+      await page.evaluate(async (sceneIdArg: string | undefined) => {
+        const csrfToken =
+          document.cookie
+            .split("; ")
+            .find((row) => row.startsWith("csrf_token="))
+            ?.split("=")[1] ?? "";
+        const headers = {
+          "Content-Type": "application/json",
+          "x-csrf-token": csrfToken,
+        };
+        const worldMatch = /\/world\/([^/]+)\/play/.exec(window.location.pathname);
+        const worldId = worldMatch?.[1];
+        const scenesResponse = await fetch("/api/graphql", {
+          method: "POST",
+          headers,
+          credentials: "same-origin",
+          body: JSON.stringify({
+            query: `query($worldId: UUID!) { scenes(worldId: $worldId) { sceneId } }`,
+            variables: { worldId },
+          }),
+        });
+        const scenesJson = await scenesResponse.json();
+        const resolvedSceneId = sceneIdArg ?? scenesJson.data?.scenes?.[0]?.sceneId;
+        const tokensResponse = await fetch("/api/graphql", {
+          method: "POST",
+          headers,
+          credentials: "same-origin",
+          body: JSON.stringify({
+            query: `query($sceneId: UUID!) { tokens(sceneId: $sceneId) { x y rotation scale } }`,
+            variables: { sceneId: resolvedSceneId },
+          }),
+        });
+        const tokensJson = await tokensResponse.json();
+        return tokensJson.data?.tokens ?? [];
+      }, sceneId);
+
+    expect(tokens.length).toBeGreaterThan(0);
+    expect(tokens[0].x).toBeCloseTo(0, 0);
+    expect(tokens[0].y).toBeCloseTo(0, 0);
+    expect(tokens[0].scale).toBeCloseTo(2.0, 5);
+    expect(tokens[0].rotation).toBeCloseTo(Math.PI / 2, 2);
   });
 
   test("T020: TokenTool panel appears on selection and its Grow/Rotate buttons resize/rotate the token", async ({
@@ -830,7 +996,12 @@ test.describe("Scene-load loading/error feedback (US4, T031/T033)", () => {
  * than the GM's own login reused.
  */
 test.describe("Non-GM sees no resize/rotate controls (US2, T015)", () => {
-  test.setTimeout(120_000);
+  // 120s was too tight for a live run: this describe block spins up a
+  // second browser context/login on top of the GM's own reloads, each
+  // reload re-instantiating the ~190MB Bevy/WASM bundle (same root cause
+  // documented on the "Token resize/rotate" describe block above, and on
+  // the US2 ownership test's setTimeout further down this file).
+  test.setTimeout(180_000);
 
   test("a connected player never sees TokenTool's resize/rotate handles, even on their own token", async ({
     page,
@@ -866,6 +1037,123 @@ test.describe("Non-GM sees no resize/rotate controls (US2, T015)", () => {
       await playerContext.close();
     }
   });
+
+  /**
+   * T003 (spec 006): regression guard for the new canvas-rendered
+   * resize/rotate handles (T015 above already covered this for the
+   * keyboard-era implementation and TokenTool panel). `sync_token_visuals`
+   * (systems/token.rs) never spawns `TokenResizeHandle`/`TokenRotateHandle`
+   * sprites unless `IsGameMaster` is true, and `handle_token_resize_drag`/
+   * `handle_token_rotate_drag` independently re-check `is_gm` before
+   * claiming a drag — so even a non-GM player who somehow knew a GM
+   * session's exact handle screen coordinates for their own token
+   * couldn't resize/rotate it that way. Verified behaviorally (dragging
+   * at the coordinates where the handles would render for a GM produces
+   * no scale/rotation change), per this file's established convention for
+   * verifying Bevy-canvas-rendered elements (see the sibling "resize and
+   * rotate handles are separate, precisely-positioned hit targets" test's
+   * doc comment for why a direct pixel check isn't available here).
+   */
+  test("a connected player dragging where resize/rotate handles would render for a GM does not resize or rotate any token, including their own", async ({
+    page,
+    browser,
+  }) => {
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Token No-GM-Canvas-Handles ${uniqueSuffix()}`,
+    );
+    await createScene(page, "No GM Canvas Handles Scene");
+    await waitForEngineReady(page);
+
+    await createTokenViaPanel(page);
+    await page.reload();
+    await waitForEngineReady(page);
+
+    const inviteCode = await generateInviteCodeFromDashboard(page, worldId);
+    await waitForEngineReady(page);
+
+    const playerContext = await browser.newContext();
+    const playerPage = await playerContext.newPage();
+    try {
+      await register(playerPage, freshCredentials("e2enogmch"));
+      await joinWorldAndEnterPlay(playerPage, inviteCode, worldId);
+      await waitForEngineReady(playerPage);
+      await playerPage.waitForTimeout(1_500);
+
+      // Select the token (selection itself isn't GM-gated), then attempt
+      // to drag at the coordinates where a GM's resize and rotate
+      // handles would render at scale 1.
+      const box = await canvasBox(playerPage);
+      const cx = box.x + box.width / 2;
+      const cy = box.y + box.height / 2;
+      await playerPage.mouse.move(cx, cy);
+      await playerPage.mouse.down();
+      await playerPage.waitForTimeout(80);
+      await playerPage.mouse.up();
+      await playerPage.waitForTimeout(300);
+
+      await dragTokenHandle(
+        playerPage,
+        resizeHandleScreenOffset(1),
+        resizeHandleScreenOffset(3),
+      );
+      await dragTokenHandle(
+        playerPage,
+        rotateHandleScreenOffset(1, 0),
+        rotateHandleScreenOffset(1, Math.PI / 3),
+      );
+      await playerPage.waitForTimeout(500);
+    } finally {
+      await playerContext.close();
+    }
+
+    await page.reload();
+    await waitForEngineReady(page);
+
+    const sceneId = /[?&]sceneId=([^&]+)/.exec(page.url())?.[1];
+    const tokens: { rotation: number; scale: number }[] = await page.evaluate(
+      async (sceneIdArg: string | undefined) => {
+        const csrfToken =
+          document.cookie
+            .split("; ")
+            .find((row) => row.startsWith("csrf_token="))
+            ?.split("=")[1] ?? "";
+        const headers = {
+          "Content-Type": "application/json",
+          "x-csrf-token": csrfToken,
+        };
+        const worldMatch = /\/world\/([^/]+)\/play/.exec(window.location.pathname);
+        const worldId = worldMatch?.[1];
+        const scenesResponse = await fetch("/api/graphql", {
+          method: "POST",
+          headers,
+          credentials: "same-origin",
+          body: JSON.stringify({
+            query: `query($worldId: UUID!) { scenes(worldId: $worldId) { sceneId } }`,
+            variables: { worldId },
+          }),
+        });
+        const scenesJson = await scenesResponse.json();
+        const resolvedSceneId = sceneIdArg ?? scenesJson.data?.scenes?.[0]?.sceneId;
+        const tokensResponse = await fetch("/api/graphql", {
+          method: "POST",
+          headers,
+          credentials: "same-origin",
+          body: JSON.stringify({
+            query: `query($sceneId: UUID!) { tokens(sceneId: $sceneId) { rotation scale } }`,
+            variables: { sceneId: resolvedSceneId },
+          }),
+        });
+        const tokensJson = await tokensResponse.json();
+        return tokensJson.data?.tokens ?? [];
+      },
+      sceneId,
+    );
+
+    expect(tokens.length).toBeGreaterThan(0);
+    expect(tokens[0].scale).toBeCloseTo(1.0, 5);
+    expect(tokens[0].rotation).toBeCloseTo(0, 5);
+  });
 });
 
 /**
@@ -887,24 +1175,36 @@ test.describe("Non-GM sees no resize/rotate controls (US2, T015)", () => {
  * additionally-granted token), tokenC (left unassigned, at the origin).
  */
 test.describe("Player-owned token dragging (US3, T021-T023)", () => {
-  test.setTimeout(300_000);
+  // 480s, not 300s: this test's ~9 sequential `page.reload()` cycles
+  // (each re-instantiating the ~190MB Bevy/WASM engine bundle) push the
+  // prior 300s budget right to its edge even on a clean pass — found
+  // live while un-skipping this test for spec 006 US2 (the popover fix
+  // itself is confirmed correct via isolated reproduction; this test's
+  // own reload-heavy structure is what needed the larger budget).
+  test.setTimeout(480_000);
 
-  // test.skip-ed rather than left hanging or deleted: the underlying
-  // server-side mutations/authorization this test exercises (move_own_token,
-  // set_own_primary_token_photo, ownerUserId/isPrimary assignment) are
-  // already correctly implemented and unit-tested (T024-T030). This is
-  // purely a live-UI proof still blocked by a real, reproducible harness
-  // issue — assigning ownership via TokenPanel's GM-only owner/primary
-  // controls races a Radix Popover.Content auto-dismissal. One trigger
-  // (blur-to-body on the owner input) was found and fixed; a second,
-  // unconfirmed trigger remains (candidates: the tokens-list re-render
-  // from `refresh()` remounting Popover.Root, or a timing interaction
-  // with TokenPanel's new optimistic-update path) that hangs
-  // `primaryCheckbox.check()` for the full 300s test timeout — skipped
-  // rather than test.fail-ed so CI doesn't pay that cost every run. Needs
-  // React DevTools/render-log instrumentation to isolate, not more
-  // black-box Playwright reruns. Tracked for a follow-up session.
-  test.skip("player drags their primary and an additionally-granted token; cannot drag an unassigned one; can edit their primary's photo; has no create control", async ({
+  // Un-skipped (spec 006 US2/T009-T011): the underlying server-side
+  // mutations/authorization this test exercises (move_own_token,
+  // set_own_primary_token_photo, ownerUserId/isPrimary assignment) were
+  // already correctly implemented and unit-tested (T024-T030) — this was
+  // purely a live-UI proof blocked by a real, reproducible Radix
+  // Popover.Content auto-dismissal race. Root cause (found by reasoning
+  // through the actual browser Tab-traversal/disabled-element semantics,
+  // confirmed live by this un-skip passing repeatedly — see quickstart.md
+  // Scenario 2 step 5, SC-003): the primary checkbox's `disabled` was
+  // gated on `token.ownerUserId`, which only flips after the
+  // owner-assignment mutation's network round trip resolves via
+  // `refresh()`. Tabbing from the owner input to the checkbox is
+  // synchronous, well before that round trip resolves — a *disabled*
+  // element is skipped in the browser's native tab order, so focus
+  // jumped past the still-disabled checkbox to whatever came next in the
+  // DOM (outside `Popover.Content`), and Radix's outside-focus dismissal
+  // read that as "focus left the popover" and closed it. Fixed in
+  // `TokenPanel.tsx` by tracking each owner input's live typed value
+  // (`ownerDrafts`) so the checkbox enables itself the instant there's a
+  // non-empty value, decoupled from the mutation/refetch cycle — see that
+  // file's own comment for the full account.
+  test("player drags their primary and an additionally-granted token; cannot drag an unassigned one; can edit their primary's photo; has no create control", async ({
     page,
     browser,
   }) => {

@@ -159,6 +159,12 @@ impl From<CoreOAuthProvider> for DbOAuthProvider {
             configured: core.configured,
             created_at: core.created_at,
             updated_at: core.updated_at,
+            // Core's OAuthProvider predates the env-var config source concept
+            // (ADR-041) and carries no such field — default to "admin" (the
+            // safe, non-privileged default every pre-existing row already
+            // has) rather than guessing "env" for a row this conversion path
+            // didn't itself materialize from an env-var scan.
+            config_source: "admin".to_string(),
         }
     }
 }

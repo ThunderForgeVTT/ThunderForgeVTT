@@ -18,6 +18,7 @@ export function OAuthProviderForm({
   provider,
   onSave,
 }: OAuthProviderFormProps) {
+  const isEnvSourced = provider.configSource === "ENV";
   const [displayName, setDisplayName] = useState(provider.displayName);
   const [oauthClientId, setOauthClientId] = useState(provider.oauthClientId ?? "");
   const [oauthClientSecret, setOauthClientSecret] = useState("");
@@ -40,17 +41,25 @@ export function OAuthProviderForm({
     setStatus(null);
 
     try {
-      await onSave(provider.id, {
-        displayName,
-        oauthClientId: oauthClientId.trim() || undefined,
-        oauthClientSecret: oauthClientSecret.trim() || undefined,
-        enabled,
-        userinfoUrl: userinfoUrl.trim() || undefined,
-        scopes: scopes
-          .split(/\s+/)
-          .map((item) => item.trim())
-          .filter(Boolean),
-      });
+      // Env-sourced rows: only `enabled` is ever writable (ADR-041) — the
+      // server ignores every other field on such a row anyway, but omitting
+      // them here keeps the request honest about what this save can do.
+      await onSave(
+        provider.id,
+        isEnvSourced
+          ? { enabled }
+          : {
+              displayName,
+              oauthClientId: oauthClientId.trim() || undefined,
+              oauthClientSecret: oauthClientSecret.trim() || undefined,
+              enabled,
+              userinfoUrl: userinfoUrl.trim() || undefined,
+              scopes: scopes
+                .split(/\s+/)
+                .map((item) => item.trim())
+                .filter(Boolean),
+            },
+      );
       setOauthClientSecret("");
       setStatus("Provider configuration updated.");
     } catch (error) {
@@ -66,6 +75,16 @@ export function OAuthProviderForm({
         <div>
           <h3 className="font-semibold">{displayName}</h3>
           <p className="text-muted-foreground">{providerSubtitle}</p>
+          {isEnvSourced ? (
+            <p
+              className="mt-1 text-xs text-muted-foreground"
+              data-testid={`${provider.id}-env-sourced-indicator`}
+            >
+              Configured via environment variable — credentials, URLs, and
+              label are set by the server and can't be edited here. Only
+              enabled/disabled is adjustable.
+            </p>
+          ) : null}
         </div>
         <label className="flex items-center gap-2 text-sm">
           <Switch
@@ -83,6 +102,8 @@ export function OAuthProviderForm({
             value={displayName}
             onChange={(event) => setDisplayName(event.target.value)}
             placeholder="Google"
+            disabled={isEnvSourced}
+            readOnly={isEnvSourced}
           />
         </Field>
         <Field label="Client ID" htmlFor={`${provider.id}-client-id`}>
@@ -91,19 +112,29 @@ export function OAuthProviderForm({
             value={oauthClientId}
             onChange={(event) => setOauthClientId(event.target.value)}
             placeholder="OAuth client identifier"
+            disabled={isEnvSourced}
+            readOnly={isEnvSourced}
           />
         </Field>
         <Field
           label="Client secret"
           htmlFor={`${provider.id}-client-secret`}
-          hint={provider.hasClientSecret ? "Leave blank to keep the stored secret." : "Add the first client secret for this provider."}
+          hint={
+            isEnvSourced
+              ? "Set via environment variable — not editable here."
+              : provider.hasClientSecret
+                ? "Leave blank to keep the stored secret."
+                : "Add the first client secret for this provider."
+          }
         >
           <Input
             id={`${provider.id}-client-secret`}
             type="password"
             value={oauthClientSecret}
             onChange={(event) => setOauthClientSecret(event.target.value)}
-            placeholder="Optional secret rotation"
+            placeholder={isEnvSourced ? "••••••••" : "Optional secret rotation"}
+            disabled={isEnvSourced}
+            readOnly={isEnvSourced}
           />
         </Field>
         <Field label="Userinfo URL" htmlFor={`${provider.id}-userinfo-url`}>
@@ -112,6 +143,8 @@ export function OAuthProviderForm({
             value={userinfoUrl}
             onChange={(event) => setUserinfoUrl(event.target.value)}
             placeholder="https://example.com/oauth/userinfo"
+            disabled={isEnvSourced}
+            readOnly={isEnvSourced}
           />
         </Field>
         <Field
@@ -124,6 +157,8 @@ export function OAuthProviderForm({
             value={scopes}
             onChange={(event) => setScopes(event.target.value)}
             placeholder="openid profile email"
+            disabled={isEnvSourced}
+            readOnly={isEnvSourced}
           />
         </Field>
       </div>

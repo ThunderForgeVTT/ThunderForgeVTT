@@ -2,26 +2,13 @@ use base64::{Engine as _, engine::general_purpose};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct OAuth2Config {
-    pub(crate) id: String,
-    pub(crate) secret: String,
-    pub(crate) auth_url: String,
-    pub(crate) token_url: String,
-    pub(crate) scopes: Vec<String>,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct SupportedAuthentication {
-    pub(crate) oauth2: Option<Vec<OAuth2Config>>,
-}
+pub mod oauth_env;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Config {
     pub(crate) secret: String,
     pub(crate) data_path: String,
     pub(crate) secure_cookies: bool,
-    pub(crate) authentication: Option<SupportedAuthentication>,
 }
 
 impl Config {
@@ -49,15 +36,10 @@ impl Config {
                 )
             })
             .unwrap_or(false);
-        let authentication = std::env::var("THUNDERFORGE_AUTHENTICATION")
-            .ok()
-            .and_then(|auth_str| serde_json::from_str(&auth_str).ok());
-
         Config {
             secret,
             data_path,
             secure_cookies,
-            authentication,
         }
     }
 }

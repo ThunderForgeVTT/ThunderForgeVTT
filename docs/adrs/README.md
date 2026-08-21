@@ -46,6 +46,9 @@ This directory contains architecture decisions for ThunderForgeVTT, captured usi
 | [20260505-036](./20260505-036-extensible_system_agnostic_actor_data_architecture.md) | Accepted | Extensible System-Agnostic Actor Data Architecture (Type-Indexed JSONB)                      |
 | [20260820-037](./20260820-037-native_canvas_authoring_supersedes_tldraw.md)     | Accepted | Native Bevy Canvas Authoring Supersedes Wrapped tldraw                                         |
 | [20260820-038](./20260820-038-canvas_core_crate_split_for_native_testability.md) | Accepted | Split Canvas-Authoring Logic into a Native-Testable Core Crate                                |
+| [20260820-039](./20260820-039-rustfs_scoped_asset_storage.md)                   | Accepted | RustFS Scoped Asset Storage                                                                    |
+| [20260821-040](./20260821-040-unify_token_backing_store.md)                     | Accepted | Unify Token Backing Store onto the Scene-Scoped `tokens` Table                                  |
+| [20260821-041](./20260821-041-env_var_oauth_provider_configuration.md)          | Accepted | Environment-Variable OAuth Provider Configuration, Layered on the Existing Admin-Panel Model    |
 
 > **Note (2026-08-19):** ADRs 020–024 originally collided with an unrelated "pack system" batch that reused the same day-020 through day-024 numbers. The world-domain ADRs (020–024 above) were committed first and are documented here; the colliding pack-system ADRs were renumbered to 026–030. See `docs/SYSTEM_HOOKS_API_GUIDE.md` and ADR-036's "Related Decisions" for the corrected references.
 

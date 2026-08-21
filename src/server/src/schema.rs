@@ -180,6 +180,7 @@ diesel::table! {
         oauth_client_id -> Nullable<Varchar>,
         oauth_client_secret -> Nullable<Varchar>,
         configured -> Bool,
+        config_source -> Varchar,
     }
 }
 

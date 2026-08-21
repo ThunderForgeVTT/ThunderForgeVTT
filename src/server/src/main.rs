@@ -180,6 +180,14 @@ async fn main() {
         system_hooks: std::sync::Arc::new(tokio::sync::RwLock::new(system_hooks::SystemHookRegistry::new())),
     };
 
+    // Materialize any OAUTH_*-env-var-configured provider instances (ADR-041)
+    // before the app starts accepting connections, so the sign-in screen's
+    // first load already reflects them.
+    eprintln!("[Server] 🚀 Materializing environment-configured OAuth providers");
+    if let Err(err) = admin::materialize_env_oauth_providers(&db_pool).await {
+        eprintln!("[Server] ⚠️  Failed to materialize env-configured OAuth providers: {err}");
+    }
+
     // Spawn the PostgreSQL LISTEN background task
     eprintln!("[Server] 🚀 Starting PostgreSQL LISTEN background task");
     network::spawn_listen_task(db_pool.clone(), world_event_sender);

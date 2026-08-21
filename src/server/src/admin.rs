@@ -1,15 +1,17 @@
+use crate::config::oauth_env::{parse_oauth_env_vars, resolve};
 use crate::models::{
-    AdminBootstrapSetup, AuthSecuritySetting, NewAuthSecuritySetting, OAuthProvider,
+    AdminBootstrapSetup, AuthSecuritySetting, NewAuthSecuritySetting, NewOAuthProvider,
+    OAuthProvider,
 };
 use crate::schema::{
     admin_bootstrap_setup, auth_security_settings, oauth_providers, policies, users, world_events,
     world_tokens, worlds,
 };
-use crate::state::AppState;
+use crate::state::{AppState, DbPool};
 use chrono::Utc;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -167,15 +169,43 @@ pub async fn update_oauth_provider(
             return Ok::<_, diesel::result::Error>(None);
         };
 
-        let display_name = update.display_name.unwrap_or(existing.display_name);
-        let oauth_client_id = update.oauth_client_id.or(existing.oauth_client_id);
-        let oauth_client_secret = update.oauth_client_secret.or(existing.oauth_client_secret);
+        // ADR-041 write guard: env-sourced rows are re-asserted by the
+        // startup materialization scan on every restart, so admin edits to
+        // their credential/URL/label fields would silently have no lasting
+        // effect. Only `enabled` (FR-006) is ever writable on such a row
+        // through this mutation — every other field in `update` is ignored,
+        // not erased, so the response still reflects the row's real,
+        // persisted (env-sourced) values.
+        let is_env_sourced = existing.config_source == "env";
+        let display_name = if is_env_sourced {
+            existing.display_name
+        } else {
+            update.display_name.unwrap_or(existing.display_name)
+        };
+        let oauth_client_id = if is_env_sourced {
+            existing.oauth_client_id
+        } else {
+            update.oauth_client_id.or(existing.oauth_client_id)
+        };
+        let oauth_client_secret = if is_env_sourced {
+            existing.oauth_client_secret
+        } else {
+            update.oauth_client_secret.or(existing.oauth_client_secret)
+        };
         let enabled = update.enabled.unwrap_or(existing.enabled);
-        let userinfo_url = update.userinfo_url.or(existing.userinfo_url);
-        let scopes = update
-            .scopes
-            .map(|items| items.into_iter().map(Some).collect::<Vec<_>>())
-            .unwrap_or(existing.scopes);
+        let userinfo_url = if is_env_sourced {
+            existing.userinfo_url
+        } else {
+            update.userinfo_url.or(existing.userinfo_url)
+        };
+        let scopes = if is_env_sourced {
+            existing.scopes
+        } else {
+            update
+                .scopes
+                .map(|items| items.into_iter().map(Some).collect::<Vec<_>>())
+                .unwrap_or(existing.scopes)
+        };
         let configured = oauth_client_id.is_some() && oauth_client_secret.is_some();
 
         diesel::update(oauth_providers::table.filter(oauth_providers::id.eq(provider_id)))
@@ -203,6 +233,128 @@ pub async fn update_oauth_provider(
     .map_err(|_| "Failed to update OAuth provider".to_string())?
     .flatten()
     .ok_or_else(|| "OAuth provider not found".to_string())
+}
+
+/// Startup-time materialization of `OAUTH_*` env-var-configured provider
+/// instances into `oauth_providers` rows (ADR-041, research.md §3/§6).
+///
+/// - Every env-var-detected instance is upserted with `config_source =
+///   "env"`; every writable field is refreshed on each run except `enabled`,
+///   which is only set `true` on first insert — an admin's later toggle
+///   must survive a restart.
+/// - Any row that *was* `config_source = "env"` but whose env vars are no
+///   longer present in this scan is flipped back to `config_source =
+///   "admin"`, values untouched (never deleted — see research.md §6 on why
+///   deleting would cascade-orphan linked `user_oauth_accounts`).
+/// - Incomplete env-var groups are logged (FR-010) and skipped, never
+///   panicking startup.
+pub async fn materialize_env_oauth_providers(db_pool: &DbPool) -> Result<(), String> {
+    let parsed = parse_oauth_env_vars(std::env::vars());
+    let mut resolved = Vec::with_capacity(parsed.len());
+    for instance in &parsed {
+        match resolve(instance) {
+            Ok(r) => resolved.push(r),
+            Err(missing) => {
+                tracing::warn!(
+                    provider = %missing.provider,
+                    instance = %missing.instance,
+                    missing_field = %missing.field,
+                    "OAuth env-var provider instance is missing a required setting; skipping"
+                );
+            }
+        }
+    }
+
+    let mut conn = db_pool
+        .get()
+        .map_err(|_| "Failed to get DB connection".to_string())?;
+
+    tokio::task::spawn_blocking(move || {
+        let now = Utc::now().naive_utc();
+        let mut seen_keys: HashSet<String> = HashSet::new();
+
+        for r in &resolved {
+            seen_keys.insert(r.provider_key.clone());
+            let scopes: Vec<Option<String>> = r.scopes.iter().cloned().map(Some).collect();
+
+            let existing = oauth_providers::table
+                .filter(oauth_providers::provider_key.eq(&r.provider_key))
+                .select(OAuthProvider::as_select())
+                .first::<OAuthProvider>(&mut conn)
+                .optional()?;
+
+            match existing {
+                Some(row) => {
+                    // Only set enabled=true on the row's first transition
+                    // into config_source="env"; an already-env-sourced row
+                    // keeps whatever an admin last toggled it to.
+                    let enabled = if row.config_source == "env" {
+                        row.enabled
+                    } else {
+                        true
+                    };
+                    diesel::update(oauth_providers::table.filter(oauth_providers::id.eq(row.id)))
+                        .set((
+                            oauth_providers::display_name.eq(&r.display_name),
+                            oauth_providers::authorization_url.eq(&r.authorization_url),
+                            oauth_providers::token_url.eq(&r.token_url),
+                            oauth_providers::userinfo_url.eq(&r.userinfo_url),
+                            oauth_providers::scopes.eq(&scopes),
+                            oauth_providers::oauth_client_id.eq(Some(&r.client_id)),
+                            oauth_providers::oauth_client_secret.eq(Some(&r.client_secret)),
+                            oauth_providers::configured.eq(true),
+                            oauth_providers::config_source.eq("env"),
+                            oauth_providers::enabled.eq(enabled),
+                            oauth_providers::updated_at.eq(now),
+                        ))
+                        .execute(&mut conn)?;
+                }
+                None => {
+                    let new_row = NewOAuthProvider {
+                        id: uuid::Uuid::now_v7(),
+                        provider_key: r.provider_key.clone(),
+                        display_name: r.display_name.clone(),
+                        authorization_url: r.authorization_url.clone(),
+                        token_url: r.token_url.clone(),
+                        userinfo_url: r.userinfo_url.clone(),
+                        scopes,
+                        oauth_client_id: Some(r.client_id.clone()),
+                        oauth_client_secret: Some(r.client_secret.clone()),
+                        configured: true,
+                        enabled: true,
+                        created_at: now,
+                        updated_at: now,
+                        config_source: "env".to_string(),
+                    };
+                    diesel::insert_into(oauth_providers::table)
+                        .values(&new_row)
+                        .execute(&mut conn)?;
+                }
+            }
+        }
+
+        // Anything still config_source="env" but not seen in this scan had
+        // its env vars removed — revert to admin-editable, values retained.
+        let stale_env_rows = oauth_providers::table
+            .filter(oauth_providers::config_source.eq("env"))
+            .select(OAuthProvider::as_select())
+            .load::<OAuthProvider>(&mut conn)?;
+        for row in stale_env_rows {
+            if !seen_keys.contains(&row.provider_key) {
+                diesel::update(oauth_providers::table.filter(oauth_providers::id.eq(row.id)))
+                    .set((
+                        oauth_providers::config_source.eq("admin"),
+                        oauth_providers::updated_at.eq(now),
+                    ))
+                    .execute(&mut conn)?;
+            }
+        }
+
+        Ok::<_, diesel::result::Error>(())
+    })
+    .await
+    .map_err(|_| "Failed to spawn blocking task".to_string())?
+    .map_err(|_| "Failed to materialize env-configured OAuth providers".to_string())
 }
 
 pub async fn load_auth_security_settings(state: &AppState) -> Result<AuthSecuritySetting, String> {

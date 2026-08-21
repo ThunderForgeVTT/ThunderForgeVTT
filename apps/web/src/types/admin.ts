@@ -25,6 +25,8 @@ export interface AdminWelcomeSummary {
   diskUsage: number;
 }
 
+export type OAuthConfigSource = "ADMIN" | "ENV";
+
 export interface OAuthProviderConfig {
   id: string;
   providerKey: string;
@@ -38,6 +40,9 @@ export interface OAuthProviderConfig {
   enabled: boolean;
   hasClientSecret: boolean;
   updatedAt: string;
+  /** ADR-041: "ENV" rows are materialized from `OAUTH_*` server env vars —
+   * only `enabled` is editable on them; every other field is env-authoritative. */
+  configSource: OAuthConfigSource;
 }
 
 export interface ManifestEntry {
