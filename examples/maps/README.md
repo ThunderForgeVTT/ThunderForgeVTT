@@ -52,14 +52,27 @@ confirming the original license. Treat this directory as dev/test-only.
   `environment.ambient_light`** (`fffff7e4`) with `baked_lighting: true`
   and zero explicit `lights[]` entries. The only fixture in this set
   that exercises the currently-parsed-but-unused `ambient_light` field
-  (spec 003 US2) — every other fixture here uses the default
-  `ffffffff` or omits it.
+  (spec 003 US3) — every other fixture here uses the default
+  `ffffffff` or omits it. Its `format` field was corrected from `0.2` to
+  `0.3` during spec 003 implementation — as originally committed it
+  declared format `0.2`, which the importer's format-version gate
+  correctly rejects (FR-015), making this fixture unimportable; the rest
+  of its shape was already fully UVTT-0.3-compatible, so this was a
+  one-field metadata fix, not a reshape.
 
 None of the 64 source files surveyed when picking this set had a
 `freestanding: true` portal or a non-empty `objects_line_of_sight[]`
 array — real DungeonDraft exports don't appear to populate either field
-in practice. Testing those two spec-003 US2 field categories will need
-a hand-crafted/synthetic fixture, not a real-world file.
+in practice. Testing those two spec-003 US3 field categories needed a
+hand-crafted/synthetic fixture, not a real-world file:
+
+- `synthetic-freestanding-portal-and-object-los.dd2vtt` — hand-written
+  (not exported from DungeonDraft), exercising exactly the two field
+  categories no real-world fixture above has: one `freestanding: true`
+  portal and one `objects_line_of_sight` polygon, alongside an ordinary
+  4-wall room and a 1x1 placeholder PNG background. Used solely to
+  confirm the import response's `warnings` field discloses both
+  categories (spec 003 US3, contracts/map-import-response.md).
 
 ## Top-level JSON shape (format 0.3)
 

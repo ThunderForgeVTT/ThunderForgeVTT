@@ -88,16 +88,23 @@ pub struct UvttPortal {
     pub rotation: f64,
     #[serde(default)]
     pub closed: bool,
+    /// A portal not attached to any wall/door geometry. Read by
+    /// `freestanding_portal_warning` (User Story 3) to disclose that it
+    /// wasn't turned into a usable door/wall by this import.
     #[serde(default)]
-    #[allow(dead_code)]
     pub freestanding: bool,
 }
 
 #[derive(Debug, Default, Deserialize)]
-#[allow(dead_code)] // not yet wired to a scene-level ambient-light concept
 pub struct UvttEnvironment {
+    /// Parsed for round-trip fidelity; not read downstream (baked
+    /// lighting itself is out of this feature's scope, unlike
+    /// `ambient_light` below).
     #[serde(default)]
+    #[allow(dead_code)]
     pub baked_lighting: bool,
+    /// Read by `ambient_light_warning` (User Story 3) — present-and-set
+    /// values aren't applied to scene lighting by this import yet.
     #[serde(default)]
     pub ambient_light: Option<String>,
 }
@@ -416,39 +423,98 @@ fn error_response(err: &MapImportError) -> (StatusCode, Json<serde_json::Value>)
     (status, Json(json!({ "error": err.to_string() })))
 }
 
-async fn import_uvtt(
-    State(state): State<AppState>,
-    Extension(auth_user): Extension<AuthenticatedUser>,
-    Path(scene_id): Path<Uuid>,
-    mut multipart: Multipart,
-) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    let user_id = auth_user.user_id;
+/// T020 (User Story 3): the shape of a successful import's response.
+/// `warnings` discloses source-file field categories that were parsed but
+/// silently not applied — see `research.md` §5-6 — so a GM is never
+/// unknowingly missing part of their map. Empty for every fixture that
+/// doesn't use those fields (FR-014).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ImportResult {
+    pub walls_created: usize,
+    pub doors_created: usize,
+    pub lights_created: usize,
+    pub background_image_set: bool,
+    pub skipped_degenerate_polygons: usize,
+    pub warnings: Vec<String>,
+}
 
-    // Read the uploaded file field, enforcing the size cap as we go.
-    let mut file_bytes: Option<Vec<u8>> = None;
-    while let Some(field) = multipart
-        .next_field()
-        .await
-        .map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Failed to read multipart field: {e}")}))))?
-    {
-        if field.name() == Some("file") {
-            let bytes = field
-                .bytes()
-                .await
-                .map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Failed to read file bytes: {e}")}))))?;
-            if bytes.len() > MAX_UPLOAD_BYTES {
-                return Err(error_response(&MapImportError::PayloadTooLarge));
-            }
-            file_bytes = Some(bytes.to_vec());
-            break;
-        }
+/// T021: a `freestanding: true` portal has no attaching wall/door
+/// geometry of its own in this importer (`walls_from_portals` builds a
+/// wall from every portal's `bounds` regardless of `freestanding`, so the
+/// portal itself is never dropped) — but a freestanding portal is
+/// conceptually "not attached to a wall" per the source format, which is
+/// the gap this warning discloses (research.md §6).
+fn freestanding_portal_warning(portals: &[UvttPortal]) -> Option<String> {
+    let count = portals.iter().filter(|p| p.freestanding).count();
+    if count == 0 {
+        return None;
     }
-    let Some(file_bytes) = file_bytes else {
-        return Err(error_response(&MapImportError::MissingFileField));
-    };
+    Some(format!(
+        "{count} freestanding portal{plural} present in the source file; freestanding portals are not attached to wall geometry and may not appear as expected",
+        plural = if count == 1 { "" } else { "s" }
+    ))
+}
 
+/// DungeonDraft's own exporter default (fully-opaque white, i.e. "no
+/// ambient tint") — every real-world fixture surveyed for this feature
+/// sets `ambient_light` to exactly this value except
+/// `little-fish-academy.dd2vtt`'s deliberate non-default
+/// `"fffff7e4"` (data-model.md). Warning on every file regardless of
+/// value would violate FR-014's "no new noise for the common case", so
+/// this only fires when the value differs from the exporter's default.
+const DEFAULT_AMBIENT_LIGHT: &str = "ffffffff";
+
+/// T022: a non-default `ambient_light` is parsed but not applied to
+/// scene lighting today (research.md §5-6).
+fn ambient_light_warning(environment: &UvttEnvironment) -> Option<String> {
+    environment
+        .ambient_light
+        .as_ref()
+        .filter(|value| value.as_str() != DEFAULT_AMBIENT_LIGHT)
+        .map(|value| {
+            format!("ambient_light (\"{value}\") was present in the source file but is not yet applied to scene lighting")
+        })
+}
+
+/// T023: `objects_line_of_sight` (occluders attached to placeable
+/// objects, distinct from the static `line_of_sight` walls) has no
+/// vision-blocking geometry created from it today — it's merged into
+/// ordinary walls by `import_uvtt_impl` for backward-compatible
+/// behavior, but that merge itself is the thing worth disclosing since
+/// object-attached occluders are conceptually different from static
+/// walls.
+fn objects_line_of_sight_warning(polygons: &[Vec<UvttPoint>]) -> Option<String> {
+    if polygons.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "{count} objects_line_of_sight occluder polygon{plural} present in the source file; object-attached vision-blocking geometry is imported as ordinary static walls, not as object-linked occluders",
+        count = polygons.len(),
+        plural = if polygons.len() == 1 { "" } else { "s" }
+    ))
+}
+
+/// Core import logic, independent of the HTTP/multipart layer, so tests
+/// can call it directly and re-query the DB afterward (research.md §4's
+/// round-trip pattern) — mirrors `mutations_assets.rs`'s
+/// `upload_canvas_image_impl` shape.
+pub async fn import_uvtt_impl(
+    state: &AppState,
+    user_id: Uuid,
+    scene_id: Uuid,
+    file_bytes: Vec<u8>,
+) -> Result<ImportResult, MapImportError> {
     // Parse + validate the whole file before touching the DB (T026c).
-    let parsed = parse_uvtt(&file_bytes).map_err(|e| error_response(&e))?;
+    let parsed = parse_uvtt(&file_bytes)?;
+
+    let warnings: Vec<String> = [
+        freestanding_portal_warning(&parsed.file.portals),
+        ambient_light_warning(&parsed.file.environment),
+        objects_line_of_sight_warning(&parsed.file.objects_line_of_sight),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
 
     let db_pool = state.db_pool.clone();
 
@@ -469,13 +535,7 @@ async fn import_uvtt(
             .ok_or(MapImportError::SceneNotOwned)
     })
     .await
-    .map_err(|_| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": "Failed to spawn blocking task"})),
-        )
-    })?
-    .map_err(|e| error_response(&e))?;
+    .map_err(|_| MapImportError::Io("Failed to spawn blocking task".to_string()))??;
 
     let (grid_size, world_id) = scene_row;
     let target_grid_size = grid_size as f64;
@@ -483,9 +543,8 @@ async fn import_uvtt(
     // Decode + transcode + write the background image to RustFS outside
     // the DB transaction (the RustFS write isn't transactional with
     // Postgres anyway); if it fails we bail before any DB writes happen.
-    let saved_background = save_background_image(user_id, world_id, scene_id, &parsed.file.image)
-        .await
-        .map_err(|e| error_response(&e))?;
+    let saved_background =
+        save_background_image(user_id, world_id, scene_id, &parsed.file.image).await?;
 
     let walls: Vec<WallInsert> = walls_from_line_of_sight(&parsed.file.line_of_sight, target_grid_size)
         .into_iter()
@@ -592,21 +651,66 @@ async fn import_uvtt(
         })
     })
     .await
-    .map_err(|_| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": "Failed to spawn blocking task"})),
-        )
-    })?;
+    .map_err(|_| MapImportError::Io("Failed to spawn blocking task".to_string()))?;
 
-    result.map_err(|e| error_response(&MapImportError::Database(e)))?;
+    result.map_err(MapImportError::Database)?;
+
+    Ok(ImportResult {
+        walls_created,
+        doors_created,
+        lights_created,
+        background_image_set: true,
+        skipped_degenerate_polygons: parsed.skipped_degenerate_polygons,
+        warnings,
+    })
+}
+
+/// Thin Axum handler: reads the multipart body, delegates to
+/// `import_uvtt_impl`, and serializes the result to JSON. Kept separate
+/// from `import_uvtt_impl` so tests can call the core logic directly
+/// without HTTP/multipart scaffolding (research.md §4).
+async fn import_uvtt(
+    State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthenticatedUser>,
+    Path(scene_id): Path<Uuid>,
+    mut multipart: Multipart,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let user_id = auth_user.user_id;
+
+    // Read the uploaded file field, enforcing the size cap as we go.
+    let mut file_bytes: Option<Vec<u8>> = None;
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Failed to read multipart field: {e}")}))))?
+    {
+        if field.name() == Some("file") {
+            let bytes = field
+                .bytes()
+                .await
+                .map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Failed to read file bytes: {e}")}))))?;
+            if bytes.len() > MAX_UPLOAD_BYTES {
+                return Err(error_response(&MapImportError::PayloadTooLarge));
+            }
+            file_bytes = Some(bytes.to_vec());
+            break;
+        }
+    }
+    let Some(file_bytes) = file_bytes else {
+        return Err(error_response(&MapImportError::MissingFileField));
+    };
+
+    let result = import_uvtt_impl(&state, user_id, scene_id, file_bytes)
+        .await
+        .map_err(|e| error_response(&e))?;
 
     Ok(Json(json!({
-        "wallsCreated": walls_created,
-        "doorsCreated": doors_created,
-        "lightsCreated": lights_created,
-        "backgroundImageSet": true,
-        "skippedDegeneratePolygons": parsed.skipped_degenerate_polygons,
+        "wallsCreated": result.walls_created,
+        "doorsCreated": result.doors_created,
+        "lightsCreated": result.lights_created,
+        "backgroundImageSet": result.background_image_set,
+        "skippedDegeneratePolygons": result.skipped_degenerate_polygons,
+        "warnings": result.warnings,
     })))
 }
 
@@ -909,5 +1013,488 @@ mod tests {
         // And that no local-filesystem write happened under the old
         // map-imports/ convention.
         assert!(!std::path::Path::new("map-imports").exists());
+    }
+
+    // -------------------------------------------------------------
+    // User Story 2: round-trip persistence (T010-T015)
+    //
+    // Model: `mutations_assets.rs`'s `upload_canvas_image_happy_path_
+    // produces_webp_asset` (research.md §4) — build fixtures via
+    // `test_support`, perform the write, then re-query via a *fresh*
+    // `SELECT` (not the mutation's return value) and assert field-for-
+    // field equality against what the source file actually specifies.
+    // -------------------------------------------------------------
+
+    /// A wall's round-trip-relevant fields, order-independent (DB row
+    /// order is not guaranteed without an explicit ORDER BY, and none of
+    /// this feature's FRs care about insertion order — only "is every
+    /// field present and correct"). Coordinates compared bit-for-bit
+    /// since both sides go through the same `grid_units_to_scene_px`
+    /// multiplication with no intervening rounding.
+    #[derive(Debug, Clone, PartialEq, PartialOrd)]
+    struct WallSignature {
+        x1: f64,
+        y1: f64,
+        x2: f64,
+        y2: f64,
+        blocks_vision: bool,
+        blocks_movement: bool,
+        door_state: String,
+    }
+
+    impl From<crate::models::Wall> for WallSignature {
+        fn from(w: crate::models::Wall) -> Self {
+            WallSignature {
+                x1: w.x1,
+                y1: w.y1,
+                x2: w.x2,
+                y2: w.y2,
+                blocks_vision: w.blocks_vision,
+                blocks_movement: w.blocks_movement,
+                door_state: w.door_state,
+            }
+        }
+    }
+
+    impl From<WallInsert> for WallSignature {
+        fn from(w: WallInsert) -> Self {
+            WallSignature {
+                x1: w.x1,
+                y1: w.y1,
+                x2: w.x2,
+                y2: w.y2,
+                blocks_vision: w.blocks_vision,
+                blocks_movement: w.blocks_movement,
+                door_state: w.door_state.to_string(),
+            }
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq, PartialOrd)]
+    struct LightSignature {
+        x: f64,
+        y: f64,
+        radius: f64,
+        intensity: f64,
+        color: Option<String>,
+        casts_shadows: bool,
+    }
+
+    impl From<crate::models::LightSource> for LightSignature {
+        fn from(l: crate::models::LightSource) -> Self {
+            LightSignature {
+                x: l.x,
+                y: l.y,
+                radius: l.radius,
+                intensity: l.intensity,
+                color: l.color,
+                casts_shadows: l.casts_shadows,
+            }
+        }
+    }
+
+    impl From<LightInsert> for LightSignature {
+        fn from(l: LightInsert) -> Self {
+            LightSignature {
+                x: l.x,
+                y: l.y,
+                radius: l.radius,
+                intensity: l.intensity,
+                color: Some(l.color),
+                casts_shadows: l.casts_shadows,
+            }
+        }
+    }
+
+    fn sorted<T: PartialOrd>(mut v: Vec<T>) -> Vec<T> {
+        v.sort_by(|a, b| a.partial_cmp(b).expect("no NaN coordinates in test fixtures"));
+        v
+    }
+
+    /// Re-queries every wall/light for `scene_id` from a fresh DB
+    /// connection (not the import's in-memory return value) and asserts
+    /// exact field equality against what the source fixture specifies,
+    /// plus a background asset actually being set on the scene. Shared by
+    /// T010-T012's three fixtures.
+    async fn assert_round_trip_matches_fixture(fixture_name: &str) {
+        use crate::test_support::*;
+
+        // Loading `.env` here (rather than relying on another test having
+        // already done so first) avoids a real ordering hazard:
+        // `test_app_state()` reads `DATABASE_URL` directly from the
+        // process environment with no dotenv fallback of its own, so
+        // whichever test runs first in this binary is the one that
+        // actually needs it loaded.
+        dotenvy::dotenv().ok();
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        drop(conn);
+
+        // test_support::insert_test_scene always uses grid_size 5.
+        let target_grid_size = 5.0;
+
+        let raw = read_fixture(fixture_name);
+        let parsed = parse_uvtt(&raw).expect("fixture should parse");
+
+        let mut expected_walls: Vec<WallSignature> = walls_from_line_of_sight(
+            &parsed.file.line_of_sight,
+            target_grid_size,
+        )
+        .into_iter()
+        .chain(walls_from_line_of_sight(&parsed.file.objects_line_of_sight, target_grid_size))
+        .chain(walls_from_portals(&parsed.file.portals, target_grid_size))
+        .map(WallSignature::from)
+        .collect();
+        expected_walls = sorted(expected_walls);
+
+        let mut expected_lights: Vec<LightSignature> =
+            lights_from_uvtt(&parsed.file.lights, target_grid_size)
+                .into_iter()
+                .map(LightSignature::from)
+                .collect();
+        expected_lights = sorted(expected_lights);
+
+        let result = import_uvtt_impl(&state, owner_id, scene_id, raw)
+            .await
+            .expect("import should succeed");
+
+        assert_eq!(result.walls_created + result.doors_created, expected_walls.len());
+        assert_eq!(result.lights_created, expected_lights.len());
+
+        // Re-query from a fresh connection — the point of this test.
+        let mut conn = state.db_pool.get().unwrap();
+        use crate::schema::{light_sources, scenes, walls as walls_table};
+
+        let reloaded_walls: Vec<WallSignature> = walls_table::table
+            .filter(walls_table::scene_id.eq(scene_id))
+            .select(crate::models::Wall::as_select())
+            .load::<crate::models::Wall>(&mut conn)
+            .expect("walls should reload")
+            .into_iter()
+            .map(WallSignature::from)
+            .collect();
+        assert_eq!(sorted(reloaded_walls), expected_walls, "reloaded walls must exactly match {fixture_name}'s source geometry");
+
+        let reloaded_lights: Vec<LightSignature> = light_sources::table
+            .filter(light_sources::scene_id.eq(scene_id))
+            .select(crate::models::LightSource::as_select())
+            .load::<crate::models::LightSource>(&mut conn)
+            .expect("lights should reload")
+            .into_iter()
+            .map(LightSignature::from)
+            .collect();
+        assert_eq!(sorted(reloaded_lights), expected_lights, "reloaded lights must exactly match {fixture_name}'s source lights");
+
+        let background_asset_id = scenes::table
+            .filter(scenes::scene_id.eq(scene_id))
+            .select(scenes::background_asset_id)
+            .first::<Option<Uuid>>(&mut conn)
+            .expect("scene should reload");
+        assert!(
+            background_asset_id.is_some(),
+            "reloaded scene must reference the background image asset created by import"
+        );
+    }
+
+    /// T010: `road-side-in.dd2vtt` — 24 line-of-sight polygons / 16
+    /// portals / 4 lights, the richest real fixture — is the primary
+    /// round-trip stress test (FR-008, FR-009, FR-010).
+    #[tokio::test]
+    async fn round_trip_road_side_in_matches_fixture_exactly() {
+        assert_round_trip_matches_fixture("road-side-in.dd2vtt").await;
+    }
+
+    /// T011: `dwarven-forge.dd2vtt` — walls-only (no doors/lights) —
+    /// confirms the walls-only path is equally durable.
+    #[tokio::test]
+    async fn round_trip_dwarven_forge_walls_only_matches_fixture_exactly() {
+        assert_round_trip_matches_fixture("dwarven-forge.dd2vtt").await;
+    }
+
+    /// T012: `demo.dd2vtt` — walls, doors, lights, baked lighting — the
+    /// broadest-coverage existing fixture.
+    #[tokio::test]
+    async fn round_trip_demo_matches_fixture_exactly() {
+        assert_round_trip_matches_fixture("demo.dd2vtt").await;
+    }
+
+    /// T013 (FR-011, spec.md US2 Acceptance Scenario 3): hand-built
+    /// changes applied *on top of* an import — a new wall, a passability
+    /// toggle on an imported wall, and a new light — must persist exactly
+    /// as durably as the import itself. Exercises the same
+    /// `walls`/`light_sources` update path `update_wall`/
+    /// `create_light_source` use (research.md §3's ownership-filter
+    /// pattern), at the Diesel level directly rather than through the
+    /// full GraphQL resolver (consistent with this file's/mutations_
+    /// walls.rs's existing test style).
+    #[tokio::test]
+    async fn hand_built_edits_on_top_of_an_import_persist_exactly() {
+        use crate::test_support::*;
+
+        dotenvy::dotenv().ok();
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        drop(conn);
+
+        let raw = read_fixture("dwarven-forge.dd2vtt");
+        import_uvtt_impl(&state, owner_id, scene_id, raw)
+            .await
+            .expect("import should succeed");
+
+        let mut conn = state.db_pool.get().unwrap();
+        use crate::schema::{light_sources, scenes, walls as walls_table};
+
+        // Pick an arbitrary imported wall to toggle passability on, same
+        // ownership-scoped update shape as `update_wall`.
+        let target_wall_id = walls_table::table
+            .filter(walls_table::scene_id.eq(scene_id))
+            .select(walls_table::wall_id)
+            .first::<Uuid>(&mut conn)
+            .expect("import should have created at least one wall");
+
+        diesel::update(
+            walls_table::table
+                .filter(walls_table::wall_id.eq(target_wall_id))
+                .filter(
+                    walls_table::scene_id.eq_any(
+                        scenes::table
+                            .filter(scenes::owner_id.eq(owner_id))
+                            .select(scenes::scene_id),
+                    ),
+                ),
+        )
+        .set(walls_table::blocks_movement.eq(true))
+        .execute(&mut conn)
+        .expect("passability toggle should succeed");
+
+        // A brand-new hand-drawn wall, same insert shape create_wall uses.
+        let new_wall_id = Uuid::now_v7();
+        let now = chrono::Utc::now().naive_utc();
+        diesel::insert_into(walls_table::table)
+            .values((
+                walls_table::wall_id.eq(new_wall_id),
+                walls_table::scene_id.eq(scene_id),
+                walls_table::x1.eq(1.0),
+                walls_table::y1.eq(2.0),
+                walls_table::x2.eq(3.0),
+                walls_table::y2.eq(4.0),
+                walls_table::blocks_vision.eq(true),
+                walls_table::blocks_movement.eq(false),
+                walls_table::door_state.eq("none"),
+                walls_table::created_by.eq(owner_id),
+                walls_table::updated_by.eq(owner_id),
+                walls_table::created_at.eq(now),
+                walls_table::updated_at.eq(now),
+            ))
+            .execute(&mut conn)
+            .expect("hand-drawn wall insert should succeed");
+
+        // A hand-placed light ("torch"), same insert shape
+        // create_light_source uses.
+        let new_light_id = Uuid::now_v7();
+        diesel::insert_into(light_sources::table)
+            .values((
+                light_sources::light_id.eq(new_light_id),
+                light_sources::scene_id.eq(scene_id),
+                light_sources::x.eq(10.0),
+                light_sources::y.eq(20.0),
+                light_sources::radius.eq(100.0),
+                light_sources::intensity.eq(1.0),
+                light_sources::casts_shadows.eq(true),
+                light_sources::created_by.eq(owner_id),
+                light_sources::updated_by.eq(owner_id),
+                light_sources::created_at.eq(now),
+                light_sources::updated_at.eq(now),
+            ))
+            .execute(&mut conn)
+            .expect("hand-placed light insert should succeed");
+        drop(conn);
+
+        // Reload from a fresh connection and confirm all three edits
+        // (not just the originally-imported state) are exactly present.
+        let mut conn = state.db_pool.get().unwrap();
+        let reloaded_wall = walls_table::table
+            .filter(walls_table::wall_id.eq(target_wall_id))
+            .select(crate::models::Wall::as_select())
+            .first::<crate::models::Wall>(&mut conn)
+            .expect("toggled wall should reload");
+        assert!(reloaded_wall.blocks_movement, "passability toggle must survive reload");
+
+        let reloaded_new_wall = walls_table::table
+            .filter(walls_table::wall_id.eq(new_wall_id))
+            .select(crate::models::Wall::as_select())
+            .first::<crate::models::Wall>(&mut conn)
+            .expect("hand-drawn wall should reload");
+        assert_eq!((reloaded_new_wall.x1, reloaded_new_wall.y1, reloaded_new_wall.x2, reloaded_new_wall.y2), (1.0, 2.0, 3.0, 4.0));
+
+        let reloaded_new_light = light_sources::table
+            .filter(light_sources::light_id.eq(new_light_id))
+            .select(crate::models::LightSource::as_select())
+            .first::<crate::models::LightSource>(&mut conn)
+            .expect("hand-placed light should reload");
+        assert_eq!((reloaded_new_light.x, reloaded_new_light.y, reloaded_new_light.radius), (10.0, 20.0, 100.0));
+    }
+
+    /// T015 (SC-006): a documented, one-time verification that the
+    /// round-trip check above actually has teeth — i.e. it would fail if
+    /// a real fidelity bug were introduced, not just pass vacuously.
+    ///
+    /// Verification actually performed during this feature's
+    /// implementation (not just described): temporarily changed
+    /// `WallSignature::from(crate::models::Wall)` above to
+    /// `x1: w.x1 + 1.0` (simulating a coordinate-fidelity bug on
+    /// reload). Result: `cargo test map_import::tests::round_trip`
+    /// failed immediately and specifically — every one of
+    /// `round_trip_demo_matches_fixture_exactly`,
+    /// `round_trip_dwarven_forge_walls_only_matches_fixture_exactly`,
+    /// and `round_trip_road_side_in_matches_fixture_exactly` failed at
+    /// their `assert_eq!(sorted(reloaded_walls), expected_walls, ...)`
+    /// line with a clear "reloaded walls must exactly match ...'s source
+    /// geometry" message showing the off-by-one `x1` values — not a
+    /// silent pass. (An earlier attempt hard-coding
+    /// `blocks_movement: false` in the same spot did *not* catch
+    /// anything, because every wall this importer produces already has
+    /// `blocks_movement: false` — a useful negative-control finding in
+    /// its own right, showing the check's teeth are in the coordinate/
+    /// door-state fields, not the always-false import-time
+    /// `blocks_movement` default.) The change was then reverted; `cargo
+    /// test map_import::tests::round_trip` passed again with the fix
+    /// undone. This confirms the round-trip tests genuinely detect
+    /// fidelity regressions rather than trivially passing regardless of
+    /// what's persisted.
+    #[test]
+    fn round_trip_tests_have_teeth_verification_is_documented_not_a_live_test() {
+        // Intentionally a no-op: see this test's doc comment above for
+        // the one-time verification this documents.
+    }
+
+    // -------------------------------------------------------------
+    // User Story 3: import result field-gap disclosure (T017-T019)
+    // -------------------------------------------------------------
+
+    async fn import_and_get_warnings(fixture_name: &str) -> Vec<String> {
+        use crate::test_support::*;
+
+        dotenvy::dotenv().ok();
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        drop(conn);
+
+        let raw = read_fixture(fixture_name);
+        let result = import_uvtt_impl(&state, owner_id, scene_id, raw)
+            .await
+            .unwrap_or_else(|e| panic!("{fixture_name} should import successfully: {e}"));
+        result.warnings
+    }
+
+    /// T017: `little-fish-academy.dd2vtt`'s non-default `ambient_light`
+    /// must be disclosed (FR-012, FR-013).
+    #[tokio::test]
+    async fn warnings_disclose_non_default_ambient_light() {
+        let warnings = import_and_get_warnings("little-fish-academy.dd2vtt").await;
+        assert!(
+            warnings.iter().any(|w| w.to_lowercase().contains("ambient")),
+            "expected an ambient_light warning, got: {warnings:?}"
+        );
+    }
+
+    /// T018: the synthetic fixture's freestanding portal and
+    /// `objects_line_of_sight` polygon must both be disclosed (FR-012,
+    /// FR-013).
+    #[tokio::test]
+    async fn warnings_disclose_freestanding_portal_and_objects_line_of_sight() {
+        let warnings =
+            import_and_get_warnings("synthetic-freestanding-portal-and-object-los.dd2vtt").await;
+        assert!(
+            warnings.iter().any(|w| w.to_lowercase().contains("freestanding")),
+            "expected a freestanding-portal warning, got: {warnings:?}"
+        );
+        assert!(
+            warnings.iter().any(|w| w.to_lowercase().contains("objects_line_of_sight")),
+            "expected an objects_line_of_sight warning, got: {warnings:?}"
+        );
+    }
+
+    /// T019 (FR-014, SC-004): every fixture that doesn't use the three
+    /// unhandled field categories must produce an empty `warnings` — no
+    /// new noise for the common case.
+    #[tokio::test]
+    async fn warnings_are_empty_for_fixtures_without_unhandled_fields() {
+        for fixture in [
+            "demo.dd2vtt",
+            "chamber-of-echoing-grief.dd2vtt",
+            "grassy-path-ambush.dd2vtt",
+            "azheim-meeting.dd2vtt",
+            "road-side-in.dd2vtt",
+            "dwarven-forge.dd2vtt",
+        ] {
+            let warnings = import_and_get_warnings(fixture).await;
+            assert!(warnings.is_empty(), "{fixture} should produce no warnings, got: {warnings:?}");
+        }
+    }
+
+    // -------------------------------------------------------------
+    // User Story 3: pure-function warning-builder unit tests
+    // (T020-T024, no DB required)
+    // -------------------------------------------------------------
+
+    #[test]
+    fn freestanding_portal_warning_fires_only_when_present() {
+        assert!(freestanding_portal_warning(&[]).is_none());
+        let none_freestanding = vec![UvttPortal {
+            position: None,
+            bounds: vec![UvttPoint { x: 0.0, y: 0.0 }, UvttPoint { x: 1.0, y: 0.0 }],
+            rotation: 0.0,
+            closed: true,
+            freestanding: false,
+        }];
+        assert!(freestanding_portal_warning(&none_freestanding).is_none());
+
+        let one_freestanding = vec![UvttPortal {
+            position: None,
+            bounds: vec![UvttPoint { x: 0.0, y: 0.0 }, UvttPoint { x: 1.0, y: 0.0 }],
+            rotation: 0.0,
+            closed: true,
+            freestanding: true,
+        }];
+        assert!(freestanding_portal_warning(&one_freestanding).is_some());
+    }
+
+    #[test]
+    fn ambient_light_warning_ignores_the_exporter_default() {
+        assert!(ambient_light_warning(&UvttEnvironment {
+            baked_lighting: false,
+            ambient_light: None,
+        })
+        .is_none());
+        assert!(ambient_light_warning(&UvttEnvironment {
+            baked_lighting: false,
+            ambient_light: Some("ffffffff".to_string()),
+        })
+        .is_none());
+        assert!(ambient_light_warning(&UvttEnvironment {
+            baked_lighting: false,
+            ambient_light: Some("fffff7e4".to_string()),
+        })
+        .is_some());
+    }
+
+    #[test]
+    fn objects_line_of_sight_warning_fires_only_when_non_empty() {
+        assert!(objects_line_of_sight_warning(&[]).is_none());
+        assert!(objects_line_of_sight_warning(&[vec![
+            UvttPoint { x: 0.0, y: 0.0 },
+            UvttPoint { x: 1.0, y: 1.0 },
+        ]])
+        .is_some());
     }
 }
