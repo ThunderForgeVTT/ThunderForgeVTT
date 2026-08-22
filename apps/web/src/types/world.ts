@@ -14,6 +14,7 @@ export interface WorldRecord {
   updatedBy: string;
   createdAt: string;
   updatedAt: string;
+  sessionNotes: string | null;
 }
 
 export interface CreateWorldInput {

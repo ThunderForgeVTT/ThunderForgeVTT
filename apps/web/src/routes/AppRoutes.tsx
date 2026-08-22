@@ -20,6 +20,7 @@ const CreateWorldPage = lazy(pageLoaders.createWorld);
 const WorldDashboardPage = lazy(pageLoaders.worldDashboard);
 const WorldPage = lazy(pageLoaders.worldWorkspace);
 const WorldStagingRoutePage = lazy(pageLoaders.worldStaging);
+const WorldCompendiumRoutePage = lazy(pageLoaders.worldCompendium);
 const ActorDetailPage = lazy(pageLoaders.actorView);
 const SharedActorPage = lazy(pageLoaders.sharedActor);
 const JoinWorldPage = lazy(pageLoaders.joinWorld);
@@ -386,6 +387,14 @@ export default function AppRoutes({
           element={
             <RequireAuthenticated>
               {renderLazyPage(<WorldStagingRoutePage />, "Loading world staging")}
+            </RequireAuthenticated>
+          }
+        />
+        <Route
+          path="/world/:id/compendium"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(<WorldCompendiumRoutePage />, "Loading world compendium")}
             </RequireAuthenticated>
           }
         />

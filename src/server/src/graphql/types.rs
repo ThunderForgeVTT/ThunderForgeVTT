@@ -99,6 +99,7 @@ pub struct GraphQLWorld {
     pub updated_by: uuid::Uuid,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub session_notes: Option<String>,
 }
 
 impl From<World> for GraphQLWorld {
@@ -119,6 +120,7 @@ impl From<World> for GraphQLWorld {
             updated_by: world.updated_by,
             created_at: world.created_at,
             updated_at: world.updated_at,
+            session_notes: world.session_notes,
         }
     }
 }

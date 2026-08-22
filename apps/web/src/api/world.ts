@@ -32,6 +32,7 @@ const WORLD_FIELDS = `
   updatedBy
   createdAt
   updatedAt
+  sessionNotes
 `;
 
 async function postGraphQL<TData>(
@@ -145,4 +146,26 @@ export function deleteWorld(id: string): Promise<DeleteWorldResult> {
     `,
     { id },
   ).then((data) => data.deleteWorld);
+}
+
+type UpdateWorldSessionNotesMutation = {
+  updateWorldSessionNotes: WorldRecord;
+};
+
+/** DM/GM-only (FR-012). Saving an empty string is a valid, explicit save
+ * (FR-013), not a no-op. */
+export function updateWorldSessionNotes(
+  worldId: string,
+  notes: string,
+): Promise<WorldRecord> {
+  return postGraphQL<UpdateWorldSessionNotesMutation>(
+    `
+      mutation UpdateWorldSessionNotes($input: UpdateWorldSessionNotesInput!) {
+        updateWorldSessionNotes(input: $input) {
+          ${WORLD_FIELDS}
+        }
+      }
+    `,
+    { input: { worldId, notes } },
+  ).then((data) => data.updateWorldSessionNotes);
 }

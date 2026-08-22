@@ -13,6 +13,7 @@ export const pageLoaders = {
   worldDashboard: () => import("@/pages/world/WorldDashboardPage"),
   worldWorkspace: () => import("@/pages/world/WorldPage"),
   worldStaging: () => import("@/pages/world/WorldStagingRoutePage"),
+  worldCompendium: () => import("@/pages/world/WorldCompendiumRoutePage"),
   actorView: () => import("@/pages/world/actor/ActorDetailPage"),
   actorEdit: () => import("@/pages/world/actor/ActorDetailPage"),
   sharedActor: () => import("@/pages/actor-share/SharedActorPage"),

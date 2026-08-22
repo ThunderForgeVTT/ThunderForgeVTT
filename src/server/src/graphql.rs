@@ -1298,6 +1298,7 @@ pub async fn create_world_impl(
         updated_by: user_id,
         created_at: now,
         updated_at: now,
+        session_notes: None,
     };
 
     let inserted_world = new_world.clone();
@@ -1346,6 +1347,53 @@ pub async fn create_world_impl(
     Ok(GraphQLWorld::from(new_world))
 }
 
+/// Spec 011: "Last Session Notes" — a single per-world freeform recap,
+/// DM/GM-only to write (contracts/session-notes.md), read by any world
+/// member via the existing `world(id)` query's `sessionNotes` field.
+#[derive(InputObject, Debug, Clone)]
+pub struct UpdateWorldSessionNotesInput {
+    pub world_id: uuid::Uuid,
+    pub notes: String,
+}
+
+/// Testable core of `WorldMutation::update_world_session_notes`, split out
+/// so tests don't need a GraphQL `Context` (see `mutations_actors.rs`'s
+/// `_impl` convention). DM/GM-only (FR-012). Saving an empty string is a
+/// valid, explicit save (FR-013), not rejected as "no change".
+pub async fn update_world_session_notes_impl(
+    state: &AppState,
+    user_id: uuid::Uuid,
+    is_admin: bool,
+    input: UpdateWorldSessionNotesInput,
+) -> GraphQLResult<GraphQLWorld> {
+    if !crate::auth::actor_permissions::is_dm_of_world(state, user_id, is_admin, input.world_id)
+        .await?
+    {
+        return Err(Error::new(
+            "Only the DM (Owner or GM) may update session notes",
+        ));
+    }
+
+    let world_id = input.world_id;
+    let notes = input.notes;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    let updated = tokio::task::spawn_blocking(move || {
+        diesel::update(worlds::table.filter(worlds::id.eq(world_id)))
+            .set(worlds::session_notes.eq(notes))
+            .returning(World::as_returning())
+            .get_result::<World>(&mut conn)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to update session notes"))?;
+
+    Ok(GraphQLWorld::from(updated))
+}
+
 #[derive(Default)]
 pub struct WorldMutation;
 
@@ -1361,6 +1409,16 @@ impl WorldMutation {
         create_world_impl(state, auth_user.user_id, input)
             .await
             .map_err(Error::new)
+    }
+
+    async fn update_world_session_notes(
+        &self,
+        ctx: &Context<'_>,
+        input: UpdateWorldSessionNotesInput,
+    ) -> GraphQLResult<GraphQLWorld> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        update_world_session_notes_impl(state, auth_user.user_id, auth_user.is_admin, input).await
     }
 
     async fn rename_world(
@@ -1971,6 +2029,122 @@ mod tests {
                 name
             );
         }
+    }
+
+    // Spec 011: World Session Notes (contracts/session-notes.md)
+
+    #[tokio::test]
+    async fn dm_can_update_session_notes_and_read_it_back() {
+        use super::{UpdateWorldSessionNotesInput, update_world_session_notes_impl};
+        use crate::test_support::*;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let updated = update_world_session_notes_impl(
+            &state,
+            owner_id,
+            false,
+            UpdateWorldSessionNotesInput {
+                world_id,
+                notes: "The party defeated the goblin ambush and pressed on.".to_string(),
+            },
+        )
+        .await
+        .expect("the DM should be able to update session notes");
+
+        assert_eq!(
+            updated.session_notes.as_deref(),
+            Some("The party defeated the goblin ambush and pressed on.")
+        );
+    }
+
+    #[tokio::test]
+    async fn saving_empty_session_notes_succeeds() {
+        use super::{UpdateWorldSessionNotesInput, update_world_session_notes_impl};
+        use crate::test_support::*;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let updated = update_world_session_notes_impl(
+            &state,
+            owner_id,
+            false,
+            UpdateWorldSessionNotesInput {
+                world_id,
+                notes: "".to_string(),
+            },
+        )
+        .await
+        .expect("saving an explicit empty value must not error");
+
+        assert_eq!(updated.session_notes.as_deref(), Some(""));
+    }
+
+    #[tokio::test]
+    async fn player_role_cannot_update_session_notes() {
+        use super::{UpdateWorldSessionNotesInput, update_world_session_notes_impl};
+        use crate::test_support::*;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let player_id = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world_id, player_id, "Player");
+        drop(conn);
+
+        let result = update_world_session_notes_impl(
+            &state,
+            player_id,
+            false,
+            UpdateWorldSessionNotesInput {
+                world_id,
+                notes: "Should not be saved".to_string(),
+            },
+        )
+        .await;
+
+        assert!(
+            result.is_err(),
+            "a Player-role world member must not be able to update session notes"
+        );
+    }
+
+    #[tokio::test]
+    async fn non_member_cannot_update_session_notes() {
+        use super::{UpdateWorldSessionNotesInput, update_world_session_notes_impl};
+        use crate::test_support::*;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let outsider_id = insert_test_user(&mut conn);
+        drop(conn);
+
+        let result = update_world_session_notes_impl(
+            &state,
+            outsider_id,
+            false,
+            UpdateWorldSessionNotesInput {
+                world_id,
+                notes: "Should not be saved".to_string(),
+            },
+        )
+        .await;
+
+        assert!(
+            result.is_err(),
+            "a user with no relationship to the world must not be able to update session notes"
+        );
     }
 }
 

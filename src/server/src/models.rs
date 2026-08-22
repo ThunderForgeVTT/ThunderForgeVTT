@@ -322,6 +322,7 @@ pub struct World {
     pub updated_by: uuid::Uuid,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    pub session_notes: Option<String>,
 }
 
 use crate::db_types::PolicyEffectEnum;

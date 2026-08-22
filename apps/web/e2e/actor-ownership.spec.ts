@@ -81,9 +81,15 @@ async function currentUserId(page: Page): Promise<string> {
 }
 
 async function createNpcAndOpenEdit(page: Page, worldId: string, npcName: string): Promise<string> {
+  // Spec 011: NPC creation moved from staging to /compendium.
+  await page.goto(`/world/${worldId}/compendium`);
   await page.getByPlaceholder("New NPC name").fill(npcName);
   await page.getByRole("button", { name: "Add NPC" }).click();
-  await page.getByText(npcName).click();
+  await page
+    .getByTestId("npc-catalog-table")
+    .locator("tr", { hasText: npcName })
+    .getByRole("link", { name: "View" })
+    .click();
   await page.waitForURL(new RegExp(`/world/${worldId}/actor/[^/]+/view$`), { timeout: 15_000 });
   await page.getByRole("button", { name: "Edit" }).click();
   await page.waitForURL(new RegExp(`/world/${worldId}/actor/([^/]+)/edit$`), { timeout: 15_000 });

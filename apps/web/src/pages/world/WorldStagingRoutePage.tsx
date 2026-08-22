@@ -75,6 +75,9 @@ export default function WorldStagingRoutePage() {
         onSceneCreated={(scene) => setScenes((current) => [...current, scene])}
         isGm={isGm}
         onPlay={() => navigate(`/world/${id}/play`)}
+        onSessionNotesSaved={(notes) =>
+          setWorld((current) => (current ? { ...current, sessionNotes: notes } : current))
+        }
       />
     </>
   );

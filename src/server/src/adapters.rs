@@ -199,6 +199,7 @@ impl From<CoreWorld> for DbWorld {
             updated_by: core.updated_by,
             created_at: core.created_at,
             updated_at: core.updated_at,
+            session_notes: None,
         }
     }
 }

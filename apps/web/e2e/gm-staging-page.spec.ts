@@ -88,12 +88,16 @@ test.describe("US1: GM sees a real staging page, not the old placeholder shell",
     });
     await expect(page.locator("canvas")).toHaveCount(0);
 
-    // Real scene data (the auto-created default scene), real player list
-    // (at least the GM), real NPC roster (empty state, not placeholder).
+    // Real scene data (the auto-created default scene) and real player
+    // list (at least the GM). Spec 011: NPC management moved to the
+    // dedicated /compendium route — this page now only links out to it
+    // (see world-compendium.spec.ts for NPC-roster coverage) and shows a
+    // Last Session Notes panel instead.
     await expect(page.getByTestId("scene-switcher")).toContainText(worldName);
     await expect(page.getByText("Players")).toBeVisible();
     await expect(page.getByTestId("staging-player-list")).toHaveCount(1);
-    await expect(page.getByText("No NPCs yet.")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId("compendium-link")).toBeVisible();
+    await expect(page.getByTestId("session-notes-panel")).toBeVisible();
 
     // No dead "Return to dashboard" link pointing at /counter.
     await expect(page.getByRole("link", { name: "Return to dashboard" })).toHaveCount(0);
@@ -239,10 +243,8 @@ test.describe("US3: players get the same shell, read-only and independent of the
 
       await outsiderPage.goto(`/world/${worldId}/staging`);
       // The staging shell itself still renders, but never with the real
-      // world's data — `getWorld`/`worldActors` both enforce the same
-      // visibility rule as `scenes`, so a non-member never sees the real
-      // name, and the NPC roster surfaces a load failure rather than
-      // silently showing real (or fabricated) content.
+      // world's data — `getWorld` enforces the same visibility rule as
+      // `scenes`, so a non-member never sees the real world name.
       await expect(outsiderPage.getByTestId("world-staging-page")).toBeVisible({
         timeout: 15_000,
       });

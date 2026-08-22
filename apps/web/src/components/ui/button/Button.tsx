@@ -98,7 +98,13 @@ export function Button({
       >
         {cloneElement<{ className?: string; children?: ReactNode }>(
           child as ReactElement<{ className?: string; children?: ReactNode }>,
-          { className: childProps.className },
+          // Bug fix: arbitrary caller props (data-testid, aria-label, etc.,
+          // captured in `...props` above) used to be dropped entirely on
+          // this asChild path — only the non-asChild branch below spread
+          // them onto the rendered element. Forward them here too, same
+          // as the non-asChild branch does, so e.g. `data-testid` on a
+          // `<Button asChild>` actually lands on the rendered child.
+          { ...props, className: childProps.className },
           content,
         )}
       </ShadcnButton>

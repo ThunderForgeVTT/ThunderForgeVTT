@@ -1,13 +1,9 @@
-import { useState } from "react";
-import { createActor } from "@/api/actors";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button/Button";
-import { Card } from "@/components/ui/card/Card";
-import { Input } from "@/components/ui/input";
 import { Panel } from "@/components/ui/panel/Panel";
 import { ScrollArea } from "@/components/ui/scroll-area/ScrollArea";
-import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
 import { SceneSwitcher } from "@/components/world/SceneSwitcher";
-import { NpcCatalog } from "@/components/world/NpcCatalog/NpcCatalog";
+import { SessionNotesPanel } from "@/components/world/SessionNotesPanel/SessionNotesPanel";
 import { useWorldMembers } from "@/hooks/useWorldMembers";
 import type { SceneRecord } from "@/types/scene";
 import type { WorldRecord } from "@/types/world";
@@ -22,14 +18,17 @@ export interface WorldStagingPageProps {
   /** Whether the current user may create scenes — GM/Owner only (FR-012). */
   isGm: boolean;
   onPlay: () => void;
+  /** Called when Last Session Notes is saved, so the caller's own world
+   * record stays in sync without a full refetch. */
+  onSessionNotesSaved: (notes: string) => void;
 }
 
 /**
  * Spec 009 (T009, US1): the staging page every world member sees first at
- * `/world/:id/play` — replaces the old `WorldLayout.tsx` placeholder shell.
- * Real scenes, real players, real NPCs, one "Play" action into full-screen
- * canvas mode. Lore is a labeled extension point only (FR-005) — not real
- * content in this pass.
+ * `/world/:id/play`. Spec 011 (US3): simplified down to exactly Play,
+ * Players, and Last Session Notes — the NPC catalog and the old "Lore —
+ * coming soon" placeholder moved to the dedicated `/world/:id/compendium`
+ * portal (linked from here).
  */
 export function WorldStagingPage({
   worldId,
@@ -40,33 +39,9 @@ export function WorldStagingPage({
   onSceneCreated,
   isGm,
   onPlay,
+  onSessionNotesSaved,
 }: WorldStagingPageProps) {
   const { members } = useWorldMembers(worldId);
-  const [newNpcName, setNewNpcName] = useState("");
-  const [newNpcDescription, setNewNpcDescription] = useState("");
-  const [isCreatingNpc, setIsCreatingNpc] = useState(false);
-  const [npcRefreshKey, setNpcRefreshKey] = useState(0);
-
-  const handleAddNpc = async () => {
-    const label = newNpcName.trim();
-    if (!label) {
-      return;
-    }
-    setIsCreatingNpc(true);
-    try {
-      await createActor({
-        worldId,
-        label,
-        isNpc: true,
-        description: newNpcDescription.trim() || undefined,
-      });
-      setNewNpcName("");
-      setNewNpcDescription("");
-      setNpcRefreshKey((current) => current + 1);
-    } finally {
-      setIsCreatingNpc(false);
-    }
-  };
 
   return (
     <main className="grid min-h-screen gap-4 bg-background p-4" data-testid="world-staging-page">
@@ -77,20 +52,25 @@ export function WorldStagingPage({
           </p>
           <h1 className="text-2xl font-semibold">{world?.name ?? "World"}</h1>
           <p className="mt-2 max-w-3xl text-muted-foreground">
-            Confirm the scene, roster, and NPCs before handing the screen to
-            the game.
+            Confirm the scene and roster before handing the screen to the
+            game. Manage NPCs, items, and abilities from the Compendium.
           </p>
         </div>
-        <Button
-          type="button"
-          variant="primary"
-          size="lg"
-          icon="spark"
-          data-testid="play-button"
-          onClick={onPlay}
-        >
-          Play
-        </Button>
+        <div className="flex flex-col items-end gap-2">
+          <Button
+            type="button"
+            variant="primary"
+            size="lg"
+            icon="spark"
+            data-testid="play-button"
+            onClick={onPlay}
+          >
+            Play
+          </Button>
+          <Button asChild variant="secondary" size="sm" data-testid="compendium-link">
+            <Link to={`/world/${worldId}/compendium`}>Open Compendium</Link>
+          </Button>
+        </div>
       </header>
 
       <section className="grid gap-4 lg:grid-cols-2">
@@ -129,52 +109,18 @@ export function WorldStagingPage({
       </section>
 
       <section>
-        <Panel variant="parchment" className="rounded-xl border border-border">
+        <Panel variant="parchment" className="rounded-xl border border-border" data-testid="session-notes-panel">
           <p className="mb-3 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-            NPC catalog
+            Last session notes
           </p>
-          <NpcCatalog worldId={worldId} refreshKey={npcRefreshKey} />
-          {isGm ? (
-            <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
-              <Input
-                value={newNpcName}
-                onChange={(event) => setNewNpcName(event.target.value)}
-                placeholder="New NPC name"
-                disabled={isCreatingNpc}
-                data-testid="new-npc-name-input"
-              />
-              <Input
-                value={newNpcDescription}
-                onChange={(event) => setNewNpcDescription(event.target.value)}
-                placeholder="Description (optional)"
-                disabled={isCreatingNpc}
-                data-testid="new-npc-description-input"
-              />
-              <Button
-                type="button"
-                size="sm"
-                icon="skull"
-                onClick={() => void handleAddNpc()}
-                disabled={isCreatingNpc || !newNpcName.trim()}
-                data-testid="add-npc-button"
-              >
-                Add NPC
-              </Button>
-            </div>
-          ) : null}
+          <SessionNotesPanel
+            worldId={worldId}
+            notes={world?.sessionNotes ?? null}
+            isGm={isGm}
+            onSaved={onSessionNotesSaved}
+          />
         </Panel>
       </section>
-
-      <Card className="grid gap-2 opacity-60">
-        <p className="inline-flex items-center gap-2 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-          <FantasyIcon name="quill" size={14} />
-          Lore — coming soon
-        </p>
-        <p className="text-sm text-muted-foreground">
-          A dedicated lore/notes section for this world will live here in a
-          future update.
-        </p>
-      </Card>
     </main>
   );
 }

@@ -49,9 +49,16 @@ async function registerAndCreateWorld(page: Page, worldName: string): Promise<st
 }
 
 async function createNpcAndOpenEdit(page: Page, worldId: string, npcName: string): Promise<string> {
+  // Spec 011: NPC creation moved from staging to the dedicated
+  // /compendium route.
+  await page.goto(`/world/${worldId}/compendium`);
   await page.getByPlaceholder("New NPC name").fill(npcName);
   await page.getByRole("button", { name: "Add NPC" }).click();
-  await page.getByRole("link", { name: npcName }).click();
+  await page
+    .getByTestId("npc-catalog-table")
+    .locator("tr", { hasText: npcName })
+    .getByRole("link", { name: "View" })
+    .click();
   await page.waitForURL(new RegExp(`/world/${worldId}/actor/[^/]+/view$`), { timeout: 15_000 });
   await page.getByRole("button", { name: "Edit" }).click();
   await page.waitForURL(new RegExp(`/world/${worldId}/actor/([^/]+)/edit$`), { timeout: 15_000 });
@@ -97,10 +104,17 @@ test.describe("US5: share an actor, copy it independently, then revoke", () => {
         timeout: 10_000,
       });
 
-      // The copy is a real, independent actor in the destination world's roster.
-      await otherPage.goto(`/world/${destinationWorldId}/staging`);
-      await expect(otherPage.getByText(npcName)).toBeVisible({ timeout: 10_000 });
-      await otherPage.getByRole("link", { name: npcName }).click();
+      // The copy is a real, independent actor in the destination world's
+      // roster (spec 011: viewed via /compendium, not /staging).
+      await otherPage.goto(`/world/${destinationWorldId}/compendium`);
+      await expect(otherPage.getByTestId("npc-catalog-table")).toContainText(npcName, {
+        timeout: 10_000,
+      });
+      await otherPage
+        .getByTestId("npc-catalog-table")
+        .locator("tr", { hasText: npcName })
+        .getByRole("link", { name: "View" })
+        .click();
       await otherPage.waitForURL(/\/actor\/[^/]+\/view$/, { timeout: 15_000 });
       await otherPage.getByRole("button", { name: "Edit" }).click();
       await otherPage.locator("#actor-label").fill("Renamed Copy");

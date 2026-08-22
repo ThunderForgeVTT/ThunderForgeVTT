@@ -458,6 +458,7 @@ diesel::table! {
         description -> Nullable<Text>,
         game_system_id -> Nullable<Varchar>,
         interface_pack_id -> Nullable<Varchar>,
+        session_notes -> Nullable<Text>,
     }
 }
 
