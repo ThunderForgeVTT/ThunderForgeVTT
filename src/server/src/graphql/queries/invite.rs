@@ -81,18 +81,21 @@ impl InviteQuery {
             .get()
             .map_err(|_| Error::new("Failed to get DB connection"))?;
 
-        // Verify user is a member of the world (any role can view members)
-        let _member: Option<WorldMember> = world_members::table
-            .filter(world_members::world_id.eq(world_id))
-            .filter(world_members::user_id.eq(user_id))
-            .select(WorldMember::as_select())
-            .first::<WorldMember>(&mut conn)
-            .optional()
-            .map_err(|e| Error::new(format!("Database error: {}", e)))?;
-
-        if _member.is_none() {
-            return Err(Error::new("User is not a member of this world"));
-        }
+        // Verify user is a member of the world (any role can view members).
+        // Spec 010 fix: this used to be an inline `world_members` lookup
+        // with no fallback for a world's own owner — who has no
+        // `world_members` row (`create_world` doesn't insert one; see
+        // `require_world_member`'s doc comment) — so a world's own DM
+        // could never list their own world's membership (discovered while
+        // building the actor ownership block, which depends on this query
+        // via `useWorldMembers`'s RxDB replication). Routing through
+        // `require_world_member` applies the same owner fallback every
+        // other world-scoped query/mutation already uses (e.g.
+        // `generate_invite_code`).
+        require_world_member(&mut conn, user_id, world_id).map_err(|e| match e {
+            WorldMembershipError::NotAMember => Error::new("User is not a member of this world"),
+            WorldMembershipError::Database(msg) => Error::new(format!("Database error: {}", msg)),
+        })?;
 
         // Load all members for the world
         let members: Vec<WorldMember> = world_members::table
@@ -130,18 +133,13 @@ impl InviteQuery {
             .get()
             .map_err(|_| Error::new("Failed to get DB connection"))?;
 
-        // Verify caller is a member of the world
-        let _caller: Option<WorldMember> = world_members::table
-            .filter(world_members::world_id.eq(world_id))
-            .filter(world_members::user_id.eq(caller_id))
-            .select(WorldMember::as_select())
-            .first::<WorldMember>(&mut conn)
-            .optional()
-            .map_err(|e| Error::new(format!("Database error: {}", e)))?;
-
-        if _caller.is_none() {
-            return Err(Error::new("User is not a member of this world"));
-        }
+        // Verify caller is a member of the world (spec 010 fix — see
+        // `world_members`'s own comment above on the missing owner
+        // fallback this inline check used to have).
+        require_world_member(&mut conn, caller_id, world_id).map_err(|e| match e {
+            WorldMembershipError::NotAMember => Error::new("User is not a member of this world"),
+            WorldMembershipError::Database(msg) => Error::new(format!("Database error: {}", msg)),
+        })?;
 
         // Load the specific member
         let member: Option<WorldMember> = world_members::table

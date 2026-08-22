@@ -7,7 +7,7 @@ import { test, expect, type Page } from "@playwright/test";
  * not just at the unit-test level (mutations_invites.rs::tests already
  * covers the underlying `require_world_member` fix directly).
  *
- * Before this fix: `CampaignSettingsPanel.tsx`'s "Generate Invite Code"
+ * Before this fix: `CampaignSettingsPanel.tsx`'s "Generate Join Link"
  * button sent flat GraphQL arguments the resolver didn't accept, and
  * even corrected, the resolver's own inline `world_members` lookup had
  * no fallback for a world's own owner (who has no `world_members` row —
@@ -55,6 +55,15 @@ async function register(page: Page, creds: Credentials): Promise<void> {
   });
 }
 
+async function extractInviteCode(page: Page): Promise<string> {
+  const input = page.locator("input[readonly]").first();
+  await expect(input).toBeVisible({ timeout: 10_000 });
+  const url = await input.inputValue();
+  const code = new URL(url).pathname.split("/").pop();
+  if (!code) throw new Error(`Could not extract invite code from URL: ${url}`);
+  return code;
+}
+
 /** Registers a GM, creates a world, then explicitly navigates to the world
  * dashboard (`/world/{id}`), where `CampaignSettingsPanel` lives — needed
  * to generate an invite code. Spec 008: CreateWorldPage's own post-success
@@ -69,9 +78,9 @@ async function registerAndCreateWorldOnDashboard(
   await page.goto("/worlds/create");
   await page.locator("#world-name").fill(worldName);
   await page.getByRole("button", { name: /create world/i }).click();
-  await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
+  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
 
-  const match = /\/world\/([^/]+)\/play$/.exec(new URL(page.url()).pathname);
+  const match = /\/world\/([^/]+)\/staging$/.exec(new URL(page.url()).pathname);
   if (!match) {
     throw new Error(`Could not extract world id from URL: ${page.url()}`);
   }
@@ -106,18 +115,12 @@ test.describe("A GM invites a genuine second player (US4)", () => {
     // Bug 1 regression guard: this click used to fail outright with a
     // GraphQL argument-shape error ("argument input... is required but
     // not provided").
-    await gmPage.getByRole("button", { name: "Generate Invite Code" }).click();
+    await gmPage.getByRole("button", { name: "Generate Join Link" }).click();
 
     // Bug 2 regression guard: this used to fail with "User is not a
     // member of this world" even with Bug 1 fixed, since create_world
     // never gives the owner a world_members row.
-    const inviteCodeLocator = gmPage.locator("code").first();
-    await expect(inviteCodeLocator).toBeVisible({ timeout: 10_000 });
-    const inviteCode = (await inviteCodeLocator.textContent())?.trim();
-    if (!inviteCode) {
-      throw new Error("Invite code did not render after generation");
-    }
-
+    const inviteCode = await extractInviteCode(gmPage);
     // No error banner should be showing after a successful generation.
     await expect(gmPage.getByText(/failed to generate invite code/i)).toHaveCount(0);
 

@@ -15,6 +15,16 @@
     <meta name="twitter:image" content="/social-card.svg" />
     <link rel="icon" href="/brand-mark.svg" type="image/svg+xml" />
     <title><%= pageTitle %></title>
+    <script>
+      (function () {
+        var stored = window.localStorage.getItem("thunderforge-theme");
+        var isDark =
+          stored === "dark" ||
+          (stored !== "light" &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.classList.toggle("dark", isDark);
+      })();
+    </script>
   </head>
   <body>
     <noscript><h1>You need JavaScript to run ThunderForge VTT.</h1></noscript>

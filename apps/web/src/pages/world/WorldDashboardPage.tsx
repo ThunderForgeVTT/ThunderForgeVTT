@@ -175,7 +175,7 @@ export default function WorldDashboardPage() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button asChild icon="worlds">
-                    <Link to={`/world/${world.id}/play`}>Enter world</Link>
+                    <Link to={`/world/${world.id}/staging`}>Enter world</Link>
                   </Button>
                   <Button variant="secondary" icon="settings" disabled>
                     Manage settings
@@ -256,7 +256,7 @@ export default function WorldDashboardPage() {
                   </p>
                   <div className="grid gap-2 text-sm">
                     <Link
-                      to={`/world/${world.id}/play`}
+                      to={`/world/${world.id}/staging`}
                       className="text-primary underline-offset-4 hover:underline"
                     >
                       Enter the live workspace

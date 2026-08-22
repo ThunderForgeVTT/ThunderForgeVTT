@@ -328,6 +328,31 @@ diesel::table! {
 }
 
 diesel::table! {
+    world_actor_permissions (id) {
+        id -> Uuid,
+        actor_id -> Uuid,
+        user_id -> Uuid,
+        #[max_length = 16]
+        level -> Varchar,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    world_actor_shares (id) {
+        id -> Uuid,
+        actor_id -> Uuid,
+        #[max_length = 32]
+        share_code -> Varchar,
+        created_by -> Uuid,
+        revoked -> Bool,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     world_actor_system_data (id) {
         id -> Uuid,
         actor_id -> Uuid,
@@ -458,6 +483,10 @@ diesel::joinable!(user_oauth_accounts -> oauth_providers (provider_id));
 diesel::joinable!(user_oauth_accounts -> users (user_id));
 diesel::joinable!(user_sessions -> users (user_id));
 diesel::joinable!(walls -> scenes (scene_id));
+diesel::joinable!(world_actor_permissions -> users (user_id));
+diesel::joinable!(world_actor_permissions -> world_actors (actor_id));
+diesel::joinable!(world_actor_shares -> users (created_by));
+diesel::joinable!(world_actor_shares -> world_actors (actor_id));
 diesel::joinable!(world_actor_system_data -> world_actors (actor_id));
 diesel::joinable!(world_actors -> scenes (scene_id));
 diesel::joinable!(world_actors -> worlds (world_id));
@@ -489,6 +518,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     user_sessions,
     users,
     walls,
+    world_actor_permissions,
+    world_actor_shares,
     world_actor_system_data,
     world_actors,
     world_events,

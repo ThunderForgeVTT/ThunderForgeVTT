@@ -11,12 +11,14 @@ import {
   Image,
   Link as LinkIcon,
   Map as MapIcon,
+  Moon,
   Package,
   Settings as SettingsIcon,
   Shapes,
   Shield,
   Skull,
   Sparkles,
+  Sun,
   Trash2,
   Users,
   Wand2,
@@ -35,6 +37,7 @@ export type FantasyIconName =
   | "inventory"
   | "link"
   | "map"
+  | "moon"
   | "quill"
   | "rune"
   | "scene"
@@ -43,6 +46,7 @@ export type FantasyIconName =
   | "skull"
   | "spark"
   | "spells"
+  | "sun"
   | "tokens"
   | "torch"
   | "trash"
@@ -68,6 +72,7 @@ const ICON_MAP: Record<FantasyIconName, React.ComponentType<SVGProps<SVGSVGEleme
   inventory: Package,
   link: LinkIcon,
   map: MapIcon,
+  moon: Moon,
   quill: Feather,
   rune: Sparkles,
   scene: Image,
@@ -76,6 +81,7 @@ const ICON_MAP: Record<FantasyIconName, React.ComponentType<SVGProps<SVGSVGEleme
   skull: Skull,
   spark: Zap,
   spells: WandSparkles,
+  sun: Sun,
   tokens: Shapes,
   torch: Flame,
   trash: Trash2,

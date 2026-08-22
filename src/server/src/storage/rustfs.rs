@@ -52,6 +52,8 @@ pub enum StorageError {
     GetObject(String),
     #[error("S3 CreateBucket failed: {0}")]
     CreateBucket(String),
+    #[error("S3 HeadBucket failed: {0}")]
+    HealthCheck(String),
     #[error("STS AssumeRole response was missing credentials")]
     MissingCredentials,
 }
@@ -130,6 +132,21 @@ fn root_s3_client(cfg: &RustFsConfig) -> aws_sdk_s3::Client {
         .force_path_style(true)
         .build();
     aws_sdk_s3::Client::from_conf(conf)
+}
+
+/// Cheap connectivity probe for the `/status` page (FR-020-adjacent) — a
+/// `HeadBucket` against the configured bucket using the root credential,
+/// never exposed further than this module. Returns an error rather than
+/// panicking so the status endpoint can report "down" instead of 500ing.
+pub async fn health_check(cfg: &RustFsConfig) -> Result<(), StorageError> {
+    let client = root_s3_client(cfg);
+    client
+        .head_bucket()
+        .bucket(&cfg.bucket)
+        .send()
+        .await
+        .map(|_| ())
+        .map_err(|e| StorageError::HealthCheck(e.to_string()))
 }
 
 /// Idempotent bucket bootstrap for local dev (FR-020) — RustFS has no

@@ -12,7 +12,12 @@ export const pageLoaders = {
   createWorld: () => import("@/pages/world/CreateWorldPage"),
   worldDashboard: () => import("@/pages/world/WorldDashboardPage"),
   worldWorkspace: () => import("@/pages/world/WorldPage"),
+  worldStaging: () => import("@/pages/world/WorldStagingRoutePage"),
+  actorView: () => import("@/pages/world/actor/ActorDetailPage"),
+  actorEdit: () => import("@/pages/world/actor/ActorDetailPage"),
+  sharedActor: () => import("@/pages/actor-share/SharedActorPage"),
   joinWorld: () => import("@/pages/world/JoinWorldPage"),
+  status: () => import("@/pages/status/StatusPage"),
   notFound: () => import("@/pages/not-found/NotFoundPage"),
 } as const;
 

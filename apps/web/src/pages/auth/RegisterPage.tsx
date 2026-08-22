@@ -101,33 +101,22 @@ export default function RegisterPage() {
     <>
       <SEO {...registerPageSeo} />
       <AuthLayout
-        eyebrow="Onboarding"
-        title="Create a local ThunderForge account."
-        description="Set up your account to start building and running worlds."
         aside={
-          <Card>
-            <div className="grid gap-3">
-              <h2 className="text-lg font-semibold">Already have access?</h2>
-              <div className="grid gap-2">
-                <Link to="/login" className="font-medium text-primary hover:underline">
-                  Return to login
-                </Link>
-                <Link to="/welcome" className="font-medium text-primary hover:underline">
-                  Open the welcome hall
-                </Link>
-              </div>
+          <Card className="p-5">
+            <div className="grid gap-2">
+              <Link to="/login" className="font-medium text-primary hover:underline">
+                Return to login
+              </Link>
+              <Link to="/welcome" className="font-medium text-primary hover:underline">
+                Open the welcome hall
+              </Link>
             </div>
           </Card>
         }
       >
-        <Card>
+        <Card className="p-6">
           <form onSubmit={onSubmit} className="grid gap-4">
-            <div className="grid gap-1.5">
-              <h2 className="text-lg font-semibold">Create credentials</h2>
-              <p className="text-muted-foreground">
-                You'll be signed in right away once your account is created.
-              </p>
-            </div>
+            <h2 className="text-lg font-semibold">Create account</h2>
 
             <Field label="Username" htmlFor="register-username">
               <Input

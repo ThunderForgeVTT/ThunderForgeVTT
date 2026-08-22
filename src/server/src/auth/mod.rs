@@ -41,6 +41,10 @@ use url::Url;
 /// authorization guard for canvas asset reads/writes.
 pub mod world_membership;
 
+/// Spec 010: actor ownership/permission enforcement (`require_actor_permission`,
+/// `is_dm_of_world`).
+pub mod actor_permissions;
+
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/authentication/setup/status", get(setup_status))

@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { WorldLayout } from "@/layouts/world-layout/WorldLayout";
-import { WorldStagingPage } from "@/layouts/world-layout/WorldStagingPage";
 import type { SeoConfig } from "@/types/seo";
 import { createWorldStore } from "@/engine/world/store";
 import {
@@ -45,6 +44,7 @@ export const worldPageSeo: SeoConfig = {
 
 export default function WorldPage() {
   const { id = "" } = useParams();
+  const navigate = useNavigate();
   const loaded = useRef(false);
   const canvasContainerId = "game-canvas-container";
   const worldSyncSessionRef = useRef<WorldSyncSession | null>(null);
@@ -98,13 +98,15 @@ export default function WorldPage() {
   // (research.md §3). Wall authoring tools (FR-009) are hidden entirely
   // for non-GMs, never merely disabled.
   const { isGm: isSceneOwner } = useWorldRole(id, world);
-  // Spec 009 (T010): staging page vs full-screen canvas is a local,
-  // per-user UI state — never synced across users (FR-014) and never
-  // reflected in the URL. The canvas container below is rendered
-  // unconditionally regardless of this value (only its CSS visibility
-  // changes) so the already-booted Bevy engine's canvas handle never goes
-  // stale (research.md §1).
-  const [playView, setPlayView] = useState<"staging" | "playing">("staging");
+  // Spec 010: staging now happens earlier, at its own `/world/:id/staging`
+  // route (`WorldStagingRoutePage.tsx`) — landing here means staging is
+  // already done, so this page always renders the full-screen canvas
+  // directly. `playView` itself is kept (rather than removed outright) so
+  // the canvas-visibility effect below — which spec 009's research.md §1
+  // found load-bearing for not invalidating the already-booted Bevy
+  // engine's canvas handle — continues to work unmodified; it now simply
+  // never leaves `"playing"`.
+  const [playView] = useState<"staging" | "playing">("playing");
   const sceneId = selectedSceneId;
 
   // Spec 004 (US4, T034-T036): scene-switch loading/error feedback. Before
@@ -676,23 +678,9 @@ export default function WorldPage() {
   return (
     <>
       <SEO {...seo} />
-      <div style={{ display: playView === "staging" ? "block" : "none" }}>
-        <WorldStagingPage
-          worldId={id}
-          world={world}
-          scenes={scenes}
-          sceneId={sceneId}
-          onSceneChange={setSelectedSceneId}
-          onSceneCreated={(scene) =>
-            setScenes((current) => [...current, scene])
-          }
-          isGm={isSceneOwner}
-          onPlay={() => setPlayView("playing")}
-        />
-      </div>
       <div style={{ display: playView === "playing" ? "block" : "none" }}>
       <WorldLayout
-        onBackToStaging={() => setPlayView("staging")}
+        onBackToStaging={() => navigate(`/world/${id}/staging`)}
         worldId={id}
         tokens={Object.values(worldState.tokens)}
         scenes={scenes}

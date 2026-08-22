@@ -39,10 +39,11 @@ export default function CreateWorldPage() {
       // form (FR-005) — createWorld's input already treats both as
       // optional server-side, so simply not sending them is sufficient.
       const world = await createWorld({ name, description });
-      // T007 (US1): straight to the canvas, never the dashboard — the
-      // world now always has a default scene already rendered (FR-004,
-      // FR-006), via create_world's atomic transaction (T005).
-      void navigate(`/world/${world.id}/play`);
+      // Spec 010: straight to staging (not the canvas, and not the
+      // dashboard) — the world now always has a default scene already
+      // rendered (FR-004, FR-006), via create_world's atomic transaction
+      // (T005), and staging is the new first stop before "Play".
+      void navigate(`/world/${world.id}/staging`);
     } catch (error) {
       // FR-011: input stays exactly as the user left it — this catch
       // never clears `name`/`description`, only surfaces the error.

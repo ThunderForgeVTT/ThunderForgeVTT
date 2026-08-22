@@ -1,3 +1,5 @@
+export type ActorPermissionLevel = "VIEWER" | "EDITOR" | "OWNER";
+
 export type WorldActorRecord = {
   id: string;
   worldId: string;
@@ -9,6 +11,14 @@ export type WorldActorRecord = {
   isNpc: boolean;
   createdBy: string;
   ownedBy: string;
+  myPermissionLevel: ActorPermissionLevel;
   createdAt: string;
+  updatedAt: string;
+};
+
+export type ActorPermissionRecord = {
+  actorId: string;
+  userId: string;
+  level: ActorPermissionLevel;
   updatedAt: string;
 };

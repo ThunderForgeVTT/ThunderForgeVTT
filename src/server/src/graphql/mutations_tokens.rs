@@ -277,6 +277,15 @@ impl TokenMutation {
     /// Move a token the caller controls (their primary token, or one the GM
     /// granted them) — position only, no scene-ownership required. Spec 004
     /// FR-009: a player may drag any token whose `owner_user_id` is them.
+    /// Spec 010 (research.md §5, FR-018): additionally, if the token is
+    /// linked to an actor (`tokens.actor_id`), a caller holding effective
+    /// `Owner` permission on that actor (or the DM, always) may also move
+    /// it — this is the live-play enforcement point for the actor
+    /// ownership block, extending rather than replacing the existing
+    /// `owner_user_id` check. Multiple simultaneous Owner-level members
+    /// are all independently authorized here (no locking) — whichever one
+    /// most recently moves the token "wins," matching the spec's stated
+    /// conflict resolution.
     async fn move_own_token(
         &self,
         ctx: &Context<'_>,
@@ -287,6 +296,40 @@ impl TokenMutation {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         let user_id = auth_user.user_id;
+        let is_admin = auth_user.is_admin;
+
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+        let existing = tokio::task::spawn_blocking(move || {
+            use crate::schema::tokens;
+            tokens::table
+                .filter(tokens::token_id.eq(token_id))
+                .select(crate::models::Token::as_select())
+                .first::<crate::models::Token>(&mut conn)
+                .optional()
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to load token"))?
+        .ok_or_else(|| Error::new("Move token failed (not found or not controlled by you)"))?;
+
+        let is_direct_owner = existing.owner_user_id == Some(user_id);
+        let is_actor_owner = match existing.actor_id {
+            Some(actor_id) => crate::auth::actor_permissions::effective_actor_permission(
+                state, user_id, is_admin, actor_id,
+            )
+            .await
+            .map(|level| level.rank() >= crate::graphql::types::ActorPermissionLevel::Owner.rank())
+            .unwrap_or(false),
+            None => false,
+        };
+
+        if !is_direct_owner && !is_actor_owner {
+            return Err(Error::new("Move token failed (not found or not controlled by you)"));
+        }
+
         let mut conn = state
             .db_pool
             .get()
@@ -295,14 +338,10 @@ impl TokenMutation {
         let updated_token = tokio::task::spawn_blocking(move || {
             use crate::schema::tokens;
 
-            let token = diesel::update(
-                tokens::table
-                    .filter(tokens::token_id.eq(token_id))
-                    .filter(tokens::owner_user_id.eq(user_id)),
-            )
-            .set((tokens::x.eq(x), tokens::y.eq(y)))
-            .returning(crate::models::Token::as_returning())
-            .get_result(&mut conn)?;
+            let token = diesel::update(tokens::table.filter(tokens::token_id.eq(token_id)))
+                .set((tokens::x.eq(x), tokens::y.eq(y)))
+                .returning(crate::models::Token::as_returning())
+                .get_result(&mut conn)?;
 
             if let Ok(world_id) = world_id_for_scene(&mut conn, token.scene_id) {
                 let _ = record_world_event(

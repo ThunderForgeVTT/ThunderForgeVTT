@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button/Button";
 import { Dropdown } from "@/components/ui/dropdown/Dropdown";
 import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
 import type { FantasyIconName } from "@/components/ui/fantasy-icon/FantasyIcon";
+import { ThemeToggle } from "@/components/navigation/ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
 
 export interface HeaderNavItem {
@@ -72,6 +73,7 @@ export function AppHeader({ brandHref, navItems }: AppHeaderProps) {
         </nav>
 
         <div className="flex items-center gap-3">
+          <ThemeToggle />
           <Dropdown
             trigger={
               <Button variant="ghost" size="sm" icon="rune">

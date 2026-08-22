@@ -305,7 +305,7 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
         <div className="grid gap-3">
           <h3 className="font-semibold">Invite Players</h3>
           <p className="text-sm text-muted-foreground">
-            Generate invite codes to share with other players. Each code allows a specific number of joins.
+            Generate join links to share with other players. Each link allows a specific number of joins.
           </p>
 
           <Button
@@ -314,7 +314,7 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
             icon="link"
             className="justify-self-start"
           >
-            {isGenerating ? "Generating..." : "Generate Invite Code"}
+            {isGenerating ? "Generating..." : "Generate Join Link"}
           </Button>
 
           {invitesLoading ? (
@@ -331,9 +331,6 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
                   className="grid gap-3 rounded-lg border border-border p-4"
                 >
                   <div className="flex flex-wrap items-center gap-2">
-                    <code className="rounded bg-muted px-2 py-1 text-sm">
-                      {invite.inviteCode}
-                    </code>
                     <span className="text-sm text-muted-foreground">
                       {getInviteStatus(invite)}
                     </span>
@@ -354,7 +351,7 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
                       onClick={() => void handleCopyToClipboard(invite.inviteCode)}
                       icon={copiedCode === invite.inviteCode ? "check" : "copy"}
                     >
-                      {copiedCode === invite.inviteCode ? "Copied!" : "Copy"}
+                      {copiedCode === invite.inviteCode ? "Copied!" : "Copy link"}
                     </Button>
                   </div>
 

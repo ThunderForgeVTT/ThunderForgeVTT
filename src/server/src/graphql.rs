@@ -102,6 +102,18 @@ pub use mutations_tokens::TokenMutation;
 pub mod mutations_assets;
 pub use mutations_assets::{AssetMutation, AssetQuery};
 
+// Spec 010: actor creation/field-editing mutations
+pub mod mutations_actors;
+pub use mutations_actors::ActorMutation;
+
+// Spec 010: the actor "ownership block" (Viewer/Editor/Owner grants)
+pub mod mutations_actor_permissions;
+pub use mutations_actor_permissions::{ActorPermissionMutation, ActorPermissionQuery};
+
+// Spec 010: actor sharing and cross-world deep copy
+pub mod mutations_actor_shares;
+pub use mutations_actor_shares::{ActorShareMutation, ActorShareQuery};
+
 
 
 // Admin types are now in admin_types.rs module (Phase 4.9.Z Step 2)
@@ -253,7 +265,12 @@ impl From<crate::models::Scene> for GraphQLScene {
 }
 
 // Spec 009 (T001): GM staging page's NPC roster read path.
+// Spec 010: `myPermissionLevel` is a per-request-computed field (depends on
+// the calling user), so this type is `#[graphql(complex)]` — its resolver
+// lives in the `#[ComplexObject]` impl below rather than being a plain
+// struct field populated by `From<WorldActor>`.
 #[derive(SimpleObject, Debug, Clone)]
+#[graphql(complex)]
 pub struct GraphQLWorldActor {
     id: uuid::Uuid,
     world_id: uuid::Uuid,
@@ -267,6 +284,29 @@ pub struct GraphQLWorldActor {
     owned_by: uuid::Uuid,
     created_at: chrono::NaiveDateTime,
     updated_at: chrono::NaiveDateTime,
+}
+
+#[async_graphql::ComplexObject]
+impl GraphQLWorldActor {
+    /// Effective Viewer/Editor/Owner level the calling user holds on this
+    /// actor (data-model.md's "effective actor permission") — DM of the
+    /// actor's world always resolves to `Owner` (FR-017); otherwise the
+    /// caller's explicit `world_actor_permissions` row, else `Viewer`
+    /// (FR-016).
+    async fn my_permission_level(
+        &self,
+        ctx: &Context<'_>,
+    ) -> GraphQLResult<crate::graphql::types::ActorPermissionLevel> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        crate::auth::actor_permissions::effective_actor_permission(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            self.id,
+        )
+        .await
+    }
 }
 
 impl From<WorldActor> for GraphQLWorldActor {
@@ -832,10 +872,6 @@ impl ActorSystemDataMutation {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         let user_id = auth_user.user_id;
-        let mut conn = state
-            .db_pool
-            .get()
-            .map_err(|_| Error::new("Failed to get DB connection"))?;
 
         let actor_id = input.actor_id;
         let game_system_id = input.game_system_id.clone();
@@ -843,10 +879,29 @@ impl ActorSystemDataMutation {
         let data_value = input.data.0.clone();
         let now = Utc::now().naive_utc();
 
-        // 🔐 ADR-010: Verify user owns the actor + persist update in single spawn_blocking call
+        // Spec 010 (research.md §4): authorization moved from the old
+        // single-owner `world_actors.owned_by` check to the real
+        // Viewer/Editor/Owner permission model — Editor-or-Owner
+        // effective permission required (the DM always qualifies). This
+        // must happen (and be awaited) before the DB connection below is
+        // obtained — PgConnection is not held-across-`.await` safe in
+        // this codebase's usage pattern (see `world_membership.rs`).
+        crate::auth::actor_permissions::require_actor_permission(
+            state,
+            user_id,
+            auth_user.is_admin,
+            actor_id,
+            crate::graphql::types::ActorPermissionLevel::Editor,
+        )
+        .await?;
+
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
         let upserted_data = tokio::task::spawn_blocking({
             let actor_id = actor_id;
-            let user_id = user_id;
             let game_system_id = game_system_id.clone();
             let data_type = data_type.clone();
             let data_value = data_value.clone();
@@ -854,15 +909,14 @@ impl ActorSystemDataMutation {
                 use crate::schema::{world_actors, world_actor_system_data};
                 use diesel::prelude::*;
 
-                // 1. Verify user owns the actor
+                // Permission already verified above; just load the actor.
                 let actor = world_actors::table
                     .filter(world_actors::id.eq(actor_id))
-                    .filter(world_actors::owned_by.eq(user_id))
                     .select(crate::models::WorldActor::as_select())
                     .first::<crate::models::WorldActor>(&mut conn)
                     .optional()
                     .map_err(|e| format!("Failed to load actor: {}", e))?
-                    .ok_or_else(|| "Actor not found or not owned by user".to_string())?;
+                    .ok_or_else(|| "Actor not found".to_string())?;
 
                 // 2. Validate: Actor's game_system_id must match the mutation's game_system_id
                 if actor.game_system_id.as_ref() != Some(&game_system_id) {
@@ -1695,6 +1749,8 @@ pub struct QueryRoot(
     InviteQuery,
     AssetQuery,
     ActorQuery,
+    ActorPermissionQuery,
+    ActorShareQuery,
 );
 
 #[derive(MergedObject, Default)]
@@ -1712,6 +1768,9 @@ pub struct MutationRoot(
     ShapeMutation,
     TokenMutation,
     AssetMutation,
+    ActorMutation,
+    ActorPermissionMutation,
+    ActorShareMutation,
 );
 
 pub type AppSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;

@@ -19,6 +19,9 @@ const WorldListPage = lazy(pageLoaders.worldList);
 const CreateWorldPage = lazy(pageLoaders.createWorld);
 const WorldDashboardPage = lazy(pageLoaders.worldDashboard);
 const WorldPage = lazy(pageLoaders.worldWorkspace);
+const WorldStagingRoutePage = lazy(pageLoaders.worldStaging);
+const ActorDetailPage = lazy(pageLoaders.actorView);
+const SharedActorPage = lazy(pageLoaders.sharedActor);
 const JoinWorldPage = lazy(pageLoaders.joinWorld);
 const NotFoundPage = lazy(pageLoaders.notFound);
 
@@ -375,6 +378,38 @@ export default function AppRoutes({
                 <WorldDashboardPage />,
                 "Loading world dashboard",
               )}
+            </RequireAuthenticated>
+          }
+        />
+        <Route
+          path="/world/:id/staging"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(<WorldStagingRoutePage />, "Loading world staging")}
+            </RequireAuthenticated>
+          }
+        />
+        <Route
+          path="/world/:id/actor/:actorId/view"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(<ActorDetailPage mode="view" />, "Loading actor")}
+            </RequireAuthenticated>
+          }
+        />
+        <Route
+          path="/world/:id/actor/:actorId/edit"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(<ActorDetailPage mode="edit" />, "Loading actor")}
+            </RequireAuthenticated>
+          }
+        />
+        <Route
+          path="/shared/actor/:code"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(<SharedActorPage />, "Loading shared actor")}
             </RequireAuthenticated>
           }
         />

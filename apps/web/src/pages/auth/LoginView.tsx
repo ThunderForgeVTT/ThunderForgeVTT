@@ -261,46 +261,30 @@ export function LoginView() {
 
   return (
     <AuthLayout
-      eyebrow="Access"
-      title="Sign in to ThunderForge."
-      description="Enter your credentials to continue. If this account has two-factor authentication enabled, you'll be asked for a code as a second step."
       aside={
-        <Card>
-          <div className="grid gap-3">
-            <h2 className="text-lg font-semibold">Other routes</h2>
-            <div className="grid gap-2">
-              <Link
-                to={`/register${location.search}`}
-                className="font-medium text-primary hover:underline"
-              >
-                Create a local account
-              </Link>
-              <Link to="/welcome" className="font-medium text-primary hover:underline">
-                Review the welcome hall
-              </Link>
-            </div>
+        <Card className="p-5">
+          <div className="grid gap-2">
+            <Link
+              to={`/register${location.search}`}
+              className="font-medium text-primary hover:underline"
+            >
+              Create a local account
+            </Link>
+            <Link to="/welcome" className="font-medium text-primary hover:underline">
+              Review the welcome hall
+            </Link>
           </div>
         </Card>
       }
     >
-      <div className="grid gap-6">
+      <div className="grid gap-5">
         <div className="relative grid gap-4">
           <Card
-            className={cn(loginStep === "twoFactor" && "opacity-60")}
+            className={cn("p-6", loginStep === "twoFactor" && "opacity-60")}
             data-ambient-sound="guild-hall-candles"
           >
             <form onSubmit={onSubmitCredentials} className="grid gap-4">
-              <div className="grid gap-1.5">
-                <p className="inline-flex items-center gap-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-                  <FantasyIcon name="shield" size={16} />
-                  Primary login
-                </p>
-                <h2 className="text-lg font-semibold">Enter your credentials.</h2>
-                <p className="text-muted-foreground">
-                  Sign in with the email address or username tied to your
-                  local ThunderForge account.
-                </p>
-              </div>
+              <h2 className="text-lg font-semibold">Sign in</h2>
 
               {loginStep === "twoFactor" ? (
                 <div className="grid gap-2 rounded-lg border border-border bg-secondary p-3">
@@ -420,22 +404,13 @@ export function LoginView() {
           {loginStep === "twoFactor" ? (
             <Card
               className={cn(
-                "border-2",
+                "border-2 p-6",
                 currentStatusVariant === "danger" && "border-destructive",
                 currentStatusVariant === "success" && "border-emerald-600",
               )}
             >
               <form onSubmit={onSubmitTwoFactor} className="grid gap-4">
-                <div className="grid gap-1.5">
-                  <p className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-                    Two-factor verification
-                  </p>
-                  <h3 className="text-lg font-semibold">Enter your code.</h3>
-                  <p className="text-muted-foreground">
-                    Enter the code from your authenticator app to finish
-                    signing in.
-                  </p>
-                </div>
+                <h3 className="text-lg font-semibold">Two-factor code</h3>
 
                 <Field
                   label="Authentication code"
@@ -460,7 +435,6 @@ export function LoginView() {
                     }
                     className="text-center text-lg tracking-[0.3em]"
                     placeholder="123456"
-                    aria-describedby="login-two-factor-hint"
                   />
                 </Field>
 
@@ -493,14 +467,6 @@ export function LoginView() {
                     Back to credentials
                   </Button>
                 </div>
-
-                <p
-                  id="login-two-factor-hint"
-                  className="text-sm text-muted-foreground"
-                >
-                  Codes refresh automatically. Only request a new one if this
-                  code expires before you can submit it.
-                </p>
               </form>
             </Card>
           ) : null}

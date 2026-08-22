@@ -49,23 +49,25 @@ async function registerAndCreateWorld(page: Page, worldName: string): Promise<vo
   await page.locator("#world-name").fill(worldName);
   await page.getByRole("button", { name: /create world/i }).click();
 
-  // Spec 008: CreateWorldPage navigates straight to /world/{id}/play (the
-  // canvas), not the dashboard — no separate "Enter world" click.
-  await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
-  // Spec 009: /world/:id/play now lands on the staging page first — the
-  // canvas only appears in full-screen mode after clicking "Play".
+  // Spec 010: CreateWorldPage navigates to /world/{id}/staging (not the
+  // canvas directly, and not the dashboard) — click "Play" to reach the
+  // full-screen canvas at /world/{id}/play.
+  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
   await page.getByTestId("play-button").click();
+  await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
 }
 
 async function createScene(page: Page, name: string): Promise<void> {
-  // Spec 009: in full-screen canvas mode, "New scene" lives inside the
-  // (collapsed-by-default) sidebar now, not floating over the canvas. The
-  // staging page (hidden but still mounted) renders its own copy of the
-  // same control, so every lookup here must be scoped to the visible one
-  // or Playwright's strict mode rejects the ambiguous match.
-  const newSceneButton = page.locator('[data-testid="new-scene-button"]:visible');
-  if ((await newSceneButton.count()) === 0) {
+  // In full-screen canvas mode, "New scene" lives inside the
+  // (collapsed-by-default) sidebar. Spec 010: staging is now its own
+  // route (not mounted alongside `/play`), so there is exactly one
+  // "new-scene-button" in the DOM here — no `:visible` disambiguation
+  // against a second, hidden-but-mounted staging copy is needed anymore;
+  // just ensure the sidebar is actually open before clicking.
+  const newSceneButton = page.getByTestId("new-scene-button");
+  if (!(await newSceneButton.isVisible().catch(() => false))) {
     await page.getByTestId("sidebar-toggle-button").click();
+    await expect(newSceneButton).toBeVisible({ timeout: 10_000 });
   }
   await newSceneButton.click();
   await page.locator('[data-testid="new-scene-name-input"]:visible').fill(name);

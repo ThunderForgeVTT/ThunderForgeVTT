@@ -1,5 +1,8 @@
+import { useState } from "react";
+import { createActor } from "@/api/actors";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
+import { Input } from "@/components/ui/input";
 import { Panel } from "@/components/ui/panel/Panel";
 import { ScrollArea } from "@/components/ui/scroll-area/ScrollArea";
 import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
@@ -39,6 +42,24 @@ export function WorldStagingPage({
   onPlay,
 }: WorldStagingPageProps) {
   const { members } = useWorldMembers(worldId);
+  const [newNpcName, setNewNpcName] = useState("");
+  const [isCreatingNpc, setIsCreatingNpc] = useState(false);
+  const [npcRefreshKey, setNpcRefreshKey] = useState(0);
+
+  const handleAddNpc = async () => {
+    const label = newNpcName.trim();
+    if (!label) {
+      return;
+    }
+    setIsCreatingNpc(true);
+    try {
+      await createActor({ worldId, label, isNpc: true });
+      setNewNpcName("");
+      setNpcRefreshKey((current) => current + 1);
+    } finally {
+      setIsCreatingNpc(false);
+    }
+  };
 
   return (
     <main className="grid min-h-screen gap-4 bg-background p-4" data-testid="world-staging-page">
@@ -103,8 +124,27 @@ export function WorldStagingPage({
             NPCs
           </p>
           <ScrollArea className="h-40">
-            <NpcRoster worldId={worldId} />
+            <NpcRoster worldId={worldId} refreshKey={npcRefreshKey} />
           </ScrollArea>
+          {isGm ? (
+            <div className="mt-3 flex gap-2">
+              <Input
+                value={newNpcName}
+                onChange={(event) => setNewNpcName(event.target.value)}
+                placeholder="New NPC name"
+                disabled={isCreatingNpc}
+              />
+              <Button
+                type="button"
+                size="sm"
+                icon="skull"
+                onClick={() => void handleAddNpc()}
+                disabled={isCreatingNpc || !newNpcName.trim()}
+              >
+                Add NPC
+              </Button>
+            </div>
+          ) : null}
         </Panel>
       </section>
 

@@ -24,7 +24,7 @@ import { test, expect, type Page, type Browser } from "@playwright/test";
  * both outside spec 003's scope (world invites/membership, not map
  * fidelity or editor tooling):
  *
- * 1. `CampaignSettingsPanel.tsx`'s "Generate Invite Code" button sends
+ * 1. `CampaignSettingsPanel.tsx`'s "Generate Join Link" button sends
  *    `generateInviteCode(worldId: $worldId, maxUses: $maxUses)` as two
  *    flat GraphQL arguments, but the resolver
  *    (`mutations_invites.rs::generate_invite_code`) takes a single
@@ -82,11 +82,9 @@ async function register(page: Page, creds: Credentials): Promise<void> {
   });
 }
 
-/** Registers a GM and creates a world. Spec 008: CreateWorldPage now
- * navigates straight to `/world/{id}/play` (the canvas) on success — there
- * is no more intermediate dashboard stop to separately click "Enter world"
- * from (none of this file's tests need the dashboard itself, only the
- * world id and a live canvas session). */
+/** Registers a GM and creates a world. Spec 010: CreateWorldPage now
+ * navigates to `/world/{id}/staging` (not the canvas directly, and not
+ * the dashboard) on success. */
 async function registerAndCreateWorldOnDashboard(
   page: Page,
   worldName: string,
@@ -96,22 +94,23 @@ async function registerAndCreateWorldOnDashboard(
   await page.goto("/worlds/create");
   await page.locator("#world-name").fill(worldName);
   await page.getByRole("button", { name: /create world/i }).click();
-  await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
+  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
 
-  const match = /\/world\/([^/]+)\/play$/.exec(new URL(page.url()).pathname);
+  const match = /\/world\/([^/]+)\/staging$/.exec(new URL(page.url()).pathname);
   if (!match) {
     throw new Error(`Could not extract world id from URL: ${page.url()}`);
   }
   return match[1];
 }
 
-/** Spec 009: `/world/:id/play` now lands on the staging page first — the
- * canvas only appears in full-screen mode after clicking "Play". Kept as
- * its own function (rather than folded into `registerAndCreateWorldOnDashboard`)
- * so this file's existing call sites don't need a mechanical rename. */
+/** Spec 010: staging is now its own route — click "Play" there to reach
+ * the full-screen canvas at `/world/:id/play`. Kept as its own function
+ * (rather than folded into `registerAndCreateWorldOnDashboard`) so this
+ * file's existing call sites don't need a mechanical rename. */
 async function enterWorldPlay(page: Page): Promise<void> {
-  await expect(page).toHaveURL(/\/world\/[^/]+\/play$/);
+  await expect(page).toHaveURL(/\/world\/[^/]+\/staging$/);
   await page.getByTestId("play-button").click();
+  await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
 }
 
 /**
@@ -136,14 +135,16 @@ async function secondSessionSameLogin(
 }
 
 async function createScene(page: Page, name: string): Promise<void> {
-  // Spec 009: in full-screen canvas mode, "New scene" lives inside the
-  // (collapsed-by-default) sidebar now, not floating over the canvas. The
-  // staging page (hidden but still mounted) renders its own copy of the
-  // same control, so every lookup here must be scoped to the visible one
-  // or Playwright's strict mode rejects the ambiguous match.
-  const newSceneButton = page.locator('[data-testid="new-scene-button"]:visible');
-  if ((await newSceneButton.count()) === 0) {
+  // In full-screen canvas mode, "New scene" lives inside the
+  // (collapsed-by-default) sidebar. Spec 010: staging is now its own
+  // route (not mounted alongside `/play`), so there is exactly one
+  // "new-scene-button" in the DOM here — no `:visible` disambiguation
+  // against a second, hidden-but-mounted staging copy is needed anymore;
+  // just ensure the sidebar is actually open before clicking.
+  const newSceneButton = page.getByTestId("new-scene-button");
+  if (!(await newSceneButton.isVisible().catch(() => false))) {
     await page.getByTestId("sidebar-toggle-button").click();
+    await expect(newSceneButton).toBeVisible({ timeout: 10_000 });
   }
   await newSceneButton.click();
   await page.locator('[data-testid="new-scene-name-input"]:visible').fill(name);

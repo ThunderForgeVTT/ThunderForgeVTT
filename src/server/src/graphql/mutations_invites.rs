@@ -486,6 +486,29 @@ impl InviteMutation {
             .execute(&mut conn)
             .map_err(|e| Error::new(format!("Failed to remove member: {}", e)))?;
 
+        // Spec 010 (research.md §7, FR-022): a removed member's actor
+        // ownership-block entries don't get a DB-level cascade (there is
+        // no direct FK from `world_members` to `world_actor_permissions`
+        // — the relationship is via `world_id` on the joined
+        // `world_actors` row), so this is deleted explicitly here,
+        // alongside the membership removal.
+        {
+            use crate::schema::{world_actor_permissions, world_actors};
+            diesel::delete(
+                world_actor_permissions::table
+                    .filter(world_actor_permissions::user_id.eq(user_id))
+                    .filter(
+                        world_actor_permissions::actor_id.eq_any(
+                            world_actors::table
+                                .filter(world_actors::world_id.eq(world_id))
+                                .select(world_actors::id),
+                        ),
+                    ),
+            )
+            .execute(&mut conn)
+            .map_err(|e| Error::new(format!("Failed to clean up actor permissions: {}", e)))?;
+        }
+
         // Record event for audit trail
         let event_payload = serde_json::json!({
             "user_id": target_member.user_id,

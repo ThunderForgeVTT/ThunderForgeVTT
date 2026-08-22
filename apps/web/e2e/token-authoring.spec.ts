@@ -36,6 +36,8 @@ function uniqueSuffix(): string {
  * canvas only appears in full-screen mode after clicking "Play". */
 async function clickPlay(page: Page): Promise<void> {
   await page.getByTestId("play-button").click();
+  // Spec 010: "Play" is now a real navigation from /staging to /play.
+  await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
 }
 
 interface Credentials {
@@ -66,15 +68,24 @@ async function register(page: Page, creds: Credentials): Promise<void> {
   });
 }
 
+async function extractInviteCode(page: Page): Promise<string> {
+  const input = page.locator("input[readonly]").first();
+  await expect(input).toBeVisible({ timeout: 10_000 });
+  const url = await input.inputValue();
+  const code = new URL(url).pathname.split("/").pop();
+  if (!code) throw new Error(`Could not extract invite code from URL: ${url}`);
+  return code;
+}
+
 async function registerAndCreateWorld(page: Page, worldName: string): Promise<string> {
   await register(page, freshCredentials("e2etok"));
 
   await page.goto("/worlds/create");
   await page.locator("#world-name").fill(worldName);
   await page.getByRole("button", { name: /create world/i }).click();
-  // Spec 008: CreateWorldPage now navigates straight to /world/{id}/play
-  // (the canvas), not the dashboard — no separate "Enter world" click.
-  await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
+  // Spec 010: CreateWorldPage now navigates to /world/{id}/staging (not
+  // the canvas directly, and not the dashboard).
+  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
   await clickPlay(page);
   const match = /\/world\/([^/]+)\/play$/.exec(new URL(page.url()).pathname);
   if (!match) {
@@ -128,14 +139,8 @@ async function registerAndGetUserId(page: Page, prefix: string): Promise<string>
 async function generateInviteCodeFromDashboard(page: Page, worldId: string): Promise<string> {
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto(`/world/${worldId}`);
-  await page.getByRole("button", { name: "Generate Invite Code" }).click();
-  const inviteCodeLocator = page.locator("code").first();
-  await expect(inviteCodeLocator).toBeVisible({ timeout: 10_000 });
-  const inviteCode = (await inviteCodeLocator.textContent())?.trim();
-  if (!inviteCode) {
-    throw new Error("Invite code did not render after generation");
-  }
-  await page.goto(`/world/${worldId}/play`);
+  await page.getByRole("button", { name: "Generate Join Link" }).click();
+  const inviteCode = await extractInviteCode(page);  await page.goto(`/world/${worldId}/play`);
   return inviteCode;
 }
 
@@ -155,19 +160,21 @@ async function joinWorldAndEnterPlay(
   await page.getByRole("button", { name: "Join Campaign" }).click();
   await page.waitForURL(new RegExp(`/world/${worldId}$`), { timeout: 15_000 });
   await page.getByRole("link", { name: "Enter world" }).first().click();
-  await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
+  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
   await clickPlay(page);
 }
 
 async function createScene(page: Page, name: string): Promise<void> {
-  // Spec 009: in full-screen canvas mode, "New scene" lives inside the
-  // (collapsed-by-default) sidebar now, not floating over the canvas. The
-  // staging page (hidden but still mounted) renders its own copy of the
-  // same control, so every lookup here must be scoped to the visible one
-  // or Playwright's strict mode rejects the ambiguous match.
-  const newSceneButton = page.locator('[data-testid="new-scene-button"]:visible');
-  if ((await newSceneButton.count()) === 0) {
+  // In full-screen canvas mode, "New scene" lives inside the
+  // (collapsed-by-default) sidebar. Spec 010: staging is now its own
+  // route (not mounted alongside `/play`), so there is exactly one
+  // "new-scene-button" in the DOM here — no `:visible` disambiguation
+  // against a second, hidden-but-mounted staging copy is needed anymore;
+  // just ensure the sidebar is actually open before clicking.
+  const newSceneButton = page.getByTestId("new-scene-button");
+  if (!(await newSceneButton.isVisible().catch(() => false))) {
     await page.getByTestId("sidebar-toggle-button").click();
+    await expect(newSceneButton).toBeVisible({ timeout: 10_000 });
   }
   await newSceneButton.click();
   await page.locator('[data-testid="new-scene-name-input"]:visible').fill(name);

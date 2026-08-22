@@ -84,7 +84,7 @@ export function WorldCard({ world, showOwner = false }: WorldCardProps) {
           <Link to={`/world/${world.id}`}>Open dashboard</Link>
         </Button>
         <Button asChild variant="ghost" icon="spark">
-          <Link to={`/world/${world.id}/play`}>Enter world</Link>
+          <Link to={`/world/${world.id}/staging`}>Enter world</Link>
         </Button>
       </div>
     </Card>

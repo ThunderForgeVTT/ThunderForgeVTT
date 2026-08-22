@@ -2,7 +2,8 @@ use crate::schema::{
     admin_bootstrap_oauth_sessions, admin_bootstrap_setup, auth_security_settings, canvas_image_assets, fog_masks,
     game_systems, light_sources, login_two_factor_challenges, oauth_authorization_sessions, oauth_link_challenges,
     oauth_providers, players_online, scenes, shapes, tokens, user_oauth_accounts, user_sessions,
-    users, walls, world_actors, world_actor_system_data, world_events, world_invites, world_members, world_tokens, worlds,
+    users, walls, world_actors, world_actor_permissions, world_actor_shares, world_actor_system_data, world_events,
+    world_invites, world_members, world_tokens, worlds,
 };
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -804,6 +805,56 @@ pub struct NewWorldActor {
     pub owned_by: uuid::Uuid,
     pub is_public: bool,
     pub is_npc: bool,
+}
+
+/// Spec 010: an actor's "ownership block" entry — one explicit
+/// (actor, world member, permission level) grant. Absence of a row means
+/// default Viewer access (see `auth::actor_permissions::require_actor_permission`).
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_actor_permissions)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct ActorPermission {
+    pub id: uuid::Uuid,
+    pub actor_id: uuid::Uuid,
+    pub user_id: uuid::Uuid,
+    pub level: String,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+/// New actor permission for insertion/upsert.
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_actor_permissions)]
+pub struct NewActorPermission {
+    pub id: uuid::Uuid,
+    pub actor_id: uuid::Uuid,
+    pub user_id: uuid::Uuid,
+    pub level: String,
+}
+
+/// Spec 010: a revocable, uncapped shareable link for one actor
+/// (`createActorShareLink`/`revokeActorShareLink`/`sharedActor`).
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_actor_shares)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct ActorShare {
+    pub id: uuid::Uuid,
+    pub actor_id: uuid::Uuid,
+    pub share_code: String,
+    pub created_by: uuid::Uuid,
+    pub revoked: bool,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+/// New actor share link for insertion.
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_actor_shares)]
+pub struct NewActorShare {
+    pub id: uuid::Uuid,
+    pub actor_id: uuid::Uuid,
+    pub share_code: String,
+    pub created_by: uuid::Uuid,
 }
 
 /// System-specific actor data - five semantic JSONB columns

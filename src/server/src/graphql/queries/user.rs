@@ -50,6 +50,56 @@ impl UserQuery {
             .map(|items| items.into_iter().map(GraphQLWorld::from).collect())
     }
 
+    /// Spec 010 (research.md §8): worlds where the caller holds DM-level
+    /// access — Owner (`created_by`) OR an accepted `GM` `world_members`
+    /// row. Deliberately additive alongside `myWorlds` (which only covers
+    /// `created_by`) rather than changing that query's existing behavior;
+    /// used by the "Copy to World" destination picker.
+    async fn my_dm_worlds(&self, ctx: &Context<'_>) -> GraphQLResult<Vec<GraphQLWorld>> {
+        let state = app_state(ctx)?;
+        let user_id = authenticated_user(ctx)?.user_id;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        let worlds_list = tokio::task::spawn_blocking(move || {
+            use crate::models::World;
+            use crate::schema::{world_members, worlds};
+            use diesel::prelude::*;
+
+            let owned = worlds::table
+                .filter(worlds::created_by.eq(user_id))
+                .select(World::as_select())
+                .load::<World>(&mut conn)?;
+
+            let gm_world_ids = world_members::table
+                .filter(world_members::user_id.eq(user_id))
+                .filter(world_members::role.eq("GM"))
+                .select(world_members::world_id)
+                .load::<uuid::Uuid>(&mut conn)?;
+
+            let gm_worlds = worlds::table
+                .filter(worlds::id.eq_any(gm_world_ids))
+                .select(World::as_select())
+                .load::<World>(&mut conn)?;
+
+            let mut combined = owned;
+            for world in gm_worlds {
+                if !combined.iter().any(|w| w.id == world.id) {
+                    combined.push(world);
+                }
+            }
+
+            Ok::<_, diesel::result::Error>(combined)
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to load DM worlds"))?;
+
+        Ok(worlds_list.into_iter().map(GraphQLWorld::from).collect())
+    }
+
     async fn world(
         &self,
         ctx: &Context<'_>,

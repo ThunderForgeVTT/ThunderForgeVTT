@@ -107,6 +107,59 @@ async fn readiness_handler(State(state): State<AppState>) -> impl IntoResponse {
     }
 }
 
+#[derive(serde::Serialize)]
+struct ServiceStatus {
+    key: &'static str,
+    up: bool,
+    latency_ms: u128,
+}
+
+#[derive(serde::Serialize)]
+struct StatusPageResponse {
+    services: Vec<ServiceStatus>,
+}
+
+/// Public, unauthenticated status snapshot backing the frontend's `/status`
+/// page. Deliberately reports only a stable `key` per subsystem (never a
+/// real hostname, image tag, or connection string) — the page itself has
+/// no auth gate, so nothing here should help an anonymous visitor map the
+/// deployment's real infrastructure.
+async fn status_handler(State(state): State<AppState>) -> impl IntoResponse {
+    let db_start = std::time::Instant::now();
+    let db_up = tokio::task::spawn_blocking(move || match state.db_pool.get() {
+        Ok(mut conn) => diesel::sql_query("SELECT 1").execute(&mut conn).is_ok(),
+        Err(_) => false,
+    })
+    .await
+    .unwrap_or(false);
+    let db_latency_ms = db_start.elapsed().as_millis();
+
+    let storage_start = std::time::Instant::now();
+    let rustfs_cfg = storage::rustfs::RustFsConfig::from_env();
+    let storage_up = storage::rustfs::health_check(&rustfs_cfg).await.is_ok();
+    let storage_latency_ms = storage_start.elapsed().as_millis();
+
+    axum::Json(StatusPageResponse {
+        services: vec![
+            ServiceStatus {
+                key: "core",
+                up: true,
+                latency_ms: 0,
+            },
+            ServiceStatus {
+                key: "database",
+                up: db_up,
+                latency_ms: db_latency_ms,
+            },
+            ServiceStatus {
+                key: "storage",
+                up: storage_up,
+                latency_ms: storage_latency_ms,
+            },
+        ],
+    })
+}
+
 #[derive(Parser, Debug)]
 #[command(name = "thunderforge")]
 #[command(about = "A virtual tabletop for the modern era.")]
@@ -269,6 +322,7 @@ async fn main() {
     let api_router = Router::new()
         .route("/healthz", get(liveness_handler))
         .route("/readyz", get(readiness_handler))
+        .route("/status", get(status_handler))
         .merge(graphql_router)
         .merge(auth::router())
         .merge(user_router)

@@ -196,3 +196,100 @@ impl From<WorldEvent> for GraphQLWorldEvent {
         }
     }
 }
+
+// ============================================================================
+// Spec 010: Actor Ownership / Sharing
+// ============================================================================
+
+use crate::models::{ActorPermission, ActorShare};
+
+/// Effective permission level a caller holds on one actor. `Owner` is
+/// always implicit for the world's DM (Owner/GM role) regardless of any
+/// explicit `world_actor_permissions` row (spec 010 FR-017).
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq, Debug)]
+pub enum ActorPermissionLevel {
+    Viewer,
+    Editor,
+    Owner,
+}
+
+impl ActorPermissionLevel {
+    pub fn as_db_str(self) -> &'static str {
+        match self {
+            ActorPermissionLevel::Viewer => "Viewer",
+            ActorPermissionLevel::Editor => "Editor",
+            ActorPermissionLevel::Owner => "Owner",
+        }
+    }
+
+    pub fn from_db_str(value: &str) -> Option<Self> {
+        match value {
+            "Viewer" => Some(ActorPermissionLevel::Viewer),
+            "Editor" => Some(ActorPermissionLevel::Editor),
+            "Owner" => Some(ActorPermissionLevel::Owner),
+            _ => None,
+        }
+    }
+
+    /// Ordering for "at least X" checks — Viewer < Editor < Owner.
+    pub fn rank(self) -> u8 {
+        match self {
+            ActorPermissionLevel::Viewer => 0,
+            ActorPermissionLevel::Editor => 1,
+            ActorPermissionLevel::Owner => 2,
+        }
+    }
+}
+
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLActorPermission {
+    pub actor_id: uuid::Uuid,
+    pub user_id: uuid::Uuid,
+    pub level: ActorPermissionLevel,
+    pub updated_at: NaiveDateTime,
+}
+
+impl From<ActorPermission> for GraphQLActorPermission {
+    fn from(row: ActorPermission) -> Self {
+        Self {
+            actor_id: row.actor_id,
+            user_id: row.user_id,
+            level: ActorPermissionLevel::from_db_str(&row.level)
+                .unwrap_or(ActorPermissionLevel::Viewer),
+            updated_at: row.updated_at,
+        }
+    }
+}
+
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLActorShareLink {
+    pub id: uuid::Uuid,
+    pub actor_id: uuid::Uuid,
+    pub share_code: String,
+    pub revoked: bool,
+    pub created_at: NaiveDateTime,
+}
+
+impl From<ActorShare> for GraphQLActorShareLink {
+    fn from(row: ActorShare) -> Self {
+        Self {
+            id: row.id,
+            actor_id: row.actor_id,
+            share_code: row.share_code,
+            revoked: row.revoked,
+            created_at: row.created_at,
+        }
+    }
+}
+
+/// Read-only, world-identity-scrubbed projection of a shared actor
+/// (research.md §9) — deliberately excludes id/worldId/sceneId/createdBy/
+/// ownedBy so an arbitrary logged-in viewer can't learn the source world.
+#[derive(SimpleObject, Debug, Clone)]
+pub struct SharedActorPreview {
+    pub label: String,
+    pub actor_type: String,
+    pub is_npc: bool,
+    pub game_system_id: Option<String>,
+    pub system_data: Option<crate::graphql::GraphQLActorSystemData>,
+}

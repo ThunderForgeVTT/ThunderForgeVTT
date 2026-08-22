@@ -36,6 +36,15 @@ async function register(page: Page, creds: Credentials): Promise<void> {
   await page.getByRole("button", { name: "Create account" }).click();
 }
 
+async function extractInviteCode(page: Page): Promise<string> {
+  const input = page.locator("input[readonly]").first();
+  await expect(input).toBeVisible({ timeout: 10_000 });
+  const url = await input.inputValue();
+  const code = new URL(url).pathname.split("/").pop();
+  if (!code) throw new Error(`Could not extract invite code from URL: ${url}`);
+  return code;
+}
+
 /** Waits for the Bevy canvas to actually be mounted and settled, mirroring
  * the identical helper in token-authoring.spec.ts/canvas-authoring.spec.ts. */
 async function waitForEngineReady(page: Page): Promise<void> {
@@ -44,11 +53,12 @@ async function waitForEngineReady(page: Page): Promise<void> {
   await page.waitForTimeout(1_000);
 }
 
-/** Spec 009: `/world/:id/play` now lands on the staging page first — the
+/** Spec 010: staging is its own route now (`/world/:id/staging`) — the
  * canvas (and its loading indicators) only become visible in full-screen
- * mode after clicking "Play". */
+ * mode, at `/world/:id/play`, after clicking "Play". */
 async function clickPlay(page: Page): Promise<void> {
   await page.getByTestId("play-button").click();
+  await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
 }
 
 test.describe("US1: zero-world registration goes straight to world creation, then straight to canvas (T002-T003)", () => {
@@ -66,7 +76,7 @@ test.describe("US1: zero-world registration goes straight to world creation, the
     await expect(page.getByText("Welcome back to ThunderForge.")).toHaveCount(0);
   });
 
-  test("submitting the create-world form lands directly on the canvas with the default scene already rendered — no dashboard, no New-scene modal", async ({
+  test("submitting the create-world form lands on staging with the default scene already rendered, then Play reaches the canvas — no dashboard, no New-scene modal", async ({
     page,
   }) => {
     await register(page, freshCredentials("e2eonb"));
@@ -76,21 +86,21 @@ test.describe("US1: zero-world registration goes straight to world creation, the
     await page.locator("#world-name").fill(worldName);
     await page.getByRole("button", { name: /create world/i }).click();
 
-    // FR-004/FR-006: straight to /world/:id/play, never /world/:id (the
-    // dashboard).
-    await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
+    // Spec 010 (was FR-004/FR-006 straight to /world/:id/play): now lands
+    // on /world/:id/staging first — still never /world/:id (the dashboard).
+    await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
 
     // The default scene already exists (create_world's atomic transaction,
-    // T005) — the staging page's scene switcher (spec 009) shows it
-    // selected, and the "New scene" modal never had to appear.
+    // T005) — the staging page's scene switcher shows it selected, and
+    // the "New scene" modal never had to appear.
     await expect(page.getByTestId("scene-switcher")).toBeVisible({
       timeout: 10_000,
     });
     await expect(page.getByTestId("scene-switcher")).toContainText(worldName);
     await expect(page.getByTestId("new-scene-name-input")).toHaveCount(0);
 
-    // Spec 009: clicking Play enters full-screen canvas mode, where the
-    // same default scene is already loaded and rendered.
+    // Clicking Play enters full-screen canvas mode, where the same
+    // default scene is already loaded and rendered.
     await clickPlay(page);
     await waitForEngineReady(page);
   });
@@ -104,11 +114,10 @@ test.describe("US1: honest engine-load feedback (T004)", () => {
     await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
     await page.locator("#world-name").fill(`E2E Loading ${uniqueSuffix()}`);
     await page.getByRole("button", { name: /create world/i }).click();
-    await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
-    // Spec 009: the indicator lives inside full-screen canvas mode now —
-    // click Play immediately to catch it as early as possible (the engine
-    // itself starts downloading as soon as the page mounts, regardless of
-    // staging vs. full-screen, per research.md §1/§4).
+    await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
+    // The indicator lives inside full-screen canvas mode — click Play
+    // immediately to catch it as early as possible (the engine itself
+    // starts downloading as soon as /play mounts).
     await clickPlay(page);
 
     // FR-002/SC-002: the indicator is visible from render until engineReady
@@ -134,7 +143,7 @@ test.describe("US1: honest engine-load feedback (T004)", () => {
     // mountEngine's dynamic import rejects (FR-003).
     await page.route("**/engine*.wasm", (route) => route.abort());
     await page.getByRole("button", { name: /create world/i }).click();
-    await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
+    await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
     await clickPlay(page);
 
     await expect(page.getByText("Failed to load game engine")).toBeVisible({
@@ -166,8 +175,8 @@ test.describe("US2: no dead/placeholder controls remain (T011-T012)", () => {
     const worldName = `E2E Dashboard ${uniqueSuffix()}`;
     await page.locator("#world-name").fill(worldName);
     await page.getByRole("button", { name: /create world/i }).click();
-    await page.waitForURL(/\/world\/([^/]+)\/play$/, { timeout: 15_000 });
-    const worldId = /\/world\/([^/]+)\/play$/.exec(new URL(page.url()).pathname)?.[1];
+    await page.waitForURL(/\/world\/([^/]+)\/staging$/, { timeout: 15_000 });
+    const worldId = /\/world\/([^/]+)\/staging$/.exec(new URL(page.url()).pathname)?.[1];
     if (!worldId) throw new Error("Could not extract world id");
 
     await page.goto(`/world/${worldId}`);
@@ -188,18 +197,14 @@ test.describe("US2: invite-code path works for existing and brand-new accounts (
     await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
     await page.locator("#world-name").fill(`E2E Invite ${uniqueSuffix()}`);
     await page.getByRole("button", { name: /create world/i }).click();
-    await page.waitForURL(/\/world\/([^/]+)\/play$/, { timeout: 15_000 });
-    const worldId = /\/world\/([^/]+)\/play$/.exec(new URL(page.url()).pathname)?.[1];
+    await page.waitForURL(/\/world\/([^/]+)\/staging$/, { timeout: 15_000 });
+    const worldId = /\/world\/([^/]+)\/staging$/.exec(new URL(page.url()).pathname)?.[1];
     if (!worldId) throw new Error("Could not extract world id");
 
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     await page.goto(`/world/${worldId}`);
-    await page.getByRole("button", { name: "Generate Invite Code" }).click();
-    const inviteCodeLocator = page.locator("code").first();
-    await expect(inviteCodeLocator).toBeVisible({ timeout: 10_000 });
-    const inviteCode = (await inviteCodeLocator.textContent())?.trim();
-    if (!inviteCode) throw new Error("Invite code did not render");
-
+    await page.getByRole("button", { name: "Generate Join Link" }).click();
+    const inviteCode = await extractInviteCode(page);
     // A second, distinct account (with an existing world of its own, so it
     // lands on the hub, not zero-world create-world) redeems the code.
     const playerContext = await browser.newContext();
@@ -209,7 +214,7 @@ test.describe("US2: invite-code path works for existing and brand-new accounts (
       await playerPage.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
       await playerPage.locator("#world-name").fill(`E2E Player Own World ${uniqueSuffix()}`);
       await playerPage.getByRole("button", { name: /create world/i }).click();
-      await playerPage.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
+      await playerPage.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
 
       await playerPage.goto("/welcome");
       await playerPage.locator("#welcome-invite-code").fill(inviteCode);
@@ -231,16 +236,14 @@ test.describe("US2: invite-code path works for existing and brand-new accounts (
     await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
     await page.locator("#world-name").fill(`E2E Invite Register ${uniqueSuffix()}`);
     await page.getByRole("button", { name: /create world/i }).click();
-    await page.waitForURL(/\/world\/([^/]+)\/play$/, { timeout: 15_000 });
-    const worldId = /\/world\/([^/]+)\/play$/.exec(new URL(page.url()).pathname)?.[1];
+    await page.waitForURL(/\/world\/([^/]+)\/staging$/, { timeout: 15_000 });
+    const worldId = /\/world\/([^/]+)\/staging$/.exec(new URL(page.url()).pathname)?.[1];
     if (!worldId) throw new Error("Could not extract world id");
 
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     await page.goto(`/world/${worldId}`);
-    await page.getByRole("button", { name: "Generate Invite Code" }).click();
-    const inviteCode = (await page.locator("code").first().textContent())?.trim();
-    if (!inviteCode) throw new Error("Invite code did not render");
-    await page.context().clearCookies();
+    await page.getByRole("button", { name: "Generate Join Link" }).click();
+    const inviteCode = await extractInviteCode(page);    await page.context().clearCookies();
 
     // Follow the invite link unauthenticated -> redirected to login with
     // returnTo preserved.
@@ -288,7 +291,7 @@ test.describe("US3: returning users always see the hub with one-click shortcuts 
     const worldName = `E2E Single World ${uniqueSuffix()}`;
     await page.locator("#world-name").fill(worldName);
     await page.getByRole("button", { name: /create world/i }).click();
-    await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
+    await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
 
     // A fresh session with the same login, landing on /welcome directly.
     const { context, page: freshPage } = await secondSessionSameLogin(browser, page);
@@ -311,13 +314,13 @@ test.describe("US3: returning users always see the hub with one-click shortcuts 
     const firstName = `E2E Multi A ${uniqueSuffix()}`;
     await page.locator("#world-name").fill(firstName);
     await page.getByRole("button", { name: /create world/i }).click();
-    await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
+    await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
 
     const secondName = `E2E Multi B ${uniqueSuffix()}`;
     await page.goto("/worlds/create");
     await page.locator("#world-name").fill(secondName);
     await page.getByRole("button", { name: /create world/i }).click();
-    await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
+    await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
 
     await page.goto("/welcome");
     await expect(page).toHaveURL(/\/welcome$/);
