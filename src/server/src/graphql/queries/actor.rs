@@ -33,6 +33,43 @@ pub async fn world_actors_impl(
     .map_err(|_| Error::new("Failed to load world actors"))
 }
 
+/// Testable core of `ActorQuery::search_actors`. Server-side counterpart
+/// to the client's FlexSearch index (`@/search/actorSearch.ts`) — a plain
+/// case-insensitive substring match against `label`/`description`, for
+/// callers that haven't mirrored the full roster locally. Same visibility
+/// rule as `world_actors_impl`.
+pub async fn search_actors_impl(
+    state: &AppState,
+    user_id: uuid::Uuid,
+    is_admin: bool,
+    world_id: uuid::Uuid,
+    query: &str,
+) -> GraphQLResult<Vec<WorldActor>> {
+    require_visible_world(state, user_id, is_admin, world_id).await?;
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    let pattern = format!("%{}%", query.replace('%', "\\%").replace('_', "\\_"));
+
+    tokio::task::spawn_blocking(move || {
+        world_actors::table
+            .filter(world_actors::world_id.eq(world_id))
+            .filter(
+                world_actors::label
+                    .ilike(pattern.clone())
+                    .or(world_actors::description.ilike(pattern)),
+            )
+            .select(WorldActor::as_select())
+            .load::<WorldActor>(&mut conn)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to search world actors"))
+}
+
 #[derive(Default)]
 pub struct ActorQuery;
 
@@ -55,11 +92,34 @@ impl ActorQuery {
 
         Ok(actors.into_iter().map(GraphQLWorldActor::from).collect())
     }
+
+    /// Server-side search pairing for the client's FlexSearch index —
+    /// see `search_actors_impl`.
+    async fn search_actors(
+        &self,
+        ctx: &Context<'_>,
+        world_id: uuid::Uuid,
+        query: String,
+    ) -> GraphQLResult<Vec<GraphQLWorldActor>> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+
+        let actors = search_actors_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            world_id,
+            &query,
+        )
+        .await?;
+
+        Ok(actors.into_iter().map(GraphQLWorldActor::from).collect())
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::world_actors_impl;
+    use super::{search_actors_impl, world_actors_impl};
     use crate::schema::world_actors;
     use crate::test_support::{insert_test_user, insert_test_world, test_app_state};
     use diesel::prelude::*;
@@ -71,6 +131,18 @@ mod tests {
         owner_id: uuid::Uuid,
         is_npc: bool,
     ) -> uuid::Uuid {
+        insert_test_actor_with_label(conn, world_id, scene_id, owner_id, is_npc, "Test Actor", None)
+    }
+
+    fn insert_test_actor_with_label(
+        conn: &mut diesel::PgConnection,
+        world_id: uuid::Uuid,
+        scene_id: uuid::Uuid,
+        owner_id: uuid::Uuid,
+        is_npc: bool,
+        label: &str,
+        description: Option<&str>,
+    ) -> uuid::Uuid {
         let id = uuid::Uuid::now_v7();
         let now = chrono::Utc::now().naive_utc();
         diesel::insert_into(world_actors::table)
@@ -80,7 +152,8 @@ mod tests {
                 world_actors::scene_id.eq(scene_id),
                 world_actors::actor_type.eq(if is_npc { "npc" } else { "character" }),
                 world_actors::game_system_id.eq("dnd5e"),
-                world_actors::label.eq("Test Actor"),
+                world_actors::label.eq(label),
+                world_actors::description.eq(description),
                 world_actors::created_by.eq(owner_id),
                 world_actors::owned_by.eq(owner_id),
                 world_actors::is_public.eq(false),
@@ -132,6 +205,71 @@ mod tests {
         assert!(
             result.is_err(),
             "a user with no ownership or world_members row must not see the world's actors"
+        );
+    }
+
+    /// Server-side counterpart to the client's FlexSearch index: a
+    /// case-insensitive substring match against label OR description.
+    #[tokio::test]
+    async fn search_actors_matches_label_or_description_case_insensitively() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let scene_id = crate::test_support::insert_test_scene(&mut conn, world_id, owner_id);
+        insert_test_actor_with_label(
+            &mut conn,
+            world_id,
+            scene_id,
+            owner_id,
+            true,
+            "Bo Jangles",
+            Some("A dancing skeleton bard"),
+        );
+        insert_test_actor_with_label(
+            &mut conn,
+            world_id,
+            scene_id,
+            owner_id,
+            true,
+            "Greta the Grim",
+            None,
+        );
+        drop(conn);
+
+        let by_label = search_actors_impl(&state, owner_id, false, world_id, "jangles")
+            .await
+            .expect("owner should be able to search actors");
+        assert_eq!(by_label.len(), 1);
+        assert_eq!(by_label[0].label, "Bo Jangles");
+
+        let by_description = search_actors_impl(&state, owner_id, false, world_id, "DANCING")
+            .await
+            .expect("search should be case-insensitive");
+        assert_eq!(by_description.len(), 1);
+        assert_eq!(by_description[0].label, "Bo Jangles");
+
+        let no_match = search_actors_impl(&state, owner_id, false, world_id, "nonexistent")
+            .await
+            .expect("a query with no matches is not an error");
+        assert!(no_match.is_empty());
+    }
+
+    /// Same visibility rule as `world_actors_rejects_non_member_non_owner`.
+    #[tokio::test]
+    async fn search_actors_rejects_non_member_non_owner() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let outsider_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let result = search_actors_impl(&state, outsider_id, false, world_id, "anything").await;
+
+        assert!(
+            result.is_err(),
+            "a user with no ownership or world_members row must not be able to search the world's actors"
         );
     }
 }

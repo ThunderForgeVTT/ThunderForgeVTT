@@ -173,18 +173,16 @@ async function canvasBox(page: Page): Promise<Box> {
 /** See canvas-authoring.spec.ts's identical helper for the full
  * rationale (GM flag / bridge-ready / canvas-focus race). */
 async function waitForEngineReady(page: Page): Promise<void> {
-  // Spec 009: playView (staging vs. full-screen canvas) is per-tab client
-  // state, not persisted across a page reload — a reload always lands back
-  // on the staging page first. Every reload site in this file just calls
-  // this helper afterward, so handle it here once rather than at each site.
-  // A one-shot `isVisible()` check races the post-reload render (the
-  // staging page/Play button may not exist in the DOM yet at the instant
-  // this runs) — an immediate-`false` result would then silently skip the
-  // click and leave the canvas hidden. Checking "already playing" instead,
-  // then *waiting* (not one-shot checking) for Play otherwise, is race-free.
   const canvas = page.locator("canvas");
-  const alreadyPlaying = await canvas.isVisible().catch(() => false);
-  if (!alreadyPlaying) {
+  // Spec 010: `/world/:id/play` is a real route now, not a client-state
+  // toggle — a reload keeps the same URL, so the canvas is simply still
+  // mounting (WASM engine startup) and no staging "Play" button will
+  // ever appear here. Only click Play when we're actually still on the
+  // staging route (a one-shot `isVisible()` check on the canvas used to
+  // stand in for this, but it raced the canvas's own mount and could
+  // misfire a click on a "play-button" that doesn't exist on /play,
+  // hanging for the full timeout).
+  if (/\/staging$/.test(new URL(page.url()).pathname)) {
     await page.getByTestId("play-button").click({ timeout: 15_000 });
   }
   await expect(canvas).toBeVisible({ timeout: 15_000 });

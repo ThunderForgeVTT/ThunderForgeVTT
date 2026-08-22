@@ -790,6 +790,7 @@ pub struct WorldActor {
     pub is_npc: bool,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    pub description: Option<String>,
 }
 
 /// New actor for insertion
@@ -805,6 +806,7 @@ pub struct NewWorldActor {
     pub owned_by: uuid::Uuid,
     pub is_public: bool,
     pub is_npc: bool,
+    pub description: Option<String>,
 }
 
 /// Spec 010: an actor's "ownership block" entry — one explicit

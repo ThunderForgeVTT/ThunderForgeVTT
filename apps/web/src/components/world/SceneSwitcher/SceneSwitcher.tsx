@@ -31,6 +31,14 @@ export interface SceneSwitcherProps {
   /** New-scene creation is a GM/world-owner action, same as the other
    * canvas authoring tools; the caller decides who sees it. */
   canCreateScene: boolean;
+  /** Distinguishes this instance's `data-testid`s from any other mounted
+   * `SceneSwitcher` (e.g. the staging page's vs. the full-screen play
+   * sidebar's). Without this, a brief overlap during route transitions
+   * (the previous route's Suspense-wrapped tree can still be committed
+   * for a few ms while the next route's lazy chunk loads) can leave two
+   * elements answering to the same testid at once, which e2e locators
+   * then resolve ambiguously/racily. Defaults to "" (no prefix). */
+  testIdPrefix?: string;
 }
 
 /**
@@ -48,6 +56,7 @@ export function SceneSwitcher({
   onSceneChange,
   onSceneCreated,
   canCreateScene,
+  testIdPrefix = "",
 }: SceneSwitcherProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [name, setName] = useState("");
@@ -97,7 +106,7 @@ export function SceneSwitcher({
       {canCreateScene ? (
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button variant="secondary" size="sm" data-testid="new-scene-button">
+            <Button variant="secondary" size="sm" data-testid={`${testIdPrefix}new-scene-button`}>
               New scene
             </Button>
           </DialogTrigger>
@@ -109,7 +118,7 @@ export function SceneSwitcher({
               <Label htmlFor="new-scene-name">Scene name</Label>
               <Input
                 id="new-scene-name"
-                data-testid="new-scene-name-input"
+                data-testid={`${testIdPrefix}new-scene-name-input`}
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder="e.g. The Sunken Crypt"
@@ -125,7 +134,7 @@ export function SceneSwitcher({
               <Button
                 onClick={() => void handleCreate()}
                 disabled={creating}
-                data-testid="create-scene-submit"
+                data-testid={`${testIdPrefix}create-scene-submit`}
               >
                 {creating ? "Creating…" : "Create scene"}
               </Button>

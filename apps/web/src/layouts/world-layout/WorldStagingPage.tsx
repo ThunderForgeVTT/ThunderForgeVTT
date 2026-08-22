@@ -7,7 +7,7 @@ import { Panel } from "@/components/ui/panel/Panel";
 import { ScrollArea } from "@/components/ui/scroll-area/ScrollArea";
 import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
 import { SceneSwitcher } from "@/components/world/SceneSwitcher";
-import { NpcRoster } from "@/components/world/NpcRoster/NpcRoster";
+import { NpcCatalog } from "@/components/world/NpcCatalog/NpcCatalog";
 import { useWorldMembers } from "@/hooks/useWorldMembers";
 import type { SceneRecord } from "@/types/scene";
 import type { WorldRecord } from "@/types/world";
@@ -43,6 +43,7 @@ export function WorldStagingPage({
 }: WorldStagingPageProps) {
   const { members } = useWorldMembers(worldId);
   const [newNpcName, setNewNpcName] = useState("");
+  const [newNpcDescription, setNewNpcDescription] = useState("");
   const [isCreatingNpc, setIsCreatingNpc] = useState(false);
   const [npcRefreshKey, setNpcRefreshKey] = useState(0);
 
@@ -53,8 +54,14 @@ export function WorldStagingPage({
     }
     setIsCreatingNpc(true);
     try {
-      await createActor({ worldId, label, isNpc: true });
+      await createActor({
+        worldId,
+        label,
+        isNpc: true,
+        description: newNpcDescription.trim() || undefined,
+      });
       setNewNpcName("");
+      setNewNpcDescription("");
       setNpcRefreshKey((current) => current + 1);
     } finally {
       setIsCreatingNpc(false);
@@ -86,7 +93,7 @@ export function WorldStagingPage({
         </Button>
       </header>
 
-      <section className="grid gap-4 lg:grid-cols-3">
+      <section className="grid gap-4 lg:grid-cols-2">
         <Panel variant="stone" className="rounded-xl border border-border">
           <p className="mb-3 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
             Scene
@@ -98,6 +105,7 @@ export function WorldStagingPage({
             onSceneChange={onSceneChange}
             onSceneCreated={onSceneCreated}
             canCreateScene={isGm}
+            testIdPrefix="staging-"
           />
         </Panel>
 
@@ -118,21 +126,29 @@ export function WorldStagingPage({
             </ul>
           </ScrollArea>
         </Panel>
+      </section>
 
+      <section>
         <Panel variant="parchment" className="rounded-xl border border-border">
           <p className="mb-3 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-            NPCs
+            NPC catalog
           </p>
-          <ScrollArea className="h-40">
-            <NpcRoster worldId={worldId} refreshKey={npcRefreshKey} />
-          </ScrollArea>
+          <NpcCatalog worldId={worldId} refreshKey={npcRefreshKey} />
           {isGm ? (
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
               <Input
                 value={newNpcName}
                 onChange={(event) => setNewNpcName(event.target.value)}
                 placeholder="New NPC name"
                 disabled={isCreatingNpc}
+                data-testid="new-npc-name-input"
+              />
+              <Input
+                value={newNpcDescription}
+                onChange={(event) => setNewNpcDescription(event.target.value)}
+                placeholder="Description (optional)"
+                disabled={isCreatingNpc}
+                data-testid="new-npc-description-input"
               />
               <Button
                 type="button"
@@ -140,6 +156,7 @@ export function WorldStagingPage({
                 icon="skull"
                 onClick={() => void handleAddNpc()}
                 disabled={isCreatingNpc || !newNpcName.trim()}
+                data-testid="add-npc-button"
               >
                 Add NPC
               </Button>

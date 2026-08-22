@@ -7,6 +7,7 @@ export type WorldActorRecord = {
   actorType: string;
   gameSystemId: string | null;
   label: string;
+  description: string | null;
   isPublic: boolean;
   isNpc: boolean;
   createdBy: string;

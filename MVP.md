@@ -2,7 +2,7 @@
 
 This document outlines the 10 phases for reaching the Minimum Viable Product (MVP) 1 for ThunderForgeVTT.
 
-**Status as of 2026-08-21**: This checklist had never been updated since it was written — every box was still unchecked despite several phases being substantially implemented. Statuses below were verified against the actual codebase (not assumed), and are noted `[x] Done`, `[~] Partial` (with what's missing), or `[ ] Not started`. See `specs/001-bevy-canvas-authoring/`, `specs/002-canvas-authoring-asset-storage/`, and `specs/003-dd2vtt-map-fidelity/` for the specs that delivered the completed phases.
+**Status as of 2026-08-22**: This checklist had never been updated since it was written — every box was still unchecked despite several phases being substantially implemented. Statuses below were verified against the actual codebase (not assumed), and are noted `[x] Done`, `[~] Partial` (with what's missing), or `[ ] Not started`. See `specs/001-bevy-canvas-authoring/`, `specs/002-canvas-authoring-asset-storage/`, `specs/003-dd2vtt-map-fidelity/`, and `specs/010-world-staging-actors/` for the specs that delivered the completed phases.
 
 ## Core Concepts and Objects
 
@@ -50,7 +50,7 @@ This section provides a high-level overview of the core objects and concepts tha
   - Users can add stats and customizations to "Actors" (e.g., health).
   - Actors are bound to tokens.
   - This phase introduces more video game-like logic.
-  - Implemented: `world_actors`/`world_actor_system_data` tables (game-system-defined stat storage), actor-token binding via `tokens.actor_id`. **Unverified**: depth of actor customization UI and whether stat changes actually feed back into token behavior (e.g. movement, combat) was not audited in this pass — needs its own follow-up check before marking Done.
+  - Implemented: `world_actors`/`world_actor_system_data` tables (game-system-defined stat storage), actor-token binding via `tokens.actor_id`. Spec 010 added a dedicated `/world/:id/actor/:id/{view,edit}` UI (actor label editing, PC/NPC flag) and a DM-facing NPC catalog/creation screen at `/world/:id/staging`, plus the ability to share an actor via a link and deep-copy it (including cascaded `world_actor_system_data`) into another of the viewer's own worlds. **Unverified**: depth of actor customization UI beyond label/PC-NPC flag and whether stat changes actually feed back into token behavior (e.g. movement, combat) was not audited in this pass — needs its own follow-up check before marking Done.
 
 - [x] **Phase 6: Walls and Lighting** — Done
 
@@ -84,13 +84,14 @@ This section provides a high-level overview of the core objects and concepts tha
   - A robust permissions model should be implemented.
   - The Dungeon Master (DM) can edit policies for different roles (player, trusted player, assistant DM).
   - The DM can promote other players to owner.
-  - Implemented: a fixed three-tier role model (Owner/GM/Player) via `world_members`, with an `updateMemberRole` mutation that lets an Owner/GM change any member's role — including promoting someone to Owner. **Missing**: the fine-grained, DM-editable "policy" system this phase originally described does not exist — a `policies`/`permission_grants`-style table exists in the schema but is vestigial (its model struct is commented out, and it's read only for an admin stats counter, never for real authorization decisions). There is no "trusted player"/"assistant DM" role beyond the fixed three, and no policy-editing UI or mutation. (This is the same class of gap documented in `docs/SECURITY_RBAC.md` — a similarly-named `world_collaborators`/`RbacEngine` system was found to be entirely dead code, never compiled, and was deleted; `world_members`'s simpler three-role model is what's actually live.)
+  - Implemented: a fixed three-tier role model (Owner/GM/Player) via `world_members`, with an `updateMemberRole` mutation that lets an Owner/GM change any member's role — including promoting someone to Owner. Spec 010 added a real, per-object permissions layer on top of this: every actor now has an "ownership block" (`world_actor_permissions`) letting the DM grant any world member Viewer/Editor/Owner on any actor (PC or NPC), with the DM implicitly retaining full control regardless of the block's contents and a default-Viewer fallback for members with no explicit grant. This is enforced server-side (`auth/actor_permissions.rs`, gating `updateActorSystemData` and `moveOwnToken`), with a DM-only editing UI at `/world/:id/actor/:id/edit`. **Missing**: this per-actor model is not yet a general "policy" system — there is still no "trusted player"/"assistant DM" world-wide role beyond the fixed three, and no equivalent ownership-block mechanism for other content types (scenes, maps, items) yet. The vestigial `policies`/`permission_grants` schema table remains dead code as before. (Same class of gap as documented in `docs/SECURITY_RBAC.md`.)
 
 ## Post-MVP
 
-- **Sharing and Federation:** Not started.
-  - Users can create and share their own game systems, tokens, maps, etc. via a share code.
-  - The system should be able to talk to other systems to share content (federation).
+- **Sharing and Federation:** Started for actors only.
+  - Spec 010 added actor-level sharing: any actor can be shared via a link (`/shared/actor/:code`), previewed read-only by anyone, and deep-copied ("Copy to World") into one of the viewer's own worlds, fully independent of the source (including cascaded ability/item/lore data).
+  - Not yet generalized to other content types (game systems, scenes, maps) — `specs/010-world-staging-actors/spec.md`'s Assumptions section explicitly flags this as expected future work, not built yet.
+  - No cross-instance federation (talking to other ThunderForge servers) exists.
 - **Marketplace:** Not started.
   - A marketplace where users can upload and share their creations.
 - **Engine WASM bundle size / load-time:** Not started. The dev-served `dist/engine/engine_bg.wasm` is ~190MB (confirmed 2026-08-21) — every full page reload in e2e (and every real player's first load) re-instantiates it from scratch, which is now the dominant cost driving several e2e test timeouts up into the 3-8 minute range. Two independent options, not mutually exclusive:

@@ -18,6 +18,7 @@ pub struct CreateActorInput {
     pub is_npc: bool,
     pub actor_type: Option<String>,
     pub game_system_id: Option<String>,
+    pub description: Option<String>,
 }
 
 #[derive(InputObject, Debug, Clone)]
@@ -26,6 +27,7 @@ pub struct UpdateActorInput {
     pub label: Option<String>,
     pub is_npc: Option<bool>,
     pub actor_type: Option<String>,
+    pub description: Option<String>,
 }
 
 /// Testable core of `ActorMutation::create_actor`, split out so tests
@@ -60,6 +62,7 @@ pub async fn create_actor_impl(
     // generic placeholder when the caller doesn't supply one, since this
     // feature doesn't ask the DM to pick a game system up front.
     let game_system_id = Some(input.game_system_id.clone().unwrap_or_else(|| "generic".to_string()));
+    let description = input.description.clone();
 
     tokio::task::spawn_blocking(move || {
         let scene_id = scenes::table
@@ -79,6 +82,7 @@ pub async fn create_actor_impl(
             owned_by: user_id,
             is_public: false,
             is_npc,
+            description,
         };
 
         diesel::insert_into(world_actors::table)
@@ -118,6 +122,7 @@ pub async fn update_actor_impl(
     let label = input.label.clone();
     let is_npc = input.is_npc;
     let actor_type = input.actor_type.clone();
+    let description = input.description.clone();
 
     tokio::task::spawn_blocking(move || {
         let existing = world_actors::table
@@ -131,6 +136,7 @@ pub async fn update_actor_impl(
                 world_actors::label.eq(label.unwrap_or(existing.label)),
                 world_actors::is_npc.eq(is_npc.unwrap_or(existing.is_npc)),
                 world_actors::actor_type.eq(actor_type.unwrap_or(existing.actor_type)),
+                world_actors::description.eq(description.or(existing.description)),
             ))
             .returning(WorldActor::as_returning())
             .get_result::<WorldActor>(&mut conn)
@@ -200,6 +206,7 @@ mod tests {
                 is_npc: true,
                 actor_type: None,
                 game_system_id: None,
+                description: None,
             },
         )
         .await
@@ -232,6 +239,7 @@ mod tests {
                 is_npc: true,
                 actor_type: None,
                 game_system_id: None,
+                description: None,
             },
         )
         .await;
@@ -259,6 +267,7 @@ mod tests {
                 is_npc: true,
                 actor_type: None,
                 game_system_id: None,
+                description: None,
             },
         )
         .await
@@ -278,6 +287,7 @@ mod tests {
                 label: Some("Hacked Name".to_string()),
                 is_npc: None,
                 actor_type: None,
+                description: None,
             },
         )
         .await;
@@ -292,6 +302,7 @@ mod tests {
                 label: Some("Updated By DM".to_string()),
                 is_npc: None,
                 actor_type: None,
+                description: None,
             },
         )
         .await

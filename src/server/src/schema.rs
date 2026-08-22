@@ -383,6 +383,7 @@ diesel::table! {
         is_npc -> Bool,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        description -> Nullable<Text>,
     }
 }
 

@@ -19,6 +19,7 @@ const WORLD_ACTOR_FIELDS = `
   actorType
   gameSystemId
   label
+  description
   isPublic
   isNpc
   createdBy
@@ -96,12 +97,38 @@ export async function getActor(
   return actors.find((actor) => actor.id === actorId) ?? null;
 }
 
+type SearchActorsQuery = {
+  searchActors: WorldActorRecord[];
+};
+
+/**
+ * Server-side ILIKE search over a world's actor label/description
+ * (`queries/actor.rs`'s `searchActors`) — pairs with the client-side
+ * FlexSearch index (`@/search/actorSearch`) for callers that haven't
+ * (or can't) mirror the full roster locally, or want a fresh
+ * server-authoritative match against a roster too large to keep in
+ * sync client-side.
+ */
+export function searchActors(worldId: string, query: string): Promise<WorldActorRecord[]> {
+  return postGraphQL<SearchActorsQuery>(
+    `
+      query SearchActors($worldId: UUID!, $query: String!) {
+        searchActors(worldId: $worldId, query: $query) {
+          ${WORLD_ACTOR_FIELDS}
+        }
+      }
+    `,
+    { worldId, query },
+  ).then((data) => data.searchActors);
+}
+
 type CreateActorInput = {
   worldId: string;
   label: string;
   isNpc: boolean;
   actorType?: string;
   gameSystemId?: string;
+  description?: string;
 };
 
 type CreateActorMutation = {
@@ -127,6 +154,7 @@ type UpdateActorInput = {
   label?: string;
   isNpc?: boolean;
   actorType?: string;
+  description?: string;
 };
 
 type UpdateActorMutation = {

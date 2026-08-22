@@ -261,6 +261,7 @@ pub async fn copy_shared_actor_to_world_impl(
                 owned_by: user_id,
                 is_public: false,
                 is_npc: source.is_npc,
+                description: source.description.clone(),
             };
 
             let created = diesel::insert_into(world_actors::table)
@@ -388,6 +389,7 @@ mod tests {
                 is_npc: true,
                 actor_type: None,
                 game_system_id: None,
+                description: None,
             },
         )
         .await
@@ -426,6 +428,7 @@ mod tests {
                 is_npc: true,
                 actor_type: Some("npc".to_string()),
                 game_system_id: None,
+                description: None,
             },
         )
         .await
@@ -479,6 +482,7 @@ mod tests {
                 is_npc: true,
                 actor_type: None,
                 game_system_id: None,
+                description: None,
             },
         )
         .await

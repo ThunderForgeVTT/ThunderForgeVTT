@@ -10,6 +10,7 @@ import { Container } from "@/components/ui/container/Container";
 import { Field } from "@/components/ui/field/Field";
 import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/loader/Loader";
+import { Textarea } from "@/components/ui/textarea";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import { ActorOwnershipBlock } from "@/pages/world/actor/ActorOwnershipBlock";
@@ -35,6 +36,7 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
   const [actor, setActor] = useState<WorldActorRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [label, setLabel] = useState("");
+  const [description, setDescription] = useState("");
   const [isNpc, setIsNpc] = useState(true);
   const [status, setStatus] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -57,6 +59,7 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
         setActor(actorResult);
         if (actorResult) {
           setLabel(actorResult.label);
+          setDescription(actorResult.description ?? "");
           setIsNpc(actorResult.isNpc);
         }
       })
@@ -106,7 +109,7 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
     setIsSaving(true);
     setStatus(null);
     try {
-      const updated = await updateActor({ actorId, label, isNpc });
+      const updated = await updateActor({ actorId, label, isNpc, description });
       setActor(updated);
       setStatus("Saved.");
     } catch (err) {
@@ -158,6 +161,16 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
         noindex
       />
       <Container className="grid max-w-2xl gap-6 py-10">
+        <Button
+          variant="ghost"
+          size="sm"
+          icon="arrow-left"
+          className="justify-self-start"
+          onClick={() => navigate(`/world/${worldId}/staging`)}
+        >
+          Back to world
+        </Button>
+
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
@@ -204,6 +217,15 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
               <Field label="Name" htmlFor="actor-label">
                 <Input id="actor-label" value={label} onChange={(e) => setLabel(e.target.value)} />
               </Field>
+              <Field label="Description" htmlFor="actor-description">
+                <Textarea
+                  id="actor-description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="A short description of this actor…"
+                  rows={4}
+                />
+              </Field>
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
@@ -234,6 +256,11 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
               {actor.gameSystemId ? (
                 <p className="text-sm text-muted-foreground">Game system: {actor.gameSystemId}</p>
               ) : null}
+              <p className="text-sm whitespace-pre-wrap">
+                {actor.description || (
+                  <span className="text-muted-foreground italic">No description.</span>
+                )}
+              </p>
             </div>
           )}
         </Card>

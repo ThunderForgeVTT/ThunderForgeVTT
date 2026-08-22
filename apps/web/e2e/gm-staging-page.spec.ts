@@ -209,7 +209,7 @@ test.describe("US3: players get the same shell, read-only and independent of the
         timeout: 15_000,
       });
       // GM-only controls are absent for a Player.
-      await expect(playerPage.getByTestId("new-scene-button")).toHaveCount(0);
+      await expect(playerPage.getByTestId("staging-new-scene-button")).toHaveCount(0);
 
       // The player enters full-screen independently — the GM's own,
       // separate browser session is unaffected by the player's navigation.

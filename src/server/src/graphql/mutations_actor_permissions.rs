@@ -232,6 +232,7 @@ mod tests {
                 is_npc: true,
                 actor_type: None,
                 game_system_id: None,
+                description: None,
             },
         )
         .await
@@ -308,6 +309,7 @@ mod tests {
                 is_npc: false,
                 actor_type: None,
                 game_system_id: None,
+                description: None,
             },
         )
         .await
