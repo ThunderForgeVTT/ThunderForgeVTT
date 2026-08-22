@@ -1624,7 +1624,10 @@ async fn resolve_oauth_login(
     let provider_key = request.provider_key;
     let provider_key_for_audit = provider_key.clone();
     let provider_user_id = request.provider_user_id;
-    let provider_email = request.provider_email;
+    let provider_email = request
+        .provider_email
+        .map(|v| v.trim().to_lowercase())
+        .filter(|v| !v.is_empty());
     let token_expires_at = request.token_expires_at.map(|v| v.naive_utc());
 
     let outcome =
@@ -1675,7 +1678,52 @@ async fn resolve_oauth_login(
                 .optional()?;
 
             let Some(existing_user_id) = existing_user_id else {
-                return Ok(ResolveOutcome::NoMatchingUser);
+                // ADR-011: unlike an existing local account (which still
+                // requires password confirmation below before linking), a
+                // first-time OAuth identity with no local account at all is
+                // auto-provisioned. The provider already vouched for this
+                // email, so there is no password to protect and no ambiguity
+                // about which account to link.
+                let username = unique_username_from_email_sync(&mut conn, &provider_email)?;
+                let random_password_hash = hash_password(&random_urlsafe(48))
+                    .expect("Failed to hash random password for auto-provisioned OAuth user");
+
+                let new_user_id = uuid::Uuid::now_v7();
+                diesel::insert_into(users::table)
+                    .values((
+                        users::id.eq(new_user_id),
+                        users::username.eq(&username),
+                        users::email.eq(&provider_email),
+                        users::is_admin.eq(false),
+                        users::password_hash.eq(random_password_hash),
+                        users::created_at.eq(now),
+                        users::updated_at.eq(now),
+                        users::two_factor_enabled.eq(false),
+                        users::two_factor_secret_encrypted.eq::<Option<String>>(None),
+                        users::two_factor_confirmed_at.eq::<Option<chrono::NaiveDateTime>>(None),
+                        users::two_factor_admin_required.eq(false),
+                    ))
+                    .execute(&mut conn)?;
+
+                let oauth_account = NewUserOAuthAccount {
+                    id: uuid::Uuid::now_v7(),
+                    user_id: new_user_id,
+                    provider_id: provider.id,
+                    provider_user_id,
+                    provider_email: Some(provider_email),
+                    access_token_encrypted,
+                    refresh_token_encrypted,
+                    token_expires_at,
+                    linked_at: now,
+                    created_at: now,
+                    updated_at: now,
+                };
+
+                diesel::insert_into(user_oauth_accounts::table)
+                    .values(&oauth_account)
+                    .execute(&mut conn)?;
+
+                return Ok(ResolveOutcome::LinkedUser(new_user_id));
             };
 
             let challenge_id = uuid::Uuid::now_v7();
@@ -1791,7 +1839,7 @@ async fn resolve_oauth_login(
         ResolveOutcome::NoMatchingUser => error_response(
             StatusCode::NOT_FOUND,
             "no_matching_user",
-            "No existing user matched this OAuth identity",
+            "The OAuth provider did not return an email address, so this identity cannot be linked or auto-provisioned",
         ),
     }
 }
@@ -3124,6 +3172,40 @@ fn derive_bootstrap_username(desired_username: Option<String>, provider_email: &
         .to_lowercase()
 }
 
+/// Derives a username from an auto-provisioned OAuth user's email (ADR-011),
+/// appending a short random suffix on collision. Bounded retries: a
+/// collision on every attempt (astronomically unlikely) falls back to the
+/// email-local-part-plus-full-UUID form, which is unique by construction.
+fn unique_username_from_email_sync(
+    conn: &mut diesel::PgConnection,
+    email: &str,
+) -> Result<String, diesel::result::Error> {
+    let base = derive_bootstrap_username(None, email);
+    let base = if base.is_empty() { "user".to_string() } else { base };
+
+    let is_taken = |conn: &mut diesel::PgConnection, candidate: &str| {
+        users::table
+            .filter(users::username.eq(candidate))
+            .select(users::id)
+            .first::<uuid::Uuid>(conn)
+            .optional()
+            .map(|row| row.is_some())
+    };
+
+    if !is_taken(conn, &base)? {
+        return Ok(base);
+    }
+
+    for _ in 0..5 {
+        let candidate = format!("{base}-{}", random_urlsafe(4).to_lowercase());
+        if !is_taken(conn, &candidate)? {
+            return Ok(candidate);
+        }
+    }
+
+    Ok(format!("{base}-{}", uuid::Uuid::now_v7()))
+}
+
 fn random_setup_code() -> String {
     const CHARSET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     let mut bytes = [0u8; 12];
@@ -3193,7 +3275,13 @@ fn error_response(
 
 #[cfg(test)]
 mod tests {
-    use super::{derive_bootstrap_username, random_setup_code, validate_registration_input};
+    use super::{
+        derive_bootstrap_username, random_setup_code, unique_username_from_email_sync,
+        validate_registration_input,
+    };
+    use crate::schema::users;
+    use crate::test_support::test_app_state;
+    use diesel::prelude::*;
 
     #[test]
     fn registration_validation_rejects_short_password() {
@@ -3247,5 +3335,47 @@ mod tests {
                 .all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '-')
         );
         assert_eq!(code.chars().filter(|ch| *ch == '-').count(), 2);
+    }
+
+    /// ADR-011: auto-provisioned OAuth usernames derive from the email
+    /// local part when it isn't already taken.
+    #[test]
+    fn auto_provision_username_uses_email_local_part_when_free() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().expect("failed to get DB connection");
+        let email = format!("auto-provision-{}@example.invalid", uuid::Uuid::now_v7());
+
+        let username = unique_username_from_email_sync(&mut conn, &email)
+            .expect("username derivation should succeed");
+
+        assert_eq!(username, email.split('@').next().unwrap());
+    }
+
+    /// ADR-011: a collision on the email-derived base username falls back
+    /// to a suffixed variant rather than erroring, since auto-provisioning
+    /// has no user to ask for a different name.
+    #[test]
+    fn auto_provision_username_avoids_collision_with_existing_username() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().expect("failed to get DB connection");
+        let suffix = uuid::Uuid::now_v7().simple().to_string();
+        let base_username = format!("collide{suffix}");
+        let email = format!("{base_username}@example.invalid");
+
+        diesel::insert_into(users::table)
+            .values((
+                users::id.eq(uuid::Uuid::now_v7()),
+                users::username.eq(&base_username),
+                users::password_hash.eq("not-a-real-hash"),
+                users::email.eq(format!("someone-else-{suffix}@example.invalid")),
+            ))
+            .execute(&mut conn)
+            .expect("failed to insert colliding user");
+
+        let username = unique_username_from_email_sync(&mut conn, &email)
+            .expect("username derivation should succeed despite collision");
+
+        assert_ne!(username, base_username);
+        assert!(username.starts_with(&format!("{base_username}-")));
     }
 }

@@ -1,6 +1,6 @@
 # ADR-007: No Auto-Provisioning Policy
 
-**Status:** Accepted
+**Status:** Superseded — see [ADR-042](./20260821-042-oauth_auto_provisioning_on_first_login.md), which reverses the "OAuth never auto-creates a user" decision below in favor of auto-provisioning on first login when the provider supplies a verified email. The password-confirmation safeguard for linking to an *existing* account (ADR-006) is unaffected.
 
 **Decision Date:** 2026-05-04
 
