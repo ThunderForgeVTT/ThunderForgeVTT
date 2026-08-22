@@ -305,7 +305,10 @@ export function LoginView() {
                 <h2 className="text-lg font-semibold">Other routes</h2>
               </div>
               <div className="grid gap-2">
-                <Link to="/register" className="font-medium text-primary hover:underline">
+                <Link
+                  to={`/register${location.search}`}
+                  className="font-medium text-primary hover:underline"
+                >
                   Create a local account
                 </Link>
                 <Link to="/welcome" className="font-medium text-primary hover:underline">

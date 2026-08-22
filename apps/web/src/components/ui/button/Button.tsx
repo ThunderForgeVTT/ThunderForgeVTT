@@ -51,18 +51,6 @@ export function Button({
   children,
   ...props
 }: ButtonProps) {
-  const content = (
-    <>
-      {icon && iconPosition === "start" ? (
-        <FantasyIcon name={icon} size={16} />
-      ) : null}
-      {children}
-      {icon && iconPosition === "end" ? (
-        <FantasyIcon name={icon} size={16} />
-      ) : null}
-    </>
-  );
-
   const resolvedClassName = cn(
     fullWidth && "w-full",
     VARIANT_EXTRA_CLASS[variant],
@@ -83,6 +71,24 @@ export function Button({
       children?: ReactNode;
     };
 
+    // Bug fix: this used to pass Button's own `children` prop (the whole
+    // child *element*, e.g. the entire `<Link>...</Link>`) as the new
+    // children for `cloneElement`, nesting a second real `<a>` inside the
+    // Slot-merged one — invalid HTML and a duplicate accessible node.
+    // The right content to wrap is the child element's own inner
+    // content (`childProps.children`), not the child element itself.
+    const content = (
+      <>
+        {icon && iconPosition === "start" ? (
+          <FantasyIcon name={icon} size={16} />
+        ) : null}
+        {childProps.children}
+        {icon && iconPosition === "end" ? (
+          <FantasyIcon name={icon} size={16} />
+        ) : null}
+      </>
+    );
+
     return (
       <ShadcnButton
         asChild
@@ -98,6 +104,18 @@ export function Button({
       </ShadcnButton>
     );
   }
+
+  const content = (
+    <>
+      {icon && iconPosition === "start" ? (
+        <FantasyIcon name={icon} size={16} />
+      ) : null}
+      {children}
+      {icon && iconPosition === "end" ? (
+        <FantasyIcon name={icon} size={16} />
+      ) : null}
+    </>
+  );
 
   return (
     <ShadcnButton

@@ -236,7 +236,7 @@ export default function WorldPage() {
   }, [id]);
 
   // 🎮 Phase 4.7.F1: Use canvas engine hook for responsive sizing
-  const { containerRef, engineReady, error: engineError } = useCanvasEngine({
+  const { containerRef, engineReady, loadStage, error: engineError } = useCanvasEngine({
     worldId: id,
     canvasSelector: `#${canvasContainerId}`,
     onError: (err) => {
@@ -613,6 +613,31 @@ export default function WorldPage() {
             }}
           >
             {/* Bevy mounts canvas here */}
+            {/* Spec 008 (US1, FR-002/SC-002): the flat #2a2a2a background
+             * above used to show nothing at all here while the ~190MB
+             * WASM engine loaded — this closes that gap with continuous
+             * status text, styled identically to the scene-load-indicator
+             * block below it. */}
+            {!engineReady && !engineError ? (
+              <div
+                data-testid="engine-load-indicator"
+                style={{
+                  position: "absolute",
+                  top: "50%",
+                  left: "50%",
+                  transform: "translate(-50%, -50%)",
+                  color: "white",
+                  textAlign: "center",
+                  zIndex: 1000,
+                }}
+              >
+                <p>
+                  {loadStage === "downloading"
+                    ? "Downloading engine…"
+                    : "Starting engine…"}
+                </p>
+              </div>
+            ) : null}
             {engineError && (
               <div
                 style={{

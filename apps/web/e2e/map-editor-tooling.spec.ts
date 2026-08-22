@@ -82,9 +82,11 @@ async function register(page: Page, creds: Credentials): Promise<void> {
   });
 }
 
-/** Registers a GM, creates a world, and leaves the page on the world
- * dashboard (`/world/{id}`) rather than entering play — so the invite
- * code can be generated before the GM enters the live scene. */
+/** Registers a GM and creates a world. Spec 008: CreateWorldPage now
+ * navigates straight to `/world/{id}/play` (the canvas) on success — there
+ * is no more intermediate dashboard stop to separately click "Enter world"
+ * from (none of this file's tests need the dashboard itself, only the
+ * world id and a live canvas session). */
 async function registerAndCreateWorldOnDashboard(
   page: Page,
   worldName: string,
@@ -94,18 +96,21 @@ async function registerAndCreateWorldOnDashboard(
   await page.goto("/worlds/create");
   await page.locator("#world-name").fill(worldName);
   await page.getByRole("button", { name: /create world/i }).click();
-  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
+  await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
 
-  const match = /\/world\/([^/]+)$/.exec(new URL(page.url()).pathname);
+  const match = /\/world\/([^/]+)\/play$/.exec(new URL(page.url()).pathname);
   if (!match) {
     throw new Error(`Could not extract world id from URL: ${page.url()}`);
   }
   return match[1];
 }
 
+/** No-op: kept only so this file's existing call sites (all written
+ * against the pre-spec-008 two-step create-then-enter flow) don't need a
+ * mechanical rename — `registerAndCreateWorldOnDashboard` above already
+ * lands on `/play` directly now. */
 async function enterWorldPlay(page: Page): Promise<void> {
-  await page.getByRole("link", { name: "Enter world" }).first().click();
-  await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
+  await expect(page).toHaveURL(/\/world\/[^/]+\/play$/);
 }
 
 /**

@@ -34,8 +34,20 @@ async function getWasmModule() {
   return loadPromise;
 }
 
-export async function mountEngine(options: EngineMountOptions): Promise<void> {
+// Spec 008 (US1, FR-002): the only two real phase boundaries this loader
+// exposes — "downloading" spans both the dynamic import and wasm-bindgen's
+// own init/instantiation (getWasmModule's whole body), "starting" is the
+// final `module.start()` call. No byte-level progress is available through
+// the APIs in use here (research.md §3) — status text, not a percentage.
+export type EngineLoadStage = "downloading" | "starting";
+
+export async function mountEngine(
+  options: EngineMountOptions,
+  onStageChange?: (stage: EngineLoadStage) => void,
+): Promise<void> {
+  onStageChange?.("downloading");
   const module = await getWasmModule();
+  onStageChange?.("starting");
 
   state.canvasSelector = options.canvasSelector;
   state.worldId = options.worldId;

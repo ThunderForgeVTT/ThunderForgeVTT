@@ -1174,6 +1174,86 @@ impl SceneMutation {
 
 // Query structs moved to queries modules (Phase 4.9.Z Step 5)
 
+/// Spec 008 (US1, FR-004/FR-006): creates a world and its one default
+/// scene in a single DB transaction — both succeed or both fail, so a
+/// world can never exist with zero scenes through this path. Default
+/// scene values mirror `create_scene`'s own defaults exactly
+/// (data-model.md), inlined here rather than calling that resolver since
+/// this needs to run inside the same transaction as the world insert.
+/// Factored out of the `create_world` resolver (mirrors this codebase's
+/// `_impl` convention, e.g. `mutations_assets.rs`'s
+/// `upload_canvas_image_impl`) so it's directly unit-testable without a
+/// full GraphQL execution context.
+pub async fn create_world_impl(
+    state: &AppState,
+    user_id: uuid::Uuid,
+    input: GraphQLCreateWorldInput,
+) -> Result<GraphQLWorld, String> {
+    let prepared_input = prepare_world_input(input)?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| "Failed to get DB connection".to_string())?;
+    let now = Utc::now().naive_utc();
+
+    let new_world = World {
+        id: uuid::Uuid::now_v7(),
+        name: prepared_input.name,
+        description: prepared_input.description,
+        game_system_id: prepared_input.game_system_id,
+        interface_pack_id: prepared_input.interface_pack_id,
+        created_by: user_id,
+        updated_by: user_id,
+        created_at: now,
+        updated_at: now,
+    };
+
+    let inserted_world = new_world.clone();
+    let world_name_for_scene = new_world.name.clone();
+    tokio::task::spawn_blocking(move || {
+        use crate::schema::scenes;
+
+        conn.transaction(|conn| {
+            diesel::insert_into(worlds::table)
+                .values(&inserted_world)
+                .execute(conn)?;
+
+            let scene_values = (
+                scenes::scene_id.eq(uuid::Uuid::now_v7()),
+                scenes::world_id.eq(inserted_world.id),
+                scenes::name.eq(&world_name_for_scene),
+                scenes::description.eq::<Option<String>>(None),
+                scenes::type_.eq("battlemap"),
+                scenes::grid_size.eq(5),
+                scenes::grid_type.eq("square"),
+                scenes::width.eq(100),
+                scenes::height.eq(100),
+                scenes::metadata.eq::<Option<serde_json::Value>>(None),
+                scenes::owner_id.eq(user_id),
+                scenes::created_at.eq(now),
+                scenes::updated_at.eq(now),
+            );
+
+            diesel::insert_into(scenes::table)
+                .values(scene_values)
+                .execute(conn)?;
+
+            Ok::<_, diesel::result::Error>(())
+        })
+    })
+    .await
+    .map_err(|_| "Failed to spawn blocking task".to_string())?
+    .map_err(|error| world_write_error(error, "Failed to create world").message)?;
+
+    // NOTE: world creation does not insert a world_members owner row.
+    // require_world_member() (src/server/src/auth/world_membership.rs,
+    // spec 002) falls back to worlds.created_by to compensate for this
+    // gap. See that module's doc comment for the full story — fixing it
+    // at the source (inserting an owner world_members row here) is a
+    // separate, deliberate follow-up, not done as part of this cleanup.
+    Ok(GraphQLWorld::from(new_world))
+}
+
 #[derive(Default)]
 pub struct WorldMutation;
 
@@ -1186,42 +1266,9 @@ impl WorldMutation {
     ) -> GraphQLResult<GraphQLWorld> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        let prepared_input = prepare_world_input(input).map_err(Error::new)?;
-        let mut conn = state
-            .db_pool
-            .get()
-            .map_err(|_| Error::new("Failed to get DB connection"))?;
-        let now = Utc::now().naive_utc();
-
-        let new_world = World {
-            id: uuid::Uuid::now_v7(),
-            name: prepared_input.name,
-            description: prepared_input.description,
-            game_system_id: prepared_input.game_system_id,
-            interface_pack_id: prepared_input.interface_pack_id,
-            created_by: auth_user.user_id,
-            updated_by: auth_user.user_id,
-            created_at: now,
-            updated_at: now,
-        };
-
-        let inserted_world = new_world.clone();
-        tokio::task::spawn_blocking(move || {
-            diesel::insert_into(worlds::table)
-                .values(&inserted_world)
-                .execute(&mut conn)
-        })
-        .await
-        .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|error| world_write_error(error, "Failed to create world"))?;
-
-        // NOTE: world creation does not insert a world_members owner row.
-        // require_world_member() (src/server/src/auth/world_membership.rs,
-        // spec 002) falls back to worlds.created_by to compensate for this
-        // gap. See that module's doc comment for the full story — fixing it
-        // at the source (inserting an owner world_members row here) is a
-        // separate, deliberate follow-up, not done as part of this cleanup.
-        Ok(GraphQLWorld::from(new_world))
+        create_world_impl(state, auth_user.user_id, input)
+            .await
+            .map_err(Error::new)
     }
 
     async fn rename_world(
@@ -1634,7 +1681,96 @@ pub type AppSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;
 
 #[cfg(test)]
 mod tests {
-    use super::{GraphQLCreateWorldInput, prepare_world_input, validate_world_name};
+    use super::{
+        GraphQLCreateWorldInput, create_world_impl, prepare_world_input, validate_world_name,
+    };
+
+    /// Spec 008 (T022, FR-004/FR-006): `create_world` must always yield
+    /// exactly one scene — never zero — since the whole point of this
+    /// feature is that a freshly created world's canvas has content on it
+    /// immediately, with no separate "create a scene" step.
+    #[tokio::test]
+    async fn create_world_always_yields_exactly_one_scene() {
+        use crate::schema::scenes;
+        use crate::test_support::*;
+        use diesel::prelude::*;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let user_id = insert_test_user(&mut conn);
+        drop(conn);
+
+        let world = create_world_impl(
+            &state,
+            user_id,
+            GraphQLCreateWorldInput {
+                name: "The Ember Crown".to_string(),
+                description: None,
+                game_system_id: None,
+                interface_pack_id: None,
+            },
+        )
+        .await
+        .expect("world creation should succeed");
+
+        let mut conn = state.db_pool.get().unwrap();
+        let scene_count = scenes::table
+            .filter(scenes::world_id.eq(world.id))
+            .count()
+            .get_result::<i64>(&mut conn)
+            .expect("scene count query should succeed");
+
+        assert_eq!(
+            scene_count, 1,
+            "create_world must always produce exactly one default scene"
+        );
+    }
+
+    /// Spec 008 (T022): an invalid world name must fail validation
+    /// *before* any DB write happens — confirming create_world_impl's
+    /// early-return on prepare_world_input's error leaves nothing
+    /// persisted (no orphaned world, no orphaned scene) for a rejected
+    /// input, the same "both succeed or both fail" guarantee research.md
+    /// §1 describes for the transaction itself.
+    #[tokio::test]
+    async fn create_world_rejects_invalid_name_before_any_write() {
+        use crate::schema::worlds;
+        use crate::test_support::*;
+        use diesel::prelude::*;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let user_id = insert_test_user(&mut conn);
+        let before_count = worlds::table
+            .count()
+            .get_result::<i64>(&mut conn)
+            .expect("world count query should succeed");
+        drop(conn);
+
+        let result = create_world_impl(
+            &state,
+            user_id,
+            GraphQLCreateWorldInput {
+                name: "ab".to_string(), // below MIN_WORLD_NAME_LEN
+                description: None,
+                game_system_id: None,
+                interface_pack_id: None,
+            },
+        )
+        .await;
+
+        assert!(result.is_err(), "a too-short name must be rejected");
+
+        let mut conn = state.db_pool.get().unwrap();
+        let after_count = worlds::table
+            .count()
+            .get_result::<i64>(&mut conn)
+            .expect("world count query should succeed");
+        assert_eq!(
+            before_count, after_count,
+            "a rejected create_world call must not write a world row"
+        );
+    }
 
     #[test]
     fn world_name_validation_rejects_invalid_characters() {

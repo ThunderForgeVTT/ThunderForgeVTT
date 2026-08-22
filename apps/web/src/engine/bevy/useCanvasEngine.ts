@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { EngineMountOptions, EngineState } from './types';
-import { mountEngine } from './index';
+import { mountEngine, type EngineLoadStage } from './index';
 
 interface UseCanvasEngineOptions {
   worldId: string;
@@ -12,6 +12,10 @@ interface UseCanvasEngineResult {
   containerRef: React.RefObject<HTMLDivElement>;
   engine: any; // Engine WASM instance for calling exported functions
   engineReady: boolean;
+  /** Spec 008 (US1, FR-002): "downloading" until engineReady flips true —
+   * never null before that point, so callers can always show status text
+   * instead of a silent gap. */
+  loadStage: EngineLoadStage;
   error: Error | null;
 }
 
@@ -38,6 +42,7 @@ export function useCanvasEngine(
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const engineRef = useRef<any>(null);
   const [engineReady, setEngineReady] = useState(false);
+  const [loadStage, setLoadStage] = useState<EngineLoadStage>('downloading');
   const [error, setError] = useState<Error | null>(null);
 
   // 🎮 Mount Bevy engine on component mount
@@ -50,10 +55,13 @@ export function useCanvasEngine(
 
     const mountAsync = async () => {
       try {
-        const engine = await mountEngine({
-          canvasSelector: options.canvasSelector,
-          worldId: options.worldId,
-        } as EngineMountOptions);
+        const engine = await mountEngine(
+          {
+            canvasSelector: options.canvasSelector,
+            worldId: options.worldId,
+          } as EngineMountOptions,
+          setLoadStage,
+        );
 
         engineRef.current = engine;
         setEngineReady(true);
@@ -127,6 +135,7 @@ export function useCanvasEngine(
     containerRef,
     engine: engineRef.current,
     engineReady,
+    loadStage,
     error,
   };
 }

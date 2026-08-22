@@ -49,10 +49,8 @@ async function registerAndCreateWorld(page: Page, worldName: string): Promise<vo
   await page.locator("#world-name").fill(worldName);
   await page.getByRole("button", { name: /create world/i }).click();
 
-  // CreateWorldPage navigates to /world/{id} (the dashboard) on success.
-  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
-
-  await page.getByRole("link", { name: "Enter world" }).first().click();
+  // Spec 008: CreateWorldPage navigates straight to /world/{id}/play (the
+  // canvas), not the dashboard — no separate "Enter world" click.
   await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
 }
 

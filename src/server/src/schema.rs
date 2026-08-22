@@ -1,14 +1,6 @@
 // @generated automatically by Diesel CLI.
 
 pub mod sql_types {
-    // NOTE: no `Clone` on either of these two derives — db_types.rs's
-    // `DbEnum`-derived enums (`CanvasImageAssetKind`/`PolicyEffectEnum`)
-    // already provide a Clone impl for these same underlying SQL types, and
-    // `diesel print-schema` regeneration always re-adds `Clone` here, which
-    // then conflicts (E0119) with those impls. Remove `Clone` again if a
-    // future `diesel migration run`/`print-schema` clobbers this comment
-    // (see specs/003-dd2vtt-map-fidelity T003 and
-    // specs/004-token-canvas-authoring T003 notes).
     #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "CanvasImageAssetKind"))]
     pub struct CanvasImageAssetKind;

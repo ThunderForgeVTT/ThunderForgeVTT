@@ -55,8 +55,11 @@ async function register(page: Page, creds: Credentials): Promise<void> {
   });
 }
 
-/** Registers a GM, creates a world, and leaves the page on the world
- * dashboard (`/world/{id}`), where `CampaignSettingsPanel` lives. */
+/** Registers a GM, creates a world, then explicitly navigates to the world
+ * dashboard (`/world/{id}`), where `CampaignSettingsPanel` lives — needed
+ * to generate an invite code. Spec 008: CreateWorldPage's own post-success
+ * navigation now goes straight to `/world/{id}/play`, so reaching the
+ * dashboard is a deliberate second step here, not the default landing. */
 async function registerAndCreateWorldOnDashboard(
   page: Page,
   worldName: string,
@@ -66,13 +69,17 @@ async function registerAndCreateWorldOnDashboard(
   await page.goto("/worlds/create");
   await page.locator("#world-name").fill(worldName);
   await page.getByRole("button", { name: /create world/i }).click();
-  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
+  await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
 
-  const match = /\/world\/([^/]+)$/.exec(new URL(page.url()).pathname);
+  const match = /\/world\/([^/]+)\/play$/.exec(new URL(page.url()).pathname);
   if (!match) {
     throw new Error(`Could not extract world id from URL: ${page.url()}`);
   }
-  return match[1];
+  const worldId = match[1];
+
+  await page.goto(`/world/${worldId}`);
+  await expect(page).toHaveURL(new RegExp(`/world/${worldId}$`));
+  return worldId;
 }
 
 test.describe("A GM invites a genuine second player (US4)", () => {

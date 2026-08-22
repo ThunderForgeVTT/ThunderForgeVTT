@@ -3,7 +3,14 @@
 
 [print_schema]
 file = "src/schema.rs"
-custom_type_derives = ["diesel::query_builder::QueryId", "Clone"]
+# No "Clone" here — diesel_derive_enum's `ExistingTypePath` mode (used by
+# db_types.rs's CanvasImageAssetKindEnum/PolicyEffectEnum) already generates
+# a Clone impl for these same marker structs. Adding "Clone" back causes
+# `diesel migration run`/`print-schema` to regenerate a conflicting second
+# impl (E0119) every time — this bit multiple specs before being fixed here
+# (see specs/003-dd2vtt-map-fidelity T003, specs/004-token-canvas-authoring
+# T003, and the matching comment previously hand-maintained in schema.rs).
+custom_type_derives = ["diesel::query_builder::QueryId"]
 
 [migrations_directory]
 dir = "migrations"

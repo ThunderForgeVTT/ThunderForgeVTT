@@ -66,14 +66,13 @@ async function registerAndCreateWorld(page: Page, worldName: string): Promise<st
   await page.goto("/worlds/create");
   await page.locator("#world-name").fill(worldName);
   await page.getByRole("button", { name: /create world/i }).click();
-  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
-  const match = /\/world\/([^/]+)$/.exec(new URL(page.url()).pathname);
+  // Spec 008: CreateWorldPage now navigates straight to /world/{id}/play
+  // (the canvas), not the dashboard — no separate "Enter world" click.
+  await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
+  const match = /\/world\/([^/]+)\/play$/.exec(new URL(page.url()).pathname);
   if (!match) {
     throw new Error(`Could not extract world id from URL: ${page.url()}`);
   }
-
-  await page.getByRole("link", { name: "Enter world" }).first().click();
-  await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
   return match[1];
 }
 

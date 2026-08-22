@@ -79,11 +79,25 @@ function RequireAdmin({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+/** Spec 008 (US2, FR-012): mirrors LoginView.tsx's/RegisterPage.tsx's own
+ * `redirectTarget` helper. Without this, an already-authenticated visitor
+ * who transiently lands on `/login?returnTo=/join/xyz` (e.g. JoinWorldPage
+ * redirecting there before its own `isAuthenticated` read has caught up
+ * with a just-completed login/register) gets bounced to `authenticatedHome`
+ * unconditionally, silently dropping the invite code they were mid-way
+ * through redeeming. */
+function returnToFromSearch(search: string): string | null {
+  const params = new URLSearchParams(search);
+  const returnTo = params.get("returnTo");
+  return returnTo && returnTo.startsWith("/") ? returnTo : null;
+}
+
 export default function AppRoutes({
   setupStatus,
   onSetupStatusRefresh,
 }: AppRoutesProps) {
   const { isAdmin, isAuthenticated, isLoading, redirectAfterLogin } = useAuth();
+  const location = useLocation();
   const setupRequired = setupStatus.setup_required;
 
   if (!setupRequired && isLoading) {
@@ -224,7 +238,10 @@ export default function AppRoutes({
             setupRequired ? (
               <Navigate to="/setup" replace />
             ) : isAuthenticated ? (
-              <Navigate to={authenticatedHome} replace />
+              <Navigate
+                to={returnToFromSearch(location.search) ?? authenticatedHome}
+                replace
+              />
             ) : (
               renderLazyPage(<LoginPage />, "Loading login screen")
             )
@@ -236,7 +253,10 @@ export default function AppRoutes({
             setupRequired ? (
               <Navigate to="/setup" replace />
             ) : isAuthenticated ? (
-              <Navigate to={authenticatedHome} replace />
+              <Navigate
+                to={returnToFromSearch(location.search) ?? authenticatedHome}
+                replace
+              />
             ) : (
               renderLazyPage(<RegisterPage />, "Loading registration screen")
             )
