@@ -2,7 +2,6 @@ import type { FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { getSetupStatus, startOAuthLogin } from "@/api/auth";
-import { Avatar } from "@/components/ui/avatar/Avatar";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
@@ -260,106 +259,31 @@ export function LoginView() {
     setStatus("Adjust your credentials, then sign in again.");
   };
 
-  const loginSteps = [
-    {
-      label: "Step 1",
-      copy: "Enter your username or email and password.",
-      state: loginStep === "credentials" ? "active" : "complete",
-    },
-    {
-      label: "Step 2",
-      copy: "Only shown if this account has two-factor authentication enabled.",
-      state: loginStep === "twoFactor" ? "active" : "idle",
-    },
-  ] as const;
-
   return (
     <AuthLayout
       eyebrow="Access"
       title="Sign in to ThunderForge."
       description="Enter your credentials to continue. If this account has two-factor authentication enabled, you'll be asked for a code as a second step."
       aside={
-        <div className="grid gap-4">
-          <Card>
-            <div className="grid gap-3">
-              <h2 className="text-lg font-semibold">How sign-in works</h2>
-              <p className="text-muted-foreground">
-                Login resolves in stages so you only see what's relevant right
-                now.
-              </p>
-              <ol className="grid list-decimal gap-1.5 pl-4 text-sm text-muted-foreground">
-                <li>Enter your username or email with your password.</li>
-                <li>If required, complete a 6-digit two-factor code.</li>
-                <li>You're redirected straight to your account.</li>
-              </ol>
-            </div>
-          </Card>
-
-          <Card>
-            <div className="grid gap-3">
-              <div className="grid gap-1.5">
-                <p className="inline-flex items-center gap-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-                  <FantasyIcon name="wand" size={16} />
-                  Other options
-                </p>
-                <h2 className="text-lg font-semibold">Other routes</h2>
-              </div>
-              <div className="grid gap-2">
-                <Link
-                  to={`/register${location.search}`}
-                  className="font-medium text-primary hover:underline"
-                >
-                  Create a local account
-                </Link>
-                <Link to="/welcome" className="font-medium text-primary hover:underline">
-                  Review the welcome hall
-                </Link>
-              </div>
-              <div className="mt-2 inline-flex items-center [&>*:not(:first-child)]:-ml-2">
-                <Avatar seed="guild-warden" name="Guild warden" />
-                <Avatar seed="map-smith" name="Map smith" />
-              </div>
-            </div>
-          </Card>
-        </div>
-      }
-    >
-      <div className="grid gap-6">
         <Card>
-          <div className="grid gap-6">
-            <div className="grid gap-1.5">
-              <p className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-                Sign in
-              </p>
-              <h2 className="text-2xl font-semibold">
-                One step at a time.
-              </h2>
-              <p className="text-muted-foreground">
-                Two-factor verification only appears if your account requires
-                it, keeping the first step focused and quick.
-              </p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {loginSteps.map((step, index) => (
-                <article
-                  key={step.label}
-                  className={cn(
-                    "rounded-lg border border-border p-4",
-                    step.state === "active" && "border-primary bg-secondary",
-                    step.state === "complete" && "opacity-70",
-                  )}
-                >
-                  <span className="mb-2 inline-flex size-6 items-center justify-center rounded-full bg-muted text-xs font-semibold">
-                    {step.state === "complete" ? "✓" : index + 1}
-                  </span>
-                  <h3 className="font-semibold">{step.label}</h3>
-                  <p className="text-sm text-muted-foreground">{step.copy}</p>
-                </article>
-              ))}
+          <div className="grid gap-3">
+            <h2 className="text-lg font-semibold">Other routes</h2>
+            <div className="grid gap-2">
+              <Link
+                to={`/register${location.search}`}
+                className="font-medium text-primary hover:underline"
+              >
+                Create a local account
+              </Link>
+              <Link to="/welcome" className="font-medium text-primary hover:underline">
+                Review the welcome hall
+              </Link>
             </div>
           </div>
         </Card>
-
+      }
+    >
+      <div className="grid gap-6">
         <div className="relative grid gap-4">
           <Card
             className={cn(loginStep === "twoFactor" && "opacity-60")}

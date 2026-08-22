@@ -2,7 +2,6 @@ import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { getSetupStatus, startOAuthLogin } from "@/api/auth";
-import { Avatar } from "@/components/ui/avatar/Avatar";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
@@ -104,26 +103,11 @@ export default function RegisterPage() {
       <AuthLayout
         eyebrow="Onboarding"
         title="Create a local ThunderForge account."
-        description="Phase 1 uses secure cookie sessions backed by the existing Rust auth stack, leaving room for worlds, actors, permissions, and multiplayer ownership later."
+        description="Set up your account to start building and running worlds."
         aside={
           <Card>
-            <div className="grid gap-4">
+            <div className="grid gap-3">
               <h2 className="text-lg font-semibold">Already have access?</h2>
-              <p className="text-muted-foreground">
-                Return to login or review the welcome hall this session
-                unlocks.
-              </p>
-              <div className="grid gap-3">
-                <div className="inline-flex gap-3">
-                  <Avatar seed="archivist" name="Archivist" />
-                  <Avatar seed="summoner" name="Summoner" />
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Accounts created here can later attach to worlds, actors,
-                  invites, and policy scopes.
-                </p>
-              </div>
-              <RuneDivider label="Return paths" />
               <div className="grid gap-2">
                 <Link to="/login" className="font-medium text-primary hover:underline">
                   Return to login
@@ -141,8 +125,7 @@ export default function RegisterPage() {
             <div className="grid gap-1.5">
               <h2 className="text-lg font-semibold">Create credentials</h2>
               <p className="text-muted-foreground">
-                Registration stores Argon2 password hashes and starts a
-                database-backed session immediately.
+                You'll be signed in right away once your account is created.
               </p>
             </div>
 

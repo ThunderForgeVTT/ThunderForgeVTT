@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { Avatar } from "@/components/ui/avatar/Avatar";
 import { Container } from "@/components/ui/container/Container";
 import { RuneDivider } from "@/components/ui/rune-divider/RuneDivider";
 
@@ -29,17 +28,6 @@ export function AuthLayout({
             {title}
           </h1>
           <p className="max-w-2xl text-muted-foreground">{description}</p>
-          <div className="mt-2 flex flex-wrap items-center gap-4 text-muted-foreground">
-            <div className="inline-flex items-center [&>*:not(:first-child)]:-ml-2">
-              <Avatar seed="scribe" name="Scribe" size="sm" />
-              <Avatar seed="warden" name="Warden" size="sm" />
-              <Avatar seed="seer" name="Seer" size="sm" />
-            </div>
-            <span>
-              Onboarding and account access all route through the same
-              typed shell.
-            </span>
-          </div>
         </section>
 
         <RuneDivider label="Access rituals" />
