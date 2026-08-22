@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { WorldLayout } from "@/layouts/world-layout/WorldLayout";
+import { WorldStagingPage } from "@/layouts/world-layout/WorldStagingPage";
 import type { SeoConfig } from "@/types/seo";
 import { createWorldStore } from "@/engine/world/store";
 import {
@@ -22,6 +23,7 @@ import { useCanvasEngine } from "@/engine/bevy/useCanvasEngine";
 import { getWorld } from "@/api/world";
 import { getScenes } from "@/api/scenes";
 import { useAuth } from "@/hooks/useAuth";
+import { useWorldRole } from "@/hooks/useWorldRole";
 import { WallTool } from "@/components/canvas-tools/WallTool";
 import { LightingTool } from "@/components/canvas-tools/LightingTool";
 import { ShapeTool } from "@/components/canvas-tools/ShapeTool";
@@ -30,7 +32,6 @@ import { AssetPasteTool } from "@/components/canvas-tools/AssetPasteTool";
 import { TokenTool } from "@/components/canvas-tools/TokenTool";
 import { TokenPanel } from "@/components/TokenPanel";
 import type { CanvasImageAsset } from "@/api/assets";
-import { SceneSwitcher } from "@/components/world/SceneSwitcher";
 import type { WorldRecord } from "@/types/world";
 import type { SceneRecord } from "@/types/scene";
 
@@ -88,11 +89,22 @@ export default function WorldPage() {
   // delete/ownership-assignment controls to the GM.
   const [tokenPanelOpen, setTokenPanelOpen] = useState(false);
 
-  // GM/scene-owner check: same `createdBy === user.id` ownership
-  // comparison already used to gate GM-only affordances on
-  // WorldDashboardPage.tsx. Wall authoring tools (FR-009) are hidden
-  // entirely for non-owners, never merely disabled.
-  const isSceneOwner = Boolean(world && user && world.createdBy === user.id);
+  // GM/scene-owner check. Spec 009 (T007): this used to be a bare
+  // `world.createdBy === user.id` comparison, which only recognized the
+  // world's original creator — an invited co-GM (a `world_members` row
+  // with role "GM") was silently treated as a non-owner. `useWorldRole`
+  // fixes that by also matching an accepted GM-role membership, falling
+  // back to the same createdBy check when no membership row exists yet
+  // (research.md §3). Wall authoring tools (FR-009) are hidden entirely
+  // for non-GMs, never merely disabled.
+  const { isGm: isSceneOwner } = useWorldRole(id, world);
+  // Spec 009 (T010): staging page vs full-screen canvas is a local,
+  // per-user UI state — never synced across users (FR-014) and never
+  // reflected in the URL. The canvas container below is rendered
+  // unconditionally regardless of this value (only its CSS visibility
+  // changes) so the already-booted Bevy engine's canvas handle never goes
+  // stale (research.md §1).
+  const [playView, setPlayView] = useState<"staging" | "playing">("staging");
   const sceneId = selectedSceneId;
 
   // Spec 004 (US4, T034-T036): scene-switch loading/error feedback. Before
@@ -235,14 +247,82 @@ export default function WorldPage() {
     };
   }, [id]);
 
+  // Spec 009: stabilized with useCallback — useCanvasEngine's mount effect
+  // depends on this callback's identity (see useCanvasEngine.ts), so a
+  // fresh inline function here re-triggers mountEngine() on every render.
+  // That was always latent, but WorldPage.tsx didn't previously have a
+  // render-triggering subscription (useWorldRole -> useWorldMembers, added
+  // in this spec) frequent enough to actually surface it as an infinite
+  // "Maximum update depth exceeded" loop.
+  const handleEngineError = useCallback((err: Error) => {
+    console.error("Bevy engine failed to mount:", err);
+  }, []);
+
   // 🎮 Phase 4.7.F1: Use canvas engine hook for responsive sizing
   const { containerRef, engineReady, loadStage, error: engineError } = useCanvasEngine({
     worldId: id,
     canvasSelector: `#${canvasContainerId}`,
-    onError: (err) => {
-      console.error("Bevy engine failed to mount:", err);
-    },
+    onError: handleEngineError,
   });
+
+  // Spec 009: Bevy/winit inserts the real <canvas> as a direct child of
+  // <body> (verified via live inspection), not as a descendant of
+  // `#game-canvas-container` — the container div only reserves layout
+  // space for it, it never actually contains it. Two consequences this
+  // effect handles directly, since neither can be solved with CSS on our
+  // own React tree:
+  // 1. `display:none` on any wrapper around the container never hides the
+  //    real canvas — it must be toggled on the canvas element itself.
+  // 2. With no positioning of its own, the canvas sits in normal document
+  //    flow as the last child of <body> — i.e. *after* the full-viewport
+  //    `WorldLayout`/`WorldStagingPage` wrappers that come before it in the
+  //    DOM, landing one viewport-height below where it's meant to render.
+  //    `position: fixed; inset: 0` removes it from that flow entirely so
+  //    it always fills the viewport regardless of surrounding page content.
+  // A plain effect keyed on [playView] can miss the exact moment the
+  // canvas is inserted (e.g. right after a reload, mid-WASM-boot) and
+  // then never re-fire since nothing else changes — a MutationObserver on
+  // <body>, plus applying playViewRef's current value whenever a canvas
+  // shows up, catches it regardless of timing.
+  const playViewRef = useRef(playView);
+  playViewRef.current = playView;
+
+  const applyCanvasVisibility = useCallback((canvas: HTMLCanvasElement) => {
+    if (playViewRef.current === "playing") {
+      canvas.style.display = "";
+      canvas.style.position = "fixed";
+      canvas.style.inset = "0";
+    } else {
+      canvas.style.display = "none";
+    }
+  }, []);
+
+  useEffect(() => {
+    const existing = document.querySelector<HTMLCanvasElement>("canvas");
+    if (existing) {
+      applyCanvasVisibility(existing);
+    }
+
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        mutation.addedNodes.forEach((node) => {
+          if (node instanceof HTMLCanvasElement) {
+            applyCanvasVisibility(node);
+          }
+        });
+      }
+    });
+    observer.observe(document.body, { childList: true });
+
+    return () => observer.disconnect();
+  }, [applyCanvasVisibility]);
+
+  useEffect(() => {
+    const canvas = document.querySelector<HTMLCanvasElement>("canvas");
+    if (canvas) {
+      applyCanvasVisibility(canvas);
+    }
+  }, [playView, engineReady, applyCanvasVisibility]);
 
   useEffect(
     () => worldStore.subscribe((event) => setWorldState(event.state)),
@@ -596,9 +676,32 @@ export default function WorldPage() {
   return (
     <>
       <SEO {...seo} />
+      <div style={{ display: playView === "staging" ? "block" : "none" }}>
+        <WorldStagingPage
+          worldId={id}
+          world={world}
+          scenes={scenes}
+          sceneId={sceneId}
+          onSceneChange={setSelectedSceneId}
+          onSceneCreated={(scene) =>
+            setScenes((current) => [...current, scene])
+          }
+          isGm={isSceneOwner}
+          onPlay={() => setPlayView("playing")}
+        />
+      </div>
+      <div style={{ display: playView === "playing" ? "block" : "none" }}>
       <WorldLayout
+        onBackToStaging={() => setPlayView("staging")}
         worldId={id}
         tokens={Object.values(worldState.tokens)}
+        scenes={scenes}
+        sceneId={sceneId}
+        onSceneChange={setSelectedSceneId}
+        onSceneCreated={(scene) =>
+          setScenes((current) => [...current, scene])
+        }
+        isGm={isSceneOwner}
         canvas={
           <div
             ref={containerRef}
@@ -701,41 +804,6 @@ export default function WorldPage() {
                 </Button>
               </div>
             ) : null}
-            {scenes.length > 0 || isSceneOwner ? (
-              // Not gated on scenes.length alone: a brand-new world has
-              // zero scenes, and the "New scene" affordance (the only way
-              // to create the first one) needs to render precisely then.
-              // SceneSwitcher itself hides the scene picker when the list
-              // is empty and hides "New scene" when canCreateScene is false.
-              <div
-                style={{
-                  position: "absolute",
-                  top: "1rem",
-                  left: "50%",
-                  transform: "translateX(-50%)",
-                  // Higher than the GM tool panels (zIndex 900 below):
-                  // the ShapeTool panel's row of sub-tool buttons can run
-                  // wide enough to visually/pointer-overlap this
-                  // top-center control at common viewport widths, and
-                  // scene selection needs to stay reliably clickable
-                  // regardless of which tool panel happens to paint on
-                  // top of it.
-                  zIndex: 950,
-                  width: "14rem",
-                }}
-              >
-                <SceneSwitcher
-                  worldId={id}
-                  scenes={scenes}
-                  sceneId={sceneId}
-                  onSceneChange={setSelectedSceneId}
-                  onSceneCreated={(scene) =>
-                    setScenes((current) => [...current, scene])
-                  }
-                  canCreateScene={isSceneOwner}
-                />
-              </div>
-            ) : null}
             {isSceneOwner && sceneId ? (
               <div
                 style={{
@@ -830,6 +898,7 @@ export default function WorldPage() {
           </div>
         }
       />
+      </div>
     </>
   );
 }

@@ -53,16 +53,28 @@ async function registerAndCreateWorld(page: Page, worldName: string): Promise<vo
   // Spec 008: CreateWorldPage navigates straight to /world/{id}/play (the
   // canvas), not the dashboard — no separate "Enter world" click.
   await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
+  // Spec 009: /world/:id/play now lands on the staging page first — the
+  // canvas only appears in full-screen mode after clicking "Play".
+  await page.getByTestId("play-button").click();
 }
 
 async function createScene(page: Page, name: string): Promise<void> {
-  await page.getByTestId("new-scene-button").click();
-  await page.getByTestId("new-scene-name-input").fill(name);
-  await page.getByTestId("create-scene-submit").click();
+  // Spec 009: in full-screen canvas mode, "New scene" lives inside the
+  // (collapsed-by-default) sidebar now, not floating over the canvas. The
+  // staging page (hidden but still mounted) renders its own copy of the
+  // same control, so every lookup here must be scoped to the visible one
+  // or Playwright's strict mode rejects the ambiguous match.
+  const newSceneButton = page.locator('[data-testid="new-scene-button"]:visible');
+  if ((await newSceneButton.count()) === 0) {
+    await page.getByTestId("sidebar-toggle-button").click();
+  }
+  await newSceneButton.click();
+  await page.locator('[data-testid="new-scene-name-input"]:visible').fill(name);
+  await page.locator('[data-testid="create-scene-submit"]:visible').click();
   await expect(page.getByTestId("new-scene-name-input")).toBeHidden({
     timeout: 10_000,
   });
-  await expect(page.getByTestId("scene-switcher")).toContainText(name);
+  await expect(page.locator('[data-testid="scene-switcher"]:visible')).toContainText(name);
 }
 
 /** Dispatches a synthetic `paste` ClipboardEvent carrying real PNG bytes.

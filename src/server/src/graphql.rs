@@ -76,7 +76,7 @@ pub use helpers::{
 
 // Phase 4.9.Z Step 5: Query extraction into separate modules
 pub mod queries;
-pub use queries::{AdminQuery, HealthcheckQuery, SceneQuery, UserQuery, InviteQuery};
+pub use queries::{ActorQuery, AdminQuery, HealthcheckQuery, SceneQuery, UserQuery, InviteQuery};
 
 // Phase 4.10.B: Invite & Membership mutations for multiplayer campaigns
 pub mod mutations_invites;
@@ -248,6 +248,42 @@ impl From<crate::models::Scene> for GraphQLScene {
             updated_at: scene.updated_at,
             background_image_path: scene.background_image_path,
             background_asset_id: scene.background_asset_id,
+        }
+    }
+}
+
+// Spec 009 (T001): GM staging page's NPC roster read path.
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLWorldActor {
+    id: uuid::Uuid,
+    world_id: uuid::Uuid,
+    scene_id: uuid::Uuid,
+    actor_type: String,
+    game_system_id: Option<String>,
+    label: String,
+    is_public: bool,
+    is_npc: bool,
+    created_by: uuid::Uuid,
+    owned_by: uuid::Uuid,
+    created_at: chrono::NaiveDateTime,
+    updated_at: chrono::NaiveDateTime,
+}
+
+impl From<WorldActor> for GraphQLWorldActor {
+    fn from(actor: WorldActor) -> Self {
+        Self {
+            id: actor.id,
+            world_id: actor.world_id,
+            scene_id: actor.scene_id,
+            actor_type: actor.actor_type,
+            game_system_id: actor.game_system_id,
+            label: actor.label,
+            is_public: actor.is_public,
+            is_npc: actor.is_npc,
+            created_by: actor.created_by,
+            owned_by: actor.owned_by,
+            created_at: actor.created_at,
+            updated_at: actor.updated_at,
         }
     }
 }
@@ -1658,6 +1694,7 @@ pub struct QueryRoot(
     SceneQuery,
     InviteQuery,
     AssetQuery,
+    ActorQuery,
 );
 
 #[derive(MergedObject, Default)]

@@ -44,6 +44,13 @@ async function waitForEngineReady(page: Page): Promise<void> {
   await page.waitForTimeout(1_000);
 }
 
+/** Spec 009: `/world/:id/play` now lands on the staging page first — the
+ * canvas (and its loading indicators) only become visible in full-screen
+ * mode after clicking "Play". */
+async function clickPlay(page: Page): Promise<void> {
+  await page.getByTestId("play-button").click();
+}
+
 test.describe("US1: zero-world registration goes straight to world creation, then straight to canvas (T002-T003)", () => {
   test("a brand-new account lands directly on the create-world form, with no /welcome hub content ever rendered", async ({
     page,
@@ -72,16 +79,20 @@ test.describe("US1: zero-world registration goes straight to world creation, the
     // FR-004/FR-006: straight to /world/:id/play, never /world/:id (the
     // dashboard).
     await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
-    await waitForEngineReady(page);
 
     // The default scene already exists (create_world's atomic transaction,
-    // T005) — the scene switcher shows it selected, and the "New scene"
-    // modal never had to appear for the canvas to have content.
+    // T005) — the staging page's scene switcher (spec 009) shows it
+    // selected, and the "New scene" modal never had to appear.
     await expect(page.getByTestId("scene-switcher")).toBeVisible({
       timeout: 10_000,
     });
     await expect(page.getByTestId("scene-switcher")).toContainText(worldName);
     await expect(page.getByTestId("new-scene-name-input")).toHaveCount(0);
+
+    // Spec 009: clicking Play enters full-screen canvas mode, where the
+    // same default scene is already loaded and rendered.
+    await clickPlay(page);
+    await waitForEngineReady(page);
   });
 });
 
@@ -94,6 +105,11 @@ test.describe("US1: honest engine-load feedback (T004)", () => {
     await page.locator("#world-name").fill(`E2E Loading ${uniqueSuffix()}`);
     await page.getByRole("button", { name: /create world/i }).click();
     await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
+    // Spec 009: the indicator lives inside full-screen canvas mode now —
+    // click Play immediately to catch it as early as possible (the engine
+    // itself starts downloading as soon as the page mounts, regardless of
+    // staging vs. full-screen, per research.md §1/§4).
+    await clickPlay(page);
 
     // FR-002/SC-002: the indicator is visible from render until engineReady
     // flips true — check it's present immediately (before the canvas is
@@ -119,6 +135,7 @@ test.describe("US1: honest engine-load feedback (T004)", () => {
     await page.route("**/engine*.wasm", (route) => route.abort());
     await page.getByRole("button", { name: /create world/i }).click();
     await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
+    await clickPlay(page);
 
     await expect(page.getByText("Failed to load game engine")).toBeVisible({
       timeout: 15_000,

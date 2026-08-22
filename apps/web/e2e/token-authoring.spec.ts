@@ -32,6 +32,12 @@ function uniqueSuffix(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** Spec 009: `/world/:id/play` now lands on the staging page first — the
+ * canvas only appears in full-screen mode after clicking "Play". */
+async function clickPlay(page: Page): Promise<void> {
+  await page.getByTestId("play-button").click();
+}
+
 interface Credentials {
   username: string;
   email: string;
@@ -69,6 +75,7 @@ async function registerAndCreateWorld(page: Page, worldName: string): Promise<st
   // Spec 008: CreateWorldPage now navigates straight to /world/{id}/play
   // (the canvas), not the dashboard — no separate "Enter world" click.
   await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
+  await clickPlay(page);
   const match = /\/world\/([^/]+)\/play$/.exec(new URL(page.url()).pathname);
   if (!match) {
     throw new Error(`Could not extract world id from URL: ${page.url()}`);
@@ -149,16 +156,26 @@ async function joinWorldAndEnterPlay(
   await page.waitForURL(new RegExp(`/world/${worldId}$`), { timeout: 15_000 });
   await page.getByRole("link", { name: "Enter world" }).first().click();
   await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
+  await clickPlay(page);
 }
 
 async function createScene(page: Page, name: string): Promise<void> {
-  await page.getByTestId("new-scene-button").click();
-  await page.getByTestId("new-scene-name-input").fill(name);
-  await page.getByTestId("create-scene-submit").click();
+  // Spec 009: in full-screen canvas mode, "New scene" lives inside the
+  // (collapsed-by-default) sidebar now, not floating over the canvas. The
+  // staging page (hidden but still mounted) renders its own copy of the
+  // same control, so every lookup here must be scoped to the visible one
+  // or Playwright's strict mode rejects the ambiguous match.
+  const newSceneButton = page.locator('[data-testid="new-scene-button"]:visible');
+  if ((await newSceneButton.count()) === 0) {
+    await page.getByTestId("sidebar-toggle-button").click();
+  }
+  await newSceneButton.click();
+  await page.locator('[data-testid="new-scene-name-input"]:visible').fill(name);
+  await page.locator('[data-testid="create-scene-submit"]:visible').click();
   await expect(page.getByTestId("new-scene-name-input")).toBeHidden({
     timeout: 10_000,
   });
-  await expect(page.getByTestId("scene-switcher")).toContainText(name);
+  await expect(page.locator('[data-testid="scene-switcher"]:visible')).toContainText(name);
 }
 
 type Box = { x: number; y: number; width: number; height: number };
@@ -179,7 +196,20 @@ async function canvasBox(page: Page): Promise<Box> {
 /** See canvas-authoring.spec.ts's identical helper for the full
  * rationale (GM flag / bridge-ready / canvas-focus race). */
 async function waitForEngineReady(page: Page): Promise<void> {
+  // Spec 009: playView (staging vs. full-screen canvas) is per-tab client
+  // state, not persisted across a page reload — a reload always lands back
+  // on the staging page first. Every reload site in this file just calls
+  // this helper afterward, so handle it here once rather than at each site.
+  // A one-shot `isVisible()` check races the post-reload render (the
+  // staging page/Play button may not exist in the DOM yet at the instant
+  // this runs) — an immediate-`false` result would then silently skip the
+  // click and leave the canvas hidden. Checking "already playing" instead,
+  // then *waiting* (not one-shot checking) for Play otherwise, is race-free.
   const canvas = page.locator("canvas");
+  const alreadyPlaying = await canvas.isVisible().catch(() => false);
+  if (!alreadyPlaying) {
+    await page.getByTestId("play-button").click({ timeout: 15_000 });
+  }
   await expect(canvas).toBeVisible({ timeout: 15_000 });
   await page.waitForTimeout(3_000);
   await canvas.scrollIntoViewIfNeeded();

@@ -52,19 +52,31 @@ async function registerAndCreateWorld(page: Page, worldName: string): Promise<vo
   // Spec 008: CreateWorldPage navigates straight to /world/{id}/play (the
   // canvas), not the dashboard — no separate "Enter world" click.
   await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
+  // Spec 009: /world/:id/play now lands on the staging page first — the
+  // canvas only appears in full-screen mode after clicking "Play".
+  await page.getByTestId("play-button").click();
 }
 
 async function createScene(page: Page, name: string): Promise<void> {
-  await page.getByTestId("new-scene-button").click();
-  await page.getByTestId("new-scene-name-input").fill(name);
-  await page.getByTestId("create-scene-submit").click();
+  // Spec 009: in full-screen canvas mode, "New scene" lives inside the
+  // (collapsed-by-default) sidebar now, not floating over the canvas. The
+  // staging page (hidden but still mounted) renders its own copy of the
+  // same control, so every lookup here must be scoped to the visible one
+  // or Playwright's strict mode rejects the ambiguous match.
+  const newSceneButton = page.locator('[data-testid="new-scene-button"]:visible');
+  if ((await newSceneButton.count()) === 0) {
+    await page.getByTestId("sidebar-toggle-button").click();
+  }
+  await newSceneButton.click();
+  await page.locator('[data-testid="new-scene-name-input"]:visible').fill(name);
+  await page.locator('[data-testid="create-scene-submit"]:visible').click();
 
   // Dialog closes and the switcher shows the newly-created (and
   // auto-selected) scene once creation round-trips.
   await expect(page.getByTestId("new-scene-name-input")).toBeHidden({
     timeout: 10_000,
   });
-  await expect(page.getByTestId("scene-switcher")).toContainText(name);
+  await expect(page.locator('[data-testid="scene-switcher"]:visible')).toContainText(name);
 }
 
 async function importMap(
@@ -83,9 +95,12 @@ async function importMap(
 }
 
 async function switchToScene(page: Page, name: string): Promise<void> {
-  await page.getByTestId("scene-switcher").click();
+  // Spec 009: both the (hidden, if in full-screen mode) staging page and
+  // the sidebar render their own scene switcher — scope to the visible one.
+  const sceneSwitcher = page.locator('[data-testid="scene-switcher"]:visible');
+  await sceneSwitcher.click();
   await page.getByRole("option", { name }).click();
-  await expect(page.getByTestId("scene-switcher")).toContainText(name);
+  await expect(sceneSwitcher).toContainText(name);
 }
 
 type Box = { x: number; y: number; width: number; height: number };
@@ -142,7 +157,20 @@ async function canvasBox(page: Page): Promise<Box> {
  * plus an extra settle window.
  */
 async function waitForEngineReady(page: Page): Promise<void> {
+  // Spec 009: playView (staging vs. full-screen canvas) is per-tab client
+  // state, not persisted across a page reload — a reload always lands back
+  // on the staging page first. Every reload site in this file just calls
+  // this helper afterward, so handle it here once rather than at each site.
+  // A one-shot `isVisible()` check races the post-reload render (the
+  // staging page/Play button may not exist in the DOM yet at the instant
+  // this runs) — an immediate-`false` result would then silently skip the
+  // click and leave the canvas hidden. Checking "already playing" instead,
+  // then *waiting* (not one-shot checking) for Play otherwise, is race-free.
   const canvas = page.locator("canvas");
+  const alreadyPlaying = await canvas.isVisible().catch(() => false);
+  if (!alreadyPlaying) {
+    await page.getByTestId("play-button").click({ timeout: 15_000 });
+  }
   await expect(canvas).toBeVisible({ timeout: 15_000 });
   await page.waitForTimeout(3_000);
   await canvas.scrollIntoViewIfNeeded();
@@ -212,12 +240,11 @@ test.describe("Native canvas authoring: map import and scene switching", () => {
   }) => {
     await registerAndCreateWorld(page, `E2E World ${uniqueSuffix()}`);
 
-    // A brand-new world has zero scenes — only the "New scene" affordance
-    // should be visible (FR-013: the canvas must still work with nothing
-    // authored on it yet; this ensures the *page*, not just the canvas,
-    // doesn't crash on zero scenes either).
-    await expect(page.getByTestId("new-scene-button")).toBeVisible();
-    await expect(page.getByTestId("map-import-tool")).toHaveCount(0);
+    // Spec 009: "New scene" now lives in the full-screen sidebar, closed by
+    // default — open it before the rest of this test relies on it being
+    // reachable via `createScene`/`switchToScene`.
+    await page.getByTestId("sidebar-toggle-button").click();
+    await expect(page.locator('[data-testid="new-scene-button"]:visible')).toBeVisible();
 
     // --- Scene One: import the rich demo map ---
     await createScene(page, "Scene One");
