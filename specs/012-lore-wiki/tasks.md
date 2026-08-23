@@ -138,7 +138,7 @@ Existing two-project split (plan.md "Project Structure"): `src/server/` (Rust/Ax
 ### Implementation for User Story 4
 
 - [X] T042 [US4] Extend `updateLoreEntry` in `src/server/src/graphql/mutations_lore.rs` to regenerate `slug` (via `markdown::slug`, with collision disambiguation) whenever `title` changes, keeping `id` stable (FR-014) (depends on T012, T021)
-- [ ] T043 [US4] Enforce Viewer-or-above access denial in the `loreEntry(worldId, slug)` query in `src/server/src/graphql/queries/lore.rs` for non-members (FR-015) (depends on T023)
+- [X] T043 [US4] Enforce Viewer-or-above access denial in the `loreEntry(worldId, slug)` query in `src/server/src/graphql/queries/lore.rs` for non-members (FR-015) (depends on T023)
 - [ ] T044 [P] [US4] Add a "copy link" control to `apps/web/src/pages/world/lore/LoreEntryDetailPage.tsx` that copies the current `/world/:id/lore/:slug` URL (depends on T029)
 - [ ] T045 [P] [US4] Add a not-found/graceful state to `LoreEntryDetailPage.tsx` for a `null` `loreEntry` response (stale slug or denied access) (depends on T029, T043)
 
@@ -171,7 +171,7 @@ Existing two-project split (plan.md "Project Structure"): `src/server/` (Rust/Ax
 - [ ] T051 [P] Run `cargo check` and `cargo test` in `src/server` to confirm the new resolvers and inline `#[tokio::test]` coverage pass (constitution Principle V)
 - [ ] T052 [P] Run `pnpm --filter @thunderforge/web build` and `pnpm --filter @thunderforge/web lint` in `apps/web`
 - [ ] T053 Execute every scenario in `specs/012-lore-wiki/quickstart.md` against a running local dev stack (`docker compose up`), including the cross-cutting deletion/ownership-block/upload-size checks
-- [ ] T054 [P] Confirm the world-removal cascade deletes a departed member's `world_lore_permissions` rows (mirrors the existing actor-permission cascade, spec 010) by exercising it against `src/server/src/auth/lore_permissions.rs` and the relevant world-membership-removal path
+- [X] T054 [P] Confirm the world-removal cascade deletes a departed member's `world_lore_permissions` rows (mirrors the existing actor-permission cascade, spec 010) by exercising it against `src/server/src/auth/lore_permissions.rs` and the relevant world-membership-removal path
 
 ---
 
