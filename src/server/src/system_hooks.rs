@@ -10,46 +10,32 @@ use std::collections::HashMap;
 
 /// The contract for all system-provided hooks.
 /// Systems implement these interfaces to customize VTT behavior.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SystemHookContract {
     /// Called when a token is about to move.
     /// Returns true to allow the move, false to reject it.
     pub on_token_move: Option<String>, // Function name in system module
-    
+
     /// Called to compute derived token statistics (AC, initiative, etc.)
     /// Receives base stats, returns computed derived stats.
     pub compute_derived_stats: Option<String>,
-    
+
     /// Called to validate a roll (e.g., "4d6", "2d20kh1").
     /// Returns parsed roll or error.
     pub validate_roll: Option<String>,
-    
+
     /// Called to format damage output (e.g., "2d6+3" -> "2d6+3 (avg: 10)").
     pub format_damage: Option<String>,
-    
+
     /// Called when a token's conditions change.
     /// Allows system to reject or modify conditions.
     pub on_condition_change: Option<String>,
-    
+
     /// Called to check if a token can see another token (fog of war).
     pub check_token_visibility: Option<String>,
-    
+
     /// Called to compute armor class for a token.
     pub compute_armor_class: Option<String>,
-}
-
-impl Default for SystemHookContract {
-    fn default() -> Self {
-        Self {
-            on_token_move: None,
-            compute_derived_stats: None,
-            validate_roll: None,
-            format_damage: None,
-            on_condition_change: None,
-            check_token_visibility: None,
-            compute_armor_class: None,
-        }
-    }
 }
 
 /// Registry of all active system hooks per world/system.
@@ -75,10 +61,7 @@ impl SystemHookRegistry {
 
     /// Get hooks for a system (returns empty contract if not found)
     pub fn get_system_hooks(&self, system_id: &str) -> SystemHookContract {
-        self.hooks
-            .get(system_id)
-            .cloned()
-            .unwrap_or_default()
+        self.hooks.get(system_id).cloned().unwrap_or_default()
     }
 
     /// Check if a hook is registered for a system
@@ -168,7 +151,10 @@ mod tests {
         let hooks = SystemHookContract::default();
         registry.register_system("d20-5e".to_string(), hooks);
 
-        assert!(registry.has_hook("d20-5e", "onTokenMove") || !registry.get_system_hooks("d20-5e").on_token_move.is_some());
+        assert!(
+            registry.has_hook("d20-5e", "onTokenMove")
+                || !registry.get_system_hooks("d20-5e").on_token_move.is_some()
+        );
 
         registry.unregister_system("d20-5e");
         let retrieved = registry.get_system_hooks("d20-5e");

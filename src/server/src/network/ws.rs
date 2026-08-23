@@ -7,16 +7,14 @@
 //! Phase 4.9.B.2: Enhanced with session lifecycle tracking (connect/disconnect)
 
 use axum::{
-    extract::{ws::WebSocketUpgrade, Path, State},
-    response::IntoResponse,
     Extension,
+    extract::{Path, State, ws::WebSocketUpgrade},
+    response::IntoResponse,
 };
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
-use crate::{
-    auth_middleware::AuthenticatedUser, models::WorldEvent, session, state::AppState,
-};
+use crate::{auth_middleware::AuthenticatedUser, models::WorldEvent, session, state::AppState};
 
 /// Handles HTTP upgrade requests for WebSocket connections.
 ///
@@ -46,9 +44,7 @@ pub async fn websocket_handler(
     let player_id = auth_user.user_id;
     let broadcast_rx = app_state.world_event_sender.subscribe();
 
-    ws.on_upgrade(move |socket| {
-        handle_socket(socket, broadcast_rx, app_state, player_id, world_id)
-    })
+    ws.on_upgrade(move |socket| handle_socket(socket, broadcast_rx, app_state, player_id, world_id))
 }
 
 /// Handles the WebSocket connection lifecycle.
@@ -165,12 +161,14 @@ async fn handle_socket(
         eprintln!("[WS] ❌ Failed to record player disconnect: {}", e);
     }
 
-    eprintln!("[WS] 🔌 WebSocket connection closed for player {}", player_id);
+    eprintln!(
+        "[WS] 🔌 WebSocket connection closed for player {}",
+        player_id
+    );
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[test]
     fn test_message_serialization() {

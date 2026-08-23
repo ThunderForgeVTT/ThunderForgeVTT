@@ -1,11 +1,11 @@
-use async_graphql::{Enum, InputObject, SimpleObject, Json};
+use async_graphql::{Enum, InputObject, Json, SimpleObject};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::db_types::PolicyEffectEnum;
 // use crate::models::Policy; // Disabled - Policy table not implemented
 
-use super::{GraphQLUser, GraphQLWorld, GraphQLWorldToken, GraphQLWorldEvent};
+use super::{GraphQLUser, GraphQLWorld, GraphQLWorldEvent, GraphQLWorldToken};
 
 // ========== World & Scene Creation/Update ==========
 
@@ -390,62 +390,9 @@ pub struct GraphQLUpdateFogMaskInput {
 }
 
 // ========== Campaign & Invite Management (Phase 4.10) ==========
-
-/// Input for generating a new invite code
-#[derive(InputObject, Debug, Clone)]
-pub struct GraphQLGenerateInviteCodeInput {
-    /// World ID for the campaign
-    pub world_id: Uuid,
-    /// Maximum number of times this invite can be used (0 = unlimited)
-    pub max_uses: i32,
-    /// Optional expiry time (ISO 8601 format, e.g., "2026-05-13T12:00:00Z")
-    pub expires_at: Option<String>,
-}
-
-/// Input for joining a world via invite code
-#[derive(InputObject, Debug, Clone)]
-pub struct GraphQLJoinWorldInput {
-    /// The invite code from the URL or shared link
-    pub invite_code: String,
-}
-
-/// Input for updating a member's role in a world
-#[derive(InputObject, Debug, Clone)]
-pub struct GraphQLUpdateMemberRoleInput {
-    /// World ID where the member belongs
-    pub world_id: Uuid,
-    /// User ID of the member to update
-    pub user_id: Uuid,
-    /// New role: Owner, GM, or Player
-    pub role: String,
-}
-
-// ========== Campaign & Invite Response Types ==========
-
-/// GraphQL representation of a world invite code
-#[derive(SimpleObject, Debug, Clone)]
-pub struct GraphQLWorldInvite {
-    pub id: Uuid,
-    pub world_id: Uuid,
-    pub invite_code: String,
-    pub max_uses: i32,
-    pub used_count: i32,
-    pub expires_at: Option<String>,
-    pub created_by: Uuid,
-    pub created_at: String,
-    pub updated_at: String,
-    /// Human-readable status: e.g., "2/5 uses", "Expired (2026-05-01)", or "Unlimited uses"
-    pub status: String,
-}
-
-/// GraphQL representation of a world membership
-#[derive(SimpleObject, Debug, Clone)]
-pub struct GraphQLWorldMembership {
-    pub id: Uuid,
-    pub world_id: Uuid,
-    pub user_id: Uuid,
-    pub role: String,
-    pub joined_at: String,
-    pub created_at: String,
-    pub updated_at: String,
-}
+//
+// The actual invite/membership input and response types are defined in
+// mutations_invites.rs (GenerateInviteCodeInput, JoinWorldInput,
+// UpdateMemberRoleInput, WorldInvitePayload, WorldMembershipPayload) — the
+// GraphQL*-prefixed versions once here were an orphaned earlier draft,
+// never wired into any resolver, and have been removed.

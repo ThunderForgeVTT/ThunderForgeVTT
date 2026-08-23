@@ -77,7 +77,11 @@ enum ShapeDragMode {
     /// Click-dragging out a brand-new stroke/rect/ellipse/line from
     /// `start` to the live cursor position. For `Stroke`, `points`
     /// accumulates every sampled position while dragging.
-    Creating { kind: ShapeKind, start: Vec2, points: Vec<Vec2> },
+    Creating {
+        kind: ShapeKind,
+        start: Vec2,
+        points: Vec<Vec2>,
+    },
     /// Dragging an existing shape's whole body to a new position. `origin`
     /// is the cursor position at drag-start; `prior_geometry` is the
     /// shape's full geometry at drag-start, captured for the undo stack.
@@ -107,7 +111,9 @@ fn cursor_world_position(
     let window = windows.iter().next()?;
     let (camera, camera_transform) = camera_query.iter().next()?;
     let cursor_px = window.cursor_position()?;
-    camera.viewport_to_world_2d(camera_transform, cursor_px).ok()
+    camera
+        .viewport_to_world_2d(camera_transform, cursor_px)
+        .ok()
 }
 
 /// The anchor/center position used for hit-testing and moving a shape,
@@ -355,7 +361,11 @@ pub(crate) fn handle_shape_input(
 
     if mouse_button.just_released(MouseButton::Left) {
         match std::mem::take(&mut drag.mode) {
-            ShapeDragMode::Creating { kind, start, points } => {
+            ShapeDragMode::Creating {
+                kind,
+                start,
+                points,
+            } => {
                 let end = cursor;
                 let geometry = match kind {
                     ShapeKind::Stroke => {
@@ -491,17 +501,17 @@ pub(crate) fn handle_shape_keyboard_toggles(
         return;
     }
 
-    if keyboard.just_pressed(KeyCode::Delete) || keyboard.just_pressed(KeyCode::Backspace) {
-        if let Some(deleted) = shape_set.remove(&shape_id) {
-            shape_set.push_undo(ShapeEdit::Delete { deleted });
-            selected_shape.deselect();
-            emit_shape_selection(None);
-            emit_event(json!({
-                "type": "delete_shape",
-                "shapeId": shape_id,
-                "worldId": active_world.0,
-            }));
-        }
+    if (keyboard.just_pressed(KeyCode::Delete) || keyboard.just_pressed(KeyCode::Backspace))
+        && let Some(deleted) = shape_set.remove(&shape_id)
+    {
+        shape_set.push_undo(ShapeEdit::Delete { deleted });
+        selected_shape.deselect();
+        emit_shape_selection(None);
+        emit_event(json!({
+            "type": "delete_shape",
+            "shapeId": shape_id,
+            "worldId": active_world.0,
+        }));
     }
 }
 
@@ -694,7 +704,9 @@ pub(crate) fn sync_shape_visuals(
                     g["x2"].as_f64().unwrap_or(0.0) as f32,
                     g["y2"].as_f64().unwrap_or(0.0) as f32,
                 );
-                commands.spawn(segment_sprite(start, end, color, translation_z)).id()
+                commands
+                    .spawn(segment_sprite(start, end, color, translation_z))
+                    .id()
             }
             ShapeKind::Stroke => {
                 let points: Vec<Vec2> = shape.geometry["points"]

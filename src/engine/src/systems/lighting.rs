@@ -12,8 +12,7 @@ use bevy::window::PrimaryWindow;
 use serde_json::{Value, json};
 
 use crate::resources::{
-    CanvasLayer, IsGameMaster, LightEdit, LightSet, LightSource, SelectedLight, WallSet,
-    is_visible,
+    CanvasLayer, IsGameMaster, LightEdit, LightSet, LightSource, SelectedLight, WallSet, is_visible,
 };
 use crate::{ActiveWorld, TokenIdentity, emit_event};
 
@@ -92,7 +91,9 @@ fn cursor_world_position(
     let window = windows.iter().next()?;
     let (camera, camera_transform) = camera_query.iter().next()?;
     let cursor_px = window.cursor_position()?;
-    camera.viewport_to_world_2d(camera_transform, cursor_px).ok()
+    camera
+        .viewport_to_world_2d(camera_transform, cursor_px)
+        .ok()
 }
 
 /// Resolves a light's effective render/occlusion position: for a
@@ -319,16 +320,16 @@ pub(crate) fn handle_light_keyboard_toggles(
         return;
     }
 
-    if keyboard.just_pressed(KeyCode::Delete) || keyboard.just_pressed(KeyCode::Backspace) {
-        if let Some(deleted) = light_set.remove(&light_id) {
-            light_set.push_undo(LightEdit::Delete { deleted });
-            selected_light.deselect();
-            emit_event(json!({
-                "type": "delete_light",
-                "lightId": light_id,
-                "worldId": active_world.0,
-            }));
-        }
+    if (keyboard.just_pressed(KeyCode::Delete) || keyboard.just_pressed(KeyCode::Backspace))
+        && let Some(deleted) = light_set.remove(&light_id)
+    {
+        light_set.push_undo(LightEdit::Delete { deleted });
+        selected_light.deselect();
+        emit_event(json!({
+            "type": "delete_light",
+            "lightId": light_id,
+            "worldId": active_world.0,
+        }));
     }
 }
 
@@ -442,7 +443,11 @@ pub(crate) fn sync_light_visuals(
     token_positions: Query<(&Transform, &TokenIdentity)>,
     mut sprite_query: Query<
         (&mut Transform, &mut Sprite),
-        (With<LightVisual>, Without<LightHandle>, Without<TokenIdentity>),
+        (
+            With<LightVisual>,
+            Without<LightHandle>,
+            Without<TokenIdentity>,
+        ),
     >,
     handle_query: Query<Entity, With<LightHandle>>,
 ) {
@@ -614,7 +619,10 @@ mod tests {
         let mut positions = HashMap::new();
         positions.insert("token-1".to_string(), Vec2::new(42.0, 7.0));
 
-        assert_eq!(effective_light_position(&light, &positions), Vec2::new(42.0, 7.0));
+        assert_eq!(
+            effective_light_position(&light, &positions),
+            Vec2::new(42.0, 7.0)
+        );
     }
 
     #[test]
@@ -623,14 +631,20 @@ mod tests {
         light.attached_token_id = Some("missing".to_string());
 
         let positions = HashMap::new();
-        assert_eq!(effective_light_position(&light, &positions), Vec2::new(3.0, 4.0));
+        assert_eq!(
+            effective_light_position(&light, &positions),
+            Vec2::new(3.0, 4.0)
+        );
     }
 
     #[test]
     fn effective_position_uses_stored_when_not_attached() {
         let light = source("l1", 3.0, 4.0, 100.0, true);
         let positions = HashMap::new();
-        assert_eq!(effective_light_position(&light, &positions), Vec2::new(3.0, 4.0));
+        assert_eq!(
+            effective_light_position(&light, &positions),
+            Vec2::new(3.0, 4.0)
+        );
     }
 
     #[test]
@@ -658,9 +672,9 @@ mod tests {
     // `thunderforge_canvas_core::wall`'s tests.
     mod apply_light_illumination_tests {
         use super::*;
-        use crate::resources::wall::WallSet as EngineWallSet;
-        use crate::resources::lighting::LightSet as EngineLightSet;
         use crate::TokenIdentity;
+        use crate::resources::lighting::LightSet as EngineLightSet;
+        use crate::resources::wall::WallSet as EngineWallSet;
         use thunderforge_canvas_core::wall::{DoorState as CoreDoorState, Wall as CoreWall};
 
         fn app_with_blocking_wall_and_token(token_pos: Vec2) -> App {

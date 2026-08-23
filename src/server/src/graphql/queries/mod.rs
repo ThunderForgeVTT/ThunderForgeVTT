@@ -10,6 +10,8 @@ pub mod lore;
 pub mod scene;
 pub mod user;
 pub mod invite;
+pub mod item;
+pub mod inventory;
 
 pub use actor::ActorQuery;
 pub use admin::AdminQuery;
@@ -18,3 +20,5 @@ pub use lore::LoreQuery;
 pub use scene::SceneQuery;
 pub use user::UserQuery;
 pub use invite::InviteQuery;
+pub use item::ItemQuery;
+pub use inventory::InventoryQuery;

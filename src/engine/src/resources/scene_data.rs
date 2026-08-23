@@ -1,18 +1,14 @@
-use bevy::prelude::{Resource, Component};
+use bevy::prelude::Resource;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum GridType {
+    #[default]
     Square,
     Hexagonal,
     Gridless,
-}
-
-impl Default for GridType {
-    fn default() -> Self {
-        Self::Square
-    }
 }
 
 impl std::fmt::Display for GridType {
@@ -138,7 +134,7 @@ impl SceneData {
 
     /// Static helper for Y conversion (used in grid generation before resource access)
     pub fn database_y_to_bevy_y_static(database_y: f32, pixel_height: f32) -> f32 {
-        pixel_height - (database_y * 32.0)  // Assumes grid_size=32
+        pixel_height - (database_y * 32.0) // Assumes grid_size=32
     }
 }
 
@@ -179,7 +175,10 @@ mod tests {
 
         // Top-left in database (y=0) maps to top of Bevy viewport (y=pixel_height)
         let bevy_y = scene.database_y_to_bevy_y(0.0);
-        assert_eq!(bevy_y, 320.0, "Database Y=0 should map to Bevy Y=pixel_height");
+        assert_eq!(
+            bevy_y, 320.0,
+            "Database Y=0 should map to Bevy Y=pixel_height"
+        );
 
         // Bottom in database (y=10) maps to bottom of Bevy (y=0)
         let bevy_y = scene.database_y_to_bevy_y(10.0);
@@ -222,7 +221,7 @@ mod tests {
         let (x, y, w, h) = scene.bounds();
         assert_eq!(x, 0.0);
         assert_eq!(y, 0.0);
-        assert_eq!(w, 640.0);  // 20 * 32
-        assert_eq!(h, 960.0);  // 30 * 32
+        assert_eq!(w, 640.0); // 20 * 32
+        assert_eq!(h, 960.0); // 30 * 32
     }
 }

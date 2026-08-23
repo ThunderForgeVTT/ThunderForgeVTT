@@ -1,7 +1,6 @@
 //! World actor queries (spec 009: GM staging page's NPC roster).
 
 use async_graphql::Context;
-use diesel::prelude::*;
 
 use crate::graphql::*;
 use crate::state::AppState;
@@ -131,7 +130,15 @@ mod tests {
         owner_id: uuid::Uuid,
         is_npc: bool,
     ) -> uuid::Uuid {
-        insert_test_actor_with_label(conn, world_id, scene_id, owner_id, is_npc, "Test Actor", None)
+        insert_test_actor_with_label(
+            conn,
+            world_id,
+            scene_id,
+            owner_id,
+            is_npc,
+            "Test Actor",
+            None,
+        )
     }
 
     fn insert_test_actor_with_label(

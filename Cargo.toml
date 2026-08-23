@@ -11,6 +11,25 @@ members = [
 ]
 default-members = ["src/server", "src/core"]
 
+# Opt-in lints beyond clippy's own defaults, verified against the current
+# codebase before enabling (`cargo clippy --workspace --all-targets -- -W
+# clippy::<lint>` per lint, checked for zero/near-zero existing violations) —
+# each member crate must add `[lints] workspace = true` to inherit these
+# (see src/server/Cargo.toml etc. for the pattern). Deliberately NOT
+# included: `clippy::unwrap_used`/`expect_used` (300+/171 existing hits —
+# real value, but a repo-wide cleanup of that size is its own follow-up, not
+# something to silently gate CI on) and `clippy::print_stderr` (107 hits,
+# likely legitimate `eprintln!`-based logging — worth auditing separately
+# before deciding whether it should route through `tracing` instead).
+[workspace.lints.clippy]
+dbg_macro = "warn"          # forgotten dbg!() left in committed code
+todo = "warn"                # stub markers that shouldn't ship
+unimplemented = "warn"       # ditto
+print_stdout = "warn"        # a server should log via `tracing`, not println!
+exit = "warn"                # std::process::exit() would kill the whole server, not just a request
+large_enum_variant = "warn"  # one oversized variant silently bloats every value of the enum
+mem_forget = "warn"          # near-always a bug outside FFI/leak-on-purpose cases
+
 [profile.release]
 # less code to include into binary
 panic = 'abort'

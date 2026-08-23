@@ -13,10 +13,8 @@ use diesel::prelude::*;
 use diesel::result::DatabaseErrorKind;
 use diesel::result::Error as DieselError;
 
-use crate::schema::*;
 use crate::AppState;
-
-pub use async_graphql::Result as GraphQLResultType;
+use crate::schema::*;
 
 // ============================================================================
 // CONTEXT HELPERS
@@ -309,7 +307,7 @@ pub async fn load_owned_world_events(
 //         .db_pool
 //         .get()
 //         .map_err(|_| Error::new("Failed to get DB connection"))?;
-// 
+//
 //     tokio::task::spawn_blocking(move || {
 //         policies::table
 //             .filter(policies::created_by.eq(user_id))
@@ -321,7 +319,7 @@ pub async fn load_owned_world_events(
 //     .map_err(|_| Error::new("Failed to spawn blocking task"))?
 //     .map_err(|_| Error::new("Failed to query policies"))
 // }
-// 
+//
 /// Load a single world by ID with permission checks.
 ///
 /// # Permissions
@@ -359,7 +357,7 @@ pub async fn load_visible_world_by_id(
 
     let found = tokio::task::spawn_blocking(move || -> Result<Option<World>, String> {
         if !is_admin {
-            use crate::auth::world_membership::{require_world_member, WorldMembershipError};
+            use crate::auth::world_membership::{WorldMembershipError, require_world_member};
             match require_world_member(&mut conn, user_id, world_id) {
                 Ok(_role) => {}
                 Err(WorldMembershipError::NotAMember) => return Ok(None),
@@ -460,10 +458,10 @@ pub async fn load_owned_world_event_by_id(
     }
 }
 
-/// Load a single policy by ID with ownership verification.
-///
-/// # Permissions
-// /// Returns the policy only if the user owns it (created_by match).
+// Load a single policy by ID with ownership verification (disabled
+// pending schema — Policy is not wired into this pass).
+//
+// Permissions: returns the policy only if the user owns it (created_by match).
 // pub async fn load_owned_policy_by_id(
 //     state: &AppState,
 //     user_id: uuid::Uuid,
@@ -473,7 +471,7 @@ pub async fn load_owned_world_event_by_id(
 //         .db_pool
 //         .get()
 //         .map_err(|_| Error::new("Failed to get DB connection"))?;
-// 
+//
 //     let found = tokio::task::spawn_blocking(move || {
 //         policies::table
 //             .filter(policies::id.eq(policy_id))
@@ -484,7 +482,7 @@ pub async fn load_owned_world_event_by_id(
 //     .await
 //     .map_err(|_| Error::new("Failed to spawn blocking task"))?
 //     .map_err(|_| Error::new("Failed to query policy"))?;
-// 
+//
 //     match found {
 //         Some(policy) if policy.created_by != user_id => Err(Error::new("Forbidden")),
 //         other => Ok(other),
@@ -492,6 +490,7 @@ pub async fn load_owned_world_event_by_id(
 // }
 
 /// Load a single game system by ID.
+#[allow(dead_code)] // no call site yet — kept as the obvious lookup helper for when one is needed
 pub async fn load_game_system_by_id(
     state: &AppState,
     system_id: uuid::Uuid,

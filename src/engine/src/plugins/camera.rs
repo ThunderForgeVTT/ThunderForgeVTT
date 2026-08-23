@@ -1,25 +1,24 @@
-use bevy::prelude::*;
 use crate::resources::CameraManager;
+use bevy::prelude::*;
 
 pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
-        app
-            .init_resource::<CameraManager>()
+        app.init_resource::<CameraManager>()
             .add_systems(Startup, setup_camera)
-            .add_systems(Update, (
-                update_camera_transform,
-                handle_keyboard_camera_shortcuts,  // Phase 4.7.D2
-            ));
+            .add_systems(
+                Update,
+                (
+                    update_camera_transform,
+                    handle_keyboard_camera_shortcuts, // Phase 4.7.D2
+                ),
+            );
     }
 }
 
 fn setup_camera(mut commands: Commands) {
-    commands.spawn((
-        Camera2d::default(),
-        Transform::from_xyz(0.0, 0.0, 100.0),
-    ));
+    commands.spawn((Camera2d, Transform::from_xyz(0.0, 0.0, 100.0)));
 }
 
 fn update_camera_transform(

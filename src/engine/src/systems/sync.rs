@@ -10,12 +10,12 @@
 
 #![cfg(target_arch = "wasm32")]
 
-use bevy::prelude::*;
 use crate::components::*;
-use crate::sync_test::{CircularFlowTracer, FlowStage};
+use crate::sync_test::CircularFlowTracer;
+use bevy::prelude::*;
 
 /// System stub: Process incoming server events and apply/reject changes.
-/// 
+///
 /// PHASE 4.5: Implement full mutation response processing with:
 /// - Request/response correlation
 /// - Optimistic update confirmation
@@ -29,7 +29,7 @@ pub fn process_server_responses(
 }
 
 /// System stub: Handle mutation rejection errors.
-/// 
+///
 /// PHASE 4.5: Implement error handling with:
 /// - Error type detection
 /// - Rollback logic

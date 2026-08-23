@@ -8,7 +8,7 @@
 use bevy::prelude::*;
 
 use crate::components::{GridPosition, RollbackCache, TokenId};
-use crate::sync_test::{CircularFlowTracer, FlowStage};
+use crate::sync_test::CircularFlowTracer;
 
 /// Component marking a token with a pending optimistic update
 #[derive(Component, Clone, Debug)]
@@ -41,7 +41,13 @@ pub fn mark_mutation_pending(
 pub fn process_mutation_results(
     mut _commands: Commands,
     mut _tracer: ResMut<CircularFlowTracer>,
-    mut _query: Query<(Entity, &PendingMutation, &mut GridPosition, &TokenId, &RollbackCache)>,
+    mut _query: Query<(
+        Entity,
+        &PendingMutation,
+        &mut GridPosition,
+        &TokenId,
+        &RollbackCache,
+    )>,
 ) {
     // Phase 4.6.1: Implement with ServerEvent listener
     // for (entity, pending, mut grid_pos, token_id, cache) in query.iter_mut() {

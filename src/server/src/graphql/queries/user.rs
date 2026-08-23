@@ -3,7 +3,80 @@
 use async_graphql::Context;
 
 use crate::graphql::*;
+use crate::state::AppState;
 use crate::users::export_user_data_payload;
+
+/// Testable core of `UserQuery::me` (see `actor.rs`'s `_impl` convention).
+pub async fn me_impl(
+    state: &AppState,
+    user_id: uuid::Uuid,
+) -> GraphQLResult<Option<crate::models::User>> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    tokio::task::spawn_blocking(move || {
+        use crate::schema::users;
+        use crate::models::User;
+        use diesel::prelude::*;
+        users::table
+            .filter(users::id.eq(user_id))
+            .select(User::as_select())
+            .first::<User>(&mut conn)
+            .optional()
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to load user"))
+}
+
+/// Testable core of `UserQuery::my_dm_worlds` — combines owned worlds with
+/// worlds where the caller holds an accepted `GM` `world_members` row,
+/// deduplicated (spec 010, research.md §8).
+pub async fn my_dm_worlds_impl(
+    state: &AppState,
+    user_id: uuid::Uuid,
+) -> GraphQLResult<Vec<crate::models::World>> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    tokio::task::spawn_blocking(move || {
+        use crate::models::World;
+        use crate::schema::{world_members, worlds};
+        use diesel::prelude::*;
+
+        let owned = worlds::table
+            .filter(worlds::created_by.eq(user_id))
+            .select(World::as_select())
+            .load::<World>(&mut conn)?;
+
+        let gm_world_ids = world_members::table
+            .filter(world_members::user_id.eq(user_id))
+            .filter(world_members::role.eq("GM"))
+            .select(world_members::world_id)
+            .load::<uuid::Uuid>(&mut conn)?;
+
+        let gm_worlds = worlds::table
+            .filter(worlds::id.eq_any(gm_world_ids))
+            .select(World::as_select())
+            .load::<World>(&mut conn)?;
+
+        let mut combined = owned;
+        for world in gm_worlds {
+            if !combined.iter().any(|w| w.id == world.id) {
+                combined.push(world);
+            }
+        }
+
+        Ok::<_, diesel::result::Error>(combined)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to load DM worlds"))
+}
 
 #[derive(Default)]
 pub struct UserQuery;
@@ -13,25 +86,7 @@ impl UserQuery {
     async fn me(&self, ctx: &Context<'_>) -> GraphQLResult<Option<GraphQLUser>> {
         let state = app_state(ctx)?;
         let user_id = authenticated_user(ctx)?.user_id;
-        let mut conn = state
-            .db_pool
-            .get()
-            .map_err(|_| Error::new("Failed to get DB connection"))?;
-
-        let user = tokio::task::spawn_blocking(move || {
-            use crate::schema::users;
-            use crate::models::User;
-            use diesel::prelude::*;
-            users::table
-                .filter(users::id.eq(user_id))
-                .select(User::as_select())
-                .first::<User>(&mut conn)
-                .optional()
-        })
-        .await
-        .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to load user"))?;
-
+        let user = me_impl(state, user_id).await?;
         Ok(user.map(GraphQLUser::from))
     }
 
@@ -58,45 +113,7 @@ impl UserQuery {
     async fn my_dm_worlds(&self, ctx: &Context<'_>) -> GraphQLResult<Vec<GraphQLWorld>> {
         let state = app_state(ctx)?;
         let user_id = authenticated_user(ctx)?.user_id;
-        let mut conn = state
-            .db_pool
-            .get()
-            .map_err(|_| Error::new("Failed to get DB connection"))?;
-
-        let worlds_list = tokio::task::spawn_blocking(move || {
-            use crate::models::World;
-            use crate::schema::{world_members, worlds};
-            use diesel::prelude::*;
-
-            let owned = worlds::table
-                .filter(worlds::created_by.eq(user_id))
-                .select(World::as_select())
-                .load::<World>(&mut conn)?;
-
-            let gm_world_ids = world_members::table
-                .filter(world_members::user_id.eq(user_id))
-                .filter(world_members::role.eq("GM"))
-                .select(world_members::world_id)
-                .load::<uuid::Uuid>(&mut conn)?;
-
-            let gm_worlds = worlds::table
-                .filter(worlds::id.eq_any(gm_world_ids))
-                .select(World::as_select())
-                .load::<World>(&mut conn)?;
-
-            let mut combined = owned;
-            for world in gm_worlds {
-                if !combined.iter().any(|w| w.id == world.id) {
-                    combined.push(world);
-                }
-            }
-
-            Ok::<_, diesel::result::Error>(combined)
-        })
-        .await
-        .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to load DM worlds"))?;
-
+        let worlds_list = my_dm_worlds_impl(state, user_id).await?;
         Ok(worlds_list.into_iter().map(GraphQLWorld::from).collect())
     }
 
@@ -181,5 +198,70 @@ impl UserQuery {
             .await
             .map(GraphQLExportMyDataPayload::from)
             .map_err(Error::new)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{me_impl, my_dm_worlds_impl};
+    use crate::test_support::{insert_test_user, insert_test_world, insert_test_world_member, test_app_state};
+
+    #[tokio::test]
+    async fn me_returns_the_matching_user_row() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let user_id = insert_test_user(&mut conn);
+        drop(conn);
+
+        let user = me_impl(&state, user_id)
+            .await
+            .expect("query should not error")
+            .expect("the just-inserted user should be found");
+
+        assert_eq!(user.id, user_id);
+    }
+
+    #[tokio::test]
+    async fn me_returns_none_for_an_unknown_user_id() {
+        let state = test_app_state();
+
+        let user = me_impl(&state, uuid::Uuid::now_v7())
+            .await
+            .expect("query should not error");
+
+        assert!(user.is_none());
+    }
+
+    #[tokio::test]
+    async fn my_dm_worlds_includes_owned_and_gm_worlds_deduplicated() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let user_id = insert_test_user(&mut conn);
+        let owned_world_id = insert_test_world(&mut conn, user_id);
+        let other_owner_id = insert_test_user(&mut conn);
+        let gm_world_id = insert_test_world(&mut conn, other_owner_id);
+        insert_test_world_member(&mut conn, gm_world_id, user_id, "GM");
+        // A world the user merely plays in (Player role) must NOT appear.
+        let player_world_owner = insert_test_user(&mut conn);
+        let player_world_id = insert_test_world(&mut conn, player_world_owner);
+        insert_test_world_member(&mut conn, player_world_id, user_id, "Player");
+        drop(conn);
+
+        let worlds = my_dm_worlds_impl(&state, user_id)
+            .await
+            .expect("query should not error");
+
+        let ids: Vec<uuid::Uuid> = worlds.iter().map(|w| w.id).collect();
+        assert!(ids.contains(&owned_world_id), "owned worlds must be included");
+        assert!(ids.contains(&gm_world_id), "GM-role worlds must be included");
+        assert!(
+            !ids.contains(&player_world_id),
+            "worlds where the user only holds Player role must NOT be included"
+        );
+        assert_eq!(
+            ids.len(),
+            2,
+            "no world should appear twice even if owned and GM somehow overlapped"
+        );
     }
 }

@@ -1,4 +1,4 @@
-.PHONY: dev services-up services-down services-down-clean migrate build clean format help
+.PHONY: dev services-up services-down services-down-clean migrate build clean format help lint check-file-length
 
 # Loads DATABASE_URL (and anything else) from the repo-root .env for targets
 # that shell out to tools which don't read it themselves (diesel-cli).
@@ -17,6 +17,8 @@ help:
 	@echo "  make build            Production build (engine WASM + backend + frontend)"
 	@echo "  make clean            Remove build output (dist/)"
 	@echo "  make format           Run prettier + cargo fmt"
+	@echo "  make lint             Run cargo clippy (-D warnings) across the workspace"
+	@echo "  make check-file-length  Fail if any tracked .rs file exceeds 1000 lines (see scripts/check-file-length.sh)"
 
 dev: services-up migrate
 	pnpm dev
@@ -52,3 +54,9 @@ clean:
 
 format:
 	pnpm format
+
+lint:
+	cargo clippy --workspace --all-targets -- -D warnings
+
+check-file-length:
+	@./scripts/check-file-length.sh

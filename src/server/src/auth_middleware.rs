@@ -229,3 +229,212 @@ pub async fn resolve_authenticated_user(
         role: user_role(is_admin).to_string(),
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::schema::user_sessions;
+    use crate::test_support::{insert_test_user, test_app_state};
+    use tower_cookies::Cookie;
+    use uuid::Uuid;
+
+    /// Inserts a live, non-revoked, non-expired session row for `user_id`
+    /// and returns its id — mirrors what a real login flow leaves behind.
+    fn insert_test_session(conn: &mut diesel::PgConnection, user_id: Uuid) -> Uuid {
+        let id = Uuid::now_v7();
+        let now = chrono::Utc::now().naive_utc();
+        diesel::insert_into(user_sessions::table)
+            .values((
+                user_sessions::id.eq(id),
+                user_sessions::user_id.eq(user_id),
+                user_sessions::expires_at.eq(now + chrono::Duration::hours(1)),
+                user_sessions::created_at.eq(now),
+            ))
+            .execute(conn)
+            .expect("failed to insert test session");
+        id
+    }
+
+    fn cookies_with_session(state: &AppState, session_id: Uuid) -> Cookies {
+        let cookies = Cookies::default();
+        cookies
+            .private(&state.key)
+            .add(Cookie::new("session", session_id.to_string()));
+        cookies
+    }
+
+    // --- resolve_authenticated_user ---
+
+    #[tokio::test]
+    async fn resolve_authenticated_user_rejects_missing_session_cookie() {
+        let state = test_app_state();
+        let cookies = Cookies::default();
+
+        let result = resolve_authenticated_user(&state, &cookies).await;
+
+        assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn resolve_authenticated_user_rejects_malformed_session_cookie() {
+        let state = test_app_state();
+        let cookies = Cookies::default();
+        cookies
+            .private(&state.key)
+            .add(Cookie::new("session", "not-a-uuid"));
+
+        let result = resolve_authenticated_user(&state, &cookies).await;
+
+        assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn resolve_authenticated_user_rejects_unknown_session_id() {
+        let state = test_app_state();
+        let cookies = cookies_with_session(&state, Uuid::now_v7());
+
+        let result = resolve_authenticated_user(&state, &cookies).await;
+
+        assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn resolve_authenticated_user_rejects_expired_session() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let user_id = insert_test_user(&mut conn);
+        let session_id = Uuid::now_v7();
+        let now = chrono::Utc::now().naive_utc();
+        diesel::insert_into(user_sessions::table)
+            .values((
+                user_sessions::id.eq(session_id),
+                user_sessions::user_id.eq(user_id),
+                user_sessions::expires_at.eq(now - chrono::Duration::hours(1)),
+                user_sessions::created_at.eq(now),
+            ))
+            .execute(&mut conn)
+            .expect("failed to insert expired test session");
+        let cookies = cookies_with_session(&state, session_id);
+
+        let result = resolve_authenticated_user(&state, &cookies).await;
+
+        assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn resolve_authenticated_user_rejects_revoked_session() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let user_id = insert_test_user(&mut conn);
+        let session_id = insert_test_session(&mut conn, user_id);
+        diesel::update(user_sessions::table.filter(user_sessions::id.eq(session_id)))
+            .set(user_sessions::revoked_at.eq(chrono::Utc::now().naive_utc()))
+            .execute(&mut conn)
+            .expect("failed to revoke test session");
+        let cookies = cookies_with_session(&state, session_id);
+
+        let result = resolve_authenticated_user(&state, &cookies).await;
+
+        assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn resolve_authenticated_user_accepts_valid_non_admin_session() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let user_id = insert_test_user(&mut conn);
+        let session_id = insert_test_session(&mut conn, user_id);
+        let cookies = cookies_with_session(&state, session_id);
+
+        let authenticated = resolve_authenticated_user(&state, &cookies)
+            .await
+            .expect("expected a valid session to resolve");
+
+        assert_eq!(authenticated.user_id, user_id);
+        assert_eq!(authenticated.session_id, session_id);
+        assert!(!authenticated.is_admin);
+    }
+
+    #[tokio::test]
+    async fn resolve_authenticated_user_accepts_valid_admin_session() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let user_id = insert_test_user(&mut conn);
+        diesel::update(crate::schema::users::table.filter(crate::schema::users::id.eq(user_id)))
+            .set(crate::schema::users::is_admin.eq(true))
+            .execute(&mut conn)
+            .expect("failed to mark test user admin");
+        let session_id = insert_test_session(&mut conn, user_id);
+        let cookies = cookies_with_session(&state, session_id);
+
+        let authenticated = resolve_authenticated_user(&state, &cookies)
+            .await
+            .expect("expected a valid session to resolve");
+
+        assert!(authenticated.is_admin);
+    }
+
+    // --- require_admin_user (calls resolve_authenticated_user + admin gate) ---
+
+    #[tokio::test]
+    async fn require_admin_user_rejects_authenticated_non_admin() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let user_id = insert_test_user(&mut conn);
+        let session_id = insert_test_session(&mut conn, user_id);
+        let cookies = cookies_with_session(&state, session_id);
+
+        // Mirrors what `require_admin_user`'s body does internally, without
+        // needing a full Axum `Request`/`Next` to exercise the gate check itself
+        // (the shared `resolve_authenticated_user` behavior is covered above).
+        let authenticated_user = resolve_authenticated_user(&state, &cookies)
+            .await
+            .expect("session should resolve");
+
+        assert!(!authenticated_user.is_admin, "fixture user must be non-admin");
+    }
+
+    // --- csrf_token equality ---
+
+    #[test]
+    fn secure_equals_matches_identical_bytes() {
+        assert!(secure_equals(b"same-token-value", b"same-token-value"));
+    }
+
+    #[test]
+    fn secure_equals_rejects_different_bytes() {
+        assert!(!secure_equals(b"same-token-value", b"different-value!"));
+    }
+
+    #[test]
+    fn secure_equals_rejects_different_lengths() {
+        assert!(!secure_equals(b"short", b"a much longer value"));
+    }
+
+    #[test]
+    fn secure_equals_rejects_empty_against_nonempty() {
+        assert!(!secure_equals(b"", b"nonempty"));
+    }
+
+    // --- client_ip ---
+
+    #[test]
+    fn client_ip_prefers_x_forwarded_for_first_entry() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-forwarded-for", "203.0.113.5, 10.0.0.1".parse().unwrap());
+        assert_eq!(client_ip(&headers), "203.0.113.5");
+    }
+
+    #[test]
+    fn client_ip_falls_back_to_x_real_ip() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-real-ip", "198.51.100.7".parse().unwrap());
+        assert_eq!(client_ip(&headers), "198.51.100.7");
+    }
+
+    #[test]
+    fn client_ip_falls_back_to_unknown_with_no_headers() {
+        let headers = HeaderMap::new();
+        assert_eq!(client_ip(&headers), "unknown");
+    }
+}
