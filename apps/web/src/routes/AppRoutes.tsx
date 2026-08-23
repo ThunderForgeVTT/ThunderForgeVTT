@@ -22,6 +22,8 @@ const WorldPage = lazy(pageLoaders.worldWorkspace);
 const WorldStagingRoutePage = lazy(pageLoaders.worldStaging);
 const WorldCompendiumRoutePage = lazy(pageLoaders.worldCompendium);
 const ActorDetailPage = lazy(pageLoaders.actorView);
+const LoreEntryDetailPage = lazy(pageLoaders.loreEntryView);
+const LoreRevisionHistory = lazy(pageLoaders.loreEntryHistory);
 const SharedActorPage = lazy(pageLoaders.sharedActor);
 const JoinWorldPage = lazy(pageLoaders.joinWorld);
 const NotFoundPage = lazy(pageLoaders.notFound);
@@ -411,6 +413,30 @@ export default function AppRoutes({
           element={
             <RequireAuthenticated>
               {renderLazyPage(<ActorDetailPage mode="edit" />, "Loading actor")}
+            </RequireAuthenticated>
+          }
+        />
+        <Route
+          path="/world/:id/lore/:slug/view"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(<LoreEntryDetailPage mode="view" />, "Loading lore entry")}
+            </RequireAuthenticated>
+          }
+        />
+        <Route
+          path="/world/:id/lore/:slug/edit"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(<LoreEntryDetailPage mode="edit" />, "Loading lore entry")}
+            </RequireAuthenticated>
+          }
+        />
+        <Route
+          path="/world/:id/lore/:slug/history"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(<LoreRevisionHistory />, "Loading revision history")}
             </RequireAuthenticated>
           }
         />

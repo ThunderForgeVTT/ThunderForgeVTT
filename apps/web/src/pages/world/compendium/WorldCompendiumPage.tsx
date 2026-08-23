@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Tabs } from "@/components/ui/tabs/Tabs";
 import { ActorPreviewPanel } from "@/pages/world/compendium/ActorPreviewPanel";
 import { ComingSoonTab } from "@/pages/world/compendium/ComingSoonTab";
+import { LoreCompendiumTab } from "@/pages/world/compendium/LoreCompendiumTab";
 import { NpcCompendiumTab } from "@/pages/world/compendium/NpcCompendiumTab";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import type { WorldActorRecord } from "@/types/actor";
@@ -67,6 +68,12 @@ export function WorldCompendiumPage({ worldId, world }: WorldCompendiumPageProps
                 />
               </div>
             ),
+          },
+          {
+            value: "lore",
+            label: "Lore",
+            icon: "quill",
+            content: <LoreCompendiumTab worldId={worldId} isGm={isGm} />,
           },
           {
             value: "items",

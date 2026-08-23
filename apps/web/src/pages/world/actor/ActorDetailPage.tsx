@@ -265,6 +265,29 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
           )}
         </Card>
 
+        {/* Spec 012 (T037, FR-006): lore entries that reference this actor. */}
+        <Card className="grid gap-2 p-4" data-testid="actor-lore-linked-from">
+          <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+            Linked from (lore)
+          </h2>
+          {actor.loreLinkedFrom.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic">No lore entries link here yet.</p>
+          ) : (
+            <ul className="grid gap-1">
+              {actor.loreLinkedFrom.map((source) => (
+                <li key={source.id}>
+                  <Link
+                    to={`/world/${worldId}/lore/${source.slug}/view`}
+                    className="text-sm text-primary hover:underline"
+                  >
+                    {source.title}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
         {isDm && mode === "edit" ? (
           <ActorOwnershipBlock actorId={actorId} worldId={worldId} world={world} />
         ) : null}

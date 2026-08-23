@@ -31,6 +31,11 @@ const LORE_ENTRY_FIELDS = `
   createdBy
   createdAt
   updatedAt
+  linkedFrom {
+    id
+    title
+    slug
+  }
 `;
 
 async function postGraphQL<TData>(

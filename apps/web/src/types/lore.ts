@@ -1,5 +1,11 @@
 import type { ActorPermissionLevel } from "@/types/actor";
 
+export type LoreLinkSourceRecord = {
+  id: string;
+  title: string;
+  slug: string;
+};
+
 export type LoreEntryRecord = {
   id: string;
   worldId: string;
@@ -12,6 +18,8 @@ export type LoreEntryRecord = {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  /** FR-006: every lore entry whose body currently links to this one. */
+  linkedFrom: LoreLinkSourceRecord[];
 };
 
 export type LoreRevisionRecord = {

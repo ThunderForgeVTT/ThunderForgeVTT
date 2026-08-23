@@ -27,6 +27,11 @@ const WORLD_ACTOR_FIELDS = `
   myPermissionLevel
   createdAt
   updatedAt
+  loreLinkedFrom {
+    id
+    title
+    slug
+  }
 `;
 
 async function postGraphQL<TData>(
