@@ -35,13 +35,13 @@ pub struct DerivedStats {
 
 /// Core trait for all game systems
 ///
-/// Implement this trait to add support for a new game system (D&D 5e, Pathfinder, Fate, etc).
+/// Implement this trait to add support for a new game system (5E, Pathfinder, Fate, etc).
 /// Systems are registered at engine startup and can be switched between worlds.
 pub trait GameSystem: Send + Sync {
     /// Unique system identifier (e.g., "dnd5e", "pathfinder2e", "basic")
     fn id(&self) -> &'static str;
 
-    /// Human-readable system name (e.g., "Dungeons & Dragons 5th Edition")
+    /// Human-readable system name (e.g., "5E System Core")
     fn name(&self) -> &'static str;
 
     /// List of ability score names this system uses (e.g., ["Strength", "Dexterity", ...])

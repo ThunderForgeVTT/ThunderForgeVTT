@@ -14,7 +14,7 @@ mod tests {
         // Verify system.json has valid manifest structure
         let manifest = json!({
             "id": "dnd5e",
-            "title": "Dungeons & Dragons 5th Edition",
+            "title": "5E System Core",
             "version": "0.1.0",
             "data_types": {
                 "ability_data": {

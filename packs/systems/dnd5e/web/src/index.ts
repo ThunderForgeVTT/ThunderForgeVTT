@@ -123,10 +123,10 @@ export const RxDBSchema = {
   },
 };
 
-// Export D&D 5e System Manifest
+// Export 5E System Core Manifest
 export const dnd5eSystemManifest: DnD5eSystemManifest = {
   id: 'dnd5e',
-  title: 'Dungeons & Dragons 5th Edition',
+  title: '5E System Core',
   version: '0.1.0',
   components: {
     CharacterSheet,

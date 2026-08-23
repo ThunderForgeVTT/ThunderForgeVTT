@@ -1,10 +1,10 @@
 {
   "id": "dnd5e",
-  "title": "Dungeons & Dragons 5th Edition",
+  "title": "5E System Core",
   "version": "0.1.0",
   "author": "ThunderForgeVTT Contributors",
-  "description": "Official D&D 5th Edition ruleset for ThunderForgeVTT. Implements ability scores, skills, spellcasting, and character progression.",
-  "license": "CC BY 4.0 (D&D 5e SRD)",
+  "description": "5E Compatible ruleset for ThunderForgeVTT, built from the System Reference Document 5.2.1. Implements ability scores, skills, spellcasting, and character progression.",
+  "license": "CC BY 4.0 (System Reference Document 5.2.1 by Wizards of the Coast)",
   "url": "https://github.com/ThunderForgeVTT/ThunderForgeVTT",
   "compatibility": {
     "minimum": "0.1.0",

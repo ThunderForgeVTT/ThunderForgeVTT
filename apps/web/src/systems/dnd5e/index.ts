@@ -1,10 +1,10 @@
 /**
  * apps/web/src/systems/dnd5e/index.ts
- * D&D 5e System Web Module Entry Point
+ * 5E System Core Web Module Entry Point
  *
  * Phase 4.8.1: System-Aware React Components (Phase E.1)
  *
- * Exports all D&D 5e game system web assets:
+ * Exports all 5E System Core game system web assets:
  * - React components for character sheet
  * - RxDB schema extensions
  * - Local derived data calculators
@@ -19,12 +19,12 @@ import { AbilityScores } from "@/components/game-systems/dnd5e/AbilityScores";
 import { SkillsList } from "@/components/game-systems/dnd5e/SkillsList";
 
 /**
- * D&D 5e System Manifest
+ * 5E System Core Manifest
  * Defines metadata, capabilities, and schema for the system
  */
 export const DnD5eSystemManifest = {
   id: "dnd5e",
-  title: "Dungeons & Dragons 5th Edition",
+  title: "5E System Core",
   version: "0.1.0",
   author: "ThunderForge Contributors",
   compatibility: {
