@@ -15,6 +15,8 @@ export type LoreEntryRecord = {
   renderedHtml: string;
   currentRevisionId: string | null;
   myPermissionLevel: ActorPermissionLevel;
+  moderated: boolean;
+  moderationCaseId: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;

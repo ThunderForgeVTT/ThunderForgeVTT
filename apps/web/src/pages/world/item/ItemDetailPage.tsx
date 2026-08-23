@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/loader/Loader";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
+import { ModeratedContentBanner } from "@/components/world/ModeratedContentBanner";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import { ItemEffectEditor } from "@/pages/world/item/ItemEffectEditor";
 import { ItemOwnershipBlock } from "@/pages/world/item/ItemOwnershipBlock";
@@ -101,6 +102,26 @@ export default function ItemDetailPage({ mode }: ItemDetailPageProps) {
   // server independently rejects the mutation regardless (Principle III).
   if (mode === "edit" && item.myPermissionLevel === "VIEWER") {
     return <Navigate to={`/world/${worldId}/item/${itemId}/view`} replace />;
+  }
+
+  if (item.moderated) {
+    return (
+      <>
+        <SEO title="Item unavailable" description="Item detail" noindex />
+        <Container className="grid max-w-2xl gap-6 py-10">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon="arrow-left"
+            className="justify-self-start"
+            onClick={() => navigate(`/world/${worldId}/compendium`)}
+          >
+            Back to Compendium
+          </Button>
+          <ModeratedContentBanner caseId={item.moderationCaseId} isOwner={item.myPermissionLevel === "OWNER"} />
+        </Container>
+      </>
+    );
   }
 
   const canEdit = item.myPermissionLevel !== "VIEWER";

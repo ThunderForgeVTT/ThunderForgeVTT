@@ -23,6 +23,8 @@ export type WorldItemRecord = {
   iconAssetId: string | null;
   effects: ItemEffectRecord[];
   myPermissionLevel: ActorPermissionLevel;
+  moderated: boolean;
+  moderationCaseId: string | null;
   createdAt: string;
   updatedAt: string;
 };

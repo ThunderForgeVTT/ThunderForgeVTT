@@ -28,6 +28,8 @@ const LORE_ENTRY_FIELDS = `
   renderedHtml
   currentRevisionId
   myPermissionLevel
+  moderated
+  moderationCaseId
   createdBy
   createdAt
   updatedAt

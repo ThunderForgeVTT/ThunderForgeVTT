@@ -10,6 +10,7 @@ import { Field } from "@/components/ui/field/Field";
 import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/loader/Loader";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
+import { ModeratedContentBanner } from "@/components/world/ModeratedContentBanner";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import { LoreMarkdownEditor } from "@/pages/world/lore/LoreMarkdownEditor";
 import { LoreMarkdownRenderer } from "@/pages/world/lore/LoreMarkdownRenderer";
@@ -99,6 +100,20 @@ export default function LoreEntryDetailPage({ mode }: LoreEntryDetailPageProps) 
   // server independently rejects the mutation regardless (Principle III).
   if (mode === "edit" && entry.myPermissionLevel === "VIEWER") {
     return <Navigate to={`/world/${worldId}/lore/${entry.slug}/view`} replace />;
+  }
+
+  if (entry.moderated) {
+    return (
+      <Container className="grid max-w-2xl gap-6 py-10">
+        <Link to={`/world/${worldId}/compendium`} className="justify-self-start text-primary hover:underline">
+          Back to compendium
+        </Link>
+        <ModeratedContentBanner
+          caseId={entry.moderationCaseId}
+          isOwner={entry.myPermissionLevel === "OWNER"}
+        />
+      </Container>
+    );
   }
 
   const canEdit = entry.myPermissionLevel !== "VIEWER";

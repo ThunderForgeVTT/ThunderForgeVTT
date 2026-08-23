@@ -32,6 +32,8 @@ const WORLD_ITEM_FIELDS = `
     ${ITEM_EFFECT_FIELDS}
   }
   myPermissionLevel
+  moderated
+  moderationCaseId
   createdAt
   updatedAt
 `;

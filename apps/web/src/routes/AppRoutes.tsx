@@ -10,7 +10,9 @@ import { pageLoaders } from "./pageLoaders";
 const LoginPage = lazy(pageLoaders.login);
 const RegisterPage = lazy(pageLoaders.signup);
 const OAuthCallbackPage = lazy(pageLoaders.oauthCallback);
+const DmcaCompliancePage = lazy(pageLoaders.dmcaCompliance);
 const AdminSettingsPage = lazy(pageLoaders.adminSettings);
+const AdminModerationReviewPage = lazy(pageLoaders.adminModerationReview);
 const SetupPage = lazy(pageLoaders.setup);
 const SetupCallbackPage = lazy(pageLoaders.setupCallback);
 const CounterPage = lazy(pageLoaders.counter);
@@ -279,6 +281,13 @@ export default function AppRoutes({
           )}
         />
         <Route
+          path="/legal/dmca"
+          element={renderLazyPage(
+            <DmcaCompliancePage />,
+            "Loading DMCA policy",
+          )}
+        />
+        <Route
           path="/admin"
           element={
             <RequireAdmin>
@@ -336,6 +345,14 @@ export default function AppRoutes({
                 <AdminSettingsPage initialSection="security" />,
                 "Loading admin security",
               )}
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="/admin/moderation"
+          element={
+            <RequireAdmin>
+              {renderLazyPage(<AdminModerationReviewPage />, "Loading moderation review")}
             </RequireAdmin>
           }
         />
