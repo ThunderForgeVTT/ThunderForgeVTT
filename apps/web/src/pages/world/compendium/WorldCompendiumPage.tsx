@@ -2,9 +2,12 @@ import { useMemo, useState } from "react";
 import { Tabs } from "@/components/ui/tabs/Tabs";
 import { ActorPreviewPanel } from "@/pages/world/compendium/ActorPreviewPanel";
 import { ComingSoonTab } from "@/pages/world/compendium/ComingSoonTab";
+import { ItemCompendiumTab } from "@/pages/world/compendium/ItemCompendiumTab";
+import { ItemPreviewPanel } from "@/pages/world/compendium/ItemPreviewPanel";
 import { NpcCompendiumTab } from "@/pages/world/compendium/NpcCompendiumTab";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import type { WorldActorRecord } from "@/types/actor";
+import type { WorldItemRecord } from "@/types/item";
 import type { WorldRecord } from "@/types/world";
 
 export interface WorldCompendiumPageProps {
@@ -25,11 +28,18 @@ export interface WorldCompendiumPageProps {
 export function WorldCompendiumPage({ worldId, world }: WorldCompendiumPageProps) {
   const [selectedActorId, setSelectedActorId] = useState<string | null>(null);
   const [roster, setRoster] = useState<WorldActorRecord[]>([]);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [itemCatalog, setItemCatalog] = useState<WorldItemRecord[]>([]);
   const { isGm } = useWorldRole(worldId, world);
 
   const selectedActor = useMemo(
     () => roster.find((actor) => actor.id === selectedActorId) ?? null,
     [roster, selectedActorId],
+  );
+
+  const selectedItem = useMemo(
+    () => itemCatalog.find((item) => item.id === selectedItemId) ?? null,
+    [itemCatalog, selectedItemId],
   );
 
   return (
@@ -72,7 +82,22 @@ export function WorldCompendiumPage({ worldId, world }: WorldCompendiumPageProps
             value: "items",
             label: "Items",
             icon: "inventory",
-            content: <ComingSoonTab label="Items" />,
+            content: (
+              <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
+                <ItemCompendiumTab
+                  worldId={worldId}
+                  onSelect={setSelectedItemId}
+                  selectedItemId={selectedItemId}
+                  isGm={isGm}
+                  onCatalogLoaded={setItemCatalog}
+                />
+                <ItemPreviewPanel
+                  worldId={worldId}
+                  item={selectedItem}
+                  onClose={() => setSelectedItemId(null)}
+                />
+              </div>
+            ),
           },
           {
             value: "abilities",

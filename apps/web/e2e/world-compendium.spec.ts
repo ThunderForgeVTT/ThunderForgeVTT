@@ -91,12 +91,12 @@ test.describe("Compendium shell: tabs, NPC browse/search, row-select preview", (
     await expect(page.getByTestId("actor-preview-panel")).toContainText(npcName);
     await expect(page.getByTestId("actor-preview-panel")).toContainText("Non-Player Character");
 
-    // Placeholder tabs: no table, no search, clearly-labeled "coming soon".
+    // Items tab (spec 013): fully real now — empty state, not "coming soon".
     await page.getByRole("tab", { name: "Items" }).click();
-    await expect(page.getByTestId("compendium-coming-soon")).toContainText("Items — coming soon");
-    await expect(page.getByTestId("npc-catalog-table")).toHaveCount(0);
-    await expect(page.getByTestId("npc-catalog-search-input")).toHaveCount(0);
+    await expect(page.getByText("No Items yet.")).toBeVisible();
+    await expect(page.getByTestId("compendium-coming-soon")).toHaveCount(0);
 
+    // Abilities remains a placeholder.
     await page.getByRole("tab", { name: "Abilities" }).click();
     await expect(page.getByTestId("compendium-coming-soon")).toContainText(
       "Abilities — coming soon",
@@ -234,6 +234,108 @@ test.describe("US2: a Player browses the Compendium with the same read access, m
       // myPermissionLevel field, spec 010).
       await expect(playerPage.getByTestId("actor-preview-panel-view")).toBeVisible();
       await expect(playerPage.getByTestId("actor-preview-panel-edit")).toHaveCount(0);
+    } finally {
+      await playerContext.close();
+    }
+  });
+});
+
+/** Seeds an Item via the Compendium's own "Add Item" control (spec 013 US1). */
+async function addItemFromCompendium(page: Page, worldId: string, name: string): Promise<void> {
+  await page.goto(`/world/${worldId}/compendium`);
+  await page.getByRole("tab", { name: "Items" }).click();
+  await page.getByTestId("new-item-name-input").fill(name);
+  await page.getByTestId("add-item-button").click();
+  await expect(page.getByText(name)).toBeVisible({ timeout: 10_000 });
+}
+
+test.describe("Spec 013 US1: DM authors an Item with a description and structured effects", () => {
+  test("DM adds an Item via the Compendium, adds effects, and sees them persist", async ({ page }) => {
+    const worldId = await registerAndCreateWorld(page, `E2E Items DM ${uniqueSuffix()}`);
+    const itemName = `Potion of Healing ${uniqueSuffix()}`;
+
+    await addItemFromCompendium(page, worldId, itemName);
+    await expect(page.getByTestId("item-catalog-table")).toContainText(itemName, { timeout: 10_000 });
+
+    // Select it, follow Edit from the preview panel, add a heal effect.
+    await page.getByTestId("item-catalog-table").getByText(itemName).click();
+    await page.getByTestId("item-preview-panel-edit").click();
+    await page.waitForURL(/\/item\/[^/]+\/edit$/, { timeout: 15_000 });
+
+    await page.getByTestId("new-item-effect-formula").fill("3d6");
+    await page.getByTestId("new-item-effect-target").fill("Hit Points");
+    await page.getByTestId("add-item-effect-button").click();
+    // Formula/target render as editable <input> values, not static text —
+    // assert on the saved row's input values, not toContainText.
+    const savedFormulaInput = page.locator('[data-testid^="item-effect-row-"] input[aria-label="Effect formula"]');
+    await expect(savedFormulaInput).toHaveValue("3d6", { timeout: 10_000 });
+    await expect(
+      page.locator('[data-testid^="item-effect-row-"] input[aria-label="Effect target"]'),
+    ).toHaveValue("Hit Points");
+
+    // Reload confirms the effect persisted, matching the structured shape authored.
+    await page.reload();
+    await expect(savedFormulaInput).toHaveValue("3d6");
+    await expect(
+      page.locator('[data-testid^="item-effect-row-"] input[aria-label="Effect target"]'),
+    ).toHaveValue("Hit Points");
+  });
+
+  test("rejects an empty effect formula without persisting it", async ({ page }) => {
+    const worldId = await registerAndCreateWorld(page, `E2E Items Validation ${uniqueSuffix()}`);
+    const itemName = `Longsword ${uniqueSuffix()}`;
+    await addItemFromCompendium(page, worldId, itemName);
+
+    await page.getByTestId("item-catalog-table").getByText(itemName).click();
+    await page.getByTestId("item-preview-panel-edit").click();
+    await page.waitForURL(/\/item\/[^/]+\/edit$/, { timeout: 15_000 });
+
+    // The "Add effect" control is disabled until both fields are filled,
+    // so a whitespace-only formula never reaches the server (FR-006).
+    await page.getByTestId("new-item-effect-target").fill("Hit Points");
+    await expect(page.getByTestId("add-item-effect-button")).toBeDisabled();
+  });
+});
+
+test.describe("Spec 013 US4: a Player browses the Items tab with the same read access, minus DM controls", () => {
+  test("Player sees identical browse/preview, no Add Item, and no Edit on a Viewer-only Item", async ({
+    page,
+    browser,
+  }) => {
+    const worldName = `E2E Items Player ${uniqueSuffix()}`;
+    const worldId = await registerAndCreateWorld(page, worldName);
+    const itemName = `Player-Visible Item ${uniqueSuffix()}`;
+    await addItemFromCompendium(page, worldId, itemName);
+
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.goto(`/world/${worldId}`);
+    await page.getByRole("button", { name: "Generate Join Link" }).click();
+    const inviteInput = page.locator("input[readonly]");
+    await expect(inviteInput).toBeVisible({ timeout: 10_000 });
+    const inviteUrl = await inviteInput.inputValue();
+    const inviteRelativePath = new URL(inviteUrl).pathname;
+
+    const playerContext = await browser.newContext();
+    const playerPage = await playerContext.newPage();
+    try {
+      await joinWorldAsPlayer(playerPage, worldId, inviteRelativePath, "e2eitemsplyr");
+
+      await playerPage.goto(`/world/${worldId}/compendium`);
+      await playerPage.getByRole("tab", { name: "Items" }).click();
+
+      // Same browse/preview as the DM.
+      await expect(playerPage.getByTestId("item-catalog-table")).toContainText(itemName);
+      await playerPage.getByTestId("item-catalog-table").getByText(itemName).click();
+      await expect(playerPage.getByTestId("item-preview-panel")).toContainText(itemName);
+
+      // No Add Item control for a non-DM (FR-002/FR-008).
+      await expect(playerPage.getByTestId("new-item-name-input")).toHaveCount(0);
+      await expect(playerPage.getByTestId("add-item-button")).toHaveCount(0);
+
+      // Default-Viewer access on this Item — no Edit action anywhere.
+      await expect(playerPage.getByTestId("item-preview-panel-view")).toBeVisible();
+      await expect(playerPage.getByTestId("item-preview-panel-edit")).toHaveCount(0);
+      await expect(playerPage.locator('[data-testid^="item-catalog-edit-"]')).toHaveCount(0);
     } finally {
       await playerContext.close();
     }

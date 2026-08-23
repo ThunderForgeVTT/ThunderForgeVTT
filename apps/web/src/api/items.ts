@@ -291,3 +291,19 @@ export function setItemPermission(
     { input: { itemId, userId, level } },
   ).then((data) => data.setItemPermission);
 }
+
+type RemoveItemPermissionMutation = {
+  removeItemPermission: boolean;
+};
+
+/** Resets a member back to the implicit default Viewer level. */
+export function removeItemPermission(itemId: string, userId: string): Promise<boolean> {
+  return postGraphQL<RemoveItemPermissionMutation>(
+    `
+      mutation RemoveItemPermission($itemId: UUID!, $userId: UUID!) {
+        removeItemPermission(itemId: $itemId, userId: $userId)
+      }
+    `,
+    { itemId, userId },
+  ).then((data) => data.removeItemPermission);
+}

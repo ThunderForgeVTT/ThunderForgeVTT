@@ -69,22 +69,22 @@ Existing two-project split (plan.md "Project Structure"): `src/server/` (Rust/Ax
 
 ### Implementation for User Story 1
 
-- [ ] T015 [US1] Implement `createItem` mutation in `src/server/src/graphql/mutations_items.rs`: DM-only check via `auth::item_permissions::is_dm_of_world`, insert `world_items` row (`description`/`icon_asset_id` optional per Clarifications), no name-uniqueness check (FR-019, contracts/graphql-items.md) (depends on T009, T010, T011)
-- [ ] T016 [US1] Implement `updateItem` mutation in `src/server/src/graphql/mutations_items.rs`: Editor/Owner permission check via `require_item_permission` (depends on T015)
-- [ ] T017 [US1] Implement `deleteItem` mutation in `src/server/src/graphql/mutations_items.rs`: Owner-level permission check, cascade-deletes `world_item_permissions`/`world_item_effects`/`world_item_shares`, does NOT block on `world_actor_inventory` rows (nulled via `ON DELETE SET NULL`, T006) or (once spec 012 exists) `world_lore_links` rows referencing it (FR-017) (depends on T015)
-- [ ] T018 [US1] Implement `addItemEffect`/`updateItemEffect`/`removeItemEffect` mutations in `src/server/src/graphql/mutations_items.rs`: Editor/Owner check on the parent item, structural formula validation (non-empty, matches a minimal dice-grammar pattern per data-model.md) rejecting invalid formulas with a clear error before any write (FR-006, contracts/graphql-items.md) (depends on T015)
-- [ ] T019 [P] [US1] Implement `worldItems(worldId, search)` and `item(itemId)` queries in `src/server/src/graphql/queries/item.rs`: both reuse the existing `require_world_member`/`require_visible_world` check to reject non-members; `search` filters `name`/`description` instant-as-you-type (mirrors NPC catalog search) (contracts/graphql-items.md) (depends on T009, T010)
-- [ ] T020 [P] [US1] Implement `suggestItemName(worldId, name)` query in `src/server/src/graphql/queries/item.rs` using `similarity(name, :name) > 0.4 ORDER BY similarity DESC LIMIT 5` against the `pg_trgm` index (research.md §3, contracts/graphql-items.md) (depends on T002, T009)
-- [ ] T021 [US1] Wire `mutations_items` and `queries::item` into the GraphQL schema root in `src/server/src/graphql/mod.rs` (depends on T015–T020)
-- [ ] T022 [US1] Implement `setItemPermission` mutation and `itemPermissions(itemId)` query in `src/server/src/graphql/mutations_item_permissions.rs`: DM-only for both (mirrors `mutations_actor_permissions.rs`/spec 012's `mutations_lore_permissions.rs` exactly), upserts by `(item_id, world_member_user_id)` (FR-003) (depends on T009, T010, T011)
-- [ ] T023 [US1] Wire `mutations_item_permissions` into the GraphQL schema root (depends on T022, T021)
-- [ ] T024 [P] [US1] Create `apps/web/src/pages/world/compendium/ItemCompendiumTab.tsx` (searchable item catalog + DM-only "Add Item" control, mirrors `NpcCompendiumTab.tsx`) (depends on T013)
-- [ ] T025 [P] [US1] Create `apps/web/src/pages/world/compendium/ItemPreviewPanel.tsx` (right-docked preview: name, description, icon, effects; View always available, Edit gated on Editor/Owner; mirrors `ActorPreviewPanel.tsx`) (depends on T013)
-- [ ] T026 [US1] Replace `<ComingSoonTab label="Items" />` in `apps/web/src/pages/world/compendium/WorldCompendiumPage.tsx` (line ~75) with the `ItemCompendiumTab` + `ItemPreviewPanel` split view, matching the `npcs` tab's existing `grid gap-4 lg:grid-cols-[2fr_1fr]` composition (depends on T024, T025)
-- [ ] T027 [P] [US1] Create `apps/web/src/pages/world/item/ItemEffectEditor.tsx` (add/edit/remove structured effect rows: type select, formula text input, target text input, optional trigger-kind select) (depends on T013)
-- [ ] T028 [US1] Create `apps/web/src/pages/world/item/ItemDetailPage.tsx` (view/edit modes, mirrors `ActorDetailPage.tsx`) wiring `ItemEffectEditor` to `createItem`/`updateItem`/`deleteItem`/`addItemEffect`/`updateItemEffect`/`removeItemEffect` (depends on T027, T014)
-- [ ] T029 [P] [US1] Create `apps/web/src/pages/world/item/ItemOwnershipBlock.tsx` (mirrors `ActorOwnershipBlock.tsx`: lists every world member + DM with their level, DM-only edit controls) wired into `ItemDetailPage.tsx`, visible only when the viewer is DM (depends on T022, T013, T028)
-- [ ] T030 [US1] Wire the "did you mean?" hint into the Item-creation form (`ItemCompendiumTab.tsx`'s "Add Item" flow): debounce `suggestItemName` as the DM types a new name, render a non-blocking inline suggestion, never block save (FR-020) (depends on T020, T024)
+- [X] T015 [US1] Implement `createItem` mutation in `src/server/src/graphql/mutations_items.rs`: DM-only check via `auth::item_permissions::is_dm_of_world`, insert `world_items` row (`description`/`icon_asset_id` optional per Clarifications), no name-uniqueness check (FR-019, contracts/graphql-items.md) (depends on T009, T010, T011)
+- [X] T016 [US1] Implement `updateItem` mutation in `src/server/src/graphql/mutations_items.rs`: Editor/Owner permission check via `require_item_permission` (depends on T015)
+- [X] T017 [US1] Implement `deleteItem` mutation in `src/server/src/graphql/mutations_items.rs`: Owner-level permission check, cascade-deletes `world_item_permissions`/`world_item_effects`/`world_item_shares`, does NOT block on `world_actor_inventory` rows (nulled via `ON DELETE SET NULL`, T006) or (once spec 012 exists) `world_lore_links` rows referencing it (FR-017) (depends on T015)
+- [X] T018 [US1] Implement `addItemEffect`/`updateItemEffect`/`removeItemEffect` mutations in `src/server/src/graphql/mutations_items.rs`: Editor/Owner check on the parent item, structural formula validation (non-empty, matches a minimal dice-grammar pattern per data-model.md) rejecting invalid formulas with a clear error before any write (FR-006, contracts/graphql-items.md) (depends on T015)
+- [X] T019 [P] [US1] Implement `worldItems(worldId, search)` and `item(itemId)` queries in `src/server/src/graphql/queries/item.rs`: both reuse the existing `require_world_member`/`require_visible_world` check to reject non-members; `search` filters `name`/`description` instant-as-you-type (mirrors NPC catalog search) (contracts/graphql-items.md) (depends on T009, T010)
+- [X] T020 [P] [US1] Implement `suggestItemName(worldId, name)` query in `src/server/src/graphql/queries/item.rs` using `similarity(name, :name) > 0.4 ORDER BY similarity DESC LIMIT 5` against the `pg_trgm` index (research.md §3, contracts/graphql-items.md) (depends on T002, T009)
+- [X] T021 [US1] Wire `mutations_items` and `queries::item` into the GraphQL schema root in `src/server/src/graphql/mod.rs` (depends on T015–T020)
+- [X] T022 [US1] Implement `setItemPermission` mutation and `itemPermissions(itemId)` query in `src/server/src/graphql/mutations_item_permissions.rs`: DM-only for both (mirrors `mutations_actor_permissions.rs`/spec 012's `mutations_lore_permissions.rs` exactly), upserts by `(item_id, world_member_user_id)` (FR-003) (depends on T009, T010, T011)
+- [X] T023 [US1] Wire `mutations_item_permissions` into the GraphQL schema root (depends on T022, T021)
+- [X] T024 [P] [US1] Create `apps/web/src/pages/world/compendium/ItemCompendiumTab.tsx` (searchable item catalog + DM-only "Add Item" control, mirrors `NpcCompendiumTab.tsx`) (depends on T013)
+- [X] T025 [P] [US1] Create `apps/web/src/pages/world/compendium/ItemPreviewPanel.tsx` (right-docked preview: name, description, icon, effects; View always available, Edit gated on Editor/Owner; mirrors `ActorPreviewPanel.tsx`) (depends on T013)
+- [X] T026 [US1] Replace `<ComingSoonTab label="Items" />` in `apps/web/src/pages/world/compendium/WorldCompendiumPage.tsx` (line ~75) with the `ItemCompendiumTab` + `ItemPreviewPanel` split view, matching the `npcs` tab's existing `grid gap-4 lg:grid-cols-[2fr_1fr]` composition (depends on T024, T025)
+- [X] T027 [P] [US1] Create `apps/web/src/pages/world/item/ItemEffectEditor.tsx` (add/edit/remove structured effect rows: type select, formula text input, target text input, optional trigger-kind select) (depends on T013)
+- [X] T028 [US1] Create `apps/web/src/pages/world/item/ItemDetailPage.tsx` (view/edit modes, mirrors `ActorDetailPage.tsx`) wiring `ItemEffectEditor` to `createItem`/`updateItem`/`deleteItem`/`addItemEffect`/`updateItemEffect`/`removeItemEffect` (depends on T027, T014)
+- [X] T029 [P] [US1] Create `apps/web/src/pages/world/item/ItemOwnershipBlock.tsx` (mirrors `ActorOwnershipBlock.tsx`: lists every world member + DM with their level, DM-only edit controls) wired into `ItemDetailPage.tsx`, visible only when the viewer is DM (depends on T022, T013, T028)
+- [X] T030 [US1] Wire the "did you mean?" hint into the Item-creation form (`ItemCompendiumTab.tsx`'s "Add Item" flow): debounce `suggestItemName` as the DM types a new name, render a non-blocking inline suggestion, never block save (FR-020) (depends on T020, T024)
 
 **Checkpoint**: User Story 1 is fully functional and independently testable — a DM can author, save, view, delete, and delegate ownership of an Item with structured effects, browsable in the Compendium.
 
@@ -98,13 +98,13 @@ Existing two-project split (plan.md "Project Structure"): `src/server/` (Rust/Ax
 
 ### Implementation for User Story 2
 
-- [ ] T031 [US2] Implement `addItemToInventory` mutation in `src/server/src/graphql/mutations_inventory.rs`: Editor/Owner check on `actorId` via the existing `auth::actor_permissions::require_actor_permission` (NOT `item_permissions` — inventory is Actor-scoped, FR-013/Assumptions), upsert via `ON CONFLICT (actor_id, item_id) DO UPDATE SET quantity = world_actor_inventory.quantity + excluded.quantity`, refreshing `item_name_snapshot` from the Item's current name (research.md §2, contracts/graphql-inventory.md) (depends on T006, T009)
-- [ ] T032 [US2] Implement `adjustInventoryQuantity` mutation in `src/server/src/graphql/mutations_inventory.rs`: Editor/Owner check on the entry's `actor_id`, sets `quantity` to the given absolute value, deletes the row and returns `null` when the result is 0 (FR-011) (depends on T031)
-- [ ] T033 [US2] Implement `removeInventoryEntry` mutation in `src/server/src/graphql/mutations_inventory.rs`: Editor/Owner check on the entry's `actor_id`, deletes the row outright (depends on T031)
-- [ ] T034 [P] [US2] Implement `actorInventory(actorId)` query in `src/server/src/graphql/queries/inventory.rs`: Viewer-or-above check on `actorId`, returns every row including deleted-item rows rendered via `item_name_snapshot` (contracts/graphql-inventory.md) (depends on T006)
-- [ ] T035 [US2] Wire `mutations_inventory` and `queries::inventory` into the GraphQL schema root in `src/server/src/graphql/mod.rs` (depends on T031–T034)
-- [ ] T036 [P] [US2] Create `apps/web/src/pages/world/actor/ActorInventoryPanel.tsx`: Item + quantity list, add/adjust/remove controls visible only to Editor/Owner on the Actor, deleted-item rows shown distinctly via `item_name_snapshot` (depends on T013)
-- [ ] T037 [US2] Wire `ActorInventoryPanel` into the existing `apps/web/src/pages/world/actor/ActorDetailPage.tsx` (depends on T036)
+- [X] T031 [US2] Implement `addItemToInventory` mutation in `src/server/src/graphql/mutations_inventory.rs`: Editor/Owner check on `actorId` via the existing `auth::actor_permissions::require_actor_permission` (NOT `item_permissions` — inventory is Actor-scoped, FR-013/Assumptions), upsert via `ON CONFLICT (actor_id, item_id) DO UPDATE SET quantity = world_actor_inventory.quantity + excluded.quantity`, refreshing `item_name_snapshot` from the Item's current name (research.md §2, contracts/graphql-inventory.md) (depends on T006, T009)
+- [X] T032 [US2] Implement `adjustInventoryQuantity` mutation in `src/server/src/graphql/mutations_inventory.rs`: Editor/Owner check on the entry's `actor_id`, sets `quantity` to the given absolute value, deletes the row and returns `null` when the result is 0 (FR-011) (depends on T031)
+- [X] T033 [US2] Implement `removeInventoryEntry` mutation in `src/server/src/graphql/mutations_inventory.rs`: Editor/Owner check on the entry's `actor_id`, deletes the row outright (depends on T031)
+- [X] T034 [P] [US2] Implement `actorInventory(actorId)` query in `src/server/src/graphql/queries/inventory.rs`: Viewer-or-above check on `actorId`, returns every row including deleted-item rows rendered via `item_name_snapshot` (contracts/graphql-inventory.md) (depends on T006)
+- [X] T035 [US2] Wire `mutations_inventory` and `queries::inventory` into the GraphQL schema root in `src/server/src/graphql/mod.rs` (depends on T031–T034)
+- [X] T036 [P] [US2] Create `apps/web/src/pages/world/actor/ActorInventoryPanel.tsx`: Item + quantity list, add/adjust/remove controls visible only to Editor/Owner on the Actor, deleted-item rows shown distinctly via `item_name_snapshot` (depends on T013)
+- [X] T037 [US2] Wire `ActorInventoryPanel` into the existing `apps/web/src/pages/world/actor/ActorDetailPage.tsx` (depends on T036)
 
 **Checkpoint**: User Stories 1 and 2 both work independently — Items exist and Actors can hold them with quantities, permissioned via the Actor's own ownership block.
 
@@ -138,7 +138,7 @@ Existing two-project split (plan.md "Project Structure"): `src/server/` (Rust/Ax
 
 ### Implementation for User Story 4
 
-- [ ] T043 [US4] Add a Playwright e2e test to `apps/web/e2e/world-compendium-items.spec.ts`: as a Player world member, load the Compendium's Items tab, confirm the "Add Item" control is absent (verifies T024's DM-only gate), confirm search/select/preview work identically to the DM's experience, and confirm the preview panel omits "Edit" for an Item where the Player's `myPermissionLevel` is `VIEWER` (verifies T025's gate)
+- [X] T043 [US4] Add a Playwright e2e test to `apps/web/e2e/world-compendium-items.spec.ts`: as a Player world member, load the Compendium's Items tab, confirm the "Add Item" control is absent (verifies T024's DM-only gate), confirm search/select/preview work identically to the DM's experience, and confirm the preview panel omits "Edit" for an Item where the Player's `myPermissionLevel` is `VIEWER` (verifies T025's gate)
 
 **Checkpoint**: User Stories 1, 2, and 4 all work independently — the same catalog/gating logic built in US1 correctly serves both roles with no story-specific implementation beyond this verification test.
 
@@ -152,13 +152,13 @@ Existing two-project split (plan.md "Project Structure"): `src/server/` (Rust/Ax
 
 ### Implementation for User Story 5
 
-- [ ] T044 [US5] Implement `createItemShareLink`/`revokeItemShareLink` mutations in `src/server/src/graphql/mutations_item_shares.rs`, directly mirroring `mutations_actor_shares.rs`'s `generate_share_code`/create/revoke logic and its `created_by`-or-DM revoke rule (FR-022, FR-027, contracts/item-share.md) (depends on T009, T010)
-- [ ] T045 [US5] Implement `sharedItem(shareCode)` query in `src/server/src/graphql/mutations_item_shares.rs` (or a sibling query module): authenticated-only, no world-membership check, returns `SharedItemPreview` or a clear "not available" error for a revoked/missing link (mirrors `shared_actor_impl`) (depends on T044)
-- [ ] T046 [US5] Implement `copySharedItemToWorld` mutation in `src/server/src/graphql/mutations_item_shares.rs`: re-verifies DM-level access on `destinationWorldId` server-side, in one transaction inserts a new `world_items` row (fresh id, empty ownership block) and clones every `world_item_effects` row from the source (FR-025, FR-026, contracts/item-share.md) (depends on T044, T018)
-- [ ] T047 [US5] Confirm the existing `myDmWorlds` query (spec 010) is reused as-is for the "Copy to World" destination picker — no Item-specific variant needed (research.md §5); add a resolver test in `mutations_item_shares.rs` confirming it returns the caller's DM-level worlds unfiltered by content type (depends on T044)
-- [ ] T048 [US5] Wire `mutations_item_shares` (and its query) into the GraphQL schema root in `src/server/src/graphql/mod.rs` (depends on T044–T047)
-- [ ] T049 [P] [US5] Create `apps/web/src/pages/item-share/SharedItemPage.tsx`, mirroring `apps/web/src/pages/actor-share/SharedActorPage.tsx` (read-only preview + logged-in "Copy to World" picker) (depends on T013, T014)
-- [ ] T050 [P] [US5] Add "Share" (generate/revoke link) and "Copy to World" controls to `apps/web/src/pages/world/item/ItemDetailPage.tsx` and `SharedItemPage.tsx` respectively (depends on T028, T049, T044, T046)
+- [X] T044 [US5] Implement `createItemShareLink`/`revokeItemShareLink` mutations in `src/server/src/graphql/mutations_item_shares.rs`, directly mirroring `mutations_actor_shares.rs`'s `generate_share_code`/create/revoke logic and its `created_by`-or-DM revoke rule (FR-022, FR-027, contracts/item-share.md) (depends on T009, T010)
+- [X] T045 [US5] Implement `sharedItem(shareCode)` query in `src/server/src/graphql/mutations_item_shares.rs` (or a sibling query module): authenticated-only, no world-membership check, returns `SharedItemPreview` or a clear "not available" error for a revoked/missing link (mirrors `shared_actor_impl`) (depends on T044)
+- [X] T046 [US5] Implement `copySharedItemToWorld` mutation in `src/server/src/graphql/mutations_item_shares.rs`: re-verifies DM-level access on `destinationWorldId` server-side, in one transaction inserts a new `world_items` row (fresh id, empty ownership block) and clones every `world_item_effects` row from the source (FR-025, FR-026, contracts/item-share.md) (depends on T044, T018)
+- [X] T047 [US5] Confirm the existing `myDmWorlds` query (spec 010) is reused as-is for the "Copy to World" destination picker — no Item-specific variant needed (research.md §5); add a resolver test in `mutations_item_shares.rs` confirming it returns the caller's DM-level worlds unfiltered by content type (depends on T044)
+- [X] T048 [US5] Wire `mutations_item_shares` (and its query) into the GraphQL schema root in `src/server/src/graphql/mod.rs` (depends on T044–T047)
+- [X] T049 [P] [US5] Create `apps/web/src/pages/item-share/SharedItemPage.tsx`, mirroring `apps/web/src/pages/actor-share/SharedActorPage.tsx` (read-only preview + logged-in "Copy to World" picker) (depends on T013, T014)
+- [X] T050 [P] [US5] Add "Share" (generate/revoke link) and "Copy to World" controls to `apps/web/src/pages/world/item/ItemDetailPage.tsx` and `SharedItemPage.tsx` respectively (depends on T028, T049, T044, T046)
 
 **Checkpoint**: All five user stories are independently functional.
 
@@ -168,10 +168,10 @@ Existing two-project split (plan.md "Project Structure"): `src/server/` (Rust/Ax
 
 **Purpose**: Verification and final wiring that spans multiple user stories.
 
-- [ ] T051 [P] Run `cargo check` and `cargo test` in `src/server` to confirm the new resolvers and inline `#[tokio::test]` coverage pass (constitution Principle V)
-- [ ] T052 [P] Run `pnpm --filter @thunderforge/web build` and `pnpm --filter @thunderforge/web lint` in `apps/web`
+- [X] T051 [P] Run `cargo check` and `cargo test` in `src/server` to confirm the new resolvers and inline `#[tokio::test]` coverage pass (constitution Principle V)
+- [X] T052 [P] Run `pnpm --filter @thunderforge/web build` and `pnpm --filter @thunderforge/web lint` in `apps/web`
 - [ ] T053 Execute every scenario in `specs/013-items-inventory/quickstart.md` against a running local dev stack (`docker compose up`), including the cross-cutting name-collision, optional-icon, deleted-item-inventory, and Actor-scoped-permission checks
-- [ ] T054 [P] Confirm the world-removal cascade deletes a departed member's `world_item_permissions` rows (mirrors the existing actor/lore-permission cascade) by exercising it against `src/server/src/auth/item_permissions.rs` and the relevant world-membership-removal path
+- [X] T054 [P] Confirm the world-removal cascade deletes a departed member's `world_item_permissions` rows (mirrors the existing actor/lore-permission cascade) by exercising it against `src/server/src/auth/item_permissions.rs` and the relevant world-membership-removal path
 
 ---
 

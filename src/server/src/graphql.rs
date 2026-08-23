@@ -76,7 +76,9 @@ pub use helpers::{
 
 // Phase 4.9.Z Step 5: Query extraction into separate modules
 pub mod queries;
-pub use queries::{ActorQuery, AdminQuery, HealthcheckQuery, SceneQuery, UserQuery, InviteQuery};
+pub use queries::{
+    ActorQuery, AdminQuery, HealthcheckQuery, SceneQuery, UserQuery, InviteQuery, ItemQuery, InventoryQuery,
+};
 
 // Phase 4.10.B: Invite & Membership mutations for multiplayer campaigns
 pub mod mutations_invites;
@@ -113,6 +115,22 @@ pub use mutations_actor_permissions::{ActorPermissionMutation, ActorPermissionQu
 // Spec 010: actor sharing and cross-world deep copy
 pub mod mutations_actor_shares;
 pub use mutations_actor_shares::{ActorShareMutation, ActorShareQuery};
+
+// Spec 013: item creation/field-editing/deletion and effect CRUD
+pub mod mutations_items;
+pub use mutations_items::ItemMutation;
+
+// Spec 013: the item "ownership block" (Viewer/Editor/Owner grants)
+pub mod mutations_item_permissions;
+pub use mutations_item_permissions::{ItemPermissionMutation, ItemPermissionQuery};
+
+// Spec 013: item sharing and cross-world deep copy
+pub mod mutations_item_shares;
+pub use mutations_item_shares::{ItemShareMutation, ItemShareQuery};
+
+// Spec 013: actor inventory (Item + quantity, permissioned via the actor)
+pub mod mutations_inventory;
+pub use mutations_inventory::InventoryMutation;
 
 
 
@@ -1811,6 +1829,10 @@ pub struct QueryRoot(
     ActorQuery,
     ActorPermissionQuery,
     ActorShareQuery,
+    ItemQuery,
+    ItemPermissionQuery,
+    ItemShareQuery,
+    InventoryQuery,
 );
 
 #[derive(MergedObject, Default)]
@@ -1831,6 +1853,10 @@ pub struct MutationRoot(
     ActorMutation,
     ActorPermissionMutation,
     ActorShareMutation,
+    ItemMutation,
+    ItemPermissionMutation,
+    ItemShareMutation,
+    InventoryMutation,
 );
 
 pub type AppSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;

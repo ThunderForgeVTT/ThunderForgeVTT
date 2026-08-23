@@ -509,6 +509,26 @@ impl InviteMutation {
             .map_err(|e| Error::new(format!("Failed to clean up actor permissions: {}", e)))?;
         }
 
+        // Spec 013: same rationale as the actor-permissions cleanup above,
+        // generalized to item ownership-block entries (no direct FK from
+        // `world_members` to `world_item_permissions`).
+        {
+            use crate::schema::{world_item_permissions, world_items};
+            diesel::delete(
+                world_item_permissions::table
+                    .filter(world_item_permissions::user_id.eq(user_id))
+                    .filter(
+                        world_item_permissions::item_id.eq_any(
+                            world_items::table
+                                .filter(world_items::world_id.eq(world_id))
+                                .select(world_items::id),
+                        ),
+                    ),
+            )
+            .execute(&mut conn)
+            .map_err(|e| Error::new(format!("Failed to clean up item permissions: {}", e)))?;
+        }
+
         // Record event for audit trail
         let event_payload = serde_json::json!({
             "user_id": target_member.user_id,

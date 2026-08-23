@@ -13,6 +13,7 @@ import { Loader } from "@/components/ui/loader/Loader";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { useWorldRole } from "@/hooks/useWorldRole";
+import { ActorInventoryPanel } from "@/pages/world/actor/ActorInventoryPanel";
 import { ActorOwnershipBlock } from "@/pages/world/actor/ActorOwnershipBlock";
 import type { WorldActorRecord } from "@/types/actor";
 import type { WorldRecord } from "@/types/world";
@@ -264,6 +265,8 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
             </div>
           )}
         </Card>
+
+        <ActorInventoryPanel actorId={actorId} worldId={worldId} canManage={canEdit} />
 
         {isDm && mode === "edit" ? (
           <ActorOwnershipBlock actorId={actorId} worldId={worldId} world={world} />
