@@ -80,6 +80,11 @@ pub const MAX_LORE_IMAGE_UPLOAD_BYTES: usize = 25 * 1024 * 1024;
 pub const LORE_IMAGE_MAX_DIMENSION: u32 = 2048;
 pub const LORE_IMAGE_THUMBNAIL_DIMENSION: u32 = 256;
 
+// Dimension/format fields are captured at transcode time but not currently
+// persisted on `world_lore_image_assets` (which stores byte_size/content_type
+// only) — kept on the struct since they're natural metadata a future pass
+// may want to store, not dead in the sense of being wrong to have computed.
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct LoreImageRenditions {
     pub full_webp_bytes: Vec<u8>,
