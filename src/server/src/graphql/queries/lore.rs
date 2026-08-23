@@ -135,7 +135,7 @@ pub async fn world_lore_entries_impl(
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
-    tokio::task::spawn_blocking(move || {
+    let rows = tokio::task::spawn_blocking(move || {
         world_lore_entries::table
             .filter(world_lore_entries::world_id.eq(world_id))
             .select(LoreEntry::as_select())
@@ -143,7 +143,10 @@ pub async fn world_lore_entries_impl(
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to load world lore entries"))
+    .map_err(|_| Error::new("Failed to load world lore entries"))?;
+
+    // Spec 015: excluded from list queries entirely when disabled.
+    crate::moderation::filter_visible(state, "world_lore_entry", rows, |e| e.id).await
 }
 
 /// Testable core of `LoreQuery::lore_entry`. Returns `None` (not an
@@ -164,7 +167,7 @@ pub async fn lore_entry_impl(
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
     let slug = slug.to_string();
-    tokio::task::spawn_blocking(move || {
+    let row = tokio::task::spawn_blocking(move || {
         world_lore_entries::table
             .filter(world_lore_entries::world_id.eq(world_id))
             .filter(world_lore_entries::slug.eq(&slug))
@@ -174,7 +177,32 @@ pub async fn lore_entry_impl(
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to load lore entry"))
+    .map_err(|_| Error::new("Failed to load lore entry"))?;
+
+    // Spec 015: a single-entity query returns a moderation placeholder
+    // instead of real content, for every caller including the owner
+    // (contracts/graphql-moderation.md) — never excluded like a list.
+    let Some(row) = row else {
+        return Ok(None);
+    };
+    if crate::moderation::effective_status(state, "world_lore_entry", row.id)
+        .await?
+        .is_some()
+    {
+        let now = chrono::Utc::now().naive_utc();
+        return Ok(Some(crate::models::LoreEntry {
+            id: row.id,
+            world_id: row.world_id,
+            title: "[Content removed in response to a takedown notice]".to_string(),
+            slug: row.slug,
+            content: String::new(),
+            current_revision_id: None,
+            created_by: row.created_by,
+            created_at: now,
+            updated_at: now,
+        }));
+    }
+    Ok(Some(row))
 }
 
 #[derive(Enum, Debug, Copy, Clone, Eq, PartialEq)]

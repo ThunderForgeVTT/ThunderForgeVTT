@@ -1,6 +1,7 @@
 use crate::schema::{
     admin_bootstrap_oauth_sessions, admin_bootstrap_setup, auth_security_settings,
-    canvas_image_assets, fog_masks, game_systems, light_sources, login_two_factor_challenges,
+    canvas_image_assets, content_moderation_actions, fog_masks, game_systems, light_sources,
+    login_two_factor_challenges,
     oauth_authorization_sessions, oauth_link_challenges, oauth_providers, players_online, scenes,
     shapes, tokens, user_oauth_accounts, user_sessions, users, walls, world_actor_inventory,
     world_actor_permissions, world_actor_shares, world_actor_system_data, world_actors,
@@ -1274,4 +1275,62 @@ pub struct NewActorInventoryEntry {
     pub item_id: Option<uuid::Uuid>,
     pub item_name_snapshot: String,
     pub quantity: i32,
+}
+
+// ============================================================================
+// Spec 015: DMCA Notice-and-Takedown (content moderation)
+// ============================================================================
+
+/// Spec 015: one append-only event in a takedown case's lifecycle
+/// (notice received, disabled, counter-notice forwarded, restored, etc.).
+/// Deliberately has NO foreign keys to worlds/users/content tables —
+/// FR-013 requires this history to survive deletion of any of them.
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = content_moderation_actions)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct ContentModerationAction {
+    pub id: uuid::Uuid,
+    pub case_id: uuid::Uuid,
+    pub action_type: String,
+    pub entity_type: String,
+    pub entity_id: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub account_id: Option<uuid::Uuid>,
+    pub claimant_name: String,
+    pub claimant_contact: String,
+    pub copyrighted_work_description: String,
+    pub infringing_material_location: String,
+    pub good_faith_statement: bool,
+    pub accuracy_statement: bool,
+    pub signature: String,
+    pub validity_result: Option<String>,
+    pub missing_elements: Option<Vec<Option<String>>>,
+    pub counter_notice_id: Option<uuid::Uuid>,
+    pub restoration_due_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub created_by: Option<uuid::Uuid>,
+}
+
+/// New moderation event for insertion.
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = content_moderation_actions)]
+pub struct NewContentModerationAction {
+    pub case_id: uuid::Uuid,
+    pub action_type: String,
+    pub entity_type: String,
+    pub entity_id: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub account_id: Option<uuid::Uuid>,
+    pub claimant_name: String,
+    pub claimant_contact: String,
+    pub copyrighted_work_description: String,
+    pub infringing_material_location: String,
+    pub good_faith_statement: bool,
+    pub accuracy_statement: bool,
+    pub signature: String,
+    pub validity_result: Option<String>,
+    pub missing_elements: Option<Vec<String>>,
+    pub counter_notice_id: Option<uuid::Uuid>,
+    pub restoration_due_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub created_by: Option<uuid::Uuid>,
 }

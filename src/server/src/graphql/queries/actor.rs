@@ -21,7 +21,7 @@ pub async fn world_actors_impl(
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
-    tokio::task::spawn_blocking(move || {
+    let rows = tokio::task::spawn_blocking(move || {
         world_actors::table
             .filter(world_actors::world_id.eq(world_id))
             .select(WorldActor::as_select())
@@ -29,7 +29,11 @@ pub async fn world_actors_impl(
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to load world actors"))
+    .map_err(|_| Error::new("Failed to load world actors"))?;
+
+    // Spec 015 (contracts/graphql-moderation.md): a moderation-disabled
+    // actor is excluded from every list query, for every caller.
+    crate::moderation::filter_visible(state, "world_actor", rows, |a| a.id).await
 }
 
 /// Testable core of `ActorQuery::search_actors`. Server-side counterpart
@@ -53,7 +57,7 @@ pub async fn search_actors_impl(
 
     let pattern = format!("%{}%", query.replace('%', "\\%").replace('_', "\\_"));
 
-    tokio::task::spawn_blocking(move || {
+    let rows = tokio::task::spawn_blocking(move || {
         world_actors::table
             .filter(world_actors::world_id.eq(world_id))
             .filter(
@@ -66,7 +70,9 @@ pub async fn search_actors_impl(
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to search world actors"))
+    .map_err(|_| Error::new("Failed to search world actors"))?;
+
+    crate::moderation::filter_visible(state, "world_actor", rows, |a| a.id).await
 }
 
 #[derive(Default)]

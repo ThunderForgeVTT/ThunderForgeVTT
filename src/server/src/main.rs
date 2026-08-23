@@ -11,6 +11,7 @@ mod lore_assets_serve; // Spec 012: authenticated proxy for lore image assets (m
 mod map_import;
 mod markdown; // Spec 012: lore wiki GFM rendering, [[link]] resolution, slug generation
 mod models;
+mod moderation; // Spec 015: DMCA notice-and-takedown content moderation
 mod network;
 mod pubsub;
 mod schema; // Add this line

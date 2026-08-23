@@ -63,7 +63,7 @@ pub async fn world_items_impl(
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
-    tokio::task::spawn_blocking(move || {
+    let rows = tokio::task::spawn_blocking(move || {
         let mut query = world_items::table
             .filter(world_items::world_id.eq(world_id))
             .into_boxed();
@@ -84,7 +84,10 @@ pub async fn world_items_impl(
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to load world items"))
+    .map_err(|_| Error::new("Failed to load world items"))?;
+
+    // Spec 015: excluded from list queries entirely when disabled.
+    crate::moderation::filter_visible(state, "world_item", rows, |i| i.id).await
 }
 
 /// Testable core of `ItemQuery::item`. Denies access to anyone without at
@@ -193,6 +196,28 @@ impl ItemQuery {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         let row = item_impl(state, auth_user.user_id, auth_user.is_admin, item_id).await?;
+
+        // Spec 015: single-entity queries return a moderation placeholder
+        // instead of real content, for every caller including the owner
+        // (contracts/graphql-moderation.md) — never excluded like a list.
+        if crate::moderation::effective_status(state, "world_item", row.id)
+            .await?
+            .is_some()
+        {
+            let my_permission_level = crate::auth::item_permissions::effective_item_permission(
+                state,
+                auth_user.user_id,
+                auth_user.is_admin,
+                row.id,
+            )
+            .await?;
+            return Ok(GraphQLItem::moderated_placeholder(
+                row.id,
+                row.world_id,
+                my_permission_level,
+            ));
+        }
+
         to_graphql_item(state, auth_user.user_id, auth_user.is_admin, row).await
     }
 

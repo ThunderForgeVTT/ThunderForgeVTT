@@ -1,0 +1,540 @@
+//! Spec 015: DMCA takedown notice / counter-notice / staff-resolution
+//! mutations. See contracts/graphql-moderation.md.
+
+use async_graphql::{Context, Error, InputObject, Result as GraphQLResult};
+use diesel::prelude::*;
+use uuid::Uuid;
+
+use crate::auth::actor_permissions::is_dm_of_world;
+use crate::graphql::types::{
+    GraphQLModerationAction, GraphQLModerationCase, ModerationActionType, ModerationEntityType,
+};
+use crate::graphql::{app_state, authenticated_user};
+use crate::models::{ContentModerationAction, NewContentModerationAction};
+use crate::moderation::validation::{
+    CounterNoticeFields, TakedownNoticeFields, validate_counter_notice, validate_takedown_notice,
+};
+use crate::moderation::{action_type, counter_notice_waiting_period_days};
+use crate::schema::content_moderation_actions;
+use crate::state::AppState;
+
+#[derive(InputObject, Debug, Clone)]
+pub struct SubmitTakedownNoticeInput {
+    pub entity_type: ModerationEntityType,
+    pub entity_id: Uuid,
+    pub claimant_name: String,
+    pub claimant_contact: String,
+    pub copyrighted_work_description: String,
+    pub infringing_material_location: String,
+    pub good_faith_statement: bool,
+    pub accuracy_statement: bool,
+    pub signature: String,
+}
+
+#[derive(InputObject, Debug, Clone)]
+pub struct SubmitCounterNoticeInput {
+    pub case_id: Uuid,
+    pub removed_material_description: String,
+    pub good_faith_mistake_statement: bool,
+    pub consent_to_jurisdiction: bool,
+    pub contact_information: String,
+    pub signature: String,
+}
+
+/// Resolves `(entity_type, entity_id)` to its owning `(world_id,
+/// account_id)` by querying the matching content table directly —
+/// denormalized onto every `content_moderation_actions` row at write
+/// time (data-model.md), since the moderation table itself carries no
+/// FK to any content table.
+fn resolve_entity_owner(
+    conn: &mut PgConnection,
+    entity_type: ModerationEntityType,
+    entity_id: Uuid,
+) -> Result<(Uuid, Option<Uuid>), String> {
+    use crate::schema::{world_actors, world_items, world_lore_entries};
+
+    match entity_type {
+        ModerationEntityType::WorldActor => world_actors::table
+            .filter(world_actors::id.eq(entity_id))
+            .select((world_actors::world_id, world_actors::created_by))
+            .first::<(Uuid, Uuid)>(conn)
+            .map(|(w, a)| (w, Some(a)))
+            .map_err(|_| "Actor not found".to_string()),
+        ModerationEntityType::WorldItem => world_items::table
+            .filter(world_items::id.eq(entity_id))
+            .select((world_items::world_id, world_items::created_by))
+            .first::<(Uuid, Uuid)>(conn)
+            .map(|(w, a)| (w, Some(a)))
+            .map_err(|_| "Item not found".to_string()),
+        ModerationEntityType::WorldLoreEntry => world_lore_entries::table
+            .filter(world_lore_entries::id.eq(entity_id))
+            .select((world_lore_entries::world_id, world_lore_entries::created_by))
+            .first::<(Uuid, Uuid)>(conn)
+            .map(|(w, a)| (w, Some(a)))
+            .map_err(|_| "Lore entry not found".to_string()),
+    }
+}
+
+fn load_case_events(
+    conn: &mut PgConnection,
+    case_id: Uuid,
+) -> Result<Vec<ContentModerationAction>, diesel::result::Error> {
+    content_moderation_actions::table
+        .filter(content_moderation_actions::case_id.eq(case_id))
+        .order(content_moderation_actions::created_at.asc())
+        .select(ContentModerationAction::as_select())
+        .load::<ContentModerationAction>(conn)
+}
+
+fn to_graphql_case(events: Vec<ContentModerationAction>) -> GraphQLResult<GraphQLModerationCase> {
+    let last = events
+        .last()
+        .ok_or_else(|| Error::new("Case has no events"))?;
+    let case_id = last.case_id;
+    let entity_type = ModerationEntityType::from_db_str(&last.entity_type)
+        .ok_or_else(|| Error::new("Unknown entity type"))?;
+    let entity_id = last.entity_id;
+    let world_id = last.world_id;
+    let current_status = ModerationActionType::from_db_str(&last.action_type)
+        .ok_or_else(|| Error::new("Unknown action type"))?;
+
+    Ok(GraphQLModerationCase {
+        case_id,
+        entity_type,
+        entity_id,
+        world_id,
+        current_status,
+        events: events.into_iter().map(GraphQLModerationAction::from).collect(),
+    })
+}
+
+/// Testable core of `ModerationMutation::submit_takedown_notice`.
+/// Public — no auth required (contracts/graphql-moderation.md). A
+/// statutorily-incomplete notice is recorded as
+/// `notice_rejected_incomplete` (never silently dropped, FR-003) rather
+/// than returning a GraphQL error.
+pub async fn submit_takedown_notice_impl(
+    state: &AppState,
+    input: SubmitTakedownNoticeInput,
+) -> GraphQLResult<GraphQLModerationCase> {
+    let missing = validate_takedown_notice(&TakedownNoticeFields {
+        claimant_name: &input.claimant_name,
+        claimant_contact: &input.claimant_contact,
+        copyrighted_work_description: &input.copyrighted_work_description,
+        infringing_material_location: &input.infringing_material_location,
+        good_faith_statement: input.good_faith_statement,
+        accuracy_statement: input.accuracy_statement,
+        signature: &input.signature,
+    });
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    let entity_type = input.entity_type;
+    let entity_id = input.entity_id;
+    let case_id = Uuid::now_v7();
+
+    let events = tokio::task::spawn_blocking(move || -> Result<Vec<ContentModerationAction>, String> {
+        let (world_id, account_id) = resolve_entity_owner(&mut conn, entity_type, entity_id)?;
+
+        if !missing.is_empty() {
+            diesel::insert_into(content_moderation_actions::table)
+                .values(NewContentModerationAction {
+                    case_id,
+                    action_type: action_type::NOTICE_REJECTED_INCOMPLETE.to_string(),
+                    entity_type: entity_type.as_db_str().to_string(),
+                    entity_id,
+                    world_id,
+                    account_id,
+                    claimant_name: input.claimant_name.clone(),
+                    claimant_contact: input.claimant_contact.clone(),
+                    copyrighted_work_description: input.copyrighted_work_description.clone(),
+                    infringing_material_location: input.infringing_material_location.clone(),
+                    good_faith_statement: input.good_faith_statement,
+                    accuracy_statement: input.accuracy_statement,
+                    signature: input.signature.clone(),
+                    validity_result: Some("invalid_missing_elements".to_string()),
+                    missing_elements: Some(missing.clone()),
+                    counter_notice_id: None,
+                    restoration_due_at: None,
+                    created_by: None,
+                })
+                .execute(&mut conn)
+                .map_err(|e| e.to_string())?;
+            return load_case_events(&mut conn, case_id).map_err(|e| e.to_string());
+        }
+
+        diesel::insert_into(content_moderation_actions::table)
+            .values(NewContentModerationAction {
+                case_id,
+                action_type: action_type::NOTICE_RECEIVED.to_string(),
+                entity_type: entity_type.as_db_str().to_string(),
+                entity_id,
+                world_id,
+                account_id,
+                claimant_name: input.claimant_name.clone(),
+                claimant_contact: input.claimant_contact.clone(),
+                copyrighted_work_description: input.copyrighted_work_description.clone(),
+                infringing_material_location: input.infringing_material_location.clone(),
+                good_faith_statement: input.good_faith_statement,
+                accuracy_statement: input.accuracy_statement,
+                signature: input.signature.clone(),
+                validity_result: Some("valid".to_string()),
+                missing_elements: None,
+                counter_notice_id: None,
+                restoration_due_at: None,
+                created_by: None,
+            })
+            .execute(&mut conn)
+            .map_err(|e| e.to_string())?;
+
+        diesel::insert_into(content_moderation_actions::table)
+            .values(NewContentModerationAction {
+                case_id,
+                action_type: action_type::CONTENT_DISABLED.to_string(),
+                entity_type: entity_type.as_db_str().to_string(),
+                entity_id,
+                world_id,
+                account_id,
+                claimant_name: input.claimant_name.clone(),
+                claimant_contact: input.claimant_contact.clone(),
+                copyrighted_work_description: input.copyrighted_work_description.clone(),
+                infringing_material_location: input.infringing_material_location.clone(),
+                good_faith_statement: input.good_faith_statement,
+                accuracy_statement: input.accuracy_statement,
+                signature: input.signature.clone(),
+                validity_result: Some("valid".to_string()),
+                missing_elements: None,
+                counter_notice_id: None,
+                restoration_due_at: None,
+                created_by: None,
+            })
+            .execute(&mut conn)
+            .map_err(|e| e.to_string())?;
+
+        load_case_events(&mut conn, case_id).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(Error::new)?;
+
+    to_graphql_case(events)
+}
+
+/// Testable core of `ModerationMutation::submit_counter_notice`. Requires
+/// the caller to be the owning GM/account for the case's world (reuses
+/// `is_dm_of_world`, matching every other GM-scoped mutation in this
+/// codebase).
+pub async fn submit_counter_notice_impl(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    input: SubmitCounterNoticeInput,
+) -> GraphQLResult<GraphQLModerationCase> {
+    let missing = validate_counter_notice(&CounterNoticeFields {
+        removed_material_description: &input.removed_material_description,
+        good_faith_mistake_statement: input.good_faith_mistake_statement,
+        consent_to_jurisdiction: input.consent_to_jurisdiction,
+        contact_information: &input.contact_information,
+        signature: &input.signature,
+    });
+    if !missing.is_empty() {
+        return Err(Error::new(format!(
+            "Counter-notice missing required elements: {}",
+            missing.join(", ")
+        )));
+    }
+
+    let case_id = input.case_id;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    let (world_id, entity_type, entity_id) =
+        tokio::task::spawn_blocking(move || -> Result<(Uuid, String, Uuid), String> {
+            let last = content_moderation_actions::table
+                .filter(content_moderation_actions::case_id.eq(case_id))
+                .order(content_moderation_actions::created_at.desc())
+                .select(ContentModerationAction::as_select())
+                .first::<ContentModerationAction>(&mut conn)
+                .map_err(|_| "Case not found".to_string())?;
+            Ok((last.world_id, last.entity_type, last.entity_id))
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(Error::new)?;
+
+    if !is_dm_of_world(state, user_id, is_admin, world_id).await? {
+        return Err(Error::new(
+            "Only the content's owning GM may submit a counter-notice for this case",
+        ));
+    }
+
+    let waiting_days = counter_notice_waiting_period_days();
+    let restoration_due_at = chrono::Utc::now() + chrono::Duration::days(waiting_days);
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    let events = tokio::task::spawn_blocking(move || -> Result<Vec<ContentModerationAction>, String> {
+        diesel::insert_into(content_moderation_actions::table)
+            .values(NewContentModerationAction {
+                case_id,
+                action_type: action_type::COUNTER_NOTICE_RECEIVED.to_string(),
+                entity_type: entity_type.clone(),
+                entity_id,
+                world_id,
+                account_id: Some(user_id),
+                claimant_name: String::new(),
+                claimant_contact: String::new(),
+                copyrighted_work_description: String::new(),
+                infringing_material_location: input.removed_material_description.clone(),
+                good_faith_statement: input.good_faith_mistake_statement,
+                accuracy_statement: input.consent_to_jurisdiction,
+                signature: input.signature.clone(),
+                validity_result: Some("valid".to_string()),
+                missing_elements: None,
+                counter_notice_id: Some(case_id),
+                restoration_due_at: None,
+                created_by: Some(user_id),
+            })
+            .execute(&mut conn)
+            .map_err(|e| e.to_string())?;
+
+        diesel::insert_into(content_moderation_actions::table)
+            .values(NewContentModerationAction {
+                case_id,
+                action_type: action_type::COUNTER_NOTICE_FORWARDED.to_string(),
+                entity_type,
+                entity_id,
+                world_id,
+                account_id: Some(user_id),
+                claimant_name: String::new(),
+                claimant_contact: input.contact_information.clone(),
+                copyrighted_work_description: String::new(),
+                infringing_material_location: String::new(),
+                good_faith_statement: true,
+                accuracy_statement: true,
+                signature: String::new(),
+                validity_result: None,
+                missing_elements: None,
+                counter_notice_id: Some(case_id),
+                restoration_due_at: Some(restoration_due_at),
+                created_by: Some(user_id),
+            })
+            .execute(&mut conn)
+            .map_err(|e| e.to_string())?;
+
+        load_case_events(&mut conn, case_id).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(Error::new)?;
+
+    to_graphql_case(events)
+}
+
+/// Testable core of `ModerationMutation::resolve_moderation_case`.
+/// Compliance-staff-only (`is_admin`) — manually resolves a case outside
+/// the automatic restoration-timer path (e.g. claimant filed further
+/// legal action before the waiting period elapsed).
+pub async fn resolve_moderation_case_impl(
+    state: &AppState,
+    is_admin: bool,
+    case_id: Uuid,
+    resolution: ModerationActionType,
+) -> GraphQLResult<GraphQLModerationCase> {
+    if !is_admin {
+        return Err(Error::new("Only compliance staff may resolve a moderation case"));
+    }
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    let events = tokio::task::spawn_blocking(move || -> Result<Vec<ContentModerationAction>, String> {
+        let last = content_moderation_actions::table
+            .filter(content_moderation_actions::case_id.eq(case_id))
+            .order(content_moderation_actions::created_at.desc())
+            .select(ContentModerationAction::as_select())
+            .first::<ContentModerationAction>(&mut conn)
+            .map_err(|_| "Case not found".to_string())?;
+
+        diesel::insert_into(content_moderation_actions::table)
+            .values(NewContentModerationAction {
+                case_id,
+                action_type: resolution.as_db_str().to_string(),
+                entity_type: last.entity_type,
+                entity_id: last.entity_id,
+                world_id: last.world_id,
+                account_id: last.account_id,
+                claimant_name: String::new(),
+                claimant_contact: String::new(),
+                copyrighted_work_description: String::new(),
+                infringing_material_location: String::new(),
+                good_faith_statement: false,
+                accuracy_statement: false,
+                signature: String::new(),
+                validity_result: None,
+                missing_elements: None,
+                counter_notice_id: None,
+                restoration_due_at: None,
+                created_by: None,
+            })
+            .execute(&mut conn)
+            .map_err(|e| e.to_string())?;
+
+        load_case_events(&mut conn, case_id).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(Error::new)?;
+
+    to_graphql_case(events)
+}
+
+#[derive(Default)]
+pub struct ModerationMutation;
+
+#[async_graphql::Object]
+impl ModerationMutation {
+    async fn submit_takedown_notice(
+        &self,
+        ctx: &Context<'_>,
+        input: SubmitTakedownNoticeInput,
+    ) -> GraphQLResult<GraphQLModerationCase> {
+        let state = app_state(ctx)?;
+        submit_takedown_notice_impl(state, input).await
+    }
+
+    async fn submit_counter_notice(
+        &self,
+        ctx: &Context<'_>,
+        input: SubmitCounterNoticeInput,
+    ) -> GraphQLResult<GraphQLModerationCase> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        submit_counter_notice_impl(state, auth_user.user_id, auth_user.is_admin, input).await
+    }
+
+    async fn resolve_moderation_case(
+        &self,
+        ctx: &Context<'_>,
+        case_id: Uuid,
+        resolution: ModerationActionType,
+    ) -> GraphQLResult<GraphQLModerationCase> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        resolve_moderation_case_impl(state, auth_user.is_admin, case_id, resolution).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::{insert_test_user, insert_test_world, test_app_state};
+
+    fn valid_notice_input(entity_type: ModerationEntityType, entity_id: Uuid) -> SubmitTakedownNoticeInput {
+        SubmitTakedownNoticeInput {
+            entity_type,
+            entity_id,
+            claimant_name: "Acme Corp".to_string(),
+            claimant_contact: "legal@acme.example".to_string(),
+            copyrighted_work_description: "Acme Sourcebook Vol. 1".to_string(),
+            infringing_material_location: entity_id.to_string(),
+            good_faith_statement: true,
+            accuracy_statement: true,
+            signature: "Jane Claimant".to_string(),
+        }
+    }
+
+    #[tokio::test]
+    async fn valid_notice_disables_the_target_actor() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let scene_id = crate::test_support::insert_test_scene(&mut conn, world_id, owner_id);
+        use crate::schema::world_actors;
+        let actor_id = Uuid::now_v7();
+        let now = chrono::Utc::now().naive_utc();
+        diesel::insert_into(world_actors::table)
+            .values((
+                world_actors::id.eq(actor_id),
+                world_actors::world_id.eq(world_id),
+                world_actors::scene_id.eq(scene_id),
+                world_actors::actor_type.eq("npc"),
+                world_actors::game_system_id.eq("dnd5e"),
+                world_actors::label.eq("Infringing NPC"),
+                world_actors::created_by.eq(owner_id),
+                world_actors::owned_by.eq(owner_id),
+                world_actors::is_public.eq(false),
+                world_actors::is_npc.eq(true),
+                world_actors::created_at.eq(now),
+                world_actors::updated_at.eq(now),
+            ))
+            .execute(&mut conn)
+            .unwrap();
+        drop(conn);
+
+        let case = submit_takedown_notice_impl(
+            &state,
+            valid_notice_input(ModerationEntityType::WorldActor, actor_id),
+        )
+        .await
+        .expect("valid notice should succeed");
+
+        assert_eq!(case.current_status, ModerationActionType::ContentDisabled);
+
+        let status = crate::moderation::effective_status(&state, "world_actor", actor_id)
+            .await
+            .expect("status query should not error");
+        assert_eq!(
+            status.as_deref(),
+            Some(crate::moderation::action_type::CONTENT_DISABLED)
+        );
+    }
+
+    #[tokio::test]
+    async fn incomplete_notice_is_rejected_without_disabling_content() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let item_id = crate::graphql::mutations_items::create_item_impl(
+            &state,
+            owner_id,
+            false,
+            crate::graphql::mutations_items::CreateItemInput {
+                world_id,
+                name: "Totally Original Sword".to_string(),
+                description: None,
+            },
+        )
+        .await
+        .expect("item creation should succeed")
+        .id;
+
+        let mut input = valid_notice_input(ModerationEntityType::WorldItem, item_id);
+        input.accuracy_statement = false;
+
+        let case = submit_takedown_notice_impl(&state, input)
+            .await
+            .expect("incomplete notice should still be logged, not error");
+        assert_eq!(
+            case.current_status,
+            ModerationActionType::NoticeRejectedIncomplete
+        );
+
+        let status = crate::moderation::effective_status(&state, "world_item", item_id)
+            .await
+            .expect("status query should not error");
+        assert!(status.is_none(), "an incomplete notice must not disable the entity");
+    }
+}

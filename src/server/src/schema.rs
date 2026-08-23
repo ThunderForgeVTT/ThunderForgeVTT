@@ -69,6 +69,31 @@ diesel::table! {
 }
 
 diesel::table! {
+    content_moderation_actions (id) {
+        id -> Uuid,
+        case_id -> Uuid,
+        action_type -> Text,
+        entity_type -> Text,
+        entity_id -> Uuid,
+        world_id -> Uuid,
+        account_id -> Nullable<Uuid>,
+        claimant_name -> Text,
+        claimant_contact -> Text,
+        copyrighted_work_description -> Text,
+        infringing_material_location -> Text,
+        good_faith_statement -> Bool,
+        accuracy_statement -> Bool,
+        signature -> Text,
+        validity_result -> Nullable<Text>,
+        missing_elements -> Nullable<Array<Nullable<Text>>>,
+        counter_notice_id -> Nullable<Uuid>,
+        restoration_due_at -> Nullable<Timestamptz>,
+        created_at -> Timestamptz,
+        created_by -> Nullable<Uuid>,
+    }
+}
+
+diesel::table! {
     fog_masks (fog_id) {
         fog_id -> Uuid,
         scene_id -> Uuid,
@@ -649,6 +674,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     admin_bootstrap_setup,
     auth_security_settings,
     canvas_image_assets,
+    content_moderation_actions,
     fog_masks,
     game_systems,
     light_sources,
