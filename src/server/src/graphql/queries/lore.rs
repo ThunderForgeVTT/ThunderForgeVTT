@@ -87,6 +87,9 @@ pub async fn lore_entries_linking_to(
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(|_| Error::new("Failed to load linked-from entries"))?;
 
+    // Spec 015: a disabled source entry must not leak its title/content
+    // through a target's "linked from" list.
+    let rows = crate::moderation::filter_visible(state, "world_lore_entry", rows, |e| e.id).await?;
     Ok(rows.into_iter().map(GraphQLLoreEntry::from).collect())
 }
 
@@ -116,6 +119,7 @@ pub async fn lore_entries_linking_to_actor(
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(|_| Error::new("Failed to load linked-from entries"))?;
 
+    let rows = crate::moderation::filter_visible(state, "world_lore_entry", rows, |e| e.id).await?;
     Ok(rows.into_iter().map(GraphQLLoreEntry::from).collect())
 }
 

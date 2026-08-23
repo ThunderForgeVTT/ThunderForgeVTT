@@ -95,6 +95,15 @@ pub async fn shared_actor_impl(
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(Error::new)?;
 
+    // Spec 015: a share link must not become a moderation bypass — a
+    // disabled actor's real content must never leak through this path.
+    if crate::moderation::effective_status(state, "world_actor", actor.id)
+        .await?
+        .is_some()
+    {
+        return Err(Error::new("This share link is no longer available"));
+    }
+
     Ok(SharedActorPreview {
         label: actor.label,
         actor_type: actor.actor_type,

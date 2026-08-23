@@ -537,4 +537,135 @@ mod tests {
             .expect("status query should not error");
         assert!(status.is_none(), "an incomplete notice must not disable the entity");
     }
+
+    fn valid_counter_notice_input(case_id: Uuid) -> SubmitCounterNoticeInput {
+        SubmitCounterNoticeInput {
+            case_id,
+            removed_material_description: "My homebrew NPC, entirely SRD-derived".to_string(),
+            good_faith_mistake_statement: true,
+            consent_to_jurisdiction: true,
+            contact_information: "gm@example.com".to_string(),
+            signature: "GM Name".to_string(),
+        }
+    }
+
+    /// US2: only the content's owning GM may submit a counter-notice, and
+    /// doing so forwards the case without yet restoring it.
+    #[tokio::test]
+    async fn counter_notice_requires_owner_and_forwards_without_restoring() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let outsider_id = insert_test_user(&mut conn);
+        drop(conn);
+
+        let item = crate::graphql::mutations_items::create_item_impl(
+            &state,
+            owner_id,
+            false,
+            crate::graphql::mutations_items::CreateItemInput {
+                world_id,
+                name: "Disputed Item".to_string(),
+                description: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let case = submit_takedown_notice_impl(
+            &state,
+            valid_notice_input(ModerationEntityType::WorldItem, item.id),
+        )
+        .await
+        .unwrap();
+
+        let denied =
+            submit_counter_notice_impl(&state, outsider_id, false, valid_counter_notice_input(case.case_id))
+                .await;
+        assert!(denied.is_err(), "a non-owner must not be able to counter-notice");
+
+        let forwarded = submit_counter_notice_impl(
+            &state,
+            owner_id,
+            false,
+            valid_counter_notice_input(case.case_id),
+        )
+        .await
+        .expect("owner should be able to counter-notice");
+        assert_eq!(
+            forwarded.current_status,
+            ModerationActionType::CounterNoticeForwarded
+        );
+
+        // Not yet restored — waiting period hasn't elapsed.
+        let status = crate::moderation::effective_status(&state, "world_item", item.id)
+            .await
+            .unwrap();
+        assert_eq!(
+            status.as_deref(),
+            Some(crate::moderation::action_type::CONTENT_DISABLED)
+        );
+    }
+
+    /// US2 Scenario 4: compliance staff can block restoration before the
+    /// waiting period elapses.
+    #[tokio::test]
+    async fn staff_can_block_restoration_before_waiting_period_elapses() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let item = crate::graphql::mutations_items::create_item_impl(
+            &state,
+            owner_id,
+            false,
+            crate::graphql::mutations_items::CreateItemInput {
+                world_id,
+                name: "Disputed Item 2".to_string(),
+                description: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let case = submit_takedown_notice_impl(
+            &state,
+            valid_notice_input(ModerationEntityType::WorldItem, item.id),
+        )
+        .await
+        .unwrap();
+
+        submit_counter_notice_impl(&state, owner_id, false, valid_counter_notice_input(case.case_id))
+            .await
+            .unwrap();
+
+        let denied_for_player =
+            resolve_moderation_case_impl(&state, false, case.case_id, ModerationActionType::ContentRemainsDisabled)
+                .await;
+        assert!(denied_for_player.is_err(), "a non-admin must not resolve a case");
+
+        let resolved = resolve_moderation_case_impl(
+            &state,
+            true,
+            case.case_id,
+            ModerationActionType::ContentRemainsDisabled,
+        )
+        .await
+        .expect("compliance staff should be able to resolve the case");
+        assert_eq!(
+            resolved.current_status,
+            ModerationActionType::ContentRemainsDisabled
+        );
+
+        let status = crate::moderation::effective_status(&state, "world_item", item.id)
+            .await
+            .unwrap();
+        assert_eq!(
+            status.as_deref(),
+            Some(crate::moderation::action_type::CONTENT_REMAINS_DISABLED)
+        );
+    }
 }

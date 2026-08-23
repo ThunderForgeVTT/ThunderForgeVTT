@@ -88,6 +88,15 @@ pub async fn shared_item_impl(state: &AppState, share_code: String) -> GraphQLRe
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(Error::new)?;
 
+    // Spec 015: a share link must not become a moderation bypass — a
+    // disabled item's real content must never leak through this path.
+    if crate::moderation::effective_status(state, "world_item", item.id)
+        .await?
+        .is_some()
+    {
+        return Err(Error::new("This share link is no longer available"));
+    }
+
     Ok(SharedItemPreview {
         name: item.name,
         description: item.description,
@@ -442,5 +451,59 @@ mod tests {
         assert_eq!(copy.name, "Longsword");
         assert_eq!(effects.len(), 1, "effects must be cloned onto the copy");
         assert_ne!(effects[0].item_id, source_item.id, "cloned effect must belong to the copy, not the source");
+    }
+
+    /// Spec 015: a moderation-disabled item's share link must not leak
+    /// its real content — the share link must not be a takedown bypass.
+    #[tokio::test]
+    async fn shared_item_is_unavailable_once_moderation_disabled() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let item = create_item_impl(
+            &state,
+            owner_id,
+            false,
+            CreateItemInput {
+                world_id,
+                name: "Infringing Sword".to_string(),
+                description: None,
+            },
+        )
+        .await
+        .expect("DM should create item");
+
+        let link = create_item_share_link_impl(&state, owner_id, false, item.id)
+            .await
+            .expect("owner should be able to share the item");
+
+        // Sanity: share works before any takedown.
+        assert!(shared_item_impl(&state, link.share_code.clone()).await.is_ok());
+
+        crate::graphql::mutations_moderation::submit_takedown_notice_impl(
+            &state,
+            crate::graphql::mutations_moderation::SubmitTakedownNoticeInput {
+                entity_type: crate::graphql::types::ModerationEntityType::WorldItem,
+                entity_id: item.id,
+                claimant_name: "Acme".to_string(),
+                claimant_contact: "legal@acme.example".to_string(),
+                copyrighted_work_description: "Acme Sourcebook".to_string(),
+                infringing_material_location: item.id.to_string(),
+                good_faith_statement: true,
+                accuracy_statement: true,
+                signature: "Jane".to_string(),
+            },
+        )
+        .await
+        .expect("valid notice should succeed");
+
+        let result = shared_item_impl(&state, link.share_code).await;
+        assert!(
+            result.is_err(),
+            "a disabled item's share link must stop serving real content"
+        );
     }
 }
