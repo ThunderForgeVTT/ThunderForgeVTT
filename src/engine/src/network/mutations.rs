@@ -7,11 +7,9 @@
 
 use bevy::prelude::*;
 use serde_json::json;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use wasm_bindgen_futures::spawn_local;
-
-use crate::sync_test::{CircularFlowTracer, FlowStage};
 
 /// Mutation result from server
 #[derive(Debug, Clone)]
@@ -73,16 +71,8 @@ pub fn execute_move_token_mutation(
 
     // Spawn async HTTP task
     spawn_local(async move {
-        if let Err(e) = execute_move_mutation_async(
-            mutation_id,
-            server_url,
-            world_id,
-            token_id,
-            x,
-            y,
-            z,
-        )
-        .await
+        if let Err(e) =
+            execute_move_mutation_async(mutation_id, server_url, world_id, token_id, x, y, z).await
         {
             eprintln!("[Mutation❌] Async error: {}", e);
         }
@@ -131,7 +121,10 @@ async fn execute_move_mutation_async(
     eprintln!("[Mutation📝] Body: {}", body);
 
     // Phase 4.6.1: Implement actual HTTP via gloo-net
-    eprintln!("[Mutation✅] Mutation {} queued (HTTP execution deferred to Phase 4.6.1)", mutation_id);
+    eprintln!(
+        "[Mutation✅] Mutation {} queued (HTTP execution deferred to Phase 4.6.1)",
+        mutation_id
+    );
 
     Ok(())
 }

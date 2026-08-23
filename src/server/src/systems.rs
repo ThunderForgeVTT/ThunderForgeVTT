@@ -1,20 +1,20 @@
+use crate::auth_middleware::AuthenticatedUser;
 use crate::models::{GameSystem, NewGameSystem};
 use crate::schema::game_systems;
 use crate::state::AppState;
-use crate::auth_middleware::AuthenticatedUser;
 use axum::{
+    Router,
     extract::{Extension, Multipart, Path, State},
-    http::{header, StatusCode},
+    http::{StatusCode, header},
     response::{Json, Response},
     routing::{get, post},
-    Router,
 };
 use diesel::prelude::*;
+use pack_system_spec::{SystemManifest, validate_system_manifest};
 use serde_json::json;
 use std::path::PathBuf;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
-use pack_system_spec::{validate_system_manifest, SystemManifest};
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -25,20 +25,18 @@ pub fn router() -> Router<AppState> {
 }
 
 pub fn admin_router() -> Router<AppState> {
-    Router::new()
-        .route("/install", post(install_game_system))
+    Router::new().route("/install", post(install_game_system))
 }
 
-async fn list_systems(State(state): State<AppState>) -> Result<Json<Vec<GameSystem>>, (StatusCode, Json<serde_json::Value>)> {
-    let mut conn = state
-        .db_pool
-        .get()
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": format!("Failed to get DB connection: {}", e)})),
-            )
-        })?;
+async fn list_systems(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<GameSystem>>, (StatusCode, Json<serde_json::Value>)> {
+    let mut conn = state.db_pool.get().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": format!("Failed to get DB connection: {}", e)})),
+        )
+    })?;
 
     let systems = tokio::task::spawn_blocking(move || {
         game_systems::table
@@ -70,17 +68,15 @@ async fn get_system_manifest(
     let systems_dir_path = PathBuf::from(&state.directories.systems_dir);
     let system_path = systems_dir_path.join(&slug).join("system.json");
 
-    let manifest_content = fs::read_to_string(&system_path)
-        .await
-        .map_err(|e| {
-            (
-                StatusCode::NOT_FOUND, // Or INTERNAL_SERVER_ERROR if file exists but can't be read
-                Json(json!({"error": format!("Failed to read manifest file: {}", e)})),
-            )
-        })?;
+    let manifest_content = fs::read_to_string(&system_path).await.map_err(|e| {
+        (
+            StatusCode::NOT_FOUND, // Or INTERNAL_SERVER_ERROR if file exists but can't be read
+            Json(json!({"error": format!("Failed to read manifest file: {}", e)})),
+        )
+    })?;
 
-    let manifest_json: serde_json::Value = serde_json::from_str(&manifest_content)
-        .map_err(|e| {
+    let manifest_json: serde_json::Value =
+        serde_json::from_str(&manifest_content).map_err(|e| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({"error": format!("Failed to parse manifest JSON: {}", e)})),
@@ -150,15 +146,12 @@ async fn serve_system_file(
     let file_path = systems_dir_path.join(&slug).join(&path);
 
     // Verify the resolved path is within the system directory
-    let canonical_system_dir = systems_dir_path
-        .join(&slug)
-        .canonicalize()
-        .map_err(|_| {
-            (
-                StatusCode::NOT_FOUND,
-                Json(json!({"error": "System directory not found"})),
-            )
-        })?;
+    let canonical_system_dir = systems_dir_path.join(&slug).canonicalize().map_err(|_| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "System directory not found"})),
+        )
+    })?;
 
     let canonical_file = file_path.canonicalize().map_err(|_| {
         (
@@ -230,20 +223,27 @@ async fn install_game_system(
             Json(json!({"error": format!("Failed to read multipart field: {}", e)})),
         )
     })? {
-        let name = field.name().ok_or_else(|| {
-            (
-                StatusCode::BAD_REQUEST,
-                Json(json!({"error": "Multipart field name missing"})),
-            )
-        })?.to_string();
-
-        if name == "package" { // Assuming the file input field is named "package"
-            let file_name = field.file_name().ok_or_else(|| {
+        let name = field
+            .name()
+            .ok_or_else(|| {
                 (
                     StatusCode::BAD_REQUEST,
-                    Json(json!({"error": "File name missing for package upload"})),
+                    Json(json!({"error": "Multipart field name missing"})),
                 )
-            })?.to_string();
+            })?
+            .to_string();
+
+        if name == "package" {
+            // Assuming the file input field is named "package"
+            let file_name = field
+                .file_name()
+                .ok_or_else(|| {
+                    (
+                        StatusCode::BAD_REQUEST,
+                        Json(json!({"error": "File name missing for package upload"})),
+                    )
+                })?
+                .to_string();
 
             if !file_name.ends_with(".zip") {
                 return Err((
@@ -279,7 +279,10 @@ async fn install_game_system(
     }
 
     let Some(zip_file_path) = temp_zip_path else {
-        return Err((StatusCode::BAD_REQUEST, Json(json!({"error": "No package file found in multipart upload"}))));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "No package file found in multipart upload"})),
+        ));
     };
 
     // Extract the zip file
@@ -318,12 +321,13 @@ async fn install_game_system(
 
         // Security: Prevent path traversal by ensuring extracted path is within extract_path
         if !outpath.starts_with(&extract_path) {
-             return Err((
+            return Err((
                 StatusCode::BAD_REQUEST,
-                Json(json!({"error": format!("Attempted path traversal detected: {}", outpath.display())})),
+                Json(
+                    json!({"error": format!("Attempted path traversal detected: {}", outpath.display())}),
+                ),
             ));
         }
-
 
         if (*file.name()).ends_with('/') {
             // It's a directory
@@ -336,19 +340,22 @@ async fn install_game_system(
         } else {
             // It's a file
             if let Some(p) = outpath.parent()
-                && !p.exists() {
-                    std::fs::create_dir_all(p).map_err(|e| {
+                && !p.exists()
+            {
+                std::fs::create_dir_all(p).map_err(|e| {
                         (
                             StatusCode::INTERNAL_SERVER_ERROR,
                             Json(json!({"error": format!("Failed to create parent directory during extraction: {}", e)})),
                         )
                     }
                     )?;
-                }
+            }
             let mut outfile = std::fs::File::create(&outpath).map_err(|e| {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({"error": format!("Failed to create file during extraction: {}", e)})),
+                    Json(
+                        json!({"error": format!("Failed to create file during extraction: {}", e)}),
+                    ),
                 )
             })?;
             std::io::copy(&mut file, &mut outfile).map_err(|e| {
@@ -386,23 +393,29 @@ async fn install_game_system(
     })?;
 
     // Parse the manifest into SystemManifest struct to get the ID and version
-    let system_manifest: SystemManifest = serde_json::from_str(&manifest_content)
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": format!("Failed to parse SystemManifest after validation: {}", e)})),
-            )
-        })?;
+    let system_manifest: SystemManifest = serde_json::from_str(&manifest_content).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(
+                json!({"error": format!("Failed to parse SystemManifest after validation: {}", e)}),
+            ),
+        )
+    })?;
 
     let system_slug = system_manifest.id.clone();
     let system_title = system_manifest.title.clone();
     let system_version = system_manifest.version.clone();
 
     // Ensure the system slug is valid (alphanumeric, -, _, .)
-    if !system_slug.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.')) {
+    if !system_slug
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.'))
+    {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(json!({"error": format!("Invalid system slug: {}. Slug must be alphanumeric, hyphen, underscore, or dot", system_slug)})),
+            Json(
+                json!({"error": format!("Invalid system slug: {}. Slug must be alphanumeric, hyphen, underscore, or dot", system_slug)}),
+            ),
         ));
     }
 
@@ -411,16 +424,30 @@ async fn install_game_system(
     let slug_for_check = system_slug.clone();
 
     let existing_system_count = tokio::task::spawn_blocking(move || {
-        let mut conn = pool_for_check
-            .get()
-            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to get DB connection"}))))?;
+        let mut conn = pool_for_check.get().map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to get DB connection"})),
+            )
+        })?;
         game_systems::table
             .filter(game_systems::slug.eq(&slug_for_check))
             .count()
             .get_result::<i64>(&mut conn)
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to query existing systems: {}", e)}))))
-    }).await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to spawn blocking task: {}", e)}))))??; // Propagate the error from the blocking task
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": format!("Failed to query existing systems: {}", e)})),
+                )
+            })
+    })
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": format!("Failed to spawn blocking task: {}", e)})),
+        )
+    })??; // Propagate the error from the blocking task
 
     if existing_system_count > 0 {
         return Err((
@@ -472,7 +499,9 @@ async fn install_game_system(
     }).await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to spawn blocking task for DB insertion: {}", e)}))))??; // Propagate the error from the blocking task
 
-    Ok(Json(json!({"message": format!("Game system '{}' (v{}) installed successfully!", system_title, system_version)})))
+    Ok(Json(
+        json!({"message": format!("Game system '{}' (v{}) installed successfully!", system_title, system_version)}),
+    ))
 }
 // ============================================================================
 // Phase 4.8.1: System-Agnostic Game System Validator Registry
@@ -509,22 +538,13 @@ impl GameSystemRegistry {
     }
 
     /// Register a system's validators
-    pub fn register(
-        &mut self,
-        system_id: &str,
-        validators: SystemValidators,
-    ) {
+    pub fn register(&mut self, system_id: &str, validators: SystemValidators) {
         self.systems.insert(system_id.to_string(), validators);
     }
 
     /// Validate data using system-specific validator
     /// Returns Ok(()) if valid, Err(message) if invalid
-    pub fn validate(
-        &self,
-        system_id: &str,
-        data_type: &str,
-        data: &Value,
-    ) -> Result<(), String> {
+    pub fn validate(&self, system_id: &str, data_type: &str, data: &Value) -> Result<(), String> {
         let system = self
             .systems
             .get(system_id)
@@ -616,10 +636,10 @@ mod registry_tests {
 
         // Simple test validator that rejects values > 100
         fn test_validator(data: &Value) -> Result<(), String> {
-            if let Some(val) = data.get("test_field").and_then(|v| v.as_i64()) {
-                if val > 100 {
-                    return Err("Value too large".to_string());
-                }
+            if let Some(val) = data.get("test_field").and_then(|v| v.as_i64())
+                && val > 100
+            {
+                return Err("Value too large".to_string());
             }
             Ok(())
         }
@@ -637,17 +657,33 @@ mod registry_tests {
 
         // Should pass
         let valid_data = serde_json::json!({ "test_field": 50 });
-        assert!(registry.validate("test_system", "ability_data", &valid_data).is_ok());
+        assert!(
+            registry
+                .validate("test_system", "ability_data", &valid_data)
+                .is_ok()
+        );
 
         // Should fail
         let invalid_data = serde_json::json!({ "test_field": 150 });
-        assert!(registry.validate("test_system", "ability_data", &invalid_data).is_err());
+        assert!(
+            registry
+                .validate("test_system", "ability_data", &invalid_data)
+                .is_err()
+        );
 
         // Unknown system
-        assert!(registry.validate("unknown_system", "ability_data", &valid_data).is_err());
+        assert!(
+            registry
+                .validate("unknown_system", "ability_data", &valid_data)
+                .is_err()
+        );
 
         // Unknown data type
-        assert!(registry.validate("test_system", "unknown_type", &valid_data).is_err());
+        assert!(
+            registry
+                .validate("test_system", "unknown_type", &valid_data)
+                .is_err()
+        );
     }
 
     #[test]

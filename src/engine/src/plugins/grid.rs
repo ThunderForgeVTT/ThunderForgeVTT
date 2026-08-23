@@ -1,5 +1,5 @@
+use crate::resources::{GridType, SceneData};
 use bevy::prelude::*;
-use crate::resources::{SceneData, GridType};
 
 pub struct GridPlugin;
 
@@ -34,14 +34,14 @@ fn spawn_grid_lines(
     };
 
     match scene.grid_type {
-        GridType::Gridless => return,
-        GridType::Hexagonal => return, // TODO: Phase 4.8
+        GridType::Gridless => (),
+        GridType::Hexagonal => (), // TODO: Phase 4.8
         GridType::Square => {
             // Draw vertical lines
             for x in 0..=scene.width {
                 let px = x as f32 * scene.grid_size;
                 let line_height = scene.pixel_height;
-                
+
                 // Vertical line (thin rectangle)
                 commands.spawn((
                     Sprite {
@@ -58,7 +58,7 @@ fn spawn_grid_lines(
             for y in 0..=scene.height {
                 let py = scene.database_y_to_bevy_y(y as f32);
                 let line_width = scene.pixel_width;
-                
+
                 // Horizontal line (thin rectangle)
                 commands.spawn((
                     Sprite {

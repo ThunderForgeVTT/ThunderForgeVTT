@@ -6,11 +6,11 @@
 #![cfg(target_arch = "wasm32")]
 
 pub mod client;
-pub mod websocket;
 pub mod mutations;
+pub mod websocket;
 
-use bevy::prelude::*;
 use bevy::ecs::event::Event;
+use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
@@ -96,7 +96,8 @@ impl GraphQLClient {
             }
         });
 
-        self.execute_mutation(mutation, variables, mutation_id).await
+        self.execute_mutation(mutation, variables, mutation_id)
+            .await
     }
 
     /// Execute a generic GraphQL mutation
@@ -130,6 +131,12 @@ pub struct WorldEventSubscription {
     pub event_queue: Arc<std::sync::Mutex<Vec<ServerEvent>>>,
 }
 
+impl Default for WorldEventSubscription {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WorldEventSubscription {
     pub fn new() -> Self {
         Self {
@@ -161,14 +168,15 @@ impl WorldEventSubscription {
 pub fn on_world_event_received(event_json: &str) {
     // This would need access to the Bevy World to update the subscription resource
     // For now, we enqueue it to a static queue
-    if let Ok(event) = serde_json::from_str::<ServerEvent>(event_json) {
-        WORLD_EVENT_QUEUE.lock().ok().map(|mut q| q.push(event));
+    if let Ok(event) = serde_json::from_str::<ServerEvent>(event_json)
+        && let Ok(mut q) = WORLD_EVENT_QUEUE.lock()
+    {
+        q.push(event)
     }
 }
 
 /// Static queue for world events (filled from JavaScript)
-static WORLD_EVENT_QUEUE: std::sync::Mutex<Vec<ServerEvent>> =
-    std::sync::Mutex::new(Vec::new());
+static WORLD_EVENT_QUEUE: std::sync::Mutex<Vec<ServerEvent>> = std::sync::Mutex::new(Vec::new());
 
 /// System to process incoming world events from the subscription
 pub fn process_server_events(subscription: ResMut<WorldEventSubscription>) {

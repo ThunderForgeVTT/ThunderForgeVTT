@@ -111,11 +111,11 @@ fn match_field_suffix(rest: &str) -> Option<(&'static str, &str)> {
 /// is treated as a generic provider's name, with no instance key.
 fn split_provider_instance(remaining: &str) -> (String, String) {
     let mut segments = remaining.splitn(2, '_');
-    if let Some(first) = segments.next() {
-        if KNOWN_PRESETS.contains(&first) {
-            let instance = segments.next().unwrap_or("").to_lowercase();
-            return (first.to_string(), instance);
-        }
+    if let Some(first) = segments.next()
+        && KNOWN_PRESETS.contains(&first)
+    {
+        let instance = segments.next().unwrap_or("").to_lowercase();
+        return (first.to_string(), instance);
     }
     (remaining.to_string(), String::new())
 }
@@ -217,7 +217,11 @@ pub fn resolve(parsed: &ParsedProviderInstance) -> Result<ResolvedProviderInstan
         field,
     };
 
-    let client_id = parsed.fields.client_id.clone().ok_or_else(|| missing("CLIENT_ID"))?;
+    let client_id = parsed
+        .fields
+        .client_id
+        .clone()
+        .ok_or_else(|| missing("CLIENT_ID"))?;
     let client_secret = parsed
         .fields
         .client_secret
@@ -315,7 +319,9 @@ fn title_case(s: &str) -> String {
         .map(|part| {
             let mut chars = part.chars();
             match chars.next() {
-                Some(first) => first.to_uppercase().collect::<String>() + &chars.as_str().to_lowercase(),
+                Some(first) => {
+                    first.to_uppercase().collect::<String>() + &chars.as_str().to_lowercase()
+                }
                 None => String::new(),
             }
         })
@@ -340,7 +346,10 @@ mod tests {
             vars(&[
                 ("OAUTH_KEYCLOAK_CLIENT_ID", "abc"),
                 ("OAUTH_KEYCLOAK_CLIENT_SECRET", "shh"),
-                ("OAUTH_KEYCLOAK_ISSUER_URL", "https://idp.example.com/realms/main"),
+                (
+                    "OAUTH_KEYCLOAK_ISSUER_URL",
+                    "https://idp.example.com/realms/main",
+                ),
                 ("UNRELATED_VAR", "ignored"),
             ])
             .into_iter(),
@@ -365,7 +374,10 @@ mod tests {
             vars(&[
                 ("OAUTH_KEYCLOAK_WORK_CLIENT_ID", "abc"),
                 ("OAUTH_KEYCLOAK_WORK_CLIENT_SECRET", "shh"),
-                ("OAUTH_KEYCLOAK_WORK_ISSUER_URL", "https://work.example.com/realms/main"),
+                (
+                    "OAUTH_KEYCLOAK_WORK_ISSUER_URL",
+                    "https://work.example.com/realms/main",
+                ),
                 ("OAUTH_KEYCLOAK_WORK_LABEL", "Work SSO"),
             ])
             .into_iter(),
@@ -399,8 +411,14 @@ mod tests {
             vars(&[
                 ("OAUTH_MYSERVICE_CLIENT_ID", "abc"),
                 ("OAUTH_MYSERVICE_CLIENT_SECRET", "shh"),
-                ("OAUTH_MYSERVICE_AUTHORIZATION_URL", "https://myservice.example/auth"),
-                ("OAUTH_MYSERVICE_TOKEN_URL", "https://myservice.example/token"),
+                (
+                    "OAUTH_MYSERVICE_AUTHORIZATION_URL",
+                    "https://myservice.example/auth",
+                ),
+                (
+                    "OAUTH_MYSERVICE_TOKEN_URL",
+                    "https://myservice.example/token",
+                ),
             ])
             .into_iter(),
         );
@@ -436,7 +454,10 @@ mod tests {
         );
         let resolved = resolve(&parsed[0]).expect("should resolve");
         assert_eq!(resolved.provider_key, "discord");
-        assert_eq!(resolved.authorization_url, "https://discord.com/api/oauth2/authorize");
+        assert_eq!(
+            resolved.authorization_url,
+            "https://discord.com/api/oauth2/authorize"
+        );
         assert_eq!(resolved.scopes, vec!["identify", "email"]);
     }
 }

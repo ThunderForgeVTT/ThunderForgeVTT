@@ -22,7 +22,7 @@ impl SelectedToken {
     }
 
     pub fn is_selected(&self, token_id: &str) -> bool {
-        self.0.as_ref().map_or(false, |id| id == token_id)
+        self.0.as_ref().is_some_and(|id| id == token_id)
     }
 
     pub fn get_selected(&self) -> Option<&String> {

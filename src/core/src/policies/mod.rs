@@ -207,7 +207,7 @@ mod tests {
             basic.add(uuid.clone(), access_2.clone());
             assert_eq!(
                 basic.resources[0],
-                format!("{}:{},{}", &uuid, &access, &access_2)
+                format!("{}:{},{}", uuid, access, access_2)
             );
             basic.remove(uuid.clone(), Some(access));
             assert_eq!(basic.resources[0], format!("{}:{}", uuid, access_2));

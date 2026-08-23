@@ -2,8 +2,8 @@ use crate::admin::user_role;
 use crate::auth_middleware::AuthenticatedUser;
 use crate::models::{User, World, WorldEvent, WorldToken}; // Policy disabled
 use crate::schema::{
-    login_two_factor_challenges, oauth_link_challenges, policies, user_oauth_accounts,
-    user_sessions, users, world_events, world_tokens, worlds,
+    login_two_factor_challenges, oauth_link_challenges, user_oauth_accounts, user_sessions, users,
+    world_events, world_tokens, worlds,
 };
 use crate::state::AppState;
 use axum::{

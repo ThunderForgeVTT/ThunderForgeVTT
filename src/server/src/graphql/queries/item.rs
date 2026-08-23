@@ -5,13 +5,16 @@ use async_graphql::Context;
 use diesel::dsl::sql;
 use diesel::sql_types::{Bool, Double, Text};
 
-use crate::graphql::*;
 use crate::graphql::types::GraphQLItem;
+use crate::graphql::*;
 use crate::models::{ItemEffect, WorldItem};
 use crate::schema::{world_item_effects, world_items};
 use crate::state::AppState;
 
-async fn load_item_effects(state: &AppState, item_id: uuid::Uuid) -> GraphQLResult<Vec<ItemEffect>> {
+async fn load_item_effects(
+    state: &AppState,
+    item_id: uuid::Uuid,
+) -> GraphQLResult<Vec<ItemEffect>> {
     let mut conn = state
         .db_pool
         .get()
@@ -37,7 +40,8 @@ async fn to_graphql_item(
 ) -> GraphQLResult<GraphQLItem> {
     let effects = load_item_effects(state, row.id).await?;
     let my_permission_level =
-        crate::auth::item_permissions::effective_item_permission(state, user_id, is_admin, row.id).await?;
+        crate::auth::item_permissions::effective_item_permission(state, user_id, is_admin, row.id)
+            .await?;
     Ok(GraphQLItem::from_row(row, effects, my_permission_level))
 }
 
@@ -60,7 +64,9 @@ pub async fn world_items_impl(
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
     tokio::task::spawn_blocking(move || {
-        let mut query = world_items::table.filter(world_items::world_id.eq(world_id)).into_boxed();
+        let mut query = world_items::table
+            .filter(world_items::world_id.eq(world_id))
+            .into_boxed();
 
         if let Some(term) = search.as_ref().filter(|s| !s.trim().is_empty()) {
             let pattern = format!("%{}%", term.replace('%', "\\%").replace('_', "\\_"));
@@ -86,7 +92,12 @@ pub async fn world_items_impl(
 /// enforced here by requiring at least world visibility, then letting the
 /// caller's `myPermissionLevel` on the response reflect their real level
 /// (every world member defaults to Viewer, per FR-008/FR-003).
-pub async fn item_impl(state: &AppState, user_id: uuid::Uuid, is_admin: bool, item_id: uuid::Uuid) -> GraphQLResult<WorldItem> {
+pub async fn item_impl(
+    state: &AppState,
+    user_id: uuid::Uuid,
+    is_admin: bool,
+    item_id: uuid::Uuid,
+) -> GraphQLResult<WorldItem> {
     let mut conn = state
         .db_pool
         .get()
@@ -163,7 +174,14 @@ impl ItemQuery {
     ) -> GraphQLResult<Vec<GraphQLItem>> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        let rows = world_items_impl(state, auth_user.user_id, auth_user.is_admin, world_id, search).await?;
+        let rows = world_items_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            world_id,
+            search,
+        )
+        .await?;
         let mut result = Vec::with_capacity(rows.len());
         for row in rows {
             result.push(to_graphql_item(state, auth_user.user_id, auth_user.is_admin, row).await?);
@@ -186,7 +204,9 @@ impl ItemQuery {
     ) -> GraphQLResult<Vec<GraphQLItem>> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        let rows = suggest_item_name_impl(state, auth_user.user_id, auth_user.is_admin, world_id, name).await?;
+        let rows =
+            suggest_item_name_impl(state, auth_user.user_id, auth_user.is_admin, world_id, name)
+                .await?;
         let mut result = Vec::with_capacity(rows.len());
         for row in rows {
             result.push(to_graphql_item(state, auth_user.user_id, auth_user.is_admin, row).await?);
@@ -198,7 +218,7 @@ impl ItemQuery {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graphql::mutations_items::{create_item_impl, CreateItemInput};
+    use crate::graphql::mutations_items::{CreateItemInput, create_item_impl};
     use crate::test_support::{insert_test_user, insert_test_world, test_app_state};
 
     /// FR-008: every world member sees every item at at least Viewer.
@@ -260,11 +280,21 @@ mod tests {
         )
         .await
         .expect("suggest query should succeed");
-        assert_eq!(suggestions.len(), 1, "a close typo should still surface the existing item");
+        assert_eq!(
+            suggestions.len(),
+            1,
+            "a close typo should still surface the existing item"
+        );
 
-        let none = suggest_item_name_impl(&state, owner_id, false, world_id, "Completely Unrelated Thing".to_string())
-            .await
-            .expect("suggest query should succeed");
+        let none = suggest_item_name_impl(
+            &state,
+            owner_id,
+            false,
+            world_id,
+            "Completely Unrelated Thing".to_string(),
+        )
+        .await
+        .expect("suggest query should succeed");
         assert!(none.is_empty());
     }
 }

@@ -23,15 +23,20 @@ impl std::error::Error for ValidationError {}
 
 /// Validates D&D 5e ability scores (1-20 range)
 pub fn validate_ability_data(data: &serde_json::Value) -> Result<(), ValidationError> {
-    let obj = data
-        .as_object()
-        .ok_or(ValidationError {
-            field: "ability_data".to_string(),
-            message: "must be a JSON object".to_string(),
-        })?;
+    let obj = data.as_object().ok_or(ValidationError {
+        field: "ability_data".to_string(),
+        message: "must be a JSON object".to_string(),
+    })?;
 
     // Required abilities
-    let required_abilities = ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"];
+    let required_abilities = [
+        "strength",
+        "dexterity",
+        "constitution",
+        "intelligence",
+        "wisdom",
+        "charisma",
+    ];
 
     for ability in &required_abilities {
         let value = obj
@@ -59,12 +64,10 @@ pub fn validate_ability_data(data: &serde_json::Value) -> Result<(), ValidationE
 
 /// Validates D&D 5e HP and resources
 pub fn validate_resource_data(data: &serde_json::Value) -> Result<(), ValidationError> {
-    let obj = data
-        .as_object()
-        .ok_or(ValidationError {
-            field: "resource_data".to_string(),
-            message: "must be a JSON object".to_string(),
-        })?;
+    let obj = data.as_object().ok_or(ValidationError {
+        field: "resource_data".to_string(),
+        message: "must be a JSON object".to_string(),
+    })?;
 
     // max_hp is required
     let max_hp = obj
@@ -126,12 +129,10 @@ pub fn validate_resource_data(data: &serde_json::Value) -> Result<(), Validation
 
 /// Validates D&D 5e skill and saving throw proficiencies
 pub fn validate_proficiency_data(data: &serde_json::Value) -> Result<(), ValidationError> {
-    let obj = data
-        .as_object()
-        .ok_or(ValidationError {
-            field: "proficiency_data".to_string(),
-            message: "must be a JSON object".to_string(),
-        })?;
+    let obj = data.as_object().ok_or(ValidationError {
+        field: "proficiency_data".to_string(),
+        message: "must be a JSON object".to_string(),
+    })?;
 
     // Valid skill names (matching system.json)
     let valid_skills = [
@@ -188,7 +189,14 @@ pub fn validate_proficiency_data(data: &serde_json::Value) -> Result<(), Validat
             message: "must be a JSON object".to_string(),
         })?;
 
-        let valid_abilities = ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"];
+        let valid_abilities = [
+            "strength",
+            "dexterity",
+            "constitution",
+            "intelligence",
+            "wisdom",
+            "charisma",
+        ];
 
         for (ability, proficient) in saves {
             if !valid_abilities.contains(&ability.as_str()) {
@@ -249,12 +257,10 @@ pub fn validate_proficiency_data(data: &serde_json::Value) -> Result<(), Validat
 
 /// Validates D&D 5e character class, level, race, and feats
 pub fn validate_trait_data(data: &serde_json::Value) -> Result<(), ValidationError> {
-    let obj = data
-        .as_object()
-        .ok_or(ValidationError {
-            field: "trait_data".to_string(),
-            message: "must be a JSON object".to_string(),
-        })?;
+    let obj = data.as_object().ok_or(ValidationError {
+        field: "trait_data".to_string(),
+        message: "must be a JSON object".to_string(),
+    })?;
 
     // class is required
     let _class = obj
@@ -352,12 +358,10 @@ pub fn validate_trait_data(data: &serde_json::Value) -> Result<(), ValidationErr
 
 /// Validates D&D 5e spellcasting data
 pub fn validate_spell_data(data: &serde_json::Value) -> Result<(), ValidationError> {
-    let obj = data
-        .as_object()
-        .ok_or(ValidationError {
-            field: "spell_data".to_string(),
-            message: "must be a JSON object".to_string(),
-        })?;
+    let obj = data.as_object().ok_or(ValidationError {
+        field: "spell_data".to_string(),
+        message: "must be a JSON object".to_string(),
+    })?;
 
     // If any spell data is present, spellcasting_ability should be valid
     if let Some(ability_val) = obj.get("spellcasting_ability") {
@@ -366,7 +370,14 @@ pub fn validate_spell_data(data: &serde_json::Value) -> Result<(), ValidationErr
             message: "must be a string".to_string(),
         })?;
 
-        let valid_abilities = ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"];
+        let valid_abilities = [
+            "strength",
+            "dexterity",
+            "constitution",
+            "intelligence",
+            "wisdom",
+            "charisma",
+        ];
         if !valid_abilities.contains(&ability) {
             return Err(ValidationError {
                 field: "spell_data.spellcasting_ability".to_string(),
@@ -441,7 +452,10 @@ pub fn validate_spell_data(data: &serde_json::Value) -> Result<(), ValidationErr
             message: "must be a JSON object".to_string(),
         })?;
 
-        let valid_levels = ["level_1", "level_2", "level_3", "level_4", "level_5", "level_6", "level_7", "level_8", "level_9"];
+        let valid_levels = [
+            "level_1", "level_2", "level_3", "level_4", "level_5", "level_6", "level_7", "level_8",
+            "level_9",
+        ];
 
         for (level_key, slot_count_val) in slots {
             if !valid_levels.contains(&level_key.as_str()) {
@@ -466,6 +480,37 @@ pub fn validate_spell_data(data: &serde_json::Value) -> Result<(), ValidationErr
     }
 
     Ok(())
+}
+
+// ============================================================================
+// Registry Adapters: Convert ValidationError -> String
+// ============================================================================
+// These functions wrap the validators to return Result<(), String> for use
+// in the generic system registry (src/server/src/systems/mod.rs)
+
+/// Adapter: validate_ability_data for registry
+pub fn validate_ability_data_for_registry(data: &serde_json::Value) -> Result<(), String> {
+    validate_ability_data(data).map_err(|e| e.to_string())
+}
+
+/// Adapter: validate_resource_data for registry
+pub fn validate_resource_data_for_registry(data: &serde_json::Value) -> Result<(), String> {
+    validate_resource_data(data).map_err(|e| e.to_string())
+}
+
+/// Adapter: validate_proficiency_data for registry
+pub fn validate_proficiency_data_for_registry(data: &serde_json::Value) -> Result<(), String> {
+    validate_proficiency_data(data).map_err(|e| e.to_string())
+}
+
+/// Adapter: validate_trait_data for registry
+pub fn validate_trait_data_for_registry(data: &serde_json::Value) -> Result<(), String> {
+    validate_trait_data(data).map_err(|e| e.to_string())
+}
+
+/// Adapter: validate_spell_data for registry
+pub fn validate_spell_data_for_registry(data: &serde_json::Value) -> Result<(), String> {
+    validate_spell_data(data).map_err(|e| e.to_string())
 }
 
 // ============================================================================
@@ -616,35 +661,4 @@ mod tests {
         let data = json!({"spell_save_dc": 25});
         assert!(validate_spell_data(&data).is_err());
     }
-}
-
-// ============================================================================
-// Registry Adapters: Convert ValidationError -> String
-// ============================================================================
-// These functions wrap the validators to return Result<(), String> for use
-// in the generic system registry (src/server/src/systems/mod.rs)
-
-/// Adapter: validate_ability_data for registry
-pub fn validate_ability_data_for_registry(data: &serde_json::Value) -> Result<(), String> {
-    validate_ability_data(data).map_err(|e| e.to_string())
-}
-
-/// Adapter: validate_resource_data for registry
-pub fn validate_resource_data_for_registry(data: &serde_json::Value) -> Result<(), String> {
-    validate_resource_data(data).map_err(|e| e.to_string())
-}
-
-/// Adapter: validate_proficiency_data for registry
-pub fn validate_proficiency_data_for_registry(data: &serde_json::Value) -> Result<(), String> {
-    validate_proficiency_data(data).map_err(|e| e.to_string())
-}
-
-/// Adapter: validate_trait_data for registry
-pub fn validate_trait_data_for_registry(data: &serde_json::Value) -> Result<(), String> {
-    validate_trait_data(data).map_err(|e| e.to_string())
-}
-
-/// Adapter: validate_spell_data for registry
-pub fn validate_spell_data_for_registry(data: &serde_json::Value) -> Result<(), String> {
-    validate_spell_data(data).map_err(|e| e.to_string())
 }

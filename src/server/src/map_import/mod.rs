@@ -31,9 +31,9 @@ use axum::{Extension, Router};
 // now lives in `image.rs`, with its own copy of these two imports) — cargo
 // check (which skips `#[cfg(test)]`) would otherwise flag these unused.
 #[cfg(test)]
-use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
-#[cfg(test)]
 use base64::Engine as _;
+#[cfg(test)]
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use chrono::Utc;
 use diesel::prelude::*;
 use serde_json::json;
@@ -41,7 +41,7 @@ use uuid::Uuid;
 
 use crate::auth_middleware::AuthenticatedUser;
 use crate::state::AppState;
-use crate::world_events::{record_world_event, EVENT_CODE_MAP_IMPORTED};
+use crate::world_events::{EVENT_CODE_MAP_IMPORTED, record_world_event};
 
 mod geometry;
 mod image;
@@ -140,10 +140,14 @@ pub async fn import_uvtt_impl(
     let saved_background =
         save_background_image(user_id, world_id, scene_id, &parsed.file.image).await?;
 
-    let walls: Vec<WallInsert> = walls_from_line_of_sight(&parsed.file.line_of_sight, target_grid_size)
-        .into_iter()
-        .chain(walls_from_line_of_sight(&parsed.file.objects_line_of_sight, target_grid_size))
-        .collect();
+    let walls: Vec<WallInsert> =
+        walls_from_line_of_sight(&parsed.file.line_of_sight, target_grid_size)
+            .into_iter()
+            .chain(walls_from_line_of_sight(
+                &parsed.file.objects_line_of_sight,
+                target_grid_size,
+            ))
+            .collect();
     let doors: Vec<WallInsert> = walls_from_portals(&parsed.file.portals, target_grid_size);
     let lights: Vec<LightInsert> = lights_from_uvtt(&parsed.file.lights, target_grid_size);
 
@@ -213,7 +217,8 @@ pub async fn import_uvtt_impl(
                     canvas_image_assets::width_px.eq(saved_background.width_px),
                     canvas_image_assets::height_px.eq(saved_background.height_px),
                     canvas_image_assets::byte_size.eq(saved_background.byte_size),
-                    canvas_image_assets::kind.eq(crate::db_types::CanvasImageAssetKindEnum::Background),
+                    canvas_image_assets::kind
+                        .eq(crate::db_types::CanvasImageAssetKindEnum::Background),
                     canvas_image_assets::created_by.eq(user_id),
                     canvas_image_assets::updated_by.eq(user_id),
                     canvas_image_assets::created_at.eq(now),
@@ -273,16 +278,19 @@ async fn import_uvtt(
 
     // Read the uploaded file field, enforcing the size cap as we go.
     let mut file_bytes: Option<Vec<u8>> = None;
-    while let Some(field) = multipart
-        .next_field()
-        .await
-        .map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Failed to read multipart field: {e}")}))))?
-    {
+    while let Some(field) = multipart.next_field().await.map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": format!("Failed to read multipart field: {e}")})),
+        )
+    })? {
         if field.name() == Some("file") {
-            let bytes = field
-                .bytes()
-                .await
-                .map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({"error": format!("Failed to read file bytes: {e}")}))))?;
+            let bytes = field.bytes().await.map_err(|e| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({"error": format!("Failed to read file bytes: {e}")})),
+                )
+            })?;
             if bytes.len() > MAX_UPLOAD_BYTES {
                 return Err(error_response(&MapImportError::PayloadTooLarge));
             }
@@ -361,19 +369,19 @@ mod tests {
         let parsed = parse_uvtt(&raw).expect("demo.dd2vtt should parse");
 
         assert_eq!(parsed.skipped_degenerate_polygons, 0);
-        assert_eq!(parsed.file.line_of_sight.len(), 8, "8 line_of_sight polygons");
+        assert_eq!(
+            parsed.file.line_of_sight.len(),
+            8,
+            "8 line_of_sight polygons"
+        );
         assert_eq!(parsed.file.portals.len(), 2, "2 doors/portals");
         assert_eq!(parsed.file.lights.len(), 12, "12 lights");
 
         let target_grid_size = 128.0; // matches source pixels_per_grid for a 1:1 sanity check
         let walls = walls_from_line_of_sight(&parsed.file.line_of_sight, target_grid_size);
         // Sum of (points-1) per polygon for consecutive-pair walls.
-        let expected_wall_count: usize = parsed
-            .file
-            .line_of_sight
-            .iter()
-            .map(|p| p.len() - 1)
-            .sum();
+        let expected_wall_count: usize =
+            parsed.file.line_of_sight.iter().map(|p| p.len() - 1).sum();
         assert_eq!(walls.len(), expected_wall_count);
         assert_eq!(walls.len(), 31);
 
@@ -399,7 +407,11 @@ mod tests {
         assert_eq!(parsed.file.lights.len(), 0);
 
         let walls = walls_from_line_of_sight(&parsed.file.line_of_sight, 128.0);
-        assert_eq!(walls.len(), 4, "5-point polygon yields 4 consecutive-pair walls");
+        assert_eq!(
+            walls.len(),
+            4,
+            "5-point polygon yields 4 consecutive-pair walls"
+        );
 
         let doors = walls_from_portals(&parsed.file.portals, 128.0);
         assert_eq!(doors.len(), 0);
@@ -567,7 +579,12 @@ mod tests {
         assert!(saved.storage_path.ends_with(".webp"));
         assert_eq!(
             saved.storage_path,
-            crate::storage::rustfs::object_key(owner_user_id, world_id, Some(scene_id), saved.asset_id)
+            crate::storage::rustfs::object_key(
+                owner_user_id,
+                world_id,
+                Some(scene_id),
+                saved.asset_id
+            )
         );
         // demo.dd2vtt's source image is WebP already (see the regression
         // test above); either way the *stored* format must be WebP.
@@ -701,7 +718,10 @@ mod tests {
     }
 
     fn sorted<T: PartialOrd>(mut v: Vec<T>) -> Vec<T> {
-        v.sort_by(|a, b| a.partial_cmp(b).expect("no NaN coordinates in test fixtures"));
+        v.sort_by(|a, b| {
+            a.partial_cmp(b)
+                .expect("no NaN coordinates in test fixtures")
+        });
         v
     }
 
@@ -733,15 +753,16 @@ mod tests {
         let raw = read_fixture(fixture_name);
         let parsed = parse_uvtt(&raw).expect("fixture should parse");
 
-        let mut expected_walls: Vec<WallSignature> = walls_from_line_of_sight(
-            &parsed.file.line_of_sight,
-            target_grid_size,
-        )
-        .into_iter()
-        .chain(walls_from_line_of_sight(&parsed.file.objects_line_of_sight, target_grid_size))
-        .chain(walls_from_portals(&parsed.file.portals, target_grid_size))
-        .map(WallSignature::from)
-        .collect();
+        let mut expected_walls: Vec<WallSignature> =
+            walls_from_line_of_sight(&parsed.file.line_of_sight, target_grid_size)
+                .into_iter()
+                .chain(walls_from_line_of_sight(
+                    &parsed.file.objects_line_of_sight,
+                    target_grid_size,
+                ))
+                .chain(walls_from_portals(&parsed.file.portals, target_grid_size))
+                .map(WallSignature::from)
+                .collect();
         expected_walls = sorted(expected_walls);
 
         let mut expected_lights: Vec<LightSignature> =
@@ -755,7 +776,10 @@ mod tests {
             .await
             .expect("import should succeed");
 
-        assert_eq!(result.walls_created + result.doors_created, expected_walls.len());
+        assert_eq!(
+            result.walls_created + result.doors_created,
+            expected_walls.len()
+        );
         assert_eq!(result.lights_created, expected_lights.len());
 
         // Re-query from a fresh connection — the point of this test.
@@ -770,7 +794,11 @@ mod tests {
             .into_iter()
             .map(WallSignature::from)
             .collect();
-        assert_eq!(sorted(reloaded_walls), expected_walls, "reloaded walls must exactly match {fixture_name}'s source geometry");
+        assert_eq!(
+            sorted(reloaded_walls),
+            expected_walls,
+            "reloaded walls must exactly match {fixture_name}'s source geometry"
+        );
 
         let reloaded_lights: Vec<LightSignature> = light_sources::table
             .filter(light_sources::scene_id.eq(scene_id))
@@ -780,7 +808,11 @@ mod tests {
             .into_iter()
             .map(LightSignature::from)
             .collect();
-        assert_eq!(sorted(reloaded_lights), expected_lights, "reloaded lights must exactly match {fixture_name}'s source lights");
+        assert_eq!(
+            sorted(reloaded_lights),
+            expected_lights,
+            "reloaded lights must exactly match {fixture_name}'s source lights"
+        );
 
         let background_asset_id = scenes::table
             .filter(scenes::scene_id.eq(scene_id))
@@ -918,21 +950,39 @@ mod tests {
             .select(crate::models::Wall::as_select())
             .first::<crate::models::Wall>(&mut conn)
             .expect("toggled wall should reload");
-        assert!(reloaded_wall.blocks_movement, "passability toggle must survive reload");
+        assert!(
+            reloaded_wall.blocks_movement,
+            "passability toggle must survive reload"
+        );
 
         let reloaded_new_wall = walls_table::table
             .filter(walls_table::wall_id.eq(new_wall_id))
             .select(crate::models::Wall::as_select())
             .first::<crate::models::Wall>(&mut conn)
             .expect("hand-drawn wall should reload");
-        assert_eq!((reloaded_new_wall.x1, reloaded_new_wall.y1, reloaded_new_wall.x2, reloaded_new_wall.y2), (1.0, 2.0, 3.0, 4.0));
+        assert_eq!(
+            (
+                reloaded_new_wall.x1,
+                reloaded_new_wall.y1,
+                reloaded_new_wall.x2,
+                reloaded_new_wall.y2
+            ),
+            (1.0, 2.0, 3.0, 4.0)
+        );
 
         let reloaded_new_light = light_sources::table
             .filter(light_sources::light_id.eq(new_light_id))
             .select(crate::models::LightSource::as_select())
             .first::<crate::models::LightSource>(&mut conn)
             .expect("hand-placed light should reload");
-        assert_eq!((reloaded_new_light.x, reloaded_new_light.y, reloaded_new_light.radius), (10.0, 20.0, 100.0));
+        assert_eq!(
+            (
+                reloaded_new_light.x,
+                reloaded_new_light.y,
+                reloaded_new_light.radius
+            ),
+            (10.0, 20.0, 100.0)
+        );
     }
 
     /// T015 (SC-006): a documented, one-time verification that the
@@ -996,7 +1046,9 @@ mod tests {
     async fn warnings_disclose_non_default_ambient_light() {
         let warnings = import_and_get_warnings("little-fish-academy.dd2vtt").await;
         assert!(
-            warnings.iter().any(|w| w.to_lowercase().contains("ambient")),
+            warnings
+                .iter()
+                .any(|w| w.to_lowercase().contains("ambient")),
             "expected an ambient_light warning, got: {warnings:?}"
         );
     }
@@ -1009,11 +1061,15 @@ mod tests {
         let warnings =
             import_and_get_warnings("synthetic-freestanding-portal-and-object-los.dd2vtt").await;
         assert!(
-            warnings.iter().any(|w| w.to_lowercase().contains("freestanding")),
+            warnings
+                .iter()
+                .any(|w| w.to_lowercase().contains("freestanding")),
             "expected a freestanding-portal warning, got: {warnings:?}"
         );
         assert!(
-            warnings.iter().any(|w| w.to_lowercase().contains("objects_line_of_sight")),
+            warnings
+                .iter()
+                .any(|w| w.to_lowercase().contains("objects_line_of_sight")),
             "expected an objects_line_of_sight warning, got: {warnings:?}"
         );
     }
@@ -1032,7 +1088,10 @@ mod tests {
             "dwarven-forge.dd2vtt",
         ] {
             let warnings = import_and_get_warnings(fixture).await;
-            assert!(warnings.is_empty(), "{fixture} should produce no warnings, got: {warnings:?}");
+            assert!(
+                warnings.is_empty(),
+                "{fixture} should produce no warnings, got: {warnings:?}"
+            );
         }
     }
 
@@ -1065,30 +1124,38 @@ mod tests {
 
     #[test]
     fn ambient_light_warning_ignores_the_exporter_default() {
-        assert!(ambient_light_warning(&UvttEnvironment {
-            baked_lighting: false,
-            ambient_light: None,
-        })
-        .is_none());
-        assert!(ambient_light_warning(&UvttEnvironment {
-            baked_lighting: false,
-            ambient_light: Some("ffffffff".to_string()),
-        })
-        .is_none());
-        assert!(ambient_light_warning(&UvttEnvironment {
-            baked_lighting: false,
-            ambient_light: Some("fffff7e4".to_string()),
-        })
-        .is_some());
+        assert!(
+            ambient_light_warning(&UvttEnvironment {
+                baked_lighting: false,
+                ambient_light: None,
+            })
+            .is_none()
+        );
+        assert!(
+            ambient_light_warning(&UvttEnvironment {
+                baked_lighting: false,
+                ambient_light: Some("ffffffff".to_string()),
+            })
+            .is_none()
+        );
+        assert!(
+            ambient_light_warning(&UvttEnvironment {
+                baked_lighting: false,
+                ambient_light: Some("fffff7e4".to_string()),
+            })
+            .is_some()
+        );
     }
 
     #[test]
     fn objects_line_of_sight_warning_fires_only_when_non_empty() {
         assert!(objects_line_of_sight_warning(&[]).is_none());
-        assert!(objects_line_of_sight_warning(&[vec![
-            UvttPoint { x: 0.0, y: 0.0 },
-            UvttPoint { x: 1.0, y: 1.0 },
-        ]])
-        .is_some());
+        assert!(
+            objects_line_of_sight_warning(&[vec![
+                UvttPoint { x: 0.0, y: 0.0 },
+                UvttPoint { x: 1.0, y: 1.0 },
+            ]])
+            .is_some()
+        );
     }
 }

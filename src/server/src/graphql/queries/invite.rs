@@ -1,10 +1,9 @@
 //! Invite and world membership queries (Phase 4.10)
 
 use async_graphql::Context;
-use diesel::prelude::*;
 use uuid::Uuid;
 
-use crate::auth::world_membership::{require_world_member, WorldMembershipError};
+use crate::auth::world_membership::{WorldMembershipError, require_world_member};
 use crate::graphql::*;
 use crate::models::{WorldInvite, WorldMember};
 use crate::schema::{world_invites, world_members};
@@ -46,18 +45,20 @@ pub async fn world_invites_impl(
 
     Ok(invites
         .into_iter()
-        .map(|invite| crate::graphql::mutations_invites::WorldInvitePayload {
-            id: invite.id,
-            world_id: invite.world_id,
-            invite_code: invite.invite_code,
-            max_uses: invite.max_uses,
-            used_count: invite.used_count,
-            expires_at: invite.expires_at.map(|dt| dt.to_string()),
-            created_by: invite.created_by,
-            created_at: invite.created_at.to_string(),
-            updated_at: invite.updated_at.to_string(),
-            status: format!("{}/{} uses", invite.used_count, invite.max_uses),
-        })
+        .map(
+            |invite| crate::graphql::mutations_invites::WorldInvitePayload {
+                id: invite.id,
+                world_id: invite.world_id,
+                invite_code: invite.invite_code,
+                max_uses: invite.max_uses,
+                used_count: invite.used_count,
+                expires_at: invite.expires_at.map(|dt| dt.to_string()),
+                created_by: invite.created_by,
+                created_at: invite.created_at.to_string(),
+                updated_at: invite.updated_at.to_string(),
+                status: format!("{}/{} uses", invite.used_count, invite.max_uses),
+            },
+        )
         .collect())
 }
 
@@ -97,15 +98,17 @@ pub async fn world_members_impl(
 
     Ok(members
         .into_iter()
-        .map(|member| crate::graphql::mutations_invites::WorldMembershipPayload {
-            id: member.id,
-            world_id: member.world_id,
-            user_id: member.user_id,
-            role: member.role,
-            joined_at: member.joined_at.to_string(),
-            created_at: member.created_at.to_string(),
-            updated_at: member.updated_at.to_string(),
-        })
+        .map(
+            |member| crate::graphql::mutations_invites::WorldMembershipPayload {
+                id: member.id,
+                world_id: member.world_id,
+                user_id: member.user_id,
+                role: member.role,
+                joined_at: member.joined_at.to_string(),
+                created_at: member.created_at.to_string(),
+                updated_at: member.updated_at.to_string(),
+            },
+        )
         .collect())
 }
 
@@ -138,15 +141,17 @@ pub async fn world_member_impl(
         .optional()
         .map_err(|e| Error::new(format!("Database error: {}", e)))?;
 
-    Ok(member.map(|member| crate::graphql::mutations_invites::WorldMembershipPayload {
-        id: member.id,
-        world_id: member.world_id,
-        user_id: member.user_id,
-        role: member.role,
-        joined_at: member.joined_at.to_string(),
-        created_at: member.created_at.to_string(),
-        updated_at: member.updated_at.to_string(),
-    }))
+    Ok(member.map(
+        |member| crate::graphql::mutations_invites::WorldMembershipPayload {
+            id: member.id,
+            world_id: member.world_id,
+            user_id: member.user_id,
+            role: member.role,
+            joined_at: member.joined_at.to_string(),
+            created_at: member.created_at.to_string(),
+            updated_at: member.updated_at.to_string(),
+        },
+    ))
 }
 
 /// Testable core of `InviteQuery::world_by_invite_code`.
@@ -284,11 +289,7 @@ impl InviteQuery {
     }
 
     /// Check if current user is already a member of world via invite code
-    async fn already_member(
-        &self,
-        ctx: &Context<'_>,
-        code: String,
-    ) -> GraphQLResult<bool> {
+    async fn already_member(&self, ctx: &Context<'_>, code: String) -> GraphQLResult<bool> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         already_member_impl(state, auth_user.user_id, &code).await
@@ -310,7 +311,9 @@ mod tests {
     };
     use crate::models::NewWorldInvite;
     use crate::schema::world_invites;
-    use crate::test_support::{insert_test_user, insert_test_world, insert_test_world_member, test_app_state};
+    use crate::test_support::{
+        insert_test_user, insert_test_world, insert_test_world_member, test_app_state,
+    };
     use diesel::prelude::*;
 
     fn insert_test_invite(
@@ -387,7 +390,10 @@ mod tests {
             .await
             .expect("the world's own owner must be able to list its members, even with no world_members row");
 
-        assert!(members.is_empty(), "owner has no explicit world_members row of their own");
+        assert!(
+            members.is_empty(),
+            "owner has no explicit world_members row of their own"
+        );
     }
 
     #[tokio::test]
@@ -401,7 +407,10 @@ mod tests {
 
         let result = world_members_impl(&state, outsider_id, world_id).await;
 
-        assert!(result.is_err(), "a non-member must not be able to list a world's members");
+        assert!(
+            result.is_err(),
+            "a non-member must not be able to list a world's members"
+        );
     }
 
     #[tokio::test]
@@ -436,7 +445,10 @@ mod tests {
             .await
             .expect("query itself should not error");
 
-        assert!(result.is_none(), "an expired invite must not resolve a world");
+        assert!(
+            result.is_none(),
+            "an expired invite must not resolve a world"
+        );
     }
 
     #[tokio::test]
@@ -452,7 +464,10 @@ mod tests {
             .await
             .expect("query itself should not error");
 
-        assert!(result.is_none(), "an exhausted invite (used_count >= max_uses) must not resolve a world");
+        assert!(
+            result.is_none(),
+            "an exhausted invite (used_count >= max_uses) must not resolve a world"
+        );
     }
 
     #[tokio::test]
@@ -486,7 +501,10 @@ mod tests {
         let is_member = already_member_impl(&state, player_id, &code)
             .await
             .expect("query should not error");
-        assert!(is_member, "an already-accepted member must be reported as already a member");
+        assert!(
+            is_member,
+            "an already-accepted member must be reported as already a member"
+        );
 
         let not_yet = already_member_impl(&state, owner_id, &code).await;
         // owner has no world_members row, so is_member is computed purely

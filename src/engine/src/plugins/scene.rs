@@ -1,5 +1,5 @@
+use crate::resources::scene_data::{GridType, SceneData};
 use bevy::prelude::*;
-use crate::resources::scene_data::{SceneData, GridType};
 
 pub struct ScenePlugin;
 
@@ -21,11 +21,11 @@ fn load_scene_system(mut commands: Commands) {
         32.0,
         100,
         100,
-        None,  // No background image for MVP
+        None, // No background image for MVP
     );
 
     // Phase 4.7: Scene loaded
-    let msg = format!(
+    let _msg = format!(
         "Loaded scene: {} ({}x{} cells, {}px grid)",
         scene_data.scene_id, scene_data.width, scene_data.height, scene_data.grid_size
     );

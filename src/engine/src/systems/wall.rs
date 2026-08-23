@@ -100,7 +100,9 @@ fn cursor_world_position(
     let window = windows.iter().next()?;
     let (camera, camera_transform) = camera_query.iter().next()?;
     let cursor_px = window.cursor_position()?;
-    camera.viewport_to_world_2d(camera_transform, cursor_px).ok()
+    camera
+        .viewport_to_world_2d(camera_transform, cursor_px)
+        .ok()
 }
 
 /// Shortest distance from `point` to the segment `a`-`b`. Pure/testable —
@@ -210,8 +212,7 @@ pub(crate) fn handle_wall_input(
 
         // Body select (no drag intent).
         for wall in wall_set.walls() {
-            if distance_point_to_segment(cursor, wall.start(), wall.end()) <= WALL_SELECT_DISTANCE
-            {
+            if distance_point_to_segment(cursor, wall.start(), wall.end()) <= WALL_SELECT_DISTANCE {
                 selected_wall.select(wall.id.clone());
                 emit_wall_selection(Some(&wall.id));
                 drag.mode = WallDragMode::Idle;
@@ -230,21 +231,20 @@ pub(crate) fn handle_wall_input(
         if let WallDragMode::MovingEndpoint {
             wall_id, is_start, ..
         } = &drag.mode
+            && let Some(wall) = wall_set.get(wall_id).cloned()
         {
-            if let Some(wall) = wall_set.get(wall_id).cloned() {
-                let mut updated = wall;
-                if *is_start {
-                    updated.x1 = cursor.x;
-                    updated.y1 = cursor.y;
-                } else {
-                    updated.x2 = cursor.x;
-                    updated.y2 = cursor.y;
-                }
-                // Optimistic local move so the sprite tracks the cursor;
-                // reconciled by the next `upsert_wall` confirmation from
-                // the server (see lib.rs's `apply_external_commands`).
-                wall_set.upsert(updated);
+            let mut updated = wall;
+            if *is_start {
+                updated.x1 = cursor.x;
+                updated.y1 = cursor.y;
+            } else {
+                updated.x2 = cursor.x;
+                updated.y2 = cursor.y;
             }
+            // Optimistic local move so the sprite tracks the cursor;
+            // reconciled by the next `upsert_wall` confirmation from
+            // the server (see lib.rs's `apply_external_commands`).
+            wall_set.upsert(updated);
         }
         return;
     }
@@ -452,17 +452,17 @@ pub(crate) fn handle_wall_keyboard_toggles(
         return;
     }
 
-    if keyboard.just_pressed(KeyCode::Delete) || keyboard.just_pressed(KeyCode::Backspace) {
-        if let Some(deleted) = wall_set.remove(&wall_id) {
-            wall_set.push_undo(WallEdit::Delete { deleted });
-            selected_wall.deselect();
-            emit_wall_selection(None);
-            emit_event(json!({
-                "type": "delete_wall",
-                "wallId": wall_id,
-                "worldId": active_world.0,
-            }));
-        }
+    if (keyboard.just_pressed(KeyCode::Delete) || keyboard.just_pressed(KeyCode::Backspace))
+        && let Some(deleted) = wall_set.remove(&wall_id)
+    {
+        wall_set.push_undo(WallEdit::Delete { deleted });
+        selected_wall.deselect();
+        emit_wall_selection(None);
+        emit_event(json!({
+            "type": "delete_wall",
+            "wallId": wall_id,
+            "worldId": active_world.0,
+        }));
     }
 }
 
@@ -658,7 +658,10 @@ pub(crate) fn sync_wall_visuals(
 pub(crate) fn apply_vision_occlusion(
     wall_set: Res<WallSet>,
     player_query: Query<&Transform, With<PlayerToken>>,
-    mut other_tokens: Query<(&Transform, &mut Visibility), (With<TokenIdentity>, Without<PlayerToken>)>,
+    mut other_tokens: Query<
+        (&Transform, &mut Visibility),
+        (With<TokenIdentity>, Without<PlayerToken>),
+    >,
     transform_changed: Query<(), (Changed<Transform>, With<TokenIdentity>)>,
 ) {
     if !wall_set.is_changed() && transform_changed.is_empty() {
@@ -693,26 +696,42 @@ mod tests {
 
     #[test]
     fn distance_point_to_segment_on_the_line() {
-        let d = distance_point_to_segment(Vec2::new(5.0, 0.0), Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0));
+        let d = distance_point_to_segment(
+            Vec2::new(5.0, 0.0),
+            Vec2::new(0.0, 0.0),
+            Vec2::new(10.0, 0.0),
+        );
         assert!(d.abs() < 1e-5);
     }
 
     #[test]
     fn distance_point_to_segment_perpendicular() {
-        let d = distance_point_to_segment(Vec2::new(5.0, 3.0), Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0));
+        let d = distance_point_to_segment(
+            Vec2::new(5.0, 3.0),
+            Vec2::new(0.0, 0.0),
+            Vec2::new(10.0, 0.0),
+        );
         assert!((d - 3.0).abs() < 1e-5);
     }
 
     #[test]
     fn distance_point_to_segment_beyond_endpoint() {
-        let d = distance_point_to_segment(Vec2::new(15.0, 0.0), Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0));
+        let d = distance_point_to_segment(
+            Vec2::new(15.0, 0.0),
+            Vec2::new(0.0, 0.0),
+            Vec2::new(10.0, 0.0),
+        );
         assert!((d - 5.0).abs() < 1e-5);
     }
 
     #[test]
     fn distance_point_to_segment_degenerate_segment() {
         // Zero-length segment: distance is just distance to the point.
-        let d = distance_point_to_segment(Vec2::new(3.0, 4.0), Vec2::new(0.0, 0.0), Vec2::new(0.0, 0.0));
+        let d = distance_point_to_segment(
+            Vec2::new(3.0, 4.0),
+            Vec2::new(0.0, 0.0),
+            Vec2::new(0.0, 0.0),
+        );
         assert!((d - 5.0).abs() < 1e-5);
     }
 

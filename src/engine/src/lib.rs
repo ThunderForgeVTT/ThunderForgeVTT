@@ -11,27 +11,37 @@ use wasm_bindgen::prelude::*;
 
 // Public module exports for Phase 4.2/4.3 Bevy integration
 pub mod components;
-pub mod network;
-pub mod movement;
 pub mod derived_data;
+pub mod movement;
+pub mod network;
 pub mod sync_test;
 pub mod systems;
 
 // Phase 4.7: Canvas Rendering Infrastructure
+pub mod grid;
 pub mod plugins;
 pub mod resources;
 pub mod transforms;
-pub mod grid;
 
 // Phase 4.7.G2: Integration & E2E Tests
 mod integration_tests;
 
-use movement::{PlayerControlled, handle_keyboard_movement, sync_grid_to_transform, sync_transform_to_grid, apply_grid_snapping};
 use derived_data::*;
+use movement::{
+    PlayerControlled, apply_grid_snapping, handle_keyboard_movement, sync_grid_to_transform,
+    sync_transform_to_grid,
+};
+use plugins::{
+    BackgroundPlugin, CameraPlugin, CanvasLayerPlugin, GridPlugin, LightingPlugin, ScenePlugin,
+    SelectionPlugin, ShapePlugin, SystemRegistrationPlugin, TokenPlugin, WallPlugin,
+};
+use resources::{
+    DoorState, IsGameMaster, LightSet, LightSource as EngineLight, PlacedCanvasImage,
+    PlacedCanvasImages, SceneBackground, Shape as EngineShape, ShapeKind, ShapeSet,
+    Wall as EngineWall, WallSet,
+};
 use sync_test::*;
 use systems::*;
-use plugins::{ScenePlugin, GridPlugin, TokenPlugin, CameraPlugin, SelectionPlugin, SystemRegistrationPlugin, CanvasLayerPlugin, WallPlugin, LightingPlugin, ShapePlugin, BackgroundPlugin};
-use resources::{DoorState, Wall as EngineWall, WallSet, LightSource as EngineLight, LightSet, Shape as EngineShape, ShapeKind, ShapeSet, SceneBackground, IsGameMaster, PlacedCanvasImage, PlacedCanvasImages};
 
 static ENGINE_STARTED: AtomicBool = AtomicBool::new(false);
 static EVENT_CALLBACK: OnceLock<Mutex<Option<Function>>> = OnceLock::new();
@@ -57,6 +67,9 @@ struct TokenEntities(HashMap<String, Entity>);
 #[derive(Resource)]
 struct LastPlayerSent(Vec2);
 
+// Fields aren't read yet — grid rendering doesn't consult this resource
+// today, but the value is inserted at startup ahead of that wiring landing.
+#[allow(dead_code)]
 #[derive(Resource, Clone, Debug)]
 struct GridConfig {
     grid_size: f32,
@@ -78,6 +91,9 @@ struct WorldTokenPayload {
     x: f32,
     y: f32,
     z: f32,
+    // Deserialized from the server payload but not yet read anywhere —
+    // no nameplate/tooltip rendering consumes it yet.
+    #[allow(dead_code)]
     label: Option<String>,
     // Spec 004 (US2): resize/rotate. Optional so the pre-existing
     // position-only `upsert_token` events (e.g. the WASD demo token, or a
@@ -140,15 +156,33 @@ struct WorldShapePayload {
 
 #[derive(Debug, Clone)]
 enum ExternalCommand {
-    SetWorld { world_id: String },
-    UpsertToken { token: WorldTokenPayload },
-    RemoveToken { token_id: String },
-    UpsertWall { wall: WorldWallPayload },
-    RemoveWall { wall_id: String },
-    UpsertLight { light: WorldLightPayload },
-    RemoveLight { light_id: String },
-    UpsertShape { shape: WorldShapePayload },
-    RemoveShape { shape_id: String },
+    SetWorld {
+        world_id: String,
+    },
+    UpsertToken {
+        token: WorldTokenPayload,
+    },
+    RemoveToken {
+        token_id: String,
+    },
+    UpsertWall {
+        wall: WorldWallPayload,
+    },
+    RemoveWall {
+        wall_id: String,
+    },
+    UpsertLight {
+        light: WorldLightPayload,
+    },
+    RemoveLight {
+        light_id: String,
+    },
+    UpsertShape {
+        shape: WorldShapePayload,
+    },
+    RemoveShape {
+        shape_id: String,
+    },
     /// Switches the active scene's background image (map import), or
     /// clears it (`path: None`) when the newly active scene has none.
     /// `width`/`height` are the scene's pixel dimensions, already computed
@@ -166,7 +200,9 @@ enum ExternalCommand {
     /// could hand-draw a wall or shape through the real app at all. The
     /// frontend now sends this once on scene-owner status becoming known
     /// and whenever it changes (`WorldPage.tsx`).
-    SetIsGameMaster { is_game_master: bool },
+    SetIsGameMaster {
+        is_game_master: bool,
+    },
     /// Spec 002 (US3): adds or updates one pasted canvas image on the
     /// active scene. `asset_id` is the `CanvasImageAsset.id` from
     /// `uploadCanvasImage`'s response.
@@ -178,7 +214,9 @@ enum ExternalCommand {
         width: f32,
         height: f32,
     },
-    RemoveCanvasImageAsset { asset_id: String },
+    RemoveCanvasImageAsset {
+        asset_id: String,
+    },
 }
 
 fn event_callback_slot() -> &'static Mutex<Option<Function>> {
@@ -246,7 +284,11 @@ fn parse_command(input: &str) -> Option<ExternalCommand> {
             };
             let width = value.get("width")?.as_f64()? as f32;
             let height = value.get("height")?.as_f64()? as f32;
-            Some(ExternalCommand::SetSceneBackground { path, width, height })
+            Some(ExternalCommand::SetSceneBackground {
+                path,
+                width,
+                height,
+            })
         }
         "set_is_game_master" => Some(ExternalCommand::SetIsGameMaster {
             is_game_master: value.get("isGameMaster")?.as_bool()?,
@@ -298,7 +340,9 @@ pub fn start(canvas_selector: &str) {
         .insert_resource(TokenEntities::default())
         .insert_resource(LastPlayerSent(Vec2::new(f32::MIN, f32::MIN)))
         .insert_resource(GridConfig::default())
-        .insert_resource(network::GraphQLClient::new("http://localhost:8080".to_string()))
+        .insert_resource(network::GraphQLClient::new(
+            "http://localhost:8080".to_string(),
+        ))
         .insert_resource(network::websocket::WebSocketSubscription::new())
         .insert_resource(network::WorldEventSubscription::new())
         .insert_resource(tracker)
@@ -322,7 +366,7 @@ pub fn start(canvas_selector: &str) {
         .add_plugins(GridPlugin)
         .add_plugins(TokenPlugin)
         .add_plugins(CameraPlugin)
-        .add_plugins(SelectionPlugin)  // Phase 4.7.E1: Token Selection
+        .add_plugins(SelectionPlugin) // Phase 4.7.E1: Token Selection
         // Native canvas authoring (specs/001-bevy-canvas-authoring): shared
         // layer-ordering resource, must be added before Wall/Lighting/Shape
         // plugins so it exists when they build (Constitution Principle II)
@@ -347,11 +391,7 @@ pub fn start(canvas_selector: &str) {
         .add_systems(Startup, setup_scene)
         .add_systems(
             Update,
-            (
-                apply_external_commands,
-                move_player,
-                emit_player_state,
-            ),
+            (apply_external_commands, move_player, emit_player_state),
         )
         .add_systems(
             Update,
@@ -362,13 +402,7 @@ pub fn start(canvas_selector: &str) {
                 apply_grid_snapping,
             ),
         )
-        .add_systems(
-            Update,
-            (
-                calculate_derived_stats,
-                calculate_ability_stats,
-            ),
-        )
+        .add_systems(Update, (calculate_derived_stats, calculate_ability_stats))
         .add_systems(
             Update,
             (
@@ -651,14 +685,20 @@ fn apply_external_commands(
                     shape_set.remove(&shape_id);
                 }
             }
-            ExternalCommand::SetSceneBackground { path, width, height } => {
+            ExternalCommand::SetSceneBackground {
+                path,
+                width,
+                height,
+            } => {
                 if let Some(background) = background.as_deref_mut() {
                     background.path = path;
                     background.width = width;
                     background.height = height;
                 }
             }
-            ExternalCommand::SetIsGameMaster { is_game_master: value } => {
+            ExternalCommand::SetIsGameMaster {
+                is_game_master: value,
+            } => {
                 if let Some(is_game_master) = is_game_master.as_deref_mut() {
                     is_game_master.0 = value;
                 }
@@ -672,9 +712,16 @@ fn apply_external_commands(
                 height,
             } => {
                 if let Some(placed_canvas_images) = placed_canvas_images.as_deref_mut() {
-                    placed_canvas_images
-                        .0
-                        .insert(asset_id, PlacedCanvasImage { path, x, y, width, height });
+                    placed_canvas_images.0.insert(
+                        asset_id,
+                        PlacedCanvasImage {
+                            path,
+                            x,
+                            y,
+                            width,
+                            height,
+                        },
+                    );
                 }
             }
             ExternalCommand::RemoveCanvasImageAsset { asset_id } => {

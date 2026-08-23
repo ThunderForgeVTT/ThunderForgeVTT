@@ -1,6 +1,6 @@
 //! UVTT JSON parsing (T023).
 
-use super::types::{MapImportError, ParsedUvtt, UvttFile, SUPPORTED_FORMAT};
+use super::types::{MapImportError, ParsedUvtt, SUPPORTED_FORMAT, UvttFile};
 
 /// T023: parse and validate a raw UVTT JSON payload.
 ///

@@ -6,3 +6,13 @@
 # file around it hit 1000 lines. Default is 100; kept explicit here so the
 # intent isn't silently dependent on clippy's own default changing later.
 too-many-lines-threshold = 100
+
+# Bevy ECS systems idiomatically take one parameter per Query/Res/ResMut
+# they touch, and Query's own type (tuples of component refs plus
+# With<T>/Without<T> filters) is inherently "complex" by clippy's generic
+# metric — both defaults (7 args / threshold 250) fire constantly on
+# ordinary, correctly-scoped Bevy systems in src/engine and the game-system
+# packs, not on anything that's actually hard to read. Raised, not
+# disabled, so a genuinely oversized system/type still gets flagged.
+too-many-arguments-threshold = 10
+type-complexity-threshold = 500

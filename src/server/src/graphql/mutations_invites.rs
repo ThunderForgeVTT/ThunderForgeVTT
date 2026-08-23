@@ -6,14 +6,14 @@ use diesel::prelude::*;
 use std::str::FromStr;
 use uuid::Uuid;
 
+use crate::auth::world_membership::{WorldMembershipError, require_world_member};
+use crate::auth_middleware::AuthenticatedUser;
 use crate::models::{NewWorldInvite, NewWorldMember, WorldInvite, WorldMember};
+use crate::schema::world_events;
 use crate::schema::world_invites;
 use crate::schema::world_members;
-use crate::schema::world_events;
 use crate::state::AppState;
-use crate::auth_middleware::AuthenticatedUser;
-use crate::auth::world_membership::{require_world_member, WorldMembershipError};
-use thunderforge_core::models::invites::{WorldMemberRole, WorldInvite as CoreWorldInvite};
+use thunderforge_core::models::invites::{WorldInvite as CoreWorldInvite, WorldMemberRole};
 
 // Event codes for world_events audit trail
 const EVENT_CODE_INVITE_CREATED: i32 = 2;
@@ -183,18 +183,21 @@ impl InviteMutation {
         // from an independent, fully-random v4 UUID instead removes that
         // collision class entirely.
         let invite_id = Uuid::now_v7();
-        let invite_code = format!("{}", Uuid::new_v4().to_string().replace("-", "").chars().take(8).collect::<String>())
+        let invite_code = Uuid::new_v4()
+            .to_string()
+            .replace("-", "")
+            .chars()
+            .take(8)
+            .collect::<String>()
+            .to_string()
             .to_uppercase();
 
         let now = Utc::now().naive_utc();
-        let expires_at = input
-            .expires_at
-            .as_ref()
-            .and_then(|s| {
-                chrono::DateTime::parse_from_rfc3339(s)
-                    .ok()
-                    .map(|dt| dt.naive_utc())
-            });
+        let expires_at = input.expires_at.as_ref().and_then(|s| {
+            chrono::DateTime::parse_from_rfc3339(s)
+                .ok()
+                .map(|dt| dt.naive_utc())
+        });
 
         let new_invite = NewWorldInvite {
             id: invite_id,
@@ -219,7 +222,13 @@ impl InviteMutation {
             "invite_code": new_invite.invite_code,
             "max_uses": new_invite.max_uses,
         });
-        record_world_event(&mut conn, world_id, EVENT_CODE_INVITE_CREATED, Some(event_payload), user_id)?;
+        record_world_event(
+            &mut conn,
+            world_id,
+            EVENT_CODE_INVITE_CREATED,
+            Some(event_payload),
+            user_id,
+        )?;
 
         Ok(WorldInvitePayload {
             id: new_invite.id,
@@ -250,7 +259,7 @@ impl InviteMutation {
             .map_err(|_| Error::new("Failed to get DB connection"))?;
 
         // Look up invite code
-        let mut invite: WorldInvite = world_invites::table
+        let invite: WorldInvite = world_invites::table
             .filter(world_invites::invite_code.eq(input.invite_code.clone()))
             .select(WorldInvite::as_select())
             .first::<WorldInvite>(&mut conn)
@@ -283,7 +292,7 @@ impl InviteMutation {
         }
 
         // Increment usage
-        core_invite.use_invite().map_err(|e| Error::new(e))?;
+        core_invite.use_invite().map_err(Error::new)?;
 
         // Update invite usage count
         let updated_count = core_invite.used_count;
@@ -317,7 +326,13 @@ impl InviteMutation {
             "role": new_member.role,
             "invite_code": invite.invite_code,
         });
-        record_world_event(&mut conn, world_id, EVENT_CODE_MEMBER_JOINED, Some(event_payload), user_id)?;
+        record_world_event(
+            &mut conn,
+            world_id,
+            EVENT_CODE_MEMBER_JOINED,
+            Some(event_payload),
+            user_id,
+        )?;
 
         Ok(WorldMembershipPayload {
             id: new_member.id,
@@ -349,8 +364,8 @@ impl InviteMutation {
         let new_role_str = input.role.clone();
 
         // Parse and validate new role
-        let _new_role = match new_role_str.as_str() {
-            "Owner" | "GM" | "Player" => {},
+        match new_role_str.as_str() {
+            "Owner" | "GM" | "Player" => {}
             _ => return Err(Error::new("Invalid role. Must be Owner, GM, or Player")),
         };
 
@@ -363,12 +378,15 @@ impl InviteMutation {
             .optional()
             .map_err(|e| Error::new(format!("Database error: {}", e)))?;
 
-        let caller = caller_member.ok_or_else(|| Error::new("You are not a member of this world"))?;
-        let caller_role = WorldMemberRole::from_str(&caller.role)
-            .unwrap_or(WorldMemberRole::Player);
+        let caller =
+            caller_member.ok_or_else(|| Error::new("You are not a member of this world"))?;
+        let caller_role =
+            WorldMemberRole::from_str(&caller.role).unwrap_or(WorldMemberRole::Player);
 
         if !caller_role.can_change_roles() {
-            return Err(Error::new("You do not have permission to change member roles"));
+            return Err(Error::new(
+                "You do not have permission to change member roles",
+            ));
         }
 
         // Get target member
@@ -378,16 +396,20 @@ impl InviteMutation {
             .select(WorldMember::as_select())
             .first::<WorldMember>(&mut conn)
             .map_err(|e| match e {
-                diesel::result::Error::NotFound => Error::new("Target user is not a member of this world"),
+                diesel::result::Error::NotFound => {
+                    Error::new("Target user is not a member of this world")
+                }
                 _ => Error::new(format!("Database error: {}", e)),
             })?;
 
-        let target_role = WorldMemberRole::from_str(&target_member.role)
-            .unwrap_or(WorldMemberRole::Player);
+        let target_role =
+            WorldMemberRole::from_str(&target_member.role).unwrap_or(WorldMemberRole::Player);
 
         // Check permission
         if !caller_role.can_manage(target_role) {
-            return Err(Error::new("You do not have permission to manage this member's role"));
+            return Err(Error::new(
+                "You do not have permission to manage this member's role",
+            ));
         }
 
         // Update role
@@ -406,7 +428,13 @@ impl InviteMutation {
             "old_role": target_member.role,
             "new_role": new_role_str.clone(),
         });
-        record_world_event(&mut conn, world_id, EVENT_CODE_MEMBER_ROLE_CHANGED, Some(event_payload), user_id)?;
+        record_world_event(
+            &mut conn,
+            world_id,
+            EVENT_CODE_MEMBER_ROLE_CHANGED,
+            Some(event_payload),
+            user_id,
+        )?;
 
         Ok(WorldMembershipPayload {
             id: target_member.id,
@@ -448,11 +476,11 @@ impl InviteMutation {
             .optional()
             .map_err(|e| Error::new(format!("Database error: {}", e)))?;
 
-        let caller_member = caller_member
-            .ok_or_else(|| Error::new("You are not a member of this world"))?;
+        let caller_member =
+            caller_member.ok_or_else(|| Error::new("You are not a member of this world"))?;
 
-        let caller_role = WorldMemberRole::from_str(&caller_member.role)
-            .unwrap_or(WorldMemberRole::Player);
+        let caller_role =
+            WorldMemberRole::from_str(&caller_member.role).unwrap_or(WorldMemberRole::Player);
 
         // Check permission: Only Owner or GM can remove members
         if caller_role != WorldMemberRole::Owner && caller_role != WorldMemberRole::GM {
@@ -468,11 +496,11 @@ impl InviteMutation {
             .optional()
             .map_err(|e| Error::new(format!("Database error: {}", e)))?;
 
-        let target_member = target_member
-            .ok_or_else(|| Error::new("Target user is not a member of this world"))?;
+        let target_member =
+            target_member.ok_or_else(|| Error::new("Target user is not a member of this world"))?;
 
-        let target_role = WorldMemberRole::from_str(&target_member.role)
-            .unwrap_or(WorldMemberRole::Player);
+        let target_role =
+            WorldMemberRole::from_str(&target_member.role).unwrap_or(WorldMemberRole::Player);
 
         // Check permission: Can't remove someone of equal or higher rank
         if !caller_role.can_manage(target_role) {
@@ -588,8 +616,11 @@ mod tests {
             // No insert_test_world_member call here — deliberately, since
             // this is exactly the state `create_world` leaves a fresh
             // world in today.
-            let role = crate::auth::world_membership::require_world_member(conn, owner_id, world_id)
-                .expect("owner must be authorized immediately, with no separate membership step");
+            let role =
+                crate::auth::world_membership::require_world_member(conn, owner_id, world_id)
+                    .expect(
+                        "owner must be authorized immediately, with no separate membership step",
+                    );
             assert_eq!(role, "Owner");
 
             // A non-owner, non-member user must still be rejected — this

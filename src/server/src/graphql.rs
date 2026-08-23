@@ -1,88 +1,78 @@
 use async_graphql::{
-    Context, Enum, Error, InputObject, Json, MergedObject, Result as GraphQLResult, Schema,
-    SimpleObject, Subscription,
+    Context, Error, InputObject, Json, MergedObject, Result as GraphQLResult, Schema, SimpleObject,
+    Subscription,
 };
 use base64::Engine;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use diesel::prelude::*;
-use diesel::result::{DatabaseErrorKind, Error as DieselError};
+use diesel::result::Error as DieselError;
 use futures_util::Stream;
-use std::str::FromStr;
 use std::time::Duration;
-use tokio::sync::broadcast;
-use tokio_stream::wrappers::IntervalStream;
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::IntervalStream;
 
 use crate::admin::{
-    AdminStatsSnapshot, AdminWelcomeSummarySnapshot, DiskUsageSummary, OAuthProviderUpdate,
-    SystemManifestDocument, editable_manifest_keys, load_admin_bootstrap_settings,
-    load_admin_stats, load_admin_welcome_summary, load_auth_security_settings,
-    load_oauth_providers, read_system_manifest, recalculate_disk_usage as calculate_disk_usage,
+    load_admin_stats, recalculate_disk_usage as calculate_disk_usage,
     update_manifest_key as persist_manifest_key, update_oauth_provider as persist_oauth_provider,
     update_two_factor_policy as persist_two_factor_policy,
 };
-use crate::auth_middleware::AuthenticatedUser;
-use crate::db_types::PolicyEffectEnum;
 use crate::models::{
-    AdminBootstrapSetup, AuthSecuritySetting, GameSystem, OAuthProvider, User, World,
-    WorldEvent, WorldToken, WorldActor, ActorSystemData,
+    World,
+    WorldActor,
     // Policy - disabled pending schema
 };
-use crate::schema::{game_systems, users, world_events, world_tokens, worlds, world_actors, world_actor_system_data}; // policies disabled
+use crate::schema::{world_actors, worlds}; // policies disabled
 use crate::state::AppState;
-use crate::users::{
-    UserDataDeleteSummary, UserDataExport, delete_user_data_owned, export_user_data_payload,
-};
+use crate::users::{UserDataDeleteSummary, UserDataExport, delete_user_data_owned};
 // Phase 4.8.1: dnd5e_server will be loaded at runtime via game system registry
 
 // Phase 4.9.Z Step 1: Core entity types extracted to separate module
 pub mod types;
-pub use types::{GraphQLUser, GraphQLGameSystem, GraphQLWorld, GraphQLWorldToken, GraphQLWorldEvent};
+pub use types::{
+    GraphQLGameSystem, GraphQLUser, GraphQLWorld, GraphQLWorldEvent, GraphQLWorldToken,
+};
 
 // Phase 4.9.Z Step 2: Admin types extracted to separate module
 pub mod admin_types;
 pub use admin_types::{
-    GraphQLAdminStats, GraphQLAdminWelcomeSummary, GraphQLOAuthProvider, GraphQLManifestEntry,
-    GraphQLSystemManifest, GraphQLAuthSecuritySettings, GraphQLAdminBootstrapSettings,
-    GraphQLOAuthProviderConfigInput, GraphQLDiskUsageBreakdown,
+    GraphQLAdminBootstrapSettings, GraphQLAdminStats, GraphQLAdminWelcomeSummary,
+    GraphQLAuthSecuritySettings, GraphQLOAuthProvider, GraphQLOAuthProviderConfigInput,
+    GraphQLSystemManifest,
 };
 
 // Phase 4.9.Z Step 3: Input & utility types extracted to separate module
 pub mod input_types;
 pub use input_types::{
-    GraphQLCreateWorldInput, GraphQLCreateSceneInput, GraphQLUpdateSceneInput,
-    GraphQLPlayerPresence, GraphQLPlayersOnlineList, GraphQLPolicyEffect, GraphQLPolicy,
-    GraphQLPlaceholderDomainObject, GraphQLExportManifest, GraphQLExportMyDataPayload,
-    GraphQLDeleteMyDataPayload, GraphQLDeleteWorldPayload, GraphQLCreateWorldTokenInput,
-    GraphQLUpsertWorldTokenInput, GraphQLMoveTokenInput,
-    GraphQLUpdateFogMaskInput, GraphQLGenerateInviteCodeInput, GraphQLJoinWorldInput,
-    GraphQLUpdateMemberRoleInput, GraphQLWorldInvite, GraphQLWorldMembership,
-    GraphQLCreateWallInput, GraphQLUpdateWallInput, GraphQLDoorState,
-    GraphQLCreateLightSourceInput, GraphQLUpdateLightSourceInput,
-    GraphQLCreateShapeInput, GraphQLUpdateShapeInput, GraphQLShapeKind,
-    GraphQLCreateTokenInput, GraphQLUpdateTokenInput,
+    GraphQLCreateLightSourceInput, GraphQLCreateSceneInput, GraphQLCreateShapeInput,
+    GraphQLCreateTokenInput, GraphQLCreateWallInput, GraphQLCreateWorldInput,
+    GraphQLCreateWorldTokenInput, GraphQLDeleteMyDataPayload, GraphQLDeleteWorldPayload,
+    GraphQLDoorState, GraphQLExportManifest, GraphQLExportMyDataPayload, GraphQLMoveTokenInput,
+    GraphQLPlaceholderDomainObject, GraphQLPlayerPresence, GraphQLPlayersOnlineList,
+    GraphQLShapeKind, GraphQLUpdateFogMaskInput, GraphQLUpdateLightSourceInput,
+    GraphQLUpdateSceneInput, GraphQLUpdateShapeInput, GraphQLUpdateTokenInput,
+    GraphQLUpdateWallInput, GraphQLUpsertWorldTokenInput,
 };
 
 // Phase 4.9.Z Step 4a: Helper functions extracted to separate module
 pub mod helpers;
 pub use helpers::{
-    app_state, authenticated_user, admin_user, normalize_world_name, normalize_optional_text,
-    validate_world_name, validate_optional_reference_id, prepare_world_input, world_write_error,
-    load_game_systems, load_owned_worlds, load_all_worlds, load_owned_world_tokens,
-    load_owned_world_events, load_visible_world_by_id, require_visible_world,
-    load_owned_world_token_by_id, load_owned_world_event_by_id,
-    load_game_system_by_id, get_world_id_from_scene, PreparedWorldInput,
+    admin_user, app_state, authenticated_user, get_world_id_from_scene, load_all_worlds,
+    load_game_systems, load_owned_world_event_by_id, load_owned_world_events,
+    load_owned_world_token_by_id, load_owned_world_tokens, load_owned_worlds,
+    load_visible_world_by_id, normalize_world_name, prepare_world_input, require_visible_world,
+    validate_world_name, world_write_error,
 };
 
 // Phase 4.9.Z Step 5: Query extraction into separate modules
 pub mod queries;
 pub use queries::{
-    ActorQuery, AdminQuery, HealthcheckQuery, SceneQuery, UserQuery, InviteQuery, ItemQuery, InventoryQuery,
+    ActorQuery, AdminQuery, HealthcheckQuery, InventoryQuery, InviteQuery, ItemQuery, SceneQuery,
+    UserQuery,
 };
 
 // Phase 4.10.B: Invite & Membership mutations for multiplayer campaigns
 pub mod mutations_invites;
-pub use mutations_invites::{InviteMutation, WorldInvitePayload, WorldMembershipPayload};
+pub use mutations_invites::InviteMutation;
 
 // Phase 6: Wall mutations (vision-blocking scene geometry)
 pub mod mutations_walls;
@@ -132,11 +122,7 @@ pub use mutations_item_shares::{ItemShareMutation, ItemShareQuery};
 pub mod mutations_inventory;
 pub use mutations_inventory::InventoryMutation;
 
-
-
 // Admin types are now in admin_types.rs module (Phase 4.9.Z Step 2)
-
-
 
 impl From<UserDataDeleteSummary> for GraphQLDeleteMyDataPayload {
     fn from(summary: UserDataDeleteSummary) -> Self {
@@ -225,10 +211,7 @@ impl From<UserDataExport> for GraphQLExportMyDataPayload {
     }
 }
 
-
 // Constants and struct moved to helpers.rs module (Phase 4.9.Z Step 4a)
-
-
 
 // Helper functions moved to helpers.rs module (Phase 4.9.Z Step 4a)
 
@@ -568,7 +551,7 @@ impl WorldTokenMutation {
         let created_token = tokio::task::spawn_blocking(move || {
             use crate::schema::world_tokens;
             use diesel::prelude::*;
-            
+
             diesel::insert_into(world_tokens::table)
                 .values((
                     world_tokens::id.eq(&token_id),
@@ -593,12 +576,8 @@ impl WorldTokenMutation {
         .map_err(|_| Error::new("Failed to create world token"))?;
 
         // Phase 4.9.B.2: Touch last_seen on mutation
-        if let Err(e) = crate::session::touch_last_seen(
-            state.db_pool.clone(),
-            user_id,
-            input.world_id,
-        )
-        .await
+        if let Err(e) =
+            crate::session::touch_last_seen(state.db_pool.clone(), user_id, input.world_id).await
         {
             eprintln!("⚠️  Failed to update session: {}", e);
         }
@@ -620,7 +599,9 @@ impl WorldTokenMutation {
             .map_err(|_| Error::new("Failed to get DB connection"))?;
         let now = Utc::now().naive_utc();
 
-        let token_id = input.token_id.unwrap_or_else(|| uuid::Uuid::now_v7().to_string());
+        let token_id = input
+            .token_id
+            .unwrap_or_else(|| uuid::Uuid::now_v7().to_string());
         let world_id = input.world_id;
         let label = input.label.clone();
         let x = input.x.unwrap_or(0.0);
@@ -638,7 +619,7 @@ impl WorldTokenMutation {
         // Combine all DB operations into a single spawn_blocking call
         let token_id_clone = token_id.clone();
         let (upserted_token, event_id) = tokio::task::spawn_blocking(move || {
-            use crate::schema::{world_tokens, world_events};
+            use crate::schema::{world_events, world_tokens};
             use diesel::prelude::*;
 
             // 1. UPSERT token
@@ -717,12 +698,8 @@ impl WorldTokenMutation {
         );
 
         // Phase 4.9.B.2: Touch last_seen on mutation
-        if let Err(e) = crate::session::touch_last_seen(
-            state.db_pool.clone(),
-            user_id,
-            world_id,
-        )
-        .await
+        if let Err(e) =
+            crate::session::touch_last_seen(state.db_pool.clone(), user_id, world_id).await
         {
             eprintln!("⚠️  Failed to update session: {}", e);
         }
@@ -752,7 +729,7 @@ impl WorldTokenMutation {
         let moved_token = tokio::task::spawn_blocking(move || {
             use crate::schema::world_tokens;
             use diesel::prelude::*;
-            
+
             diesel::update(
                 world_tokens::table
                     .filter(world_tokens::id.eq(&token_id))
@@ -773,12 +750,9 @@ impl WorldTokenMutation {
         .map_err(|_| Error::new("Failed to move token"))?;
 
         // Phase 4.9.B.2: Touch last_seen on mutation
-        if let Err(e) = crate::session::touch_last_seen(
-            state.db_pool.clone(),
-            user_id,
-            moved_token.world_id,
-        )
-        .await
+        if let Err(e) =
+            crate::session::touch_last_seen(state.db_pool.clone(), user_id, moved_token.world_id)
+                .await
         {
             eprintln!("⚠️  Failed to update session: {}", e);
         }
@@ -786,11 +760,7 @@ impl WorldTokenMutation {
         Ok(GraphQLWorldToken::from(moved_token))
     }
 
-    async fn delete_world_token(
-        &self,
-        ctx: &Context<'_>,
-        token_id: String,
-    ) -> GraphQLResult<bool> {
+    async fn delete_world_token(&self, ctx: &Context<'_>, token_id: String) -> GraphQLResult<bool> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         let user_id = auth_user.user_id;
@@ -824,9 +794,9 @@ impl WorldTokenMutation {
 #[derive(InputObject, Debug, Clone)]
 pub struct GraphQLUpdateActorSystemDataInput {
     actor_id: uuid::Uuid,
-    game_system_id: String,  // 'dnd5e', 'pathfinder2e', etc.
-    data_type: String,        // 'ability_data', 'resource_data', 'proficiency_data', 'trait_data', 'spell_data'
-    data: Json<serde_json::Value>,  // Raw JSON for system-specific content
+    game_system_id: String,        // 'dnd5e', 'pathfinder2e', etc.
+    data_type: String, // 'ability_data', 'resource_data', 'proficiency_data', 'trait_data', 'spell_data'
+    data: Json<serde_json::Value>, // Raw JSON for system-specific content
 }
 
 #[derive(SimpleObject, Debug, Clone)]
@@ -867,7 +837,7 @@ pub struct GraphQLActorSystemDataEvent {
     id: uuid::Uuid,
     actor_id: uuid::Uuid,
     game_system_id: String,
-    event_type: String,  // "INSERT", "UPDATE", "DELETE"
+    event_type: String, // "INSERT", "UPDATE", "DELETE"
     ability_data: Option<Json<serde_json::Value>>,
     resource_data: Option<Json<serde_json::Value>>,
     proficiency_data: Option<Json<serde_json::Value>>,
@@ -921,12 +891,11 @@ impl ActorSystemDataMutation {
             .map_err(|_| Error::new("Failed to get DB connection"))?;
 
         let upserted_data = tokio::task::spawn_blocking({
-            let actor_id = actor_id;
             let game_system_id = game_system_id.clone();
             let data_type = data_type.clone();
             let data_value = data_value.clone();
             move || {
-                use crate::schema::{world_actors, world_actor_system_data};
+                use crate::schema::{world_actor_system_data, world_actors};
                 use diesel::prelude::*;
 
                 // Permission already verified above; just load the actor.
@@ -940,115 +909,118 @@ impl ActorSystemDataMutation {
 
                 // 2. Validate: Actor's game_system_id must match the mutation's game_system_id
                 if actor.game_system_id.as_ref() != Some(&game_system_id) {
-                    return Err("Game system mismatch: actor is not configured for this system".to_string());
+                    return Err(
+                        "Game system mismatch: actor is not configured for this system".to_string(),
+                    );
                 }
 
                 // 3. Validate data_type and use registry-based validators
-                if !matches!(data_type.as_str(), "ability_data" | "resource_data" | "proficiency_data" | "trait_data" | "spell_data") {
+                if !matches!(
+                    data_type.as_str(),
+                    "ability_data"
+                        | "resource_data"
+                        | "proficiency_data"
+                        | "trait_data"
+                        | "spell_data"
+                ) {
                     return Err("Unknown data_type".to_string());
                 }
 
                 // 🔔 C2: Call system registry to validate data using game system's validators
-                crate::systems::validate_actor_system_data(&game_system_id, &data_type, &data_value)
-                    .map_err(|e| format!("Validation failed: {}", e))?;
+                crate::systems::validate_actor_system_data(
+                    &game_system_id,
+                    &data_type,
+                    &data_value,
+                )
+                .map_err(|e| format!("Validation failed: {}", e))?;
 
                 // 4. UPSERT actor system data with appropriate column
                 let result = match data_type.as_str() {
-                    "ability_data" => {
-                        diesel::insert_into(world_actor_system_data::table)
-                            .values((
-                                world_actor_system_data::actor_id.eq(actor_id),
-                                world_actor_system_data::game_system_id.eq(&game_system_id),
-                                world_actor_system_data::ability_data.eq(&data_value),
-                                world_actor_system_data::created_by.eq(user_id),
-                                world_actor_system_data::updated_by.eq(user_id),
-                            ))
-                            .on_conflict(world_actor_system_data::actor_id)
-                            .do_update()
-                            .set((
-                                world_actor_system_data::ability_data.eq(&data_value),
-                                world_actor_system_data::updated_by.eq(user_id),
-                                world_actor_system_data::updated_at.eq(now),
-                            ))
-                            .returning(crate::models::ActorSystemData::as_returning())
-                            .get_result(&mut conn)
-                    },
-                    "resource_data" => {
-                        diesel::insert_into(world_actor_system_data::table)
-                            .values((
-                                world_actor_system_data::actor_id.eq(actor_id),
-                                world_actor_system_data::game_system_id.eq(&game_system_id),
-                                world_actor_system_data::resource_data.eq(&data_value),
-                                world_actor_system_data::created_by.eq(user_id),
-                                world_actor_system_data::updated_by.eq(user_id),
-                            ))
-                            .on_conflict(world_actor_system_data::actor_id)
-                            .do_update()
-                            .set((
-                                world_actor_system_data::resource_data.eq(&data_value),
-                                world_actor_system_data::updated_by.eq(user_id),
-                                world_actor_system_data::updated_at.eq(now),
-                            ))
-                            .returning(crate::models::ActorSystemData::as_returning())
-                            .get_result(&mut conn)
-                    },
-                    "proficiency_data" => {
-                        diesel::insert_into(world_actor_system_data::table)
-                            .values((
-                                world_actor_system_data::actor_id.eq(actor_id),
-                                world_actor_system_data::game_system_id.eq(&game_system_id),
-                                world_actor_system_data::proficiency_data.eq(&data_value),
-                                world_actor_system_data::created_by.eq(user_id),
-                                world_actor_system_data::updated_by.eq(user_id),
-                            ))
-                            .on_conflict(world_actor_system_data::actor_id)
-                            .do_update()
-                            .set((
-                                world_actor_system_data::proficiency_data.eq(&data_value),
-                                world_actor_system_data::updated_by.eq(user_id),
-                                world_actor_system_data::updated_at.eq(now),
-                            ))
-                            .returning(crate::models::ActorSystemData::as_returning())
-                            .get_result(&mut conn)
-                    },
-                    "trait_data" => {
-                        diesel::insert_into(world_actor_system_data::table)
-                            .values((
-                                world_actor_system_data::actor_id.eq(actor_id),
-                                world_actor_system_data::game_system_id.eq(&game_system_id),
-                                world_actor_system_data::trait_data.eq(&data_value),
-                                world_actor_system_data::created_by.eq(user_id),
-                                world_actor_system_data::updated_by.eq(user_id),
-                            ))
-                            .on_conflict(world_actor_system_data::actor_id)
-                            .do_update()
-                            .set((
-                                world_actor_system_data::trait_data.eq(&data_value),
-                                world_actor_system_data::updated_by.eq(user_id),
-                                world_actor_system_data::updated_at.eq(now),
-                            ))
-                            .returning(crate::models::ActorSystemData::as_returning())
-                            .get_result(&mut conn)
-                    },
-                    "spell_data" => {
-                        diesel::insert_into(world_actor_system_data::table)
-                            .values((
-                                world_actor_system_data::actor_id.eq(actor_id),
-                                world_actor_system_data::game_system_id.eq(&game_system_id),
-                                world_actor_system_data::spell_data.eq(&data_value),
-                                world_actor_system_data::created_by.eq(user_id),
-                                world_actor_system_data::updated_by.eq(user_id),
-                            ))
-                            .on_conflict(world_actor_system_data::actor_id)
-                            .do_update()
-                            .set((
-                                world_actor_system_data::spell_data.eq(&data_value),
-                                world_actor_system_data::updated_by.eq(user_id),
-                                world_actor_system_data::updated_at.eq(now),
-                            ))
-                            .returning(crate::models::ActorSystemData::as_returning())
-                            .get_result(&mut conn)
-                    },
+                    "ability_data" => diesel::insert_into(world_actor_system_data::table)
+                        .values((
+                            world_actor_system_data::actor_id.eq(actor_id),
+                            world_actor_system_data::game_system_id.eq(&game_system_id),
+                            world_actor_system_data::ability_data.eq(&data_value),
+                            world_actor_system_data::created_by.eq(user_id),
+                            world_actor_system_data::updated_by.eq(user_id),
+                        ))
+                        .on_conflict(world_actor_system_data::actor_id)
+                        .do_update()
+                        .set((
+                            world_actor_system_data::ability_data.eq(&data_value),
+                            world_actor_system_data::updated_by.eq(user_id),
+                            world_actor_system_data::updated_at.eq(now),
+                        ))
+                        .returning(crate::models::ActorSystemData::as_returning())
+                        .get_result(&mut conn),
+                    "resource_data" => diesel::insert_into(world_actor_system_data::table)
+                        .values((
+                            world_actor_system_data::actor_id.eq(actor_id),
+                            world_actor_system_data::game_system_id.eq(&game_system_id),
+                            world_actor_system_data::resource_data.eq(&data_value),
+                            world_actor_system_data::created_by.eq(user_id),
+                            world_actor_system_data::updated_by.eq(user_id),
+                        ))
+                        .on_conflict(world_actor_system_data::actor_id)
+                        .do_update()
+                        .set((
+                            world_actor_system_data::resource_data.eq(&data_value),
+                            world_actor_system_data::updated_by.eq(user_id),
+                            world_actor_system_data::updated_at.eq(now),
+                        ))
+                        .returning(crate::models::ActorSystemData::as_returning())
+                        .get_result(&mut conn),
+                    "proficiency_data" => diesel::insert_into(world_actor_system_data::table)
+                        .values((
+                            world_actor_system_data::actor_id.eq(actor_id),
+                            world_actor_system_data::game_system_id.eq(&game_system_id),
+                            world_actor_system_data::proficiency_data.eq(&data_value),
+                            world_actor_system_data::created_by.eq(user_id),
+                            world_actor_system_data::updated_by.eq(user_id),
+                        ))
+                        .on_conflict(world_actor_system_data::actor_id)
+                        .do_update()
+                        .set((
+                            world_actor_system_data::proficiency_data.eq(&data_value),
+                            world_actor_system_data::updated_by.eq(user_id),
+                            world_actor_system_data::updated_at.eq(now),
+                        ))
+                        .returning(crate::models::ActorSystemData::as_returning())
+                        .get_result(&mut conn),
+                    "trait_data" => diesel::insert_into(world_actor_system_data::table)
+                        .values((
+                            world_actor_system_data::actor_id.eq(actor_id),
+                            world_actor_system_data::game_system_id.eq(&game_system_id),
+                            world_actor_system_data::trait_data.eq(&data_value),
+                            world_actor_system_data::created_by.eq(user_id),
+                            world_actor_system_data::updated_by.eq(user_id),
+                        ))
+                        .on_conflict(world_actor_system_data::actor_id)
+                        .do_update()
+                        .set((
+                            world_actor_system_data::trait_data.eq(&data_value),
+                            world_actor_system_data::updated_by.eq(user_id),
+                            world_actor_system_data::updated_at.eq(now),
+                        ))
+                        .returning(crate::models::ActorSystemData::as_returning())
+                        .get_result(&mut conn),
+                    "spell_data" => diesel::insert_into(world_actor_system_data::table)
+                        .values((
+                            world_actor_system_data::actor_id.eq(actor_id),
+                            world_actor_system_data::game_system_id.eq(&game_system_id),
+                            world_actor_system_data::spell_data.eq(&data_value),
+                            world_actor_system_data::created_by.eq(user_id),
+                            world_actor_system_data::updated_by.eq(user_id),
+                        ))
+                        .on_conflict(world_actor_system_data::actor_id)
+                        .do_update()
+                        .set((
+                            world_actor_system_data::spell_data.eq(&data_value),
+                            world_actor_system_data::updated_by.eq(user_id),
+                            world_actor_system_data::updated_at.eq(now),
+                        ))
+                        .returning(crate::models::ActorSystemData::as_returning())
+                        .get_result(&mut conn),
                     _ => return Err("Invalid data type".to_string()),
                 };
 
@@ -1067,7 +1039,6 @@ impl ActorSystemDataMutation {
         Ok(GraphQLActorSystemData::from(upserted_data))
     }
 }
-
 
 // Query structs moved to queries modules (Phase 4.9.Z Step 5)
 
@@ -1112,7 +1083,7 @@ impl SceneMutation {
         let inserted_scene = tokio::task::spawn_blocking(move || {
             use crate::schema::scenes;
             use diesel::prelude::*;
-            
+
             let values = (
                 scenes::scene_id.eq(new_scene.scene_id),
                 scenes::world_id.eq(new_scene.world_id),
@@ -1128,7 +1099,7 @@ impl SceneMutation {
                 scenes::created_at.eq(new_scene.created_at),
                 scenes::updated_at.eq(new_scene.updated_at),
             );
-            
+
             diesel::insert_into(scenes::table)
                 .values(values)
                 .returning(crate::models::Scene::as_returning())
@@ -1159,7 +1130,7 @@ impl SceneMutation {
         let updated_scene = tokio::task::spawn_blocking(move || {
             use crate::schema::scenes;
             use diesel::prelude::*;
-            
+
             let update_data = crate::models::SceneUpdate {
                 name: input.name,
                 description: input.description,
@@ -1186,11 +1157,7 @@ impl SceneMutation {
         Ok(GraphQLScene::from(updated_scene))
     }
 
-    async fn delete_scene(
-        &self,
-        ctx: &Context<'_>,
-        scene_id: uuid::Uuid,
-    ) -> GraphQLResult<bool> {
+    async fn delete_scene(&self, ctx: &Context<'_>, scene_id: uuid::Uuid) -> GraphQLResult<bool> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         let user_id = auth_user.user_id;
@@ -1243,7 +1210,7 @@ impl SceneMutation {
         let updated_fog_mask = tokio::task::spawn_blocking(move || {
             use crate::schema::fog_masks;
             use diesel::prelude::*;
-            
+
             let bitmap_bytes = base64::engine::general_purpose::STANDARD
                 .decode(&bitmap_data_base64)
                 .map_err(|_| DieselError::NotFound)?;
@@ -1280,7 +1247,6 @@ impl SceneMutation {
         Ok(GraphQLFogMask::from(updated_fog_mask))
     }
 }
-
 
 // Query structs moved to queries modules (Phase 4.9.Z Step 5)
 
@@ -1607,13 +1573,12 @@ impl AdminMutation {
 }
 
 /// Helper function to query current online players for a world (Phase 4.9.B.3)
+#[allow(dead_code)] // no resolver wires presence querying to this yet
 async fn query_players_online(
     pool: &crate::state::DbPool,
     world_id: uuid::Uuid,
 ) -> Result<Vec<GraphQLPlayerPresence>, String> {
-    let mut conn = pool
-        .get()
-        .map_err(|e| format!("Pool error: {}", e))?;
+    let mut conn = pool.get().map_err(|e| format!("Pool error: {}", e))?;
 
     let players = tokio::task::spawn_blocking(move || {
         use crate::schema::players_online;
@@ -1635,12 +1600,14 @@ async fn query_players_online(
 
     Ok(players
         .into_iter()
-        .map(|(player_id, world_id, scene_id, idle_secs)| GraphQLPlayerPresence {
-            player_id,
-            world_id,
-            scene_id,
-            idle_duration_secs: idle_secs,
-        })
+        .map(
+            |(player_id, world_id, scene_id, idle_secs)| GraphQLPlayerPresence {
+                player_id,
+                world_id,
+                scene_id,
+                idle_duration_secs: idle_secs,
+            },
+        )
         .collect())
 }
 
@@ -1661,13 +1628,13 @@ impl SubscriptionRoot {
     }
 
     /// Subscribe to world events (tokens, actors, scenes, etc.)
-    /// 
+    ///
     /// Phase 4.9.A.2: Real-time event streaming via PostgreSQL pub/sub backplane
     /// Phase 4.9.A.3: Backpressure handling for lagged subscribers
-    /// 
+    ///
     /// All subscribers receive events broadcast from the database listener task.
     /// Events are sent immediately as they are recorded in world_events table.
-    /// 
+    ///
     /// If a client falls behind (buffer fills), the subscription will stop receiving
     /// events until it catches up. This is graceful degradation under load.
     async fn world_events_created(
@@ -1676,25 +1643,30 @@ impl SubscriptionRoot {
         world_id: String,
     ) -> impl Stream<Item = Result<GraphQLWorldEvent, Error>> {
         use std::pin::Pin;
-        
+
         let app_state = ctx.data::<AppState>().ok().cloned();
         let world_uuid = uuid::Uuid::parse_str(&world_id).ok();
-        
+
         // Collect all validation to happen upfront
         let (has_error, error_msg, rx_opt) = match (&app_state, &world_uuid) {
             (None, _) => (true, "Failed to get app state", None),
             (_, None) => (true, "Invalid world_id format", None),
-            (Some(app_state), Some(_)) => (false, "", Some(app_state.world_event_sender.subscribe())),
+            (Some(app_state), Some(_)) => {
+                (false, "", Some(app_state.world_event_sender.subscribe()))
+            }
         };
-        
-        eprintln!("[GraphQL Subscription] 🎮 New subscription for world_id={}, error={}", world_id, has_error);
-        
+
+        eprintln!(
+            "[GraphQL Subscription] 🎮 New subscription for world_id={}, error={}",
+            world_id, has_error
+        );
+
         // Create a combined stream that works for both cases
         // Return type is Pin<Box<dyn Stream>> for type erasure
         if let Some(rx) = rx_opt {
             // Success case: stream from broadcast channel
             let world_uuid = world_uuid.unwrap();
-            
+
             let stream = tokio_stream::wrappers::BroadcastStream::new(rx)
                 .filter_map(move |result| {
                     match result {
@@ -1715,12 +1687,14 @@ impl SubscriptionRoot {
                         }
                     }
                 });
-            Pin::new(Box::new(stream)) as Pin<Box<dyn Stream<Item = Result<GraphQLWorldEvent, Error>> + Send>>
+            Pin::new(Box::new(stream))
+                as Pin<Box<dyn Stream<Item = Result<GraphQLWorldEvent, Error>> + Send>>
         } else {
             // Error case: single error item
-            let stream = tokio_stream::iter(vec![Err(Error::new(error_msg))])
-                .filter_map(|x| { Some(x) });
-            Pin::new(Box::new(stream)) as Pin<Box<dyn Stream<Item = Result<GraphQLWorldEvent, Error>> + Send>>
+            let stream =
+                tokio_stream::iter(vec![Err(Error::new(error_msg))]).filter_map(Some);
+            Pin::new(Box::new(stream))
+                as Pin<Box<dyn Stream<Item = Result<GraphQLWorldEvent, Error>> + Send>>
         }
     }
 
@@ -1734,18 +1708,21 @@ impl SubscriptionRoot {
         world_id: String,
     ) -> impl Stream<Item = Result<GraphQLPlayersOnlineList, Error>> {
         use std::pin::Pin;
-        
+
         let app_state = ctx.data::<AppState>().ok().cloned();
         let world_uuid = uuid::Uuid::parse_str(&world_id).ok();
-        
+
         let (has_error, error_msg, rx_opt) = match (&app_state, &world_uuid) {
             (None, _) => (true, "Failed to get app state", None),
             (_, None) => (true, "Invalid world_id format", None),
             (Some(app_state), Some(_)) => (false, "", Some(app_state.presence_sender.subscribe())),
         };
-        
-        eprintln!("[GraphQL Subscription] 🎮 New presence subscription for world_id={}, error={}", world_id, has_error);
-        
+
+        eprintln!(
+            "[GraphQL Subscription] 🎮 New presence subscription for world_id={}, error={}",
+            world_id, has_error
+        );
+
         if let (Some(rx), Some(world_id_uuid)) = (rx_opt, world_uuid) {
             // Success case: emit presence notifications
             // Note: This is a simple implementation that emits on each presence event.
@@ -1767,21 +1744,23 @@ impl SubscriptionRoot {
                         }
                     }
                 });
-            Pin::new(Box::new(stream)) as Pin<Box<dyn Stream<Item = Result<GraphQLPlayersOnlineList, Error>> + Send>>
+            Pin::new(Box::new(stream))
+                as Pin<Box<dyn Stream<Item = Result<GraphQLPlayersOnlineList, Error>> + Send>>
         } else {
             // Error case: single error item
-            let stream = tokio_stream::iter(vec![Err(Error::new(error_msg))])
-                .filter_map(|x| { Some(x) });
-            Pin::new(Box::new(stream)) as Pin<Box<dyn Stream<Item = Result<GraphQLPlayersOnlineList, Error>> + Send>>
+            let stream =
+                tokio_stream::iter(vec![Err(Error::new(error_msg))]).filter_map(Some);
+            Pin::new(Box::new(stream))
+                as Pin<Box<dyn Stream<Item = Result<GraphQLPlayersOnlineList, Error>> + Send>>
         }
     }
 
     /// Subscribe to actor system data changes (D&D 5e, Pathfinder, CoC, etc.)
-    /// 
+    ///
     /// PHASE D.2 STUB: This subscription will stream actor system data updates
     /// from the pg_notify backplane when client subscribes.
     /// Full implementation pending async database driver integration.
-    /// 
+    ///
     /// For now, returns a tick stream that can be tested.
     async fn world_actor_system_data_updated(
         &self,
@@ -1806,7 +1785,7 @@ impl SubscriptionRoot {
                     spell_data: None,
                     updated_at: chrono::Local::now().naive_utc(),
                 })
-            }
+            },
         )
     }
 }
@@ -2010,19 +1989,31 @@ mod tests {
     fn world_name_validation_enforces_length_limits() {
         // Valid: 64 characters (MAX_WORLD_NAME_LEN)
         let valid = "A".repeat(64);
-        assert!(validate_world_name(&valid).is_ok(), "64 chars should be valid");
+        assert!(
+            validate_world_name(&valid).is_ok(),
+            "64 chars should be valid"
+        );
 
         // Invalid: 65+ characters
         let invalid = "A".repeat(65);
-        assert!(validate_world_name(&invalid).is_err(), "65+ chars should be rejected");
+        assert!(
+            validate_world_name(&invalid).is_err(),
+            "65+ chars should be rejected"
+        );
 
         // Invalid: 2 characters (MIN_WORLD_NAME_LEN is 3)
         let too_short = "AB";
-        assert!(validate_world_name(too_short).is_err(), "2 chars should be rejected");
+        assert!(
+            validate_world_name(too_short).is_err(),
+            "2 chars should be rejected"
+        );
 
         // Valid: 3 characters (MIN_WORLD_NAME_LEN)
         let min_valid = "ABC";
-        assert!(validate_world_name(min_valid).is_ok(), "3 chars should be valid");
+        assert!(
+            validate_world_name(min_valid).is_ok(),
+            "3 chars should be valid"
+        );
     }
 
     // Phase 1.4: Security test - prepare_world_input rejects empty name
@@ -2173,4 +2164,3 @@ mod tests {
         );
     }
 }
-

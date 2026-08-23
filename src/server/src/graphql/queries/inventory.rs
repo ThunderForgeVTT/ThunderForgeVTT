@@ -4,8 +4,8 @@
 use async_graphql::Context;
 
 use crate::auth::actor_permissions::require_actor_permission;
-use crate::graphql::*;
 use crate::graphql::types::{ActorPermissionLevel, GraphQLInventoryEntry};
+use crate::graphql::*;
 use crate::models::ActorInventoryEntry;
 use crate::schema::world_actor_inventory;
 use crate::state::AppState;
@@ -19,7 +19,14 @@ pub async fn actor_inventory_impl(
     is_admin: bool,
     actor_id: uuid::Uuid,
 ) -> GraphQLResult<Vec<ActorInventoryEntry>> {
-    require_actor_permission(state, user_id, is_admin, actor_id, ActorPermissionLevel::Viewer).await?;
+    require_actor_permission(
+        state,
+        user_id,
+        is_admin,
+        actor_id,
+        ActorPermissionLevel::Viewer,
+    )
+    .await?;
 
     let mut conn = state
         .db_pool
@@ -42,10 +49,15 @@ pub struct InventoryQuery;
 
 #[async_graphql::Object]
 impl InventoryQuery {
-    async fn actor_inventory(&self, ctx: &Context<'_>, actor_id: uuid::Uuid) -> GraphQLResult<Vec<GraphQLInventoryEntry>> {
+    async fn actor_inventory(
+        &self,
+        ctx: &Context<'_>,
+        actor_id: uuid::Uuid,
+    ) -> GraphQLResult<Vec<GraphQLInventoryEntry>> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        let rows = actor_inventory_impl(state, auth_user.user_id, auth_user.is_admin, actor_id).await?;
+        let rows =
+            actor_inventory_impl(state, auth_user.user_id, auth_user.is_admin, actor_id).await?;
         Ok(rows.into_iter().map(GraphQLInventoryEntry::from).collect())
     }
 }
@@ -53,10 +65,14 @@ impl InventoryQuery {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graphql::mutations_actors::{create_actor_impl, CreateActorInput};
-    use crate::graphql::mutations_inventory::{add_item_to_inventory_impl, AddItemToInventoryInput};
-    use crate::graphql::mutations_items::{create_item_impl, CreateItemInput};
-    use crate::test_support::{insert_test_scene, insert_test_user, insert_test_world, test_app_state};
+    use crate::graphql::mutations_actors::{CreateActorInput, create_actor_impl};
+    use crate::graphql::mutations_inventory::{
+        AddItemToInventoryInput, add_item_to_inventory_impl,
+    };
+    use crate::graphql::mutations_items::{CreateItemInput, create_item_impl};
+    use crate::test_support::{
+        insert_test_scene, insert_test_user, insert_test_world, test_app_state,
+    };
 
     #[tokio::test]
     async fn actor_inventory_lists_entries_for_a_viewer() {

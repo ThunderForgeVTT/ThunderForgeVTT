@@ -1,10 +1,11 @@
 use crate::schema::{
-    admin_bootstrap_oauth_sessions, admin_bootstrap_setup, auth_security_settings, canvas_image_assets, fog_masks,
-    game_systems, light_sources, login_two_factor_challenges, oauth_authorization_sessions, oauth_link_challenges,
-    oauth_providers, players_online, scenes, shapes, tokens, user_oauth_accounts, user_sessions,
-    users, walls, world_actors, world_actor_inventory, world_actor_permissions, world_actor_shares,
-    world_actor_system_data, world_events, world_invites, world_item_effects, world_item_permissions,
-    world_item_shares, world_items, world_members, world_tokens, worlds,
+    admin_bootstrap_oauth_sessions, admin_bootstrap_setup, auth_security_settings,
+    canvas_image_assets, fog_masks, game_systems, light_sources, login_two_factor_challenges,
+    oauth_authorization_sessions, oauth_link_challenges, oauth_providers, players_online, scenes,
+    shapes, tokens, user_oauth_accounts, user_sessions, users, walls, world_actor_inventory,
+    world_actor_permissions, world_actor_shares, world_actor_system_data, world_actors,
+    world_events, world_invites, world_item_effects, world_item_permissions, world_item_shares,
+    world_items, world_members, world_tokens, worlds,
 };
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -325,8 +326,6 @@ pub struct World {
     pub updated_at: chrono::NaiveDateTime,
     pub session_notes: Option<String>,
 }
-
-use crate::db_types::PolicyEffectEnum;
 
 // Policy struct disabled - table not implemented
 // #[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
@@ -783,8 +782,8 @@ pub struct WorldActor {
     pub id: uuid::Uuid,
     pub world_id: uuid::Uuid,
     pub scene_id: uuid::Uuid,
-    pub actor_type: String,  // 'character', 'npc', 'hazard', 'prop', 'light_source', 'vehicle'
-    pub game_system_id: Option<String>,  // NULL for non-game objects, 'dnd5e'/'pathfinder2e' for game systems
+    pub actor_type: String, // 'character', 'npc', 'hazard', 'prop', 'light_source', 'vehicle'
+    pub game_system_id: Option<String>, // NULL for non-game objects, 'dnd5e'/'pathfinder2e' for game systems
     pub label: String,
     pub created_by: uuid::Uuid,
     pub owned_by: uuid::Uuid,
@@ -871,12 +870,12 @@ pub struct NewActorShare {
 pub struct ActorSystemData {
     pub id: uuid::Uuid,
     pub actor_id: uuid::Uuid,
-    pub game_system_id: String,  // 'dnd5e', 'pathfinder2e', 'coc7e', etc.
-    pub ability_data: Option<serde_json::Value>,  // Base ability scores/modifiers
-    pub resource_data: Option<serde_json::Value>,  // HP, mana, sanity, focus, etc.
-    pub proficiency_data: Option<serde_json::Value>,  // Skills, weapon/armor proficiencies
-    pub trait_data: Option<serde_json::Value>,  // Class, subclass, feats, backgrounds
-    pub spell_data: Option<serde_json::Value>,  // Spellbook, slots, prepared spells
+    pub game_system_id: String, // 'dnd5e', 'pathfinder2e', 'coc7e', etc.
+    pub ability_data: Option<serde_json::Value>, // Base ability scores/modifiers
+    pub resource_data: Option<serde_json::Value>, // HP, mana, sanity, focus, etc.
+    pub proficiency_data: Option<serde_json::Value>, // Skills, weapon/armor proficiencies
+    pub trait_data: Option<serde_json::Value>, // Class, subclass, feats, backgrounds
+    pub spell_data: Option<serde_json::Value>, // Spellbook, slots, prepared spells
     pub created_by: uuid::Uuid,
     pub updated_by: uuid::Uuid,
     pub created_at: chrono::NaiveDateTime,
@@ -897,8 +896,6 @@ pub struct NewActorSystemData {
     pub created_by: uuid::Uuid,
     pub updated_by: uuid::Uuid,
 }
-
-
 
 /// Player presence tracking (Phase 4.9.B.1)
 #[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]

@@ -238,35 +238,6 @@ impl From<CoreWorldEvent> for DbWorldEvent {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use uuid::{Timestamp, Uuid};
-
-    #[test]
-    fn test_user_roundtrip() {
-        let user_id = Uuid::new_v7(Timestamp::now(uuid::NoContext));
-        let db_user = DbUser {
-            id: user_id,
-            username: "testuser".to_string(),
-            email: "test@example.com".to_string(),
-            is_admin: false,
-            password_hash: "hash".to_string(),
-            created_at: chrono::Local::now().naive_local(),
-            updated_at: chrono::Local::now().naive_local(),
-            two_factor_enabled: false,
-            two_factor_secret_encrypted: None,
-            two_factor_confirmed_at: None,
-            two_factor_admin_required: false,
-        };
-
-        let core_user: CoreUser = db_user.clone().into();
-        assert_eq!(core_user.id, user_id);
-        assert_eq!(core_user.username, "testuser");
-        assert_eq!(core_user.email, "test@example.com");
-    }
-}
-
 // NOTE: WorldInvite adapters - convert Diesel ↔ Core models
 
 /// Convert Diesel WorldInvite to Core WorldInvite
@@ -346,5 +317,34 @@ impl From<thunderforge_core::models::invites::WorldMembership> for crate::models
             created_at: core.created_at,
             updated_at: core.updated_at,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uuid::{Timestamp, Uuid};
+
+    #[test]
+    fn test_user_roundtrip() {
+        let user_id = Uuid::new_v7(Timestamp::now(uuid::NoContext));
+        let db_user = DbUser {
+            id: user_id,
+            username: "testuser".to_string(),
+            email: "test@example.com".to_string(),
+            is_admin: false,
+            password_hash: "hash".to_string(),
+            created_at: chrono::Local::now().naive_local(),
+            updated_at: chrono::Local::now().naive_local(),
+            two_factor_enabled: false,
+            two_factor_secret_encrypted: None,
+            two_factor_confirmed_at: None,
+            two_factor_admin_required: false,
+        };
+
+        let core_user: CoreUser = db_user.clone().into();
+        assert_eq!(core_user.id, user_id);
+        assert_eq!(core_user.username, "testuser");
+        assert_eq!(core_user.email, "test@example.com");
     }
 }

@@ -1,7 +1,7 @@
 //! Background image decode + save (T025).
 
-use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use uuid::Uuid;
 
 use super::types::MapImportError;
