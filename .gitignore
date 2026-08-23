@@ -175,3 +175,6 @@ apps/web/.playwright/
 
 ### graphify ###
 graphify-out/
+
+### local research notes (not part of the shipped repo) ###
+/research/
