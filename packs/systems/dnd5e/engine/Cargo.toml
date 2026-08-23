@@ -1,3 +1,6 @@
+[lints]
+workspace = true
+
 [package]
 name = "dnd5e-engine"
 version = "0.1.0"

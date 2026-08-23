@@ -1,0 +1,8 @@
+# Workspace-wide clippy config (applies to every crate in Cargo.toml's
+# `[workspace] members`). Clippy has no "file is too long" lint — that's
+# enforced separately by `make check-file-length` (scripts/check-file-length.sh)
+# — but `too-many-lines-threshold` catches the single biggest contributor to
+# oversized files: a function that should have been split long before the
+# file around it hit 1000 lines. Default is 100; kept explicit here so the
+# intent isn't silently dependent on clippy's own default changing later.
+too-many-lines-threshold = 100

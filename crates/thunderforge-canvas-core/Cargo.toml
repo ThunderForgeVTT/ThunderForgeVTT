@@ -1,3 +1,6 @@
+[lints]
+workspace = true
+
 [package]
 name = "thunderforge_canvas_core"
 version = "0.1.0"

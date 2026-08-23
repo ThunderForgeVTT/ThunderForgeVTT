@@ -1,3 +1,6 @@
+[lints]
+workspace = true
+
 [package]
 name = "dnd5e-server"
 version = "0.1.0"
