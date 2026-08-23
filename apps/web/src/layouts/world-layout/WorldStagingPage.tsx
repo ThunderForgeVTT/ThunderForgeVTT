@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button/Button";
 import { Panel } from "@/components/ui/panel/Panel";
 import { ScrollArea } from "@/components/ui/scroll-area/ScrollArea";
@@ -23,12 +24,24 @@ export interface WorldStagingPageProps {
   onSessionNotesSaved: (notes: string) => void;
 }
 
+/** Same Owner/GM → "Game Master", else "Player" collapse used on the
+ * Welcome page hub (roleBadgeLabel there) — kept local since this is the
+ * only other place a member's role becomes a badge today. */
+function roleBadgeLabel(role: string): "Game Master" | "Player" {
+  return role === "Owner" || role === "GM" ? "Game Master" : "Player";
+}
+
 /**
  * Spec 009 (T009, US1): the staging page every world member sees first at
  * `/world/:id/play`. Spec 011 (US3): simplified down to exactly Play,
  * Players, and Last Session Notes — the NPC catalog and the old "Lore —
  * coming soon" placeholder moved to the dedicated `/world/:id/compendium`
  * portal (linked from here).
+ *
+ * Layout reads top-to-bottom as the actual pre-session checklist: confirm
+ * the scene and who's in the room in one glanceable strip, catch up on
+ * where the story left off, then Play — rather than a grid of
+ * equal-weight, disconnected widgets.
  */
 export function WorldStagingPage({
   worldId,
@@ -44,19 +57,18 @@ export function WorldStagingPage({
   const { members } = useWorldMembers(worldId);
 
   return (
-    <main className="grid min-h-screen gap-4 bg-background p-4" data-testid="world-staging-page">
-      <header className="flex items-start justify-between gap-4 rounded-xl border border-border bg-card p-5">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-            Session setup
-          </p>
-          <h1 className="text-2xl font-semibold">{world?.name ?? "World"}</h1>
-          <p className="mt-2 max-w-3xl text-muted-foreground">
-            Confirm the scene and roster before handing the screen to the
-            game. Manage NPCs, items, and abilities from the Compendium.
-          </p>
-        </div>
-        <div className="flex flex-col items-end gap-2">
+    <main
+      className="mx-auto grid min-h-screen w-full max-w-4xl gap-6 bg-background p-4 sm:p-6"
+      data-testid="world-staging-page"
+    >
+      <header className="grid gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+              Session setup
+            </p>
+            <h1 className="text-3xl font-semibold">{world?.name ?? "World"}</h1>
+          </div>
           <Button
             type="button"
             variant="primary"
@@ -67,15 +79,44 @@ export function WorldStagingPage({
           >
             Play
           </Button>
-          <Button asChild variant="secondary" size="sm" data-testid="compendium-link">
-            <Link to={`/world/${worldId}/compendium`}>Open Compendium</Link>
-          </Button>
+        </div>
+
+        {/* Toolbar row: a slim, subdued strip rather than a plain paragraph,
+         * so it reads as "here's where the rest of this page's actions
+         * live" instead of competing with the title for attention. */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-border bg-card/50 px-4 py-2 text-sm text-muted-foreground">
+          <span>Confirm the scene and roster below, then hand the screen to the game.</span>
+          <Link
+            to={`/world/${worldId}/compendium`}
+            className="font-medium text-foreground underline underline-offset-2 hover:text-primary"
+            data-testid="compendium-link"
+          >
+            Manage NPCs, items & abilities in the Compendium →
+          </Link>
         </div>
       </header>
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        <Panel variant="stone" className="rounded-xl border border-border">
-          <p className="mb-3 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+      {/* The story so far, read before the roster check — catching up on
+       * where things left off naturally comes before confirming who's in
+       * the room for tonight. */}
+      <Panel variant="parchment" className="rounded-xl border border-border" data-testid="session-notes-panel">
+        <p className="mb-3 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+          Last session notes
+        </p>
+        <SessionNotesPanel
+          worldId={worldId}
+          notes={world?.sessionNotes ?? null}
+          isGm={isGm}
+          onSaved={onSessionNotesSaved}
+        />
+      </Panel>
+
+      {/* "At a glance" strip: scene + roster together, since checking both
+       * is one mental step ("what are we playing, who's here") rather than
+       * two separately-weighted panels. */}
+      <Panel variant="stone" className="grid gap-5 rounded-xl border border-border sm:grid-cols-[1fr_auto] sm:items-start">
+        <div className="grid gap-2">
+          <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
             Scene
           </p>
           <SceneSwitcher
@@ -87,40 +128,28 @@ export function WorldStagingPage({
             canCreateScene={isGm}
             testIdPrefix="staging-"
           />
-        </Panel>
+        </div>
 
-        <Panel variant="leather" className="rounded-xl border border-border">
-          <p className="mb-3 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-            Players
+        <div className="grid gap-2 sm:w-64 sm:border-l sm:border-border sm:pl-5">
+          <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+            Players ({members.length})
           </p>
-          <ScrollArea className="h-40">
+          <ScrollArea className="h-32">
             <ul className="grid gap-2" data-testid="staging-player-list">
               {members.map((member) => (
                 <li key={member.id} className="flex items-center justify-between gap-2">
                   <span className="text-sm">{member.display_name ?? member.user_id}</span>
-                  <small className="text-xs text-muted-foreground uppercase tracking-wide">
-                    {member.role}
-                  </small>
+                  <Badge
+                    variant={member.role === "Owner" || member.role === "GM" ? "default" : "secondary"}
+                  >
+                    {roleBadgeLabel(member.role)}
+                  </Badge>
                 </li>
               ))}
             </ul>
           </ScrollArea>
-        </Panel>
-      </section>
-
-      <section>
-        <Panel variant="parchment" className="rounded-xl border border-border" data-testid="session-notes-panel">
-          <p className="mb-3 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-            Last session notes
-          </p>
-          <SessionNotesPanel
-            worldId={worldId}
-            notes={world?.sessionNotes ?? null}
-            isGm={isGm}
-            onSaved={onSessionNotesSaved}
-          />
-        </Panel>
-      </section>
+        </div>
+      </Panel>
     </main>
   );
 }

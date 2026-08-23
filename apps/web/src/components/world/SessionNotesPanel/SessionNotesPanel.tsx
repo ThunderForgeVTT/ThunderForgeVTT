@@ -1,8 +1,13 @@
-import { useState } from "react";
+import DOMPurify from "dompurify";
+import { marked } from "marked";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { updateWorldSessionNotes } from "@/api/world";
 import { Button } from "@/components/ui/button/Button";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
-import { Textarea } from "@/components/ui/textarea";
+
+// Lazy: CodeMirror is only needed by a GM actually editing notes, not by
+// every visitor of Session Setup (see MarkdownCodeEditor.tsx's own docs).
+const MarkdownCodeEditor = lazy(() => import("./MarkdownCodeEditor"));
 
 export interface SessionNotesPanelProps {
   worldId: string;
@@ -12,16 +17,28 @@ export interface SessionNotesPanelProps {
   onSaved: (notes: string) => void;
 }
 
+/** Renders `source` (Markdown) to sanitized HTML — `marked` doesn't
+ * sanitize its own output, and session notes are GM-authored content
+ * every world member reads, so a compromised/malicious GM account could
+ * otherwise stored-XSS every player who opens this panel. */
+function renderNotesMarkdown(source: string): string {
+  return DOMPurify.sanitize(marked.parse(source, { async: false }));
+}
+
 /**
  * Spec 011 (US3, FR-011/FR-012/FR-013): a single freeform per-world
- * "last session" recap on Session Setup. DM/GM-editable, read-only for
- * everyone else. Saving an empty value is a valid, explicit save — not
- * treated as "no change" (FR-013).
+ * "last session" recap on Session Setup. DM/GM-editable via a Markdown
+ * code editor (CodeMirror + `@codemirror/lang-markdown`), rendered as
+ * sanitized HTML for everyone (including the GM's own live preview) —
+ * matching the "code editor markdown" editing experience over a plain
+ * textarea. Read-only for non-GM members. Saving an empty value is a
+ * valid, explicit save — not treated as "no change" (FR-013).
  */
 export function SessionNotesPanel({ worldId, notes, isGm, onSaved }: SessionNotesPanelProps) {
   const [draft, setDraft] = useState(notes ?? "");
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -37,11 +54,17 @@ export function SessionNotesPanel({ worldId, notes, isGm, onSaved }: SessionNote
     }
   };
 
+  const renderedDraft = useMemo(() => renderNotesMarkdown(draft), [draft]);
+  const renderedNotes = useMemo(() => renderNotesMarkdown(notes ?? ""), [notes]);
+
   if (!isGm) {
     return (
       <div data-testid="session-notes-readonly">
         {notes ? (
-          <p className="text-sm whitespace-pre-wrap">{notes}</p>
+          <div
+            className="prose prose-sm max-w-none text-sm dark:prose-invert"
+            dangerouslySetInnerHTML={{ __html: renderedNotes }}
+          />
         ) : (
           <p className="text-sm text-muted-foreground italic">No notes yet.</p>
         )}
@@ -51,13 +74,40 @@ export function SessionNotesPanel({ worldId, notes, isGm, onSaved }: SessionNote
 
   return (
     <div className="grid gap-2">
-      <Textarea
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        placeholder="What happened last session? Leave a recap for next time…"
-        rows={5}
-        data-testid="session-notes-textarea"
-      />
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-muted-foreground">Markdown</span>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={() => setShowPreview((v) => !v)}
+          data-testid="session-notes-preview-toggle"
+        >
+          {showPreview ? "Edit" : "Preview"}
+        </Button>
+      </div>
+
+      {showPreview ? (
+        <div
+          className="prose prose-sm min-h-[10rem] max-w-none rounded-md border border-border bg-background p-3 text-sm dark:prose-invert"
+          data-testid="session-notes-preview"
+          dangerouslySetInnerHTML={{ __html: renderedDraft }}
+        />
+      ) : (
+        <div
+          className="overflow-hidden rounded-md border border-border"
+          data-testid="session-notes-editor"
+        >
+          <Suspense fallback={<div className="h-[200px] animate-pulse bg-muted" />}>
+            <MarkdownCodeEditor
+              value={draft}
+              onChange={setDraft}
+              placeholder="What happened last session? Leave a recap for next time… (Markdown supported)"
+            />
+          </Suspense>
+        </div>
+      )}
+
       <div className="flex items-center gap-3">
         <Button
           type="button"

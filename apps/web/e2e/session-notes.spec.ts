@@ -2,10 +2,34 @@ import { test, expect, type Page } from "@playwright/test";
 
 /**
  * specs/011-world-compendium (US3): Session Setup's "Last Session Notes"
- * panel — a single freeform per-world recap, DM/GM-editable, read-only for
- * everyone else. Also confirms Session Setup's simplified shape (Play,
+ * panel — a single freeform per-world recap, DM/GM-editable via a
+ * Markdown code editor (CodeMirror, not a plain `<textarea>`), read-only
+ * for everyone else. Also confirms Session Setup's simplified shape (Play,
  * Players, Last Session Notes only — no NPC list, no Lore placeholder).
  */
+
+/** CodeMirror renders a contenteditable `.cm-content`, not a native
+ * textarea — `.fill()`/`toHaveValue()` don't apply. Click in, select all,
+ * and type over it instead. */
+async function fillSessionNotes(page: Page, text: string): Promise<void> {
+  const editor = page.getByTestId("session-notes-editor").locator(".cm-content");
+  await editor.click();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.press("Backspace");
+  if (text) {
+    await page.keyboard.type(text);
+  }
+}
+
+/** Reads the editor's actual document content (one `.cm-line` per line),
+ * distinct from the placeholder widget CodeMirror renders when empty. */
+async function readSessionNotes(page: Page): Promise<string> {
+  const lines = await page
+    .getByTestId("session-notes-editor")
+    .locator(".cm-line")
+    .allTextContents();
+  return lines.join("\n");
+}
 
 function uniqueSuffix(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
@@ -67,13 +91,13 @@ test("DM edits and saves Last Session Notes; a Player sees it read-only", async 
   const worldId = await registerAndCreateWorld(page, worldName);
 
   const notesText = `We defeated the goblin ambush ${uniqueSuffix()}`;
-  await page.getByTestId("session-notes-textarea").fill(notesText);
+  await fillSessionNotes(page, notesText);
   await page.getByTestId("session-notes-save-button").click();
   await expect(page.getByText("Saved.")).toBeVisible({ timeout: 10_000 });
 
   // Persists across reload.
   await page.reload();
-  await expect(page.getByTestId("session-notes-textarea")).toHaveValue(notesText);
+  await expect.poll(() => readSessionNotes(page)).toBe(notesText);
 
   // A Player sees the same text, read-only (no textarea/save control).
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
@@ -94,7 +118,7 @@ test("DM edits and saves Last Session Notes; a Player sees it read-only", async 
 
     await playerPage.goto(`/world/${worldId}/staging`);
     await expect(playerPage.getByTestId("session-notes-readonly")).toContainText(notesText);
-    await expect(playerPage.getByTestId("session-notes-textarea")).toHaveCount(0);
+    await expect(playerPage.getByTestId("session-notes-editor")).toHaveCount(0);
     await expect(playerPage.getByTestId("session-notes-save-button")).toHaveCount(0);
   } finally {
     await playerContext.close();
@@ -105,15 +129,15 @@ test("saving an empty value is a valid save, not an error", async ({ page }) => 
   await registerAndCreateWorld(page, `E2E Session Notes Empty ${uniqueSuffix()}`);
 
   // First, save some text so there's something to clear.
-  await page.getByTestId("session-notes-textarea").fill("Something to clear");
+  await fillSessionNotes(page, "Something to clear");
   await page.getByTestId("session-notes-save-button").click();
   await expect(page.getByText("Saved.")).toBeVisible({ timeout: 10_000 });
 
   // Now clear it and save again.
-  await page.getByTestId("session-notes-textarea").fill("");
+  await fillSessionNotes(page, "");
   await page.getByTestId("session-notes-save-button").click();
   await expect(page.getByText("Saved.")).toBeVisible({ timeout: 10_000 });
 
   await page.reload();
-  await expect(page.getByTestId("session-notes-textarea")).toHaveValue("");
+  await expect.poll(() => readSessionNotes(page)).toBe("");
 });
