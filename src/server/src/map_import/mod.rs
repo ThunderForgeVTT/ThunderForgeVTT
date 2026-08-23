@@ -1,28 +1,41 @@
 //! Universal VTT (`.dd2vtt`, format `0.3`) map import.
 //!
 //! Implements:
-//! - T023: the UVTT JSON parser (`UvttFile` + `parse_uvtt`).
+//! - T023: the UVTT JSON parser (`UvttFile` + `parse_uvtt`) — `parse.rs`.
 //! - T024: grid-unit → target-scene-pixel coordinate conversion and the
 //!   wall/light "insert row" builders (`walls_from_line_of_sight`,
-//!   `walls_from_portals`, `lights_from_uvtt`).
-//! - T025: background image decode + save (`save_background_image`).
-//! - T026: the `POST /api/scenes/{scene_id}/import/uvtt` REST endpoint.
+//!   `walls_from_portals`, `lights_from_uvtt`) — `geometry.rs`.
+//! - T025: background image decode + save (`save_background_image`) —
+//!   `image.rs`.
+//! - T026: the `POST /api/scenes/{scene_id}/import/uvtt` REST endpoint —
+//!   this file.
 //! - T027: best-effort NOTIFY emission for the whole import batch.
 //!
 //! See `specs/001-bevy-canvas-authoring/data-model.md`'s "Map Import"
 //! section and `research.md` §7-9 for the design this implements, and
 //! `examples/maps/README.md` for the exact source JSON shape.
+//!
+//! Split from a single flat `map_import.rs` into this directory module
+//! (types.rs / parse.rs / geometry.rs / image.rs / warnings.rs, with the
+//! HTTP endpoint + top-level orchestration staying here) per the
+//! src/server test-coverage/file-size audit — internal reorganization
+//! only, `router()` remains the only symbol used outside this module
+//! (`main.rs`).
 
 use axum::extract::{DefaultBodyLimit, Multipart, Path, State};
 use axum::http::StatusCode;
 use axum::response::Json;
 use axum::routing::post;
 use axum::{Extension, Router};
+// Only used by `#[cfg(test)]` code below (`save_background_image` itself
+// now lives in `image.rs`, with its own copy of these two imports) — cargo
+// check (which skips `#[cfg(test)]`) would otherwise flag these unused.
+#[cfg(test)]
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+#[cfg(test)]
 use base64::Engine as _;
 use chrono::Utc;
 use diesel::prelude::*;
-use serde::Deserialize;
 use serde_json::json;
 use uuid::Uuid;
 
@@ -30,368 +43,20 @@ use crate::auth_middleware::AuthenticatedUser;
 use crate::state::AppState;
 use crate::world_events::{record_world_event, EVENT_CODE_MAP_IMPORTED};
 
-/// Only this UVTT format version is supported (research.md §7).
-const SUPPORTED_FORMAT: f64 = 0.3;
+mod geometry;
+mod image;
+mod parse;
+mod types;
+mod warnings;
+
+use geometry::*;
+use image::*;
+use parse::*;
+use types::*;
+use warnings::*;
+
 /// Multipart upload size cap (T026b).
 const MAX_UPLOAD_BYTES: usize = 50 * 1024 * 1024;
-/// PNG file signature, used to sanity-check the decoded `image` field
-/// without pulling in a full image-decoding crate (T025).
-const PNG_MAGIC: [u8; 8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
-/// WebP's container is a RIFF chunk (`RIFF????WEBP`) — bytes 0-3 are
-/// "RIFF", bytes 4-7 are a little-endian file-size field (varies per
-/// file, not checked), bytes 8-11 are "WEBP". DungeonDraft's own UVTT
-/// exporter uses WebP for the background image (verified against
-/// examples/maps/demo.dd2vtt, ~4.2MB, vs. chamber-of-echoing-grief.dd2vtt's
-/// genuine PNG) — both are valid per the format, so both must be accepted.
-const RIFF_MAGIC: [u8; 4] = [0x52, 0x49, 0x46, 0x46];
-const WEBP_MAGIC: [u8; 4] = [0x57, 0x45, 0x42, 0x50];
-
-// ---------------------------------------------------------------------
-// T023: UVTT JSON shape + parser
-//
-// These structs deliberately mirror the full documented UVTT shape
-// (examples/maps/README.md), including fields not yet consumed by T024's
-// conversion logic (`map_origin`, `resolution`/`environment` as wholes,
-// a portal's `position`/`rotation`/`freestanding`) — kept for parser
-// correctness/round-tripping and as the natural place to add
-// ambient-light or portal-orientation handling later, rather than
-// silently dropping fields the source format defines. `#[allow(dead_code)]`
-// documents that gap instead of hiding it behind an `_`-prefixed name.
-// ---------------------------------------------------------------------
-
-#[derive(Debug, Clone, Copy, Deserialize)]
-pub struct UvttPoint {
-    pub x: f64,
-    pub y: f64,
-}
-
-/// Parsed for shape/round-trip fidelity; not read downstream (see
-/// `UvttFile::resolution`'s doc comment for why).
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-pub struct UvttResolution {
-    #[serde(default)]
-    pub map_origin: Option<UvttPoint>,
-    pub map_size: UvttPoint,
-    pub pixels_per_grid: f64,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct UvttPortal {
-    #[serde(default)]
-    #[allow(dead_code)]
-    pub position: Option<UvttPoint>,
-    /// Expected to hold exactly two points (the door's endpoints).
-    pub bounds: Vec<UvttPoint>,
-    #[serde(default)]
-    #[allow(dead_code)]
-    pub rotation: f64,
-    #[serde(default)]
-    pub closed: bool,
-    /// A portal not attached to any wall/door geometry. Read by
-    /// `freestanding_portal_warning` (User Story 3) to disclose that it
-    /// wasn't turned into a usable door/wall by this import.
-    #[serde(default)]
-    pub freestanding: bool,
-}
-
-#[derive(Debug, Default, Deserialize)]
-pub struct UvttEnvironment {
-    /// Parsed for round-trip fidelity; not read downstream (baked
-    /// lighting itself is out of this feature's scope, unlike
-    /// `ambient_light` below).
-    #[serde(default)]
-    #[allow(dead_code)]
-    pub baked_lighting: bool,
-    /// Read by `ambient_light_warning` (User Story 3) — present-and-set
-    /// values aren't applied to scene lighting by this import yet.
-    #[serde(default)]
-    pub ambient_light: Option<String>,
-}
-
-fn default_light_intensity() -> f64 {
-    1.0
-}
-
-#[derive(Debug, Deserialize)]
-pub struct UvttLight {
-    pub position: UvttPoint,
-    pub range: f64,
-    #[serde(default = "default_light_intensity")]
-    pub intensity: f64,
-    pub color: String,
-    #[serde(default)]
-    pub shadows: bool,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct UvttFile {
-    pub format: f64,
-    /// Not read by T024's conversion math: `grid_units_to_scene_px` takes
-    /// the *target* scene's grid_size directly, so the source's own
-    /// `pixels_per_grid` cancels out per research.md §8 and is never
-    /// needed here.
-    #[allow(dead_code)]
-    pub resolution: UvttResolution,
-    #[serde(default)]
-    pub line_of_sight: Vec<Vec<UvttPoint>>,
-    #[serde(default)]
-    pub objects_line_of_sight: Vec<Vec<UvttPoint>>,
-    #[serde(default)]
-    pub portals: Vec<UvttPortal>,
-    /// Parsed but not yet wired to a scene-level ambient-light concept.
-    #[serde(default)]
-    #[allow(dead_code)]
-    pub environment: UvttEnvironment,
-    #[serde(default)]
-    pub lights: Vec<UvttLight>,
-    pub image: String,
-}
-
-/// Result of successfully parsing + validating a UVTT file: the parsed
-/// document plus a count of any degenerate (< 2 point) line-of-sight
-/// polygons that were skipped rather than causing a hard failure.
-#[derive(Debug)]
-pub struct ParsedUvtt {
-    pub file: UvttFile,
-    pub skipped_degenerate_polygons: usize,
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum MapImportError {
-    #[error("invalid UVTT JSON: {0}")]
-    InvalidJson(#[from] serde_json::Error),
-    #[error("unsupported UVTT format version {found}; only {SUPPORTED_FORMAT} is supported")]
-    UnsupportedFormat { found: f64 },
-    #[error("image field is not valid base64: {0}")]
-    InvalidImageBase64(String),
-    #[error("decoded image does not look like a PNG file")]
-    InvalidImageMagicBytes,
-    #[error("database error: {0}")]
-    Database(#[from] diesel::result::Error),
-    #[error("io error: {0}")]
-    Io(String),
-    #[error("scene not found or not owned by caller")]
-    SceneNotOwned,
-    #[error("upload exceeds the maximum allowed size")]
-    PayloadTooLarge,
-    #[error("no file field found in multipart upload")]
-    MissingFileField,
-    #[error("storage error: {0}")]
-    Storage(String),
-}
-
-/// T023: parse and validate a raw UVTT JSON payload.
-///
-/// Rejects any `format` other than `0.3` outright. Skips (rather than
-/// fails on) `line_of_sight`/`objects_line_of_sight` polygons with fewer
-/// than 2 points, dropping them from the parsed document and reporting
-/// how many were skipped.
-pub fn parse_uvtt(raw: &[u8]) -> Result<ParsedUvtt, MapImportError> {
-    let mut file: UvttFile = serde_json::from_slice(raw)?;
-
-    if (file.format - SUPPORTED_FORMAT).abs() > f64::EPSILON {
-        return Err(MapImportError::UnsupportedFormat { found: file.format });
-    }
-
-    let mut skipped = 0usize;
-
-    file.line_of_sight.retain(|poly| {
-        let keep = poly.len() >= 2;
-        if !keep {
-            skipped += 1;
-        }
-        keep
-    });
-    file.objects_line_of_sight.retain(|poly| {
-        let keep = poly.len() >= 2;
-        if !keep {
-            skipped += 1;
-        }
-        keep
-    });
-
-    Ok(ParsedUvtt {
-        file,
-        skipped_degenerate_polygons: skipped,
-    })
-}
-
-// ---------------------------------------------------------------------
-// T024: coordinate scaling + wall/light row builders
-// ---------------------------------------------------------------------
-
-/// Convert a grid-unit coordinate from the source file into the target
-/// scene's pixel space. Per research.md §8, the source file's own
-/// `pixels_per_grid` cancels out once working in grid units — only the
-/// *target* scene's `grid_size` matters.
-pub fn grid_units_to_scene_px(grid_units: f64, target_grid_size: f64) -> f64 {
-    grid_units * target_grid_size
-}
-
-/// One `walls` table insert row's worth of plain values (no dependency
-/// on any `models::Wall`-family struct — see T024's instructions).
-#[derive(Debug, Clone, PartialEq)]
-pub struct WallInsert {
-    pub x1: f64,
-    pub y1: f64,
-    pub x2: f64,
-    pub y2: f64,
-    pub blocks_vision: bool,
-    pub blocks_movement: bool,
-    pub door_state: &'static str,
-}
-
-/// One `light_sources` table insert row's worth of plain values.
-#[derive(Debug, Clone, PartialEq)]
-pub struct LightInsert {
-    pub x: f64,
-    pub y: f64,
-    pub radius: f64,
-    pub intensity: f64,
-    pub color: String,
-    pub casts_shadows: bool,
-}
-
-/// (a) Each `line_of_sight`/`objects_line_of_sight` polygon's consecutive
-/// point pairs become one ordinary (non-door) wall row each.
-pub fn walls_from_line_of_sight(
-    polygons: &[Vec<UvttPoint>],
-    target_grid_size: f64,
-) -> Vec<WallInsert> {
-    let mut walls = Vec::new();
-    for polygon in polygons {
-        for pair in polygon.windows(2) {
-            let a = pair[0];
-            let b = pair[1];
-            walls.push(WallInsert {
-                x1: grid_units_to_scene_px(a.x, target_grid_size),
-                y1: grid_units_to_scene_px(a.y, target_grid_size),
-                x2: grid_units_to_scene_px(b.x, target_grid_size),
-                y2: grid_units_to_scene_px(b.y, target_grid_size),
-                blocks_vision: true,
-                blocks_movement: false,
-                door_state: "none",
-            });
-        }
-    }
-    walls
-}
-
-/// (b) Each `portals[]` entry becomes one wall row from its `bounds`
-/// pair, with `door_state` derived from `closed`.
-pub fn walls_from_portals(portals: &[UvttPortal], target_grid_size: f64) -> Vec<WallInsert> {
-    portals
-        .iter()
-        .filter_map(|portal| {
-            let a = *portal.bounds.first()?;
-            let b = *portal.bounds.get(1)?;
-            Some(WallInsert {
-                x1: grid_units_to_scene_px(a.x, target_grid_size),
-                y1: grid_units_to_scene_px(a.y, target_grid_size),
-                x2: grid_units_to_scene_px(b.x, target_grid_size),
-                y2: grid_units_to_scene_px(b.y, target_grid_size),
-                blocks_vision: true,
-                blocks_movement: false,
-                door_state: if portal.closed { "closed" } else { "open" },
-            })
-        })
-        .collect()
-}
-
-/// (c) Each `lights[]` entry becomes one `light_sources` insert row.
-pub fn lights_from_uvtt(lights: &[UvttLight], target_grid_size: f64) -> Vec<LightInsert> {
-    lights
-        .iter()
-        .map(|light| LightInsert {
-            x: grid_units_to_scene_px(light.position.x, target_grid_size),
-            y: grid_units_to_scene_px(light.position.y, target_grid_size),
-            radius: grid_units_to_scene_px(light.range, target_grid_size),
-            intensity: light.intensity,
-            color: light.color.clone(),
-            casts_shadows: light.shadows,
-        })
-        .collect()
-}
-
-// ---------------------------------------------------------------------
-// T025: background image decode + save
-// ---------------------------------------------------------------------
-
-/// Returns the file extension to save with (`"png"`/`"webp"`) if `bytes`
-/// starts with a recognized image magic-byte signature, or `None` if it
-/// looks like neither. Extension matters here beyond cosmetics: Bevy's
-/// `AssetServer` (the engine-side background renderer) picks its decoder
-/// by file extension, so saving WebP bytes under a `.png` name would
-/// fail to load correctly downstream.
-fn detect_image_extension(bytes: &[u8]) -> Option<&'static str> {
-    if bytes.len() >= PNG_MAGIC.len() && bytes[..PNG_MAGIC.len()] == PNG_MAGIC {
-        return Some("png");
-    }
-    if bytes.len() >= 12 && bytes[0..4] == RIFF_MAGIC && bytes[8..12] == WEBP_MAGIC {
-        return Some("webp");
-    }
-    None
-}
-
-/// One saved background image, ready to be inserted as a
-/// `canvas_image_assets` row (`kind = Background`) and referenced from
-/// `scenes::background_asset_id` (FR-018 migration).
-pub struct SavedBackgroundImage {
-    pub asset_id: Uuid,
-    pub storage_path: String,
-    pub original_format: String,
-    pub width_px: i32,
-    pub height_px: i32,
-    pub byte_size: i64,
-}
-
-/// Decode the UVTT file's base64 `image` field, sanity-check it looks
-/// like a PNG or WebP file (both are valid per the format), transcode it
-/// to WebP, and write it to RustFS via a single-object-scoped,
-/// server-held credential (spec 002, FR-018 — the same
-/// `storage/transcode.rs` + `storage/rustfs.rs` path `uploadCanvasImage`
-/// uses, so map-import and paste-to-canvas share one storage mechanism,
-/// not two). Superseded the earlier local-filesystem write this
-/// function did in spec 001.
-pub async fn save_background_image(
-    owner_user_id: Uuid,
-    world_id: Uuid,
-    scene_id: Uuid,
-    image_base64: &str,
-) -> Result<SavedBackgroundImage, MapImportError> {
-    let bytes = BASE64_STANDARD
-        .decode(image_base64)
-        .map_err(|e| MapImportError::InvalidImageBase64(e.to_string()))?;
-
-    // Still sanity-checked up front (T025's original intent) before the
-    // more expensive decode/transcode path runs.
-    detect_image_extension(&bytes).ok_or(MapImportError::InvalidImageMagicBytes)?;
-
-    let transcoded = crate::storage::transcode::transcode_to_webp(&bytes)
-        .map_err(|e| MapImportError::Storage(e.to_string()))?;
-
-    let asset_id = Uuid::now_v7();
-    let key = crate::storage::rustfs::object_key(owner_user_id, world_id, Some(scene_id), asset_id);
-    let byte_size = transcoded.webp_bytes.len() as i64;
-    let cfg = crate::storage::rustfs::RustFsConfig::from_env();
-    crate::storage::rustfs::write_object(&cfg, &key, transcoded.webp_bytes, "image/webp")
-        .await
-        .map_err(|e| MapImportError::Storage(e.to_string()))?;
-
-    Ok(SavedBackgroundImage {
-        asset_id,
-        storage_path: key,
-        original_format: transcoded.original_format,
-        width_px: transcoded.width as i32,
-        height_px: transcoded.height as i32,
-        byte_size,
-    })
-}
-
-// ---------------------------------------------------------------------
-// T026: REST endpoint
-// ---------------------------------------------------------------------
 
 pub fn router() -> Router<AppState> {
     // Axum's `Multipart` extractor applies its own default body-size limit
@@ -421,77 +86,6 @@ fn error_response(err: &MapImportError) -> (StatusCode, Json<serde_json::Value>)
         }
     };
     (status, Json(json!({ "error": err.to_string() })))
-}
-
-/// T020 (User Story 3): the shape of a successful import's response.
-/// `warnings` discloses source-file field categories that were parsed but
-/// silently not applied — see `research.md` §5-6 — so a GM is never
-/// unknowingly missing part of their map. Empty for every fixture that
-/// doesn't use those fields (FR-014).
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct ImportResult {
-    pub walls_created: usize,
-    pub doors_created: usize,
-    pub lights_created: usize,
-    pub background_image_set: bool,
-    pub skipped_degenerate_polygons: usize,
-    pub warnings: Vec<String>,
-}
-
-/// T021: a `freestanding: true` portal has no attaching wall/door
-/// geometry of its own in this importer (`walls_from_portals` builds a
-/// wall from every portal's `bounds` regardless of `freestanding`, so the
-/// portal itself is never dropped) — but a freestanding portal is
-/// conceptually "not attached to a wall" per the source format, which is
-/// the gap this warning discloses (research.md §6).
-fn freestanding_portal_warning(portals: &[UvttPortal]) -> Option<String> {
-    let count = portals.iter().filter(|p| p.freestanding).count();
-    if count == 0 {
-        return None;
-    }
-    Some(format!(
-        "{count} freestanding portal{plural} present in the source file; freestanding portals are not attached to wall geometry and may not appear as expected",
-        plural = if count == 1 { "" } else { "s" }
-    ))
-}
-
-/// DungeonDraft's own exporter default (fully-opaque white, i.e. "no
-/// ambient tint") — every real-world fixture surveyed for this feature
-/// sets `ambient_light` to exactly this value except
-/// `little-fish-academy.dd2vtt`'s deliberate non-default
-/// `"fffff7e4"` (data-model.md). Warning on every file regardless of
-/// value would violate FR-014's "no new noise for the common case", so
-/// this only fires when the value differs from the exporter's default.
-const DEFAULT_AMBIENT_LIGHT: &str = "ffffffff";
-
-/// T022: a non-default `ambient_light` is parsed but not applied to
-/// scene lighting today (research.md §5-6).
-fn ambient_light_warning(environment: &UvttEnvironment) -> Option<String> {
-    environment
-        .ambient_light
-        .as_ref()
-        .filter(|value| value.as_str() != DEFAULT_AMBIENT_LIGHT)
-        .map(|value| {
-            format!("ambient_light (\"{value}\") was present in the source file but is not yet applied to scene lighting")
-        })
-}
-
-/// T023: `objects_line_of_sight` (occluders attached to placeable
-/// objects, distinct from the static `line_of_sight` walls) has no
-/// vision-blocking geometry created from it today — it's merged into
-/// ordinary walls by `import_uvtt_impl` for backward-compatible
-/// behavior, but that merge itself is the thing worth disclosing since
-/// object-attached occluders are conceptually different from static
-/// walls.
-fn objects_line_of_sight_warning(polygons: &[Vec<UvttPoint>]) -> Option<String> {
-    if polygons.is_empty() {
-        return None;
-    }
-    Some(format!(
-        "{count} objects_line_of_sight occluder polygon{plural} present in the source file; object-attached vision-blocking geometry is imported as ordinary static walls, not as object-linked occluders",
-        count = polygons.len(),
-        plural = if polygons.len() == 1 { "" } else { "s" }
-    ))
 }
 
 /// Core import logic, independent of the HTTP/multipart layer, so tests
