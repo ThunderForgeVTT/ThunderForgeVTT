@@ -1,5 +1,17 @@
 <!--
 Sync Impact Report
+- Version change: 1.0.0 → 1.1.0
+- Modified principles: n/a
+- Added sections: Development Workflow gained a "DMCA / Content Moderation
+  Guardrail" checkpoint (spec 015-dmca-notice-takedown, ADR-043) requiring
+  the notice-and-takedown program to be operational, and an explicit
+  "centralized public repository" determination on record, before any
+  feature exposing one world's compendium content beyond that world may
+  begin implementation.
+- Removed sections: none
+- Deferred TODOs: none
+
+Prior report (v1.0.0):
 - Version change: (none) → 1.0.0
 - Modified principles: n/a (initial ratification)
 - Added sections: Core Principles (I-V), Technology & Architecture Constraints,
@@ -113,6 +125,22 @@ per crate prevents false "it's broken" or false "it's fine" conclusions.
 - Commits are scoped to a coherent unit of work and reference the phase or
   feature they belong to, consistent with existing `Phase N.M: ...` commit
   message conventions.
+- **DMCA / Content Moderation Guardrail** (spec `015-dmca-notice-takedown`,
+  ADR-043, FR-011/FR-012): before any feature is proposed that would make
+  one world's compendium content (actors, items, lore entries, or any
+  future content type) visible, copyable, searchable, or otherwise
+  accessible outside that world — a public marketplace, a shared community
+  compendium, cross-world content browsing, etc. — design/launch review
+  MUST confirm both of the following before implementation begins: (a) the
+  notice-and-takedown program (spec 015's User Stories 1-3: intake,
+  disable, counter-notice/restoration, repeat-infringer tracking) is fully
+  operational, and (b) an explicit, on-record determination of whether the
+  proposed feature constitutes "a centralized public repository" for
+  user-shared, potentially-copyrighted content under that spec's policy —
+  if so, the feature must be redesigned or the risk explicitly accepted by
+  an accountable owner before build work starts. This checkpoint exists
+  because the platform's own legal research identifies exactly this
+  feature category as its single highest-liability move.
 
 ## Governance
 
@@ -130,4 +158,4 @@ Compliance is reviewed at PR/change-review time. Any deviation from
 Principle I (ECS owns simulation) or Principle III (ownership enforcement)
 requires explicit justification recorded in the associated ADR or spec.
 
-**Version**: 1.0.0 | **Ratified**: 2026-08-20 | **Last Amended**: 2026-08-20
+**Version**: 1.1.0 | **Ratified**: 2026-08-20 | **Last Amended**: 2026-08-23
