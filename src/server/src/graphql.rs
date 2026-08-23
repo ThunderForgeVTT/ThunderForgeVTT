@@ -29,7 +29,8 @@ use crate::users::{UserDataDeleteSummary, UserDataExport, delete_user_data_owned
 // Phase 4.9.Z Step 1: Core entity types extracted to separate module
 pub mod types;
 pub use types::{
-    GraphQLGameSystem, GraphQLUser, GraphQLWorld, GraphQLWorldEvent, GraphQLWorldToken,
+    GraphQLGameSystem, GraphQLMyWorldEntry, GraphQLUser, GraphQLWorld, GraphQLWorldEvent,
+    GraphQLWorldToken,
 };
 
 // Phase 4.9.Z Step 2: Admin types extracted to separate module

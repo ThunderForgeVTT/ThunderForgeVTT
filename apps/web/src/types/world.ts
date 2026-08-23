@@ -17,6 +17,13 @@ export interface WorldRecord {
   sessionNotes: string | null;
 }
 
+/** One entry in `myWorldsWithRole` — a world the caller owns or is an
+ * accepted member of, paired with their role ("Owner" | "GM" | "Player"). */
+export interface MyWorldEntry {
+  world: WorldRecord;
+  role: string;
+}
+
 export interface CreateWorldInput {
   name: string;
   description?: string;

@@ -125,6 +125,18 @@ impl From<World> for GraphQLWorld {
     }
 }
 
+/// One entry in `myWorldsWithRole` (Welcome page hub): a world the caller
+/// owns or is an accepted member of, paired with their role in it. `role`
+/// is the raw `world_members`-style string ("Owner"/"GM"/"Player") — the
+/// frontend collapses Owner/GM to a single "Game Master" badge and Player
+/// to "Player", matching this app's existing DM = Owner-or-GM convention
+/// (spec 010) rather than introducing a third badge label here.
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLMyWorldEntry {
+    pub world: GraphQLWorld,
+    pub role: String,
+}
+
 // ============================================================================
 // World Token (Game Token/Character)
 // ============================================================================

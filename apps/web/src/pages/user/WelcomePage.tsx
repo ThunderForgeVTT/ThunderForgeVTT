@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import { getMyWorlds } from "@/api/world";
+import { getMyWorldsWithRole } from "@/api/world";
 import { SEO } from "@/components/seo/SEO";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import { Container } from "@/components/ui/container/Container";
@@ -10,7 +11,15 @@ import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/loader/Loader";
 import { useAuth } from "@/hooks/useAuth";
 import type { SeoConfig } from "@/types/seo";
-import type { WorldRecord } from "@/types/world";
+import type { MyWorldEntry } from "@/types/world";
+
+/** Collapses the raw world_members-style role ("Owner" | "GM" | "Player")
+ * into this app's two user-facing badges — Owner and GM both run the
+ * table, so both read as "Game Master" here (mirrors the DM = Owner-or-GM
+ * convention already established in spec 010). */
+function roleBadgeLabel(role: string): "Game Master" | "Player" {
+  return role === "Owner" || role === "GM" ? "Game Master" : "Player";
+}
 
 export const welcomePageSeo: SeoConfig = {
   title: "Welcome",
@@ -24,12 +33,12 @@ export const welcomePageSeo: SeoConfig = {
  * the zero-world redirect (T006, US1) and the hub's per-world shortcut
  * cards (T021, US3) read from this same fetch, per research.md §2. */
 function useMyWorlds() {
-  const [worlds, setWorlds] = useState<WorldRecord[] | null>(null);
+  const [worlds, setWorlds] = useState<MyWorldEntry[] | null>(null);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
     let active = true;
-    getMyWorlds()
+    getMyWorldsWithRole()
       .then((result) => {
         if (active) {
           setWorlds(result);
@@ -98,9 +107,14 @@ export default function WelcomePage() {
            * (the zero case already redirected away above), regardless of
            * count (FR-001a: never auto-enter, even for exactly one). */}
           <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {(worlds ?? []).map((world) => (
+            {(worlds ?? []).map(({ world, role }) => (
               <Card key={world.id} surface="parchment" className="grid gap-3 p-6">
-                <h2 className="text-lg font-semibold">{world.name}</h2>
+                <div className="flex items-start justify-between gap-2">
+                  <h2 className="text-lg font-semibold">{world.name}</h2>
+                  <Badge variant={role === "Owner" || role === "GM" ? "default" : "secondary"}>
+                    {roleBadgeLabel(role)}
+                  </Badge>
+                </div>
                 <p className="text-muted-foreground">
                   {world.description ?? "Jump back into this world."}
                 </p>
@@ -111,18 +125,7 @@ export default function WelcomePage() {
             ))}
           </section>
 
-          <section className="grid gap-4 sm:grid-cols-3">
-            <Card surface="parchment" className="grid gap-3 p-6">
-              <h2 className="text-lg font-semibold">Browse all worlds</h2>
-              <p className="text-muted-foreground">
-                See the full list, including ones owned by others you've
-                joined.
-              </p>
-              <Button asChild variant="secondary" icon="worlds">
-                <Link to="/worlds">Browse Worlds</Link>
-              </Button>
-            </Card>
-
+          <section className="grid gap-4 sm:grid-cols-2">
             <Card surface="leather" className="grid gap-3 p-6">
               <h2 className="text-lg font-semibold">Create a world</h2>
               <p className="text-muted-foreground">

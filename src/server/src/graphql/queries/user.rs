@@ -31,6 +31,64 @@ pub async fn me_impl(
     .map_err(|_| Error::new("Failed to load user"))
 }
 
+/// Testable core of `UserQuery::my_worlds_with_role` — every world the
+/// caller owns or holds an accepted `world_members` row for, paired with
+/// their role in it. Owned worlds win the role label ("Owner") over a
+/// stray `world_members` row for the same world, since `created_by` is
+/// this codebase's actual ownership source of truth (see
+/// `auth/world_membership.rs`'s `require_world_member` for the same
+/// created_by-then-world_members fallback pattern).
+pub async fn my_worlds_with_role_impl(
+    state: &AppState,
+    user_id: uuid::Uuid,
+) -> GraphQLResult<Vec<(crate::models::World, String)>> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    tokio::task::spawn_blocking(move || {
+        use crate::models::World;
+        use crate::schema::{world_members, worlds};
+        use diesel::prelude::*;
+
+        let owned = worlds::table
+            .filter(worlds::created_by.eq(user_id))
+            .select(World::as_select())
+            .load::<World>(&mut conn)?;
+
+        let member_rows: Vec<(uuid::Uuid, String)> = world_members::table
+            .filter(world_members::user_id.eq(user_id))
+            .select((world_members::world_id, world_members::role))
+            .load::<(uuid::Uuid, String)>(&mut conn)?;
+        let member_world_ids: Vec<uuid::Uuid> =
+            member_rows.iter().map(|(id, _)| *id).collect();
+        let member_worlds = worlds::table
+            .filter(worlds::id.eq_any(member_world_ids))
+            .select(World::as_select())
+            .load::<World>(&mut conn)?;
+
+        let mut combined: Vec<(World, String)> =
+            owned.into_iter().map(|w| (w, "Owner".to_string())).collect();
+        for world in member_worlds {
+            if combined.iter().any(|(w, _)| w.id == world.id) {
+                continue;
+            }
+            let role = member_rows
+                .iter()
+                .find(|(id, _)| *id == world.id)
+                .map(|(_, role)| role.clone())
+                .unwrap_or_else(|| "Player".to_string());
+            combined.push((world, role));
+        }
+
+        Ok::<_, diesel::result::Error>(combined)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to query worlds"))
+}
+
 /// Testable core of `UserQuery::my_dm_worlds` — combines owned worlds with
 /// worlds where the caller holds an accepted `GM` `world_members` row,
 /// deduplicated (spec 010, research.md §8).
@@ -103,6 +161,26 @@ impl UserQuery {
         load_owned_worlds(state, auth_user.user_id)
             .await
             .map(|items| items.into_iter().map(GraphQLWorld::from).collect())
+    }
+
+    /// Every world the caller owns or is an accepted member of (any role),
+    /// paired with their role — powers the Welcome page hub, which should
+    /// show a user's full roster (owned AND joined-as-player worlds), not
+    /// just `myWorlds`' owned-only list.
+    async fn my_worlds_with_role(
+        &self,
+        ctx: &Context<'_>,
+    ) -> GraphQLResult<Vec<GraphQLMyWorldEntry>> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        let entries = my_worlds_with_role_impl(state, auth_user.user_id).await?;
+        Ok(entries
+            .into_iter()
+            .map(|(world, role)| GraphQLMyWorldEntry {
+                world: GraphQLWorld::from(world),
+                role,
+            })
+            .collect())
     }
 
     /// Spec 010 (research.md §8): worlds where the caller holds DM-level
@@ -203,7 +281,7 @@ impl UserQuery {
 
 #[cfg(test)]
 mod tests {
-    use super::{me_impl, my_dm_worlds_impl};
+    use super::{me_impl, my_dm_worlds_impl, my_worlds_with_role_impl};
     use crate::test_support::{insert_test_user, insert_test_world, insert_test_world_member, test_app_state};
 
     #[tokio::test]
@@ -262,6 +340,51 @@ mod tests {
             ids.len(),
             2,
             "no world should appear twice even if owned and GM somehow overlapped"
+        );
+    }
+
+    #[tokio::test]
+    async fn my_worlds_with_role_includes_owned_gm_and_player_worlds_with_correct_roles() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let user_id = insert_test_user(&mut conn);
+        let owned_world_id = insert_test_world(&mut conn, user_id);
+
+        let other_owner_id = insert_test_user(&mut conn);
+        let gm_world_id = insert_test_world(&mut conn, other_owner_id);
+        insert_test_world_member(&mut conn, gm_world_id, user_id, "GM");
+
+        let player_world_owner = insert_test_user(&mut conn);
+        let player_world_id = insert_test_world(&mut conn, player_world_owner);
+        insert_test_world_member(&mut conn, player_world_id, user_id, "Player");
+
+        // A world this user has no relationship to must never appear.
+        let stranger_id = insert_test_user(&mut conn);
+        let _stranger_world_id = insert_test_world(&mut conn, stranger_id);
+        drop(conn);
+
+        let entries = my_worlds_with_role_impl(&state, user_id)
+            .await
+            .expect("query should not error");
+
+        let role_of = |world_id: uuid::Uuid| -> Option<String> {
+            entries
+                .iter()
+                .find(|(w, _)| w.id == world_id)
+                .map(|(_, role)| role.clone())
+        };
+
+        assert_eq!(role_of(owned_world_id), Some("Owner".to_string()));
+        assert_eq!(role_of(gm_world_id), Some("GM".to_string()));
+        assert_eq!(
+            role_of(player_world_id),
+            Some("Player".to_string()),
+            "Player-role worlds must be included, unlike my_dm_worlds"
+        );
+        assert_eq!(
+            entries.len(),
+            3,
+            "only worlds the user owns or is a member of should appear"
         );
     }
 }

@@ -2,6 +2,7 @@ import { withCsrf } from "@/api/auth";
 import type {
   CreateWorldInput,
   DeleteWorldResult,
+  MyWorldEntry,
   WorldRecord,
 } from "@/types/world";
 
@@ -71,6 +72,10 @@ type MyWorldsQuery = {
   myWorlds: WorldRecord[];
 };
 
+type MyWorldsWithRoleQuery = {
+  myWorldsWithRole: MyWorldEntry[];
+};
+
 type AllWorldsQuery = {
   allWorlds: WorldRecord[];
 };
@@ -95,6 +100,21 @@ export function getMyWorlds(): Promise<WorldRecord[]> {
       }
     }
   `).then((data) => data.myWorlds);
+}
+
+/** Worlds the caller owns OR is an accepted member of (any role), each
+ * paired with their role — unlike `getMyWorlds`, which is owned-only. */
+export function getMyWorldsWithRole(): Promise<MyWorldEntry[]> {
+  return postGraphQL<MyWorldsWithRoleQuery>(`
+    query MyWorldsWithRole {
+      myWorldsWithRole {
+        role
+        world {
+          ${WORLD_FIELDS}
+        }
+      }
+    }
+  `).then((data) => data.myWorldsWithRole);
 }
 
 export function getAllWorlds(): Promise<WorldRecord[]> {
