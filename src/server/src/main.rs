@@ -7,6 +7,7 @@ mod config;
 mod db_types;
 mod errors;
 mod graphql;
+mod lore_assets_serve; // Spec 012: authenticated proxy for lore image assets (mirrors canvas_assets_serve)
 mod map_import;
 mod markdown; // Spec 012: lore wiki GFM rendering, [[link]] resolution, slug generation
 mod models;
@@ -299,6 +300,10 @@ async fn main() {
         app_state.clone(),
         auth_middleware::require_authenticated_user,
     ));
+    let lore_assets_router = lore_assets_serve::router().route_layer(from_fn_with_state(
+        app_state.clone(),
+        auth_middleware::require_authenticated_user,
+    ));
 
     let graphql_router = Router::new()
         .route(
@@ -329,7 +334,8 @@ async fn main() {
         .merge(user_router)
         .merge(world_router)
         .merge(map_import_router)
-        .merge(canvas_assets_router);
+        .merge(canvas_assets_router)
+        .merge(lore_assets_router);
 
     let systems_admin_router = systems::admin_router().route_layer(from_fn_with_state(
         app_state.clone(),

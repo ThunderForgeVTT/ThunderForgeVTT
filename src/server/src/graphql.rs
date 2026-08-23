@@ -76,7 +76,7 @@ pub use helpers::{
 
 // Phase 4.9.Z Step 5: Query extraction into separate modules
 pub mod queries;
-pub use queries::{ActorQuery, AdminQuery, HealthcheckQuery, SceneQuery, UserQuery, InviteQuery};
+pub use queries::{ActorQuery, AdminQuery, HealthcheckQuery, LoreQuery, SceneQuery, UserQuery, InviteQuery};
 
 // Phase 4.10.B: Invite & Membership mutations for multiplayer campaigns
 pub mod mutations_invites;
@@ -113,6 +113,18 @@ pub use mutations_actor_permissions::{ActorPermissionMutation, ActorPermissionQu
 // Spec 010: actor sharing and cross-world deep copy
 pub mod mutations_actor_shares;
 pub use mutations_actor_shares::{ActorShareMutation, ActorShareQuery};
+
+// Spec 012: lore entry creation/editing/deletion/restore mutations
+pub mod mutations_lore;
+pub use mutations_lore::LoreMutation;
+
+// Spec 012: the lore entry "ownership block" (Viewer/Editor/Owner grants)
+pub mod mutations_lore_permissions;
+pub use mutations_lore_permissions::{LorePermissionMutation, LorePermissionQuery};
+
+// Spec 012: paste/drop image upload for lore entries
+pub mod mutations_lore_images;
+pub use mutations_lore_images::LoreImageMutation;
 
 
 
@@ -1811,6 +1823,8 @@ pub struct QueryRoot(
     ActorQuery,
     ActorPermissionQuery,
     ActorShareQuery,
+    LoreQuery,
+    LorePermissionQuery,
 );
 
 #[derive(MergedObject, Default)]
@@ -1831,6 +1845,9 @@ pub struct MutationRoot(
     ActorMutation,
     ActorPermissionMutation,
     ActorShareMutation,
+    LoreMutation,
+    LorePermissionMutation,
+    LoreImageMutation,
 );
 
 pub type AppSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;
