@@ -70,11 +70,11 @@ Existing two-project split: `src/server/` (Rust/Axum/Diesel/async-graphql backen
 - [X] T016 [US1] [P] Same enforcement for `world_items`/`item` in `src/server/src/graphql/queries/item.rs` (depends on T004, T014)
 - [X] T017 [US1] [P] Same enforcement for `world_lore_entries`/`lore_entry` in `src/server/src/graphql/queries/lore.rs` (depends on T004, T014)
 - [X] T018 [US1] Verify (add a resolver test if not already covered by T015-T017's own tests) that a disabled entity does not leak through any OTHER existing read path that surfaces actor/item/lore data — e.g. the Compendium catalog queries, lore in-text link resolution/"linked from" lists (spec 012), and item share previews (spec 013) — since the enforcement contract requires this to hold everywhere, not just the primary detail/list queries (depends on T015, T016, T017)
-- [ ] T019 [US1] Create `apps/web/src/pages/legal/DmcaCompliancePage.tsx`: publishes the designated DMCA agent's name/title, mailing address, and electronic contact (FR-001), plain-language distinction between open-licensed system-pack content and user-entered content (FR-014), and embeds the takedown intake form (T020) — reachable at `/legal/dmca` without authentication (FR-001, SC-004)
-- [ ] T020 [US1] [P] Create `apps/web/src/components/legal/TakedownNoticeForm.tsx`: collects all `SubmitTakedownNoticeInput` fields, calls `submitTakedownNotice`, and renders either a confirmation (case logged, content disabled) or the specific `missingElements` list on rejection (FR-002, FR-003) (depends on T011)
-- [ ] T021 [US1] [P] Create `apps/web/src/components/world/ModeratedContentBanner.tsx`: renders in place of an actor/item/lore entry's detail view when its GraphQL response indicates `moderated: true`, explaining the entry was disabled in response to a takedown notice and (if the caller is the owner) linking to the counter-notice flow (FR-005) (depends on T010)
-- [ ] T022 [US1] Wire `ModeratedContentBanner` into `ActorDetailPage.tsx`, `ItemDetailPage.tsx`, and `LoreEntryDetailPage.tsx` (all under `apps/web/src/pages/world/`) as the fallback render path when the fetched entity is a moderation placeholder (depends on T021)
-- [ ] T023 [US1] Add `/legal/dmca` route (public, no auth guard) to `apps/web/src/routes/AppRoutes.tsx` and a lazy-loader entry in `apps/web/src/routes/pageLoaders.ts`, plus a link to it from the site's existing footer/legal-links surface (depends on T019)
+- [X] T019 [US1] Create `apps/web/src/pages/legal/DmcaCompliancePage.tsx`: publishes the designated DMCA agent's name/title, mailing address, and electronic contact (FR-001), plain-language distinction between open-licensed system-pack content and user-entered content (FR-014), and embeds the takedown intake form (T020) — reachable at `/legal/dmca` without authentication (FR-001, SC-004)
+- [X] T020 [US1] [P] Create `apps/web/src/components/legal/TakedownNoticeForm.tsx`: collects all `SubmitTakedownNoticeInput` fields, calls `submitTakedownNotice`, and renders either a confirmation (case logged, content disabled) or the specific `missingElements` list on rejection (FR-002, FR-003) (depends on T011)
+- [X] T021 [US1] [P] Create `apps/web/src/components/world/ModeratedContentBanner.tsx`: renders in place of an actor/item/lore entry's detail view when its GraphQL response indicates `moderated: true`, explaining the entry was disabled in response to a takedown notice and (if the caller is the owner) linking to the counter-notice flow (FR-005) (depends on T010)
+- [X] T022 [US1] Wire `ModeratedContentBanner` into `ActorDetailPage.tsx`, `ItemDetailPage.tsx`, and `LoreEntryDetailPage.tsx` (all under `apps/web/src/pages/world/`) as the fallback render path when the fetched entity is a moderation placeholder (depends on T021)
+- [X] T023 [US1] Add `/legal/dmca` route (public, no auth guard) to `apps/web/src/routes/AppRoutes.tsx` and a lazy-loader entry in `apps/web/src/routes/pageLoaders.ts`, plus a link to it from the site's existing footer/legal-links surface (depends on T019)
 
 **Checkpoint**: User Story 1 is fully functional and independently testable — a notice disables exactly one entry, everywhere it could otherwise be read, with a public intake channel.
 
@@ -92,8 +92,8 @@ Existing two-project split: `src/server/` (Rust/Axum/Diesel/async-graphql backen
 - [X] T025 [US2] Implement `resolveModerationCase(caseId, resolution)` mutation in `src/server/src/graphql/mutations_moderation.rs`: compliance-staff-only (reuse the existing `admin_user`/is_admin gate), inserts a `content_remains_disabled` (or other explicit resolution) row, which the T004 lazy-evaluator will find as the latest event and so never auto-restore past it (depends on T024)
 - [X] T026 [US2] Confirm (via test) that `moderation::effective_status`'s lazy-restoration path (T004) correctly materializes `content_restored` once `restoration_due_at` has passed with no `resolveModerationCase` call in between, and correctly does NOT restore when a `content_remains_disabled` row exists — add these as `#[tokio::test]` cases in `src/server/src/moderation/mod.rs`'s own test module if not already covered (depends on T024, T025)
 - [X] T027 [US2] Wire `submitCounterNotice`/`resolveModerationCase` into the GraphQL schema root alongside T014's wiring (depends on T024, T025)
-- [ ] T028 [US2] [P] Create `apps/web/src/components/legal/CounterNoticeForm.tsx`: collects all `SubmitCounterNoticeInput` fields, calls `submitCounterNotice`, shown from `ModeratedContentBanner` (T021) only when the caller owns the content (depends on T011, T021)
-- [ ] T029 [US2] Extend `ModeratedContentBanner.tsx` to show the restoration timeline once a counter-notice has been forwarded (`restorationDueAt`) (depends on T028)
+- [X] T028 [US2] [P] Create `apps/web/src/components/legal/CounterNoticeForm.tsx`: collects all `SubmitCounterNoticeInput` fields, calls `submitCounterNotice`, shown from `ModeratedContentBanner` (T021) only when the caller owns the content (depends on T011, T021)
+- [X] T029 [US2] Extend `ModeratedContentBanner.tsx` to show the restoration timeline once a counter-notice has been forwarded (`restorationDueAt`) (depends on T028)
 
 **Checkpoint**: User Stories 1 and 2 both work independently — the takedown process is balanced (notice → disable → counter-notice → restore-or-stay-disabled), matching 17 U.S.C. § 512(g).
 
@@ -110,8 +110,8 @@ Existing two-project split: `src/server/` (Rust/Axum/Diesel/async-graphql backen
 - [X] T030 [US3] Implement `moderationHistoryForAccount(accountId)` query in `src/server/src/graphql/queries/moderation.rs`: compliance-staff-only, groups `content_moderation_actions` rows by `case_id` into `GraphQLModerationCase`s ordered chronologically (depends on T013)
 - [X] T031 [US3] [P] Implement `repeatInfringerFlags` query in `src/server/src/graphql/queries/moderation.rs`: compliance-staff-only, counts distinct `case_id`s per `account_id` whose latest event is `content_disabled`/`content_remains_disabled` within the T006 lookback window, returns accounts at or above the T006 threshold (depends on T006, T013)
 - [X] T032 [US3] Wire both queries into the GraphQL schema root (depends on T030, T031)
-- [ ] T033 [US3] Create `apps/web/src/pages/admin/ModerationReviewPage.tsx`: internal compliance-staff surface listing flagged (repeat-infringer) accounts and, per account, its full case history via `moderationHistoryForAccount` (depends on T011, T030, T031)
-- [ ] T034 [US3] Add an admin-only route for `ModerationReviewPage` (mirroring the existing `apps/web/src/pages/admin/*` route-guard convention) to `apps/web/src/routes/AppRoutes.tsx`/`pageLoaders.ts` (depends on T033)
+- [X] T033 [US3] Create `apps/web/src/pages/admin/ModerationReviewPage.tsx`: internal compliance-staff surface listing flagged (repeat-infringer) accounts and, per account, its full case history via `moderationHistoryForAccount` (depends on T011, T030, T031)
+- [X] T034 [US3] Add an admin-only route for `ModerationReviewPage` (mirroring the existing `apps/web/src/pages/admin/*` route-guard convention) to `apps/web/src/routes/AppRoutes.tsx`/`pageLoaders.ts` (depends on T033)
 
 **Checkpoint**: User Stories 1-3 all work independently — compliance staff have a working repeat-infringer view backed by real case history.
 
@@ -125,8 +125,8 @@ Existing two-project split: `src/server/` (Rust/Axum/Diesel/async-graphql backen
 
 ### Implementation for User Story 4
 
-- [ ] T035 [US4] Author `docs/adrs/<next-number>-content-moderation-and-dmca-safe-harbor.md` per research.md R4: documents the polymorphic `content_moderation_actions` table decision (R1), the resolver-boundary enforcement decision (R2), and explicitly states the FR-011/FR-012 guardrail (no public compendium-sharing feature ships without this program operational and a "centralized public repository" determination on record) (depends on T001-T031 existing, so the ADR can accurately describe what was actually built)
-- [ ] T036 [US4] Add a "DMCA / Content Moderation Guardrail" checklist item to wherever this project's feature-proposal/launch-review process is documented (e.g. `.specify/memory/constitution.md`'s Development Workflow section, or a dedicated `docs/` review-process doc if one exists) — referencing the T035 ADR and spec 015 by name, and explicitly requiring: (a) User Stories 1-3 operational, (b) an explicit "is this a centralized public repository" determination on record — before implementation of any feature exposing one world's compendium content to another world or the public begins (FR-012)
+- [X] T035 [US4] Author `docs/adrs/<next-number>-content-moderation-and-dmca-safe-harbor.md` per research.md R4: documents the polymorphic `content_moderation_actions` table decision (R1), the resolver-boundary enforcement decision (R2), and explicitly states the FR-011/FR-012 guardrail (no public compendium-sharing feature ships without this program operational and a "centralized public repository" determination on record) (depends on T001-T031 existing, so the ADR can accurately describe what was actually built)
+- [X] T036 [US4] Add a "DMCA / Content Moderation Guardrail" checklist item to wherever this project's feature-proposal/launch-review process is documented (e.g. `.specify/memory/constitution.md`'s Development Workflow section, or a dedicated `docs/` review-process doc if one exists) — referencing the T035 ADR and spec 015 by name, and explicitly requiring: (a) User Stories 1-3 operational, (b) an explicit "is this a centralized public repository" determination on record — before implementation of any feature exposing one world's compendium content to another world or the public begins (FR-012)
 
 **Checkpoint**: All four user stories are complete — the platform has an operational, documented DMCA program and a preventative guardrail against the highest-liability feature category.
 
@@ -136,11 +136,11 @@ Existing two-project split: `src/server/` (Rust/Axum/Diesel/async-graphql backen
 
 **Purpose**: Verification and final wiring that spans multiple user stories.
 
-- [ ] T037 [P] Run `cargo check` and `cargo test` in `src/server` to confirm all new resolvers and inline `#[tokio::test]` coverage pass (constitution Principle V)
-- [ ] T038 [P] Run `cargo clippy --all-targets` on the touched native crates (thunderforge, thunderforge_core) and fix any new warnings, keeping the workspace at 0 (per the recent clippy pass)
-- [ ] T039 [P] Run `pnpm --filter @thunderforge/web build` and `pnpm --filter @thunderforge/web lint` (scoped check — this repo's frontend lint has pre-existing unrelated baseline problems; confirm you haven't added new ones, not that the whole project is clean)
-- [ ] T040 Execute every scenario in `specs/015-dmca-notice-takedown/quickstart.md` against a running local dev stack, including the public-facing `/legal/dmca` reachability check (FR-001/SC-004)
-- [ ] T041 [P] Confirm `./scripts/check-file-length.sh` shows no new failures introduced by this feature's files
+- [X] T037 [P] Run `cargo check` and `cargo test` in `src/server` to confirm all new resolvers and inline `#[tokio::test]` coverage pass (constitution Principle V)
+- [X] T038 [P] Run `cargo clippy --all-targets` on the touched native crates (thunderforge, thunderforge_core) and fix any new warnings, keeping the workspace at 0 (per the recent clippy pass)
+- [X] T039 [P] Run `pnpm --filter @thunderforge/web build` and `pnpm --filter @thunderforge/web lint` (scoped check — this repo's frontend lint has pre-existing unrelated baseline problems; confirm you haven't added new ones, not that the whole project is clean)
+- [X] T040 Execute every scenario in `specs/015-dmca-notice-takedown/quickstart.md` against a running local dev stack, including the public-facing `/legal/dmca` reachability check (FR-001/SC-004)
+- [X] T041 [P] Confirm `./scripts/check-file-length.sh` shows no new failures introduced by this feature's files
 
 ---
 
