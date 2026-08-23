@@ -36,6 +36,11 @@ const WORLD_ITEM_FIELDS = `
   moderationCaseId
   createdAt
   updatedAt
+  linkedFromLore {
+    id
+    title
+    slug
+  }
 `;
 
 async function postGraphQL<TData>(

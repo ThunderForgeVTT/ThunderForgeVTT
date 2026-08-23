@@ -404,8 +404,11 @@ impl From<ItemEffect> for GraphQLItemEffect {
 /// An Item's own GraphQL projection. `effects` is resolved separately by
 /// the owning query/mutation (not a field resolver here) since every
 /// current call site already has both rows in hand after a join/second
-/// query — keeps this type a plain `SimpleObject` with no async fetch.
+/// query. `linkedFromLore` (spec 013 US3) IS a per-request field
+/// resolver — hence `#[graphql(complex)]`, mirroring `GraphQLWorldActor`'s
+/// existing `lore_linked_from` pattern (`src/server/src/graphql.rs`).
 #[derive(SimpleObject, Debug, Clone)]
+#[graphql(complex)]
 pub struct GraphQLItem {
     pub id: uuid::Uuid,
     pub world_id: uuid::Uuid,
@@ -470,6 +473,21 @@ impl GraphQLItem {
             moderated: true,
             moderation_case_id,
         }
+    }
+}
+
+#[async_graphql::ComplexObject]
+impl GraphQLItem {
+    /// Spec 013 (US3, FR-016): every lore entry whose body currently
+    /// contains a resolved in-text link to this item — mirrors
+    /// `GraphQLWorldActor::lore_linked_from` (`src/server/src/graphql.rs`)
+    /// and `GraphQLLoreEntry::linked_from` verbatim, extended to items.
+    async fn linked_from_lore(
+        &self,
+        ctx: &async_graphql::Context<'_>,
+    ) -> async_graphql::Result<Vec<GraphQLLoreEntry>> {
+        let state = crate::graphql::app_state(ctx)?;
+        crate::graphql::queries::lore::lore_entries_linking_to_item(state, self.id).await
     }
 }
 

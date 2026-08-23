@@ -89,6 +89,7 @@ fn replace_lore_links(
                 target_kind: link.target_kind.to_string(),
                 target_lore_entry_id: link.target_lore_entry_id,
                 target_actor_id: link.target_actor_id,
+                target_item_id: link.target_item_id,
             })
             .execute(conn)?;
     }

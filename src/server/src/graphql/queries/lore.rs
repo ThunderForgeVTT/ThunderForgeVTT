@@ -11,7 +11,7 @@ use crate::auth::lore_permissions::require_lore_permission;
 use crate::graphql::types::{ActorPermissionLevel, GraphQLLoreEntry, GraphQLLoreRevision};
 use crate::graphql::{app_state, authenticated_user, require_visible_world};
 use crate::models::{LoreEntry, LoreRevision};
-use crate::schema::{world_actors, world_lore_entries, world_lore_links, world_lore_revisions};
+use crate::schema::{world_actors, world_items, world_lore_entries, world_lore_links, world_lore_revisions};
 use crate::state::AppState;
 
 /// Shared by `GraphQLLoreEntry::rendered_html` and
@@ -123,6 +123,37 @@ pub async fn lore_entries_linking_to_actor(
     Ok(rows.into_iter().map(GraphQLLoreEntry::from).collect())
 }
 
+/// Every lore entry whose body currently contains a resolved in-text
+/// link to `target_item_id` — spec 013 (US3)'s item-side counterpart of
+/// `lore_entries_linking_to`/`lore_entries_linking_to_actor`, called from
+/// `GraphQLItem::linked_from_lore`.
+pub async fn lore_entries_linking_to_item(
+    state: &AppState,
+    target_item_id: Uuid,
+) -> GraphQLResult<Vec<GraphQLLoreEntry>> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    let rows = tokio::task::spawn_blocking(move || {
+        world_lore_links::table
+            .filter(world_lore_links::target_item_id.eq(target_item_id))
+            .inner_join(
+                world_lore_entries::table
+                    .on(world_lore_links::source_lore_entry_id.eq(world_lore_entries::id)),
+            )
+            .select(LoreEntry::as_select())
+            .load::<LoreEntry>(&mut conn)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to load linked-from entries"))?;
+
+    let rows = crate::moderation::filter_visible(state, "world_lore_entry", rows, |e| e.id).await?;
+    Ok(rows.into_iter().map(GraphQLLoreEntry::from).collect())
+}
+
 /// Testable core of `LoreQuery::world_lore_entries`. Listing is not
 /// permission-gated beyond world membership — `myPermissionLevel` on
 /// each entry tells the client what UI to show (contracts/lore-crud.md).
@@ -217,6 +248,7 @@ pub async fn lore_entry_impl(
 pub enum GraphQLLoreLinkTargetKind {
     LoreEntry,
     Actor,
+    Item,
 }
 
 /// One autocomplete candidate for the editor's `[[`-trigger popover
@@ -271,6 +303,23 @@ pub async fn lore_link_targets_impl(
             id,
             title,
             kind: GraphQLLoreLinkTargetKind::Actor,
+        }));
+
+        // Spec 013 (US3): items are a third valid link target, alongside
+        // lore entries and actors. Item names may collide (FR-019 of spec
+        // 013), so — unlike lore-entry/actor titles, which this query
+        // already treats as independently listable matches — every
+        // matching item is still surfaced here as its own candidate; the
+        // author picks the intended one explicitly (FR-016).
+        let item_matches = world_items::table
+            .filter(world_items::world_id.eq(world_id))
+            .filter(world_items::name.ilike(&pattern))
+            .select((world_items::id, world_items::name))
+            .load::<(Uuid, String)>(&mut conn)?;
+        results.extend(item_matches.into_iter().map(|(id, title)| GraphQLLoreLinkTarget {
+            id,
+            title,
+            kind: GraphQLLoreLinkTargetKind::Item,
         }));
 
         Ok::<_, diesel::result::Error>(results)

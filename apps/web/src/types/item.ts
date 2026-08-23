@@ -1,4 +1,4 @@
-import type { ActorPermissionLevel } from "@/types/actor";
+import type { ActorPermissionLevel, LoreLinkSourceRecord } from "@/types/actor";
 
 export type { ActorPermissionLevel };
 
@@ -27,6 +27,7 @@ export type WorldItemRecord = {
   moderationCaseId: string | null;
   createdAt: string;
   updatedAt: string;
+  linkedFromLore: LoreLinkSourceRecord[];
 };
 
 export type ItemPermissionRecord = {

@@ -1082,10 +1082,11 @@ pub struct NewLorePermission {
 }
 
 /// A directional, in-text `[[...]]` reference from one lore entry's
-/// content to another lore entry or an actor (research.md §2). At most
-/// one of `target_lore_entry_id`/`target_actor_id` is set; a row whose
-/// target FK has gone NULL (target deleted) is treated as unresolved by
-/// every read path regardless of the stored `target_kind`.
+/// content to another lore entry, an actor, or (spec 013 US3) an item.
+/// At most one of `target_lore_entry_id`/`target_actor_id`/
+/// `target_item_id` is set; a row whose target FK has gone NULL (target
+/// deleted) is treated as unresolved by every read path regardless of
+/// the stored `target_kind`.
 #[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
 #[diesel(table_name = world_lore_links)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
@@ -1097,6 +1098,7 @@ pub struct LoreLink {
     pub target_lore_entry_id: Option<uuid::Uuid>,
     pub target_actor_id: Option<uuid::Uuid>,
     pub created_at: chrono::NaiveDateTime,
+    pub target_item_id: Option<uuid::Uuid>,
 }
 
 /// New lore link for insertion.
@@ -1109,6 +1111,7 @@ pub struct NewLoreLink {
     pub target_kind: String,
     pub target_lore_entry_id: Option<uuid::Uuid>,
     pub target_actor_id: Option<uuid::Uuid>,
+    pub target_item_id: Option<uuid::Uuid>,
 }
 
 /// An uploaded/pasted image attached to a lore entry (FR-008/009),

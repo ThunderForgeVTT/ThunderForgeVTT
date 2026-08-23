@@ -120,11 +120,11 @@ Existing two-project split (plan.md "Project Structure"): `src/server/` (Rust/Ax
 
 ### Implementation for User Story 3
 
-- [ ] T038 [US3] Create Diesel migration extending `world_lore_links`: add nullable `target_item_id UUID FK → world_items.id ON DELETE SET NULL` column and an `item` variant to the `target_kind` enum, extending the existing "exactly one target FK set at insert time" check constraint to cover it (contracts/item-lore-links.md) in `src/server/migrations/<ts>_add_item_target_to_world_lore_links/{up,down}.sql` (depends on T002, and on spec 012's `create_world_lore_links` migration already having run)
-- [ ] T039 [US3] Extend `src/server/src/markdown/links.rs`'s `[[Title]]` extraction/resolution pass to additionally resolve against `world_items.name` scoped to the current world, presenting every kind of match (lore entry, actor, item) as distinct disambiguated candidates when a title matches more than one (FR-016, contracts/item-lore-links.md) (depends on T038)
-- [ ] T040 [P] [US3] Add a `linkedFromLore: [GraphQLLoreEntry!]!` field resolver on `GraphQLItem` in `src/server/src/graphql/types.rs`, querying `world_lore_links WHERE target_item_id = :id` (depends on T038, T010)
-- [ ] T041 [US3] Add a "Linked from (lore)" list section to `apps/web/src/pages/world/item/ItemDetailPage.tsx` using the new `linkedFromLore` field (depends on T028, T040)
-- [ ] T042 [US3] Verify `deleteItem` (T017) leaves referencing `world_lore_links` rows with `target_item_id` nulled (via the migration's `ON DELETE SET NULL`) and that the existing broken-link render path (spec 012) treats them as unresolved with no new code path required — add a resolver test in `src/server/src/graphql/mutations_items.rs` confirming this (depends on T017, T038)
+- [X] T038 [US3] Create Diesel migration extending `world_lore_links`: add nullable `target_item_id UUID FK → world_items.id ON DELETE SET NULL` column and an `item` variant to the `target_kind` enum, extending the existing "exactly one target FK set at insert time" check constraint to cover it (contracts/item-lore-links.md) in `src/server/migrations/<ts>_add_item_target_to_world_lore_links/{up,down}.sql` (depends on T002, and on spec 012's `create_world_lore_links` migration already having run)
+- [X] T039 [US3] Extend `src/server/src/markdown/links.rs`'s `[[Title]]` extraction/resolution pass to additionally resolve against `world_items.name` scoped to the current world, presenting every kind of match (lore entry, actor, item) as distinct disambiguated candidates when a title matches more than one (FR-016, contracts/item-lore-links.md) (depends on T038)
+- [X] T040 [P] [US3] Add a `linkedFromLore: [GraphQLLoreEntry!]!` field resolver on `GraphQLItem` in `src/server/src/graphql/types.rs`, querying `world_lore_links WHERE target_item_id = :id` (depends on T038, T010)
+- [X] T041 [US3] Add a "Linked from (lore)" list section to `apps/web/src/pages/world/item/ItemDetailPage.tsx` using the new `linkedFromLore` field (depends on T028, T040)
+- [X] T042 [US3] Verify `deleteItem` (T017) leaves referencing `world_lore_links` rows with `target_item_id` nulled (via the migration's `ON DELETE SET NULL`) and that the existing broken-link render path (spec 012) treats them as unresolved with no new code path required — add a resolver test in `src/server/src/graphql/mutations_items.rs` confirming this (depends on T017, T038)
 
 **Checkpoint**: User Stories 1–3 all work independently — Items correlate with lore entries exactly as actors do.
 
@@ -170,7 +170,7 @@ Existing two-project split (plan.md "Project Structure"): `src/server/` (Rust/Ax
 
 - [X] T051 [P] Run `cargo check` and `cargo test` in `src/server` to confirm the new resolvers and inline `#[tokio::test]` coverage pass (constitution Principle V)
 - [X] T052 [P] Run `pnpm --filter @thunderforge/web build` and `pnpm --filter @thunderforge/web lint` in `apps/web`
-- [ ] T053 Execute every scenario in `specs/013-items-inventory/quickstart.md` against a running local dev stack (`docker compose up`), including the cross-cutting name-collision, optional-icon, deleted-item-inventory, and Actor-scoped-permission checks
+- [X] T053 Execute every scenario in `specs/013-items-inventory/quickstart.md` against a running local dev stack (`docker compose up`), including the cross-cutting name-collision, optional-icon, deleted-item-inventory, and Actor-scoped-permission checks
 - [X] T054 [P] Confirm the world-removal cascade deletes a departed member's `world_item_permissions` rows (mirrors the existing actor/lore-permission cascade) by exercising it against `src/server/src/auth/item_permissions.rs` and the relevant world-membership-removal path
 
 ---

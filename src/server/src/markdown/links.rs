@@ -18,7 +18,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use uuid::Uuid;
 
-use crate::schema::{world_actors, world_lore_entries};
+use crate::schema::{world_actors, world_items, world_lore_entries};
 
 /// Matches `[[Title]]` or `[[Title|Display Text]]`. Title/Display may not
 /// contain `]` or `|`.
@@ -39,6 +39,7 @@ pub struct PreparedLink {
     pub target_kind: &'static str,
     pub target_lore_entry_id: Option<Uuid>,
     pub target_actor_id: Option<Uuid>,
+    pub target_item_id: Option<Uuid>,
     /// `None` for an unresolved link.
     pub href: Option<String>,
 }
@@ -51,16 +52,18 @@ fn html_escape(s: &str) -> String {
 }
 
 /// Extracts every `[[...]]` occurrence from `markdown`, resolves each
-/// title against `world_lore_entries.title` and `world_actors.label`
-/// (case-insensitive exact match) scoped to `world_id`, and returns the
-/// Markdown source with each occurrence replaced by an opaque
-/// placeholder token, alongside the resolved link list.
+/// title against `world_lore_entries.title`, `world_actors.label`, and
+/// (spec 013 US3) `world_items.name` (case-insensitive exact match)
+/// scoped to `world_id`, and returns the Markdown source with each
+/// occurrence replaced by an opaque placeholder token, alongside the
+/// resolved link list.
 ///
-/// If a title matches both a lore entry and an actor, the lore entry
-/// wins (deterministic tie-break); the authoring UI's autocomplete
-/// (`loreLinkTargets`, T033) is expected to prevent an author from ever
-/// typing an ambiguous title in the first place by disambiguating at
-/// selection time (FR-007a).
+/// If a title matches more than one kind, resolution falls back in a
+/// fixed, deterministic order — lore entry, then actor, then item; the
+/// authoring UI's autocomplete (`loreLinkTargets`, T033/spec 013's
+/// FR-016) is expected to prevent an author from ever typing an
+/// ambiguous title in the first place by disambiguating at selection
+/// time (FR-007a).
 ///
 /// Blocking — callers run this inside `tokio::task::spawn_blocking`.
 pub fn extract_and_resolve(
@@ -98,6 +101,7 @@ pub fn extract_and_resolve(
                     target_kind: "lore_entry",
                     target_lore_entry_id: Some(entry_id),
                     target_actor_id: None,
+                    target_item_id: None,
                     href: Some(format!("/world/{world_id}/lore/{slug}/view")),
                 }
             } else {
@@ -117,17 +121,40 @@ pub fn extract_and_resolve(
                         target_kind: "actor",
                         target_lore_entry_id: None,
                         target_actor_id: Some(actor_id),
+                        target_item_id: None,
                         href: Some(format!("/world/{world_id}/actor/{actor_id}/view")),
                     }
                 } else {
-                    PreparedLink {
-                        placeholder: placeholder.clone(),
-                        raw_title: title.clone(),
-                        display,
-                        target_kind: "unresolved",
-                        target_lore_entry_id: None,
-                        target_actor_id: None,
-                        href: None,
+                    let item_match = world_items::table
+                        .filter(world_items::world_id.eq(world_id))
+                        .filter(world_items::name.ilike(&title))
+                        .select(world_items::id)
+                        .first::<Uuid>(conn)
+                        .optional()
+                        .unwrap_or(None);
+
+                    if let Some(item_id) = item_match {
+                        PreparedLink {
+                            placeholder: placeholder.clone(),
+                            raw_title: title.clone(),
+                            display,
+                            target_kind: "item",
+                            target_lore_entry_id: None,
+                            target_actor_id: None,
+                            target_item_id: Some(item_id),
+                            href: Some(format!("/world/{world_id}/item/{item_id}/view")),
+                        }
+                    } else {
+                        PreparedLink {
+                            placeholder: placeholder.clone(),
+                            raw_title: title.clone(),
+                            display,
+                            target_kind: "unresolved",
+                            target_lore_entry_id: None,
+                            target_actor_id: None,
+                            target_item_id: None,
+                            href: None,
+                        }
                     }
                 }
             };

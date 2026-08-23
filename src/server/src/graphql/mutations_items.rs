@@ -560,4 +560,88 @@ mod tests {
         let effects = load_item_effects(&state, item.id).await.expect("should load effects");
         assert_eq!(effects.len(), 2);
     }
+
+    /// Spec 013 (T042, US3, FR-017): deleting an item is never blocked by
+    /// an outstanding lore in-text link to it, and the referencing
+    /// `world_lore_links` row's `target_item_id` is nulled (via the
+    /// migration's `ON DELETE SET NULL`) rather than the row being
+    /// removed — the existing broken-link render path (spec 012) treats
+    /// a null-FK'd row as unresolved with no new code path required.
+    #[tokio::test]
+    async fn deleting_an_item_nulls_referencing_lore_links_instead_of_blocking() {
+        use crate::models::LoreEntry;
+        use crate::schema::{world_lore_entries, world_lore_links};
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let item = create_item_impl(
+            &state,
+            owner_id,
+            false,
+            CreateItemInput {
+                world_id,
+                name: "Potion of Healing".to_string(),
+                description: None,
+            },
+        )
+        .await
+        .expect("DM should create item");
+
+        let mut conn = state.db_pool.get().unwrap();
+        let now = chrono::Utc::now().naive_utc();
+        let lore_entry_id = uuid::Uuid::now_v7();
+        diesel::insert_into(world_lore_entries::table)
+            .values((
+                world_lore_entries::id.eq(lore_entry_id),
+                world_lore_entries::world_id.eq(world_id),
+                world_lore_entries::title.eq("Alchemist's Notes"),
+                world_lore_entries::slug.eq("alchemists-notes"),
+                world_lore_entries::content.eq("See [[Potion of Healing]]."),
+                world_lore_entries::created_by.eq(owner_id),
+                world_lore_entries::created_at.eq(now),
+                world_lore_entries::updated_at.eq(now),
+            ))
+            .execute(&mut conn)
+            .expect("failed to insert test lore entry");
+
+        let link_id = uuid::Uuid::now_v7();
+        diesel::insert_into(world_lore_links::table)
+            .values((
+                world_lore_links::id.eq(link_id),
+                world_lore_links::source_lore_entry_id.eq(lore_entry_id),
+                world_lore_links::raw_title.eq("Potion of Healing"),
+                world_lore_links::target_kind.eq("item"),
+                world_lore_links::target_item_id.eq(item.id),
+            ))
+            .execute(&mut conn)
+            .expect("failed to insert test lore link");
+        drop(conn);
+
+        delete_item_impl(&state, owner_id, false, item.id)
+            .await
+            .expect("delete must not be blocked by the outstanding lore link");
+
+        let mut conn = state.db_pool.get().unwrap();
+        let target_item_id: Option<uuid::Uuid> = world_lore_links::table
+            .filter(world_lore_links::id.eq(link_id))
+            .select(world_lore_links::target_item_id)
+            .first(&mut conn)
+            .expect("lore link row must still exist");
+        assert_eq!(
+            target_item_id, None,
+            "target_item_id must be nulled by ON DELETE SET NULL, not left dangling"
+        );
+
+        // The source entry itself is untouched — only the link's target FK
+        // was nulled, per data-model.md's ON DELETE SET NULL rationale.
+        let _: LoreEntry = world_lore_entries::table
+            .filter(world_lore_entries::id.eq(lore_entry_id))
+            .select(LoreEntry::as_select())
+            .first(&mut conn)
+            .expect("source lore entry must be unaffected");
+    }
 }

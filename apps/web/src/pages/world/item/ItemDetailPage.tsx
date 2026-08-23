@@ -285,6 +285,29 @@ export default function ItemDetailPage({ mode }: ItemDetailPageProps) {
         />
 
         {isDm && mode === "edit" ? <ItemOwnershipBlock itemId={itemId} worldId={worldId} world={world} /> : null}
+
+        {/* Spec 013 (T041, US3, FR-016): lore entries that reference this item. */}
+        <Card className="grid gap-2 p-4" data-testid="item-lore-linked-from">
+          <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+            Linked from (lore)
+          </h2>
+          {item.linkedFromLore.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic">No lore entries link here yet.</p>
+          ) : (
+            <ul className="grid gap-1">
+              {item.linkedFromLore.map((source) => (
+                <li key={source.id}>
+                  <Link
+                    to={`/world/${worldId}/lore/${source.slug}/view`}
+                    className="text-sm text-primary hover:underline"
+                  >
+                    {source.title}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
       </Container>
     </>
   );
