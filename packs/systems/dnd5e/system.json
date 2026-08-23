@@ -5,6 +5,21 @@
   "author": "ThunderForgeVTT Contributors",
   "description": "5E Compatible ruleset for ThunderForgeVTT, built from the System Reference Document 5.2.1. Implements ability scores, skills, spellcasting, and character progression.",
   "license": "CC BY 4.0 (System Reference Document 5.2.1 by Wizards of the Coast)",
+  "legal": {
+    "licenseName": "CC-BY-4.0",
+    "attributionText": "This work includes material from the System Reference Document 5.2.1 (\"SRD 5.2.1\") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2.1 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "requiredNotice": null,
+    "disclaimer": "This system pack is an independent, unofficial implementation compatible with the 5E SRD 5.2.1 ruleset. It is not published, endorsed, or affiliated with Wizards of the Coast.",
+    "trademarkRestrictions": [
+      "Do not use 'Dungeons & Dragons' as a product/module name or in marketing that implies Wizards of the Coast endorsement",
+      "Do not include any attribution to Wizards of the Coast or its parents/affiliates beyond the exact attribution statement above (per the SRD's own Legal Information page)",
+      "May use 'compatible with fifth edition' or '5E compatible' phrasing, but not the D&D trademark or logo itself",
+      "Do not reproduce or imply access to proprietary campaign lore, named characters, deities, or iconic monsters (e.g. Mind Flayers, Beholders) — these are excluded from the SRD",
+      "Where the SRD renamed a legacy item to avoid trademark bleed (e.g. 'Mysterious Deck' instead of 'Deck of Many Things', 'Dragon Orb' instead of 'Orb of Dragonkind'), use the SRD's renamed term, not the proprietary legacy name"
+    ],
+    "requiredUiPlacement": "Must be shown on the system selection screen and/or a permanent, easily accessible module settings/about tab — not buried in Terms of Service.",
+    "sourceUrl": "https://creativecommons.org/licenses/by/4.0/"
+  },
   "url": "https://github.com/ThunderForgeVTT/ThunderForgeVTT",
   "compatibility": {
     "minimum": "0.1.0",

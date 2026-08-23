@@ -776,4 +776,31 @@ mod manifest_legal_enforcement_tests {
         let Json(manifest) = result.expect("a compliant manifest must be served");
         assert_eq!(manifest["legal"]["licenseName"], "CC-BY-4.0");
     }
+
+    /// Spec 016 (T006, SC-001): the real, shipped `dnd5e` manifest — not a
+    /// synthetic fixture — has a compliant `legal` object.
+    #[tokio::test]
+    async fn dnd5e_system_json_has_a_compliant_legal_object() {
+        let mut state = test_app_state();
+        // test_app_state()'s Directories::from(temp_dir()) computes
+        // systems_dir under the temp dir, not this repo's real
+        // packs/systems — point it at the real one so this exercises the
+        // actual shipped manifest, not a fixture.
+        let real_systems_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../packs/systems")
+            .canonicalize()
+            .expect("packs/systems must exist relative to src/server");
+        state.directories.systems_dir = real_systems_dir.to_str().unwrap().to_string();
+
+        let result = get_system_manifest(AxumPath("dnd5e".to_string()), State(state)).await;
+
+        let Json(manifest) = result.expect("dnd5e's real manifest must pass legal validation");
+        assert_eq!(manifest["legal"]["licenseName"], "CC-BY-4.0");
+        assert!(
+            manifest["legal"]["attributionText"]
+                .as_str()
+                .unwrap()
+                .contains("System Reference Document")
+        );
+    }
 }
