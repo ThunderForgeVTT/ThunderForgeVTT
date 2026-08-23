@@ -6,6 +6,7 @@
 pub mod actor;
 pub mod admin;
 pub mod healthcheck;
+pub mod lore;
 pub mod scene;
 pub mod user;
 pub mod invite;
@@ -13,6 +14,7 @@ pub mod invite;
 pub use actor::ActorQuery;
 pub use admin::AdminQuery;
 pub use healthcheck::HealthcheckQuery;
+pub use lore::LoreQuery;
 pub use scene::SceneQuery;
 pub use user::UserQuery;
 pub use invite::InviteQuery;
