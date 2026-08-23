@@ -27,6 +27,23 @@
 import React, { ReactNode, createContext, useContext, useCallback, useRef, useState } from "react";
 
 /**
+ * Spec 016 (FR-001, contracts/manifest-legal-schema.md): a system pack's
+ * required, structured legal/attribution metadata — the render-ready
+ * expansion of the manifest's loose free-text `license` string. Required
+ * on every manifest (FR-003/FR-007); a pack missing it fails server-side
+ * validation before it ever reaches this type.
+ */
+export type SystemManifestLegal = {
+  licenseName: string;
+  attributionText: string;
+  requiredNotice?: string | null;
+  disclaimer?: string | null;
+  trademarkRestrictions?: string[];
+  requiredUiPlacement?: string | null;
+  sourceUrl?: string | null;
+};
+
+/**
  * System manifest type - extends any for flexibility
  * Each system (D&D 5e, Pathfinder 2e, etc.) exports its own manifest
  */
@@ -34,6 +51,7 @@ export type SystemManifest = {
   id: string;
   title: string;
   version: string;
+  legal: SystemManifestLegal;
   [key: string]: any;
 };
 

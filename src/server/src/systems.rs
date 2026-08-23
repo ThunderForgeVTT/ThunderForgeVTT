@@ -83,6 +83,20 @@ async fn get_system_manifest(
             )
         })?;
 
+    // Spec 016 (FR-007, SC-003): fail closed rather than serve a manifest
+    // with missing/empty legal metadata to a GM. This is the actual path
+    // that delivers a bundled pack's manifest today (unlike
+    // `pack_system_spec::validate_system_manifest`, used only by the
+    // admin-upload/install flow), so this is the real enforcement point.
+    pack_system_spec::validate_legal_content(&manifest_json).map_err(|e| {
+        (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(
+                json!({"error": format!("System pack '{slug}' has a non-compliant manifest: {e}")}),
+            ),
+        )
+    })?;
+
     Ok(Json(manifest_json))
 }
 
@@ -691,5 +705,75 @@ mod registry_tests {
         let registry = GAME_SYSTEMS.lock().unwrap();
         // D&D 5e should be registered on first access
         assert!(registry.systems.contains_key("dnd5e"));
+    }
+}
+
+/// Spec 016 (T005, FR-007): confirms `get_system_manifest` — the actual
+/// path that serves a bundled pack's manifest to a GM, distinct from
+/// `pack_system_spec::validate_system_manifest`'s admin-upload-only usage
+/// — rejects a manifest missing `legal`, and serves one that has it.
+#[cfg(test)]
+mod manifest_legal_enforcement_tests {
+    use super::*;
+    use crate::test_support::test_app_state;
+    use axum::extract::{Path as AxumPath, State};
+
+    fn state_with_temp_systems_dir() -> (AppState, std::path::PathBuf) {
+        let mut state = test_app_state();
+        let tmp = std::env::temp_dir().join(format!("tf-systems-test-{}", uuid::Uuid::now_v7()));
+        state.directories.systems_dir = tmp.to_str().unwrap().to_string();
+        (state, tmp)
+    }
+
+    fn write_manifest(systems_dir: &std::path::Path, slug: &str, manifest_json: &str) {
+        let pack_dir = systems_dir.join(slug);
+        std::fs::create_dir_all(&pack_dir).unwrap();
+        std::fs::write(pack_dir.join("system.json"), manifest_json).unwrap();
+    }
+
+    #[tokio::test]
+    async fn get_system_manifest_rejects_a_manifest_missing_legal() {
+        let (state, systems_dir) = state_with_temp_systems_dir();
+        write_manifest(
+            &systems_dir,
+            "no-legal-pack",
+            r#"{"id": "no-legal-pack", "title": "No Legal Pack", "version": "0.1.0"}"#,
+        );
+
+        let result = get_system_manifest(
+            AxumPath("no-legal-pack".to_string()),
+            State(state),
+        )
+        .await;
+
+        let (status, _) = result.expect_err("manifest missing legal must be rejected");
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    #[tokio::test]
+    async fn get_system_manifest_serves_a_manifest_with_valid_legal() {
+        let (state, systems_dir) = state_with_temp_systems_dir();
+        write_manifest(
+            &systems_dir,
+            "compliant-pack",
+            r#"{
+                "id": "compliant-pack",
+                "title": "Compliant Pack",
+                "version": "0.1.0",
+                "legal": {
+                    "licenseName": "CC-BY-4.0",
+                    "attributionText": "Built from an open reference document."
+                }
+            }"#,
+        );
+
+        let result = get_system_manifest(
+            AxumPath("compliant-pack".to_string()),
+            State(state),
+        )
+        .await;
+
+        let Json(manifest) = result.expect("a compliant manifest must be served");
+        assert_eq!(manifest["legal"]["licenseName"], "CC-BY-4.0");
     }
 }
