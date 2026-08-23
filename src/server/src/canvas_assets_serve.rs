@@ -92,3 +92,115 @@ async fn serve_canvas_asset(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    //! Integration tests against a real Postgres (DATABASE_URL) and a real
+    //! RustFS (`docker compose up -d rustfs`) — no mocks, mirrors
+    //! `graphql::mutations_assets::tests`'s convention.
+
+    use super::*;
+    use crate::graphql::mutations_assets::{upload_canvas_image_impl, GraphQLCanvasImageAssetKind};
+    use crate::test_support::*;
+    use axum::body::to_bytes;
+    use axum::extract::{Extension, Path, State};
+
+    fn fake_auth_user(user_id: Uuid) -> AuthenticatedUser {
+        AuthenticatedUser {
+            user_id,
+            session_id: Uuid::now_v7(),
+            expires_at: chrono::Utc::now().naive_utc() + chrono::Duration::hours(1),
+            is_admin: false,
+            role: "Player".to_string(),
+        }
+    }
+
+    /// A world member can fetch an asset that belongs to their world; the
+    /// bytes served back are exactly what was uploaded (transcoded to WebP).
+    #[tokio::test]
+    async fn serve_canvas_asset_returns_bytes_for_authorized_world_member() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        drop(conn);
+
+        let asset = upload_canvas_image_impl(
+            &state,
+            owner_id,
+            world_id,
+            scene_id,
+            GraphQLCanvasImageAssetKind::Pasted,
+            tiny_png_bytes(),
+        )
+        .await
+        .expect("upload should succeed");
+
+        let response = serve_canvas_asset(
+            State(state),
+            Extension(fake_auth_user(owner_id)),
+            Path(asset.asset_id),
+        )
+        .await;
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body should be readable");
+        assert!(!body.is_empty(), "served asset bytes should not be empty");
+    }
+
+    /// A user who is not a member of the asset's world is rejected, even
+    /// though the asset exists (FR-014/FR-019 parity with
+    /// `canvasImageAssetsForScene`).
+    #[tokio::test]
+    async fn serve_canvas_asset_rejects_non_world_member() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        let outsider_id = insert_test_user(&mut conn);
+        drop(conn);
+
+        let asset = upload_canvas_image_impl(
+            &state,
+            owner_id,
+            world_id,
+            scene_id,
+            GraphQLCanvasImageAssetKind::Pasted,
+            tiny_png_bytes(),
+        )
+        .await
+        .expect("upload should succeed");
+
+        let response = serve_canvas_asset(
+            State(state),
+            Extension(fake_auth_user(outsider_id)),
+            Path(asset.asset_id),
+        )
+        .await;
+
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    /// A nonexistent asset id returns 404, not a 500 or an authorization
+    /// error — the not-found check happens before any authz lookup.
+    #[tokio::test]
+    async fn serve_canvas_asset_returns_not_found_for_unknown_asset() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let user_id = insert_test_user(&mut conn);
+        drop(conn);
+
+        let response = serve_canvas_asset(
+            State(state),
+            Extension(fake_auth_user(user_id)),
+            Path(Uuid::now_v7()),
+        )
+        .await;
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+}
