@@ -417,6 +417,68 @@ diesel::table! {
 }
 
 diesel::table! {
+    world_lore_entries (id) {
+        id -> Uuid,
+        world_id -> Uuid,
+        title -> Text,
+        slug -> Text,
+        content -> Text,
+        current_revision_id -> Nullable<Uuid>,
+        created_by -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    world_lore_image_assets (id) {
+        id -> Uuid,
+        lore_entry_id -> Uuid,
+        uploaded_by -> Uuid,
+        original_filename -> Nullable<Text>,
+        content_type -> Text,
+        byte_size -> Int8,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    world_lore_links (id) {
+        id -> Uuid,
+        source_lore_entry_id -> Uuid,
+        raw_title -> Text,
+        #[max_length = 16]
+        target_kind -> Varchar,
+        target_lore_entry_id -> Nullable<Uuid>,
+        target_actor_id -> Nullable<Uuid>,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    world_lore_permissions (id) {
+        id -> Uuid,
+        lore_entry_id -> Uuid,
+        world_member_user_id -> Uuid,
+        #[max_length = 16]
+        level -> Varchar,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    world_lore_revisions (id) {
+        id -> Uuid,
+        lore_entry_id -> Uuid,
+        content_markdown -> Text,
+        author_id -> Uuid,
+        restored_from_revision_id -> Nullable<Uuid>,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     world_members (id) {
         id -> Uuid,
         world_id -> Uuid,
@@ -495,6 +557,14 @@ diesel::joinable!(world_actors -> worlds (world_id));
 diesel::joinable!(world_events -> worlds (world_id));
 diesel::joinable!(world_invites -> users (created_by));
 diesel::joinable!(world_invites -> worlds (world_id));
+diesel::joinable!(world_lore_entries -> users (created_by));
+diesel::joinable!(world_lore_entries -> worlds (world_id));
+diesel::joinable!(world_lore_image_assets -> users (uploaded_by));
+diesel::joinable!(world_lore_image_assets -> world_lore_entries (lore_entry_id));
+diesel::joinable!(world_lore_links -> world_actors (target_actor_id));
+diesel::joinable!(world_lore_permissions -> users (world_member_user_id));
+diesel::joinable!(world_lore_permissions -> world_lore_entries (lore_entry_id));
+diesel::joinable!(world_lore_revisions -> users (author_id));
 diesel::joinable!(world_members -> users (user_id));
 diesel::joinable!(world_members -> worlds (world_id));
 diesel::joinable!(world_tokens -> worlds (world_id));
@@ -526,6 +596,11 @@ diesel::allow_tables_to_appear_in_same_query!(
     world_actors,
     world_events,
     world_invites,
+    world_lore_entries,
+    world_lore_image_assets,
+    world_lore_links,
+    world_lore_permissions,
+    world_lore_revisions,
     world_members,
     world_tokens,
     worlds,

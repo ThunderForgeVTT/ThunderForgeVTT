@@ -29,8 +29,8 @@ Existing two-project split (plan.md "Project Structure"): `src/server/` (Rust/Ax
 
 **Purpose**: Add the new dependencies this feature needs; nothing here is user-story-specific.
 
-- [ ] T001 Add `comrak`, `ammonia`, and `slug` crate dependencies to `src/server/Cargo.toml` (research.md §1, §3)
-- [ ] T002 Run `cargo build` in `src/server` to confirm the new dependencies resolve cleanly against the existing dependency tree
+- [X] T001 Add `comrak`, `ammonia`, and `slug` crate dependencies to `src/server/Cargo.toml` (research.md §1, §3)
+- [X] T002 Run `cargo build` in `src/server` to confirm the new dependencies resolve cleanly against the existing dependency tree
 
 **Checkpoint**: New crates compile; ready for schema/module work.
 
@@ -42,12 +42,12 @@ Existing two-project split (plan.md "Project Structure"): `src/server/` (Rust/Ax
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T003 Create Diesel migration `create_world_lore_entries` (`id`, `world_id`, `title`, `slug`, `content`, `current_revision_id` nullable, `created_by`, `created_at`, `updated_at`; unique `(world_id, slug)`) in `src/server/migrations/<ts>_create_world_lore_entries/{up,down}.sql` (data-model.md)
-- [ ] T004 Create Diesel migration `create_world_lore_revisions` (`id`, `lore_entry_id` FK cascade, `content_markdown`, `author_id`, `restored_from_revision_id` nullable self-FK, `created_at`) in `src/server/migrations/<ts>_create_world_lore_revisions/{up,down}.sql` (depends on T003 for the FK target)
-- [ ] T005 Create Diesel migration `create_world_lore_permissions` (`id`, `lore_entry_id` FK cascade, `world_member_user_id`, `permission_level` enum, `created_at`, `updated_at`; unique `(lore_entry_id, world_member_user_id)`) in `src/server/migrations/<ts>_create_world_lore_permissions/{up,down}.sql` (depends on T003)
-- [ ] T006 Create Diesel migration `create_world_lore_links` (`id`, `source_lore_entry_id` FK cascade, `raw_title`, `target_kind` enum, `target_lore_entry_id` nullable FK **`ON DELETE SET NULL`**, `target_actor_id` nullable FK to `world_actors` **`ON DELETE SET NULL`**, `created_at`; check constraint enforcing exactly one target set at insert time) in `src/server/migrations/<ts>_create_world_lore_links/{up,down}.sql` — `ON DELETE SET NULL` (not the Postgres-default `RESTRICT`) is required so deleting a linked-to entry/actor never blocks that delete (FR-020, data-model.md) (depends on T003)
-- [ ] T007 Create Diesel migration `create_world_lore_image_assets` (`id`, `lore_entry_id` FK cascade, `uploaded_by`, `original_filename` nullable, `content_type`, `byte_size`, `created_at`) in `src/server/migrations/<ts>_create_world_lore_image_assets/{up,down}.sql` (depends on T003)
-- [ ] T008 Run `diesel migration run` against the local dev DB and regenerate `src/server/src/schema.rs` with the five new tables (depends on T003–T007)
+- [X] T003 Create Diesel migration `create_world_lore_entries` (`id`, `world_id`, `title`, `slug`, `content`, `current_revision_id` nullable, `created_by`, `created_at`, `updated_at`; unique `(world_id, slug)`) in `src/server/migrations/<ts>_create_world_lore_entries/{up,down}.sql` (data-model.md)
+- [X] T004 Create Diesel migration `create_world_lore_revisions` (`id`, `lore_entry_id` FK cascade, `content_markdown`, `author_id`, `restored_from_revision_id` nullable self-FK, `created_at`) in `src/server/migrations/<ts>_create_world_lore_revisions/{up,down}.sql` (depends on T003 for the FK target)
+- [X] T005 Create Diesel migration `create_world_lore_permissions` (`id`, `lore_entry_id` FK cascade, `world_member_user_id`, `permission_level` enum, `created_at`, `updated_at`; unique `(lore_entry_id, world_member_user_id)`) in `src/server/migrations/<ts>_create_world_lore_permissions/{up,down}.sql` (depends on T003)
+- [X] T006 Create Diesel migration `create_world_lore_links` (`id`, `source_lore_entry_id` FK cascade, `raw_title`, `target_kind` enum, `target_lore_entry_id` nullable FK **`ON DELETE SET NULL`**, `target_actor_id` nullable FK to `world_actors` **`ON DELETE SET NULL`**, `created_at`; check constraint enforcing exactly one target set at insert time) in `src/server/migrations/<ts>_create_world_lore_links/{up,down}.sql` — `ON DELETE SET NULL` (not the Postgres-default `RESTRICT`) is required so deleting a linked-to entry/actor never blocks that delete (FR-020, data-model.md) (depends on T003)
+- [X] T007 Create Diesel migration `create_world_lore_image_assets` (`id`, `lore_entry_id` FK cascade, `uploaded_by`, `original_filename` nullable, `content_type`, `byte_size`, `created_at`) in `src/server/migrations/<ts>_create_world_lore_image_assets/{up,down}.sql` (depends on T003)
+- [X] T008 Run `diesel migration run` against the local dev DB and regenerate `src/server/src/schema.rs` with the five new tables (depends on T003–T007)
 - [ ] T009 [P] Add `LoreEntry`, `LoreRevision`, `LorePermission`, `LoreLink`, `LoreImageAsset` Diesel `Queryable`/`Insertable` structs to `src/server/src/models.rs` (depends on T008)
 - [ ] T010 Create `src/server/src/auth/lore_permissions.rs` generalizing `auth/actor_permissions.rs`: `is_dm_of_world` reuse, `effective_lore_permission(state, user_id, is_admin, lore_entry_id)`, `require_lore_permission(..., minimum: ActorPermissionLevel)` (depends on T009)
 - [ ] T011 Create `src/server/src/markdown/mod.rs` implementing GFM parse + sanitize-to-HTML via `comrak` (GFM extensions on, `unsafe_` off) piped through `ammonia` (research.md §1) (depends on T001)

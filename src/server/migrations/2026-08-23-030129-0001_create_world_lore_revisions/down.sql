@@ -1,0 +1,2 @@
+ALTER TABLE world_lore_entries DROP CONSTRAINT world_lore_entries_current_revision_id_fkey;
+DROP TABLE world_lore_revisions;
