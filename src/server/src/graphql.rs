@@ -67,8 +67,8 @@ pub use helpers::{
 // Phase 4.9.Z Step 5: Query extraction into separate modules
 pub mod queries;
 pub use queries::{
-    ActorQuery, AdminQuery, HealthcheckQuery, InventoryQuery, InviteQuery, ItemQuery, SceneQuery,
-    UserQuery,
+    ActorQuery, AdminQuery, HealthcheckQuery, InventoryQuery, InviteQuery, ItemQuery, LoreQuery,
+    SceneQuery, UserQuery,
 };
 
 // Phase 4.10.B: Invite & Membership mutations for multiplayer campaigns
@@ -106,6 +106,18 @@ pub use mutations_actor_permissions::{ActorPermissionMutation, ActorPermissionQu
 // Spec 010: actor sharing and cross-world deep copy
 pub mod mutations_actor_shares;
 pub use mutations_actor_shares::{ActorShareMutation, ActorShareQuery};
+
+// Spec 012: lore entry creation/editing/deletion/restore mutations
+pub mod mutations_lore;
+pub use mutations_lore::LoreMutation;
+
+// Spec 012: the lore entry "ownership block" (Viewer/Editor/Owner grants)
+pub mod mutations_lore_permissions;
+pub use mutations_lore_permissions::{LorePermissionMutation, LorePermissionQuery};
+
+// Spec 012: paste/drop image upload for lore entries
+pub mod mutations_lore_images;
+pub use mutations_lore_images::LoreImageMutation;
 
 // Spec 013: item creation/field-editing/deletion and effect CRUD
 pub mod mutations_items;
@@ -309,6 +321,16 @@ impl GraphQLWorldActor {
             self.id,
         )
         .await
+    }
+
+    /// Spec 012 (FR-006): every lore entry whose body currently contains
+    /// a resolved in-text link to this actor.
+    async fn lore_linked_from(
+        &self,
+        ctx: &Context<'_>,
+    ) -> GraphQLResult<Vec<crate::graphql::types::GraphQLLoreEntry>> {
+        let state = app_state(ctx)?;
+        crate::graphql::queries::lore::lore_entries_linking_to_actor(state, self.id).await
     }
 }
 
@@ -1809,6 +1831,8 @@ pub struct QueryRoot(
     ActorQuery,
     ActorPermissionQuery,
     ActorShareQuery,
+    LoreQuery,
+    LorePermissionQuery,
     ItemQuery,
     ItemPermissionQuery,
     ItemShareQuery,
@@ -1833,6 +1857,9 @@ pub struct MutationRoot(
     ActorMutation,
     ActorPermissionMutation,
     ActorShareMutation,
+    LoreMutation,
+    LorePermissionMutation,
+    LoreImageMutation,
     ItemMutation,
     ItemPermissionMutation,
     ItemShareMutation,

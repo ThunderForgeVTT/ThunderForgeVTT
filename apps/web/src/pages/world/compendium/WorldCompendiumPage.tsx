@@ -4,6 +4,7 @@ import { ActorPreviewPanel } from "@/pages/world/compendium/ActorPreviewPanel";
 import { ComingSoonTab } from "@/pages/world/compendium/ComingSoonTab";
 import { ItemCompendiumTab } from "@/pages/world/compendium/ItemCompendiumTab";
 import { ItemPreviewPanel } from "@/pages/world/compendium/ItemPreviewPanel";
+import { LoreCompendiumTab } from "@/pages/world/compendium/LoreCompendiumTab";
 import { NpcCompendiumTab } from "@/pages/world/compendium/NpcCompendiumTab";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import type { WorldActorRecord } from "@/types/actor";
@@ -50,7 +51,7 @@ export function WorldCompendiumPage({ worldId, world }: WorldCompendiumPageProps
         </p>
         <h1 className="text-2xl font-semibold">{world?.name ?? "World"} artifacts</h1>
         <p className="mt-2 max-w-3xl text-muted-foreground">
-          Browse and curate this world's NPCs, items, and abilities without entering play.
+          Browse and curate this world's NPCs, lore, items, and abilities without entering play.
         </p>
       </header>
 
@@ -77,6 +78,12 @@ export function WorldCompendiumPage({ worldId, world }: WorldCompendiumPageProps
                 />
               </div>
             ),
+          },
+          {
+            value: "lore",
+            label: "Lore",
+            icon: "quill",
+            content: <LoreCompendiumTab worldId={worldId} isGm={isGm} />,
           },
           {
             value: "items",

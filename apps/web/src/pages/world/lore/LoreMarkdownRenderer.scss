@@ -1,0 +1,110 @@
+// This file uses `@apply` outside the main Tailwind entry (globals.css),
+// which requires an explicit `@reference` so Tailwind v4's PostCSS plugin
+// has the theme/utility context in scope when compiling it standalone —
+// without this, `@apply` fails to build (or, with plain `var(--color-*)`
+// references instead of `@apply`, fails silently: the custom properties
+// just resolve to nothing). See https://tailwindcss.com/docs/functions-and-directives#reference-directive
+@reference "../../../styles/globals.css";
+
+// Spec 012: real styling for server-rendered GFM output. The initial
+// implementation relied on Tailwind Typography's `prose` utility classes,
+// but that plugin was never actually installed in this project (verified —
+// no other file in apps/web uses `prose-*`, and `@tailwindcss/typography`
+// isn't a dependency), so every `prose-*` class was silently inert and the
+// rendered entry fell back to unstyled browser defaults.
+//
+// A first fix attempt referenced this project's `--color-*` design tokens
+// directly via `var(--color-border)` etc. — those resolved to nothing at
+// runtime (Tailwind v4's `@theme inline` tokens here are only reliably
+// consumed through Tailwind's own utility classes / `@apply`, not raw
+// `var()` lookups from arbitrary CSS), so every rule using one silently
+// no-opped again, caught by inspecting computed styles during UX
+// verification. This version uses `@apply` with the same utility classes
+// already proven to work throughout the rest of this codebase.
+
+.lore-markdown {
+  @apply leading-relaxed;
+
+  > * + * {
+    @apply mt-3;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-semibold leading-tight;
+  }
+
+  h1 {
+    @apply text-2xl;
+  }
+  h2 {
+    @apply text-xl;
+  }
+  h3 {
+    @apply text-lg;
+  }
+
+  a {
+    @apply text-primary no-underline hover:underline;
+  }
+
+  ul,
+  ol {
+    @apply pl-6;
+
+    > li + li {
+      @apply mt-1;
+    }
+  }
+
+  ul:has(input[type="checkbox"]) {
+    @apply list-none pl-1;
+  }
+
+  li input[type="checkbox"] {
+    @apply mr-2;
+  }
+
+  blockquote {
+    @apply border-l-2 border-border pl-4 text-muted-foreground italic;
+  }
+
+  code {
+    @apply rounded bg-muted px-1.5 py-0.5 font-mono text-xs;
+  }
+
+  pre {
+    @apply overflow-x-auto rounded-lg bg-muted p-3;
+
+    code {
+      @apply bg-transparent p-0;
+    }
+  }
+
+  table {
+    @apply w-full border-collapse text-sm;
+  }
+
+  th,
+  td {
+    @apply border border-border px-2.5 py-1.5 text-left;
+  }
+
+  th {
+    @apply bg-muted font-semibold;
+  }
+
+  hr {
+    @apply border-0 border-t border-border;
+  }
+
+  img {
+    @apply max-w-full rounded-lg;
+  }
+
+  .lore-link-broken {
+    @apply cursor-help rounded border border-dashed border-destructive/50 px-1 text-destructive no-underline;
+  }
+}

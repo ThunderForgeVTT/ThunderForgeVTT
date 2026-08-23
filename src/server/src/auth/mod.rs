@@ -45,6 +45,11 @@ pub mod world_membership;
 /// `is_dm_of_world`).
 pub mod actor_permissions;
 
+/// Spec 012: lore entry ownership/permission enforcement
+/// (`require_lore_permission`, `effective_lore_permission`) — generalizes
+/// `actor_permissions` to `world_lore_entries`.
+pub mod lore_permissions;
+
 /// Spec 013: item ownership/permission enforcement (`require_item_permission`),
 /// a direct structural mirror of `actor_permissions`.
 pub mod item_permissions;

@@ -5,7 +5,8 @@ use crate::schema::{
     shapes, tokens, user_oauth_accounts, user_sessions, users, walls, world_actor_inventory,
     world_actor_permissions, world_actor_shares, world_actor_system_data, world_actors,
     world_events, world_invites, world_item_effects, world_item_permissions, world_item_shares,
-    world_items, world_members, world_tokens, worlds,
+    world_items, world_lore_entries, world_lore_image_assets, world_lore_links,
+    world_lore_permissions, world_lore_revisions, world_members, world_tokens, worlds,
 };
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -990,6 +991,156 @@ pub struct NewWorldMember {
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
 }
+
+// ============================================================================
+// Spec 012: World Lore Wiki
+// ============================================================================
+
+/// A world-scoped wiki page. `content`/`current_revision_id` are
+/// denormalized copies of the latest `world_lore_revisions` row, kept in
+/// sync on every save (data-model.md).
+#[derive(Queryable, Selectable, Insertable, AsChangeset, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_lore_entries)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct LoreEntry {
+    pub id: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub title: String,
+    pub slug: String,
+    pub content: String,
+    pub current_revision_id: Option<uuid::Uuid>,
+    pub created_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+/// New lore entry for insertion.
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_lore_entries)]
+pub struct NewLoreEntry {
+    pub id: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub title: String,
+    pub slug: String,
+    pub content: String,
+    pub created_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+/// An immutable snapshot of a lore entry's Markdown content at one point
+/// in save time (FR-016). Never updated or deleted after insert.
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_lore_revisions)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct LoreRevision {
+    pub id: uuid::Uuid,
+    pub lore_entry_id: uuid::Uuid,
+    pub content_markdown: String,
+    pub author_id: uuid::Uuid,
+    pub restored_from_revision_id: Option<uuid::Uuid>,
+    pub created_at: chrono::NaiveDateTime,
+}
+
+/// New lore revision for insertion.
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_lore_revisions)]
+pub struct NewLoreRevision {
+    pub id: uuid::Uuid,
+    pub lore_entry_id: uuid::Uuid,
+    pub content_markdown: String,
+    pub author_id: uuid::Uuid,
+    pub restored_from_revision_id: Option<uuid::Uuid>,
+    pub created_at: chrono::NaiveDateTime,
+}
+
+/// A lore entry's "ownership block" entry — one explicit (lore entry,
+/// world member, permission level) grant. Absence of a row means default
+/// Viewer access. Direct structural mirror of `ActorPermission` (spec
+/// 010), generalized to lore entries (data-model.md).
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_lore_permissions)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct LorePermission {
+    pub id: uuid::Uuid,
+    pub lore_entry_id: uuid::Uuid,
+    pub world_member_user_id: uuid::Uuid,
+    pub level: String,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+/// New lore permission for insertion/upsert.
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_lore_permissions)]
+pub struct NewLorePermission {
+    pub id: uuid::Uuid,
+    pub lore_entry_id: uuid::Uuid,
+    pub world_member_user_id: uuid::Uuid,
+    pub level: String,
+}
+
+/// A directional, in-text `[[...]]` reference from one lore entry's
+/// content to another lore entry or an actor (research.md §2). At most
+/// one of `target_lore_entry_id`/`target_actor_id` is set; a row whose
+/// target FK has gone NULL (target deleted) is treated as unresolved by
+/// every read path regardless of the stored `target_kind`.
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_lore_links)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct LoreLink {
+    pub id: uuid::Uuid,
+    pub source_lore_entry_id: uuid::Uuid,
+    pub raw_title: String,
+    pub target_kind: String,
+    pub target_lore_entry_id: Option<uuid::Uuid>,
+    pub target_actor_id: Option<uuid::Uuid>,
+    pub created_at: chrono::NaiveDateTime,
+}
+
+/// New lore link for insertion.
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_lore_links)]
+pub struct NewLoreLink {
+    pub id: uuid::Uuid,
+    pub source_lore_entry_id: uuid::Uuid,
+    pub raw_title: String,
+    pub target_kind: String,
+    pub target_lore_entry_id: Option<uuid::Uuid>,
+    pub target_actor_id: Option<uuid::Uuid>,
+}
+
+/// An uploaded/pasted image attached to a lore entry (FR-008/009),
+/// stored under a UUID-based RustFS object key (never the filename).
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_lore_image_assets)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct LoreImageAsset {
+    pub id: uuid::Uuid,
+    pub lore_entry_id: uuid::Uuid,
+    pub uploaded_by: uuid::Uuid,
+    pub original_filename: Option<String>,
+    pub content_type: String,
+    pub byte_size: i64,
+    pub created_at: chrono::NaiveDateTime,
+}
+
+/// New lore image asset for insertion.
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_lore_image_assets)]
+pub struct NewLoreImageAsset {
+    pub id: uuid::Uuid,
+    pub lore_entry_id: uuid::Uuid,
+    pub uploaded_by: uuid::Uuid,
+    pub original_filename: Option<String>,
+    pub content_type: String,
+    pub byte_size: i64,
+    pub created_at: chrono::NaiveDateTime,
+}
+
+// ============================================================================
+// Spec 013: Items & Inventory
+// ============================================================================
 
 /// Spec 013: a world-scoped Item — mirrors `WorldActor`'s shape. Name is
 /// deliberately NOT unique per world (FR-019); a `suggestItemName` query

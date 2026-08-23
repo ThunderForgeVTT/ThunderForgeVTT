@@ -557,6 +557,28 @@ impl InviteMutation {
             .map_err(|e| Error::new(format!("Failed to clean up item permissions: {}", e)))?;
         }
 
+        // Spec 012 (data-model.md, mirrors FR-022 from spec 010 verbatim
+        // per spec.md's Assumptions): same story for a removed member's
+        // lore entry ownership-block entries — no direct FK from
+        // `world_members` to `world_lore_permissions`, so cleaned up
+        // explicitly here too.
+        {
+            use crate::schema::{world_lore_entries, world_lore_permissions};
+            diesel::delete(
+                world_lore_permissions::table
+                    .filter(world_lore_permissions::world_member_user_id.eq(user_id))
+                    .filter(
+                        world_lore_permissions::lore_entry_id.eq_any(
+                            world_lore_entries::table
+                                .filter(world_lore_entries::world_id.eq(world_id))
+                                .select(world_lore_entries::id),
+                        ),
+                    ),
+            )
+            .execute(&mut conn)
+            .map_err(|e| Error::new(format!("Failed to clean up lore permissions: {}", e)))?;
+        }
+
         // Record event for audit trail
         let event_payload = serde_json::json!({
             "user_id": target_member.user_id,
