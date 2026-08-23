@@ -8,6 +8,7 @@ mod db_types;
 mod errors;
 mod graphql;
 mod map_import;
+mod markdown; // Spec 012: lore wiki GFM rendering, [[link]] resolution, slug generation
 mod models;
 mod network;
 mod pubsub;
