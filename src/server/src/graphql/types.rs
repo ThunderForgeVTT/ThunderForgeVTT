@@ -421,6 +421,10 @@ pub struct GraphQLItem {
     /// placeholder, never the real content, for every caller including
     /// the owner (contracts/graphql-moderation.md's enforcement contract).
     pub moderated: bool,
+    /// Spec 015: the disabling case's id, present only on a moderation
+    /// placeholder — lets the owner's client jump straight into
+    /// `submitCounterNotice` (FR-005) without a staff-only case lookup.
+    pub moderation_case_id: Option<uuid::Uuid>,
 }
 
 impl GraphQLItem {
@@ -440,6 +444,7 @@ impl GraphQLItem {
             created_at: row.created_at,
             updated_at: row.updated_at,
             moderated: false,
+            moderation_case_id: None,
         }
     }
 
@@ -449,6 +454,7 @@ impl GraphQLItem {
         id: uuid::Uuid,
         world_id: uuid::Uuid,
         my_permission_level: ActorPermissionLevel,
+        moderation_case_id: Option<uuid::Uuid>,
     ) -> Self {
         let now = chrono::Utc::now().naive_utc();
         Self {
@@ -462,6 +468,7 @@ impl GraphQLItem {
             created_at: now,
             updated_at: now,
             moderated: true,
+            moderation_case_id,
         }
     }
 }
@@ -563,6 +570,12 @@ pub struct GraphQLLoreEntry {
     pub created_by: uuid::Uuid,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    /// Spec 015: true when this entry is currently disabled in response to
+    /// a DMCA takedown notice — `title`/`content` are a placeholder, not
+    /// the real content (contracts/graphql-moderation.md).
+    pub moderated: bool,
+    /// The disabling case's id, present only on a moderation placeholder.
+    pub moderation_case_id: Option<uuid::Uuid>,
 }
 
 #[async_graphql::ComplexObject]
@@ -615,6 +628,8 @@ impl From<LoreEntry> for GraphQLLoreEntry {
             created_by: row.created_by,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            moderated: false,
+            moderation_case_id: None,
         }
     }
 }

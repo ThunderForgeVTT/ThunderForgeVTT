@@ -211,10 +211,12 @@ impl ItemQuery {
                 row.id,
             )
             .await?;
+            let case_id = crate::moderation::active_case_id(state, "world_item", row.id).await?;
             return Ok(GraphQLItem::moderated_placeholder(
                 row.id,
                 row.world_id,
                 my_permission_level,
+                case_id,
             ));
         }
 

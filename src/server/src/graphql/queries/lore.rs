@@ -162,7 +162,7 @@ pub async fn lore_entry_impl(
     is_admin: bool,
     world_id: Uuid,
     slug: &str,
-) -> GraphQLResult<Option<LoreEntry>> {
+) -> GraphQLResult<Option<(LoreEntry, Option<Uuid>)>> {
     require_visible_world(state, user_id, is_admin, world_id).await?;
 
     let mut conn = state
@@ -194,19 +194,23 @@ pub async fn lore_entry_impl(
         .is_some()
     {
         let now = chrono::Utc::now().naive_utc();
-        return Ok(Some(crate::models::LoreEntry {
-            id: row.id,
-            world_id: row.world_id,
-            title: "[Content removed in response to a takedown notice]".to_string(),
-            slug: row.slug,
-            content: String::new(),
-            current_revision_id: None,
-            created_by: row.created_by,
-            created_at: now,
-            updated_at: now,
-        }));
+        let case_id = crate::moderation::active_case_id(state, "world_lore_entry", row.id).await?;
+        return Ok(Some((
+            crate::models::LoreEntry {
+                id: row.id,
+                world_id: row.world_id,
+                title: "[Content removed in response to a takedown notice]".to_string(),
+                slug: row.slug,
+                content: String::new(),
+                current_revision_id: None,
+                created_by: row.created_by,
+                created_at: now,
+                updated_at: now,
+            },
+            case_id,
+        )));
     }
-    Ok(Some(row))
+    Ok(Some((row, None)))
 }
 
 #[derive(Enum, Debug, Copy, Clone, Eq, PartialEq)]
@@ -345,7 +349,11 @@ impl LoreQuery {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         let entry = lore_entry_impl(state, auth_user.user_id, auth_user.is_admin, world_id, &slug).await?;
-        Ok(entry.map(GraphQLLoreEntry::from))
+        Ok(entry.map(|(row, moderation_case_id)| GraphQLLoreEntry {
+            moderated: moderation_case_id.is_some(),
+            moderation_case_id,
+            ..GraphQLLoreEntry::from(row)
+        }))
     }
 
     /// Autocomplete candidates for the editor's `[[`-trigger popover

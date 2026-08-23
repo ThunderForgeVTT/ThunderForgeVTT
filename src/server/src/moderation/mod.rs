@@ -178,6 +178,38 @@ pub async fn effective_status(
     }
 }
 
+/// The `case_id` of the entity's currently-active disabling case, if any —
+/// used so an owner-facing moderation placeholder can link straight into
+/// `submitCounterNotice` (FR-005) without a separate staff-only lookup.
+/// Mirrors `effective_status`'s "is this entity disabled right now" logic
+/// but returns the case identity instead of just a boolean/status string.
+pub async fn active_case_id(
+    state: &AppState,
+    entity_type: &str,
+    entity_id: Uuid,
+) -> GraphQLResult<Option<Uuid>> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    let entity_type_owned = entity_type.to_string();
+    let latest = tokio::task::spawn_blocking(move || latest_event(&mut conn, &entity_type_owned, entity_id))
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to load moderation status"))?;
+
+    let Some(event) = latest else {
+        return Ok(None);
+    };
+
+    if is_disabled_status(&event.action_type) || event.action_type == action_type::COUNTER_NOTICE_FORWARDED {
+        Ok(Some(event.case_id))
+    } else {
+        Ok(None)
+    }
+}
+
 /// Filters a list of rows down to only those NOT currently
 /// moderation-disabled (contracts/graphql-moderation.md's "list queries
 /// exclude the entity entirely" enforcement rule). `id_of` extracts each
