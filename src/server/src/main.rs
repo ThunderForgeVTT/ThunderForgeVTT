@@ -1,3 +1,14 @@
+// async-graphql's MergedObject-generated resolve_field()/find_entity()
+// dispatch nests one level deeper per merged Query/Mutation root member
+// (see graphql.rs's QueryRoot/MutationRoot). Spec 015's ModerationQuery/
+// ModerationMutation pushed this past the compiler's default 128-deep
+// type-layout recursion limit — only surfaces in a full `cargo run`/
+// release build that actually instantiates the live AppSchema, NOT in
+// `cargo check`/`cargo test` (see docs/adrs/20260823-043-*.md's
+// implementation notes). Raise, don't work around — every future merged
+// query/mutation module will need this headroom too.
+#![recursion_limit = "512"]
+
 mod adapters;
 mod admin;
 mod auth;
@@ -40,7 +51,7 @@ use axum::{
     http::StatusCode,
     middleware::{from_fn, from_fn_with_state},
     response::{Html, IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
 };
 use base64::{Engine as _, engine::general_purpose};
 use clap::Parser;
@@ -69,6 +80,25 @@ async fn graphql_handler(
         .execute(req.into_inner().data(auth_user))
         .await
         .into()
+}
+
+/// Spec 015 (FR-002): the ONLY GraphQL entry point reachable without an
+/// authenticated session — `/api/graphql` itself is wrapped in
+/// `require_authenticated_user` at the router-layer (below), before any
+/// resolver's own auth logic ever runs, so `submitTakedownNotice`'s
+/// resolver-level "no auth required" was previously unreachable in
+/// practice. No `AuthenticatedUser` is inserted into the execution
+/// context here; every resolver OTHER than the explicitly-public ones
+/// (which never call `authenticated_user(ctx)`) still fails cleanly with
+/// "Authentication required" if invoked through this route — this is not
+/// a broader bypass, it just removes the transport-level all-or-nothing
+/// gate for the one mutation that must be reachable by an anonymous
+/// rights holder.
+async fn graphql_public_handler(
+    Extension(schema): Extension<AppSchema>,
+    req: GraphQLRequest,
+) -> GraphQLResponse {
+    schema.execute(req.into_inner()).await.into()
 }
 
 async fn graphql_ws_handler(
@@ -326,11 +356,16 @@ async fn main() {
             auth_middleware::require_authenticated_user,
         ));
 
+    // Spec 015 (FR-002): deliberately NOT wrapped in
+    // `require_authenticated_user` — see `graphql_public_handler`'s docs.
+    let public_graphql_router = Router::new().route("/graphql/public", post(graphql_public_handler));
+
     let api_router = Router::new()
         .route("/healthz", get(liveness_handler))
         .route("/readyz", get(readiness_handler))
         .route("/status", get(status_handler))
         .merge(graphql_router)
+        .merge(public_graphql_router)
         .merge(auth::router())
         .merge(user_router)
         .merge(world_router)
