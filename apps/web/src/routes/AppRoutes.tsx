@@ -29,6 +29,7 @@ const LoreRevisionHistory = lazy(pageLoaders.loreEntryHistory);
 const SharedActorPage = lazy(pageLoaders.sharedActor);
 const ItemDetailPage = lazy(pageLoaders.itemView);
 const SharedItemPage = lazy(pageLoaders.sharedItem);
+const WorldSystemSettingsPage = lazy(pageLoaders.worldSystemSettings);
 const JoinWorldPage = lazy(pageLoaders.joinWorld);
 const NotFoundPage = lazy(pageLoaders.notFound);
 
@@ -488,6 +489,14 @@ export default function AppRoutes({
           element={
             <RequireAuthenticated>
               {renderLazyPage(<SharedItemPage />, "Loading shared item")}
+            </RequireAuthenticated>
+          }
+        />
+        <Route
+          path="/world/:id/settings/system"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(<WorldSystemSettingsPage />, "Loading system settings")}
             </RequireAuthenticated>
           }
         />

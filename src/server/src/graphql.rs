@@ -1405,6 +1405,62 @@ pub async fn update_world_session_notes_impl(
     Ok(GraphQLWorld::from(updated))
 }
 
+/// Spec 016 (FR-004, T009): assigns/changes a world's active system pack.
+/// No such mutation existed before this spec — `game_system_id` could
+/// previously only be set at `createWorld` time (and spec 008 removed the
+/// UI for that), leaving no way to assign or change it afterward. This is
+/// the write half of the new System Settings surface
+/// (`WorldSystemSettingsPage.tsx`) that also renders the target system's
+/// `legal` notice, per this feature's scope-correction note in tasks.md.
+#[derive(InputObject, Debug, Clone)]
+pub struct UpdateWorldGameSystemInput {
+    pub world_id: uuid::Uuid,
+    pub game_system_id: String,
+}
+
+/// Testable core of `WorldMutation::update_world_game_system` (see
+/// `update_world_session_notes_impl`'s identical shape/rationale).
+/// DM/GM-only — mirrors `update_world_session_notes_impl`'s permission
+/// check exactly, since assigning a world's ruleset is as GM-scoped a
+/// decision as its session recap.
+pub async fn update_world_game_system_impl(
+    state: &AppState,
+    user_id: uuid::Uuid,
+    is_admin: bool,
+    input: UpdateWorldGameSystemInput,
+) -> GraphQLResult<GraphQLWorld> {
+    if !crate::auth::actor_permissions::is_dm_of_world(state, user_id, is_admin, input.world_id)
+        .await?
+    {
+        return Err(Error::new(
+            "Only the DM (Owner or GM) may change a world's game system",
+        ));
+    }
+
+    let world_id = input.world_id;
+    let game_system_id = input.game_system_id;
+    if game_system_id.trim().is_empty() {
+        return Err(Error::new("gameSystemId must not be empty"));
+    }
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    let updated = tokio::task::spawn_blocking(move || {
+        diesel::update(worlds::table.filter(worlds::id.eq(world_id)))
+            .set(worlds::game_system_id.eq(Some(game_system_id)))
+            .returning(World::as_returning())
+            .get_result::<World>(&mut conn)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to update game system"))?;
+
+    Ok(GraphQLWorld::from(updated))
+}
+
 #[derive(Default)]
 pub struct WorldMutation;
 
@@ -1430,6 +1486,16 @@ impl WorldMutation {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         update_world_session_notes_impl(state, auth_user.user_id, auth_user.is_admin, input).await
+    }
+
+    async fn update_world_game_system(
+        &self,
+        ctx: &Context<'_>,
+        input: UpdateWorldGameSystemInput,
+    ) -> GraphQLResult<GraphQLWorld> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        update_world_game_system_impl(state, auth_user.user_id, auth_user.is_admin, input).await
     }
 
     async fn rename_world(
@@ -2195,6 +2261,89 @@ mod tests {
         assert!(
             result.is_err(),
             "a user with no relationship to the world must not be able to update session notes"
+        );
+    }
+
+    // Spec 016: World System Assignment (T009)
+
+    #[tokio::test]
+    async fn dm_can_assign_a_world_game_system() {
+        use super::{UpdateWorldGameSystemInput, update_world_game_system_impl};
+        use crate::test_support::*;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let updated = update_world_game_system_impl(
+            &state,
+            owner_id,
+            false,
+            UpdateWorldGameSystemInput {
+                world_id,
+                game_system_id: "dnd5e".to_string(),
+            },
+        )
+        .await
+        .expect("the DM should be able to assign a game system");
+
+        assert_eq!(updated.game_system_id.as_deref(), Some("dnd5e"));
+    }
+
+    #[tokio::test]
+    async fn assigning_an_empty_game_system_id_is_rejected() {
+        use super::{UpdateWorldGameSystemInput, update_world_game_system_impl};
+        use crate::test_support::*;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let result = update_world_game_system_impl(
+            &state,
+            owner_id,
+            false,
+            UpdateWorldGameSystemInput {
+                world_id,
+                game_system_id: "  ".to_string(),
+            },
+        )
+        .await;
+
+        assert!(result.is_err(), "an empty gameSystemId must be rejected");
+    }
+
+    #[tokio::test]
+    async fn player_role_cannot_assign_a_world_game_system() {
+        use super::{UpdateWorldGameSystemInput, update_world_game_system_impl};
+        use crate::test_support::*;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let player_id = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world_id, player_id, "Player");
+        drop(conn);
+
+        let result = update_world_game_system_impl(
+            &state,
+            player_id,
+            false,
+            UpdateWorldGameSystemInput {
+                world_id,
+                game_system_id: "dnd5e".to_string(),
+            },
+        )
+        .await;
+
+        assert!(
+            result.is_err(),
+            "a Player-role world member must not be able to change the world's game system"
         );
     }
 }

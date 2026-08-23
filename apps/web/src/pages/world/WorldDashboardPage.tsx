@@ -203,10 +203,16 @@ export default function WorldDashboardPage() {
                   <dl className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <dt className="text-xs text-muted-foreground">
-                        Game system ID
+                        Game system
                       </dt>
                       <dd className="font-medium">
-                        {world.gameSystemId ?? "Not yet assigned"}
+                        <Link
+                          to={`/world/${world.id}/settings/system`}
+                          className="underline underline-offset-2 hover:text-primary"
+                          data-testid="world-system-settings-link"
+                        >
+                          {world.gameSystemId ?? "Not yet assigned"} — manage
+                        </Link>
                       </dd>
                     </div>
                     <div>

@@ -189,3 +189,25 @@ export function updateWorldSessionNotes(
     { input: { worldId, notes } },
   ).then((data) => data.updateWorldSessionNotes);
 }
+
+type UpdateWorldGameSystemMutation = {
+  updateWorldGameSystem: WorldRecord;
+};
+
+/** Spec 016 (T009): assigns/changes a world's active system pack.
+ * DM/GM-only, server-enforced. */
+export function updateWorldGameSystem(
+  worldId: string,
+  gameSystemId: string,
+): Promise<WorldRecord> {
+  return postGraphQL<UpdateWorldGameSystemMutation>(
+    `
+      mutation UpdateWorldGameSystem($input: UpdateWorldGameSystemInput!) {
+        updateWorldGameSystem(input: $input) {
+          ${WORLD_FIELDS}
+        }
+      }
+    `,
+    { input: { worldId, gameSystemId } },
+  ).then((data) => data.updateWorldGameSystem);
+}

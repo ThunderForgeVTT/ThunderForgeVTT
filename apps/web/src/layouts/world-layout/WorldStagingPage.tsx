@@ -93,6 +93,13 @@ export function WorldStagingPage({
           >
             Manage NPCs, items & abilities in the Compendium →
           </Link>
+          <Link
+            to={`/world/${worldId}/settings/system`}
+            className="font-medium text-foreground underline underline-offset-2 hover:text-primary"
+            data-testid="system-settings-link"
+          >
+            System settings & license →
+          </Link>
         </div>
       </header>
 
