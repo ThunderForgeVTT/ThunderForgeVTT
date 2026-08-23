@@ -57,11 +57,21 @@ function useMyWorlds() {
   return { worlds, error };
 }
 
+/** GM-run worlds first (the ones a returning user most likely needs to
+ * get into quickly to prep/run a session), then worlds they play in —
+ * rather than whatever order the backend's owned-then-member combine
+ * happens to return. Stable otherwise (no secondary sort key). */
+function sortWorldsByRole(entries: MyWorldEntry[]): MyWorldEntry[] {
+  const rank = (role: string) => (role === "Owner" || role === "GM" ? 0 : 1);
+  return [...entries].sort((a, b) => rank(a.role) - rank(b.role));
+}
+
 export default function WelcomePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { worlds, error } = useMyWorlds();
   const [inviteCode, setInviteCode] = useState("");
+  const sortedWorlds = worlds ? sortWorldsByRole(worlds) : [];
 
   const handleJoinByCode = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -97,63 +107,73 @@ export default function WelcomePage() {
             </h1>
             <p className="max-w-2xl text-muted-foreground">
               {user?.username ?? "Welcome"}, your next step begins here.
-              Jump back into one of your worlds, create a fresh one, or
-              gather your party through an invite code.
             </p>
           </section>
 
           {/* T021 (US3): direct, one-click shortcuts into the user's actual
            * worlds — FR-009 — always shown once we know worlds.length > 0
            * (the zero case already redirected away above), regardless of
-           * count (FR-001a: never auto-enter, even for exactly one). */}
-          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {(worlds ?? []).map(({ world, role }) => (
-              <Card key={world.id} surface="parchment" className="grid gap-3 p-6">
-                <div className="flex items-start justify-between gap-2">
-                  <h2 className="text-lg font-semibold">{world.name}</h2>
-                  <Badge variant={role === "Owner" || role === "GM" ? "default" : "secondary"}>
-                    {roleBadgeLabel(role)}
-                  </Badge>
-                </div>
-                <p className="text-muted-foreground">
-                  {world.description ?? "Jump back into this world."}
-                </p>
-                <Button asChild icon="worlds">
-                  <Link to={`/world/${world.id}/staging`}>Enter {world.name}</Link>
-                </Button>
-              </Card>
-            ))}
+           * count (FR-001a: never auto-enter, even for exactly one). GM-run
+           * worlds sort first (sortWorldsByRole) so a returning GM finds
+           * their own tables without hunting past worlds they just play in. */}
+          <section className="grid gap-4">
+            <h2 className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+              Your worlds
+            </h2>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {sortedWorlds.map(({ world, role }) => (
+                <Card key={world.id} surface="parchment" className="grid gap-3 p-6">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="text-lg font-semibold">{world.name}</h3>
+                    <Badge variant={role === "Owner" || role === "GM" ? "default" : "secondary"}>
+                      {roleBadgeLabel(role)}
+                    </Badge>
+                  </div>
+                  <p className="text-muted-foreground">
+                    {world.description ?? "Jump back into this world."}
+                  </p>
+                  <Button asChild icon="worlds">
+                    <Link to={`/world/${world.id}/staging`}>Enter {world.name}</Link>
+                  </Button>
+                </Card>
+              ))}
+            </div>
           </section>
 
-          <section className="grid gap-4 sm:grid-cols-2">
-            <Card surface="leather" className="grid gap-3 p-6">
-              <h2 className="text-lg font-semibold">Create a world</h2>
-              <p className="text-muted-foreground">
-                Start a fresh tabletop chapter.
-              </p>
-              <Button asChild variant="secondary" icon="quill">
-                <Link to="/worlds/create">Create a World</Link>
-              </Button>
-            </Card>
-
-            {/* T016 (US2): real invite-code entry — FR-007 — replaces the
-             * dead CTA that used to link to /counter. */}
-            <Card surface="stone" className="grid gap-3 p-6">
-              <h2 className="text-lg font-semibold">Join via invite code</h2>
-              <form onSubmit={handleJoinByCode} className="grid gap-3">
-                <Field label="Invite code" htmlFor="welcome-invite-code">
-                  <Input
-                    id="welcome-invite-code"
-                    value={inviteCode}
-                    onChange={(event) => setInviteCode(event.target.value)}
-                    placeholder="Enter your code"
-                  />
-                </Field>
-                <Button type="submit" variant="ghost" icon="spark">
-                  Join via Invite Code
+          <section className="grid gap-4">
+            <h2 className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+              Get started
+            </h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Card surface="leather" className="grid gap-3 p-6">
+                <h3 className="text-lg font-semibold">Create a world</h3>
+                <p className="text-muted-foreground">
+                  Start a fresh tabletop chapter.
+                </p>
+                <Button asChild variant="secondary" icon="quill">
+                  <Link to="/worlds/create">Create a World</Link>
                 </Button>
-              </form>
-            </Card>
+              </Card>
+
+              {/* T016 (US2): real invite-code entry — FR-007 — replaces the
+               * dead CTA that used to link to /counter. */}
+              <Card surface="stone" className="grid gap-3 p-6">
+                <h3 className="text-lg font-semibold">Join via invite code</h3>
+                <form onSubmit={handleJoinByCode} className="grid gap-3">
+                  <Field label="Invite code" htmlFor="welcome-invite-code">
+                    <Input
+                      id="welcome-invite-code"
+                      value={inviteCode}
+                      onChange={(event) => setInviteCode(event.target.value)}
+                      placeholder="Enter your code"
+                    />
+                  </Field>
+                  <Button type="submit" variant="ghost" icon="spark">
+                    Join via Invite Code
+                  </Button>
+                </form>
+              </Card>
+            </div>
           </section>
         </main>
       </Container>
