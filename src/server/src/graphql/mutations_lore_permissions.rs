@@ -125,6 +125,42 @@ pub async fn set_lore_permission_impl(
     .map_err(Error::new)
 }
 
+/// Testable core of `LorePermissionMutation::remove_lore_permission`.
+/// DM-only. Idempotent — reverts the member to default Viewer. Not in
+/// the original contracts/lore-permissions.md shape, but added to match
+/// the "Default (Viewer)" option the actor ownership-block UI
+/// (`ActorOwnershipBlock.tsx`) already exposes — `setLorePermission`
+/// alone has no way to clear an explicit row back to the implicit
+/// default.
+pub async fn remove_lore_permission_impl(
+    state: &crate::state::AppState,
+    caller_id: Uuid,
+    is_admin: bool,
+    lore_entry_id: Uuid,
+    user_id: Uuid,
+) -> GraphQLResult<bool> {
+    require_dm_of_entrys_world(state, caller_id, is_admin, lore_entry_id).await?;
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    tokio::task::spawn_blocking(move || {
+        diesel::delete(
+            world_lore_permissions::table
+                .filter(world_lore_permissions::lore_entry_id.eq(lore_entry_id))
+                .filter(world_lore_permissions::world_member_user_id.eq(user_id)),
+        )
+        .execute(&mut conn)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to remove lore permission"))?;
+
+    Ok(true)
+}
+
 #[derive(Default)]
 pub struct LorePermissionQuery;
 
@@ -161,6 +197,17 @@ impl LorePermissionMutation {
         set_lore_permission_impl(state, auth_user.user_id, auth_user.is_admin, input)
             .await
             .map(GraphQLLorePermission::from)
+    }
+
+    async fn remove_lore_permission(
+        &self,
+        ctx: &Context<'_>,
+        lore_entry_id: Uuid,
+        user_id: Uuid,
+    ) -> GraphQLResult<bool> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        remove_lore_permission_impl(state, auth_user.user_id, auth_user.is_admin, lore_entry_id, user_id).await
     }
 }
 
