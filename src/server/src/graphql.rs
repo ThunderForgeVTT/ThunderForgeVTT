@@ -320,6 +320,16 @@ impl GraphQLWorldActor {
         )
         .await
     }
+
+    /// Spec 012 (FR-006): every lore entry whose body currently contains
+    /// a resolved in-text link to this actor.
+    async fn lore_linked_from(
+        &self,
+        ctx: &Context<'_>,
+    ) -> GraphQLResult<Vec<crate::graphql::types::GraphQLLoreEntry>> {
+        let state = app_state(ctx)?;
+        crate::graphql::queries::lore::lore_entries_linking_to_actor(state, self.id).await
+    }
 }
 
 impl From<WorldActor> for GraphQLWorldActor {
