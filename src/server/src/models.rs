@@ -2,8 +2,9 @@ use crate::schema::{
     admin_bootstrap_oauth_sessions, admin_bootstrap_setup, auth_security_settings, canvas_image_assets, fog_masks,
     game_systems, light_sources, login_two_factor_challenges, oauth_authorization_sessions, oauth_link_challenges,
     oauth_providers, players_online, scenes, shapes, tokens, user_oauth_accounts, user_sessions,
-    users, walls, world_actors, world_actor_permissions, world_actor_shares, world_actor_system_data, world_events,
-    world_invites, world_members, world_tokens, worlds,
+    users, walls, world_actors, world_actor_inventory, world_actor_permissions, world_actor_shares,
+    world_actor_system_data, world_events, world_invites, world_item_effects, world_item_permissions,
+    world_item_shares, world_items, world_members, world_tokens, worlds,
 };
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -991,4 +992,138 @@ pub struct NewWorldMember {
     pub joined_at: chrono::NaiveDateTime,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+}
+
+/// Spec 013: a world-scoped Item — mirrors `WorldActor`'s shape. Name is
+/// deliberately NOT unique per world (FR-019); a `suggestItemName` query
+/// nudges the DM with "did you mean?" instead of enforcing uniqueness.
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_items)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct WorldItem {
+    pub id: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub icon_asset_id: Option<uuid::Uuid>,
+    pub created_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+/// New item for insertion.
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_items)]
+pub struct NewWorldItem {
+    pub world_id: uuid::Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub icon_asset_id: Option<uuid::Uuid>,
+    pub created_by: uuid::Uuid,
+}
+
+/// Spec 013: an item's ownership-block entry — direct structural mirror of
+/// `ActorPermission` (spec 010), generalized to items.
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_item_permissions)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct ItemPermission {
+    pub id: uuid::Uuid,
+    pub item_id: uuid::Uuid,
+    pub user_id: uuid::Uuid,
+    pub level: String,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+/// New item permission for insertion/upsert.
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_item_permissions)]
+pub struct NewItemPermission {
+    pub id: uuid::Uuid,
+    pub item_id: uuid::Uuid,
+    pub user_id: uuid::Uuid,
+    pub level: String,
+}
+
+/// Spec 013: a structured, system-agnostic effect attached to an Item
+/// (heal/damage/modifier/attack_roll). `trigger_kind` is scaffolded per
+/// FR-004a but not evaluated by any code path in this pass.
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_item_effects)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct ItemEffect {
+    pub id: uuid::Uuid,
+    pub item_id: uuid::Uuid,
+    pub effect_type: String,
+    pub formula: String,
+    pub target: String,
+    pub trigger_kind: Option<String>,
+    pub sort_order: i32,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+/// New item effect for insertion.
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_item_effects)]
+pub struct NewItemEffect {
+    pub item_id: uuid::Uuid,
+    pub effect_type: String,
+    pub formula: String,
+    pub target: String,
+    pub trigger_kind: Option<String>,
+    pub sort_order: i32,
+}
+
+/// Spec 013: a revocable, uncapped shareable link for one Item — direct
+/// structural mirror of `ActorShare` (spec 010).
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_item_shares)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct ItemShare {
+    pub id: uuid::Uuid,
+    pub item_id: uuid::Uuid,
+    pub share_code: String,
+    pub created_by: uuid::Uuid,
+    pub revoked: bool,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+/// New item share link for insertion.
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_item_shares)]
+pub struct NewItemShare {
+    pub id: uuid::Uuid,
+    pub item_id: uuid::Uuid,
+    pub share_code: String,
+    pub created_by: uuid::Uuid,
+}
+
+/// Spec 013: one (Actor, Item, quantity) inventory row. `item_id` is
+/// nullable — nulled via `ON DELETE SET NULL` when the referenced Item is
+/// deleted (FR-017), with `item_name_snapshot` retained so the row can
+/// still render "X (deleted item)" afterward.
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_actor_inventory)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct ActorInventoryEntry {
+    pub id: uuid::Uuid,
+    pub actor_id: uuid::Uuid,
+    pub item_id: Option<uuid::Uuid>,
+    pub item_name_snapshot: String,
+    pub quantity: i32,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+/// New inventory entry for insertion.
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_actor_inventory)]
+pub struct NewActorInventoryEntry {
+    pub actor_id: uuid::Uuid,
+    pub item_id: Option<uuid::Uuid>,
+    pub item_name_snapshot: String,
+    pub quantity: i32,
 }

@@ -45,6 +45,10 @@ pub mod world_membership;
 /// `is_dm_of_world`).
 pub mod actor_permissions;
 
+/// Spec 013: item ownership/permission enforcement (`require_item_permission`),
+/// a direct structural mirror of `actor_permissions`.
+pub mod item_permissions;
+
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/authentication/setup/status", get(setup_status))

@@ -295,3 +295,207 @@ pub struct SharedActorPreview {
     pub game_system_id: Option<String>,
     pub system_data: Option<crate::graphql::GraphQLActorSystemData>,
 }
+
+// ============================================================================
+// Spec 013: Items & Inventory
+// ============================================================================
+
+use crate::models::{ActorInventoryEntry, ItemEffect, ItemPermission, ItemShare, WorldItem};
+
+/// Kind of an Item Effect. `Modifier` covers both stat boosts and
+/// detriments via a signed formula (e.g. `-1d4`) — no separate buff/debuff
+/// variant (research.md §1). Extensible by adding new variants only.
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq, Debug)]
+pub enum ItemEffectType {
+    Heal,
+    Damage,
+    Modifier,
+    AttackRoll,
+}
+
+impl ItemEffectType {
+    pub fn as_db_str(self) -> &'static str {
+        match self {
+            ItemEffectType::Heal => "heal",
+            ItemEffectType::Damage => "damage",
+            ItemEffectType::Modifier => "modifier",
+            ItemEffectType::AttackRoll => "attack_roll",
+        }
+    }
+
+    pub fn from_db_str(value: &str) -> Option<Self> {
+        match value {
+            "heal" => Some(ItemEffectType::Heal),
+            "damage" => Some(ItemEffectType::Damage),
+            "modifier" => Some(ItemEffectType::Modifier),
+            "attack_roll" => Some(ItemEffectType::AttackRoll),
+            _ => None,
+        }
+    }
+}
+
+/// Scaffolded per FR-004a — not evaluated/enforced by any code path in
+/// this pass; exists so a future dice-roller spec can add real triggering
+/// without redesigning `world_item_effects`.
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq, Debug)]
+pub enum ItemEffectTrigger {
+    OnUse,
+    Passive,
+}
+
+impl ItemEffectTrigger {
+    pub fn as_db_str(self) -> &'static str {
+        match self {
+            ItemEffectTrigger::OnUse => "on_use",
+            ItemEffectTrigger::Passive => "passive",
+        }
+    }
+
+    pub fn from_db_str(value: &str) -> Option<Self> {
+        match value {
+            "on_use" => Some(ItemEffectTrigger::OnUse),
+            "passive" => Some(ItemEffectTrigger::Passive),
+            _ => None,
+        }
+    }
+}
+
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLItemEffect {
+    pub id: uuid::Uuid,
+    pub item_id: uuid::Uuid,
+    pub effect_type: ItemEffectType,
+    pub formula: String,
+    pub target: String,
+    pub trigger_kind: Option<ItemEffectTrigger>,
+    pub sort_order: i32,
+}
+
+impl From<ItemEffect> for GraphQLItemEffect {
+    fn from(row: ItemEffect) -> Self {
+        Self {
+            id: row.id,
+            item_id: row.item_id,
+            effect_type: ItemEffectType::from_db_str(&row.effect_type)
+                .unwrap_or(ItemEffectType::Modifier),
+            formula: row.formula,
+            target: row.target,
+            trigger_kind: row
+                .trigger_kind
+                .as_deref()
+                .and_then(ItemEffectTrigger::from_db_str),
+            sort_order: row.sort_order,
+        }
+    }
+}
+
+/// An Item's own GraphQL projection. `effects` is resolved separately by
+/// the owning query/mutation (not a field resolver here) since every
+/// current call site already has both rows in hand after a join/second
+/// query — keeps this type a plain `SimpleObject` with no async fetch.
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLItem {
+    pub id: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub icon_asset_id: Option<uuid::Uuid>,
+    pub effects: Vec<GraphQLItemEffect>,
+    pub my_permission_level: ActorPermissionLevel,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+impl GraphQLItem {
+    pub fn from_row(
+        row: WorldItem,
+        effects: Vec<ItemEffect>,
+        my_permission_level: ActorPermissionLevel,
+    ) -> Self {
+        Self {
+            id: row.id,
+            world_id: row.world_id,
+            name: row.name,
+            description: row.description,
+            icon_asset_id: row.icon_asset_id,
+            effects: effects.into_iter().map(GraphQLItemEffect::from).collect(),
+            my_permission_level,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        }
+    }
+}
+
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLItemPermission {
+    pub item_id: uuid::Uuid,
+    pub user_id: uuid::Uuid,
+    pub level: ActorPermissionLevel,
+    pub updated_at: NaiveDateTime,
+}
+
+impl From<ItemPermission> for GraphQLItemPermission {
+    fn from(row: ItemPermission) -> Self {
+        Self {
+            item_id: row.item_id,
+            user_id: row.user_id,
+            level: ActorPermissionLevel::from_db_str(&row.level)
+                .unwrap_or(ActorPermissionLevel::Viewer),
+            updated_at: row.updated_at,
+        }
+    }
+}
+
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLItemShareLink {
+    pub id: uuid::Uuid,
+    pub item_id: uuid::Uuid,
+    pub share_code: String,
+    pub revoked: bool,
+    pub created_at: NaiveDateTime,
+}
+
+impl From<ItemShare> for GraphQLItemShareLink {
+    fn from(row: ItemShare) -> Self {
+        Self {
+            id: row.id,
+            item_id: row.item_id,
+            share_code: row.share_code,
+            revoked: row.revoked,
+            created_at: row.created_at,
+        }
+    }
+}
+
+/// Read-only, world-identity-scrubbed projection of a shared item
+/// (mirrors `SharedActorPreview` — excludes id/worldId/createdBy/
+/// ownership block so an arbitrary logged-in viewer can't learn the
+/// source world, per contracts/item-share.md).
+#[derive(SimpleObject, Debug, Clone)]
+pub struct SharedItemPreview {
+    pub name: String,
+    pub description: Option<String>,
+    pub icon_asset_id: Option<uuid::Uuid>,
+    pub effects: Vec<GraphQLItemEffect>,
+}
+
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLInventoryEntry {
+    pub id: uuid::Uuid,
+    pub actor_id: uuid::Uuid,
+    pub item_id: Option<uuid::Uuid>,
+    pub item_name: String,
+    pub quantity: i32,
+}
+
+impl From<ActorInventoryEntry> for GraphQLInventoryEntry {
+    fn from(row: ActorInventoryEntry) -> Self {
+        Self {
+            id: row.id,
+            actor_id: row.actor_id,
+            item_id: row.item_id,
+            item_name: row.item_name_snapshot,
+            quantity: row.quantity,
+        }
+    }
+}

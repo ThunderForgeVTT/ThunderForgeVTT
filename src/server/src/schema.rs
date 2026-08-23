@@ -328,6 +328,18 @@ diesel::table! {
 }
 
 diesel::table! {
+    world_actor_inventory (id) {
+        id -> Uuid,
+        actor_id -> Uuid,
+        item_id -> Nullable<Uuid>,
+        item_name_snapshot -> Text,
+        quantity -> Int4,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     world_actor_permissions (id) {
         id -> Uuid,
         actor_id -> Uuid,
@@ -417,6 +429,60 @@ diesel::table! {
 }
 
 diesel::table! {
+    world_item_effects (id) {
+        id -> Uuid,
+        item_id -> Uuid,
+        #[max_length = 16]
+        effect_type -> Varchar,
+        formula -> Text,
+        target -> Text,
+        #[max_length = 16]
+        trigger_kind -> Nullable<Varchar>,
+        sort_order -> Int4,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    world_item_permissions (id) {
+        id -> Uuid,
+        item_id -> Uuid,
+        user_id -> Uuid,
+        #[max_length = 16]
+        level -> Varchar,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    world_item_shares (id) {
+        id -> Uuid,
+        item_id -> Uuid,
+        #[max_length = 32]
+        share_code -> Varchar,
+        created_by -> Uuid,
+        revoked -> Bool,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    world_items (id) {
+        id -> Uuid,
+        world_id -> Uuid,
+        name -> Text,
+        description -> Nullable<Text>,
+        icon_asset_id -> Nullable<Uuid>,
+        created_by -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     world_members (id) {
         id -> Uuid,
         world_id -> Uuid,
@@ -485,6 +551,8 @@ diesel::joinable!(user_oauth_accounts -> oauth_providers (provider_id));
 diesel::joinable!(user_oauth_accounts -> users (user_id));
 diesel::joinable!(user_sessions -> users (user_id));
 diesel::joinable!(walls -> scenes (scene_id));
+diesel::joinable!(world_actor_inventory -> world_actors (actor_id));
+diesel::joinable!(world_actor_inventory -> world_items (item_id));
 diesel::joinable!(world_actor_permissions -> users (user_id));
 diesel::joinable!(world_actor_permissions -> world_actors (actor_id));
 diesel::joinable!(world_actor_shares -> users (created_by));
@@ -495,6 +563,13 @@ diesel::joinable!(world_actors -> worlds (world_id));
 diesel::joinable!(world_events -> worlds (world_id));
 diesel::joinable!(world_invites -> users (created_by));
 diesel::joinable!(world_invites -> worlds (world_id));
+diesel::joinable!(world_item_effects -> world_items (item_id));
+diesel::joinable!(world_item_permissions -> users (user_id));
+diesel::joinable!(world_item_permissions -> world_items (item_id));
+diesel::joinable!(world_item_shares -> users (created_by));
+diesel::joinable!(world_item_shares -> world_items (item_id));
+diesel::joinable!(world_items -> users (created_by));
+diesel::joinable!(world_items -> worlds (world_id));
 diesel::joinable!(world_members -> users (user_id));
 diesel::joinable!(world_members -> worlds (world_id));
 diesel::joinable!(world_tokens -> worlds (world_id));
@@ -520,12 +595,17 @@ diesel::allow_tables_to_appear_in_same_query!(
     user_sessions,
     users,
     walls,
+    world_actor_inventory,
     world_actor_permissions,
     world_actor_shares,
     world_actor_system_data,
     world_actors,
     world_events,
     world_invites,
+    world_item_effects,
+    world_item_permissions,
+    world_item_shares,
+    world_items,
     world_members,
     world_tokens,
     worlds,
