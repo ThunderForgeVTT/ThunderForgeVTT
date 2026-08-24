@@ -125,13 +125,13 @@ New workspace crate `crates/thunderforge-dice/` (path-dependency from both `src/
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T030 Author `docs/adrs/<next-number>-dice-rolling-engine-shared-crate-and-trust-boundary.md` per plan.md's Constitution Check (Principle IV, Complexity Tracking): documents the `crates/thunderforge-dice` shared-crate pattern (native + wasm32, RNG-injected, no target-detection), the server-only-authoritative-RNG trust boundary, and explicitly records that this supersedes `packs/systems/dnd5e/engine/src/dice.rs` (research.md §5) — including the recommended follow-up (migrate `roll_d20`/`RollAdvantage` call sites onto `thunderforge_dice::resolve()` with `1d20`/`2d20kh1`/`2d20kl1` formulas, then delete `dice.rs`) as noted, explicitly-out-of-scope future work, not silently implied
-- [ ] T031 [P] Run `cargo test -p thunderforge_dice` standalone (no DB/server) and confirm it passes with zero external dependencies (Constitution Principle II, quickstart.md's cross-cutting check)
-- [ ] T032 [P] Run `cargo check`/`cargo test` in `src/server` (native) and `cargo check --target wasm32-unknown-unknown -p thunderforge_engine -p dnd5e-engine` (Constitution Principle V)
-- [ ] T033 [P] Run `cargo clippy --all-targets` on `thunderforge_dice`, `thunderforge`, `thunderforge_core` and fix any new warnings, keeping the workspace at 0 (per the recent full clippy pass)
-- [ ] T034 [P] Run `pnpm --filter @thunderforge/web build` and a scoped `eslint` check on new/touched frontend files
-- [ ] T035 Execute every scenario in `specs/014-dice-rolling-engine/quickstart.md` against a running local dev stack (including the wasm32 build and standalone-crate-test cross-cutting checks) — actually trigger rolls and watch the animation in a browser, not just compile
-- [ ] T036 [P] Confirm `./scripts/check-file-length.sh` shows no new failures introduced by this feature's files
+- [X] T030 Author `docs/adrs/<next-number>-dice-rolling-engine-shared-crate-and-trust-boundary.md` per plan.md's Constitution Check (Principle IV, Complexity Tracking): documents the `crates/thunderforge-dice` shared-crate pattern (native + wasm32, RNG-injected, no target-detection), the server-only-authoritative-RNG trust boundary, and explicitly records that this supersedes `packs/systems/dnd5e/engine/src/dice.rs` (research.md §5) — including the recommended follow-up (migrate `roll_d20`/`RollAdvantage` call sites onto `thunderforge_dice::resolve()` with `1d20`/`2d20kh1`/`2d20kl1` formulas, then delete `dice.rs`) as noted, explicitly-out-of-scope future work, not silently implied
+- [X] T031 [P] Run `cargo test -p thunderforge_dice` standalone (no DB/server) and confirm it passes with zero external dependencies (Constitution Principle II, quickstart.md's cross-cutting check)
+- [X] T032 [P] Run `cargo check`/`cargo test` in `src/server` (native) and `cargo check --target wasm32-unknown-unknown -p thunderforge_engine -p dnd5e-engine` (Constitution Principle V)
+- [X] T033 [P] Run `cargo clippy --all-targets` on `thunderforge_dice`, `thunderforge`, `thunderforge_core` and fix any new warnings, keeping the workspace at 0 (per the recent full clippy pass)
+- [X] T034 [P] Run `pnpm --filter @thunderforge/web build` and a scoped `eslint` check on new/touched frontend files
+- [X] T035 Execute every scenario in `specs/014-dice-rolling-engine/quickstart.md` against a running local dev stack (including the wasm32 build and standalone-crate-test cross-cutting checks) — actually trigger rolls and watch the animation in a browser, not just compile
+- [X] T036 [P] Confirm `./scripts/check-file-length.sh` shows no new failures introduced by this feature's files
 
 ---
 
