@@ -124,6 +124,220 @@ fn record_world_event(
     Ok(event_id)
 }
 
+// ========== Implementation (testable, no GraphQL Context) ==========
+
+/// Generate a new invite code for a world (Owner/GM only). Extracted as a
+/// free function (matching `queries/actor.rs`'s `_impl` convention) so
+/// resolver tests can call it directly against `test_app_state()` without
+/// constructing a full `async_graphql::Context`.
+pub async fn generate_invite_code_impl(
+    state: &AppState,
+    user_id: Uuid,
+    input: GenerateInviteCodeInput,
+) -> GraphQLResult<WorldInvitePayload> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    let world_id = input.world_id;
+    let max_uses = input.max_uses;
+
+    if max_uses <= 0 {
+        return Err(Error::new("max_uses must be greater than 0"));
+    }
+
+    // Verify user is Owner/GM of the world. `require_world_member` (spec
+    // 002, src/server/src/auth/world_membership.rs) falls back to
+    // `worlds.created_by` when no `world_members` row exists yet, which
+    // is exactly the case for a world's own owner today (`create_world`
+    // does not insert an owner row — see that function's own comment).
+    // Previously this used a raw `world_members` lookup with no such
+    // fallback, so a world's own owner could never generate an invite
+    // for their own world (spec 003 found this live; spec 005 US4
+    // fixes it here rather than by inserting a row in `create_world`,
+    // reusing the already-built, already-tested compensating helper
+    // instead of introducing a second authorization path).
+    let role = require_world_member(&mut conn, user_id, world_id).map_err(|e| match e {
+        WorldMembershipError::NotAMember => Error::new("User is not a member of this world"),
+        WorldMembershipError::Database(msg) => Error::new(format!("Database error: {}", msg)),
+    })?;
+
+    if role != "Owner" && role != "GM" {
+        return Err(Error::new("Only Owners and GMs can generate invite codes"));
+    }
+
+    // Generate invite code. `invite_id` (the row's primary key) stays a
+    // v7 UUID for index locality, but the human-facing code MUST NOT be
+    // derived from it: v7 UUIDs front-load a millisecond timestamp, so
+    // taking the first 8 hex characters captures mostly that timestamp
+    // — two invites created within the same millisecond (trivially
+    // possible under any real concurrent load, and reliably reproduced
+    // by this file's own rapid-succession e2e test, spec 005 US4)
+    // collide on `world_invites_invite_code_key`. Deriving the code
+    // from an independent, fully-random v4 UUID instead removes that
+    // collision class entirely.
+    let invite_id = Uuid::now_v7();
+    let invite_code = Uuid::new_v4()
+        .to_string()
+        .replace("-", "")
+        .chars()
+        .take(8)
+        .collect::<String>()
+        .to_string()
+        .to_uppercase();
+
+    let now = Utc::now().naive_utc();
+    let expires_at = input.expires_at.as_ref().and_then(|s| {
+        chrono::DateTime::parse_from_rfc3339(s)
+            .ok()
+            .map(|dt| dt.naive_utc())
+    });
+
+    let new_invite = NewWorldInvite {
+        id: invite_id,
+        world_id,
+        invite_code: invite_code.clone(),
+        max_uses,
+        used_count: 0,
+        expires_at,
+        created_by: user_id,
+        created_at: now,
+        updated_at: now,
+    };
+
+    diesel::insert_into(world_invites::table)
+        .values(&new_invite)
+        .execute(&mut conn)
+        .map_err(|e| Error::new(format!("Failed to create invite: {}", e)))?;
+
+    // Record event for audit trail and real-time sync
+    let event_payload = serde_json::json!({
+        "invite_id": new_invite.id,
+        "invite_code": new_invite.invite_code,
+        "max_uses": new_invite.max_uses,
+    });
+    record_world_event(
+        &mut conn,
+        world_id,
+        EVENT_CODE_INVITE_CREATED,
+        Some(event_payload),
+        user_id,
+    )?;
+
+    Ok(WorldInvitePayload {
+        id: new_invite.id,
+        world_id: new_invite.world_id,
+        invite_code: new_invite.invite_code,
+        max_uses: new_invite.max_uses,
+        used_count: new_invite.used_count,
+        expires_at: new_invite.expires_at.map(|dt| dt.to_string()),
+        created_by: new_invite.created_by,
+        created_at: new_invite.created_at.to_string(),
+        updated_at: new_invite.updated_at.to_string(),
+        status: format!("0/{} uses", max_uses),
+    })
+}
+
+/// Join a world using an invite code. Extracted as a free function for the
+/// same reason as `generate_invite_code_impl` above.
+pub async fn join_world_impl(
+    state: &AppState,
+    user_id: Uuid,
+    input: JoinWorldInput,
+) -> GraphQLResult<WorldMembershipPayload> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    // Look up invite code
+    let invite: WorldInvite = world_invites::table
+        .filter(world_invites::invite_code.eq(input.invite_code.clone()))
+        .select(WorldInvite::as_select())
+        .first::<WorldInvite>(&mut conn)
+        .map_err(|e| match e {
+            diesel::result::Error::NotFound => Error::new("Invalid invite code"),
+            _ => Error::new(format!("Database error: {}", e)),
+        })?;
+
+    // Convert to core model to use validation
+    let mut core_invite: CoreWorldInvite = invite.clone().into();
+
+    // Validate invite
+    if !core_invite.is_valid() {
+        return Err(Error::new("Invite code is no longer valid"));
+    }
+
+    let world_id = invite.world_id;
+
+    // Check if user is already a member
+    let existing: Option<WorldMember> = world_members::table
+        .filter(world_members::world_id.eq(world_id))
+        .filter(world_members::user_id.eq(user_id))
+        .select(WorldMember::as_select())
+        .first::<WorldMember>(&mut conn)
+        .optional()
+        .map_err(|e| Error::new(format!("Database error: {}", e)))?;
+
+    if existing.is_some() {
+        return Err(Error::new("You are already a member of this world"));
+    }
+
+    // Increment usage
+    core_invite.use_invite().map_err(Error::new)?;
+
+    // Update invite usage count
+    let updated_count = core_invite.used_count;
+    diesel::update(world_invites::table.find(invite.id))
+        .set(world_invites::used_count.eq(updated_count))
+        .execute(&mut conn)
+        .map_err(|e| Error::new(format!("Failed to update invite: {}", e)))?;
+
+    // Create membership record
+    let membership_id = Uuid::now_v7();
+    let now = Utc::now().naive_utc();
+
+    let new_member = NewWorldMember {
+        id: membership_id,
+        world_id,
+        user_id,
+        role: "Player".to_string(),
+        joined_at: now,
+        created_at: now,
+        updated_at: now,
+    };
+
+    diesel::insert_into(world_members::table)
+        .values(&new_member)
+        .execute(&mut conn)
+        .map_err(|e| Error::new(format!("Failed to create membership: {}", e)))?;
+
+    // Record event for audit trail and real-time sync
+    let event_payload = serde_json::json!({
+        "user_id": new_member.user_id,
+        "role": new_member.role,
+        "invite_code": invite.invite_code,
+    });
+    record_world_event(
+        &mut conn,
+        world_id,
+        EVENT_CODE_MEMBER_JOINED,
+        Some(event_payload),
+        user_id,
+    )?;
+
+    Ok(WorldMembershipPayload {
+        id: new_member.id,
+        world_id: new_member.world_id,
+        user_id: new_member.user_id,
+        role: new_member.role,
+        joined_at: new_member.joined_at.to_string(),
+        created_at: new_member.created_at.to_string(),
+        updated_at: new_member.updated_at.to_string(),
+    })
+}
+
 // ========== Mutations ==========
 
 #[derive(Default)]
@@ -139,109 +353,7 @@ impl InviteMutation {
     ) -> GraphQLResult<WorldInvitePayload> {
         let state = get_app_state(ctx)?;
         let auth_user = get_authenticated_user(ctx)?;
-        let user_id = auth_user.user_id;
-        let mut conn = state
-            .db_pool
-            .get()
-            .map_err(|_| Error::new("Failed to get DB connection"))?;
-
-        let world_id = input.world_id;
-        let max_uses = input.max_uses;
-
-        if max_uses <= 0 {
-            return Err(Error::new("max_uses must be greater than 0"));
-        }
-
-        // Verify user is Owner/GM of the world. `require_world_member` (spec
-        // 002, src/server/src/auth/world_membership.rs) falls back to
-        // `worlds.created_by` when no `world_members` row exists yet, which
-        // is exactly the case for a world's own owner today (`create_world`
-        // does not insert an owner row — see that function's own comment).
-        // Previously this used a raw `world_members` lookup with no such
-        // fallback, so a world's own owner could never generate an invite
-        // for their own world (spec 003 found this live; spec 005 US4
-        // fixes it here rather than by inserting a row in `create_world`,
-        // reusing the already-built, already-tested compensating helper
-        // instead of introducing a second authorization path).
-        let role = require_world_member(&mut conn, user_id, world_id).map_err(|e| match e {
-            WorldMembershipError::NotAMember => Error::new("User is not a member of this world"),
-            WorldMembershipError::Database(msg) => Error::new(format!("Database error: {}", msg)),
-        })?;
-
-        if role != "Owner" && role != "GM" {
-            return Err(Error::new("Only Owners and GMs can generate invite codes"));
-        }
-
-        // Generate invite code. `invite_id` (the row's primary key) stays a
-        // v7 UUID for index locality, but the human-facing code MUST NOT be
-        // derived from it: v7 UUIDs front-load a millisecond timestamp, so
-        // taking the first 8 hex characters captures mostly that timestamp
-        // — two invites created within the same millisecond (trivially
-        // possible under any real concurrent load, and reliably reproduced
-        // by this file's own rapid-succession e2e test, spec 005 US4)
-        // collide on `world_invites_invite_code_key`. Deriving the code
-        // from an independent, fully-random v4 UUID instead removes that
-        // collision class entirely.
-        let invite_id = Uuid::now_v7();
-        let invite_code = Uuid::new_v4()
-            .to_string()
-            .replace("-", "")
-            .chars()
-            .take(8)
-            .collect::<String>()
-            .to_string()
-            .to_uppercase();
-
-        let now = Utc::now().naive_utc();
-        let expires_at = input.expires_at.as_ref().and_then(|s| {
-            chrono::DateTime::parse_from_rfc3339(s)
-                .ok()
-                .map(|dt| dt.naive_utc())
-        });
-
-        let new_invite = NewWorldInvite {
-            id: invite_id,
-            world_id,
-            invite_code: invite_code.clone(),
-            max_uses,
-            used_count: 0,
-            expires_at,
-            created_by: user_id,
-            created_at: now,
-            updated_at: now,
-        };
-
-        diesel::insert_into(world_invites::table)
-            .values(&new_invite)
-            .execute(&mut conn)
-            .map_err(|e| Error::new(format!("Failed to create invite: {}", e)))?;
-
-        // Record event for audit trail and real-time sync
-        let event_payload = serde_json::json!({
-            "invite_id": new_invite.id,
-            "invite_code": new_invite.invite_code,
-            "max_uses": new_invite.max_uses,
-        });
-        record_world_event(
-            &mut conn,
-            world_id,
-            EVENT_CODE_INVITE_CREATED,
-            Some(event_payload),
-            user_id,
-        )?;
-
-        Ok(WorldInvitePayload {
-            id: new_invite.id,
-            world_id: new_invite.world_id,
-            invite_code: new_invite.invite_code,
-            max_uses: new_invite.max_uses,
-            used_count: new_invite.used_count,
-            expires_at: new_invite.expires_at.map(|dt| dt.to_string()),
-            created_by: new_invite.created_by,
-            created_at: new_invite.created_at.to_string(),
-            updated_at: new_invite.updated_at.to_string(),
-            status: format!("0/{} uses", max_uses),
-        })
+        generate_invite_code_impl(&state, auth_user.user_id, input).await
     }
 
     /// Join a world using an invite code
@@ -252,97 +364,7 @@ impl InviteMutation {
     ) -> GraphQLResult<WorldMembershipPayload> {
         let state = get_app_state(ctx)?;
         let auth_user = get_authenticated_user(ctx)?;
-        let user_id = auth_user.user_id;
-        let mut conn = state
-            .db_pool
-            .get()
-            .map_err(|_| Error::new("Failed to get DB connection"))?;
-
-        // Look up invite code
-        let invite: WorldInvite = world_invites::table
-            .filter(world_invites::invite_code.eq(input.invite_code.clone()))
-            .select(WorldInvite::as_select())
-            .first::<WorldInvite>(&mut conn)
-            .map_err(|e| match e {
-                diesel::result::Error::NotFound => Error::new("Invalid invite code"),
-                _ => Error::new(format!("Database error: {}", e)),
-            })?;
-
-        // Convert to core model to use validation
-        let mut core_invite: CoreWorldInvite = invite.clone().into();
-
-        // Validate invite
-        if !core_invite.is_valid() {
-            return Err(Error::new("Invite code is no longer valid"));
-        }
-
-        let world_id = invite.world_id;
-
-        // Check if user is already a member
-        let existing: Option<WorldMember> = world_members::table
-            .filter(world_members::world_id.eq(world_id))
-            .filter(world_members::user_id.eq(user_id))
-            .select(WorldMember::as_select())
-            .first::<WorldMember>(&mut conn)
-            .optional()
-            .map_err(|e| Error::new(format!("Database error: {}", e)))?;
-
-        if existing.is_some() {
-            return Err(Error::new("You are already a member of this world"));
-        }
-
-        // Increment usage
-        core_invite.use_invite().map_err(Error::new)?;
-
-        // Update invite usage count
-        let updated_count = core_invite.used_count;
-        diesel::update(world_invites::table.find(invite.id))
-            .set(world_invites::used_count.eq(updated_count))
-            .execute(&mut conn)
-            .map_err(|e| Error::new(format!("Failed to update invite: {}", e)))?;
-
-        // Create membership record
-        let membership_id = Uuid::now_v7();
-        let now = Utc::now().naive_utc();
-
-        let new_member = NewWorldMember {
-            id: membership_id,
-            world_id,
-            user_id,
-            role: "Player".to_string(),
-            joined_at: now,
-            created_at: now,
-            updated_at: now,
-        };
-
-        diesel::insert_into(world_members::table)
-            .values(&new_member)
-            .execute(&mut conn)
-            .map_err(|e| Error::new(format!("Failed to create membership: {}", e)))?;
-
-        // Record event for audit trail and real-time sync
-        let event_payload = serde_json::json!({
-            "user_id": new_member.user_id,
-            "role": new_member.role,
-            "invite_code": invite.invite_code,
-        });
-        record_world_event(
-            &mut conn,
-            world_id,
-            EVENT_CODE_MEMBER_JOINED,
-            Some(event_payload),
-            user_id,
-        )?;
-
-        Ok(WorldMembershipPayload {
-            id: new_member.id,
-            world_id: new_member.world_id,
-            user_id: new_member.user_id,
-            role: new_member.role,
-            joined_at: new_member.joined_at.to_string(),
-            created_at: new_member.created_at.to_string(),
-            updated_at: new_member.updated_at.to_string(),
-        })
+        join_world_impl(&state, auth_user.user_id, input).await
     }
 
     /// Update a member's role in a world (Owner/GM only, with permission checks)
@@ -657,5 +679,210 @@ mod tests {
 
             Ok(())
         });
+    }
+
+    // ===== Resolver-level tests for generate_invite_code_impl / join_world_impl =====
+    //
+    // These call the `_impl` free functions directly against
+    // `test_support::test_app_state()` (a real DB pool, no transaction
+    // wrapper — matching `mutations_actor_claims.rs`'s established
+    // convention), rather than the `require_world_member`/core-model unit
+    // tests above, which exercise the shared primitives in isolation but
+    // never actually call these two mutations end-to-end.
+
+    use super::*;
+    use crate::test_support::{insert_test_user, insert_test_world, insert_test_world_member, test_app_state};
+
+    fn insert_test_invite(
+        conn: &mut PgConnection,
+        world_id: Uuid,
+        created_by: Uuid,
+        max_uses: i32,
+        used_count: i32,
+        expires_at: Option<chrono::NaiveDateTime>,
+    ) -> (Uuid, String) {
+        let id = Uuid::now_v7();
+        let code = Uuid::new_v4()
+            .to_string()
+            .replace('-', "")
+            .chars()
+            .take(8)
+            .collect::<String>()
+            .to_uppercase();
+        let now = Utc::now().naive_utc();
+        diesel::insert_into(world_invites::table)
+            .values(NewWorldInvite {
+                id,
+                world_id,
+                invite_code: code.clone(),
+                max_uses,
+                used_count,
+                expires_at,
+                created_by,
+                created_at: now,
+                updated_at: now,
+            })
+            .execute(conn)
+            .expect("failed to insert test invite");
+        (id, code)
+    }
+
+    #[tokio::test]
+    async fn join_world_rejects_invalid_code() {
+        let state = test_app_state();
+        let joiner_id = {
+            let mut conn = state.db_pool.get().unwrap();
+            insert_test_user(&mut conn)
+        };
+
+        let result = join_world_impl(
+            &state,
+            joiner_id,
+            JoinWorldInput {
+                invite_code: "NONEXIST".to_string(),
+            },
+        )
+        .await;
+        assert!(result.is_err(), "an unknown invite code must be rejected");
+    }
+
+    #[tokio::test]
+    async fn join_world_rejects_expired_invite() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let past = Utc::now().naive_utc() - chrono::Duration::days(1);
+        let (_id, code) = insert_test_invite(&mut conn, world_id, owner_id, 10, 0, Some(past));
+        let joiner_id = insert_test_user(&mut conn);
+        drop(conn);
+
+        let result = join_world_impl(&state, joiner_id, JoinWorldInput { invite_code: code }).await;
+        assert!(result.is_err(), "an expired invite must be rejected");
+    }
+
+    #[tokio::test]
+    async fn join_world_rejects_exhausted_invite() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        // max_uses == used_count: no uses remaining.
+        let (_id, code) = insert_test_invite(&mut conn, world_id, owner_id, 3, 3, None);
+        let joiner_id = insert_test_user(&mut conn);
+        drop(conn);
+
+        let result = join_world_impl(&state, joiner_id, JoinWorldInput { invite_code: code }).await;
+        assert!(result.is_err(), "an exhausted invite must be rejected");
+    }
+
+    #[tokio::test]
+    async fn join_world_rejects_existing_member() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let (_id, code) = insert_test_invite(&mut conn, world_id, owner_id, 10, 0, None);
+        let existing_member_id = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world_id, existing_member_id, "Player");
+        drop(conn);
+
+        let result = join_world_impl(
+            &state,
+            existing_member_id,
+            JoinWorldInput { invite_code: code },
+        )
+        .await;
+        assert!(
+            result.is_err(),
+            "a user who is already a member must not be able to join again"
+        );
+    }
+
+    #[tokio::test]
+    async fn join_world_success_creates_player_membership_and_increments_usage() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let (invite_id, code) = insert_test_invite(&mut conn, world_id, owner_id, 5, 0, None);
+        let joiner_id = insert_test_user(&mut conn);
+        drop(conn);
+
+        let payload = join_world_impl(&state, joiner_id, JoinWorldInput { invite_code: code })
+            .await
+            .expect("a valid, unused invite must allow joining");
+        assert_eq!(payload.world_id, world_id);
+        assert_eq!(payload.user_id, joiner_id);
+        assert_eq!(payload.role, "Player");
+
+        let mut conn = state.db_pool.get().unwrap();
+        let member: WorldMember = world_members::table
+            .filter(world_members::world_id.eq(world_id))
+            .filter(world_members::user_id.eq(joiner_id))
+            .select(WorldMember::as_select())
+            .first(&mut conn)
+            .expect("membership row must have been created");
+        assert_eq!(member.role, "Player");
+
+        let updated_invite: WorldInvite = world_invites::table
+            .find(invite_id)
+            .select(WorldInvite::as_select())
+            .first(&mut conn)
+            .expect("invite row must still exist");
+        assert_eq!(
+            updated_invite.used_count, 1,
+            "used_count must be incremented on a successful join"
+        );
+    }
+
+    #[tokio::test]
+    async fn generate_invite_code_rejects_non_member() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let outsider_id = insert_test_user(&mut conn);
+        drop(conn);
+
+        let result = generate_invite_code_impl(
+            &state,
+            outsider_id,
+            GenerateInviteCodeInput {
+                world_id,
+                max_uses: 5,
+                expires_at: None,
+            },
+        )
+        .await;
+        assert!(
+            result.is_err(),
+            "a non-member/non-owner must not be able to generate an invite"
+        );
+    }
+
+    #[tokio::test]
+    async fn generate_invite_code_success_path() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let payload = generate_invite_code_impl(
+            &state,
+            owner_id,
+            GenerateInviteCodeInput {
+                world_id,
+                max_uses: 7,
+                expires_at: None,
+            },
+        )
+        .await
+        .expect("the world's own owner must be able to generate an invite");
+        assert_eq!(payload.world_id, world_id);
+        assert_eq!(payload.max_uses, 7);
+        assert_eq!(payload.used_count, 0);
+        assert_eq!(payload.invite_code.len(), 8);
     }
 }
