@@ -142,6 +142,34 @@ export async function fetchGenieResourceHoldings(
   return data.genieResourceHoldings;
 }
 
+const GENIE_TRADE_PROPOSALS_QUERY = `
+  query GenieTradeProposals($actorId: UUID!) {
+    genieTradeProposals(actorId: $actorId) {
+      id
+      sessionId
+      fromActorId
+      fromResourceType
+      fromQuantity
+      toActorId
+      toResourceType
+      toQuantity
+      status
+    }
+  }
+`;
+
+/** Pending trade proposals naming `actorId` as the recipient. Caller must
+ * control `actorId` (server-enforced). */
+export async function fetchGenieTradeProposals(
+  actorId: string,
+): Promise<GenieTradeProposalRecord[]> {
+  const data = await postGraphQL<{ genieTradeProposals: GenieTradeProposalRecord[] }>(
+    GENIE_TRADE_PROPOSALS_QUERY,
+    { actorId },
+  );
+  return data.genieTradeProposals;
+}
+
 const START_GENIE_SESSION_MUTATION = `
   mutation StartGenieSession($input: StartGenieSessionInput!) {
     startGenieSession(input: $input) {

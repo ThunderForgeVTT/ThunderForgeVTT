@@ -314,29 +314,52 @@ impl From<TxError> for String {
 /// non-DM member to `Viewer` with no automatic `Owner` grant for a
 /// claimed/created player character, which would make a player unable
 /// to trade or spend their own Session Resources without an explicit
-/// GM-granted permission row. `owned_by` is the right "is this my
-/// character" signal for this feature.
+/// GM-granted permission row.
+///
+/// Spec 019 fix: `owned_by` alone isn't the whole story — a real player's
+/// character, per spec 017's onboarding flow, is one the *GM* created and
+/// the *player* then claimed via `world_actor_claims` (join
+/// `world_members`); `owned_by` stays the GM/creator forever, it never
+/// transfers on claim. Without also checking the claim, any player who
+/// joined the normal way (not one who created their own actor) got
+/// "You do not control this actor" for every Session Resource action
+/// tied to their own character — found live while wiring
+/// `genieTradeProposals` and confirmed via a real two-account e2e run
+/// (`genie-resource-trade.spec.ts`).
 async fn caller_controls_actor(state: &AppState, user_id: Uuid, is_admin: bool, actor_id: Uuid) -> GraphQLResult<bool> {
     let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
-    let (world_id, owned_by) = tokio::task::spawn_blocking(move || -> Result<(Uuid, Uuid), String> {
-        use crate::schema::world_actors;
-        world_actors::table
-            .filter(world_actors::id.eq(actor_id))
-            .select((world_actors::world_id, world_actors::owned_by))
-            .first::<(Uuid, Uuid)>(&mut conn)
-            .map_err(|_| "Actor not found".to_string())
-    })
+    let (world_id, owned_by, claimed_by_user_id) = tokio::task::spawn_blocking(
+        move || -> Result<(Uuid, Uuid, Option<Uuid>), String> {
+            use crate::schema::{world_actor_claims, world_actors, world_members};
+
+            let (world_id, owned_by) = world_actors::table
+                .filter(world_actors::id.eq(actor_id))
+                .select((world_actors::world_id, world_actors::owned_by))
+                .first::<(Uuid, Uuid)>(&mut conn)
+                .map_err(|_| "Actor not found".to_string())?;
+
+            let claimed_by_user_id = world_actor_claims::table
+                .inner_join(world_members::table.on(world_members::id.eq(world_actor_claims::world_member_id)))
+                .filter(world_actor_claims::actor_id.eq(actor_id))
+                .select(world_members::user_id)
+                .first::<Uuid>(&mut conn)
+                .optional()
+                .map_err(|e| format!("Failed to load actor claim: {e}"))?;
+
+            Ok((world_id, owned_by, claimed_by_user_id))
+        },
+    )
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(Error::new)?;
 
-    if owned_by == user_id {
+    if owned_by == user_id || claimed_by_user_id == Some(user_id) {
         return Ok(true);
     }
     is_dm_of_world(state, user_id, is_admin, world_id).await
 }
 
-async fn require_caller_controls_actor(state: &AppState, user_id: Uuid, is_admin: bool, actor_id: Uuid) -> GraphQLResult<()> {
+pub(crate) async fn require_caller_controls_actor(state: &AppState, user_id: Uuid, is_admin: bool, actor_id: Uuid) -> GraphQLResult<()> {
     if !caller_controls_actor(state, user_id, is_admin, actor_id).await? {
         return Err(Error::new("You do not control this actor"));
     }
@@ -1407,5 +1430,54 @@ mod tests {
         let mut conn = state.db_pool.get().unwrap();
         let remaining = load_holding_quantity(&mut conn, session_id, actor_a, "essence").unwrap();
         assert_eq!(remaining, 0);
+    }
+
+    #[tokio::test]
+    async fn a_player_who_only_claimed_their_character_controls_it_for_session_resources() {
+        // Spec 019 regression guard: caller_controls_actor previously
+        // checked only world_actors.owned_by, which never changes on
+        // claim (spec 017's real player-onboarding path — the GM creates
+        // the actor, a player then claims it via world_actor_claims).
+        // Found live: a claimed-not-owned player got "You do not control
+        // this actor" on every Session Resource action for their own PC.
+        use crate::graphql::mutations_actor_claims::claim_actor_impl;
+
+        let state = test_app_state();
+        let (world_id, owner_id, player_id, session_id) = setup_active_session(&state).await;
+
+        let mut conn = state.db_pool.get().unwrap();
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        // Owned by the GM, not the player — only a claim will follow.
+        let claimed_actor = insert_test_actor(&mut conn, world_id, scene_id, owner_id);
+        let other_actor = insert_test_actor(&mut conn, world_id, scene_id, owner_id);
+        diesel::update(crate::schema::world_actors::table.filter(crate::schema::world_actors::id.eq(claimed_actor)))
+            .set(crate::schema::world_actors::available_for_claim.eq(true))
+            .execute(&mut conn)
+            .unwrap();
+        drop(conn);
+
+        claim_actor_impl(&state, player_id, world_id, claimed_actor)
+            .await
+            .expect("player should be able to claim an available actor");
+
+        // Before the fix this failed with "You do not control this actor".
+        let proposal = propose_resource_trade_impl(
+            &state,
+            player_id,
+            false,
+            session_id,
+            claimed_actor,
+            "insight".to_string(),
+            1,
+            other_actor,
+            "favor".to_string(),
+            1,
+        )
+        .await;
+        assert!(
+            proposal.is_ok(),
+            "a player who claimed (not owns) their character should control it for Session Resource actions: {:?}",
+            proposal.err()
+        );
     }
 }

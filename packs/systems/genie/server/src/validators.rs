@@ -176,6 +176,24 @@ pub fn validate_trait_data(data: &serde_json::Value) -> Result<(), ValidationErr
         }
     }
 
+    if let Some(level) = obj.get("level") {
+        if !level.is_null() {
+            let value = level.as_i64().ok_or(ValidationError {
+                field: "trait_data.level".to_string(),
+                message: "must be an integer or null".to_string(),
+            })?;
+            // Matches `wishPoints`'s table range in system.json (levels
+            // 1-10) — the only levels calculateMaxWishPoints knows how to
+            // score.
+            if !(1..=10).contains(&value) {
+                return Err(ValidationError {
+                    field: "trait_data.level".to_string(),
+                    message: "must be between 1 and 10".to_string(),
+                });
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -248,6 +266,30 @@ mod tests {
 
     #[test]
     fn trait_data_accepts_empty_conditions_list() {
+        let data = json!({ "active_conditions": [] });
+        assert!(validate_trait_data(&data).is_ok());
+    }
+
+    #[test]
+    fn trait_data_rejects_level_zero() {
+        let data = json!({ "level": 0 });
+        assert!(validate_trait_data(&data).is_err());
+    }
+
+    #[test]
+    fn trait_data_rejects_level_above_ten() {
+        let data = json!({ "level": 11 });
+        assert!(validate_trait_data(&data).is_err());
+    }
+
+    #[test]
+    fn trait_data_accepts_level_in_range() {
+        let data = json!({ "level": 3 });
+        assert!(validate_trait_data(&data).is_ok());
+    }
+
+    #[test]
+    fn trait_data_accepts_no_level_at_all() {
         let data = json!({ "active_conditions": [] });
         assert!(validate_trait_data(&data).is_ok());
     }

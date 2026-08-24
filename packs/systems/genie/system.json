@@ -103,11 +103,12 @@
       }
     },
     "trait_data": {
-      "description": "Active conditions, Patron/lineage link, and (NPC-only) size category",
+      "description": "Active conditions, Patron/lineage link, (NPC-only) size category, and character level",
       "properties": {
         "active_conditions": { "type": "array", "items": { "type": "string" }, "label": "Active Conditions" },
         "patron_lore_entry_id": { "type": "string", "label": "Patron (Lore Entry)" },
-        "size_category": { "type": "string", "label": "Size Category" }
+        "size_category": { "type": "string", "label": "Size Category" },
+        "level": { "type": "integer", "min": 1, "max": 10, "label": "Level" }
       }
     }
   }

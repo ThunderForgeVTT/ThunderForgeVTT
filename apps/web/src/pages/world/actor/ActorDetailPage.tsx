@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import {
+  calculateMaxWishPoints,
   CharacterSheet as GenieCharacterSheet,
   GENIE_CONDITIONS,
   type GenieAbilityData,
   type GenieProficiencyData,
+  type GenieResourceData,
 } from "@thunderforge/genie";
 import { updateActorSystemData } from "@/api/actorSystemData";
 import { createActorShareLink, revokeActorShareLink } from "@/api/actorShares";
@@ -49,6 +51,13 @@ function GenieActorSheet({ actor, canEdit }: { actor: WorldActorRecord; canEdit:
   const activeConditions: string[] = Array.isArray(data?.trait_data?.active_conditions)
     ? (data!.trait_data!.active_conditions as string[])
     : [];
+  const level: number = typeof data?.trait_data?.level === "number" ? data.trait_data.level : 1;
+  const resourceData: GenieResourceData = (data?.resource_data as GenieResourceData | undefined) ?? {
+    current_wish_points: 0,
+    max_wish_points: calculateMaxWishPoints(level),
+    current_health: 1,
+    max_health: 1,
+  };
 
   const handleAbilityChange = async (ability: keyof GenieAbilityData, value: number) => {
     await updateActorSystemData(actor.id, "genie", "ability_data", {
@@ -66,6 +75,25 @@ function GenieActorSheet({ actor, canEdit }: { actor: WorldActorRecord; canEdit:
     await refetch();
   };
 
+  const handleLevelChange = async (newLevel: number) => {
+    await updateTraits({ ...(data?.trait_data ?? {}), level: newLevel });
+    const newMaxWishPoints = calculateMaxWishPoints(newLevel);
+    await updateActorSystemData(actor.id, "genie", "resource_data", {
+      ...resourceData,
+      max_wish_points: newMaxWishPoints,
+      current_wish_points: Math.min(resourceData.current_wish_points, newMaxWishPoints),
+    });
+    await refetch();
+  };
+
+  const handleResourceChange = async (field: keyof GenieResourceData, value: number) => {
+    await updateActorSystemData(actor.id, "genie", "resource_data", {
+      ...resourceData,
+      [field]: value,
+    });
+    await refetch();
+  };
+
   return (
     <Card className="grid gap-4 p-4" data-testid="genie-actor-sheet">
       <GenieCharacterSheet
@@ -75,9 +103,13 @@ function GenieActorSheet({ actor, canEdit }: { actor: WorldActorRecord; canEdit:
           abilityData,
           proficiencyData,
           activeConditions,
+          level,
+          resourceData,
         }}
         isEditable={canEdit}
         onAbilityChange={(ability, value) => void handleAbilityChange(ability, value)}
+        onLevelChange={(newLevel) => void handleLevelChange(newLevel)}
+        onResourceChange={(field, value) => void handleResourceChange(field, value)}
       />
       {canEdit ? (
         <div className="grid gap-2 border-t pt-4" data-testid="genie-condition-editor">

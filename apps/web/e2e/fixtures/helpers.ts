@@ -47,6 +47,15 @@ export async function register(page: Page, creds: Credentials): Promise<void> {
   await page.locator("#register-password").fill(creds.password);
   await page.locator("#register-password-confirmation").fill(creds.password);
   await page.getByRole("button", { name: "Create account" }).click();
+  // Wait for the post-registration redirect before returning: a caller
+  // that immediately does its own page.goto() (a full navigation, not a
+  // SPA route change) can otherwise race/abort the register mutation's
+  // still-in-flight fetch/cookie-set, landing on /login instead — found
+  // live while writing genie-resource-trade.spec.ts. Existing callers
+  // that already wait for a more specific URL right after this
+  // (registerAndCreateWorld's own `/worlds/create$` wait, etc.) are
+  // unaffected — this resolves immediately once already past /register.
+  await page.waitForURL((url) => !url.pathname.startsWith("/register"), { timeout: 15_000 });
 }
 
 /** Registers a fresh user (prefixed for readability in failure output) and

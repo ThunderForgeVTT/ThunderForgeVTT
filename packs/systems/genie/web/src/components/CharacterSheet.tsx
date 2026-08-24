@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import * as Tabs from '@radix-ui/react-tabs';
 import ConditionTrack from './ConditionTrack';
+import { calculateMaxWishPoints } from '../derived-data';
 
 /**
  * Spec 018 (Genie) `ability_data` shape — see `packs/systems/genie/system.json`'s
@@ -29,6 +30,17 @@ export interface GenieSkillDefinition {
   ability: keyof GenieAbilityData;
 }
 
+/**
+ * Spec 018/019 `resource_data` shape — see
+ * `packs/systems/genie/system.json`'s `data_types.resource_data`.
+ */
+export interface GenieResourceData {
+  current_wish_points: number;
+  max_wish_points: number;
+  current_health: number;
+  max_health: number;
+}
+
 export interface GenieCharacter {
   id: string;
   name: string;
@@ -37,6 +49,13 @@ export interface GenieCharacter {
   /** `trait_data.active_conditions` (spec 018 User Story 4) — optional
    * since older callers/fixtures may not supply it yet. */
   activeConditions?: string[];
+  /** `trait_data.level` (spec 019) — Genie is class-less but does scale
+   * Wish Points by level (`system.json`'s `wishPoints` table); optional
+   * since trait_data.level itself is optional (older actors may not have
+   * one set yet), in which case the host page should default to 1. */
+  level?: number;
+  /** `resource_data` (spec 019) — optional for the same reason. */
+  resourceData?: GenieResourceData;
 }
 
 interface CharacterSheetProps {
@@ -53,6 +72,13 @@ interface CharacterSheetProps {
   isEditable?: boolean;
   onAbilityChange?: (ability: keyof GenieAbilityData, value: number) => void;
   onSkillTrainedToggle?: (skillKey: string) => void;
+  /** Spec 019: character level changed (1-10) — the host page is
+   * responsible for also recomputing/persisting `resource_data.max_wish_points`
+   * via `calculateMaxWishPoints`, this callback only reports the new level. */
+  onLevelChange?: (level: number) => void;
+  /** Spec 019: a `resource_data` field was edited directly (e.g. spending/
+   * restoring current Wish Points or Health). */
+  onResourceChange?: (field: keyof GenieResourceData, value: number) => void;
 }
 
 const ABILITY_LABELS: Record<keyof GenieAbilityData, string> = {
@@ -79,6 +105,8 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
   isEditable = false,
   onAbilityChange,
   onSkillTrainedToggle,
+  onLevelChange,
+  onResourceChange,
 }) => {
   const [selectedTab, setSelectedTab] = useState<string>('abilities');
 
@@ -101,6 +129,24 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
   const handleAbilityChange = (ability: keyof GenieAbilityData, value: number) => {
     if (!isEditable || !onAbilityChange) return;
     onAbilityChange(ability, value);
+  };
+
+  const level = character.level ?? 1;
+  const resourceData = character.resourceData ?? {
+    current_wish_points: 0,
+    max_wish_points: calculateMaxWishPoints(level),
+    current_health: 1,
+    max_health: 1,
+  };
+
+  const handleLevelChange = (value: number) => {
+    if (!isEditable || !onLevelChange) return;
+    onLevelChange(value);
+  };
+
+  const handleResourceChange = (field: keyof GenieResourceData, value: number) => {
+    if (!isEditable || !onResourceChange) return;
+    onResourceChange(field, value);
   };
 
   return (
@@ -128,6 +174,12 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
             className="px-4 py-2 font-semibold border-b-2 border-transparent data-[state=active]:border-blue-500 hover:text-blue-600"
           >
             Conditions
+          </Tabs.Trigger>
+          <Tabs.Trigger
+            value="resources"
+            className="px-4 py-2 font-semibold border-b-2 border-transparent data-[state=active]:border-blue-500 hover:text-blue-600"
+          >
+            Resources
           </Tabs.Trigger>
         </Tabs.List>
 
@@ -187,6 +239,63 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
 
         <Tabs.Content value="conditions" className="p-4">
           <ConditionTrack activeConditions={character.activeConditions} variant="sheet" />
+        </Tabs.Content>
+
+        <Tabs.Content value="resources" className="p-4" data-testid="genie-resources-tab">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="flex flex-col items-center gap-1 border rounded p-3">
+              <span className="text-sm font-semibold text-gray-600">Level</span>
+              {isEditable ? (
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  className="w-16 text-center border rounded"
+                  data-testid="genie-level-input"
+                  value={level}
+                  onChange={(e) => handleLevelChange(Number(e.target.value))}
+                />
+              ) : (
+                <span className="text-2xl font-bold">{level}</span>
+              )}
+            </div>
+
+            <div className="flex flex-col items-center gap-1 border rounded p-3">
+              <span className="text-sm font-semibold text-gray-600">Wish Points</span>
+              {isEditable ? (
+                <input
+                  type="number"
+                  min={0}
+                  max={resourceData.max_wish_points}
+                  className="w-16 text-center border rounded"
+                  data-testid="genie-current-wish-points-input"
+                  value={resourceData.current_wish_points}
+                  onChange={(e) => handleResourceChange('current_wish_points', Number(e.target.value))}
+                />
+              ) : (
+                <span className="text-2xl font-bold">{resourceData.current_wish_points}</span>
+              )}
+              <span className="text-xs text-gray-500">/ {resourceData.max_wish_points} max</span>
+            </div>
+
+            <div className="flex flex-col items-center gap-1 border rounded p-3">
+              <span className="text-sm font-semibold text-gray-600">Health</span>
+              {isEditable ? (
+                <input
+                  type="number"
+                  min={0}
+                  max={resourceData.max_health}
+                  className="w-16 text-center border rounded"
+                  data-testid="genie-current-health-input"
+                  value={resourceData.current_health}
+                  onChange={(e) => handleResourceChange('current_health', Number(e.target.value))}
+                />
+              ) : (
+                <span className="text-2xl font-bold">{resourceData.current_health}</span>
+              )}
+              <span className="text-xs text-gray-500">/ {resourceData.max_health} max</span>
+            </div>
+          </div>
         </Tabs.Content>
       </Tabs.Root>
     </div>

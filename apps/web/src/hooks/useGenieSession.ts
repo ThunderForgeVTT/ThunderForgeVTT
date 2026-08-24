@@ -15,6 +15,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { getWorldActors } from "@/api/actors";
 import {
   acceptResourceTrade as acceptResourceTradeRequest,
   advanceDoomClock as advanceDoomClockRequest,
@@ -22,14 +23,17 @@ import {
   createPuzzleClock as createPuzzleClockRequest,
   fetchGenieResourceHoldings,
   fetchGenieSession,
+  fetchGenieTradeProposals,
   type GenieResourceHoldingRecord,
   type GenieSessionRecord,
+  type GenieTradeProposalRecord,
   proposeResourceTrade as proposeResourceTradeRequest,
   type ProposeResourceTradeInput,
   spendResourceOnPuzzleClock as spendResourceOnPuzzleClockRequest,
   spendWish as spendWishRequest,
   startGenieSession as startGenieSessionRequest,
 } from "@/api/genieSession";
+import type { WorldActorRecord } from "@/types/actor";
 
 export interface UseGenieSessionResult {
   session: GenieSessionRecord | null;
@@ -49,14 +53,30 @@ export interface UseGenieSessionResult {
     resourceType: string,
     quantity: number,
   ) => Promise<void>;
+  /** Spec 019: the viewer's own PC in this world (first non-NPC actor they
+   * own), and every *other* PC — the two things `SessionResourceTrade`
+   * needs to offer a trade to someone. `null` while unresolved/absent. */
+  myActor: WorldActorRecord | null;
+  partyMembers: WorldActorRecord[];
+  myHoldings: GenieResourceHoldingRecord[];
+  incomingProposals: GenieTradeProposalRecord[];
 }
 
 /** worldId may be undefined while the host page's world is still loading —
- * the hook simply won't fetch until it's set. */
-export function useGenieSession(worldId: string | undefined): UseGenieSessionResult {
+ * the hook simply won't fetch until it's set. currentUserId may be null
+ * while auth is still resolving — myActor/holdings/proposals stay empty
+ * until both are known. */
+export function useGenieSession(
+  worldId: string | undefined,
+  currentUserId: string | null | undefined,
+): UseGenieSessionResult {
   const [session, setSession] = useState<GenieSessionRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [myActor, setMyActor] = useState<WorldActorRecord | null>(null);
+  const [partyMembers, setPartyMembers] = useState<WorldActorRecord[]>([]);
+  const [myHoldings, setMyHoldings] = useState<GenieResourceHoldingRecord[]>([]);
+  const [incomingProposals, setIncomingProposals] = useState<GenieTradeProposalRecord[]>([]);
 
   const refetch = useCallback(async () => {
     if (!worldId) {
@@ -78,6 +98,54 @@ export function useGenieSession(worldId: string | undefined): UseGenieSessionRes
   useEffect(() => {
     void refetch();
   }, [refetch]);
+
+  useEffect(() => {
+    if (!worldId || !currentUserId) {
+      setMyActor(null);
+      setPartyMembers([]);
+      return;
+    }
+    let active = true;
+    getWorldActors(worldId)
+      .then((actors) => {
+        if (!active) return;
+        const pcs = actors.filter((a) => !a.isNpc);
+        // A claimed actor's `ownedBy` stays the GM/creator who made it —
+        // the current *controller* is `claimedBy.userId` instead (found
+        // live while writing genie-resource-trade.spec.ts: this
+        // previously matched only ownedBy, so a player who joined via
+        // the real invite-and-claim flow never resolved as "my actor" at
+        // all). Falls back to ownedBy for an actor nobody has claimed —
+        // e.g. the GM's own PC, played directly without a claim.
+        const controllerId = (actor: WorldActorRecord) => actor.claimedBy?.userId ?? actor.ownedBy;
+        setMyActor(pcs.find((a) => controllerId(a) === currentUserId) ?? null);
+        setPartyMembers(pcs.filter((a) => controllerId(a) !== currentUserId));
+      })
+      .catch((err) => {
+        console.error("Failed to load world actors for resource trading:", err);
+      });
+    return () => {
+      active = false;
+    };
+  }, [worldId, currentUserId]);
+
+  const refetchTrades = useCallback(async () => {
+    if (!session || !myActor) {
+      setMyHoldings([]);
+      setIncomingProposals([]);
+      return;
+    }
+    const [holdings, proposals] = await Promise.all([
+      fetchGenieResourceHoldings(session.id, myActor.id),
+      fetchGenieTradeProposals(myActor.id),
+    ]);
+    setMyHoldings(holdings);
+    setIncomingProposals(proposals);
+  }, [session, myActor]);
+
+  useEffect(() => {
+    void refetchTrades();
+  }, [refetchTrades]);
 
   const startSession = useCallback(
     async (doomClockMax: number) => {
@@ -137,13 +205,22 @@ export function useGenieSession(worldId: string | undefined): UseGenieSessionRes
     });
   }, []);
 
-  const proposeResourceTrade = useCallback(async (input: ProposeResourceTradeInput) => {
-    await proposeResourceTradeRequest(input);
-  }, []);
+  const proposeResourceTrade = useCallback(
+    async (input: ProposeResourceTradeInput) => {
+      await proposeResourceTradeRequest(input);
+      await refetchTrades();
+    },
+    [refetchTrades],
+  );
 
-  const acceptResourceTrade = useCallback(async (proposalId: string) => {
-    return acceptResourceTradeRequest(proposalId);
-  }, []);
+  const acceptResourceTrade = useCallback(
+    async (proposalId: string) => {
+      const holdings = await acceptResourceTradeRequest(proposalId);
+      await refetchTrades();
+      return holdings;
+    },
+    [refetchTrades],
+  );
 
   // Same rationale as advancePuzzleClock above: this can also resolve the
   // clock and win the session, so it merges the response locally instead
@@ -179,6 +256,10 @@ export function useGenieSession(worldId: string | undefined): UseGenieSessionRes
     proposeResourceTrade,
     acceptResourceTrade,
     spendResourceOnPuzzleClock,
+    myActor,
+    partyMembers,
+    myHoldings,
+    incomingProposals,
   };
 }
 

@@ -43,7 +43,14 @@ export {
   SessionClocks,
   SessionResourceTrade,
 };
-export type { GenieCharacter, GenieAbilityData, GenieProficiencyData, GenieSkillDefinition } from './components/CharacterSheet';
+export type {
+  GenieCharacter,
+  GenieAbilityData,
+  GenieProficiencyData,
+  GenieSkillDefinition,
+  GenieResourceData,
+} from './components/CharacterSheet';
+export { calculateMaxWishPoints } from './derived-data.ts';
 export type { ConditionTrackProps } from './components/ConditionTrack';
 export type { SessionWishPoolProps } from './components/SessionWishPool';
 export type { SessionClocksProps, GeniePuzzleClockData } from './components/SessionClocks';

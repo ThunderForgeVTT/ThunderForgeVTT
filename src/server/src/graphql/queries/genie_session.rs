@@ -8,11 +8,15 @@ use uuid::Uuid;
 
 use crate::auth::world_membership::require_world_member;
 use crate::graphql::mutations_genie_session::{
-    GraphQLGenieResourceHolding, GraphQLGenieSession,
+    require_caller_controls_actor, GraphQLGenieResourceHolding, GraphQLGenieSession,
+    GraphQLGenieTradeProposal,
 };
 use crate::graphql::{app_state, authenticated_user};
-use crate::models::{GenieResourceHolding, GenieSession, GeniePuzzleClock};
-use crate::schema::{world_genie_puzzle_clocks, world_genie_resource_holdings, world_genie_sessions};
+use crate::models::{GenieResourceHolding, GenieSession, GeniePuzzleClock, GenieTradeProposal};
+use crate::schema::{
+    world_genie_puzzle_clocks, world_genie_resource_holdings, world_genie_sessions,
+    world_genie_trade_proposals,
+};
 use crate::state::AppState;
 
 fn build_graphql_session(session: GenieSession, clocks: Vec<GeniePuzzleClock>) -> GraphQLGenieSession {
@@ -118,6 +122,42 @@ pub async fn genie_resource_holdings_impl(
     Ok(holdings.into_iter().map(GraphQLGenieResourceHolding::from).collect())
 }
 
+/// Testable core of `GenieSessionQuery::genie_trade_proposals`. Spec 019:
+/// the read-side `proposeResourceTrade`/`acceptResourceTrade` were
+/// missing — a player had no way to discover a trade proposed to them.
+/// Scoped to proposals still awaiting a response (`status = "pending"`;
+/// `accept_resource_trade_impl` flips accepted ones to `"accepted"` via
+/// UPDATE, never deletes), naming `actor_id` as the *recipient*
+/// (`to_actor_id`) — only that actor's controller (or the world's GM) may
+/// see what's been proposed to them, mirroring the same
+/// `require_caller_controls_actor` check `acceptResourceTrade` itself
+/// already enforces.
+pub async fn genie_trade_proposals_impl(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    actor_id: Uuid,
+) -> GraphQLResult<Vec<GraphQLGenieTradeProposal>> {
+    require_caller_controls_actor(state, user_id, is_admin, actor_id).await?;
+
+    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    let proposals = tokio::task::spawn_blocking(move || -> Result<Vec<GenieTradeProposal>, String> {
+        world_genie_trade_proposals::table
+            .filter(world_genie_trade_proposals::to_actor_id.eq(actor_id))
+            .filter(world_genie_trade_proposals::status.eq("pending"))
+            .order(world_genie_trade_proposals::created_at.desc())
+            .select(GenieTradeProposal::as_select())
+            .load::<GenieTradeProposal>(&mut conn)
+            .map_err(|e| format!("Failed to load trade proposals: {e}"))
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(Error::new)?;
+
+    Ok(proposals.into_iter().map(GraphQLGenieTradeProposal::from).collect())
+}
+
 #[derive(Default)]
 pub struct GenieSessionQuery;
 
@@ -139,13 +179,52 @@ impl GenieSessionQuery {
         let auth_user = authenticated_user(ctx)?;
         genie_resource_holdings_impl(state, auth_user.user_id, session_id, actor_id).await
     }
+
+    async fn genie_trade_proposals(
+        &self,
+        ctx: &Context<'_>,
+        actor_id: Uuid,
+    ) -> GraphQLResult<Vec<GraphQLGenieTradeProposal>> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        genie_trade_proposals_impl(state, auth_user.user_id, auth_user.is_admin, actor_id).await
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graphql::mutations_genie_session::{start_genie_session_impl, StartGenieSessionInput};
-    use crate::test_support::{insert_test_user, insert_test_world, insert_test_world_member, test_app_state};
+    use crate::graphql::mutations_genie_session::{
+        propose_resource_trade_impl, start_genie_session_impl, StartGenieSessionInput,
+    };
+    use crate::test_support::{
+        insert_test_scene, insert_test_user, insert_test_world, insert_test_world_member, test_app_state,
+    };
+
+    fn insert_test_actor(conn: &mut PgConnection, world_id: Uuid, scene_id: Uuid, owner_id: Uuid) -> Uuid {
+        use crate::schema::world_actors;
+        let now = chrono::Utc::now().naive_utc();
+        let actor_id = Uuid::now_v7();
+        diesel::insert_into(world_actors::table)
+            .values((
+                world_actors::id.eq(actor_id),
+                world_actors::world_id.eq(world_id),
+                world_actors::scene_id.eq(scene_id),
+                world_actors::actor_type.eq("character"),
+                world_actors::game_system_id.eq("genie"),
+                world_actors::label.eq("Test Actor"),
+                world_actors::created_by.eq(owner_id),
+                world_actors::owned_by.eq(owner_id),
+                world_actors::is_public.eq(false),
+                world_actors::is_npc.eq(false),
+                world_actors::created_at.eq(now),
+                world_actors::updated_at.eq(now),
+                world_actors::available_for_claim.eq(false),
+            ))
+            .execute(conn)
+            .expect("failed to insert test actor");
+        actor_id
+    }
 
     #[tokio::test]
     async fn genie_session_returns_none_when_no_active_session_exists() {
@@ -176,5 +255,85 @@ mod tests {
         let result = genie_session_impl(&state, player_id, world_id).await.unwrap();
         assert!(result.is_some(), "a player, not just the GM, should be able to read the session's shared state");
         assert_eq!(result.unwrap().wishes_remaining, 3);
+    }
+
+    #[tokio::test]
+    async fn genie_trade_proposals_lists_only_pending_proposals_addressed_to_the_actor() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        let from_actor = insert_test_actor(&mut conn, world_id, scene_id, owner_id);
+        let unrelated_actor = insert_test_actor(&mut conn, world_id, scene_id, owner_id);
+        // A different owner so accept_resource_trade_impl's self-accept
+        // rejection (caller == proposal.created_by) doesn't fire below —
+        // all proposals here are created by `owner_id`.
+        let player_id = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world_id, player_id, "Player");
+        let to_actor = insert_test_actor(&mut conn, world_id, scene_id, player_id);
+        drop(conn);
+
+        let session = start_genie_session_impl(
+            &state,
+            owner_id,
+            false,
+            StartGenieSessionInput { world_id, doom_clock_max: 6 },
+        )
+        .await
+        .unwrap();
+
+        // Not addressed to `to_actor` — must not show up.
+        propose_resource_trade_impl(
+            &state, owner_id, false, session.id, from_actor, "insight".to_string(), 1, unrelated_actor,
+            "favor".to_string(), 1,
+        )
+        .await
+        .unwrap();
+
+        let pending = propose_resource_trade_impl(
+            &state, owner_id, false, session.id, from_actor, "insight".to_string(), 2, to_actor,
+            "favor".to_string(), 1,
+        )
+        .await
+        .unwrap();
+
+        let accepted = propose_resource_trade_impl(
+            &state, owner_id, false, session.id, from_actor, "insight".to_string(), 3, to_actor,
+            "essence".to_string(), 1,
+        )
+        .await
+        .unwrap();
+        // Flip status directly rather than driving the real
+        // acceptResourceTrade mutation (which also enforces holdings
+        // sufficiency) — irrelevant to what this query's own "pending
+        // only" filter is testing.
+        let mut conn = state.db_pool.get().unwrap();
+        diesel::update(world_genie_trade_proposals::table.filter(world_genie_trade_proposals::id.eq(accepted.id)))
+            .set(world_genie_trade_proposals::status.eq("accepted"))
+            .execute(&mut conn)
+            .unwrap();
+        drop(conn);
+
+        let result = genie_trade_proposals_impl(&state, owner_id, false, to_actor).await.unwrap();
+
+        assert_eq!(result.len(), 1, "only the still-pending proposal addressed to to_actor should be listed");
+        assert_eq!(result[0].id, pending.id);
+    }
+
+    #[tokio::test]
+    async fn genie_trade_proposals_rejects_a_caller_who_does_not_control_the_actor() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        let to_actor = insert_test_actor(&mut conn, world_id, scene_id, owner_id);
+        let stranger_id = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world_id, stranger_id, "Player");
+        drop(conn);
+
+        let result = genie_trade_proposals_impl(&state, stranger_id, false, to_actor).await;
+        assert!(result.is_err());
     }
 }

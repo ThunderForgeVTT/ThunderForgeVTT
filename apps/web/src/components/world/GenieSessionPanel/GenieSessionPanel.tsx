@@ -1,5 +1,6 @@
-import { SessionClocks, SessionWishPool } from "@thunderforge/genie";
+import { SessionClocks, SessionResourceTrade, SessionWishPool } from "@thunderforge/genie";
 import { Button } from "@/components/ui/button/Button";
+import { useAuth } from "@/hooks/useAuth";
 import { useGenieSession } from "@/hooks/useGenieSession";
 
 export interface GenieSessionPanelProps {
@@ -7,19 +8,38 @@ export interface GenieSessionPanelProps {
   isGm: boolean;
 }
 
+/** Genie's `sessionResources` block (`packs/systems/genie/system.json`) —
+ * stable manifest content, hardcoded here rather than an extra manifest
+ * fetch (`TokenPanel.tsx`'s `getGameSystemManifest` pattern would work
+ * too, but is more code for 3 fixed keys/labels). */
+const GENIE_SESSION_RESOURCE_TYPES = [
+  { key: "insight", label: "Insight" },
+  { key: "favor", label: "Favor" },
+  { key: "essence", label: "Essence" },
+];
+
 /**
- * Spec 018 User Story 7: the Genie GM session loop — Session Wish Pool
- * and Doom/Puzzle Clocks. `SessionResourceTrade` is deliberately not
- * wired here yet: the backend only exposes point mutations
- * (`proposeResourceTrade`/`acceptResourceTrade`), not a query to list a
- * player's pending incoming proposals, so there's no real data source for
- * that component's `incomingProposals` prop without either a new backend
- * query or a live subscription transport (neither exists yet — see
- * `apps/web/src/engine/world/sync/genieSession.ts`'s doc comment).
+ * Spec 018/019 User Story 7: the Genie GM session loop — Session Wish
+ * Pool, Doom/Puzzle Clocks, and (spec 019) Session Resource trading.
  */
 export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
-  const { session, loading, error, startSession, spendWish, advanceDoomClock, createPuzzleClock, advancePuzzleClock } =
-    useGenieSession(worldId);
+  const { user } = useAuth();
+  const {
+    session,
+    loading,
+    error,
+    startSession,
+    spendWish,
+    advanceDoomClock,
+    createPuzzleClock,
+    advancePuzzleClock,
+    myActor,
+    partyMembers,
+    myHoldings,
+    incomingProposals,
+    proposeResourceTrade,
+    acceptResourceTrade,
+  } = useGenieSession(worldId, user?.id);
 
   if (loading) {
     return null;
@@ -62,6 +82,36 @@ export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
         onAdvancePuzzleClock={(clockId, delta) => advancePuzzleClock(clockId, delta)}
         onCreatePuzzleClock={(label, segmentsMax) => createPuzzleClock(label, segmentsMax)}
       />
+      {myActor ? (
+        <SessionResourceTrade
+          myActorId={myActor.id}
+          myHoldings={myHoldings}
+          resourceTypes={GENIE_SESSION_RESOURCE_TYPES}
+          partyMembers={partyMembers.map((actor) => ({ actorId: actor.id, label: actor.label }))}
+          incomingProposals={incomingProposals.map((proposal) => ({
+            id: proposal.id,
+            fromActorId: proposal.fromActorId,
+            fromActorLabel:
+              partyMembers.find((actor) => actor.id === proposal.fromActorId)?.label ?? "Unknown",
+            fromResourceType: proposal.fromResourceType,
+            fromQuantity: proposal.fromQuantity,
+            toResourceType: proposal.toResourceType,
+            toQuantity: proposal.toQuantity,
+          }))}
+          onProposeTrade={(input) =>
+            proposeResourceTrade({
+              sessionId: session.id,
+              fromActorId: myActor.id,
+              fromResourceType: input.fromResourceType,
+              fromQuantity: input.fromQuantity,
+              toActorId: input.toActorId,
+              toResourceType: input.toResourceType,
+              toQuantity: input.toQuantity,
+            })
+          }
+          onAcceptProposal={(proposalId) => acceptResourceTrade(proposalId)}
+        />
+      ) : null}
     </div>
   );
 }
