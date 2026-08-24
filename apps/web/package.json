@@ -41,7 +41,10 @@
     "vite-tsconfig-paths": "^5.1.4"
   },
   "dependencies": {
+    "@codemirror/autocomplete": "^6.20.3",
     "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/view": "^6.43.9",
     "@fontsource-variable/geist": "^5.3.0",
     "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-dialog": "^1.1.15",

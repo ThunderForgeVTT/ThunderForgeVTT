@@ -14,9 +14,18 @@ importers:
 
   apps/web:
     dependencies:
+      '@codemirror/autocomplete':
+        specifier: ^6.20.3
+        version: 6.20.3
       '@codemirror/lang-markdown':
         specifier: ^6.5.2
         version: 6.5.2
+      '@codemirror/language':
+        specifier: ^6.12.4
+        version: 6.12.4
+      '@codemirror/view':
+        specifier: ^6.43.9
+        version: 6.43.9
       '@fontsource-variable/geist':
         specifier: ^5.3.0
         version: 5.3.0

@@ -141,3 +141,37 @@ test("saving an empty value is a valid save, not an error", async ({ page }) => 
   await page.reload();
   await expect.poll(() => readSessionNotes(page)).toBe("");
 });
+
+test("spec 021: the editor shows line numbers and a working fold gutter", async ({ page }) => {
+  await registerAndCreateWorld(page, `E2E Session Notes Fold ${uniqueSuffix()}`);
+
+  const editor = page.getByTestId("session-notes-editor");
+  await fillSessionNotes(page, "# Heading One\nSome text under it.\nMore text.");
+
+  // Line numbers are visible (basicSetup.lineNumbers, spec 021 FR-001).
+  // `.cm-gutterElement` includes a hidden width-calculation spacer
+  // (`visibility: hidden`, used only to size the gutter) alongside the
+  // real, visible per-line markers — exclude it explicitly.
+  const realLineNumbers = editor.locator(".cm-gutter.cm-lineNumbers .cm-gutterElement:not([style*='visibility: hidden'])");
+  await expect(realLineNumbers.first()).toBeVisible();
+  await expect(realLineNumbers).toHaveCount(3);
+
+  // A fold marker is present next to the foldable heading line, and
+  // clicking it actually collapses the section beneath it (spec 021
+  // FR-002 — @codemirror/lang-markdown's real heading-based folding,
+  // research.md R1, not just a decorative gutter).
+  const foldMarker = editor.getByTitle("Unfold line").first();
+  await expect(foldMarker).toHaveCount(1);
+  // Playwright's default actionability check treats this marker as
+  // covered/not-visible even though a real click lands on it correctly
+  // (confirmed live) — force the click rather than fight that check.
+  await foldMarker.click({ force: true });
+
+  await expect(editor.locator(".cm-foldPlaceholder")).toHaveCount(1);
+  await expect.poll(() => readSessionNotes(page)).toContain("Heading One");
+  await expect.poll(() => readSessionNotes(page)).not.toContain("Some text under it.");
+
+  // Unfold restores it.
+  await editor.getByTitle("Fold line").first().click({ force: true });
+  await expect.poll(() => readSessionNotes(page)).toContain("Some text under it.");
+});

@@ -91,12 +91,67 @@ async function createLoreEntry(page: Page, worldId: string, title: string): Prom
 const PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
-/** Dispatches a synthetic `paste` ClipboardEvent on the focused lore
- * editor textarea, mirroring canvas-asset-paste.spec.ts's approach —
- * LoreMarkdownEditor's `onPaste` handler lives on the textarea itself
- * (not `document`), so the event must be dispatched there. */
+/** Spec 021: LoreMarkdownEditor is now CodeMirror (contenteditable
+ * `.cm-content`, not a real `<textarea>`) — `.fill()`/`.inputValue()`
+ * don't apply. Mirrors session-notes.spec.ts's own helpers. */
+function loreEditorContent(page: Page) {
+  return page.getByTestId("lore-markdown-editor-textarea").locator(".cm-content");
+}
+
+/** For short, single-line content — types it via real keystrokes, which
+ * means CodeMirror's markdown smart-continuation (auto-inserting `- [ ] `
+ * or `> ` after Enter, a real feature for a real user actively typing) is
+ * live. Do not use this for multi-line fixtures containing list items or
+ * blockquotes — see `pasteIntoLoreEditor` for that. */
+async function fillLoreEditor(page: Page, text: string): Promise<void> {
+  const editor = loreEditorContent(page);
+  await editor.click();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.press("Backspace");
+  if (text) {
+    await page.keyboard.type(text);
+  }
+}
+
+/** For multi-line fixture content (tables, lists, blockquotes, fenced
+ * code) where the exact text must land byte-for-byte. Dispatches a
+ * synthetic paste instead of typing — CodeMirror inserts pasted text as
+ * one atomic transaction, so none of its per-Enter smart-continuation
+ * commands (list/blockquote marker auto-insertion) fire, unlike typing
+ * the same multi-line string via individual keystrokes (found live: a
+ * `- [ ] ` line was auto-continued into `- [ ] - [ ] `, and a blockquote
+ * line auto-continued `> ` onto the following fenced-code line, both
+ * genuinely correct behavior for a real user, not a bug in the editor —
+ * just the wrong simulation technique for "set this exact fixture text"). */
+async function pasteIntoLoreEditor(page: Page, text: string): Promise<void> {
+  const editor = loreEditorContent(page);
+  await editor.click();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.press("Backspace");
+  await editor.evaluate((el, plainText) => {
+    const dt = new DataTransfer();
+    dt.setData("text/plain", plainText);
+    const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: dt });
+    el.dispatchEvent(event);
+  }, text);
+}
+
+async function readLoreEditor(page: Page): Promise<string> {
+  const lines = await loreEditorContent(page).locator(".cm-line").allTextContents();
+  return lines.join("\n");
+}
+
+/** Dispatches a synthetic `paste` ClipboardEvent directly on `.cm-content`
+ * — CodeMirror's `EditorView.domEventHandlers` attaches its paste
+ * listener to `view.contentDOM` (`.cm-content`) specifically, not the
+ * editor's outer root, so the event must originate there (a native
+ * `dispatchEvent` only bubbles up an element's own ancestor chain, never
+ * down into a descendant like `.cm-content`) — confirmed by reading
+ * @codemirror/view's own source (research.md R3/R4 correction: the plan
+ * assumed dispatching on the outer testid'd wrapper would still bubble
+ * down to `.cm-content`, which is backwards). */
 async function pasteImageIntoEditor(page: Page): Promise<void> {
-  await page.getByTestId("lore-markdown-editor-textarea").evaluate((el, base64) => {
+  await loreEditorContent(page).evaluate((el, base64) => {
     const binary = atob(base64);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) {
@@ -140,7 +195,7 @@ test.describe("US1: DM authors a lore entry with rich Markdown", () => {
       "",
       "See https://example.com for more.",
     ].join("\n");
-    await page.getByTestId("lore-markdown-editor-textarea").fill(markdown);
+    await pasteIntoLoreEditor(page, markdown);
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByText("Saved.")).toBeVisible({ timeout: 10_000 });
 
@@ -179,23 +234,23 @@ test.describe("US2: correlate lore entries with each other and with actors", () 
     const entryATitle = `Entry A ${uniqueSuffix()}`;
     const slugA = await createLoreEntry(page, worldId, entryATitle);
     await page.goto(`/world/${worldId}/lore/${slugA}/edit`);
-    const textarea = page.getByTestId("lore-markdown-editor-textarea");
-    await textarea.fill(`See [[${entryBTitle.slice(0, 6)}`);
-    await expect(page.getByTestId("lore-link-autocomplete")).toBeVisible({ timeout: 10_000 });
-    await page.getByText(entryBTitle, { exact: true }).click();
+    await fillLoreEditor(page, `See [[${entryBTitle.slice(0, 6)}`);
+    const autocomplete = page.locator(".cm-tooltip-autocomplete");
+    await expect(autocomplete).toBeVisible({ timeout: 10_000 });
+    await autocomplete.getByText(entryBTitle, { exact: true }).click();
 
-    await textarea.focus();
+    await loreEditorContent(page).click();
     await page.keyboard.press("End");
     await page.keyboard.type(` and [[${npcName.slice(0, 6)}`);
-    await expect(page.getByTestId("lore-link-autocomplete")).toBeVisible({ timeout: 10_000 });
-    await page.getByText(npcName, { exact: true }).click();
+    await expect(autocomplete).toBeVisible({ timeout: 10_000 });
+    await autocomplete.getByText(npcName, { exact: true }).click();
 
-    const currentValue = await textarea.inputValue();
+    const currentValue = await readLoreEditor(page);
     expect(currentValue).toContain(`[[${entryBTitle}]]`);
     expect(currentValue).toContain(`[[${npcName}]]`);
 
     // Also add an unresolved link to prove FR-007's broken-link rendering.
-    await textarea.focus();
+    await loreEditorContent(page).click();
     await page.keyboard.press("End");
     await page.keyboard.type(" and [[Totally Nonexistent Title]]");
 
@@ -244,11 +299,11 @@ test.describe("US2: correlate lore entries with each other and with actors", () 
     const entryTitle = `Entry Linking an Item ${uniqueSuffix()}`;
     const slug = await createLoreEntry(page, worldId, entryTitle);
     await page.goto(`/world/${worldId}/lore/${slug}/edit`);
-    const textarea = page.getByTestId("lore-markdown-editor-textarea");
-    await textarea.fill(`Forged from [[${itemName.slice(0, 6)}`);
-    await expect(page.getByTestId("lore-link-autocomplete")).toBeVisible({ timeout: 10_000 });
-    await page.getByText(itemName, { exact: true }).click();
-    expect(await textarea.inputValue()).toContain(`[[${itemName}]]`);
+    await fillLoreEditor(page, `Forged from [[${itemName.slice(0, 6)}`);
+    const autocomplete = page.locator(".cm-tooltip-autocomplete");
+    await expect(autocomplete).toBeVisible({ timeout: 10_000 });
+    await autocomplete.getByText(itemName, { exact: true }).click();
+    expect(await readLoreEditor(page)).toContain(`[[${itemName}]]`);
 
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByText("Saved.")).toBeVisible({ timeout: 10_000 });
@@ -275,11 +330,11 @@ test.describe("US3: paste an image into the editor", () => {
     const slug = await createLoreEntry(page, worldId, title);
 
     await page.goto(`/world/${worldId}/lore/${slug}/edit`);
-    await page.getByTestId("lore-markdown-editor-textarea").click();
+    await loreEditorContent(page).click();
     await pasteImageIntoEditor(page);
 
     await expect(async () => {
-      const value = await page.getByTestId("lore-markdown-editor-textarea").inputValue();
+      const value = await readLoreEditor(page);
       expect(value).toMatch(/!\[.*\]\(.*\)/);
     }).toPass({ timeout: 10_000 });
 
