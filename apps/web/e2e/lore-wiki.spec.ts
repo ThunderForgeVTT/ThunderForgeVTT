@@ -222,6 +222,50 @@ test.describe("US2: correlate lore entries with each other and with actors", () 
       timeout: 10_000,
     });
   });
+
+  // Spec 013 US3 (T038-T042): the same [[...]] correlation extended to
+  // Items, which had resolver-level coverage
+  // (deleting_an_item_nulls_referencing_lore_links_instead_of_blocking in
+  // mutations_items.rs) but no browser-level check that a lore entry
+  // actually resolves an [[Item Name]] link and that the item's own
+  // "Linked from (lore)" section (ItemDetailPage.tsx) shows it.
+  test("[[links]] to an Item resolve, with a reciprocal linked-from backlink on the item's page", async ({
+    page,
+  }) => {
+    const worldId = await registerAndCreateWorld(page, `E2E Lore Item Correlate ${uniqueSuffix()}`);
+
+    const itemName = `Amulet of Linking ${uniqueSuffix()}`;
+    await page.goto(`/world/${worldId}/compendium`);
+    await page.getByRole("tab", { name: "Items" }).click();
+    await page.getByTestId("new-item-name-input").fill(itemName);
+    await page.getByTestId("add-item-button").click();
+    await expect(page.getByTestId("item-catalog-table")).toContainText(itemName, { timeout: 10_000 });
+
+    const entryTitle = `Entry Linking an Item ${uniqueSuffix()}`;
+    const slug = await createLoreEntry(page, worldId, entryTitle);
+    await page.goto(`/world/${worldId}/lore/${slug}/edit`);
+    const textarea = page.getByTestId("lore-markdown-editor-textarea");
+    await textarea.fill(`Forged from [[${itemName.slice(0, 6)}`);
+    await expect(page.getByTestId("lore-link-autocomplete")).toBeVisible({ timeout: 10_000 });
+    await page.getByText(itemName, { exact: true }).click();
+    expect(await textarea.inputValue()).toContain(`[[${itemName}]]`);
+
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByText("Saved.")).toBeVisible({ timeout: 10_000 });
+
+    await page.goto(`/world/${worldId}/lore/${slug}/view`);
+    await expect(page.getByTestId("lore-markdown-rendered").getByText(itemName)).toBeVisible();
+
+    // Reciprocal backlink on the item's own detail page.
+    await page.goto(`/world/${worldId}/compendium`);
+    await page.getByRole("tab", { name: "Items" }).click();
+    await page.getByTestId("item-catalog-table").getByText(itemName).click();
+    await page.getByTestId("item-preview-panel-view").click();
+    await page.waitForURL(/\/item\/[^/]+\/view$/, { timeout: 15_000 });
+    await expect(page.getByTestId("item-lore-linked-from")).toContainText(entryTitle, {
+      timeout: 10_000,
+    });
+  });
 });
 
 test.describe("US3: paste an image into the editor", () => {

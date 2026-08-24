@@ -148,4 +148,70 @@ test.describe("A GM invites a genuine second player (US4)", () => {
     await gmContext.close();
     await playerContext.close();
   });
+
+  test("visiting a join link with an invalid invite code shows a clear error, not a crash", async ({
+    page,
+  }) => {
+    await register(page, freshCredentials("e2ebadcode"));
+    await page.goto("/join/NOTAREALCODE");
+
+    // `alreadyMember` (bundled in the same GraphQL request as
+    // `worldByInviteCode`) rejects an unmatched code with "Invalid invite
+    // code", which JoinWorldPage surfaces via its error-status branch
+    // ("Could not load campaign") rather than the separate `!world`
+    // branch ("Campaign not found") — both are legitimate non-crash error
+    // states in this component; this is the one an unmatched code
+    // actually reaches.
+    await expect(page.getByRole("heading", { name: /could not load campaign/i })).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.getByText(/invalid invite code/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: /return to my campaigns/i })).toBeVisible();
+  });
+
+  test("a user who is already a member sees the already-a-member state, not the join flow", async ({
+    browser,
+  }) => {
+    const gmContext = await browser.newContext({
+      permissions: ["clipboard-read", "clipboard-write"],
+    });
+    const gmPage = await gmContext.newPage();
+    const worldId = await registerAndCreateWorldOnDashboard(
+      gmPage,
+      `E2E Already Member ${uniqueSuffix()}`,
+    );
+    await gmPage.getByRole("button", { name: "Generate Join Link" }).click();
+    const inviteCode = await extractInviteCode(gmPage);
+
+    const playerContext = await browser.newContext();
+    const playerPage = await playerContext.newPage();
+    await register(playerPage, freshCredentials("e2ealready"));
+
+    await playerPage.goto(`/join/${inviteCode}`);
+    await playerPage.getByRole("button", { name: "Join Campaign" }).click();
+    await playerPage.waitForURL(new RegExp(`/world/${worldId}/actor-select$`), {
+      timeout: 15_000,
+    });
+
+    // Revisit the same invite link as the same, now-a-member, user.
+    await playerPage.goto(`/join/${inviteCode}`);
+    await expect(playerPage.getByText(/you are already a member/i)).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(playerPage.getByRole("button", { name: /enter campaign/i })).toBeVisible();
+    // The join flow itself must not be offered again.
+    await expect(playerPage.getByRole("button", { name: "Join Campaign" })).toHaveCount(0);
+
+    await gmContext.close();
+    await playerContext.close();
+  });
+
+  // An exhausted (max-uses-reached) invite is deliberately NOT covered
+  // here at the e2e level: CampaignSettingsPanel's "Generate Join Link"
+  // hard-codes maxUses to 5, so reaching that state through the real UI
+  // would require 5 separate registrations purely to exhaust one invite
+  // — excessive setup for a path already directly covered by
+  // `join_world_rejects_exhausted_invite` in mutations_invites.rs's
+  // resolver tests (see that file), which exercises the exact same
+  // rejection without the UI overhead.
 });
