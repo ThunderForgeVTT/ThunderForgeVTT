@@ -5,6 +5,7 @@ import { Panel } from "@/components/ui/panel/Panel";
 import { ScrollArea } from "@/components/ui/scroll-area/ScrollArea";
 import { SceneSwitcher } from "@/components/world/SceneSwitcher";
 import { SessionNotesPanel } from "@/components/world/SessionNotesPanel/SessionNotesPanel";
+import { SessionSetupInviteLink } from "@/components/world/SessionSetupInviteLink";
 import { useWorldMembers } from "@/hooks/useWorldMembers";
 import type { SceneRecord } from "@/types/scene";
 import type { WorldRecord } from "@/types/world";
@@ -155,6 +156,7 @@ export function WorldStagingPage({
               ))}
             </ul>
           </ScrollArea>
+          {isGm ? <SessionSetupInviteLink worldId={worldId} /> : null}
         </div>
       </Panel>
     </main>

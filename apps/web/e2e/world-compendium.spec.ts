@@ -143,7 +143,7 @@ async function joinWorldAsPlayer(
   await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
   await page.goto(inviteUrl);
   await page.getByRole("button", { name: "Join Campaign" }).click();
-  await page.waitForURL(new RegExp(`/world/${worldId}$`), { timeout: 15_000 });
+  await page.waitForURL(new RegExp(`/world/${worldId}(/actor-select)?$`), { timeout: 15_000 });
 }
 
 test.describe("US1: DM adds and edits an NPC from the Compendium", () => {

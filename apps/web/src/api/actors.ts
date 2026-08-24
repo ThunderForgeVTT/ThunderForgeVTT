@@ -32,6 +32,13 @@ const WORLD_ACTOR_FIELDS = `
     title
     slug
   }
+  availableForClaim
+  claimedBy {
+    id
+    worldId
+    userId
+    username
+  }
 `;
 
 async function postGraphQL<TData>(
@@ -240,4 +247,47 @@ export function removeActorPermission(actorId: string, userId: string): Promise<
     `,
     { actorId, userId },
   ).then((data) => data.removeActorPermission);
+}
+
+type SetActorAvailabilityMutation = {
+  setActorAvailability: WorldActorRecord;
+};
+
+/**
+ * Spec 017 (FR-004): GM-only (Owner-level Actor permission). Marks/unmarks
+ * a PC-classified actor as offered on the Actor Selection screen.
+ */
+export function setActorAvailability(actorId: string, available: boolean): Promise<WorldActorRecord> {
+  return postGraphQL<SetActorAvailabilityMutation>(
+    `
+      mutation SetActorAvailability($actorId: UUID!, $available: Boolean!) {
+        setActorAvailability(actorId: $actorId, available: $available) {
+          ${WORLD_ACTOR_FIELDS}
+        }
+      }
+    `,
+    { actorId, available },
+  ).then((data) => data.setActorAvailability);
+}
+
+type UnclaimActorMutation = {
+  unclaimActor: WorldActorRecord;
+};
+
+/**
+ * Spec 017 (FR-013): GM-only. Frees a claimed character (e.g. a player
+ * left, or a mistake was made) without removing the prior claimant from
+ * the world.
+ */
+export function unclaimActor(actorId: string): Promise<WorldActorRecord> {
+  return postGraphQL<UnclaimActorMutation>(
+    `
+      mutation UnclaimActor($actorId: UUID!) {
+        unclaimActor(actorId: $actorId) {
+          ${WORLD_ACTOR_FIELDS}
+        }
+      }
+    `,
+    { actorId },
+  ).then((data) => data.unclaimActor);
 }

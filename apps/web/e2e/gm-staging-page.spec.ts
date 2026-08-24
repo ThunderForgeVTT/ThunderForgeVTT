@@ -206,7 +206,7 @@ test.describe("US3: players get the same shell, read-only and independent of the
         playerPage.getByRole("button", { name: "Join Campaign" }),
       ).toBeVisible({ timeout: 10_000 });
       await playerPage.getByRole("button", { name: "Join Campaign" }).click();
-      await playerPage.waitForURL(new RegExp(`/world/${worldId}$`), { timeout: 15_000 });
+      await playerPage.waitForURL(new RegExp(`/world/${worldId}(/actor-select)?$`), { timeout: 15_000 });
 
       await playerPage.goto(`/world/${worldId}/staging`);
       await expect(playerPage.getByTestId("world-staging-page")).toBeVisible({

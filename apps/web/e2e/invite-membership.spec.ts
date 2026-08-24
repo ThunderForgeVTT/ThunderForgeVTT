@@ -135,15 +135,15 @@ test.describe("A GM invites a genuine second player (US4)", () => {
     ).toBeVisible({ timeout: 10_000 });
     await playerPage.getByRole("button", { name: "Join Campaign" }).click();
 
-    await playerPage.waitForURL(new RegExp(`/world/${worldId}$`), {
+    // Spec 017 (FR-001): a non-GM member who joins with zero
+    // GM-designated available characters and player-created-actors off is
+    // routed to Actor Selection's "ask your GM" wait state, not straight
+    // to the world dashboard — the join itself still succeeded (they're a
+    // full member), just gated on picking a character first.
+    await playerPage.waitForURL(new RegExp(`/world/${worldId}/actor-select$`), {
       timeout: 15_000,
     });
-
-    // The joined non-owner account can view the world dashboard — the
-    // join actually worked, membership actually exists.
-    await expect(
-      playerPage.getByRole("heading", { name: /E2E Invite Membership/i }),
-    ).toBeVisible();
+    await expect(playerPage.getByTestId("waiting-for-gm")).toBeVisible();
 
     await gmContext.close();
     await playerContext.close();

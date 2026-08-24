@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { createActorShareLink, revokeActorShareLink } from "@/api/actorShares";
-import { getActor, updateActor } from "@/api/actors";
+import { getActor, setActorAvailability, unclaimActor, updateActor } from "@/api/actors";
 import { getWorld } from "@/api/world";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
@@ -45,6 +45,7 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
   const [shareLinkId, setShareLinkId] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState(false);
   const [isRevoking, setIsRevoking] = useState(false);
+  const [isUpdatingClaim, setIsUpdatingClaim] = useState(false);
   const { isGm: isDm } = useWorldRole(worldId, world);
 
   useEffect(() => {
@@ -133,6 +134,32 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
       setStatus(err instanceof Error ? err.message : "Failed to create share link");
     } finally {
       setIsSharing(false);
+    }
+  };
+
+  const handleToggleAvailability = async (available: boolean) => {
+    setIsUpdatingClaim(true);
+    setStatus(null);
+    try {
+      const updated = await setActorAvailability(actorId, available);
+      setActor(updated);
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Failed to update availability");
+    } finally {
+      setIsUpdatingClaim(false);
+    }
+  };
+
+  const handleUnclaim = async () => {
+    setIsUpdatingClaim(true);
+    setStatus(null);
+    try {
+      const updated = await unclaimActor(actorId);
+      setActor(updated);
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Failed to unclaim character");
+    } finally {
+      setIsUpdatingClaim(false);
     }
   };
 
@@ -290,6 +317,41 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
         </Card>
 
         <ActorInventoryPanel actorId={actorId} worldId={worldId} canManage={canEdit} />
+
+        {/* Spec 017 (T028, US3): GM-only, PC-only "available for claiming"
+            control plus who currently has this character claimed. */}
+        {isDm && !actor.isNpc ? (
+          <Card className="grid gap-3 p-4" data-testid="actor-claim-block">
+            <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+              Player claiming
+            </h2>
+            {actor.claimedBy ? (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground">
+                  Claimed by <span className="font-medium text-foreground">{actor.claimedBy.username}</span>
+                </p>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void handleUnclaim()}
+                  disabled={isUpdatingClaim}
+                >
+                  {isUpdatingClaim ? "Un-claiming..." : "Un-claim"}
+                </Button>
+              </div>
+            ) : (
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={actor.availableForClaim}
+                  disabled={isUpdatingClaim}
+                  onChange={(e) => void handleToggleAvailability(e.target.checked)}
+                />
+                Available for a joining player to claim
+              </label>
+            )}
+          </Card>
+        ) : null}
 
         {isDm && mode === "edit" ? (
           <ActorOwnershipBlock actorId={actorId} worldId={worldId} world={world} />

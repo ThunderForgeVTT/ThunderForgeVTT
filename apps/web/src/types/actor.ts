@@ -23,6 +23,10 @@ export type WorldActorRecord = {
   updatedAt: string;
   /** Spec 012 (FR-006): every lore entry whose body currently links here. */
   loreLinkedFrom: LoreLinkSourceRecord[];
+  /** Spec 017 (FR-004): offered on the Actor Selection screen. */
+  availableForClaim: boolean;
+  /** Spec 017 (FR-012): who currently has this actor claimed, if anyone. */
+  claimedBy: ActorClaimMemberRecord | null;
 };
 
 export type ActorPermissionRecord = {
@@ -30,4 +34,19 @@ export type ActorPermissionRecord = {
   userId: string;
   level: ActorPermissionLevel;
   updatedAt: string;
+};
+
+export type ActorClaimMemberRecord = {
+  id: string;
+  worldId: string;
+  userId: string;
+  username: string;
+};
+
+export type ActorClaimRecord = {
+  actorId: string;
+  actor: WorldActorRecord;
+  worldMemberId: string;
+  claimedByUserId: string;
+  claimedAt: string;
 };

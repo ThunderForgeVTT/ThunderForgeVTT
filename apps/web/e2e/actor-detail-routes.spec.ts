@@ -111,7 +111,7 @@ test.describe("US4: Viewer can view but is redirected away from /edit", () => {
 
       await playerPage.goto(`/join/${inviteCode}`);
       await playerPage.getByRole("button", { name: "Join Campaign" }).click();
-      await playerPage.waitForURL(new RegExp(`/world/${worldId}$`), { timeout: 15_000 });
+      await playerPage.waitForURL(new RegExp(`/world/${worldId}(/actor-select)?$`), { timeout: 15_000 });
 
       // Default Viewer: /view renders, /edit redirects to /view.
       await playerPage.goto(`/world/${worldId}/actor/${actorId}/view`);

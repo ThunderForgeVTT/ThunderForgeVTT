@@ -124,7 +124,7 @@ test.describe("US3: DM assigns ownership; grantee gains edit rights", () => {
 
       await playerPage.goto(`/join/${inviteCode}`);
       await playerPage.getByRole("button", { name: "Join Campaign" }).click();
-      await playerPage.waitForURL(new RegExp(`/world/${worldId}$`), { timeout: 15_000 });
+      await playerPage.waitForURL(new RegExp(`/world/${worldId}(/actor-select)?$`), { timeout: 15_000 });
 
       await page.goto(`/world/${worldId}/staging`);
       const actorId = await createNpcAndOpenEdit(page, worldId, `Bo Jangles ${uniqueSuffix()}`);
@@ -186,7 +186,7 @@ test.describe("US3: DM assigns ownership; grantee gains edit rights", () => {
 
         await playerPage.goto(`/join/${inviteCode}`);
         await playerPage.getByRole("button", { name: "Join Campaign" }).click();
-        await playerPage.waitForURL(new RegExp(`/world/${worldId}$`), { timeout: 15_000 });
+        await playerPage.waitForURL(new RegExp(`/world/${worldId}(/actor-select)?$`), { timeout: 15_000 });
       }
 
       await page.goto(`/world/${worldId}/staging`);

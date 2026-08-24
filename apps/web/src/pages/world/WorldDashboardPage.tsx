@@ -10,6 +10,7 @@ import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
 import { Loader } from "@/components/ui/loader/Loader";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { useAuth } from "@/hooks/useAuth";
+import { useActorClaimGate } from "@/hooks/useActorClaimGate";
 import { CampaignSettingsPanel } from "@/components/campaign/CampaignSettingsPanel";
 import type { SeoConfig } from "@/types/seo";
 import type { WorldRecord } from "@/types/world";
@@ -103,6 +104,10 @@ export default function WorldDashboardPage() {
   const world = worldState.requestedId === id ? worldState.world : null;
   const status = worldState.requestedId === id ? worldState.status : null;
 
+  // Spec 017 (FR-001): a non-GM member with no claimed character yet is
+  // redirected to Actor Selection before this dashboard renders.
+  const { cleared: claimGateCleared } = useActorClaimGate(id, world);
+
   const handleDelete = async () => {
     if (!world || isDeleting) {
       return;
@@ -130,7 +135,7 @@ export default function WorldDashboardPage() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || (world && !claimGateCleared)) {
     return <Loader fullScreen label="Opening world dashboard" />;
   }
 

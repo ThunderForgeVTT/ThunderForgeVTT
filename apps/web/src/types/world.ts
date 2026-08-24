@@ -15,6 +15,9 @@ export interface WorldRecord {
   createdAt: string;
   updatedAt: string;
   sessionNotes: string | null;
+  /** Spec 017 (FR-007): gates the Actor Selection screen's
+   * "create your own character" option. */
+  allowPlayerCreatedActors: boolean;
 }
 
 /** One entry in `myWorldsWithRole` — a world the caller owns or is an
