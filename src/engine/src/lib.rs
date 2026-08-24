@@ -32,8 +32,8 @@ use movement::{
     sync_transform_to_grid,
 };
 use plugins::{
-    BackgroundPlugin, CameraPlugin, CanvasLayerPlugin, GridPlugin, LightingPlugin, ScenePlugin,
-    SelectionPlugin, ShapePlugin, SystemRegistrationPlugin, TokenPlugin, WallPlugin,
+    BackgroundPlugin, CameraPlugin, CanvasLayerPlugin, DiceRollPlugin, GridPlugin, LightingPlugin,
+    ScenePlugin, SelectionPlugin, ShapePlugin, SystemRegistrationPlugin, TokenPlugin, WallPlugin,
 };
 use resources::{
     DoorState, IsGameMaster, LightSet, LightSource as EngineLight, PlacedCanvasImage,
@@ -217,6 +217,19 @@ enum ExternalCommand {
     RemoveCanvasImageAsset {
         asset_id: String,
     },
+    /// Spec 014 (US4): the per-die final values from a `rollDice`
+    /// response, already authoritative — this command only ever tells
+    /// `DiceRollPlugin` what to animate toward, never asks it to decide
+    /// an outcome (FR-015).
+    TriggerDiceRoll {
+        dice: Vec<DiceRollDiePayload>,
+    },
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct DiceRollDiePayload {
+    #[serde(rename = "finalValue")]
+    final_value: i64,
 }
 
 fn event_callback_slot() -> &'static Mutex<Option<Function>> {
@@ -304,6 +317,11 @@ fn parse_command(input: &str) -> Option<ExternalCommand> {
         "remove_canvas_image_asset" => Some(ExternalCommand::RemoveCanvasImageAsset {
             asset_id: value.get("assetId")?.as_str()?.to_owned(),
         }),
+        "trigger_dice_roll" => {
+            let dice_value = value.get("dice")?.clone();
+            let dice: Vec<DiceRollDiePayload> = serde_json::from_value(dice_value).ok()?;
+            Some(ExternalCommand::TriggerDiceRoll { dice })
+        }
         _ => None,
     }
 }
@@ -388,6 +406,10 @@ pub fn start(canvas_selector: &str) {
         // Depends on CanvasLayerPlugin (above); order relative to
         // WallPlugin/LightingPlugin/ShapePlugin doesn't matter.
         .add_plugins(BackgroundPlugin)
+        // Spec 014 (US4): dice-bouncing reveal for a `rollDice` response
+        // already handed to us — independent of every canvas plugin
+        // above (Constitution Principle II).
+        .add_plugins(DiceRollPlugin)
         .add_systems(Startup, setup_scene)
         .add_systems(
             Update,
@@ -566,6 +588,9 @@ fn apply_external_commands(
     // registered (both `init_resource` it idempotently) — same
     // graceful-degradation rationale as `wall_set` above.
     is_game_master: Option<ResMut<IsGameMaster>>,
+    // `PendingDiceRoll` only exists once `DiceRollPlugin` is registered,
+    // same graceful-degradation rationale as `wall_set` above.
+    pending_dice_roll: Option<ResMut<plugins::dice_roll::PendingDiceRoll>>,
 ) {
     let drained = if let Ok(mut queue) = external_command_queue().lock() {
         queue.drain(..).collect::<Vec<_>>()
@@ -579,6 +604,7 @@ fn apply_external_commands(
     let mut background = background;
     let mut placed_canvas_images = placed_canvas_images;
     let mut is_game_master = is_game_master;
+    let mut pending_dice_roll = pending_dice_roll;
 
     for command in drained {
         match command {
@@ -727,6 +753,15 @@ fn apply_external_commands(
             ExternalCommand::RemoveCanvasImageAsset { asset_id } => {
                 if let Some(placed_canvas_images) = placed_canvas_images.as_deref_mut() {
                     placed_canvas_images.0.remove(&asset_id);
+                }
+            }
+            ExternalCommand::TriggerDiceRoll { dice } => {
+                if let Some(pending_dice_roll) = pending_dice_roll.as_deref_mut() {
+                    pending_dice_roll.0 = Some(
+                        dice.into_iter()
+                            .map(|d| plugins::dice_roll::DiceRollDie { final_value: d.final_value })
+                            .collect(),
+                    );
                 }
             }
         }

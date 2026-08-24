@@ -9,6 +9,7 @@ pub mod wall;
 pub mod lighting;
 pub mod shape;
 pub mod background;
+pub mod dice_roll;
 
 pub use scene::ScenePlugin;
 pub use grid::GridPlugin;
@@ -21,3 +22,4 @@ pub use wall::WallPlugin;
 pub use lighting::LightingPlugin;
 pub use shape::ShapePlugin;
 pub use background::BackgroundPlugin;
+pub use dice_roll::DiceRollPlugin;

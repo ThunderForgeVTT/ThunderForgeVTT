@@ -30,6 +30,7 @@ import { MapImportTool } from "@/components/canvas-tools/MapImportTool";
 import { AssetPasteTool } from "@/components/canvas-tools/AssetPasteTool";
 import { TokenTool } from "@/components/canvas-tools/TokenTool";
 import { TokenPanel } from "@/components/TokenPanel";
+import { DiceRollerPanel } from "@/components/world/DiceRollerPanel/DiceRollerPanel";
 import type { CanvasImageAsset } from "@/api/assets";
 import type { WorldRecord } from "@/types/world";
 import type { SceneRecord } from "@/types/scene";
@@ -883,6 +884,16 @@ export default function WorldPage() {
                 />
               </div>
             ) : null}
+            <div
+              style={{
+                position: "absolute",
+                bottom: "1rem",
+                left: "1rem",
+                zIndex: 900,
+              }}
+            >
+              <DiceRollerPanel worldId={id} engineReady={engineReady} />
+            </div>
           </div>
         }
       />

@@ -114,6 +114,22 @@ export async function setIsGameMaster(isGameMaster: boolean): Promise<void> {
   module.apply_world_command(JSON.stringify({ type: "set_is_game_master", isGameMaster }));
 }
 
+/**
+ * Spec 014 (US4): forwards the per-die detail from an already-resolved
+ * `rollDice` response into the engine's `DiceRollPlugin`, purely to
+ * animate a reveal — this never asks the engine to decide an outcome
+ * (FR-015). Not a `WorldCommand`/`worldStore` event: like
+ * `setIsGameMaster`, this is a one-shot local trigger, not persisted
+ * world state to sync or broadcast.
+ */
+export async function triggerDiceRollAnimation(dice: { finalValue: number }[]): Promise<void> {
+  const module = await getWasmModule();
+  if (!module.apply_world_command) {
+    return;
+  }
+  module.apply_world_command(JSON.stringify({ type: "trigger_dice_roll", dice }));
+}
+
 export function getEngineState(): Readonly<EngineState> {
   return state;
 }
