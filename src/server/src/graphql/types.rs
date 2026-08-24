@@ -100,6 +100,9 @@ pub struct GraphQLWorld {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub session_notes: Option<String>,
+    /// Spec 017 (FR-007): gates the Actor Selection screen's "create your
+    /// own character" option. GM-controlled, defaults to false.
+    pub allow_player_created_actors: bool,
 }
 
 impl From<World> for GraphQLWorld {
@@ -121,6 +124,7 @@ impl From<World> for GraphQLWorld {
             created_at: world.created_at,
             updated_at: world.updated_at,
             session_notes: world.session_notes,
+            allow_player_created_actors: world.allow_player_created_actors,
         }
     }
 }
