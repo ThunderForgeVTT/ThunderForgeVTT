@@ -26,6 +26,20 @@ export function freshCredentials(prefix: string): Credentials {
   };
 }
 
+/** Logs in an already-existing user (e.g. the SQL-seeded demo user from
+ * src/server/seeds/e2e_demo.sql) by identifier (username or email) +
+ * password. */
+export async function login(
+  page: Page,
+  identifier: string,
+  password: string,
+): Promise<void> {
+  await page.goto("/login");
+  await page.locator("#login-identifier").fill(identifier);
+  await page.locator("#login-password").fill(password);
+  await page.getByRole("button", { name: /sign in/i }).click();
+}
+
 export async function register(page: Page, creds: Credentials): Promise<void> {
   await page.goto("/register");
   await page.locator("#register-username").fill(creds.username);
