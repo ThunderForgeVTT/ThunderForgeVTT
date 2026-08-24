@@ -7,7 +7,8 @@ use crate::schema::{
     world_actor_permissions, world_actor_shares, world_actor_system_data, world_actors,
     world_events, world_invites, world_item_effects, world_item_permissions, world_item_shares,
     world_items, world_lore_entries, world_lore_image_assets, world_lore_links,
-    world_lore_permissions, world_lore_revisions, world_members, world_tokens, worlds,
+    world_lore_permissions, world_lore_revisions, world_members, world_roll_records,
+    world_tokens, worlds,
 };
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -1336,4 +1337,39 @@ pub struct NewContentModerationAction {
     pub counter_notice_id: Option<uuid::Uuid>,
     pub restoration_due_at: Option<chrono::DateTime<chrono::Utc>>,
     pub created_by: Option<uuid::Uuid>,
+}
+
+// ============================================================================
+// Spec 014: Dice Rolling Engine (world_roll_records)
+// ============================================================================
+
+/// Spec 014 (FR-014): one immutable, durable record of a resolved dice
+/// roll. `detail` stores the full `thunderforge_dice::RollResolution`
+/// (every `DieOutcome`) as JSON; `result_kind`/`result_value` are
+/// denormalized out of it for cheap sorting/display in a history list.
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_roll_records)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct RollRecord {
+    pub id: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub triggered_by: uuid::Uuid,
+    pub formula: String,
+    pub bindings: Option<serde_json::Value>,
+    pub detail: serde_json::Value,
+    pub result_kind: String,
+    pub result_value: f64,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_roll_records)]
+pub struct NewRollRecord {
+    pub world_id: uuid::Uuid,
+    pub triggered_by: uuid::Uuid,
+    pub formula: String,
+    pub bindings: Option<serde_json::Value>,
+    pub detail: serde_json::Value,
+    pub result_kind: String,
+    pub result_value: f64,
 }

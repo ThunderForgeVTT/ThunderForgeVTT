@@ -79,6 +79,9 @@ regex = "1.13.1"
 [dependencies.thunderforge_core]
 path = "../core"
 
+[dependencies.thunderforge_dice]
+path = "../../crates/thunderforge-dice"
+
 [dependencies.pack_system_spec]
 path = "../../crates/pack_system_spec"
 

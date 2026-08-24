@@ -13,6 +13,7 @@ pub mod invite;
 pub mod item;
 pub mod inventory;
 pub mod moderation;
+pub mod roll;
 
 pub use actor::ActorQuery;
 pub use admin::AdminQuery;
@@ -24,3 +25,4 @@ pub use invite::InviteQuery;
 pub use item::ItemQuery;
 pub use inventory::InventoryQuery;
 pub use moderation::ModerationQuery;
+pub use roll::RollQuery;

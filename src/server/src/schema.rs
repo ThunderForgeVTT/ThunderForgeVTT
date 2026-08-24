@@ -584,6 +584,20 @@ diesel::table! {
 }
 
 diesel::table! {
+    world_roll_records (id) {
+        id -> Uuid,
+        world_id -> Uuid,
+        triggered_by -> Uuid,
+        formula -> Text,
+        bindings -> Nullable<Jsonb>,
+        detail -> Jsonb,
+        result_kind -> Text,
+        result_value -> Float8,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
     world_tokens (id) {
         id -> Text,
         world_id -> Uuid,
@@ -669,6 +683,8 @@ diesel::joinable!(world_lore_permissions -> world_lore_entries (lore_entry_id));
 diesel::joinable!(world_lore_revisions -> users (author_id));
 diesel::joinable!(world_members -> users (user_id));
 diesel::joinable!(world_members -> worlds (world_id));
+diesel::joinable!(world_roll_records -> users (triggered_by));
+diesel::joinable!(world_roll_records -> worlds (world_id));
 diesel::joinable!(world_tokens -> worlds (world_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
@@ -710,6 +726,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     world_lore_permissions,
     world_lore_revisions,
     world_members,
+    world_roll_records,
     world_tokens,
     worlds,
 );

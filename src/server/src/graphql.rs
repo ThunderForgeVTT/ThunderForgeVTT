@@ -68,7 +68,7 @@ pub use helpers::{
 pub mod queries;
 pub use queries::{
     ActorQuery, AdminQuery, HealthcheckQuery, InventoryQuery, InviteQuery, ItemQuery, LoreQuery,
-    ModerationQuery, SceneQuery, UserQuery,
+    ModerationQuery, RollQuery, SceneQuery, UserQuery,
 };
 
 // Phase 4.10.B: Invite & Membership mutations for multiplayer campaigns
@@ -138,6 +138,9 @@ pub use mutations_inventory::InventoryMutation;
 // Spec 015: DMCA notice-and-takedown moderation mutations
 pub mod mutations_moderation;
 pub use mutations_moderation::ModerationMutation;
+
+pub mod mutations_roll;
+pub use mutations_roll::RollMutation;
 
 // Admin types are now in admin_types.rs module (Phase 4.9.Z Step 2)
 
@@ -1908,6 +1911,7 @@ pub struct QueryRoot(
     ItemShareQuery,
     InventoryQuery,
     ModerationQuery,
+    RollQuery,
 );
 
 #[derive(MergedObject, Default)]
@@ -1936,6 +1940,7 @@ pub struct MutationRoot(
     ItemShareMutation,
     InventoryMutation,
     ModerationMutation,
+    RollMutation,
 );
 
 pub type AppSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;
