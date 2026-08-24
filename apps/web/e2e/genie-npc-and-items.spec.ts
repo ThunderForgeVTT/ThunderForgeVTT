@@ -204,25 +204,24 @@ test.describe("Spec 018 Scenario 3: NPC size category sets a token's default foo
     // Diminutive NPC's token. `trait_data` was set via a raw GraphQL
     // call above (no UI path exists to set it — see file header), and
     // TokenPanel reads it via `useActorSystemData`'s direct GraphQL fetch
-    // on mount. Retry selecting the NPC until the scale hint reflects the
-    // real value, rather than asserting on the very first render, and
-    // reload first to force a fresh fetch.
+    // on mount — select the NPC once and poll the hint text with a real
+    // retrying assertion rather than a manual loop that reselects
+    // "(blank token)" each iteration: that reselection unmounts/resets
+    // the in-flight fetch every time, so a synchronous `.innerText()`
+    // read right after always caught the pre-fetch "1x" default and the
+    // loop could never actually settle (found via live instrumentation —
+    // the correct 0.5x value does arrive, just ~200-500ms after
+    // selection, not within the same tick).
     await page.reload();
     await waitForEngineReady(page);
     await page.getByTestId("token-panel-toggle-button").click({ force: true });
     await page.getByTestId("token-create-trigger").click({ force: true });
-    let diminutiveHintText = "";
-    for (let attempt = 0; attempt < 10; attempt++) {
-      await page.getByTestId("token-create-npc-select").selectOption({ label: "(blank token)" });
-      await page.getByTestId("token-create-npc-select").selectOption({ label: "Minor Sprite" });
-      diminutiveHintText = (await page.getByTestId("token-create-npc-scale-hint").innerText().catch(() => "")) ?? "";
-      if (/0\.5/.test(diminutiveHintText)) break;
-      await page.waitForTimeout(1_000);
-    }
-    expect(
-      diminutiveHintText,
-      "TokenPanel's NPC scale hint never picked up trait_data.size_category (GraphQL fetch of a server-side updateActorSystemData write) within 10s.",
-    ).toMatch(/0\.5/);
+    await page.getByTestId("token-create-npc-select").selectOption({ label: "Minor Sprite" });
+    const diminutiveHint = page.getByTestId("token-create-npc-scale-hint");
+    await expect(
+      diminutiveHint,
+      "TokenPanel's NPC scale hint never picked up trait_data.size_category (GraphQL fetch of a server-side updateActorSystemData write).",
+    ).toHaveText(/0\.5/, { timeout: 10_000 });
     const [createDiminutiveResp] = await Promise.all([
       page.waitForResponse(
         (r) => r.url().includes("/api/graphql") && (r.request().postData() ?? "").includes("createToken"),
@@ -233,19 +232,21 @@ test.describe("Spec 018 Scenario 3: NPC size category sets a token's default foo
       data?: { createToken?: { tokenId?: string; scale?: number } };
     };
     expect(diminutiveTokenBody.data?.createToken?.scale).toBeCloseTo(0.5, 5);
-    await page.keyboard.press("Escape");
+    // No Escape here: the create-token dialog already closes itself on a
+    // successful submit (handleCreateToken's setCreateDialogOpen(false))
+    // — pressing Escape on top of that closed the whole token *panel*
+    // (its own Escape-to-dismiss handler), not just the dialog, leaving
+    // nothing for the next "token-create-trigger" click to find.
 
     // Colossal NPC's token.
     await page.getByTestId("token-create-trigger").click({ force: true });
-    let colossalHintText = "";
-    for (let attempt = 0; attempt < 10; attempt++) {
-      await page.getByTestId("token-create-npc-select").selectOption({ label: "(blank token)" });
-      await page.getByTestId("token-create-npc-select").selectOption({ label: "Towering Elemental Servant" });
-      colossalHintText = (await page.getByTestId("token-create-npc-scale-hint").innerText().catch(() => "")) ?? "";
-      if (/\b4\b/.test(colossalHintText)) break;
-      await page.waitForTimeout(1_000);
-    }
-    expect(colossalHintText).toMatch(/\b4\b/);
+    await page.getByTestId("token-create-npc-select").selectOption({ label: "Towering Elemental Servant" });
+    const colossalHint = page.getByTestId("token-create-npc-scale-hint");
+    // Not /\b4\b/: "4" and "x" are both word characters, so there's no
+    // word boundary between them in "scale: 4x" and that regex could
+    // never match — this silently masked itself as a data-race retry
+    // instead of a clear regex failure until instrumented directly.
+    await expect(colossalHint).toHaveText(/\b4x\b/, { timeout: 10_000 });
     const [createColossalResp] = await Promise.all([
       page.waitForResponse(
         (r) => r.url().includes("/api/graphql") && (r.request().postData() ?? "").includes("createToken"),
