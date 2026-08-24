@@ -44,43 +44,6 @@ import { createLight, deleteLight, getLights, updateLight } from "@/api/lights";
 import type { LightRecord } from "@/types/light";
 import type { WorldStore } from "../store";
 import type { WorldLight } from "../types";
-import { getWorldDatabase } from "./database";
-
-async function persistLightDoc(light: LightRecord): Promise<void> {
-  try {
-    const db = await getWorldDatabase();
-    await db.collections.world_lights.upsert({
-      lightId: light.lightId,
-      sceneId: light.sceneId,
-      x: light.x,
-      y: light.y,
-      radius: light.radius,
-      intensity: light.intensity,
-      color: light.color,
-      attachedTokenId: light.attachedTokenId,
-      castsShadows: light.castsShadows,
-      metadata: light.metadata,
-      createdBy: light.createdBy,
-      updatedBy: light.updatedBy,
-      createdAt: light.createdAt,
-      updatedAt: light.updatedAt,
-    });
-  } catch (error) {
-    // RxDB persistence is a best-effort offline cache (T042); the world
-    // store dispatch above is the source of truth for the live session.
-    console.error("Failed to persist light source to RxDB:", error);
-  }
-}
-
-async function removeLightDoc(lightId: string): Promise<void> {
-  try {
-    const db = await getWorldDatabase();
-    const doc = await db.collections.world_lights.findOne(lightId).exec();
-    await doc?.remove();
-  } catch (error) {
-    console.error("Failed to remove light source from RxDB:", error);
-  }
-}
 
 type WorldEventLike = {
   event_code?: number;
@@ -135,7 +98,6 @@ export async function applyLightWorldEvent(
   if (action === "deleted") {
     if (lightId) {
       worldStore.dispatch({ type: "remove_light", lightId }, "sync");
-      await removeLightDoc(lightId);
     }
     return;
   }
@@ -149,7 +111,6 @@ export async function applyLightWorldEvent(
       { type: "upsert_light", light: lightRecordToWorldLight(light) },
       "sync",
     );
-    await persistLightDoc(light);
   }
 }
 
@@ -196,7 +157,6 @@ export async function loadLightsIntoStore(
       { type: "upsert_light", light: lightRecordToWorldLight(light) },
       "sync",
     );
-    await persistLightDoc(light);
   }
 }
 
@@ -235,7 +195,6 @@ export function startLightMutationBridge(
             { type: "upsert_light", light: lightRecordToWorldLight(created) },
             "sync",
           );
-          void persistLightDoc(created);
         })
         .catch((error) => {
           console.error("Failed to create light source:", error);
@@ -259,7 +218,6 @@ export function startLightMutationBridge(
             { type: "upsert_light", light: lightRecordToWorldLight(updated) },
             "sync",
           );
-          void persistLightDoc(updated);
         })
         .catch((error) => {
           console.error("Failed to update light source:", error);
@@ -273,7 +231,6 @@ export function startLightMutationBridge(
         .then((ok) => {
           if (ok) {
             worldStore.dispatch({ type: "remove_light", lightId }, "sync");
-            void removeLightDoc(lightId);
           }
         })
         .catch((error) => {

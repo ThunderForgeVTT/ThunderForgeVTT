@@ -3,10 +3,12 @@
  * Scene-scoped token sync: mirrors walls.ts's shape (inbound NOTIFY-refetch,
  * outbound mutation bridge) but for the modern `tokens` table
  * (src/server/src/graphql/mutations_tokens.rs), which is what actually
- * persists tokens across a page reload — the legacy `world_tokens` path
- * (this directory's index.ts#startWorldSync, driven by
- * engine/world/types.ts's generic `upsert_token`/`remove_token` commands)
- * is left untouched and keeps running alongside this.
+ * persists tokens across a page reload. The legacy `world_tokens`/RxDB
+ * path (formerly this directory's index.ts#startWorldSync) has been
+ * removed as dead code: it wrote to an RxDB-only collection nothing read
+ * back, and posted to `syncWorldMutations`/`publishTokenDeltas` GraphQL
+ * mutations that never existed server-side. This module (the real,
+ * working sync path) is unaffected by that removal.
  *
  * Two independent responsibilities, matching walls.ts:
  *
@@ -45,44 +47,6 @@ import { createToken, deleteToken, getTokens, moveOwnToken, updateToken } from "
 import type { TokenRecord } from "@/types/token";
 import type { WorldStore } from "../store";
 import type { WorldToken } from "../types";
-import { getWorldDatabase } from "./database";
-
-async function persistTokenDoc(token: TokenRecord): Promise<void> {
-  try {
-    const db = await getWorldDatabase();
-    await db.collections.world_scene_tokens.upsert({
-      tokenId: token.tokenId,
-      sceneId: token.sceneId,
-      actorId: token.actorId,
-      x: token.x,
-      y: token.y,
-      rotation: token.rotation,
-      scale: token.scale,
-      metadata: token.metadata,
-      createdAt: token.createdAt,
-      updatedAt: token.updatedAt,
-      ownerUserId: token.ownerUserId,
-      isPrimary: token.isPrimary,
-      photoUrl: token.photoUrl,
-      health: token.health,
-      maxHealth: token.maxHealth,
-    });
-  } catch (error) {
-    // RxDB persistence is a best-effort offline cache; the world store
-    // dispatch is the source of truth for the live session.
-    console.error("Failed to persist token to RxDB:", error);
-  }
-}
-
-async function removeTokenDoc(tokenId: string): Promise<void> {
-  try {
-    const db = await getWorldDatabase();
-    const doc = await db.collections.world_scene_tokens.findOne(tokenId).exec();
-    await doc?.remove();
-  } catch (error) {
-    console.error("Failed to remove token from RxDB:", error);
-  }
-}
 
 type WorldEventLike = {
   event_code?: number;
@@ -145,7 +109,6 @@ export async function applyTokenWorldEvent(
   if (action === "deleted") {
     if (tokenId) {
       worldStore.dispatch({ type: "remove_token", tokenId }, "sync");
-      await removeTokenDoc(tokenId);
     }
     return;
   }
@@ -158,7 +121,6 @@ export async function applyTokenWorldEvent(
       { type: "upsert_token", token: tokenRecordToWorldToken(token) },
       "sync",
     );
-    await persistTokenDoc(token);
   }
 }
 
@@ -206,7 +168,6 @@ export async function loadTokensIntoStore(
       { type: "upsert_token", token: tokenRecordToWorldToken(token) },
       "sync",
     );
-    await persistTokenDoc(token);
   }
 }
 
@@ -268,10 +229,6 @@ export function startTokenMutationBridge(
         const knownTokenId = engineIdToTokenId.get(token.id);
 
         if (knownTokenId) {
-          const persistAndSave = (updated: Awaited<ReturnType<typeof updateToken>>) => {
-            void persistTokenDoc(updated);
-          };
-
           if (isSceneOwner) {
             // Resize/rotate (US2, FR-006/FR-007) are GM-only and travel
             // through this same generic `upsert_token` engine event —
@@ -287,20 +244,16 @@ export function startTokenMutationBridge(
             if (token.scale !== undefined) {
               input.scale = token.scale;
             }
-            void updateToken(knownTokenId, input)
-              .then(persistAndSave)
-              .catch((error) => {
-                console.error("Failed to update token:", error);
-              });
+            void updateToken(knownTokenId, input).catch((error) => {
+              console.error("Failed to update token:", error);
+            });
           } else {
             // Spec 004 FR-009: non-GM callers only ever move a token they
             // control; the server enforces owner_user_id = requester and
             // rejects anything else with no effect.
-            void moveOwnToken(knownTokenId, token.x, token.y)
-              .then(persistAndSave)
-              .catch((error) => {
-                console.error("Failed to move own token:", error);
-              });
+            void moveOwnToken(knownTokenId, token.x, token.y).catch((error) => {
+              console.error("Failed to move own token:", error);
+            });
           }
           return;
         }
@@ -328,7 +281,6 @@ export function startTokenMutationBridge(
         })
           .then((created) => {
             engineIdToTokenId.set(token.id, created.tokenId);
-            void persistTokenDoc(created);
           })
           .catch((error) => {
             console.error("Failed to create token:", error);
@@ -353,7 +305,6 @@ export function startTokenMutationBridge(
           .then((ok) => {
             if (ok) {
               engineIdToTokenId.delete(engineId);
-              void removeTokenDoc(knownTokenId);
             }
           })
           .catch((error) => {

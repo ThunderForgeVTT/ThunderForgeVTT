@@ -1,15 +1,26 @@
 /**
  * useWorldMembers.ts
- * React hook for querying world members/roster from RxDB collection
+ * React hook for fetching a world's membership roster.
  *
  * Usage:
- *   const { members, loading, error } = useWorldMembers(worldId);
+ *   const { members, loading, error, refetch } = useWorldMembers(worldId);
  *
- * Returns reactive updates whenever members change in RxDB (from backend sync)
+ * RxDB has been hard cut from this layer entirely: it was fatally broken
+ * app-wide (RxDB 17.2.0 rejects the inline `index: true` schema shorthand
+ * used throughout, error SC26 — crashing `getWorldDatabase()` for every
+ * collection), and there was never a live GraphQL subscription transport
+ * wired up client-side to make its "reactive" local-cache queries actually
+ * reflect server-side pushes anyway (at best they mirrored this browser
+ * tab's own optimistic writes). This hook now fetches directly via
+ * GraphQL on mount and whenever `worldId` changes, mirroring the
+ * established fallback pattern in `useActorSystemData.ts`. There is no
+ * live push transport, so members will NOT update in this view when
+ * another user joins/leaves/changes role elsewhere — call `refetch()` (or
+ * remount) to pick up changes.
  */
 
-import { useEffect, useState } from 'react';
-import { useWorldDatabase } from './useWorldDatabase';
+import { useCallback, useEffect, useState } from 'react';
+import { getWorldMembers } from '@/api/worldMembers';
 import type { WorldMemberDoc } from '../db/collections/worldMembersCollection';
 import { sortMembersByRole } from '../db/collections/worldMembersCollection';
 
@@ -17,64 +28,50 @@ export interface UseWorldMembersResult {
   members: WorldMemberDoc[];
   loading: boolean;
   error: Error | null;
+  refetch: () => Promise<void>;
+}
+
+function isMemberRole(role: string): role is 'Owner' | 'GM' | 'Player' {
+  return role === 'Owner' || role === 'GM' || role === 'Player';
 }
 
 export function useWorldMembers(worldId: string): UseWorldMembersResult {
-  const db = useWorldDatabase();
   const [members, setMembers] = useState<WorldMemberDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  useEffect(() => {
-    if (!db) {
+  const fetchMembers = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const records = await getWorldMembers(worldId);
+
+      const docs: WorldMemberDoc[] = records
+        .filter((record) => isMemberRole(record.role))
+        .map((record) => ({
+          id: record.id,
+          world_id: record.worldId ?? worldId,
+          user_id: record.userId,
+          role: record.role as 'Owner' | 'GM' | 'Player',
+          joined_at: record.joinedAt,
+          created_at: record.createdAt ?? record.joinedAt,
+          updated_at: record.updatedAt ?? record.joinedAt,
+        }));
+
+      // Sort by role hierarchy: Owner, GM, Player
+      setMembers(sortMembersByRole(docs));
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error(String(err)));
+      setMembers([]);
+    } finally {
       setLoading(false);
-      return;
     }
+  }, [worldId]);
 
-    let mounted = true;
-    const unsubscribes: Array<() => void> = [];
+  useEffect(() => {
+    void fetchMembers();
+  }, [fetchMembers]);
 
-    (async () => {
-      try {
-        // Query members for this world, sorted by join time (oldest first)
-        const query = db.collections.world_members.find({
-          selector: { world_id: worldId },
-          sort: [{ joined_at: 'asc' }],
-        });
-
-        // Subscribe to reactive updates (RxDB observable)
-        const subscription = query.$.subscribe({
-          next: (docs: WorldMemberDoc[]) => {
-            if (mounted) {
-              // Sort by role hierarchy: Owner, GM, Player
-              const sortedDocs = sortMembersByRole(docs);
-              setMembers(sortedDocs);
-              setLoading(false);
-              setError(null);
-            }
-          },
-          error: (err: Error) => {
-            if (mounted) {
-              setError(err);
-              setLoading(false);
-            }
-          },
-        });
-
-        unsubscribes.push(() => subscription.unsubscribe());
-      } catch (err) {
-        if (mounted) {
-          setError(err instanceof Error ? err : new Error(String(err)));
-          setLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      mounted = false;
-      unsubscribes.forEach((unsub) => unsub());
-    };
-  }, [db, worldId]);
-
-  return { members, loading, error };
+  return { members, loading, error, refetch: fetchMembers };
 }

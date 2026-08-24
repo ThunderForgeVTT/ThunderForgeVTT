@@ -130,10 +130,10 @@ test.describe("US3: DM assigns ownership; grantee gains edit rights", () => {
       const actorId = await createNpcAndOpenEdit(page, worldId, `Bo Jangles ${uniqueSuffix()}`);
 
       // DM assigns the player Owner via the ownership block. The player
-      // row depends on `useWorldMembers`'s RxDB replication catching up
-      // with the just-completed join, which can lag behind the GraphQL
-      // mutation that caused it — reload once if the row hasn't appeared
-      // yet, rather than failing outright on replication timing.
+      // row depends on `useWorldMembers`'s fetch picking up the
+      // just-completed join, which can lag behind the GraphQL mutation
+      // that caused it — reload once if the row hasn't appeared yet,
+      // rather than failing outright on fetch timing.
       await expect(page.getByTestId("actor-ownership-block")).toBeVisible({ timeout: 10_000 });
       const ownershipRow = page.getByTestId(`ownership-row-${playerId}`);
       try {

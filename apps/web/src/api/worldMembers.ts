@@ -5,6 +5,9 @@ export interface WorldMemberRecord {
   userId: string;
   role: string;
   joinedAt: string;
+  worldId?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 type GraphQLError = {
@@ -49,15 +52,14 @@ type WorldMembersQuery = {
 };
 
 /**
- * Fetches a world's membership roster directly via GraphQL. NOTE: this
- * deliberately does not use the `useWorldMembers`/RxDB path — that
- * replication is wired through `services/replication/inviteReplicationHandler.ts`,
- * whose `setupInviteReplication`/`fetchInitialData` are never actually
- * invoked anywhere in the app (and, independently, its GraphQL queries
- * use snake_case field/argument names against a schema that is entirely
- * camelCase, so they would fail even if wired up) — so that collection is
- * always empty today. This function mirrors `CampaignSettingsPanel.tsx`'s
- * own direct-query workaround for the same reason.
+ * Fetches a world's membership roster directly via GraphQL. RxDB has been
+ * hard cut from this layer entirely (it was fatally broken app-wide — RxDB
+ * 17.2.0 rejects the inline `index: true` schema shorthand used throughout,
+ * error SC26 — and there was never a live GraphQL subscription transport
+ * wired up client-side to make its "reactive" queries actually reactive
+ * across tabs/sessions anyway). `useWorldMembers` now calls this function
+ * directly. This mirrors `CampaignSettingsPanel.tsx`'s own direct-query
+ * pattern for the same data.
  */
 export function getWorldMembers(worldId: string): Promise<WorldMemberRecord[]> {
   return postGraphQL<WorldMembersQuery>(
@@ -65,9 +67,12 @@ export function getWorldMembers(worldId: string): Promise<WorldMemberRecord[]> {
       query WorldMembers($worldId: ID!) {
         worldMembers(worldId: $worldId) {
           id
+          worldId
           userId
           role
           joinedAt
+          createdAt
+          updatedAt
         }
       }
     `,

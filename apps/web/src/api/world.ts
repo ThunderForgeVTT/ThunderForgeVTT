@@ -241,6 +241,53 @@ export function getMyWorldMemberRole(worldId: string, userId: string): Promise<s
   ).then((data) => data.worldMember?.role ?? null);
 }
 
+export interface WorldInviteRecord {
+  id: string;
+  worldId: string;
+  inviteCode: string;
+  maxUses: number;
+  usedCount: number;
+  expiresAt?: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  status: string;
+}
+
+type WorldInvitesQuery = {
+  worldInvites: WorldInviteRecord[];
+};
+
+/**
+ * Fetches a world's active invite codes directly via GraphQL. RxDB has
+ * been hard cut from this layer entirely (see `getWorldMembers`'s doc
+ * comment in `api/worldMembers.ts` for why) — `useWorldInvites` now calls
+ * this function directly instead of subscribing to a local RxDB
+ * collection. Mirrors `CampaignSettingsPanel.tsx`'s own direct-query
+ * pattern for the same data.
+ */
+export function getWorldInvites(worldId: string): Promise<WorldInviteRecord[]> {
+  return postGraphQL<WorldInvitesQuery>(
+    `
+      query WorldInvites($worldId: ID!) {
+        worldInvites(worldId: $worldId) {
+          id
+          worldId
+          inviteCode
+          maxUses
+          usedCount
+          expiresAt
+          createdBy
+          createdAt
+          updatedAt
+          status
+        }
+      }
+    `,
+    { worldId },
+  ).then((data) => data.worldInvites);
+}
+
 type UpdateWorldGameSystemMutation = {
   updateWorldGameSystem: WorldRecord;
 };

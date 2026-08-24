@@ -36,9 +36,8 @@
  *
  * NOTE: as of this feature, no part of apps/web establishes a live
  * GraphQL subscription transport (no apollo-client/graphql-ws usage
- * exists anywhere in the app yet — confirmed by search). `startWorldSync`
- * for tokens only coalesces outbound deltas; it does not consume
- * `worldEventsCreated`. `startWallEventSync` is written to the same
+ * exists anywhere in the app yet — confirmed by search).
+ * `startWallEventSync` is written to the same
  * "reasonable default" shape as setupWorldTokensReplication so it drops
  * in once that transport exists; until then, wall changes made by the
  * current tab still work end-to-end via the outbound mutation bridge and
@@ -51,43 +50,6 @@ import { createWall, deleteWall, getWalls, updateWall } from "@/api/walls";
 import type { WallRecord, DoorState as ApiDoorState } from "@/types/wall";
 import type { WorldStore } from "../store";
 import type { DoorState, WorldWall } from "../types";
-import { getWorldDatabase } from "./database";
-
-async function persistWallDoc(wall: WallRecord): Promise<void> {
-  try {
-    const db = await getWorldDatabase();
-    await db.collections.world_walls.upsert({
-      wallId: wall.wallId,
-      sceneId: wall.sceneId,
-      x1: wall.x1,
-      y1: wall.y1,
-      x2: wall.x2,
-      y2: wall.y2,
-      blocksVision: wall.blocksVision,
-      blocksMovement: wall.blocksMovement,
-      doorState: toDoorState(wall.doorState),
-      metadata: wall.metadata,
-      createdBy: wall.createdBy,
-      updatedBy: wall.updatedBy,
-      createdAt: wall.createdAt,
-      updatedAt: wall.updatedAt,
-    });
-  } catch (error) {
-    // RxDB persistence is a best-effort offline cache (T019); the world
-    // store dispatch above is the source of truth for the live session.
-    console.error("Failed to persist wall to RxDB:", error);
-  }
-}
-
-async function removeWallDoc(wallId: string): Promise<void> {
-  try {
-    const db = await getWorldDatabase();
-    const doc = await db.collections.world_walls.findOne(wallId).exec();
-    await doc?.remove();
-  } catch (error) {
-    console.error("Failed to remove wall from RxDB:", error);
-  }
-}
 
 type WorldEventLike = {
   event_code?: number;
@@ -161,7 +123,6 @@ export async function applyWallWorldEvent(
   if (action === "deleted") {
     if (wallId) {
       worldStore.dispatch({ type: "remove_wall", wallId }, "sync");
-      await removeWallDoc(wallId);
     }
     return;
   }
@@ -174,7 +135,6 @@ export async function applyWallWorldEvent(
       { type: "upsert_wall", wall: wallRecordToWorldWall(wall) },
       "sync",
     );
-    await persistWallDoc(wall);
   }
 }
 
@@ -222,7 +182,6 @@ export async function loadWallsIntoStore(
       { type: "upsert_wall", wall: wallRecordToWorldWall(wall) },
       "sync",
     );
-    await persistWallDoc(wall);
   }
 }
 
@@ -261,7 +220,6 @@ export function startWallMutationBridge(
             { type: "upsert_wall", wall: wallRecordToWorldWall(created) },
             "sync",
           );
-          void persistWallDoc(created);
         })
         .catch((error) => {
           console.error("Failed to create wall:", error);
@@ -288,7 +246,6 @@ export function startWallMutationBridge(
             { type: "upsert_wall", wall: wallRecordToWorldWall(updated) },
             "sync",
           );
-          void persistWallDoc(updated);
         })
         .catch((error) => {
           console.error("Failed to update wall:", error);
@@ -302,7 +259,6 @@ export function startWallMutationBridge(
         .then((ok) => {
           if (ok) {
             worldStore.dispatch({ type: "remove_wall", wallId }, "sync");
-            void removeWallDoc(wallId);
           }
         })
         .catch((error) => {

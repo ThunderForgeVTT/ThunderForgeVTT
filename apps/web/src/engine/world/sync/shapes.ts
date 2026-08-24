@@ -50,41 +50,6 @@ import { createShape, deleteShape, getShapes, updateShape } from "@/api/shapes";
 import type { ShapeRecord, ShapeKind as ApiShapeKind } from "@/types/shape";
 import type { WorldStore } from "../store";
 import type { ShapeKind, WorldShape } from "../types";
-import { getWorldDatabase } from "./database";
-
-async function persistShapeDoc(shape: ShapeRecord): Promise<void> {
-  try {
-    const db = await getWorldDatabase();
-    await db.collections.world_shapes.upsert({
-      shapeId: shape.shapeId,
-      sceneId: shape.sceneId,
-      kind: shape.kind,
-      geometry: shape.geometry,
-      text: shape.text,
-      style: shape.style,
-      visibleToPlayers: shape.visibleToPlayers,
-      metadata: shape.metadata,
-      createdBy: shape.createdBy,
-      updatedBy: shape.updatedBy,
-      createdAt: shape.createdAt,
-      updatedAt: shape.updatedAt,
-    });
-  } catch (error) {
-    // RxDB persistence is a best-effort offline cache; the world store
-    // dispatch above is the source of truth for the live session.
-    console.error("Failed to persist shape to RxDB:", error);
-  }
-}
-
-async function removeShapeDoc(shapeId: string): Promise<void> {
-  try {
-    const db = await getWorldDatabase();
-    const doc = await db.collections.world_shapes.findOne(shapeId).exec();
-    await doc?.remove();
-  } catch (error) {
-    console.error("Failed to remove shape from RxDB:", error);
-  }
-}
 
 type WorldEventLike = {
   event_code?: number;
@@ -165,7 +130,6 @@ export async function applyShapeWorldEvent(
   if (action === "deleted") {
     if (shapeId) {
       worldStore.dispatch({ type: "remove_shape", shapeId }, "sync");
-      await removeShapeDoc(shapeId);
     }
     return;
   }
@@ -178,7 +142,6 @@ export async function applyShapeWorldEvent(
       { type: "upsert_shape", shape: shapeRecordToWorldShape(shape) },
       "sync",
     );
-    await persistShapeDoc(shape);
   }
 }
 
@@ -226,7 +189,6 @@ export async function loadShapesIntoStore(
       { type: "upsert_shape", shape: shapeRecordToWorldShape(shape) },
       "sync",
     );
-    await persistShapeDoc(shape);
   }
 }
 
@@ -263,7 +225,6 @@ export function startShapeMutationBridge(
             { type: "upsert_shape", shape: shapeRecordToWorldShape(created) },
             "sync",
           );
-          void persistShapeDoc(created);
         })
         .catch((error) => {
           console.error("Failed to create shape:", error);
@@ -284,7 +245,6 @@ export function startShapeMutationBridge(
             { type: "upsert_shape", shape: shapeRecordToWorldShape(updated) },
             "sync",
           );
-          void persistShapeDoc(updated);
         })
         .catch((error) => {
           console.error("Failed to update shape:", error);
@@ -298,7 +258,6 @@ export function startShapeMutationBridge(
         .then((ok) => {
           if (ok) {
             worldStore.dispatch({ type: "remove_shape", shapeId }, "sync");
-            void removeShapeDoc(shapeId);
           }
         })
         .catch((error) => {

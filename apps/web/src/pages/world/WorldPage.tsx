@@ -6,7 +6,6 @@ import { WorldLayout } from "@/layouts/world-layout/WorldLayout";
 import type { SeoConfig } from "@/types/seo";
 import { createWorldStore } from "@/engine/world/store";
 import {
-  createGraphQLWorldSyncTransport,
   loadLightsIntoStore,
   loadShapesIntoStore,
   loadTokensIntoStore,
@@ -15,9 +14,7 @@ import {
   startShapeMutationBridge,
   startTokenMutationBridge,
   startWallMutationBridge,
-  startWorldSync,
 } from "@/engine/world/sync";
-import type { WorldSyncSession } from "@/engine/world/sync/types";
 import { useCanvasEngine } from "@/engine/bevy/useCanvasEngine";
 import { getWorld } from "@/api/world";
 import { getScenes } from "@/api/scenes";
@@ -48,7 +45,6 @@ export default function WorldPage() {
   const navigate = useNavigate();
   const loaded = useRef(false);
   const canvasContainerId = "game-canvas-container";
-  const worldSyncSessionRef = useRef<WorldSyncSession | null>(null);
   // Scene-scoped tokens are loaded from the server (tokens(sceneId)) once
   // a scene is selected — see the loadTokensIntoStore/startTokenMutationBridge
   // effect below — rather than seeded here with fixture data. The engine's
@@ -331,36 +327,6 @@ export default function WorldPage() {
     () => worldStore.subscribe((event) => setWorldState(event.state)),
     [worldStore],
   );
-
-  useEffect(() => {
-    if (!id) {
-      return;
-    }
-
-    let active = true;
-
-    const setupSync = async () => {
-      await worldSyncSessionRef.current?.stop();
-
-      if (!active) {
-        return;
-      }
-
-      worldSyncSessionRef.current = await startWorldSync({
-        worldId: id,
-        worldStore,
-        transport: createGraphQLWorldSyncTransport(),
-      });
-    };
-
-    void setupSync();
-
-    return () => {
-      active = false;
-      void worldSyncSessionRef.current?.stop();
-      worldSyncSessionRef.current = null;
-    };
-  }, [id, worldStore]);
 
   useEffect(() => {
     if (loaded.current) {
@@ -881,6 +847,7 @@ export default function WorldPage() {
                   isSceneOwner={isSceneOwner}
                   isOpen={tokenPanelOpen}
                   onOpenChange={setTokenPanelOpen}
+                  worldId={id}
                 />
               </div>
             ) : null}

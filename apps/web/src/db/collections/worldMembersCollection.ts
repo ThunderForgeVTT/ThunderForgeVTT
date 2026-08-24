@@ -1,98 +1,18 @@
 /**
  * worldMembersCollection.ts
- * RxDB collection schema for world members (campaign roster)
+ * Plain types and pure helpers for world members (campaign roster).
  *
- * This collection mirrors the server's world_members table with:
- * - Offline-first caching of campaign rosters
- * - Automatic replication via GraphQL subscriptions
- * - Real-time updates when members join or roles change
+ * RxDB was hard cut from this layer: members are now fetched directly via
+ * GraphQL (see `hooks/useWorldMembers.ts`, `api/worldMembers.ts`) rather
+ * than cached/queried through a local RxDB collection. This module keeps
+ * only the document shape and pure role-hierarchy helpers, which are still
+ * consumed by `engine/world/sync/schemas.ts` and various components.
  */
 
-import { RxJsonSchema } from 'rxdb';
-
 /**
- * JSON Schema for world_members RxDB collection.
- * Must match the Diesel WorldMember model.
- */
-export const worldMembersSchema: RxJsonSchema<any> = {
-  title: 'World Members',
-  description: 'Players and GMs who are members of a campaign',
-  version: 0,
-  keyCompression: false,
-  primaryKey: 'id',
-  type: 'object',
-  properties: {
-    // Base fields from server (world_members table)
-    id: {
-      type: 'string',
-      description: 'Unique membership record ID (UUID)',
-      maxLength: 36,
-    },
-    world_id: {
-      type: 'string',
-      description: 'World/campaign this member belongs to',
-      maxLength: 36,
-      index: true,
-    },
-    user_id: {
-      type: 'string',
-      description: 'User ID of the member (UUID)',
-      maxLength: 36,
-      index: true,
-    },
-    role: {
-      type: 'string',
-      description: 'Member role: Owner, GM, or Player',
-      enum: ['Owner', 'GM', 'Player'],
-    },
-    joined_at: {
-      type: 'string',
-      format: 'date-time',
-      description: 'ISO 8601 timestamp when member joined',
-    },
-    created_at: {
-      type: 'string',
-      format: 'date-time',
-      description: 'ISO 8601 record creation timestamp',
-    },
-    updated_at: {
-      type: 'string',
-      format: 'date-time',
-      description: 'ISO 8601 last update timestamp',
-    },
-
-    // Client-side metadata (not sent to server)
-    is_current_user: {
-      type: 'boolean',
-      description: 'Derived: whether this is the logged-in user',
-      default: false,
-    },
-    display_name: {
-      type: ['string', 'null'],
-      description: 'Derived: cached user display name (for sorting/filtering)',
-    },
-  },
-  required: [
-    'id',
-    'world_id',
-    'user_id',
-    'role',
-    'joined_at',
-    'created_at',
-    'updated_at',
-  ],
-  indexes: [
-    // Efficient queries: all members of a world, sorted by join time
-    ['world_id', 'joined_at'],
-    // Lookup member by world and user (to check membership)
-    ['world_id', 'user_id'],
-    // Query members by role (to find all GMs, etc.)
-    ['world_id', 'role'],
-  ],
-};
-
-/**
- * Type definition for WorldMember documents in RxDB.
+ * Type definition for a world membership record, as returned by the
+ * server's `worldMembers` GraphQL query (mapped from camelCase to this
+ * snake_case shape for backward-compatible field names across consumers).
  */
 export interface WorldMemberDoc {
   id: string;

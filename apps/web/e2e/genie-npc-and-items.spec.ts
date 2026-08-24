@@ -15,34 +15,21 @@ import { test, expect, type Page } from "@playwright/test";
  *   never routed anywhere in apps/web). So `trait_data.size_category` is
  *   set here via the real `updateActorSystemData` GraphQL mutation
  *   directly through the live session.
- * - BIGGER REAL BUG found this way: `TokenPanel`'s NPC size-category ->
- *   scale resolution (spec 018 T047) reads `trait_data` via
- *   `useActorSystemData`, which queries the client-side RxDB
- *   `world_actor_system_data` collection
- *   (apps/web/src/db/collections/worldActorSystemDataCollection.ts).
- *   That collection's own header comment claims "Automatic replication
- *   via GraphQL subscriptions", but `database.ts` never actually
- *   registers ANY pull/push replication for it (confirmed via grep — no
- *   `replicateRxCollection`/similar call references
- *   `world_actor_system_data` anywhere), and the server exposes no
- *   `actorSystemData`-style query field to read it back either (only the
- *   `updateActorSystemData` mutation and a `world_actor_system_data_updated`
- *   subscription, and this session's own broader finding is that no live
- *   GraphQL subscription transport exists client-side anywhere in this
- *   app yet). So nothing ever populates this RxDB collection from the
- *   server AT ALL, for any actor, under any code path that exists in the
- *   running app today — not on initial load, not live. `resolveSizeScale`
- *   itself is correct (unit-tested in
- *   apps/web/src/utils/__tests__/sizeCategory.test.ts), but it can never
- *   receive real trait_data in the actual running app, so it silently
- *   falls back to the 1x default every time. Verified below by setting
- *   trait_data server-side (the mutation genuinely persists it — no
- *   error is thrown) and confirming the scale hint stays "1x" even after
- *   a full page reload, ruling out "just hasn't synced yet" in favor of
- *   "never syncs". `test.fail()` is used per this suite's own established
- *   convention (see gm-staging-page.spec.ts's back-to-staging test) for
- *   flagging a real, confirmed regression rather than silently masking
- *   it.
+ * - FIXED since this file was first written: `TokenPanel`'s NPC
+ *   size-category -> scale resolution (spec 018 T047) used to read
+ *   `trait_data` via `useActorSystemData`, which queried a client-side
+ *   RxDB `world_actor_system_data` collection that had no pull/push
+ *   replication ever registered for it, so it never reflected a
+ *   server-side `updateActorSystemData` write. The RxDB hard-cut
+ *   (apps/web/src/hooks/useActorSystemData.ts) replaced that with a
+ *   direct GraphQL fetch against the new `actorSystemData(actorId)`
+ *   query (apps/web/src/api/actorSystemData.ts,
+ *   src/server/src/graphql/queries/actor.rs's `actor_system_data_impl`),
+ *   so `resolveSizeScale` (apps/web/src/utils/sizeCategory.ts,
+ *   unit-tested in apps/web/src/utils/__tests__/sizeCategory.test.ts) now
+ *   receives real trait_data in the running app. This test previously
+ *   used `test.fail()` to flag the confirmed regression; it now asserts
+ *   the real (fixed) behavior.
  * - `ActorInventoryPanel`'s inventory row only renders `itemName` and
  *   `quantity` (`InventoryEntryRecord` in apps/web/src/types/inventory.ts
  *   has no `description`/`effects` fields at all) — so Acceptance
@@ -190,12 +177,13 @@ async function ensureSidebarOpen(page: Page): Promise<void> {
 }
 
 test.describe("Spec 018 Scenario 3: NPC size category sets a token's default footprint", () => {
-  // BUG DISCOVERED during spec 018 verification (not a test bug — see
-  // file header): TokenPanel's NPC scale hint never reflects a real
-  // NPC's trait_data.size_category, because nothing in the running app
-  // populates the RxDB collection it reads from. Flagged rather than
-  // silently masked.
-  test.fail(
+  // Previously flagged via test.fail() as a confirmed regression (see file
+  // header): TokenPanel's NPC scale hint never reflected a real NPC's
+  // trait_data.size_category because nothing in the running app populated
+  // the RxDB collection it read from. The RxDB hard-cut replaced that read
+  // path with a direct GraphQL fetch, so this now asserts the real,
+  // working behavior.
+  test(
     "a colossal NPC's token defaults to a larger scale than a diminutive NPC's",
     async ({ page }) => {
     test.setTimeout(90_000);
@@ -215,14 +203,10 @@ test.describe("Spec 018 Scenario 3: NPC size category sets a token's default foo
 
     // Diminutive NPC's token. `trait_data` was set via a raw GraphQL
     // call above (no UI path exists to set it — see file header), and
-    // TokenPanel reads it via `useActorSystemData`'s RxDB-backed
-    // replication (not a direct query), which pulls on its own cycle
-    // rather than instantly reflecting a server-side write. Retry
-    // selecting the NPC until the scale hint reflects the real value,
-    // rather than asserting on the very first render.
-    // Force a fresh RxDB sync pass (a reload re-runs whatever initial
-    // replication/query populates world_actor_system_data) before even
-    // trying, to distinguish "just hasn't synced yet" from "never syncs".
+    // TokenPanel reads it via `useActorSystemData`'s direct GraphQL fetch
+    // on mount. Retry selecting the NPC until the scale hint reflects the
+    // real value, rather than asserting on the very first render, and
+    // reload first to force a fresh fetch.
     await page.reload();
     await waitForEngineReady(page);
     await page.getByTestId("token-panel-toggle-button").click({ force: true });
@@ -237,7 +221,7 @@ test.describe("Spec 018 Scenario 3: NPC size category sets a token's default foo
     }
     expect(
       diminutiveHintText,
-      "TokenPanel's NPC scale hint never picked up trait_data.size_category (RxDB replication of a server-side updateActorSystemData write) within 10s — see file header note on the RxDB pull-cycle gap.",
+      "TokenPanel's NPC scale hint never picked up trait_data.size_category (GraphQL fetch of a server-side updateActorSystemData write) within 10s.",
     ).toMatch(/0\.5/);
     const [createDiminutiveResp] = await Promise.all([
       page.waitForResponse(

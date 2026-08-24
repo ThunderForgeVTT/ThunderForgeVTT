@@ -1,15 +1,17 @@
 /**
  * apps/web/src/hooks/useActorSystemData.ts
- * RxDB Query Hook for Actor System Data
+ * Query hook for Actor System Data
  *
- * Phase 4.8.1: E2.1 - RxDB Integration
- *
- * Hook to query and subscribe to actor system data from RxDB.
- * Automatically handles subscription lifecycle and provides:
- * - Real-time updates as data changes
- * - Loading state during initial query
- * - Error handling for failed queries
- * - Auto-cleanup on unmount
+ * RxDB hard-cut (unreleased project, leaning into Bevy as the real sync
+ * mechanism instead — see project constitution Principle I): this used to
+ * query an RxDB local collection with a live `.subscribe()`. That
+ * collection never had replication wired up (see the deleted
+ * db/collections/worldActorSystemDataCollection.ts replication code), so
+ * the "real-time subscription" only ever reflected this tab's own
+ * optimistic writes, never another client's. Now this hook fetches
+ * directly via GraphQL (`@/api/actorSystemData`) on mount and on
+ * actorId/gameSystemId change, and exposes `refetch` for callers (like
+ * `useUpdateActorData`) to force a fresh read after a mutation.
  *
  * Usage:
  * ```tsx
@@ -27,11 +29,29 @@
  */
 
 import { useEffect, useState, useCallback } from "react";
-import { getWorldDatabase } from "@/engine/world/sync/database";
+import { fetchActorSystemData } from "@/api/actorSystemData";
+
+function fromGraphQLRecord(
+  record: NonNullable<Awaited<ReturnType<typeof fetchActorSystemData>>>,
+): ActorSystemData {
+  return {
+    id: record.id,
+    actor_id: record.actorId,
+    game_system_id: record.gameSystemId,
+    ability_data: record.abilityData ?? undefined,
+    resource_data: record.resourceData ?? undefined,
+    proficiency_data: record.proficiencyData ?? undefined,
+    trait_data: record.traitData ?? undefined,
+    spell_data: record.spellData ?? undefined,
+    created_by: "",
+    updated_by: "",
+    created_at: record.createdAt,
+    updated_at: record.updatedAt,
+  };
+}
 
 /**
- * Actor system data as stored in RxDB
- * Matches worldActorSystemDataSchema from database.ts
+ * Actor system data as read from the server.
  */
 export interface ActorSystemData {
   id: string;
@@ -51,7 +71,8 @@ export interface ActorSystemData {
   created_at: string;
   updated_at: string;
 
-  // Optimistic update metadata
+  // Optimistic update metadata (set locally by useUpdateActorData while a
+  // mutation is in flight; never sent to or read back from the server)
   _optimistic?: boolean;
   _lastServerData?: Record<string, any>;
 }
@@ -60,10 +81,10 @@ export interface ActorSystemData {
  * Hook return value
  */
 export interface UseActorSystemDataResult {
-  /** Current actor system data (null while loading) */
+  /** Current actor system data (null while loading, or if none exists) */
   data: ActorSystemData | null;
 
-  /** True while initial query is executing */
+  /** True while a query is executing */
   loading: boolean;
 
   /** Error message if query failed (null if success) */
@@ -74,18 +95,11 @@ export interface UseActorSystemDataResult {
 }
 
 /**
- * Query RxDB for actor system data with automatic subscription
+ * Fetch an actor's system data directly via GraphQL.
  *
  * @param actorId - Actor ID to query (required)
  * @param gameSystemId - Game system ID to filter by (optional, e.g., "dnd5e")
  * @returns { data, loading, error, refetch }
- *
- * Handles:
- * ✅ Initial query from RxDB
- * ✅ Real-time subscription to changes
- * ✅ Automatic cleanup on unmount
- * ✅ Error handling and retry
- * ✅ Loading state management
  */
 export function useActorSystemData(
   actorId: string,
@@ -95,38 +109,17 @@ export function useActorSystemData(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  const refetch = useCallback(async () => {
+  const load = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const db = await getWorldDatabase();
-
-      // Build query: find by actor_id and optionally game_system_id
-      let query = db.collections.world_actor_system_data.find().where("actor_id").eq(actorId);
-
-      // Execute query
-      const results = await query.exec();
-
-      if (results.length === 0) {
-        // No data found, clear state
+      const remote = await fetchActorSystemData(actorId);
+      if (!remote || (gameSystemId && remote.gameSystemId !== gameSystemId)) {
         setData(null);
-        setLoading(false);
-        return;
+      } else {
+        setData(fromGraphQLRecord(remote));
       }
-
-      // If gameSystemId is specified, filter results
-      const filteredResult = gameSystemId
-        ? results.find((r) => r.game_system_id === gameSystemId)
-        : results[0];
-
-      if (!filteredResult) {
-        setData(null);
-        setLoading(false);
-        return;
-      }
-
-      setData(filteredResult as ActorSystemData);
       setLoading(false);
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -137,83 +130,11 @@ export function useActorSystemData(
     }
   }, [actorId, gameSystemId]);
 
-  // Initial fetch and subscription setup
   useEffect(() => {
-    let unsubscribe: (() => void) | null = null;
+    void load();
+  }, [load]);
 
-    (async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const db = await getWorldDatabase();
-
-        // Initial fetch
-        let query = db.collections.world_actor_system_data.find().where("actor_id").eq(actorId);
-
-        const results = await query.exec();
-
-        if (results.length === 0) {
-          setData(null);
-          setLoading(false);
-          return;
-        }
-
-        // Filter by gameSystemId if provided
-        const initialData = gameSystemId
-          ? results.find((r) => r.game_system_id === gameSystemId)
-          : results[0];
-
-        if (!initialData) {
-          setData(null);
-          setLoading(false);
-          return;
-        }
-
-        setData(initialData as ActorSystemData);
-        setLoading(false);
-
-        // Subscribe to changes
-        // Build subscription query: watch for changes to this actor's data
-        const subscription = db.collections.world_actor_system_data
-          .find()
-          .where("actor_id")
-          .eq(actorId)
-          .$.subscribe((docs: any[]) => {
-            if (docs.length === 0) {
-              setData(null);
-              return;
-            }
-
-            // Update to the first matching doc, or filter by gameSystemId
-            const updatedData = gameSystemId
-              ? docs.find((d) => d.game_system_id === gameSystemId)
-              : docs[0];
-
-            if (updatedData) {
-              setData(updatedData as ActorSystemData);
-            }
-          });
-
-        unsubscribe = () => subscription.unsubscribe?.();
-      } catch (err) {
-        const error = err instanceof Error ? err : new Error(String(err));
-        setError(error);
-        setData(null);
-        setLoading(false);
-        console.error("[useActorSystemData] Setup failed:", error);
-      }
-    })();
-
-    // Cleanup subscription on unmount
-    return () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
-    };
-  }, [actorId, gameSystemId]);
-
-  return { data, loading, error, refetch };
+  return { data, loading, error, refetch: load };
 }
 
 /**

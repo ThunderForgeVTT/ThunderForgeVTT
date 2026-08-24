@@ -10,12 +10,12 @@
  * - Spellbook: Known spells and spell slots (future)
  * - Resources: HP, hit dice, spell slots, etc. (future)
  *
- * Data is fetched from RxDB world_actor_system_data collection and updated
- * via GraphQL mutations with optimistic updates and rollback.
+ * Data is fetched and updated directly via GraphQL (RxDB removed — see
+ * useActorSystemData.ts / useUpdateActorData.ts).
  *
  * Phase E.2 Integration:
- * ✅ useActorSystemData - Real-time RxDB sync
- * ✅ useUpdateActorData - Optimistic mutations
+ * ✅ useActorSystemData - direct GraphQL fetch
+ * ✅ useUpdateActorData - GraphQL mutation
  * ✅ useGameSystemManifest - System calculators
  */
 
@@ -53,8 +53,8 @@ export interface CharacterSheetProps {
  * />
  * ```
  *
- * ✅ E2.1: useActorSystemData loads data from RxDB with real-time subscriptions
- * ✅ E2.2: useUpdateActorData handles optimistic mutations with rollback
+ * ✅ E2.1: useActorSystemData loads data via direct GraphQL fetch
+ * ✅ E2.2: useUpdateActorData sends the GraphQL mutation directly
  * ✅ E2.3: useGameSystemManifest provides system calculators (no prop drilling)
  */
 export function CharacterSheet({
@@ -64,7 +64,7 @@ export function CharacterSheet({
   editable = false,
   onError,
 }: CharacterSheetProps): ReactNode {
-  // E2.1: Load actor system data from RxDB
+  // E2.1: Load actor system data via direct GraphQL fetch
   const { data: actorData, loading: dataLoading, error: dataError } = useActorSystemData(
     actorId,
     gameSystemId,

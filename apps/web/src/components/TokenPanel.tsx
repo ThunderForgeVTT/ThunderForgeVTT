@@ -8,7 +8,12 @@ import {
   setOwnPrimaryTokenPhoto,
   updateToken,
 } from '../api/tokens';
+import { getWorldActors } from '../api/actors';
+import { getGameSystemManifest } from '../api/gameSystems';
+import { useActorSystemData } from '../hooks/useActorSystemData';
+import { resolveSizeScale, type SizeCategoriesLookup } from '../utils/sizeCategory';
 import type { TokenRecord } from '../types/token';
+import type { WorldActorRecord } from '../types/actor';
 import '../styles/TokenPanel.scss';
 
 interface TokenPanelProps {
@@ -19,6 +24,12 @@ interface TokenPanelProps {
   isSceneOwner: boolean;
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
+  /** World this scene belongs to — used only to offer an NPC picker on
+   * token creation (spec 018 T047: staging a Genie NPC of a given
+   * `size_category` defaults its token's `scale` per the NPC's game
+   * system manifest `sizeCategories` lookup, research.md R6). Omit to
+   * keep the plain blank-token creation flow. */
+  worldId?: string;
 }
 
 /**
@@ -37,6 +48,7 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
   isSceneOwner,
   isOpen,
   onOpenChange,
+  worldId,
 }) => {
   const [tokens, setTokens] = useState<TokenRecord[]>([]);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -45,6 +57,61 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
   const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Spec 018 T047: NPC roster + size-category -> scale resolution for the
+  // "Create Token" dialog's optional NPC picker. Kept fully optional and
+  // additive — a blank `newTokenActorId` behaves exactly like before
+  // (createToken called with no `actorId`/`scale` override).
+  const [npcActors, setNpcActors] = useState<WorldActorRecord[]>([]);
+  const [newTokenActorId, setNewTokenActorId] = useState<string>('');
+  const [sizeCategories, setSizeCategories] = useState<SizeCategoriesLookup | undefined>();
+
+  const selectedActor = npcActors.find((a) => a.id === newTokenActorId) ?? null;
+  const { data: selectedActorSystemData } = useActorSystemData(
+    newTokenActorId,
+    selectedActor?.gameSystemId ?? undefined,
+  );
+
+  useEffect(() => {
+    if (!isOpen || !worldId || !isSceneOwner) return;
+    getWorldActors(worldId)
+      .then((actors) => setNpcActors(actors.filter((a) => a.isNpc)))
+      .catch((err) => {
+        console.error('Failed to load NPC roster for token creation:', err);
+      });
+  }, [isOpen, worldId, isSceneOwner]);
+
+  useEffect(() => {
+    const gameSystemId = selectedActor?.gameSystemId;
+    if (!gameSystemId) {
+      setSizeCategories(undefined);
+      return;
+    }
+    let active = true;
+    getGameSystemManifest(gameSystemId)
+      .then((manifest) => {
+        if (active) {
+          setSizeCategories(manifest.sizeCategories as SizeCategoriesLookup | undefined);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load game system manifest for token scale:', err);
+        if (active) setSizeCategories(undefined);
+      });
+    return () => {
+      active = false;
+    };
+  }, [selectedActor?.gameSystemId]);
+
+  /** The `scale` a new token defaults to given the currently-selected NPC
+   * (if any) — `undefined` when no NPC is selected, so `createToken` falls
+   * back to the server's existing default rather than forcing a value. */
+  const resolvedNewTokenScale: number | undefined = newTokenActorId
+    ? resolveSizeScale(
+        sizeCategories,
+        (selectedActorSystemData?.trait_data?.size_category as string | undefined) ?? null,
+      )
+    : undefined;
   // Root cause of the primary-checkbox hang (spec 006 US2, found via
   // live instrumentation — see research.md §3): the checkbox's `disabled`
   // was gated on `token.ownerUserId`, which only flips (via `refresh()`)
@@ -88,9 +155,15 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
         y: 0,
         health: newTokenHealth,
         maxHealth: newTokenMaxHealth,
+        // Spec 018 T047: a token created for a selected NPC defaults to
+        // that NPC's size-category scale (resolveSizeScale, ../utils/
+        // sizeCategory.ts) rather than the server's plain default.
+        actorId: newTokenActorId || undefined,
+        scale: resolvedNewTokenScale,
       });
       setNewTokenHealth(undefined);
       setNewTokenMaxHealth(undefined);
+      setNewTokenActorId('');
       setCreateDialogOpen(false);
       refresh();
     } catch (err) {
@@ -98,7 +171,7 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [sceneId, newTokenHealth, newTokenMaxHealth, refresh]);
+  }, [sceneId, newTokenHealth, newTokenMaxHealth, newTokenActorId, resolvedNewTokenScale, refresh]);
 
   const handleDeleteToken = useCallback(
     async (tokenId: string) => {
@@ -339,6 +412,33 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
                   <Dialog.Description>Fill in token details. Leave blank for defaults.</Dialog.Description>
 
                   <div className="token-form">
+                    {npcActors.length > 0 && (
+                      <div className="form-group">
+                        <label htmlFor="token-npc">Stage NPC (optional)</label>
+                        <select
+                          id="token-npc"
+                          data-testid="token-create-npc-select"
+                          value={newTokenActorId}
+                          onChange={(e) => setNewTokenActorId(e.target.value)}
+                        >
+                          <option value="">(blank token)</option>
+                          {npcActors.map((actor) => (
+                            <option key={actor.id} value={actor.id}>
+                              {actor.label}
+                            </option>
+                          ))}
+                        </select>
+                        {newTokenActorId && (
+                          <p
+                            className="token-npc-scale-hint"
+                            data-testid="token-create-npc-scale-hint"
+                          >
+                            Default token scale: {resolvedNewTokenScale}x
+                          </p>
+                        )}
+                      </div>
+                    )}
+
                     <div className="form-group">
                       <label htmlFor="token-health">Current Health</label>
                       <input

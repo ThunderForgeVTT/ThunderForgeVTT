@@ -2,15 +2,16 @@
  * apps/web/src/hooks/useUpdateActorData.ts
  * GraphQL Mutation Hook for Actor System Data
  *
- * Phase 4.8.1: E2.2 - Optimistic Updates & Mutations
- *
- * Hook to update actor system data with optimistic updates and rollback.
- * Handles the full mutation lifecycle:
- * 1. Optimistic: Update RxDB immediately
- * 2. Save original: Store pre-mutation values
- * 3. Send: Send GraphQL mutation to server
- * 4. Confirm: Server validates and persists
- * 5. Rollback: Restore original values on rejection
+ * RxDB hard-cut (unreleased project, leaning into Bevy as the real sync
+ * mechanism instead — see project constitution Principle I): this used to
+ * write optimistically to an RxDB local collection, then send the GraphQL
+ * mutation, then reconcile/rollback in RxDB. That local collection was
+ * never actually read back from anywhere except this hook and
+ * `useActorSystemData` (which now reads via GraphQL directly), so the
+ * optimistic write bought nothing beyond in-memory React state. This hook
+ * now sends the mutation straight to the server and lets the caller's
+ * `useActorSystemData().refetch()` (or its own local UI state) reflect the
+ * result — no local persistence layer involved.
  *
  * Usage:
  * ```tsx
@@ -21,8 +22,10 @@
  */
 
 import { useCallback, useState } from "react";
-import { getWorldDatabase } from "@/engine/world/sync/database";
-import { ActorSystemData } from "./useActorSystemData";
+import {
+  updateActorSystemData,
+  type ActorSystemDataType,
+} from "@/api/actorSystemData";
 
 /**
  * Mutation hook result
@@ -39,44 +42,11 @@ export interface UseUpdateActorDataResult {
 }
 
 /**
- * GraphQL mutation query to update actor system data
- * This will be sent to the server for validation and persistence
- */
-const UPDATE_ACTOR_DATA_MUTATION = `
-  mutation UpdateActorSystemData($input: UpdateActorSystemDataInput!) {
-    updateActorSystemData(input: $input) {
-      success
-      message
-      data {
-        id
-        actor_id
-        game_system_id
-        ability_data
-        resource_data
-        proficiency_data
-        trait_data
-        spell_data
-        updated_by
-        updated_at
-      }
-    }
-  }
-`;
-
-/**
- * Update actor system data with optimistic updates and rollback
+ * Update actor system data.
  *
  * @param actorId - Actor ID to update (required)
  * @param gameSystemId - Game system ID (required, e.g., "dnd5e")
  * @returns { mutate, isPending, error }
- *
- * Handles:
- * ✅ Optimistic update to RxDB
- * ✅ Save pre-mutation state for rollback
- * ✅ Send GraphQL mutation to server
- * ✅ Rollback on server rejection
- * ✅ Loading state during mutation
- * ✅ Error handling and logging
  */
 export function useUpdateActorData(
   actorId: string,
@@ -91,107 +61,16 @@ export function useUpdateActorData(
         setIsPending(true);
         setError(null);
 
-        const db = await getWorldDatabase();
-
-        // 1️⃣ Get current data for rollback
-        const currentQuery = db.collections.world_actor_system_data
-          .find()
-          .where("actor_id")
-          .eq(actorId);
-
-        const currentResults = await currentQuery.exec();
-        const currentDoc = currentResults.find((d) => d.game_system_id === gameSystemId);
-
-        if (!currentDoc) {
-          throw new Error(`No actor system data found for ${actorId} in ${gameSystemId}`);
-        }
-
-        const original = { ...currentDoc } as ActorSystemData;
-        const originalDataType = currentDoc[dataType as keyof ActorSystemData];
-
-        // 2️⃣ Optimistic update: Update RxDB immediately
-        const optimisticUpdate: Partial<ActorSystemData> = {
-          [dataType]: data,
-          _optimistic: true,
-          _lastServerData: {
-            [dataType]: originalDataType,
-          },
-        };
-
-        await db.collections.world_actor_system_data.upsert({
-          ...currentDoc,
-          ...optimisticUpdate,
-        });
-
-        // 3️⃣ Send GraphQL mutation to server
-        const response = await fetch("/graphql", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            query: UPDATE_ACTOR_DATA_MUTATION,
-            variables: {
-              input: {
-                actor_id: actorId,
-                game_system_id: gameSystemId,
-                [dataType]: data,
-              },
-            },
-          }),
-        });
-
-        const responseJson = await response.json();
-
-        if (!response.ok || responseJson.errors) {
-          const errorMessage =
-            responseJson.errors?.[0]?.message || `HTTP ${response.status}`;
-          throw new Error(`Server rejected mutation: ${errorMessage}`);
-        }
-
-        // 4️⃣ Server confirmed! Remove optimistic flag
-        // RxDB subscription will receive the canonical server data via pg_notify
-        const finalUpdate: Partial<ActorSystemData> = {
-          _optimistic: false,
-          _lastServerData: undefined,
-        };
-
-        await db.collections.world_actor_system_data.upsert({
-          ...currentDoc,
-          ...optimisticUpdate,
-          ...finalUpdate,
-        });
+        await updateActorSystemData(
+          actorId,
+          gameSystemId,
+          dataType as ActorSystemDataType,
+          data,
+        );
 
         setIsPending(false);
       } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err));
-
-        // 5️⃣ Rollback: Restore original values
-        try {
-          const db = await getWorldDatabase();
-
-          // Query current doc to get latest
-          const currentQuery = db.collections.world_actor_system_data
-            .find()
-            .where("actor_id")
-            .eq(actorId);
-
-          const currentResults = await currentQuery.exec();
-          const currentDoc = currentResults.find((d) => d.game_system_id === gameSystemId);
-
-          if (currentDoc) {
-            // Restore original data type, remove optimistic flags
-            await db.collections.world_actor_system_data.upsert({
-              ...currentDoc,
-              [dataType]: originalDataType,
-              _optimistic: false,
-              _lastServerData: undefined,
-            });
-          }
-        } catch (rollbackErr) {
-          console.error("[useUpdateActorData] Rollback failed:", rollbackErr);
-        }
-
         setError(error);
         setIsPending(false);
         throw error;
