@@ -1,0 +1,13 @@
+# Keeps the Docker build context (this repo, used by
+# ThunderForgeVTT/docker's server/Dockerfile and web/Dockerfile) to just
+# source — everything below is either a build artifact regenerated inside
+# the image, or irrelevant to the build and multi-GB in a working tree.
+
+target/
+node_modules/
+dist/
+data/
+.git/
+test-results/
+playwright-report/
+apps/web/e2e/.demo/
