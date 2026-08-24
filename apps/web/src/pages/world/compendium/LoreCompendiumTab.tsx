@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { createLoreEntry, getWorldLoreEntries } from "@/api/lore";
+import { COMPENDIUM_OVERVIEW_SLUG } from "@/api/compendiumOverview";
 import { Button } from "@/components/ui/button/Button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -65,16 +66,21 @@ export function LoreCompendiumTab({ worldId, isGm }: LoreCompendiumTabProps) {
     }
   };
 
+  // Spec 021: the reserved Compendium-overview entry is authored from
+  // System settings, not this catalog — exclude it here so it doesn't show
+  // up as an ordinary, editable/deletable-looking lore row.
+  const catalogEntries = useMemo(
+    () => (entries ?? []).filter((entry) => entry.slug !== COMPENDIUM_OVERVIEW_SLUG),
+    [entries],
+  );
+
   const visibleEntries = useMemo(() => {
-    if (!entries) {
-      return [];
-    }
     const q = query.trim().toLowerCase();
     if (!q) {
-      return entries;
+      return catalogEntries;
     }
-    return entries.filter((entry) => entry.title.toLowerCase().includes(q));
-  }, [entries, query]);
+    return catalogEntries.filter((entry) => entry.title.toLowerCase().includes(q));
+  }, [catalogEntries, query]);
 
   if (error) {
     return <p className="text-sm text-destructive">Failed to load lore: {error.message}</p>;
@@ -95,7 +101,7 @@ export function LoreCompendiumTab({ worldId, isGm }: LoreCompendiumTabProps) {
         aria-label="Search lore entries"
       />
 
-      {entries.length === 0 ? (
+      {catalogEntries.length === 0 ? (
         <p className="text-sm text-muted-foreground">No lore entries yet.</p>
       ) : visibleEntries.length === 0 ? (
         <p className="text-sm text-muted-foreground">No lore entries match "{query}".</p>

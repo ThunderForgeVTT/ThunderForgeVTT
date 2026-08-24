@@ -59,12 +59,6 @@ export function WorldSidebarNav({ worldId, isGm }: WorldSidebarNavProps) {
       testId: "world-nav-staging",
     },
     {
-      label: "Play",
-      icon: "spark",
-      to: `/world/${worldId}/play`,
-      testId: "world-nav-play",
-    },
-    {
       label: "NPCs",
       icon: "skull",
       to: `/world/${worldId}/compendium?tab=npcs`,

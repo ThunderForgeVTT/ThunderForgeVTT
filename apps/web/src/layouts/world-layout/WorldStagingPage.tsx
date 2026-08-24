@@ -1,5 +1,4 @@
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button/Button";
 import { Panel } from "@/components/ui/panel/Panel";
 import { ScrollArea } from "@/components/ui/scroll-area/ScrollArea";
 import { GenieSessionPanel } from "@/components/world/GenieSessionPanel/GenieSessionPanel";
@@ -19,7 +18,6 @@ export interface WorldStagingPageProps {
   onSceneCreated: (scene: SceneRecord) => void;
   /** Whether the current user may create scenes — GM/Owner only (FR-012). */
   isGm: boolean;
-  onPlay: () => void;
   /** Called when Last Session Notes is saved, so the caller's own world
    * record stays in sync without a full refetch. */
   onSessionNotesSaved: (notes: string) => void;
@@ -52,39 +50,24 @@ export function WorldStagingPage({
   onSceneChange,
   onSceneCreated,
   isGm,
-  onPlay,
   onSessionNotesSaved,
 }: WorldStagingPageProps) {
   const { members } = useWorldMembers(worldId);
 
   return (
-    <main
-      className="mx-auto grid min-h-screen w-full max-w-4xl gap-6 bg-background p-4 sm:p-6"
-      data-testid="world-staging-page"
-    >
+    <main className="grid w-full gap-6" data-testid="world-staging-page">
       <header className="grid gap-3">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-              Session setup
-            </p>
-            <h1 className="text-3xl font-semibold">{world?.name ?? "World"}</h1>
-          </div>
-          <Button
-            type="button"
-            variant="primary"
-            size="lg"
-            icon="spark"
-            data-testid="play-button"
-            onClick={onPlay}
-          >
-            Play
-          </Button>
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+            Session setup
+          </p>
+          <h1 className="text-3xl font-semibold">{world?.name ?? "World"}</h1>
         </div>
 
         {/* Toolbar row: a slim, subdued strip rather than a plain paragraph.
-         * The Compendium/System settings links formerly here now live in
-         * the persistent WorldSidebarNav (WorldSectionShell). */}
+         * The Compendium/System settings links and the Play button formerly
+         * here now live in WorldSectionShell (persistent sidebar + a single
+         * top-right Play button shared by every world hub screen). */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-border bg-card/50 px-4 py-2 text-sm text-muted-foreground">
           <span>Confirm the scene and roster below, then hand the screen to the game.</span>
         </div>

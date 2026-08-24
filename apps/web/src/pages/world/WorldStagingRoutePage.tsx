@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { getScenes } from "@/api/scenes";
 import { getWorld } from "@/api/world";
 import { SEO } from "@/components/seo/SEO";
@@ -22,7 +22,6 @@ import type { WorldRecord } from "@/types/world";
  */
 export default function WorldStagingRoutePage() {
   const { id = "" } = useParams();
-  const navigate = useNavigate();
   const [world, setWorld] = useState<WorldRecord | null>(null);
   const [scenes, setScenes] = useState<SceneRecord[]>([]);
   const [sceneId, setSceneId] = useState<string | null>(null);
@@ -76,7 +75,6 @@ export default function WorldStagingRoutePage() {
           onSceneChange={setSceneId}
           onSceneCreated={(scene) => setScenes((current) => [...current, scene])}
           isGm={isGm}
-          onPlay={() => navigate(`/world/${id}/play`)}
           onSessionNotesSaved={(notes) =>
             setWorld((current) => (current ? { ...current, sessionNotes: notes } : current))
           }

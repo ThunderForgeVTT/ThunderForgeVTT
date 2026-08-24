@@ -33,6 +33,16 @@ export const BUNDLED_SYSTEM_LABELS: Readonly<Record<string, string>> = {
   year_zero_engine: "Year Zero Engine",
 };
 
+/**
+ * Which bundled systems have a real, data-connected actor sheet wired up
+ * (`SYSTEM_ACTOR_SHEETS` in `systemActorSheets.ts`) — today, only Genie.
+ * The other packs ship a manifest and a presentational `CharacterSheet`
+ * component, but nothing renders/edits real actor data for them yet, so
+ * pickers mark them "(TBD)" and disable selecting them rather than
+ * silently accepting a choice that doesn't actually work in play.
+ */
+export const IMPLEMENTED_SYSTEM_IDS: ReadonlySet<string> = new Set(["genie"]);
+
 /** Fetches one system pack's full manifest — including its required
  * `legal` object — straight from the server's static-pack-serving route
  * (`GET /api/systems/:id/manifest.json`, `systems.rs::get_system_manifest`).

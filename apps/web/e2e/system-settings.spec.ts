@@ -54,31 +54,42 @@ async function createWorld(page: Page, worldName: string): Promise<string> {
 }
 
 test.describe("Spec 016: GM assigns a game system and its legal notice is persistently visible", () => {
-  test("GM picks dnd5e, reviews the legal notice, confirms, and it persists across a revisit", async ({
+  test("GM sees Genie already assigned, unimplemented systems marked TBD and disabled, and re-confirming Genie's legal notice persists across a revisit", async ({
     page,
   }) => {
     await register(page, freshCredentials("e2esystem"));
     const worldId = await createWorld(page, `E2E System Settings ${uniqueSuffix()}`);
 
+    // Spec 021: world creation now sends a game-system picker default
+    // (Genie), so a freshly-created world already has one assigned rather
+    // than showing "no system assigned yet".
     await page.goto(`/world/${worldId}/settings/system`);
-    await expect(page.getByTestId("active-system-card")).toContainText(/no system assigned yet/i);
+    await expect(page.getByTestId("active-system-card")).toContainText("Genie");
 
     await page.getByTestId("system-picker").click();
-    await page.getByRole("option", { name: "dnd5e" }).click();
 
-    // The legal notice must be shown BEFORE assignment is confirmed, not
-    // only after (FR-004's "point of selection" review step).
+    // Spec 021: Genie is the only system with a real, data-connected actor
+    // sheet — every other bundled pack is marked "(TBD)" and disabled in
+    // the picker rather than silently accepting a non-functional choice.
+    const dnd5eOption = page.getByRole("option", { name: "5E System Core" });
+    await expect(dnd5eOption).toContainText("(TBD)");
+    await expect(dnd5eOption).toHaveAttribute("aria-disabled", "true");
+
+    // Re-picking the already-active system still exercises the "review the
+    // legal notice before confirming" flow (FR-004's "point of selection"
+    // review step), without needing a second implemented system.
+    await page.getByRole("option", { name: "Genie", exact: true }).click();
     await expect(page.getByTestId("pending-system-confirmation")).toBeVisible({ timeout: 10_000 });
     const pendingLegalText = await page.getByTestId("pending-system-confirmation").innerText();
     expect(pendingLegalText.length).toBeGreaterThan(0);
 
     await page.getByRole("button", { name: "Confirm" }).click();
     await expect(page.getByText("System assigned.")).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByTestId("active-system-card")).toContainText("5E System Core");
+    await expect(page.getByTestId("active-system-card")).toContainText("Genie");
 
     // Persists across a fresh navigation, not just optimistic local state.
     await page.goto(`/world/${worldId}/settings/system`);
-    await expect(page.getByTestId("active-system-card")).toContainText("5E System Core", { timeout: 10_000 });
+    await expect(page.getByTestId("active-system-card")).toContainText("Genie", { timeout: 10_000 });
     await expect(page.getByTestId("active-system-card")).not.toContainText(/no system assigned yet/i);
   });
 
@@ -90,12 +101,10 @@ test.describe("Spec 016: GM assigns a game system and its legal notice is persis
     });
     const gmPage = await gmContext.newPage();
     await register(gmPage, freshCredentials("e2esystemgm"));
+    // Spec 021: world creation already assigns Genie by default, so there's
+    // no separate "GM assigns a system" step needed before checking that a
+    // non-GM member sees the same info with no picker.
     const worldId = await createWorld(gmPage, `E2E System Settings Viewer ${uniqueSuffix()}`);
-    await gmPage.goto(`/world/${worldId}/settings/system`);
-    await gmPage.getByTestId("system-picker").click();
-    await gmPage.getByRole("option", { name: "dnd5e" }).click();
-    await gmPage.getByRole("button", { name: "Confirm" }).click();
-    await expect(gmPage.getByText("System assigned.")).toBeVisible({ timeout: 10_000 });
 
     await gmPage.goto(`/world/${worldId}`);
     await gmPage.getByRole("button", { name: "Generate Join Link" }).click();
@@ -115,7 +124,7 @@ test.describe("Spec 016: GM assigns a game system and its legal notice is persis
     });
 
     await playerPage.goto(`/world/${worldId}/settings/system`);
-    await expect(playerPage.getByTestId("active-system-card")).toContainText("5E System Core", {
+    await expect(playerPage.getByTestId("active-system-card")).toContainText("Genie", {
       timeout: 10_000,
     });
     // No GM-only picker for a non-GM member.

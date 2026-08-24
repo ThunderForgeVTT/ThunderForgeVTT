@@ -1,5 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { getLoreEntry } from "@/api/lore";
+import { COMPENDIUM_OVERVIEW_SLUG } from "@/api/compendiumOverview";
 import { Tabs } from "@/components/ui/tabs/Tabs";
 import { ActorPreviewPanel } from "@/pages/world/compendium/ActorPreviewPanel";
 import { ComingSoonTab } from "@/pages/world/compendium/ComingSoonTab";
@@ -7,6 +9,7 @@ import { ItemCompendiumTab } from "@/pages/world/compendium/ItemCompendiumTab";
 import { ItemPreviewPanel } from "@/pages/world/compendium/ItemPreviewPanel";
 import { LoreCompendiumTab } from "@/pages/world/compendium/LoreCompendiumTab";
 import { NpcCompendiumTab } from "@/pages/world/compendium/NpcCompendiumTab";
+import { LoreMarkdownRenderer } from "@/pages/world/lore/LoreMarkdownRenderer";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import type { WorldActorRecord } from "@/types/actor";
 import type { WorldItemRecord } from "@/types/item";
@@ -42,6 +45,29 @@ export function WorldCompendiumPage({ worldId, world }: WorldCompendiumPageProps
   const [itemCatalog, setItemCatalog] = useState<WorldItemRecord[]>([]);
   const { isGm } = useWorldRole(worldId, world);
 
+  // Spec 021: the header blurb is GM-authored Markdown (a reserved lore
+  // entry, edited from System settings), not a hardcoded sentence — `null`
+  // (not yet created for this world) just means the header shows no blurb.
+  const [overviewHtml, setOverviewHtml] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    getLoreEntry(worldId, COMPENDIUM_OVERVIEW_SLUG)
+      .then((entry) => {
+        if (active) {
+          setOverviewHtml(entry && !entry.moderated ? entry.renderedHtml : null);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setOverviewHtml(null);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [worldId]);
+
   const selectedActor = useMemo(
     () => roster.find((actor) => actor.id === selectedActorId) ?? null,
     [roster, selectedActorId],
@@ -53,15 +79,12 @@ export function WorldCompendiumPage({ worldId, world }: WorldCompendiumPageProps
   );
 
   return (
-    <main className="grid min-h-screen gap-4 bg-background p-4" data-testid="world-compendium-page">
-      <header className="rounded-xl border border-border bg-card p-5">
-        <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-          World compendium
-        </p>
-        <h1 className="text-2xl font-semibold">{world?.name ?? "World"} artifacts</h1>
-        <p className="mt-2 max-w-3xl text-muted-foreground">
-          Browse and curate this world's NPCs, lore, items, and abilities without entering play.
-        </p>
+    <main className="grid w-full gap-4" data-testid="world-compendium-page">
+      <header className="grid gap-1 rounded-lg border border-border bg-card px-4 py-3">
+        <h1 className="text-xl font-semibold">{world?.name ?? "World"} artifacts</h1>
+        {overviewHtml ? (
+          <LoreMarkdownRenderer html={overviewHtml} className="text-sm text-muted-foreground" />
+        ) : null}
       </header>
 
       <Tabs

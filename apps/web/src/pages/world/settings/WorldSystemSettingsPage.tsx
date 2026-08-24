@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { BUNDLED_SYSTEM_IDS, BUNDLED_SYSTEM_LABELS, getGameSystemManifest } from "@/api/gameSystems";
+import {
+  BUNDLED_SYSTEM_IDS,
+  BUNDLED_SYSTEM_LABELS,
+  IMPLEMENTED_SYSTEM_IDS,
+  getGameSystemManifest,
+} from "@/api/gameSystems";
 import { getWorld, updateWorldGameSystem, updateWorldGenieResourceCarryover } from "@/api/world";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
@@ -19,6 +24,7 @@ import { SystemLegalNotice } from "@/components/game-systems/legal/SystemLegalNo
 import type { SystemManifest } from "@/contexts/GameSystemContext";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import { WorldSectionShell } from "@/layouts/world-layout/WorldSectionShell";
+import { CompendiumOverviewSettingsCard } from "@/pages/world/settings/CompendiumOverviewSettingsCard";
 import type { WorldRecord } from "@/types/world";
 
 /**
@@ -146,7 +152,7 @@ export default function WorldSystemSettingsPage() {
     <>
       <SEO title={`${world.name} — System settings`} description="World system settings" noindex />
       <WorldSectionShell worldId={worldId} isGm={isGm}>
-      <Container className="grid max-w-2xl gap-6 py-10">
+      <Container className="mx-0 grid w-full max-w-4xl gap-6 py-10">
         <Button
           variant="ghost"
           size="sm"
@@ -178,6 +184,8 @@ export default function WorldSystemSettingsPage() {
           )}
         </Card>
 
+        {isGm ? <CompendiumOverviewSettingsCard worldId={worldId} /> : null}
+
         {isGm ? (
           <Card className="grid gap-4 p-6" data-testid="system-picker-card">
             <h2 className="text-lg font-semibold">
@@ -188,11 +196,15 @@ export default function WorldSystemSettingsPage() {
                 <SelectValue placeholder="Select a system" />
               </SelectTrigger>
               <SelectContent>
-                {BUNDLED_SYSTEM_IDS.map((systemId) => (
-                  <SelectItem key={systemId} value={systemId}>
-                    {BUNDLED_SYSTEM_LABELS[systemId] ?? systemId}
-                  </SelectItem>
-                ))}
+                {BUNDLED_SYSTEM_IDS.map((systemId) => {
+                  const isImplemented = IMPLEMENTED_SYSTEM_IDS.has(systemId);
+                  return (
+                    <SelectItem key={systemId} value={systemId} disabled={!isImplemented}>
+                      {BUNDLED_SYSTEM_LABELS[systemId] ?? systemId}
+                      {isImplemented ? null : " (TBD)"}
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
 
