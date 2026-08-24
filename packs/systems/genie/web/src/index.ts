@@ -32,6 +32,30 @@ import SessionClocks from './components/SessionClocks';
 import SessionResourceTrade from './components/SessionResourceTrade';
 import { calculateMaxWishPoints } from './derived-data.ts';
 
+// Named component + type exports, for apps/web (or any other consumer) to
+// import individually rather than only through the bundled manifest below.
+export {
+  CharacterSheet,
+  ManifestationRollButton,
+  ConditionTrack,
+  SizeCategoryBadge,
+  SessionWishPool,
+  SessionClocks,
+  SessionResourceTrade,
+};
+export type { GenieCharacter, GenieAbilityData, GenieProficiencyData, GenieSkillDefinition } from './components/CharacterSheet';
+export type { ConditionTrackProps } from './components/ConditionTrack';
+export type { SessionWishPoolProps } from './components/SessionWishPool';
+export type { SessionClocksProps, GeniePuzzleClockData } from './components/SessionClocks';
+export type {
+  SessionResourceTradeProps,
+  GenieResourceHoldingData,
+  GeniePartyMemberOption,
+  GenieIncomingTradeProposal,
+} from './components/SessionResourceTrade';
+export { GENIE_CONDITIONS, resolveCondition, resolveConditions } from './conditions';
+export type { GenieConditionDefinition } from './conditions';
+
 // Derived data calculators (spec 018-genie-house-system, US6)
 // Mirrors packs/systems/dnd5e/web/src/index.ts's DerivedDataCalculators
 // shape: `resource_data.max_wish_points` is recalculated on read from the

@@ -92,8 +92,23 @@ test.describe("Spec 018 Scenario 1: the Manifestation roll exercises keep/drop +
   }) => {
     const worldId = await registerAndCreateWorld(page, `E2E Genie System ${uniqueSuffix()}`);
 
+    // Genie is now the server-side default (prepare_world_input,
+    // src/server/src/graphql/helpers.rs) for a world created with no
+    // system explicitly selected — a fresh world here already has one
+    // assigned, so first switch to a different pack to get back to an
+    // "assigning a system through the UI" starting point before testing
+    // that flow's legal-notice reviewing step (this test's actual point).
     await page.goto(`/world/${worldId}/settings/system`);
-    await expect(page.getByTestId("active-system-card")).toContainText(/no system assigned yet/i);
+    await expect(page.getByTestId("active-system-card")).toContainText("Genie");
+
+    await page.getByTestId("system-picker").click();
+    await page.getByRole("option", { name: "dnd5e" }).click();
+    await expect(page.getByTestId("pending-system-confirmation")).toBeVisible({ timeout: 10_000 });
+    await page.getByRole("button", { name: "Confirm" }).click();
+    await expect(page.getByText("System assigned.")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId("active-system-card")).toContainText("5E System Core", {
+      timeout: 10_000,
+    });
 
     await page.getByTestId("system-picker").click();
     await page.getByRole("option", { name: "genie" }).click();

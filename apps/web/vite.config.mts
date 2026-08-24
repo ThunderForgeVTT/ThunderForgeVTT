@@ -14,6 +14,20 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // packs/systems/genie/web has never actually been built as a
+      // library (no vite lib config, tsconfig has noEmit: true) — aliased
+      // straight to its TS source rather than fixing that unrelated,
+      // pre-existing build gap just to consume it here.
+      "@thunderforge/genie": path.resolve(
+        __dirname,
+        "../../packs/systems/genie/web/src/index.ts",
+      ),
+      // genie/web has its own node_modules with React 18.3.1 (this app is
+      // on React 19); without forcing it to resolve here, its aliased
+      // source pulls in a second React copy → "Invalid hook call".
+      react: path.resolve(__dirname, "node_modules/react"),
+      "react-dom": path.resolve(__dirname, "node_modules/react-dom"),
+      "react/jsx-runtime": path.resolve(__dirname, "node_modules/react/jsx-runtime"),
     },
   },
   plugins: [

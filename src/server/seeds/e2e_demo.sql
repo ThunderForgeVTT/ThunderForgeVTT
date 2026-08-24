@@ -11,6 +11,19 @@
 -- runs. To apply by hand:
 --   psql "$DATABASE_URL" -f src/server/seeds/e2e_demo.sql
 
+-- Reset any Genie session-loop state left over from a previous e2e run
+-- against this same fixed-UUID demo world (spend_wish/advance_doom_clock/
+-- etc. mutate real rows, so re-running the suite against a not-yet-wiped
+-- DB would otherwise start from wherever the last run left off instead of
+-- a clean session).
+DELETE FROM world_genie_puzzle_clocks
+WHERE session_id IN (SELECT id FROM world_genie_sessions WHERE world_id = '00000000-0000-0000-0000-0000000000f0');
+DELETE FROM world_genie_resource_holdings
+WHERE session_id IN (SELECT id FROM world_genie_sessions WHERE world_id = '00000000-0000-0000-0000-0000000000f0');
+DELETE FROM world_genie_trade_proposals
+WHERE session_id IN (SELECT id FROM world_genie_sessions WHERE world_id = '00000000-0000-0000-0000-0000000000f0');
+DELETE FROM world_genie_sessions WHERE world_id = '00000000-0000-0000-0000-0000000000f0';
+
 -- Skip the first-run admin bootstrap wizard entirely.
 INSERT INTO admin_bootstrap_setup (id, setup_completed_at, admin_code_hash, admin_code_generated_at, created_at, updated_at)
 VALUES (1, now(), NULL, NULL, now(), now())

@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button/Button";
 import { Panel } from "@/components/ui/panel/Panel";
 import { ScrollArea } from "@/components/ui/scroll-area/ScrollArea";
+import { GenieSessionPanel } from "@/components/world/GenieSessionPanel/GenieSessionPanel";
 import { SceneSwitcher } from "@/components/world/SceneSwitcher";
 import { SessionNotesPanel } from "@/components/world/SessionNotesPanel/SessionNotesPanel";
 import { SessionSetupInviteLink } from "@/components/world/SessionSetupInviteLink";
@@ -159,6 +160,21 @@ export function WorldStagingPage({
           {isGm ? <SessionSetupInviteLink worldId={worldId} /> : null}
         </div>
       </Panel>
+
+      {/* Spec 018 US7: the Genie session loop (Wish Pool, Doom Clock,
+       * Puzzle Clocks) — only relevant for Genie-system worlds. */}
+      {world?.gameSystemId === "genie" ? (
+        <Panel
+          variant="stone"
+          className="grid gap-3 rounded-xl border border-border"
+          data-testid="genie-session-panel-wrapper"
+        >
+          <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+            Genie session
+          </p>
+          <GenieSessionPanel worldId={worldId} isGm={isGm} />
+        </Panel>
+      ) : null}
     </main>
   );
 }
