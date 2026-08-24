@@ -171,6 +171,7 @@ docs/IMPLEMENTATION_GUIDE.md
 apps/web/test-results/
 apps/web/playwright-report/
 apps/web/e2e/screenshots/
+apps/web/e2e/fixtures/.demo/
 apps/web/.playwright/
 
 ### graphify ###

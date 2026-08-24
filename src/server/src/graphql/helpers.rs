@@ -164,7 +164,8 @@ pub fn prepare_world_input(
         ));
     }
 
-    let game_system_id = normalize_optional_text(input.game_system_id);
+    let game_system_id =
+        normalize_optional_text(input.game_system_id).or_else(|| Some("genie".to_string()));
     validate_optional_reference_id("Game system ID", game_system_id.as_deref())?;
 
     let interface_pack_id = normalize_optional_text(input.interface_pack_id);
