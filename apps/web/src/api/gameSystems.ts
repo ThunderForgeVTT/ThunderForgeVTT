@@ -21,6 +21,18 @@ export const BUNDLED_SYSTEM_IDS: readonly string[] = [
   "year_zero_engine",
 ];
 
+/** Display titles for `BUNDLED_SYSTEM_IDS`, mirrored from each pack's
+ * `system.json` `title` field so pickers don't have to show raw ids. */
+export const BUNDLED_SYSTEM_LABELS: Readonly<Record<string, string>> = {
+  dnd5e: "5E System Core",
+  genie: "Genie",
+  pathfinder2e: "Pathfinder Second Edition",
+  cypher_system: "Cypher System",
+  fate_core: "Fate Core",
+  blades_in_the_dark: "Blades in the Dark",
+  year_zero_engine: "Year Zero Engine",
+};
+
 /** Fetches one system pack's full manifest — including its required
  * `legal` object — straight from the server's static-pack-serving route
  * (`GET /api/systems/:id/manifest.json`, `systems.rs::get_system_manifest`).

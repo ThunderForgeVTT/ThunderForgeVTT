@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { BUNDLED_SYSTEM_IDS, getGameSystemManifest } from "@/api/gameSystems";
+import { BUNDLED_SYSTEM_IDS, BUNDLED_SYSTEM_LABELS, getGameSystemManifest } from "@/api/gameSystems";
 import { getWorld, updateWorldGameSystem, updateWorldGenieResourceCarryover } from "@/api/world";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
@@ -188,7 +188,7 @@ export default function WorldSystemSettingsPage() {
               <SelectContent>
                 {BUNDLED_SYSTEM_IDS.map((systemId) => (
                   <SelectItem key={systemId} value={systemId}>
-                    {systemId}
+                    {BUNDLED_SYSTEM_LABELS[systemId] ?? systemId}
                   </SelectItem>
                 ))}
               </SelectContent>

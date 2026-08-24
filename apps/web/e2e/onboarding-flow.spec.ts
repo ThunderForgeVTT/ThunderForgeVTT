@@ -154,17 +154,21 @@ test.describe("US1: honest engine-load feedback (T004)", () => {
 });
 
 test.describe("US2: no dead/placeholder controls remain (T011-T012)", () => {
-  test("the create-world form shows only name and description — no game-system or interface-pack selector", async ({
+  test("the create-world form shows name, description, and a real game-system picker — no interface-pack selector", async ({
     page,
   }) => {
+    // Spec 008 (FR-005) originally removed game-system selection from this
+    // form because it was non-functional at the time; it's since been
+    // re-added as a real picker over the bundled system packs
+    // (BUNDLED_SYSTEM_IDS), defaulting to Genie.
     await register(page, freshCredentials("e2eonb"));
     await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
 
     await expect(page.locator("#world-name")).toBeVisible();
     await expect(page.locator("#world-description")).toBeVisible();
-    await expect(page.locator("#world-game-system")).toHaveCount(0);
+    await expect(page.locator("#world-system")).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Game system" })).toHaveText("Genie");
     await expect(page.locator("#world-interface-pack")).toHaveCount(0);
-    await expect(page.getByText(/placeholder game system/i)).toHaveCount(0);
   });
 
   test("an existing world's dashboard shows only real data — no unfilled placeholder panels", async ({

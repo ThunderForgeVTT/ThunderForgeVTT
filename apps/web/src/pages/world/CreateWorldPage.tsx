@@ -1,11 +1,19 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { BUNDLED_SYSTEM_IDS, BUNDLED_SYSTEM_LABELS } from "@/api/gameSystems";
 import { createWorld } from "@/api/world";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { Container } from "@/components/ui/container/Container";
 import { Field } from "@/components/ui/field/Field";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { Textarea } from "@/components/ui/textarea";
 import type { SeoConfig } from "@/types/seo";
@@ -21,6 +29,7 @@ export default function CreateWorldPage() {
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [gameSystemId, setGameSystemId] = useState("genie");
   const [status, setStatus] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -35,10 +44,7 @@ export default function CreateWorldPage() {
     setStatus(null);
 
     try {
-      // T014 (US2): game-system/interface-pack selection removed from this
-      // form (FR-005) — createWorld's input already treats both as
-      // optional server-side, so simply not sending them is sufficient.
-      const world = await createWorld({ name, description });
+      const world = await createWorld({ name, description, gameSystemId });
       // Spec 010: straight to staging (not the canvas, and not the
       // dashboard) — the world now always has a default scene already
       // rendered (FR-004, FR-006), via create_world's atomic transaction
@@ -120,6 +126,25 @@ export default function CreateWorldPage() {
                   maxLength={600}
                   rows={5}
                 />
+              </Field>
+
+              <Field
+                label="Game system"
+                htmlFor="world-system"
+                hint="You can change this later from the world's system settings."
+              >
+                <Select value={gameSystemId} onValueChange={setGameSystemId}>
+                  <SelectTrigger id="world-system" aria-label="Game system">
+                    <SelectValue placeholder="Select a system" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BUNDLED_SYSTEM_IDS.map((systemId) => (
+                      <SelectItem key={systemId} value={systemId}>
+                        {BUNDLED_SYSTEM_LABELS[systemId] ?? systemId}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Field>
             </div>
 
