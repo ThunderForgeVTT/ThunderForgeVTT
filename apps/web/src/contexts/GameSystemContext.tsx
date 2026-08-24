@@ -93,35 +93,25 @@ export function GameSystemProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      // Dynamically import system manifest based on ID
-      let manifest: SystemManifest;
+      // Dynamically import system manifest based on ID — one generic path
+      // for every system, no per-systemId special-casing. Every pack's
+      // `@/systems/<id>/index` (or, for packs living under
+      // `packs/systems/<id>/web`, whatever local re-export bridges it
+      // in) exports its manifest under a name containing "Manifest"
+      // (`DnD5eSystemManifest`, `genieSystemManifest`, etc.) — sniff for
+      // that key rather than hardcoding it per system.
+      const module = await import(
+        /* @vite-ignore */
+        `@/systems/${systemId}/index`
+      );
 
-      if (systemId === "dnd5e") {
-        const module = await import("@/systems/dnd5e/index");
-        manifest = module.DnD5eSystemManifest as SystemManifest;
-      } else if (systemId === "pathfinder2e") {
-        // Future: support additional systems
-        const module = await import(
-          /* @vite-ignore */
-          `@/systems/${systemId}/index`
-        );
-        manifest = module[`${systemId}SystemManifest`] as SystemManifest;
-      } else {
-        // Fallback: attempt generic import
-        const module = await import(
-          /* @vite-ignore */
-          `@/systems/${systemId}/index`
-        );
-
-        // Try common naming patterns
-        const keys = Object.keys(module);
-        const manifestKey = keys.find((k) => k.includes("Manifest"));
-        if (!manifestKey) {
-          throw new Error(`No manifest exported from @/systems/${systemId}/index`);
-        }
-
-        manifest = module[manifestKey] as SystemManifest;
+      const keys = Object.keys(module);
+      const manifestKey = keys.find((k) => k.includes("Manifest"));
+      if (!manifestKey) {
+        throw new Error(`No manifest exported from @/systems/${systemId}/index`);
       }
+
+      const manifest = module[manifestKey] as SystemManifest;
 
       // Cache and return
       cacheRef.current.set(systemId, manifest);

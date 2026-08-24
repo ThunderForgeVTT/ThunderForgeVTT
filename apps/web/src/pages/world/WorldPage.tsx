@@ -6,6 +6,10 @@ import { WorldLayout } from "@/layouts/world-layout/WorldLayout";
 import type { SeoConfig } from "@/types/seo";
 import { createWorldStore } from "@/engine/world/store";
 import {
+  applyLightWorldEvent,
+  applyShapeWorldEvent,
+  applyTokenWorldEvent,
+  applyWallWorldEvent,
   loadLightsIntoStore,
   loadShapesIntoStore,
   loadTokensIntoStore,
@@ -14,6 +18,7 @@ import {
   startShapeMutationBridge,
   startTokenMutationBridge,
   startWallMutationBridge,
+  subscribeToWorldEvents,
 } from "@/engine/world/sync";
 import { useCanvasEngine } from "@/engine/bevy/useCanvasEngine";
 import { getWorld } from "@/api/world";
@@ -577,6 +582,56 @@ export default function WorldPage() {
     markSceneResourceLoaded,
     markSceneResourceFailed,
   ]);
+
+  // Live cross-client sync: one subscription per mounted scene, feeding
+  // every apply*WorldEvent for this scene's canvas primitives — each of
+  // those already filters by its own event code internally (walls=10,
+  // tokens=14, etc, see their own doc comments), so a single shared
+  // subscription driving all four is correct and avoids opening four
+  // separate WebSocket subscriptions for the same event stream. The
+  // backend transport (Postgres listener -> broadcast channel -> this
+  // `worldEventsCreated` GraphQL subscription -> /api/ws) already existed
+  // in full; this is the first thing in apps/web to actually open it.
+  useEffect(() => {
+    if (!id || !sceneId || !bridgeReady) {
+      return;
+    }
+
+    // Not an AbortController + in-loop flag check: a `for await` loop
+    // only re-checks anything between events, so if the world goes quiet
+    // (no new events) the loop hangs forever awaiting the next one and
+    // the subscription would never actually close on unmount/scene
+    // change. Holding the iterator directly and calling `.return()` on
+    // it unblocks that pending `next()` immediately (it synchronously
+    // disposes the underlying graphql-ws subscription, which resolves
+    // the pending promise via the `complete` callback) — this is why
+    // `for await...of` itself calls `.return()` on early exit, and why a
+    // manual cleanup needs to do the same explicitly.
+    const iterator = subscribeToWorldEvents(id)[Symbol.asyncIterator]();
+    let cancelled = false;
+
+    (async () => {
+      try {
+        while (!cancelled) {
+          const { value: event, done } = await iterator.next();
+          if (done || cancelled || !event) break;
+          await Promise.all([
+            applyWallWorldEvent(worldStore, sceneId, event),
+            applyTokenWorldEvent(worldStore, sceneId, event),
+            applyShapeWorldEvent(worldStore, sceneId, event),
+            applyLightWorldEvent(worldStore, sceneId, event),
+          ]);
+        }
+      } catch (error) {
+        console.error("World events live-sync error:", error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      void iterator.return?.();
+    };
+  }, [id, sceneId, bridgeReady, worldStore]);
 
   const handleMapImportComplete = useCallback(() => {
     if (!sceneId || !id) {

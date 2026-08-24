@@ -91,12 +91,24 @@ export function startGenieSessionEventSync(
   handlers: GenieSessionEventHandlers,
   graphqlSubscription: AsyncIterable<WorldEventLike>,
 ): () => void {
-  const abortController = new AbortController();
+  // Not an AbortController + in-loop flag check: `for await` only
+  // re-checks anything between events, so on a quiet world the loop
+  // hangs forever awaiting the next one and the cleanup function
+  // wouldn't actually close the subscription. Holding the iterator
+  // directly and calling `.return()` unblocks a pending `next()`
+  // immediately instead (this is what `for await...of` itself does on
+  // early exit — this is that same behavior, invoked explicitly since
+  // this cleanup happens from outside the loop, not inside it). Found
+  // live while first actually driving this from a real subscription
+  // (this function predates one existing at all).
+  const iterator = graphqlSubscription[Symbol.asyncIterator]();
+  let cancelled = false;
 
   (async () => {
     try {
-      for await (const event of graphqlSubscription) {
-        if (abortController.signal.aborted) break;
+      while (!cancelled) {
+        const { value: event, done } = await iterator.next();
+        if (done || cancelled || !event) break;
         applyGenieSessionWorldEvent(handlers, event);
       }
     } catch (error) {
@@ -105,6 +117,7 @@ export function startGenieSessionEventSync(
   })();
 
   return () => {
-    abortController.abort();
+    cancelled = true;
+    void iterator.return?.();
   };
 }

@@ -16,6 +16,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getWorldActors } from "@/api/actors";
+import { startGenieSessionEventSync, subscribeToWorldEvents } from "@/engine/world/sync";
 import {
   acceptResourceTrade as acceptResourceTradeRequest,
   advanceDoomClock as advanceDoomClockRequest,
@@ -89,7 +90,22 @@ export function useGenieSession(
       setLoading(true);
       setError(null);
       const result = await fetchGenieSession(worldId);
-      setSession(result);
+      setSession((prev) => {
+        if (result) return result;
+        // genieSession(worldId) only ever returns the *active* session by
+        // design (queries/genie_session.rs filters status="active") — a
+        // null result is ambiguous between "no session was ever started"
+        // and "the session just concluded" (possibly on another client,
+        // which is exactly what the live-sync NOTIFY handler below
+        // triggers this refetch for). Don't clobber an already-known
+        // concluded session with that ambiguous null — this is the same
+        // bug advancePuzzleClock/spendResourceOnPuzzleClock's direct
+        // mutation responses were fixed for earlier; a blind refetch()
+        // reintroduces it the moment anything (like live sync) calls it
+        // after a mutation that could have won/lost the session.
+        if (prev && prev.status !== "ACTIVE") return prev;
+        return null;
+      });
     } catch (err) {
       setError(err instanceof Error ? err : new Error(String(err)));
     } finally {
@@ -148,6 +164,24 @@ export function useGenieSession(
   useEffect(() => {
     void refetchTrades();
   }, [refetchTrades]);
+
+  // Live cross-client sync: a NOTIFY for this world's Genie session state
+  // (wish pool/doom clock/puzzle clocks) or a resource trade re-runs the
+  // same refetch()/refetchTrades() a manual action already triggers —
+  // this is the piece that makes Scenarios 8-9 (spec 018 quickstart)
+  // actually work across two real connected clients rather than only
+  // updating the tab that performed the action.
+  useEffect(() => {
+    if (!worldId) return;
+    const stopSync = startGenieSessionEventSync(
+      {
+        onSessionStateChanged: () => void refetch(),
+        onResourceTradeChanged: () => void refetchTrades(),
+      },
+      subscribeToWorldEvents(worldId),
+    );
+    return stopSync;
+  }, [worldId, refetch, refetchTrades]);
 
   const startSession = useCallback(
     async (doomClockMax: number) => {

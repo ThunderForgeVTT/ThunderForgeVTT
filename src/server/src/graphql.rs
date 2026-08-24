@@ -11,6 +11,7 @@ use std::time::Duration;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::IntervalStream;
 
+use crate::auth::world_membership::require_world_member;
 use crate::admin::{
     load_admin_stats, recalculate_disk_usage as calculate_disk_usage,
     update_manifest_key as persist_manifest_key, update_oauth_provider as persist_oauth_provider,
@@ -1861,10 +1862,36 @@ impl SubscriptionRoot {
         let app_state = ctx.data::<AppState>().ok().cloned();
         let world_uuid = uuid::Uuid::parse_str(&world_id).ok();
 
+        // Authorization: this previously had none at all — any
+        // authenticated user could subscribe to any world's events by
+        // guessing/enumerating world_id, bypassing per-world membership
+        // entirely. `authenticated_user`/`require_world_member` mirror
+        // every other world-scoped resolver in this file.
+        let membership_ok = match (&app_state, &world_uuid) {
+            (Some(state), Some(uuid)) => match authenticated_user(ctx) {
+                Ok(auth_user) => {
+                    let user_id = auth_user.user_id;
+                    let world_uuid = *uuid;
+                    let pool = state.db_pool.clone();
+                    tokio::task::spawn_blocking(move || {
+                        pool.get()
+                            .ok()
+                            .and_then(|mut conn| require_world_member(&mut conn, user_id, world_uuid).ok())
+                            .is_some()
+                    })
+                    .await
+                    .unwrap_or(false)
+                }
+                Err(_) => false,
+            },
+            _ => false,
+        };
+
         // Collect all validation to happen upfront
         let (has_error, error_msg, rx_opt) = match (&app_state, &world_uuid) {
             (None, _) => (true, "Failed to get app state", None),
             (_, None) => (true, "Invalid world_id format", None),
+            (_, _) if !membership_ok => (true, "You must be a member of this world", None),
             (Some(app_state), Some(_)) => {
                 (false, "", Some(app_state.world_event_sender.subscribe()))
             }
