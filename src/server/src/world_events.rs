@@ -18,11 +18,24 @@ use crate::schema::world_events;
 /// Event codes for the `world_events` audit trail / NOTIFY payload.
 /// 1-5 are already used by token sync and invite/membership mutations
 /// (src/server/src/graphql.rs, src/server/src/graphql/mutations_invites.rs).
+/// 10 (wall), 11 (light), 12 (shape), 13 (map import), 14 (token) are
+/// documented in `apps/web/src/engine/world/sync/tokens.ts`'s doc comment;
+/// 15 (spec 018, Genie session state) is documented there too.
 pub const EVENT_CODE_WALL_CHANGED: i32 = 10;
 pub const EVENT_CODE_LIGHT_SOURCE_CHANGED: i32 = 11;
 pub const EVENT_CODE_SHAPE_CHANGED: i32 = 12;
 pub const EVENT_CODE_MAP_IMPORTED: i32 = 13;
 pub const EVENT_CODE_TOKEN_CHANGED: i32 = 14;
+/// Spec 018 (User Story 7): Genie session-loop state changes — the
+/// Session Wish Pool, Doom Clock, Puzzle Clocks, and Session Resource
+/// trades (data-model.md `world_events`). Reuses this existing generic
+/// broadcast mechanism rather than a dedicated subscription (research.md
+/// R7); consumed by the same `worldEventsCreated(worldId)` subscription
+/// every world-member client already holds open. Payload shape
+/// (`token_event` JSON column):
+/// `{ "kind": "wish_pool" | "doom_clock" | "puzzle_clock" | "resource_trade", "session_id": "...", ...kind-specific fields }`
+/// (contracts/genie-session-loop.md).
+pub const EVENT_CODE_GENIE_SESSION_STATE: i32 = 15;
 
 /// Record a world event to the audit trail and trigger NOTIFY for real-time sync.
 pub fn record_world_event(

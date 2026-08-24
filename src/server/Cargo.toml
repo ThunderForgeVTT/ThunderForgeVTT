@@ -88,3 +88,27 @@ path = "../../crates/pack_system_spec"
 [dependencies.dnd5e_server]
 path = "../../packs/systems/dnd5e/server"
 package = "dnd5e-server"
+
+[dependencies.genie_server]
+path = "../../packs/systems/genie/server"
+package = "genie-server"
+
+[dependencies.pathfinder2e_server]
+path = "../../packs/systems/pathfinder2e/server"
+package = "pathfinder2e-server"
+
+[dependencies.cypher_server]
+path = "../../packs/systems/cypher_system/server"
+package = "cypher-server"
+
+[dependencies.fate_server]
+path = "../../packs/systems/fate_core/server"
+package = "fate-server"
+
+[dependencies.blades_server]
+path = "../../packs/systems/blades_in_the_dark/server"
+package = "blades-server"
+
+[dependencies.yze_server]
+path = "../../packs/systems/year_zero_engine/server"
+package = "yze-server"

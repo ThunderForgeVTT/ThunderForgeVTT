@@ -605,6 +605,131 @@ pub fn register_dnd5e_system(registry: &mut GameSystemRegistry) {
 }
 
 // ============================================================================
+// Genie System Registration
+// ============================================================================
+
+/// Initialize Genie validators in the registry.
+///
+/// Genie has no spell_data slot (it has no spellcasting) and reuses the
+/// registry's trait_data slot for conditions/Patron/size_category
+/// (spec 018 data-model.md — see genie-server's validators.rs doc comments).
+pub fn register_genie_system(registry: &mut GameSystemRegistry) {
+    use genie_server::{
+        validate_ability_data_for_registry, validate_proficiency_data_for_registry,
+        validate_resource_data_for_registry, validate_trait_data_for_registry,
+    };
+
+    registry.register(
+        "genie",
+        SystemValidators {
+            ability_data: Some(validate_ability_data_for_registry),
+            resource_data: Some(validate_resource_data_for_registry),
+            proficiency_data: Some(validate_proficiency_data_for_registry),
+            trait_data: Some(validate_trait_data_for_registry),
+            spell_data: None,
+        },
+    );
+}
+
+// ============================================================================
+// Pathfinder 2e / Cypher System / Fate Core / Blades in the Dark / Year Zero
+// Engine System Registration
+// ============================================================================
+//
+// All five follow register_genie_system's exact pattern: no spell_data slot
+// (none of the five research digests found a spellcasting-specific data
+// shape distinct from generic resource_data), full ability/resource/
+// proficiency/trait_data validation from each pack's own validators.rs.
+
+pub fn register_pathfinder2e_system(registry: &mut GameSystemRegistry) {
+    use pathfinder2e_server::{
+        validate_ability_data_for_registry, validate_proficiency_data_for_registry,
+        validate_resource_data_for_registry, validate_trait_data_for_registry,
+    };
+    registry.register(
+        "pathfinder2e",
+        SystemValidators {
+            ability_data: Some(validate_ability_data_for_registry),
+            resource_data: Some(validate_resource_data_for_registry),
+            proficiency_data: Some(validate_proficiency_data_for_registry),
+            trait_data: Some(validate_trait_data_for_registry),
+            spell_data: None,
+        },
+    );
+}
+
+pub fn register_cypher_system(registry: &mut GameSystemRegistry) {
+    use cypher_server::{
+        validate_ability_data_for_registry, validate_proficiency_data_for_registry,
+        validate_resource_data_for_registry, validate_trait_data_for_registry,
+    };
+    registry.register(
+        "cypher_system",
+        SystemValidators {
+            ability_data: Some(validate_ability_data_for_registry),
+            resource_data: Some(validate_resource_data_for_registry),
+            proficiency_data: Some(validate_proficiency_data_for_registry),
+            trait_data: Some(validate_trait_data_for_registry),
+            spell_data: None,
+        },
+    );
+}
+
+pub fn register_fate_core_system(registry: &mut GameSystemRegistry) {
+    use fate_server::{
+        validate_ability_data_for_registry, validate_proficiency_data_for_registry,
+        validate_resource_data_for_registry, validate_trait_data_for_registry,
+    };
+    registry.register(
+        "fate_core",
+        SystemValidators {
+            // Fate has no fixed ability scores (research.md); ability_data
+            // still validates (accepts any object, per fate-server's
+            // validators.rs) so an empty ability_data block is always valid.
+            ability_data: Some(validate_ability_data_for_registry),
+            resource_data: Some(validate_resource_data_for_registry),
+            proficiency_data: Some(validate_proficiency_data_for_registry),
+            trait_data: Some(validate_trait_data_for_registry),
+            spell_data: None,
+        },
+    );
+}
+
+pub fn register_blades_in_the_dark_system(registry: &mut GameSystemRegistry) {
+    use blades_server::{
+        validate_ability_data_for_registry, validate_proficiency_data_for_registry,
+        validate_resource_data_for_registry, validate_trait_data_for_registry,
+    };
+    registry.register(
+        "blades_in_the_dark",
+        SystemValidators {
+            ability_data: Some(validate_ability_data_for_registry),
+            resource_data: Some(validate_resource_data_for_registry),
+            proficiency_data: Some(validate_proficiency_data_for_registry),
+            trait_data: Some(validate_trait_data_for_registry),
+            spell_data: None,
+        },
+    );
+}
+
+pub fn register_year_zero_engine_system(registry: &mut GameSystemRegistry) {
+    use yze_server::{
+        validate_ability_data_for_registry, validate_proficiency_data_for_registry,
+        validate_resource_data_for_registry, validate_trait_data_for_registry,
+    };
+    registry.register(
+        "year_zero_engine",
+        SystemValidators {
+            ability_data: Some(validate_ability_data_for_registry),
+            resource_data: Some(validate_resource_data_for_registry),
+            proficiency_data: Some(validate_proficiency_data_for_registry),
+            trait_data: Some(validate_trait_data_for_registry),
+            spell_data: None,
+        },
+    );
+}
+
+// ============================================================================
 // Lazy-Loaded Global Registry (Singleton Pattern)
 // ============================================================================
 
@@ -617,7 +742,12 @@ pub static GAME_SYSTEMS: Lazy<Mutex<GameSystemRegistry>> = Lazy::new(|| {
 
     // 🎮 Register all available systems on first access
     register_dnd5e_system(&mut registry);
-    // In future phases: register_pathfinder2e_system(&mut registry);
+    register_genie_system(&mut registry);
+    register_pathfinder2e_system(&mut registry);
+    register_cypher_system(&mut registry);
+    register_fate_core_system(&mut registry);
+    register_blades_in_the_dark_system(&mut registry);
+    register_year_zero_engine_system(&mut registry);
     // In future phases: register_coc7e_system(&mut registry);
 
     Mutex::new(registry)
@@ -802,5 +932,89 @@ mod manifest_legal_enforcement_tests {
                 .unwrap()
                 .contains("System Reference Document")
         );
+    }
+
+    /// Spec 018 (T014): the real, shipped `genie` manifest has a compliant
+    /// `legal` object declaring original, ThunderForgeVTT-owned content —
+    /// mirrors dnd5e_system_json_has_a_compliant_legal_object above.
+    #[tokio::test]
+    async fn genie_system_json_has_a_compliant_legal_object() {
+        let mut state = test_app_state();
+        let real_systems_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../packs/systems")
+            .canonicalize()
+            .expect("packs/systems must exist relative to src/server");
+        state.directories.systems_dir = real_systems_dir.to_str().unwrap().to_string();
+
+        let result = get_system_manifest(AxumPath("genie".to_string()), State(state)).await;
+
+        let Json(manifest) = result.expect("genie's real manifest must pass legal validation");
+        assert_eq!(
+            manifest["legal"]["licenseName"],
+            "ThunderForgeVTT Original Content"
+        );
+        assert!(manifest["legal"]["trademarkRestrictions"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+    }
+
+    /// Shared helper for the five research-digest-backed packs below —
+    /// mirrors dnd5e/genie's own compliance tests but parameterized, since
+    /// all five follow the identical assertion shape (real manifest,
+    /// pointed at the actual packs/systems dir, checked against the
+    /// licenseName recorded in the corresponding research digest).
+    async fn assert_manifest_has_license(system_id: &str, expected_license_name: &str) {
+        let mut state = test_app_state();
+        let real_systems_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../packs/systems")
+            .canonicalize()
+            .expect("packs/systems must exist relative to src/server");
+        state.directories.systems_dir = real_systems_dir.to_str().unwrap().to_string();
+
+        let result = get_system_manifest(AxumPath(system_id.to_string()), State(state)).await;
+
+        let Json(manifest) = result
+            .unwrap_or_else(|_| panic!("{system_id}'s real manifest must pass legal validation"));
+        assert_eq!(manifest["legal"]["licenseName"], expected_license_name);
+    }
+
+    /// Spec: research/system_pathfinder2e.json's `legal.licenseName`.
+    #[tokio::test]
+    async fn pathfinder2e_system_json_has_a_compliant_legal_object() {
+        assert_manifest_has_license("pathfinder2e", "Open RPG Creative License (ORC)").await;
+    }
+
+    /// Spec: research/system_cypher_system.json's `legal.licenseName`.
+    #[tokio::test]
+    async fn cypher_system_json_has_a_compliant_legal_object() {
+        assert_manifest_has_license("cypher_system", "Cypher System Open License").await;
+    }
+
+    /// Spec: research/system_fate_core.json's `legal.licenseName`.
+    #[tokio::test]
+    async fn fate_core_system_json_has_a_compliant_legal_object() {
+        assert_manifest_has_license(
+            "fate_core",
+            "Creative Commons Attribution 3.0 Unported license",
+        )
+        .await;
+    }
+
+    /// Spec: research/system_blades_in_the_dark.json's `legal.licenseName`.
+    #[tokio::test]
+    async fn blades_in_the_dark_system_json_has_a_compliant_legal_object() {
+        assert_manifest_has_license(
+            "blades_in_the_dark",
+            "Creative Commons Attribution 3.0 Unported (CC BY 3.0)",
+        )
+        .await;
+    }
+
+    /// Spec: research/system_year_zero_engine.json's `legal.licenseName`.
+    #[tokio::test]
+    async fn year_zero_engine_system_json_has_a_compliant_legal_object() {
+        assert_manifest_has_license("year_zero_engine", "Year Zero Engine Free Tabletop License")
+            .await;
     }
 }

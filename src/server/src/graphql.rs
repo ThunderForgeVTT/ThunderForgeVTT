@@ -67,8 +67,8 @@ pub use helpers::{
 // Phase 4.9.Z Step 5: Query extraction into separate modules
 pub mod queries;
 pub use queries::{
-    ActorQuery, AdminQuery, HealthcheckQuery, InventoryQuery, InviteQuery, ItemQuery, LoreQuery,
-    ModerationQuery, RollQuery, SceneQuery, UserQuery,
+    ActorQuery, AdminQuery, GenieSessionQuery, HealthcheckQuery, InventoryQuery, InviteQuery,
+    ItemQuery, LoreQuery, ModerationQuery, RollQuery, SceneQuery, UserQuery,
 };
 
 // Phase 4.10.B: Invite & Membership mutations for multiplayer campaigns
@@ -141,6 +141,11 @@ pub use mutations_moderation::ModerationMutation;
 
 pub mod mutations_roll;
 pub use mutations_roll::RollMutation;
+
+// Spec 018 (User Story 7): the Genie session loop — Session Wish Pool,
+// Doom Clock, Puzzle Clocks, and Session Resource trades.
+pub mod mutations_genie_session;
+pub use mutations_genie_session::GenieSessionMutation;
 
 // Spec 017: actor "available for claiming" flag, atomic claiming,
 // player-created characters, and GM un-claim.
@@ -2026,6 +2031,7 @@ pub struct QueryRoot(
     ModerationQuery,
     RollQuery,
     ActorClaimQuery,
+    GenieSessionQuery,
 );
 
 #[derive(MergedObject, Default)]
@@ -2055,6 +2061,7 @@ pub struct MutationRoot(
     InventoryMutation,
     ModerationMutation,
     RollMutation,
+    GenieSessionMutation,
     ActorClaimMutation,
 );
 

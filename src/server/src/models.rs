@@ -6,7 +6,9 @@ use crate::schema::{
     shapes, tokens, user_oauth_accounts, user_sessions, users, walls, world_actor_claims,
     world_actor_inventory,
     world_actor_permissions, world_actor_shares, world_actor_system_data, world_actors,
-    world_events, world_invites, world_item_effects, world_item_permissions, world_item_shares,
+    world_events, world_genie_puzzle_clocks, world_genie_resource_holdings,
+    world_genie_sessions, world_genie_trade_proposals, world_invites, world_item_effects,
+    world_item_permissions, world_item_shares,
     world_items, world_lore_entries, world_lore_image_assets, world_lore_links,
     world_lore_permissions, world_lore_revisions, world_members, world_roll_records,
     world_tokens, worlds,
@@ -1401,4 +1403,100 @@ pub struct NewRollRecord {
     pub detail: serde_json::Value,
     pub result_kind: String,
     pub result_value: f64,
+}
+
+// ============================================================================
+// Spec 018 (User Story 7): Genie Session Loop — Session Wish Pool, Doom
+// Clock, Puzzle Clocks, Session Resource holdings, and trade proposals.
+// data-model.md "Session Wish Pool + Doom Clock", "world_genie_puzzle_clocks",
+// "world_genie_resource_holdings".
+// ============================================================================
+
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_genie_sessions)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct GenieSession {
+    pub id: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub wishes_remaining: i32,
+    pub doom_clock_current: i32,
+    pub doom_clock_max: i32,
+    pub status: String,
+    pub created_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_genie_sessions)]
+pub struct NewGenieSession {
+    pub world_id: uuid::Uuid,
+    pub doom_clock_max: i32,
+    pub created_by: uuid::Uuid,
+}
+
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_genie_puzzle_clocks)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct GeniePuzzleClock {
+    pub id: uuid::Uuid,
+    pub session_id: uuid::Uuid,
+    pub label: String,
+    pub segments_current: i32,
+    pub segments_max: i32,
+    pub resolved_at: Option<chrono::NaiveDateTime>,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_genie_puzzle_clocks)]
+pub struct NewGeniePuzzleClock {
+    pub session_id: uuid::Uuid,
+    pub label: String,
+    pub segments_max: i32,
+}
+
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_genie_resource_holdings)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct GenieResourceHolding {
+    pub id: uuid::Uuid,
+    pub session_id: uuid::Uuid,
+    pub actor_id: uuid::Uuid,
+    pub resource_type: String,
+    pub quantity: i32,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_genie_trade_proposals)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct GenieTradeProposal {
+    pub id: uuid::Uuid,
+    pub session_id: uuid::Uuid,
+    pub from_actor_id: uuid::Uuid,
+    pub from_resource_type: String,
+    pub from_quantity: i32,
+    pub to_actor_id: uuid::Uuid,
+    pub to_resource_type: String,
+    pub to_quantity: i32,
+    pub status: String,
+    pub created_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_genie_trade_proposals)]
+pub struct NewGenieTradeProposal {
+    pub session_id: uuid::Uuid,
+    pub from_actor_id: uuid::Uuid,
+    pub from_resource_type: String,
+    pub from_quantity: i32,
+    pub to_actor_id: uuid::Uuid,
+    pub to_resource_type: String,
+    pub to_quantity: i32,
+    pub created_by: uuid::Uuid,
 }

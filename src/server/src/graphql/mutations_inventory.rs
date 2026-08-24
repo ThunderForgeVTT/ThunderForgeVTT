@@ -436,4 +436,112 @@ mod tests {
         .expect("Editor-on-actor caller should be able to add an item they can only view");
         assert_eq!(entry.quantity, 1);
     }
+
+    /// Spec 018 (Genie house system) User Story 5, T054: proves the
+    /// existing spec 013 items/inventory system needs ZERO Genie-specific
+    /// changes. Exercises a Genie "Wish-Granted Item" — content from
+    /// `packs/systems/genie/seed-content/items.json`'s "Lamp of Minor
+    /// Binding" entry — through the real `createItem` / `addItemEffect` /
+    /// `addItemToInventory` / `actorInventory` mutation and query stack,
+    /// including a formula that uses the real `thunderforge-dice` grammar
+    /// confirmed by US1 (`x=6` exploding, not an illustrative `!6`).
+    #[tokio::test]
+    async fn genie_wish_granted_item_round_trips_through_inventory() {
+        use crate::graphql::mutations_items::{add_item_effect_impl, create_item_impl, CreateItemInput, ItemEffectInput};
+        use crate::graphql::types::{ItemEffectTrigger, ItemEffectType};
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        insert_test_scene(&mut conn, world_id, owner_id);
+        drop(conn);
+
+        let item = create_item_impl(
+            &state,
+            owner_id,
+            false,
+            CreateItemInput {
+                world_id,
+                name: "Lamp of Minor Binding".to_string(),
+                description: Some(
+                    "A dented brass lamp still warm from its last wish.".to_string(),
+                ),
+            },
+        )
+        .await
+        .expect("DM should be able to create the Genie item");
+
+        let attack_effect = add_item_effect_impl(
+            &state,
+            owner_id,
+            false,
+            item.id,
+            ItemEffectInput {
+                effect_type: ItemEffectType::AttackRoll,
+                formula: "1d20 + CUNNING".to_string(),
+                target: "Binding Attempt".to_string(),
+                trigger_kind: Some(ItemEffectTrigger::OnUse),
+                sort_order: Some(0),
+            },
+        )
+        .await
+        .expect("Genie attack-roll effect formula should be accepted unmodified");
+        assert_eq!(attack_effect.formula, "1d20 + CUNNING");
+
+        let damage_effect = add_item_effect_impl(
+            &state,
+            owner_id,
+            false,
+            item.id,
+            ItemEffectInput {
+                effect_type: ItemEffectType::Damage,
+                formula: "2d6x=6".to_string(),
+                target: "Bound Creature's Resolve".to_string(),
+                trigger_kind: Some(ItemEffectTrigger::OnUse),
+                sort_order: Some(1),
+            },
+        )
+        .await
+        .expect("Genie exploding-dice formula (x=6) should be accepted unmodified");
+        assert_eq!(damage_effect.formula, "2d6x=6");
+
+        let actor = create_actor_impl(
+            &state,
+            owner_id,
+            false,
+            CreateActorInput {
+                world_id,
+                label: "Player Character".to_string(),
+                is_npc: false,
+                actor_type: None,
+                game_system_id: None,
+                description: None,
+            },
+        )
+        .await
+        .expect("DM should create actor");
+
+        let entry = add_item_to_inventory_impl(
+            &state,
+            owner_id,
+            false,
+            AddItemToInventoryInput {
+                actor_id: actor.id,
+                item_id: item.id,
+                quantity: 1,
+            },
+        )
+        .await
+        .expect("adding the Genie item to inventory should succeed via the unmodified spec 013 mutation");
+        assert_eq!(entry.item_name_snapshot, "Lamp of Minor Binding");
+        assert_eq!(entry.quantity, 1);
+
+        let inventory = crate::graphql::queries::inventory::actor_inventory_impl(&state, owner_id, false, actor.id)
+            .await
+            .expect("actorInventory should return the round-tripped entry");
+        assert_eq!(inventory.len(), 1);
+        assert_eq!(inventory[0].item_name_snapshot, "Lamp of Minor Binding");
+        assert_eq!(inventory[0].item_id, Some(item.id));
+    }
 }

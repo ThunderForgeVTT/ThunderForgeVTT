@@ -34,6 +34,13 @@ fn spawn_grid_lines(
     };
 
     match scene.grid_type {
+        // Wish-Warped Zone / any gridless topology: intentionally spawns no
+        // `GridLine` entities. This is the terminal behavior for this
+        // variant, not an unfinished placeholder — a gridless scene has no
+        // fixed cell size to render lines against, so tokens are expected
+        // to position freely (see `apply_grid_snapping` in
+        // `crate::movement`, which likewise skips snapping for this
+        // variant rather than snapping to a nonexistent cell size).
         GridType::Gridless => (),
         GridType::Hexagonal => (), // TODO: Phase 4.8
         GridType::Square => {

@@ -3,6 +3,7 @@
 use bevy::prelude::*;
 use crate::components::*;
 use crate::network::mutations::{execute_move_token_mutation, MutationTracker};
+use crate::resources::{GridType, SceneData};
 use crate::systems::optimistic::mark_mutation_pending;
 use crate::sync_test::{CircularFlowTracer, FlowStage};
 
@@ -115,12 +116,28 @@ pub fn sync_transform_to_grid(
 }
 
 /// Apply grid snapping to token positions
-/// This rounds positions to the nearest grid cell
+/// This rounds positions to the nearest grid cell.
+///
+/// Gridless scenes (`GridType::Gridless`, e.g. Genie's Wish-Warped Zone)
+/// have no fixed cell size to snap to, so this system is a no-op for them
+/// — tokens keep whatever free-form position they were moved to. When
+/// `SceneData` hasn't been inserted yet (see `plugins::grid`'s identical
+/// `Option<Res<SceneData>>` degradation), snapping is skipped entirely
+/// rather than assuming a topology.
 pub fn apply_grid_snapping(
+    scene: Option<Res<SceneData>>,
     mut query: Query<(&mut GridPosition, &RollbackCache), Changed<GridPosition>>,
 ) {
+    let Some(scene) = scene else {
+        return;
+    };
+
+    if scene.grid_type == GridType::Gridless {
+        return;
+    }
+
     let grid_size = 32.0; // Default grid size in pixels
-    
+
     for (mut grid_pos, cache) in query.iter_mut() {
         if !cache.is_pending {
             // Snap to grid (only if not waiting for server)
