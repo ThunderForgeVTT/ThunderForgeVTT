@@ -353,6 +353,15 @@ diesel::table! {
 }
 
 diesel::table! {
+    world_actor_claims (id) {
+        id -> Uuid,
+        actor_id -> Uuid,
+        world_member_id -> Uuid,
+        claimed_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
     world_actor_inventory (id) {
         id -> Uuid,
         actor_id -> Uuid,
@@ -421,6 +430,7 @@ diesel::table! {
         created_at -> Timestamp,
         updated_at -> Timestamp,
         description -> Nullable<Text>,
+        available_for_claim -> Bool,
     }
 }
 
@@ -627,6 +637,7 @@ diesel::table! {
         game_system_id -> Nullable<Varchar>,
         interface_pack_id -> Nullable<Varchar>,
         session_notes -> Nullable<Text>,
+        allow_player_created_actors -> Bool,
     }
 }
 
@@ -653,6 +664,8 @@ diesel::joinable!(user_oauth_accounts -> oauth_providers (provider_id));
 diesel::joinable!(user_oauth_accounts -> users (user_id));
 diesel::joinable!(user_sessions -> users (user_id));
 diesel::joinable!(walls -> scenes (scene_id));
+diesel::joinable!(world_actor_claims -> world_actors (actor_id));
+diesel::joinable!(world_actor_claims -> world_members (world_member_id));
 diesel::joinable!(world_actor_inventory -> world_actors (actor_id));
 diesel::joinable!(world_actor_inventory -> world_items (item_id));
 diesel::joinable!(world_actor_permissions -> users (user_id));
@@ -709,6 +722,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     user_sessions,
     users,
     walls,
+    world_actor_claims,
     world_actor_inventory,
     world_actor_permissions,
     world_actor_shares,

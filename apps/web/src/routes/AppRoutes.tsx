@@ -23,6 +23,7 @@ const WorldDashboardPage = lazy(pageLoaders.worldDashboard);
 const WorldPage = lazy(pageLoaders.worldWorkspace);
 const WorldStagingRoutePage = lazy(pageLoaders.worldStaging);
 const WorldCompendiumRoutePage = lazy(pageLoaders.worldCompendium);
+const ActorSelectionPage = lazy(pageLoaders.actorSelection);
 const ActorDetailPage = lazy(pageLoaders.actorView);
 const LoreEntryDetailPage = lazy(pageLoaders.loreEntryView);
 const LoreRevisionHistory = lazy(pageLoaders.loreEntryHistory);
@@ -409,6 +410,14 @@ export default function AppRoutes({
           element={
             <RequireAuthenticated>
               {renderLazyPage(<WorldStagingRoutePage />, "Loading world staging")}
+            </RequireAuthenticated>
+          }
+        />
+        <Route
+          path="/world/:id/actor-select"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(<ActorSelectionPage />, "Loading Actor Selection")}
             </RequireAuthenticated>
           }
         />

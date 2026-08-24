@@ -158,7 +158,7 @@ async function joinWorldAndEnterPlay(
     timeout: 10_000,
   });
   await page.getByRole("button", { name: "Join Campaign" }).click();
-  await page.waitForURL(new RegExp(`/world/${worldId}$`), { timeout: 15_000 });
+  await page.waitForURL(new RegExp(`/world/${worldId}(/actor-select)?$`), { timeout: 15_000 });
   await page.getByRole("link", { name: "Enter world" }).first().click();
   await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
   await clickPlay(page);

@@ -3,7 +3,8 @@ use crate::schema::{
     canvas_image_assets, content_moderation_actions, fog_masks, game_systems, light_sources,
     login_two_factor_challenges,
     oauth_authorization_sessions, oauth_link_challenges, oauth_providers, players_online, scenes,
-    shapes, tokens, user_oauth_accounts, user_sessions, users, walls, world_actor_inventory,
+    shapes, tokens, user_oauth_accounts, user_sessions, users, walls, world_actor_claims,
+    world_actor_inventory,
     world_actor_permissions, world_actor_shares, world_actor_system_data, world_actors,
     world_events, world_invites, world_item_effects, world_item_permissions, world_item_shares,
     world_items, world_lore_entries, world_lore_image_assets, world_lore_links,
@@ -328,6 +329,9 @@ pub struct World {
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
     pub session_notes: Option<String>,
+    /// Spec 017 (FR-007): GM-controlled, defaults to false. Gates whether
+    /// the Actor Selection screen offers "create your own character".
+    pub allow_player_created_actors: bool,
 }
 
 // Policy struct disabled - table not implemented
@@ -795,6 +799,10 @@ pub struct WorldActor {
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
     pub description: Option<String>,
+    /// Spec 017: GM-set flag offering this (PC-only) actor to a joining
+    /// player on the Actor Selection screen. Independent of claim state —
+    /// see `world_actor_claims` for who currently has it claimed.
+    pub available_for_claim: bool,
 }
 
 /// New actor for insertion
@@ -861,6 +869,27 @@ pub struct NewActorShare {
     pub actor_id: uuid::Uuid,
     pub share_code: String,
     pub created_by: uuid::Uuid,
+}
+
+/// Spec 017: a claimed (PC-only) actor — one active claim per actor and
+/// per world member, both enforced by `UNIQUE` constraints on this table
+/// (see specs/017-invite-actor-selection/data-model.md, research.md §4).
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_actor_claims)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct ActorClaim {
+    pub id: uuid::Uuid,
+    pub actor_id: uuid::Uuid,
+    pub world_member_id: uuid::Uuid,
+    pub claimed_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// New actor claim for insertion.
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_actor_claims)]
+pub struct NewActorClaim {
+    pub actor_id: uuid::Uuid,
+    pub world_member_id: uuid::Uuid,
 }
 
 /// System-specific actor data - five semantic JSONB columns

@@ -142,6 +142,11 @@ pub use mutations_moderation::ModerationMutation;
 pub mod mutations_roll;
 pub use mutations_roll::RollMutation;
 
+// Spec 017: actor "available for claiming" flag, atomic claiming,
+// player-created characters, and GM un-claim.
+pub mod mutations_actor_claims;
+pub use mutations_actor_claims::{ActorClaimMutation, ActorClaimQuery};
+
 // Admin types are now in admin_types.rs module (Phase 4.9.Z Step 2)
 
 impl From<UserDataDeleteSummary> for GraphQLDeleteMyDataPayload {
@@ -306,6 +311,9 @@ pub struct GraphQLWorldActor {
     owned_by: uuid::Uuid,
     created_at: chrono::NaiveDateTime,
     updated_at: chrono::NaiveDateTime,
+    /// Spec 017 (FR-004): GM-set flag offering this (PC-only) actor to a
+    /// joining player on the Actor Selection screen.
+    available_for_claim: bool,
 }
 
 #[async_graphql::ComplexObject]
@@ -339,6 +347,17 @@ impl GraphQLWorldActor {
         let state = app_state(ctx)?;
         crate::graphql::queries::lore::lore_entries_linking_to_actor(state, self.id).await
     }
+
+    /// Spec 017 (FR-012): who currently has this actor claimed, if anyone.
+    /// `None` if unclaimed — independent of `available_for_claim`, since an
+    /// actor can be un-flagged without losing its claim (data-model.md).
+    async fn claimed_by(
+        &self,
+        ctx: &Context<'_>,
+    ) -> GraphQLResult<Option<GraphQLWorldMember>> {
+        let state = app_state(ctx)?;
+        crate::graphql::mutations_actor_claims::claimed_by_impl(state, self.id).await
+    }
 }
 
 impl From<WorldActor> for GraphQLWorldActor {
@@ -357,7 +376,39 @@ impl From<WorldActor> for GraphQLWorldActor {
             owned_by: actor.owned_by,
             created_at: actor.created_at,
             updated_at: actor.updated_at,
+            available_for_claim: actor.available_for_claim,
         }
+    }
+}
+
+// Spec 017: a world member, exposed for `claimedBy`/`GraphQLActorClaim`.
+// Deliberately minimal (no role/joined_at) — nothing downstream needs more
+// than "who" yet; extend here rather than introducing a second member type
+// if that changes.
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLWorldMember {
+    pub id: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub user_id: uuid::Uuid,
+    pub username: String,
+}
+
+// Spec 017: the result of `claimActor`/`createAndClaimActor`, and
+// `myActorClaim`'s non-null case.
+#[derive(SimpleObject, Debug, Clone)]
+#[graphql(complex)]
+pub struct GraphQLActorClaim {
+    pub actor_id: uuid::Uuid,
+    pub world_member_id: uuid::Uuid,
+    pub claimed_by_user_id: uuid::Uuid,
+    pub claimed_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[async_graphql::ComplexObject]
+impl GraphQLActorClaim {
+    async fn actor(&self, ctx: &Context<'_>) -> GraphQLResult<GraphQLWorldActor> {
+        let state = app_state(ctx)?;
+        crate::graphql::mutations_actor_claims::load_actor_impl(state, self.actor_id).await
     }
 }
 
@@ -1313,6 +1364,7 @@ pub async fn create_world_impl(
         created_at: now,
         updated_at: now,
         session_notes: None,
+        allow_player_created_actors: false,
     };
 
     let inserted_world = new_world.clone();
@@ -1464,6 +1516,51 @@ pub async fn update_world_game_system_impl(
     Ok(GraphQLWorld::from(updated))
 }
 
+/// Spec 017 (FR-007): the GM-controlled world setting gating whether the
+/// Actor Selection screen's "create your own character" option is shown.
+#[derive(InputObject, Debug, Clone)]
+pub struct UpdateWorldAllowPlayerCreatedActorsInput {
+    pub world_id: uuid::Uuid,
+    pub allow: bool,
+}
+
+/// Testable core of `WorldMutation::update_world_allow_player_created_actors`
+/// (mirrors `update_world_session_notes_impl`'s shape/rationale exactly).
+/// DM/GM-only.
+pub async fn update_world_allow_player_created_actors_impl(
+    state: &AppState,
+    user_id: uuid::Uuid,
+    is_admin: bool,
+    input: UpdateWorldAllowPlayerCreatedActorsInput,
+) -> GraphQLResult<GraphQLWorld> {
+    if !crate::auth::actor_permissions::is_dm_of_world(state, user_id, is_admin, input.world_id)
+        .await?
+    {
+        return Err(Error::new(
+            "Only the DM (Owner or GM) may change this world's player-created-actors setting",
+        ));
+    }
+
+    let world_id = input.world_id;
+    let allow = input.allow;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    let updated = tokio::task::spawn_blocking(move || {
+        diesel::update(worlds::table.filter(worlds::id.eq(world_id)))
+            .set(worlds::allow_player_created_actors.eq(allow))
+            .returning(World::as_returning())
+            .get_result::<World>(&mut conn)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to update allow_player_created_actors"))?;
+
+    Ok(GraphQLWorld::from(updated))
+}
+
 #[derive(Default)]
 pub struct WorldMutation;
 
@@ -1499,6 +1596,22 @@ impl WorldMutation {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         update_world_game_system_impl(state, auth_user.user_id, auth_user.is_admin, input).await
+    }
+
+    async fn update_world_allow_player_created_actors(
+        &self,
+        ctx: &Context<'_>,
+        input: UpdateWorldAllowPlayerCreatedActorsInput,
+    ) -> GraphQLResult<GraphQLWorld> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        update_world_allow_player_created_actors_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            input,
+        )
+        .await
     }
 
     async fn rename_world(
@@ -1912,6 +2025,7 @@ pub struct QueryRoot(
     InventoryQuery,
     ModerationQuery,
     RollQuery,
+    ActorClaimQuery,
 );
 
 #[derive(MergedObject, Default)]
@@ -1941,6 +2055,7 @@ pub struct MutationRoot(
     InventoryMutation,
     ModerationMutation,
     RollMutation,
+    ActorClaimMutation,
 );
 
 pub type AppSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;

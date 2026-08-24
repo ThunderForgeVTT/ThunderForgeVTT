@@ -200,6 +200,7 @@ impl From<CoreWorld> for DbWorld {
             created_at: core.created_at,
             updated_at: core.updated_at,
             session_notes: None,
+            allow_player_created_actors: false,
         }
     }
 }

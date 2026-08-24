@@ -16,6 +16,7 @@ export const pageLoaders = {
   worldWorkspace: () => import("@/pages/world/WorldPage"),
   worldStaging: () => import("@/pages/world/WorldStagingRoutePage"),
   worldCompendium: () => import("@/pages/world/WorldCompendiumRoutePage"),
+  actorSelection: () => import("@/pages/world/ActorSelectionPage"),
   actorView: () => import("@/pages/world/actor/ActorDetailPage"),
   actorEdit: () => import("@/pages/world/actor/ActorDetailPage"),
   loreEntryView: () => import("@/pages/world/lore/LoreEntryDetailPage"),

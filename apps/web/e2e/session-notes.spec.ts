@@ -114,7 +114,7 @@ test("DM edits and saves Last Session Notes; a Player sees it read-only", async 
     await playerPage.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
     await playerPage.goto(inviteRelativePath);
     await playerPage.getByRole("button", { name: "Join Campaign" }).click();
-    await playerPage.waitForURL(new RegExp(`/world/${worldId}$`), { timeout: 15_000 });
+    await playerPage.waitForURL(new RegExp(`/world/${worldId}(/actor-select)?$`), { timeout: 15_000 });
 
     await playerPage.goto(`/world/${worldId}/staging`);
     await expect(playerPage.getByTestId("session-notes-readonly")).toContainText(notesText);

@@ -34,6 +34,7 @@ const WORLD_FIELDS = `
   createdAt
   updatedAt
   sessionNotes
+  allowPlayerCreatedActors
 `;
 
 async function postGraphQL<TData>(
@@ -188,6 +189,56 @@ export function updateWorldSessionNotes(
     `,
     { input: { worldId, notes } },
   ).then((data) => data.updateWorldSessionNotes);
+}
+
+type UpdateWorldAllowPlayerCreatedActorsMutation = {
+  updateWorldAllowPlayerCreatedActors: WorldRecord;
+};
+
+/**
+ * Spec 017 (FR-007): DM/GM-only. Gates the Actor Selection screen's
+ * "create your own character" option, re-checked server-side on every
+ * `createAndClaimActor` call regardless of this cached value.
+ */
+export function updateWorldAllowPlayerCreatedActors(
+  worldId: string,
+  allow: boolean,
+): Promise<WorldRecord> {
+  return postGraphQL<UpdateWorldAllowPlayerCreatedActorsMutation>(
+    `
+      mutation UpdateWorldAllowPlayerCreatedActors($input: UpdateWorldAllowPlayerCreatedActorsInput!) {
+        updateWorldAllowPlayerCreatedActors(input: $input) {
+          ${WORLD_FIELDS}
+        }
+      }
+    `,
+    { input: { worldId, allow } },
+  ).then((data) => data.updateWorldAllowPlayerCreatedActors);
+}
+
+type WorldMemberQuery = {
+  worldMember: { role: string } | null;
+};
+
+/**
+ * Spec 017 (research.md §5): a direct, synchronous GraphQL read of the
+ * caller's own membership role — used by `useActorClaimGate` instead of
+ * the RxDB-backed `useWorldRole` hook, since a member who has *just*
+ * joined via `joinWorld` (the exact moment this gate matters) cannot
+ * assume RxDB's world-member collection has replicated their own new row
+ * yet; this query hits the server's `world_members` table directly.
+ */
+export function getMyWorldMemberRole(worldId: string, userId: string): Promise<string | null> {
+  return postGraphQL<WorldMemberQuery>(
+    `
+      query MyWorldMemberRole($worldId: ID!, $userId: ID!) {
+        worldMember(worldId: $worldId, userId: $userId) {
+          role
+        }
+      }
+    `,
+    { worldId, userId },
+  ).then((data) => data.worldMember?.role ?? null);
 }
 
 type UpdateWorldGameSystemMutation = {

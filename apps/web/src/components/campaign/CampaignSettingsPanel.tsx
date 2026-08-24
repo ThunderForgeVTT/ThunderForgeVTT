@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { withCsrf } from "@/api/auth";
+import { getWorld, updateWorldAllowPlayerCreatedActors } from "@/api/world";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import { Input } from "@/components/ui/input";
@@ -87,12 +88,32 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
   const [error, setError] = useState<string | null>(null);
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
   const [changingRoleFor, setChangingRoleFor] = useState<string | null>(null);
+  const [allowPlayerCreatedActors, setAllowPlayerCreatedActors] = useState(false);
+  const [isUpdatingAllowSetting, setIsUpdatingAllowSetting] = useState(false);
 
   // Load invites and members on mount
   useEffect(() => {
     void loadInvites();
     void loadMembers();
+    void getWorld(worldId).then((world) => {
+      if (world) {
+        setAllowPlayerCreatedActors(world.allowPlayerCreatedActors);
+      }
+    });
   }, [worldId]);
+
+  const handleToggleAllowPlayerCreatedActors = async (allow: boolean) => {
+    setIsUpdatingAllowSetting(true);
+    setError(null);
+    try {
+      const updated = await updateWorldAllowPlayerCreatedActors(worldId, allow);
+      setAllowPlayerCreatedActors(updated.allowPlayerCreatedActors);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update setting");
+    } finally {
+      setIsUpdatingAllowSetting(false);
+    }
+  };
 
   const loadInvites = async () => {
     try {
@@ -365,6 +386,24 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
               ))}
             </div>
           )}
+        </div>
+
+        {/* Spec 017 (FR-007): player-created character setting */}
+        <div className="grid gap-3">
+          <h3 className="font-semibold">Player-created characters</h3>
+          <p className="text-sm text-muted-foreground">
+            When on, a joining player without a GM-designated character can create their own
+            on the Actor Selection screen. Off by default.
+          </p>
+          <label className="flex items-center gap-2 text-sm" data-testid="allow-player-created-actors-toggle">
+            <input
+              type="checkbox"
+              checked={allowPlayerCreatedActors}
+              disabled={isUpdatingAllowSetting}
+              onChange={(e) => void handleToggleAllowPlayerCreatedActors(e.target.checked)}
+            />
+            Allow players to create their own actors
+          </label>
         </div>
 
         {/* Player Roster Section */}
