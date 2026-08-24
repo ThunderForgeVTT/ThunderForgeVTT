@@ -1,0 +1,52 @@
+{
+  "$schema": "N/A — no loader consumes this file yet; see README note below",
+  "description": "Example Wish-Granted Item content for the Genie house system (spec 018-genie-house-system, User Story 5). Each entry maps directly onto spec 013-items-inventory's existing `createItem` / `addItemEffect` GraphQL mutations (see specs/013-items-inventory/contracts/graphql-items.md) — field names below mirror `CreateItemInput` and `ItemEffectInput` exactly (camelCase, as the mutations receive them over GraphQL). This is DATA to hand to those existing mutations, not a new content-loading pipeline: as of this writing there is no established 'seed pack content' loader anywhere in packs/systems/ (checked packs/systems/dnd5e/ for a precedent — none exists), so this file establishes a first, deliberately unopinionated example of the pattern rather than inventing a loader to consume it. A future spec can add a `system.json` `seedContent` pointer + import script if/when a second system wants the same thing.",
+  "items": [
+    {
+      "name": "Lamp of Minor Binding",
+      "description": "A dented brass lamp still warm from its last wish. Rubbing it doesn't summon a genie anymore — the binding was spent — but the residual magic can still lash out at whatever the wielder points it at.",
+      "effects": [
+        {
+          "effectType": "ATTACK_ROLL",
+          "formula": "1d20 + CUNNING",
+          "target": "Binding Attempt",
+          "triggerKind": "ON_USE",
+          "sortOrder": 0
+        },
+        {
+          "effectType": "DAMAGE",
+          "formula": "2d6x=6",
+          "target": "Bound Creature's Resolve",
+          "triggerKind": "ON_USE",
+          "sortOrder": 1
+        }
+      ]
+    },
+    {
+      "name": "Sash of Woven Favor",
+      "description": "Threads pulled from a genie's own vestments, woven into a wearable sash. It hums faintly whenever its wearer calls in a favor.",
+      "effects": [
+        {
+          "effectType": "MODIFIER",
+          "formula": "+1",
+          "target": "Favor Rerolls",
+          "triggerKind": "PASSIVE",
+          "sortOrder": 0
+        }
+      ]
+    },
+    {
+      "name": "Vial of Bottled Essence",
+      "description": "A stoppered glass vial holding a single swirling mote of raw wish-essence, siphoned off during a bargain that never fully resolved. Drinking it stings, then mends.",
+      "effects": [
+        {
+          "effectType": "HEAL",
+          "formula": "1d4 + SPIRIT",
+          "target": "Essence",
+          "triggerKind": "ON_USE",
+          "sortOrder": 0
+        }
+      ]
+    }
+  ]
+}

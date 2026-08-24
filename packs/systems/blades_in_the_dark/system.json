@@ -1,0 +1,132 @@
+{
+  "id": "blades_in_the_dark",
+  "title": "Blades in the Dark / Forged in the Dark",
+  "version": "0.1.0",
+  "author": "ThunderForgeVTT Contributors",
+  "description": "Blades in the Dark / Forged in the Dark ruleset for ThunderForgeVTT, digested from its official SRD (see research/system_blades_in_the_dark.json for full provenance).",
+  "license": "Creative Commons Attribution 3.0 Unported (CC BY 3.0)",
+  "url": "https://github.com/ThunderForgeVTT/ThunderForgeVTT",
+  "compatibility": {
+    "minimum": "0.1.0",
+    "verified": "0.1.0",
+    "maximum": "1.0.0"
+  },
+  "esmodules": [
+    "web/dist/index.js"
+  ],
+  "styles": [
+    "web/dist/index.css"
+  ],
+  "packages": {
+    "server": "./server",
+    "engine": "./engine",
+    "web": "./web"
+  },
+  "abilities": {
+    "insight": {
+      "label": "Insight"
+    },
+    "prowess": {
+      "label": "Prowess"
+    },
+    "resolve": {
+      "label": "Resolve"
+    }
+  },
+  "skills": {
+    "hunt": { "ability": "insight", "label": "Hunt" },
+    "study": { "ability": "insight", "label": "Study" },
+    "survey": { "ability": "insight", "label": "Survey" },
+    "tinker": { "ability": "insight", "label": "Tinker" },
+    "finesse": { "ability": "prowess", "label": "Finesse" },
+    "prowl": { "ability": "prowess", "label": "Prowl" },
+    "skirmish": { "ability": "prowess", "label": "Skirmish" },
+    "wreck": { "ability": "prowess", "label": "Wreck" },
+    "attune": { "ability": "resolve", "label": "Attune" },
+    "command": { "ability": "resolve", "label": "Command" },
+    "consort": { "ability": "resolve", "label": "Consort" },
+    "sway": { "ability": "resolve", "label": "Sway" }
+  },
+  "actionRoll": {
+    "formula": "(rating)d6kh1",
+    "description": "Blades in the Dark action/resistance/fortune roll: roll a pool of d6s equal to the relevant action rating (bound via the `rating` placeholder) and take the single highest die. Special case not expressible in one formula string: a rating of 0 instead rolls 2d6 and takes the LOWEST die (application logic should send a fixed \"2d6kl1\" formula when the rating is 0, rather than binding `rating` to 0)."
+  },
+  "legal": {
+    "licenseName": "Creative Commons Attribution 3.0 Unported (CC BY 3.0)",
+    "attributionText": "This work is based on Blades in the Dark (found at http://bladesinthedark.com/), product of One Seven Design, developed and authored by John Harper, and licensed for our use under the Creative Commons Attribution 3.0 Unported license (http://creativecommons.org/licenses/by/3.0/).",
+    "requiredNotice": null,
+    "disclaimer": "This is an unofficial, third-party digital implementation of mechanics derived from the Blades in the Dark SRD. It is not affiliated with, endorsed by, or sponsored by One Seven Design, John Harper, or Evil Hat Productions. 'Blades in the Dark' and the 'Forged in the Dark' framework name may be trademarks of their respective owners; only the CC-BY-licensed SRD text and mechanics are reused here, under attribution.",
+    "trademarkRestrictions": [],
+    "requiredUiPlacement": "Must be shown on the system selection screen when a GM picks Blades in the Dark / Forged in the Dark, and/or a permanent, easily accessible module settings tab for the system \u2014 not buried in a ToS or changelog.",
+    "sourceUrl": "https://creativecommons.org/licenses/by/3.0/"
+  },
+  "data_types": {
+    "ability_data": {
+      "description": "Blades in the Dark / Forged in the Dark ability/attribute scores",
+      "properties": {
+        "insight": {
+          "type": "integer",
+          "min": 0,
+          "max": 4,
+          "label": "Insight"
+        },
+        "prowess": {
+          "type": "integer",
+          "min": 0,
+          "max": 4,
+          "label": "Prowess"
+        },
+        "resolve": {
+          "type": "integer",
+          "min": 0,
+          "max": 4,
+          "label": "Resolve"
+        }
+      }
+    },
+    "resource_data": {
+      "description": "Blades in the Dark / Forged in the Dark core resources",
+      "properties": {
+        "stress": {
+          "type": "integer",
+          "min": 0,
+          "label": "Stress"
+        },
+        "trauma": {
+          "type": "integer",
+          "min": 0,
+          "label": "Trauma"
+        },
+        "coin": {
+          "type": "integer",
+          "min": 0,
+          "label": "Coin"
+        }
+      }
+    },
+    "proficiency_data": {
+      "description": "Trained skills",
+      "properties": {
+        "trained_skills": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "label": "Trained Skills"
+        }
+      }
+    },
+    "trait_data": {
+      "description": "Freeform traits/notes",
+      "properties": {
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "label": "Notes"
+        }
+      }
+    }
+  }
+}

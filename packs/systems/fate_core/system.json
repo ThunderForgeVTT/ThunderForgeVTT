@@ -1,0 +1,118 @@
+{
+  "id": "fate_core",
+  "title": "Fate Core",
+  "version": "0.1.0",
+  "author": "ThunderForgeVTT Contributors",
+  "description": "Fate Core ruleset for ThunderForgeVTT, digested from its official SRD (see research/system_fate_core.json for full provenance).",
+  "license": "Creative Commons Attribution 3.0 Unported license",
+  "url": "https://github.com/ThunderForgeVTT/ThunderForgeVTT",
+  "compatibility": {
+    "minimum": "0.1.0",
+    "verified": "0.1.0",
+    "maximum": "1.0.0"
+  },
+  "esmodules": [
+    "web/dist/index.js"
+  ],
+  "styles": [
+    "web/dist/index.css"
+  ],
+  "packages": {
+    "server": "./server",
+    "engine": "./engine",
+    "web": "./web"
+  },
+  "abilities": {},
+  "ladder": [
+    { "key": "legendary", "label": "Legendary", "abbreviation": "+8", "value": 8 },
+    { "key": "epic", "label": "Epic", "abbreviation": "+7", "value": 7 },
+    { "key": "fantastic", "label": "Fantastic", "abbreviation": "+6", "value": 6 },
+    { "key": "superb", "label": "Superb", "abbreviation": "+5", "value": 5 },
+    { "key": "great", "label": "Great", "abbreviation": "+4", "value": 4 },
+    { "key": "good", "label": "Good", "abbreviation": "+3", "value": 3 },
+    { "key": "fair", "label": "Fair", "abbreviation": "+2", "value": 2 },
+    { "key": "average", "label": "Average", "abbreviation": "+1", "value": 1 },
+    { "key": "mediocre", "label": "Mediocre", "abbreviation": "+0", "value": 0 },
+    { "key": "poor", "label": "Poor", "abbreviation": "-1", "value": -1 },
+    { "key": "terrible", "label": "Terrible", "abbreviation": "-2", "value": -2 }
+  ],
+  "ladderRoll": {
+    "formula": "4dF + SKILL",
+    "supportedByDiceEngine": true,
+    "notes": "Confirmed supported by crates/thunderforge-dice's grammar: 'dF' is a first-class die-sides token (parser.rs parse_dice_term) that resolves each die to -1/0/+1 (eval.rs DieSides::Fate). SKILL is a placeholder bound to the character's Ladder rating for the chosen skill at roll time. See crates/thunderforge-dice/src/eval.rs test `fate_core_ladder_roll_with_skill_placeholder` for a verified 4dF+skill resolution."
+  },
+  "skills": {
+    "athletics": { "label": "Athletics", "actions": ["Overcome", "Create an Advantage", "Defend"] },
+    "burglary": { "label": "Burglary", "actions": ["Overcome", "Create an Advantage"] },
+    "contacts": { "label": "Contacts", "actions": ["Overcome", "Create an Advantage", "Defend"] },
+    "crafts": { "label": "Crafts", "actions": ["Overcome", "Create an Advantage"] },
+    "deceive": { "label": "Deceive", "actions": ["Overcome", "Create an Advantage", "Defend"] },
+    "drive": { "label": "Drive", "actions": ["Overcome", "Create an Advantage", "Defend"] },
+    "empathy": { "label": "Empathy", "actions": ["Overcome", "Create an Advantage", "Defend"] },
+    "fight": { "label": "Fight", "actions": ["Overcome", "Create an Advantage", "Attack", "Defend"] },
+    "investigate": { "label": "Investigate", "actions": ["Overcome", "Create an Advantage"] },
+    "lore": { "label": "Lore", "actions": ["Overcome", "Create an Advantage"] },
+    "notice": { "label": "Notice", "actions": ["Overcome", "Create an Advantage", "Defend"] },
+    "physique": { "label": "Physique", "actions": ["Overcome", "Create an Advantage", "Defend"] },
+    "provoke": { "label": "Provoke", "actions": ["Overcome", "Create an Advantage", "Attack"] },
+    "rapport": { "label": "Rapport", "actions": ["Overcome", "Create an Advantage", "Defend"] },
+    "resources": { "label": "Resources", "actions": ["Overcome", "Create an Advantage"] },
+    "shoot": { "label": "Shoot", "actions": ["Overcome", "Create an Advantage", "Attack"] },
+    "stealth": { "label": "Stealth", "actions": ["Overcome", "Create an Advantage", "Defend"] },
+    "will": { "label": "Will", "actions": ["Overcome", "Create an Advantage", "Defend"] }
+  },
+  "legal": {
+    "licenseName": "Creative Commons Attribution 3.0 Unported license",
+    "attributionText": "This work is based on Fate Core System and Fate Accelerated Edition, products of Evil Hat Productions, LLC, developed, authored, and edited by Leonard Balsera, Brian Engard, Jeremy Keller, Ryan Macklin, Mike Olson, Clark Valentine, Amanda Valentine, Fred Hicks, and Rob Donoghue, and licensed for our use under the Creative Commons Attribution 3.0 Unported license. This work is also based on Fate Condensed, a product of Evil Hat Productions, LLC, developed, authored, and edited by PK Sullivan, Lara Turner, Fred Hicks, Richard Bellingham, Robert Hanz, and Sophie Lagac\u00e9, and licensed for our use under the Creative Commons Attribution 3.0 Unported license.",
+    "requiredNotice": null,
+    "disclaimer": "ThunderForgeVTT is not affiliated with, endorsed by, or sponsored by Evil Hat Productions, LLC. Fate Core, Fate Accelerated, and Fate Condensed are products of Evil Hat Productions, LLC, used here under the terms of the Creative Commons Attribution 3.0 Unported license.",
+    "trademarkRestrictions": [],
+    "requiredUiPlacement": "Must be shown on the system selection screen when a GM picks Fate Core, and/or on a permanent, easily accessible module settings/about tab for the pack \u2014 not buried in a ToS or credits scroll.",
+    "sourceUrl": "https://creativecommons.org/licenses/by/3.0/"
+  },
+  "data_types": {
+    "ability_data": {
+      "description": "Fate Core ability/attribute scores",
+      "properties": {}
+    },
+    "resource_data": {
+      "description": "Fate Core core resources",
+      "properties": {
+        "fate_points": {
+          "type": "integer",
+          "min": 0,
+          "label": "Fate Points"
+        },
+        "refresh": {
+          "type": "integer",
+          "min": 0,
+          "label": "Refresh"
+        }
+      }
+    },
+    "proficiency_data": {
+      "description": "Trained skills",
+      "properties": {
+        "trained_skills": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "label": "Trained Skills"
+        }
+      }
+    },
+    "trait_data": {
+      "description": "Freeform traits/notes",
+      "properties": {
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "label": "Notes"
+        }
+      }
+    }
+  }
+}

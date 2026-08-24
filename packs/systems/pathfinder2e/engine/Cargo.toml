@@ -1,0 +1,38 @@
+[lints]
+workspace = true
+
+[package]
+name = "pathfinder2e-engine"
+version = "0.1.0"
+edition = "2021"
+repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
+license = "BSD 3-Clause License"
+
+[dependencies]
+bevy = { version = "0.18.1", default-features = false, features = [
+    "bevy_asset",
+    "bevy_core_pipeline",
+    "bevy_render",
+    "bevy_sprite",
+    "bevy_text",
+    "bevy_ui",
+    "bevy_window",
+    "default_font",
+    "png",
+    "webgl2",
+] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+bevy_winit = { version = "0.18.1" }
+pathfinder2e-server = { path = "../server" }
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+name = "pathfinder2e_engine"
+path = "src/lib.rs"

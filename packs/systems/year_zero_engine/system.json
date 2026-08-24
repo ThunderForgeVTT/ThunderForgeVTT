@@ -1,0 +1,153 @@
+{
+  "id": "year_zero_engine",
+  "title": "Year Zero Engine",
+  "version": "0.1.0",
+  "author": "ThunderForgeVTT Contributors",
+  "description": "Year Zero Engine ruleset for ThunderForgeVTT, digested from its official SRD (see research/system_year_zero_engine.json for full provenance).",
+  "license": "Year Zero Engine Free Tabletop License",
+  "url": "https://github.com/ThunderForgeVTT/ThunderForgeVTT",
+  "compatibility": {
+    "minimum": "0.1.0",
+    "verified": "0.1.0",
+    "maximum": "1.0.0"
+  },
+  "esmodules": [
+    "web/dist/index.js"
+  ],
+  "styles": [
+    "web/dist/index.css"
+  ],
+  "packages": {
+    "server": "./server",
+    "engine": "./engine",
+    "web": "./web"
+  },
+  "abilities": {
+    "strength": {
+      "label": "Strength"
+    },
+    "agility": {
+      "label": "Agility"
+    },
+    "wits": {
+      "label": "Wits"
+    },
+    "empathy": {
+      "label": "Empathy"
+    }
+  },
+  "skills": {
+    "force": { "ability": "strength", "label": "Force" },
+    "melee": { "ability": "strength", "label": "Melee" },
+    "stamina": { "ability": "strength", "label": "Stamina" },
+    "marksmanship": { "ability": "agility", "label": "Marksmanship" },
+    "mobility": { "ability": "agility", "label": "Mobility" },
+    "stealth": { "ability": "agility", "label": "Stealth" },
+    "crafting": { "ability": "wits", "label": "Crafting" },
+    "observation": { "ability": "wits", "label": "Observation" },
+    "survival": { "ability": "wits", "label": "Survival" },
+    "healing": { "ability": "empathy", "label": "Healing" },
+    "insight": { "ability": "empathy", "label": "Insight" },
+    "persuasion": { "ability": "empathy", "label": "Persuasion" }
+  },
+  "skillRoll": {
+    "formula": "(attribute+skill)d6cs>=6",
+    "description": "Year Zero Engine's core dice-pool mechanic (standard d6-pool variant, not the optional step-dice variant used by games like Twilight 2000): roll a pool of Base Dice (equal to the attribute score) plus Skill Dice (equal to the skill level), all d6, and count each die showing a 6 as one success; at least one success is required to succeed. Confirmed against crates/thunderforge-dice's real grammar: `attribute` and `skill` are placeholder-bound scores summed inside the parenthesized dice-count expression (a real grammar feature, per the existing `(skill)d6kh3x=6cs>=4` formula in that crate's own test suite), producing a single d6 pool so `cs>=6` counts successes across the combined pool in one pass. Two separately-counted pools added with `+` (e.g. `{attribute}d6cs>=6+{skill}d6cs>=6`) also parses, but the dice engine only classifies a formula's ResolutionKind as SuccessCount when success-counting happens on a single top-level dice/pool node, so the two-pool-added-together form would evaluate to the correct numeric total but be reported as a Total, not a SuccessCount — the single-combined-pool form above is the correct one for this mechanic. Gear Dice are a further additive pool this pass intentionally leaves out of the formula (out of scope per this pass's plan).",
+    "placeholders": {
+      "attribute": "The chosen attribute's score (1-5): strength, agility, wits, or empathy.",
+      "skill": "The chosen skill's trained level (0-5)."
+    }
+  },
+  "legal": {
+    "licenseName": "Year Zero Engine Free Tabletop License",
+    "attributionText": "Year Zero Engine Standard Reference Document v1.0. Authored by Tomas H\u00e4renstam. (c) 2023 Fria Ligan AB. Permission to copy, modify and distribute this text is granted solely through the Year Zero Engine Free Tabletop License. Not for resale. Permission granted to print or photocopy this document for personal use only.",
+    "requiredNotice": null,
+    "disclaimer": "This system pack is an unofficial, fan-made digest of publicly available SRD content for use as a virtual tabletop utility. It is not affiliated with, endorsed by, or sponsored by Fria Ligan AB / Free League Publishing. Year Zero Engine and all associated game line names (Mutant: Year Zero, Forbidden Lands, Alien RPG, Tales from the Loop, Twilight 2000, etc.) are trademarks of their respective owners.",
+    "trademarkRestrictions": [
+      "No standalone video game or NFT product based on the Year Zero Engine SRD ruleset may be created under this license",
+      "A VTT digital character sheet / rules-automation module is treated as a digital utility extension of tabletop play, not a standalone video game, and is therefore understood to fall outside this restriction \u2014 a distinction Free League Publishing has consistently honored in its community content ecosystem"
+    ],
+    "requiredUiPlacement": "Must be shown on the system selection screen (or campaign splash screen) and/or a permanent, easily accessible module settings/about tab when a GM selects Year Zero Engine as their system \u2014 not buried in a Terms of Service page.",
+    "sourceUrl": null
+  },
+  "data_types": {
+    "ability_data": {
+      "description": "Year Zero Engine ability/attribute scores (standard d6-pool variant range: 1-5, per research/system_year_zero_engine.json core_stats[].range/scale)",
+      "properties": {
+        "strength": {
+          "type": "integer",
+          "min": 1,
+          "max": 5,
+          "label": "Strength"
+        },
+        "agility": {
+          "type": "integer",
+          "min": 1,
+          "max": 5,
+          "label": "Agility"
+        },
+        "wits": {
+          "type": "integer",
+          "min": 1,
+          "max": 5,
+          "label": "Wits"
+        },
+        "empathy": {
+          "type": "integer",
+          "min": 1,
+          "max": 5,
+          "label": "Empathy"
+        }
+      }
+    },
+    "resource_data": {
+      "description": "Year Zero Engine core resources",
+      "properties": {
+        "health": {
+          "type": "integer",
+          "min": 0,
+          "label": "Health"
+        },
+        "resolve": {
+          "type": "integer",
+          "min": 0,
+          "label": "Resolve"
+        },
+        "stress": {
+          "type": "integer",
+          "min": 0,
+          "label": "Stress"
+        },
+        "experience_points": {
+          "type": "integer",
+          "min": 0,
+          "label": "Experience Points"
+        }
+      }
+    },
+    "proficiency_data": {
+      "description": "Trained skills",
+      "properties": {
+        "trained_skills": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "label": "Trained Skills"
+        }
+      }
+    },
+    "trait_data": {
+      "description": "Freeform traits/notes",
+      "properties": {
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "label": "Notes"
+        }
+      }
+    }
+  }
+}

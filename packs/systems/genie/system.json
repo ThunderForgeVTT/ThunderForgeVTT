@@ -1,0 +1,114 @@
+{
+  "id": "genie",
+  "title": "Genie",
+  "version": "0.1.0",
+  "author": "ThunderForgeVTT Contributors",
+  "description": "Genie is ThunderForgeVTT's original house system: a co-op, escape-room-style ruleset (a shared Session Wish Pool, a Doom Clock, Puzzle Clocks, and tradeable Session Resources) designed to be genuinely playable while exercising every facet of the engine, per spec 018-genie-house-system.",
+  "license": "ThunderForgeVTT Original Content",
+  "url": "https://github.com/ThunderForgeVTT/ThunderForgeVTT",
+  "compatibility": {
+    "minimum": "0.1.0",
+    "verified": "0.1.0",
+    "maximum": "1.0.0"
+  },
+  "esmodules": ["web/dist/index.js"],
+  "styles": ["web/dist/index.css"],
+  "packages": {
+    "server": "./server",
+    "engine": "./engine",
+    "web": "./web"
+  },
+  "abilities": {
+    "might": { "label": "Might", "abbreviation": "MGT" },
+    "cunning": { "label": "Cunning", "abbreviation": "CUN" },
+    "spirit": { "label": "Spirit", "abbreviation": "SPI" }
+  },
+  "skills": {},
+  "sessionResources": {
+    "insight": { "label": "Insight" },
+    "favor": { "label": "Favor" },
+    "essence": { "label": "Essence" }
+  },
+  "wishPoints": {
+    "1": [2],
+    "2": [3],
+    "3": [4],
+    "4": [5],
+    "5": [6],
+    "6": [7],
+    "7": [8],
+    "8": [9],
+    "9": [10],
+    "10": [12]
+  },
+  "sizeCategories": {
+    "diminutive": { "scale": 0.5, "label": "Diminutive" },
+    "small": { "scale": 0.75, "label": "Small" },
+    "medium": { "scale": 1.0, "label": "Medium" },
+    "large": { "scale": 2.0, "label": "Large" },
+    "huge": { "scale": 3.0, "label": "Huge" },
+    "colossal": { "scale": 4.0, "label": "Colossal" }
+  },
+  "conditions": {
+    "bound": {
+      "label": "Bound",
+      "description": "The Genie's power is constrained by their vessel, a Patron's rule, or a captor's ward — wish-granting abilities are suppressed or restricted until the binding is broken."
+    },
+    "exposed": {
+      "label": "Exposed",
+      "description": "The Genie's true nature or vessel has been revealed, stripping away the concealment that normally protects them from mortal notice and interference."
+    },
+    "favored": {
+      "label": "Favored",
+      "description": "The Genie currently holds a Patron's blessing, granting an edge on Manifestation rolls until the favor lapses or is spent."
+    }
+  },
+  "manifestationRoll": {
+    "formula": "(skill)d6kh{keep}x=6cs>=4",
+    "description": "Roll a pool of d6s equal to the relevant skill rating (bound via the 'skill' placeholder at roll time), keep the top N dice (substitute the literal keep count for '{keep}' before sending, since kh's count is a parse-time literal in crates/thunderforge-dice's grammar, not a runtime placeholder), explode on 6, count successes at 4+."
+  },
+  "legal": {
+    "licenseName": "ThunderForgeVTT Original Content",
+    "attributionText": "Genie is an original system created for ThunderForgeVTT. No external attribution required.",
+    "requiredNotice": null,
+    "disclaimer": null,
+    "trademarkRestrictions": [],
+    "requiredUiPlacement": null,
+    "sourceUrl": null
+  },
+  "data_types": {
+    "ability_data": {
+      "description": "Genie ability scores",
+      "properties": {
+        "might": { "type": "integer", "label": "Might" },
+        "cunning": { "type": "integer", "label": "Cunning" },
+        "spirit": { "type": "integer", "label": "Spirit" }
+      },
+      "required": ["might", "cunning", "spirit"]
+    },
+    "resource_data": {
+      "description": "Wish Points and Health",
+      "properties": {
+        "current_wish_points": { "type": "integer", "min": 0, "label": "Current Wish Points" },
+        "max_wish_points": { "type": "integer", "min": 0, "label": "Maximum Wish Points" },
+        "current_health": { "type": "integer", "min": 0, "label": "Current Health" },
+        "max_health": { "type": "integer", "min": 1, "label": "Maximum Health" }
+      },
+      "required": ["max_wish_points", "max_health"]
+    },
+    "proficiency_data": {
+      "description": "Trained skills",
+      "properties": {
+        "trained_skills": { "type": "array", "items": { "type": "string" }, "label": "Trained Skills" }
+      }
+    },
+    "trait_data": {
+      "description": "Active conditions, Patron/lineage link, and (NPC-only) size category",
+      "properties": {
+        "active_conditions": { "type": "array", "items": { "type": "string" }, "label": "Active Conditions" },
+        "patron_lore_entry_id": { "type": "string", "label": "Patron (Lore Entry)" },
+        "size_category": { "type": "string", "label": "Size Category" }
+      }
+    }
+  }
+}

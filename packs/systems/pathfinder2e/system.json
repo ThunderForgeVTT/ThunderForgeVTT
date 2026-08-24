@@ -1,0 +1,171 @@
+{
+  "id": "pathfinder2e",
+  "title": "Pathfinder Second Edition",
+  "version": "0.1.0",
+  "author": "ThunderForgeVTT Contributors",
+  "description": "Pathfinder Second Edition (Remaster) ruleset for ThunderForgeVTT, digested from its official SRD (see research/system_pathfinder2e.json for full provenance).",
+  "license": "Open RPG Creative License (ORC)",
+  "url": "https://github.com/ThunderForgeVTT/ThunderForgeVTT",
+  "compatibility": {
+    "minimum": "0.1.0",
+    "verified": "0.1.0",
+    "maximum": "1.0.0"
+  },
+  "esmodules": [
+    "web/dist/index.js"
+  ],
+  "styles": [
+    "web/dist/index.css"
+  ],
+  "packages": {
+    "server": "./server",
+    "engine": "./engine",
+    "web": "./web"
+  },
+  "abilities": {
+    "strength": {
+      "label": "Strength"
+    },
+    "dexterity": {
+      "label": "Dexterity"
+    },
+    "constitution": {
+      "label": "Constitution"
+    },
+    "intelligence": {
+      "label": "Intelligence"
+    },
+    "wisdom": {
+      "label": "Wisdom"
+    },
+    "charisma": {
+      "label": "Charisma"
+    }
+  },
+  "skills": {
+    "acrobatics": { "ability": "dexterity", "label": "Acrobatics" },
+    "arcana": { "ability": "intelligence", "label": "Arcana" },
+    "athletics": { "ability": "strength", "label": "Athletics" },
+    "crafting": { "ability": "intelligence", "label": "Crafting" },
+    "deception": { "ability": "charisma", "label": "Deception" },
+    "diplomacy": { "ability": "charisma", "label": "Diplomacy" },
+    "intimidation": { "ability": "charisma", "label": "Intimidation" },
+    "lore": { "ability": "intelligence", "label": "Lore" },
+    "medicine": { "ability": "wisdom", "label": "Medicine" },
+    "nature": { "ability": "wisdom", "label": "Nature" },
+    "occultism": { "ability": "intelligence", "label": "Occultism" },
+    "performance": { "ability": "charisma", "label": "Performance" },
+    "religion": { "ability": "wisdom", "label": "Religion" },
+    "society": { "ability": "intelligence", "label": "Society" },
+    "stealth": { "ability": "dexterity", "label": "Stealth" },
+    "survival": { "ability": "wisdom", "label": "Survival" },
+    "thievery": { "ability": "dexterity", "label": "Thievery" },
+    "perception": { "ability": "wisdom", "label": "Perception" }
+  },
+  "coreCheck": "1d20+modifier",
+  "legal": {
+    "licenseName": "Open RPG Creative License (ORC)",
+    "attributionText": "Pathfinder Player Core 2 / Pathfinder Monster Core \u00a9 2024, Paizo Inc.; licensed under the ORC License located at the Library of Congress at TX 9-307-067 and available online at various locations including paizo.com/orclicense, azoralaw.com/orclicense, and others. All warranties are disclaimed as set forth therein.",
+    "requiredNotice": "Sourced verbatim from Player Core's own printed ORC Notice page (p.463, colophon abridged): 'This product is licensed under the ORC License to be held in the Library of Congress and available online at various locations including paizo.com/orclicense, azoralaw.com/orclicense, and others. All warranties are disclaimed as set forth therein. Attribution: This product is original game content and is not based on a licensed game system. If you use our Licensed Material in your own published work, please credit us in your product as follows: Pathfinder Player Core (c) 2023 Paizo Inc., Designed by Logan Bonner, Jason Bulmahn, Stephen Radney-MacFarland, and Mark Seifter. [full author list continues in the book colophon] ... Reserved Material: Reserved Material elements in this product include all elements designated as Reserved Material under the ORC License. To avoid confusion, such items include: All trademarks, registered trademarks, proper nouns (characters, deities, locations, etc., as well as all adjectives, names, titles, and descriptive terms derived from proper nouns), artworks, characters, dialogue, locations, organizations, plots, storylines, and trade dress. Expressly Designated Licensed Material: This product contains no Expressly Designated Licensed Material. Pathfinder Player Core (c) 2023, Paizo Inc. Paizo, the Paizo golem, Pathfinder, and other trademarks owned by Paizo are property of Paizo Inc. All rights reserved.'",
+    "disclaimer": null,
+    "trademarkRestrictions": [
+      "Do not use 'Pathfinder,' 'Paizo,' the Paizo golem logo, or 'Starfinder' as a product name, module name, or in any way that implies Paizo's endorsement or sponsorship",
+      "Do not reproduce Reserved Material (proprietary setting lore, named NPCs/deities/locations, official artwork) in the system pack; only Licensed Material (mechanics and rules text) may be programmatically ingested",
+      "Software built to process ORC-licensed data is not itself required to be open-sourced; only the game-mechanic content carries share-alike/attribution obligations, not the rendering engine or platform code"
+    ],
+    "requiredUiPlacement": "The ORC Notice must be prominently displayed wherever a GM selects or enables this system pack \u2014 e.g. on a system-selection splash screen shown at campaign creation, and/or in a permanent, easily accessible module settings/about tab \u2014 not buried in a hidden Terms of Service page.",
+    "sourceUrl": "https://paizo.com/orclicense"
+  },
+  "data_types": {
+    "ability_data": {
+      "description": "Pathfinder Second Edition (Remaster) ability/attribute modifiers (modifier-based, not a raw 1-20 score, per research/system_pathfinder2e.json core_stats[].scale: typically -5 to +10ish)",
+      "properties": {
+        "strength": {
+          "type": "integer",
+          "min": -5,
+          "max": 10,
+          "label": "Strength"
+        },
+        "dexterity": {
+          "type": "integer",
+          "min": -5,
+          "max": 10,
+          "label": "Dexterity"
+        },
+        "constitution": {
+          "type": "integer",
+          "min": -5,
+          "max": 10,
+          "label": "Constitution"
+        },
+        "intelligence": {
+          "type": "integer",
+          "min": -5,
+          "max": 10,
+          "label": "Intelligence"
+        },
+        "wisdom": {
+          "type": "integer",
+          "min": -5,
+          "max": 10,
+          "label": "Wisdom"
+        },
+        "charisma": {
+          "type": "integer",
+          "min": -5,
+          "max": 10,
+          "label": "Charisma"
+        }
+      }
+    },
+    "resource_data": {
+      "description": "Pathfinder Second Edition (Remaster) core resources",
+      "properties": {
+        "current_hp": {
+          "type": "integer",
+          "min": 0,
+          "label": "Current Hp"
+        },
+        "max_hp": {
+          "type": "integer",
+          "min": 0,
+          "label": "Max Hp"
+        },
+        "focus_points": {
+          "type": "integer",
+          "min": 0,
+          "label": "Focus Points"
+        },
+        "hero_points": {
+          "type": "integer",
+          "min": 0,
+          "label": "Hero Points"
+        }
+      }
+    },
+    "proficiency_data": {
+      "description": "Trained skills",
+      "properties": {
+        "trained_skills": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "label": "Trained Skills"
+        }
+      }
+    },
+    "trait_data": {
+      "description": "Freeform traits/notes",
+      "properties": {
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "label": "Notes"
+        }
+      }
+    }
+  }
+}

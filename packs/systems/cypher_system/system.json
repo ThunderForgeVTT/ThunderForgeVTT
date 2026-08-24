@@ -1,0 +1,148 @@
+{
+  "id": "cypher_system",
+  "title": "Cypher System",
+  "version": "0.1.0",
+  "author": "ThunderForgeVTT Contributors",
+  "description": "Cypher System ruleset for ThunderForgeVTT, digested from its official SRD (see research/system_cypher_system.json for full provenance).",
+  "license": "Cypher System Open License",
+  "url": "https://github.com/ThunderForgeVTT/ThunderForgeVTT",
+  "compatibility": {
+    "minimum": "0.1.0",
+    "verified": "0.1.0",
+    "maximum": "1.0.0"
+  },
+  "esmodules": [
+    "web/dist/index.js"
+  ],
+  "styles": [
+    "web/dist/index.css"
+  ],
+  "packages": {
+    "server": "./server",
+    "engine": "./engine",
+    "web": "./web"
+  },
+  "abilities": {
+    "might": {
+      "label": "Might"
+    },
+    "speed": {
+      "label": "Speed"
+    },
+    "intellect": {
+      "label": "Intellect"
+    }
+  },
+  "skills": {},
+  "proficiencyTiers": {
+    "description": "Cypher System deliberately has no fixed skill list (per research/system_cypher_system.json's `skills` digest); a character's relationship to any given task is instead described by one of these training tiers, which ease or hinder the task's difficulty before the 1d20 roll (see `taskResolution`).",
+    "trained": {
+      "label": "Trained",
+      "effect": "Eases the task's difficulty by one step."
+    },
+    "specialized": {
+      "label": "Specialized",
+      "effect": "Eases the task's difficulty by two steps (the maximum from skill training alone)."
+    },
+    "practiced": {
+      "label": "Practiced",
+      "effect": "The unmodified default — no ease or hindrance from training."
+    },
+    "inability": {
+      "label": "Inability",
+      "effect": "Hinders the task's difficulty by one step; canceled out if the character is also trained in the same task."
+    }
+  },
+  "taskResolution": {
+    "formula": "1d20",
+    "description": "The Cypher System's universal task-resolution mechanic: the GM sets a task's difficulty (1-10); the target number is always difficulty x 3. The player rolls 1d20 and succeeds if the result meets or beats the target number. Difficulty is eased (lowered) before the roll by skill training, assets, and Effort, and hindered (raised) by circumstance; a difficulty eased to 0 succeeds automatically with no roll.",
+    "targetNumberFormula": "difficulty * 3",
+    "notes": "The dice-engine formula is a plain '1d20' roll (crates/thunderforge-dice's grammar only supports a success-threshold modifier like 'cs>={n}' with a literal numeric condition, not a placeholder-driven one, so a dynamic per-roll target number of 3x a variable difficulty cannot be expressed inside the formula string itself). The roll result is compared against the target number in application logic, not in the dice formula."
+  },
+  "legal": {
+    "licenseName": "Cypher System Open License",
+    "attributionText": "This [product] uses the Cypher System, developed by Monte Cook Games, LLC, and licensed for use under the Cypher System Open License. Compatible with the Cypher System, \u00a9 Monte Cook Games, LLC. The Cypher System and its logo are trademarks of Monte Cook Games, LLC in the U.S.A. and other countries. This work contains material derived from the Cypher System Reference Document, which is copyright Monte Cook Games, LLC and available under the Cypher System Open License. This is not an official Monte Cook Games product and is not affiliated with, or endorsed by, Monte Cook Games, LLC.",
+    "requiredNotice": "Compatible with the Cypher System",
+    "disclaimer": "This product is an independent production by ThunderForgeVTT and is not affiliated with, endorsed by, or sponsored by Monte Cook Games, LLC. Compatible with the Cypher System, developed by Monte Cook Games.",
+    "trademarkRestrictions": [
+      "Do not use Monte Cook Games trademarks other than the required 'Cypher System' compatibility phrase (e.g. do not use 'Numenera', 'The Strange', or other MCG product names as if they were licensed).",
+      "Do not use the Monte Cook Games company logo or the Cypher System logo/trade dress beyond the sanctioned compatibility logo, if used.",
+      "Do not state or imply official MCG endorsement, sponsorship, or affiliation anywhere in the product or its marketing."
+    ],
+    "requiredUiPlacement": "The 'Compatible with the Cypher System' notice (or the official compatibility logo) must be prominently displayed on the primary digital storefront / system-selection screen where a GM picks this system for a campaign \u2014 not buried in a settings tab or Terms of Service page.",
+    "sourceUrl": "https://csol.montecookgames.com/"
+  },
+  "data_types": {
+    "ability_data": {
+      "description": "Cypher System ability/attribute scores",
+      "properties": {
+        "might": {
+          "type": "integer",
+          "label": "Might"
+        },
+        "speed": {
+          "type": "integer",
+          "label": "Speed"
+        },
+        "intellect": {
+          "type": "integer",
+          "label": "Intellect"
+        }
+      }
+    },
+    "resource_data": {
+      "description": "Cypher System core resources",
+      "properties": {
+        "might_pool": {
+          "type": "integer",
+          "min": 0,
+          "label": "Might Pool"
+        },
+        "speed_pool": {
+          "type": "integer",
+          "min": 0,
+          "label": "Speed Pool"
+        },
+        "intellect_pool": {
+          "type": "integer",
+          "min": 0,
+          "label": "Intellect Pool"
+        },
+        "effort": {
+          "type": "integer",
+          "min": 0,
+          "label": "Effort"
+        },
+        "xp": {
+          "type": "integer",
+          "min": 0,
+          "label": "Xp"
+        }
+      }
+    },
+    "proficiency_data": {
+      "description": "Trained skills",
+      "properties": {
+        "trained_skills": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "label": "Trained Skills"
+        }
+      }
+    },
+    "trait_data": {
+      "description": "Freeform traits/notes",
+      "properties": {
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "label": "Notes"
+        }
+      }
+    }
+  }
+}

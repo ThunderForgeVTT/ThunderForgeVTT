@@ -1,0 +1,19 @@
+[lints]
+workspace = true
+
+[package]
+name = "yze-server"
+version = "0.1.0"
+edition = "2021"
+repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
+license = "BSD 3-Clause License"
+
+[dependencies]
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+tokio = { version = "1.40", features = ["full"] }
+async-trait = "0.1"
+
+[lib]
+name = "yze_server"
+path = "src/lib.rs"

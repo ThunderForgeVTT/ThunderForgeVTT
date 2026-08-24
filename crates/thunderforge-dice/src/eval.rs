@@ -129,23 +129,41 @@ fn eval_expr<R: Rng>(ctx: &mut EvalCtx<R>, expr: &Expr) -> Result<ExprValue, For
             Ok(ExprValue::total(-v.value))
         }
         Expr::BinOp(lhs, op, rhs) => {
-            let l = eval_expr(ctx, lhs)?.value;
-            let r = eval_expr(ctx, rhs)?.value;
+            let l = eval_expr(ctx, lhs)?;
+            let r = eval_expr(ctx, rhs)?;
             let value = match op {
-                BinOp::Add => l + r,
-                BinOp::Sub => l - r,
-                BinOp::Mul => l * r,
+                BinOp::Add => l.value + r.value,
+                BinOp::Sub => l.value - r.value,
+                BinOp::Mul => l.value * r.value,
                 BinOp::Div => {
-                    if r == 0.0 {
+                    if r.value == 0.0 {
                         return Err(FormulaError::DivisionByZero);
                     }
-                    l / r
+                    l.value / r.value
                 }
             };
             if !value.is_finite() {
                 return Err(FormulaError::NonFiniteResult);
             }
-            Ok(ExprValue::total(value))
+            // Bug fix (found while building the year_zero_engine pack,
+            // spec 018): a formula like `NdXcs>=T + MdYcs>=T` — two
+            // independently success-counting pools summed — used to lose
+            // both sides' success_count here, silently degrading to
+            // ResolutionKind::Total. Only `+` has an unambiguous meaning
+            // for combining success counts (successes from both pools,
+            // summed); Sub/Mul/Div on a success-counting operand have no
+            // sensible success-count semantics, so they still degrade to a
+            // plain numeric total, same as before.
+            let success_count = match op {
+                BinOp::Add => match (l.success_count, r.success_count) {
+                    (Some(a), Some(b)) => Some(a + b),
+                    (Some(a), None) => Some(a),
+                    (None, Some(b)) => Some(b),
+                    (None, None) => None,
+                },
+                _ => None,
+            };
+            Ok(ExprValue { value, success_count })
         }
         Expr::MathFn(kind, inner) => {
             let v = eval_expr(ctx, inner)?.value;
@@ -565,6 +583,23 @@ mod tests {
     }
 
     #[test]
+    fn fate_core_ladder_roll_with_skill_placeholder() {
+        // Fate Core's resolution formula: 4dF + skill rating on the Ladder.
+        // Faces 0,1,2,1 -> -1,0,1,0 (sum -0.0) plus a Good (+3) skill.
+        let formula = DiceFormula::parse("4dF + SKILL").unwrap();
+        let mut bindings = PlaceholderBindings::new();
+        bindings.insert("SKILL".to_string(), 3.0);
+        let mut rng = ScriptedRng::new(vec![0, 1, 2, 1]);
+        let result = resolve(&formula, &bindings, &mut rng).unwrap();
+        assert_eq!(result.dice.len(), 4);
+        for die in &result.dice {
+            assert!(die.final_value >= -1 && die.final_value <= 1);
+            assert_eq!(die.sides, DieSides::Fate);
+        }
+        assert_eq!(result.kind, ResolutionKind::Total(-1.0 + 0.0 + 1.0 + 0.0 + 3.0));
+    }
+
+    #[test]
     fn nested_dice_size() {
         // (2d4) -> faces 2,3 (values 2,3) sum=5 dice -> 5d8, each rolls face value+1
         let result = resolve_str("(2d4)d8", vec![1, 2, 0, 1, 2, 3, 4]).unwrap();
@@ -632,5 +667,193 @@ mod tests {
         let without_bindings = resolve(&formula, &PlaceholderBindings::new(), &mut rng_b).unwrap();
 
         assert_eq!(with_bindings.kind, without_bindings.kind);
+    }
+
+    /// Spec 018 (Genie) User Story 1 / T019: the Manifestation roll —
+    /// keep-highest, exploding, and success-counting composed together in
+    /// one formula, with a placeholder driving the dice count. This is
+    /// the exact "hardest three features at once" composition spec 018
+    /// exists to exercise (not new engine capability, just new coverage).
+    #[test]
+    fn genie_manifestation_roll_composes_keep_explode_and_success_count() {
+        // 4 dice (bound via the `skill` placeholder), keep top 3, explode
+        // on 6, count successes at 4+.
+        let formula = DiceFormula::parse("(skill)d6kh3x=6cs>=4").unwrap();
+        let mut bindings = PlaceholderBindings::new();
+        bindings.insert("skill".to_string(), 4.0);
+
+        // die1: raw 5 -> face 6, explodes; explosion raw 2 -> face 3 (stop)
+        // die2: raw 3 -> face 4
+        // die3: raw 1 -> face 2
+        // die4: raw 0 -> face 1
+        let mut rng = ScriptedRng::new(vec![5, 2, 3, 1, 0]);
+        let result = resolve(&formula, &bindings, &mut rng).unwrap();
+
+        // Exploding a die extends its own `rolls` chain rather than
+        // adding a new pool entry, so 4 dice were requested and 4
+        // `DieOutcome`s are present overall.
+        assert_eq!(result.dice.len(), 4);
+
+        let exploded = result.dice.iter().find(|d| d.rolls.len() > 1).expect("one die should have exploded");
+        assert_eq!(exploded.rolls, vec![6, 3], "full chain (original 6 plus every explosion) must be recorded");
+        assert_eq!(exploded.final_value, 3);
+        assert!(exploded.kept, "the exploded die's final value (3) is in the top 3 and should be kept");
+
+        let kept: Vec<_> = result.dice.iter().filter(|d| d.kept).collect();
+        let dropped: Vec<_> = result.dice.iter().filter(|d| !d.kept).collect();
+        assert_eq!(kept.len(), 3, "kh3 should keep exactly 3 of the 4 dice");
+        assert_eq!(dropped.len(), 1, "kh3 should drop exactly 1 of the 4 dice");
+        assert_eq!(dropped[0].final_value, 1, "the lowest die (face 1) should be the one dropped");
+
+        // Successes: kept final values are 4 (die2), 3 (exploded die1),
+        // 2 (die3) -> only the 4 counts as a success at cs>=4.
+        assert_eq!(result.kind, ResolutionKind::SuccessCount(1));
+    }
+
+    /// packs/systems/pathfinder2e system pack: confirms the pack's
+    /// `system.json` "coreCheck" formula (`1d20+modifier`) is a real,
+    /// resolvable formula in this engine's grammar. `modifier` here
+    /// stands in for PF2e's already-summed total (ability modifier +
+    /// proficiency bonus + any circumstance/status/item bonuses —
+    /// Player Core "Checks," p.400-401); the dice engine only cares
+    /// that it's one placeholder bound to a single flat number. Degree
+    /// of success (critical success/success/failure/critical failure,
+    /// per the DC-comparison table in Player Core p.401) is application
+    /// logic layered on top of this raw d20+modifier total, not a
+    /// notation this engine has (no success-threshold-vs-DC comparator
+    /// exists in the grammar — `cs{cond}`/`cf{cond}` count successes
+    /// across a *pool* of dice, which doesn't model a single d20 vs a
+    /// scalar DC).
+    #[test]
+    fn pathfinder2e_core_check_formula_resolves_d20_plus_modifier() {
+        let formula = DiceFormula::parse("1d20+modifier").unwrap();
+        let mut bindings = PlaceholderBindings::new();
+        bindings.insert("modifier".to_string(), 7.0);
+
+        // raw 14 -> face 15 (ScriptedRng values are 0-indexed raw d20 rolls)
+        let mut rng = ScriptedRng::new(vec![14]);
+        let result = resolve(&formula, &bindings, &mut rng).unwrap();
+
+        let ResolutionKind::Total(total) = result.kind else { panic!("expected Total") };
+        assert_eq!(total, 22.0, "1d20(15) + modifier(7) = 22");
+        assert_eq!(result.dice.len(), 1);
+        assert_eq!(result.dice[0].final_value, 15);
+    }
+
+    /// packs/systems/cypher_system: confirms `system.json`'s
+    /// `taskResolution.formula` ("1d20") is a real, resolvable formula.
+    /// The Cypher System's target number (difficulty * 3) is dynamic per
+    /// roll (the GM sets difficulty 1-10 per task), and this grammar's
+    /// only success-threshold notation (`cs{cond}`) requires a literal
+    /// numeric condition rather than a placeholder-driven one — so the
+    /// meets-or-beats-target-number comparison is deliberately left to
+    /// application logic layered on top of a plain d20 roll, not
+    /// expressed inside the formula string itself.
+    #[test]
+    fn cypher_system_task_resolution_formula_resolves_plain_1d20() {
+        let formula = DiceFormula::parse("1d20").unwrap();
+        // raw 16 -> face 17 (ScriptedRng values are 0-indexed raw d20 rolls)
+        let mut rng = ScriptedRng::new(vec![16]);
+        let result = resolve(&formula, &PlaceholderBindings::new(), &mut rng).unwrap();
+
+        assert_eq!(result.dice.len(), 1);
+        assert_eq!(result.dice[0].final_value, 17);
+        assert_eq!(result.kind, ResolutionKind::Total(17.0));
+
+        // Application-side comparison: a difficulty-4 task has target
+        // number 12 (4 * 3); a roll of 17 meets/beats it and succeeds.
+        let target_number = 4 * 3;
+        assert!(17 >= target_number, "roll of 17 should meet/beat target number 12");
+    }
+
+    /// packs/systems/blades_in_the_dark: confirms `system.json`'s
+    /// `actionRoll.formula` ("(rating)d6kh1") is a real, resolvable
+    /// formula for Blades' core action roll — roll a pool of d6s equal to
+    /// the action rating (bound via the `rating` placeholder) and take
+    /// the single highest die. The zero-rating special case (2d6, keep
+    /// the LOWEST die) is a separate fixed formula ("2d6kl1") chosen by
+    /// application logic rather than expressed here, since this grammar
+    /// has no conditional-on-placeholder-value branching.
+    #[test]
+    fn blades_in_the_dark_action_roll_formula_keeps_single_highest_die() {
+        let formula = DiceFormula::parse("(rating)d6kh1").unwrap();
+        let mut bindings = PlaceholderBindings::new();
+        bindings.insert("rating".to_string(), 3.0);
+
+        // raw 1,4,2 -> faces 2,5,3 -> kh1 keeps the highest (5)
+        let mut rng = ScriptedRng::new(vec![1, 4, 2]);
+        let result = resolve(&formula, &bindings, &mut rng).unwrap();
+
+        assert_eq!(result.dice.len(), 3, "a rating of 3 should roll a pool of 3d6");
+        let kept: Vec<_> = result.dice.iter().filter(|d| d.kept).collect();
+        assert_eq!(kept.len(), 1, "kh1 should keep exactly one die");
+        assert_eq!(kept[0].final_value, 5, "the highest of faces 2,5,3 is 5");
+        assert_eq!(result.kind, ResolutionKind::Total(5.0));
+    }
+
+    /// packs/systems/year_zero_engine: confirms `system.json`'s `skillRoll.formula`
+    /// (`"(attribute+skill)d6cs>=6"`) is a real, resolvable formula in this engine's
+    /// grammar, and that it implements YZE's core dice-pool mechanic (standard d6-pool
+    /// variant): roll a pool of Base Dice (attribute) + Skill Dice (skill), all d6,
+    /// counting each 6 as a success. `attribute` and `skill` are two placeholders
+    /// summed inside the parenthesized dice-count expression — the same real grammar
+    /// feature already exercised by the `(skill)d6kh3x=6cs>=4` Genie test above — which
+    /// produces one combined d6 pool so `cs>=6` reports a single ResolutionKind::SuccessCount
+    /// over the whole pool.
+    #[test]
+    fn year_zero_engine_skill_roll_formula_counts_sixes_across_combined_pool() {
+        let formula = DiceFormula::parse("(attribute+skill)d6cs>=6").unwrap();
+        let mut bindings = PlaceholderBindings::new();
+        bindings.insert("attribute".to_string(), 2.0);
+        bindings.insert("skill".to_string(), 1.0);
+
+        // Pool of 3 (attribute 2 + skill 1) d6. Raw values 5,5,0 -> faces 6,6,1:
+        // two sixes (successes), one non-six.
+        let mut rng = ScriptedRng::new(vec![5, 5, 0]);
+        let result = resolve(&formula, &bindings, &mut rng).unwrap();
+
+        assert_eq!(result.dice.len(), 3);
+        assert_eq!(result.kind, ResolutionKind::SuccessCount(2));
+    }
+
+    /// Regression test for a bug found while building the year_zero_engine pack
+    /// (spec 018): two independently success-counting dice pools added together
+    /// (`NdXcs>=T + MdYcs>=T`) used to have `eval_expr`'s `BinOp::Add` arm discard
+    /// both sides' `success_count`, silently reporting `ResolutionKind::Total`
+    /// instead of the combined success count. Fixed by summing each side's
+    /// `success_count` when both are present (and propagating whichever side has
+    /// one, if only one does) for `+` specifically — the only operator with an
+    /// unambiguous "combine these two pools' successes" meaning.
+    #[test]
+    fn adding_two_independently_success_counting_pools_sums_their_success_counts() {
+        let formula = DiceFormula::parse("2d6cs>=6+1d6cs>=6").unwrap();
+
+        // Pool A (2d6): raw 5,0 -> faces 6,1 -> one success.
+        // Pool B (1d6): raw 5 -> face 6 -> one success.
+        // Combined: 2 successes total, not a plain numeric total of the faces.
+        let mut rng = ScriptedRng::new(vec![5, 0, 5]);
+        let result = resolve(&formula, &PlaceholderBindings::new(), &mut rng).unwrap();
+
+        assert_eq!(result.dice.len(), 3);
+        assert_eq!(
+            result.kind,
+            ResolutionKind::SuccessCount(2),
+            "two separately-thresholded pools added together must sum their success counts, not degrade to a Total"
+        );
+    }
+
+    /// A success-counting pool added to a plain flat number (no success_count on
+    /// that side) should still report the pool's own success count, not silently
+    /// drop it just because the other operand wasn't itself success-counting.
+    #[test]
+    fn success_counting_pool_plus_flat_number_still_reports_success_count() {
+        let formula = DiceFormula::parse("2d6cs>=6+3").unwrap();
+
+        // 2d6: raw 5,0 -> faces 6,1 -> one success. The "+3" is flavor/bonus text
+        // some systems might tack on, not meaningful as a success-count offset.
+        let mut rng = ScriptedRng::new(vec![5, 0]);
+        let result = resolve(&formula, &PlaceholderBindings::new(), &mut rng).unwrap();
+
+        assert_eq!(result.kind, ResolutionKind::SuccessCount(1));
     }
 }
