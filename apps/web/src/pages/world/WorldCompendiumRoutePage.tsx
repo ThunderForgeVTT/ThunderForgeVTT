@@ -3,6 +3,8 @@ import { useParams } from "react-router-dom";
 import { getWorld } from "@/api/world";
 import { SEO } from "@/components/seo/SEO";
 import { Loader } from "@/components/ui/loader/Loader";
+import { useWorldRole } from "@/hooks/useWorldRole";
+import { WorldSectionShell } from "@/layouts/world-layout/WorldSectionShell";
 import { WorldCompendiumPage } from "@/pages/world/compendium/WorldCompendiumPage";
 import type { SeoConfig } from "@/types/seo";
 import type { WorldRecord } from "@/types/world";
@@ -17,6 +19,7 @@ export default function WorldCompendiumRoutePage() {
   const { id = "" } = useParams();
   const [world, setWorld] = useState<WorldRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { isGm } = useWorldRole(id, world);
 
   useEffect(() => {
     let active = true;
@@ -53,7 +56,9 @@ export default function WorldCompendiumRoutePage() {
   return (
     <>
       <SEO {...seo} />
-      <WorldCompendiumPage worldId={id} world={world} />
+      <WorldSectionShell worldId={id} isGm={isGm}>
+        <WorldCompendiumPage worldId={id} world={world} />
+      </WorldSectionShell>
     </>
   );
 }

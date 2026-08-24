@@ -20,11 +20,21 @@ export interface TabsProps {
   items: TabsItem[];
   defaultValue: string;
   className?: string;
+  /** Controlled active tab — pass together with `onValueChange` to drive
+   * the selection externally (e.g. from a URL search param). Omit both
+   * for the plain uncontrolled `defaultValue` behavior. */
+  value?: string;
+  onValueChange?: (value: string) => void;
 }
 
-export function Tabs({ items, defaultValue, className }: TabsProps) {
+export function Tabs({ items, defaultValue, className, value, onValueChange }: TabsProps) {
   return (
-    <ShadcnTabs defaultValue={defaultValue} className={cn(className)}>
+    <ShadcnTabs
+      defaultValue={defaultValue}
+      value={value}
+      onValueChange={onValueChange}
+      className={cn(className)}
+    >
       <TabsList aria-label="Sections">
         {items.map((item) => (
           <TabsTrigger key={item.value} value={item.value}>

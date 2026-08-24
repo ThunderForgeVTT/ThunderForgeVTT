@@ -5,6 +5,7 @@ import { getWorld } from "@/api/world";
 import { SEO } from "@/components/seo/SEO";
 import { Loader } from "@/components/ui/loader/Loader";
 import { useWorldRole } from "@/hooks/useWorldRole";
+import { WorldSectionShell } from "@/layouts/world-layout/WorldSectionShell";
 import { WorldStagingPage } from "@/layouts/world-layout/WorldStagingPage";
 import type { SceneRecord } from "@/types/scene";
 import type { SeoConfig } from "@/types/seo";
@@ -66,19 +67,21 @@ export default function WorldStagingRoutePage() {
   return (
     <>
       <SEO {...seo} />
-      <WorldStagingPage
-        worldId={id}
-        world={world}
-        scenes={scenes}
-        sceneId={sceneId}
-        onSceneChange={setSceneId}
-        onSceneCreated={(scene) => setScenes((current) => [...current, scene])}
-        isGm={isGm}
-        onPlay={() => navigate(`/world/${id}/play`)}
-        onSessionNotesSaved={(notes) =>
-          setWorld((current) => (current ? { ...current, sessionNotes: notes } : current))
-        }
-      />
+      <WorldSectionShell worldId={id} isGm={isGm}>
+        <WorldStagingPage
+          worldId={id}
+          world={world}
+          scenes={scenes}
+          sceneId={sceneId}
+          onSceneChange={setSceneId}
+          onSceneCreated={(scene) => setScenes((current) => [...current, scene])}
+          isGm={isGm}
+          onPlay={() => navigate(`/world/${id}/play`)}
+          onSessionNotesSaved={(notes) =>
+            setWorld((current) => (current ? { ...current, sessionNotes: notes } : current))
+          }
+        />
+      </WorldSectionShell>
     </>
   );
 }

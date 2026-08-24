@@ -18,6 +18,7 @@ import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { SystemLegalNotice } from "@/components/game-systems/legal/SystemLegalNotice";
 import type { SystemManifest } from "@/contexts/GameSystemContext";
 import { useWorldRole } from "@/hooks/useWorldRole";
+import { WorldSectionShell } from "@/layouts/world-layout/WorldSectionShell";
 import type { WorldRecord } from "@/types/world";
 
 /**
@@ -144,6 +145,7 @@ export default function WorldSystemSettingsPage() {
   return (
     <>
       <SEO title={`${world.name} — System settings`} description="World system settings" noindex />
+      <WorldSectionShell worldId={worldId} isGm={isGm}>
       <Container className="grid max-w-2xl gap-6 py-10">
         <Button
           variant="ghost"
@@ -249,6 +251,7 @@ export default function WorldSystemSettingsPage() {
           </p>
         ) : null}
       </Container>
+      </WorldSectionShell>
     </>
   );
 }

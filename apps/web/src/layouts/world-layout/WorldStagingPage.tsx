@@ -1,4 +1,3 @@
-import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button/Button";
 import { Panel } from "@/components/ui/panel/Panel";
@@ -83,25 +82,11 @@ export function WorldStagingPage({
           </Button>
         </div>
 
-        {/* Toolbar row: a slim, subdued strip rather than a plain paragraph,
-         * so it reads as "here's where the rest of this page's actions
-         * live" instead of competing with the title for attention. */}
+        {/* Toolbar row: a slim, subdued strip rather than a plain paragraph.
+         * The Compendium/System settings links formerly here now live in
+         * the persistent WorldSidebarNav (WorldSectionShell). */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-border bg-card/50 px-4 py-2 text-sm text-muted-foreground">
           <span>Confirm the scene and roster below, then hand the screen to the game.</span>
-          <Link
-            to={`/world/${worldId}/compendium`}
-            className="font-medium text-foreground underline underline-offset-2 hover:text-primary"
-            data-testid="compendium-link"
-          >
-            Manage NPCs, items & abilities in the Compendium →
-          </Link>
-          <Link
-            to={`/world/${worldId}/settings/system`}
-            className="font-medium text-foreground underline underline-offset-2 hover:text-primary"
-            data-testid="system-settings-link"
-          >
-            System settings & license →
-          </Link>
         </div>
       </header>
 

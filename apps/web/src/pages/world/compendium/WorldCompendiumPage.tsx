@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Tabs } from "@/components/ui/tabs/Tabs";
 import { ActorPreviewPanel } from "@/pages/world/compendium/ActorPreviewPanel";
 import { ComingSoonTab } from "@/pages/world/compendium/ComingSoonTab";
@@ -26,7 +27,15 @@ export interface WorldCompendiumPageProps {
  * a plain array so a future tab is a one-line addition, not a
  * restructuring (research.md §4).
  */
+const COMPENDIUM_TAB_VALUES = ["npcs", "lore", "items", "abilities"];
+
 export function WorldCompendiumPage({ worldId, world }: WorldCompendiumPageProps) {
+  // Spec 021 (world sidebar nav): the tab is URL-driven so sidebar links
+  // (e.g. `/compendium?tab=lore`) land directly on that tab instead of
+  // always opening to NPCs.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const activeTab = COMPENDIUM_TAB_VALUES.includes(requestedTab ?? "") ? requestedTab! : "npcs";
   const [selectedActorId, setSelectedActorId] = useState<string | null>(null);
   const [roster, setRoster] = useState<WorldActorRecord[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -57,6 +66,12 @@ export function WorldCompendiumPage({ worldId, world }: WorldCompendiumPageProps
 
       <Tabs
         defaultValue="npcs"
+        value={activeTab}
+        onValueChange={(tab) => setSearchParams((current) => {
+          const next = new URLSearchParams(current);
+          next.set("tab", tab);
+          return next;
+        }, { replace: true })}
         items={[
           {
             value: "npcs",

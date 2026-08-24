@@ -71,7 +71,7 @@ test.describe("Spec 011 regression: staging no longer embeds the NPC catalog", (
   test("staging shows a Compendium link instead of an inline NPC form", async ({ page }) => {
     await registerAndCreateWorld(page, `E2E Staging No NPC ${uniqueSuffix()}`);
 
-    await expect(page.getByTestId("compendium-link")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId("world-nav-npcs")).toBeVisible({ timeout: 10_000 });
     await expect(page.getByPlaceholder("New NPC name")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Add NPC" })).toHaveCount(0);
     await expect(page.getByText("Lore — coming soon")).toHaveCount(0);

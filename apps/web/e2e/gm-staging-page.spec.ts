@@ -96,7 +96,7 @@ test.describe("US1: GM sees a real staging page, not the old placeholder shell",
     await expect(page.getByTestId("scene-switcher")).toContainText(worldName);
     await expect(page.getByText("Players")).toBeVisible();
     await expect(page.getByTestId("staging-player-list")).toHaveCount(1);
-    await expect(page.getByTestId("compendium-link")).toBeVisible();
+    await expect(page.getByTestId("world-nav-npcs")).toBeVisible();
     await expect(page.getByTestId("session-notes-panel")).toBeVisible();
 
     // No dead "Return to dashboard" link pointing at /counter.
