@@ -55,6 +55,8 @@ export interface SessionResourceTradeProps {
     toQuantity: number;
   }) => void | Promise<void>;
   onAcceptProposal?: (proposalId: string) => void | Promise<void>;
+  /** Spec 019: the counterpart declines a still-pending proposal. */
+  onDeclineProposal?: (proposalId: string) => void | Promise<void>;
 }
 
 export const SessionResourceTrade: React.FC<SessionResourceTradeProps> = ({
@@ -64,6 +66,7 @@ export const SessionResourceTrade: React.FC<SessionResourceTradeProps> = ({
   incomingProposals,
   onProposeTrade,
   onAcceptProposal,
+  onDeclineProposal,
 }) => {
   const [toActorId, setToActorId] = useState(partyMembers[0]?.actorId ?? '');
   const [fromResourceType, setFromResourceType] = useState(resourceTypes[0]?.key ?? '');
@@ -105,14 +108,24 @@ export const SessionResourceTrade: React.FC<SessionResourceTradeProps> = ({
                   <strong>{p.fromActorLabel}</strong> offers {p.fromQuantity} {p.fromResourceType} for your{' '}
                   {p.toQuantity} {p.toResourceType}
                 </span>
-                <button
-                  type="button"
-                  className="px-2 py-1 bg-green-600 text-white rounded text-xs font-semibold"
-                  onClick={() => onAcceptProposal?.(p.id)}
-                  disabled={!onAcceptProposal}
-                >
-                  Accept
-                </button>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    className="px-2 py-1 bg-green-600 text-white rounded text-xs font-semibold"
+                    onClick={() => onAcceptProposal?.(p.id)}
+                    disabled={!onAcceptProposal}
+                  >
+                    Accept
+                  </button>
+                  <button
+                    type="button"
+                    className="px-2 py-1 bg-gray-400 text-white rounded text-xs font-semibold"
+                    onClick={() => onDeclineProposal?.(p.id)}
+                    disabled={!onDeclineProposal}
+                  >
+                    Decline
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

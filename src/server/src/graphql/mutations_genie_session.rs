@@ -933,6 +933,85 @@ pub async fn accept_resource_trade_impl(
     Ok(holdings.into_iter().map(GraphQLGenieResourceHolding::from).collect())
 }
 
+/// Spec 019: the counterpart declines a still-pending proposal — no
+/// holdings change, just a status flip to `"rejected"` (the table's
+/// CHECK constraint already allowed this value; it was simply never set
+/// by any mutation) — mirrors accept_resource_trade_impl's authorization
+/// exactly: not the proposer, must control one of the two named actors —
+/// so the proposer isn't left waiting on a trade nobody will ever accept.
+pub async fn decline_resource_trade_impl(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    proposal_id: Uuid,
+) -> GraphQLResult<GraphQLGenieTradeProposal> {
+    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let proposal = tokio::task::spawn_blocking(move || -> Result<GenieTradeProposal, String> {
+        world_genie_trade_proposals::table
+            .filter(world_genie_trade_proposals::id.eq(proposal_id))
+            .select(GenieTradeProposal::as_select())
+            .first::<GenieTradeProposal>(&mut conn)
+            .map_err(|_| "Trade proposal not found".to_string())
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(Error::new)?;
+
+    if proposal.status != "pending" {
+        return Err(Error::new("This trade proposal is no longer pending"));
+    }
+    if proposal.created_by == user_id {
+        return Err(Error::new("You cannot decline your own trade proposal"));
+    }
+    let controls_from = caller_controls_actor(state, user_id, is_admin, proposal.from_actor_id).await?;
+    let controls_to = caller_controls_actor(state, user_id, is_admin, proposal.to_actor_id).await?;
+    if !controls_from && !controls_to {
+        return Err(Error::new("You are not a party to this trade"));
+    }
+
+    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let updated = tokio::task::spawn_blocking(move || -> Result<GenieTradeProposal, String> {
+        conn.transaction(|conn| -> Result<GenieTradeProposal, diesel::result::Error> {
+            let now = Utc::now().naive_utc();
+            let updated = diesel::update(world_genie_trade_proposals::table.filter(world_genie_trade_proposals::id.eq(proposal_id)))
+                .set((
+                    world_genie_trade_proposals::status.eq("rejected"),
+                    world_genie_trade_proposals::updated_at.eq(now),
+                ))
+                .returning(GenieTradeProposal::as_returning())
+                .get_result::<GenieTradeProposal>(conn)?;
+
+            let trade_world_id = world_genie_sessions::table
+                .filter(world_genie_sessions::id.eq(updated.session_id))
+                .select(world_genie_sessions::world_id)
+                .first::<Uuid>(conn)?;
+
+            let _ = record_world_event(
+                conn,
+                trade_world_id,
+                EVENT_CODE_GENIE_SESSION_STATE,
+                Some(serde_json::json!({
+                    "kind": "resource_trade",
+                    "session_id": updated.session_id,
+                    "action": "rejected",
+                    "proposal_id": updated.id,
+                    "from_actor_id": updated.from_actor_id,
+                    "to_actor_id": updated.to_actor_id,
+                })),
+                user_id,
+            );
+
+            Ok(updated)
+        })
+        .map_err(|e| format!("Failed to decline trade: {e}"))
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(Error::new)?;
+
+    Ok(GraphQLGenieTradeProposal::from(updated))
+}
+
 // ============================================================================
 // spendResourceOnPuzzleClock (T035) — self-spend, no counterpart consent
 // ============================================================================
@@ -1132,6 +1211,12 @@ impl GenieSessionMutation {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         accept_resource_trade_impl(state, auth_user.user_id, auth_user.is_admin, proposal_id).await
+    }
+
+    async fn decline_resource_trade(&self, ctx: &Context<'_>, proposal_id: Uuid) -> GraphQLResult<GraphQLGenieTradeProposal> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        decline_resource_trade_impl(state, auth_user.user_id, auth_user.is_admin, proposal_id).await
     }
 
     async fn spend_resource_on_puzzle_clock(
@@ -1353,6 +1438,37 @@ mod tests {
 
         let self_accept = accept_resource_trade_impl(&state, owner_id, false, proposal.id).await;
         assert!(self_accept.is_err(), "the proposer must not be able to accept their own proposal");
+    }
+
+    #[tokio::test]
+    async fn decline_resource_trade_rejects_self_decline_and_succeeds_for_the_counterpart() {
+        let state = test_app_state();
+        let (world_id, owner_id, player_id, session_id) = setup_active_session(&state).await;
+
+        let mut conn = state.db_pool.get().unwrap();
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        let actor_a = insert_test_actor(&mut conn, world_id, scene_id, owner_id);
+        let actor_b = insert_test_actor(&mut conn, world_id, scene_id, player_id);
+        drop(conn);
+
+        let proposal = propose_resource_trade_impl(
+            &state, owner_id, false, session_id, actor_a, "insight".to_string(), 2, actor_b,
+            "favor".to_string(), 1,
+        )
+        .await
+        .unwrap();
+
+        let self_decline = decline_resource_trade_impl(&state, owner_id, false, proposal.id).await;
+        assert!(self_decline.is_err(), "the proposer must not be able to decline their own proposal");
+
+        let declined = decline_resource_trade_impl(&state, player_id, false, proposal.id).await.unwrap();
+        assert_eq!(declined.status, "rejected");
+
+        let re_decline = decline_resource_trade_impl(&state, player_id, false, proposal.id).await;
+        assert!(re_decline.is_err(), "an already-declined proposal must not be declinable again");
+
+        let accept_after_decline = accept_resource_trade_impl(&state, player_id, false, proposal.id).await;
+        assert!(accept_after_decline.is_err(), "a declined proposal must not be acceptable");
     }
 
     #[tokio::test]

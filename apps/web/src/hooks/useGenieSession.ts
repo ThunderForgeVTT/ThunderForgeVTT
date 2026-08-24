@@ -21,6 +21,7 @@ import {
   advanceDoomClock as advanceDoomClockRequest,
   advancePuzzleClock as advancePuzzleClockRequest,
   createPuzzleClock as createPuzzleClockRequest,
+  declineResourceTrade as declineResourceTradeRequest,
   fetchGenieResourceHoldings,
   fetchGenieSession,
   fetchGenieTradeProposals,
@@ -47,6 +48,7 @@ export interface UseGenieSessionResult {
   advancePuzzleClock: (clockId: string, delta: number) => Promise<void>;
   proposeResourceTrade: (input: ProposeResourceTradeInput) => Promise<void>;
   acceptResourceTrade: (proposalId: string) => Promise<GenieResourceHoldingRecord[]>;
+  declineResourceTrade: (proposalId: string) => Promise<void>;
   spendResourceOnPuzzleClock: (
     clockId: string,
     actorId: string,
@@ -222,6 +224,14 @@ export function useGenieSession(
     [refetchTrades],
   );
 
+  const declineResourceTrade = useCallback(
+    async (proposalId: string) => {
+      await declineResourceTradeRequest(proposalId);
+      await refetchTrades();
+    },
+    [refetchTrades],
+  );
+
   // Same rationale as advancePuzzleClock above: this can also resolve the
   // clock and win the session, so it merges the response locally instead
   // of refetching into a null-because-concluded genieSession(worldId).
@@ -255,6 +265,7 @@ export function useGenieSession(
     advancePuzzleClock,
     proposeResourceTrade,
     acceptResourceTrade,
+    declineResourceTrade,
     spendResourceOnPuzzleClock,
     myActor,
     partyMembers,

@@ -39,6 +39,7 @@ export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
     incomingProposals,
     proposeResourceTrade,
     acceptResourceTrade,
+    declineResourceTrade,
   } = useGenieSession(worldId, user?.id);
 
   if (loading) {
@@ -110,6 +111,7 @@ export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
             })
           }
           onAcceptProposal={(proposalId) => acceptResourceTrade(proposalId)}
+          onDeclineProposal={(proposalId) => declineResourceTrade(proposalId)}
         />
       ) : null}
     </div>

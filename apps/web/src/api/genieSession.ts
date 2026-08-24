@@ -356,6 +356,34 @@ export async function acceptResourceTrade(
   return data.acceptResourceTrade;
 }
 
+const DECLINE_RESOURCE_TRADE_MUTATION = `
+  mutation DeclineResourceTrade($proposalId: UUID!) {
+    declineResourceTrade(proposalId: $proposalId) {
+      id
+      sessionId
+      fromActorId
+      fromResourceType
+      fromQuantity
+      toActorId
+      toResourceType
+      toQuantity
+      status
+    }
+  }
+`;
+
+/** Caller must control one of the two named actors and not be the
+ * proposer (server-enforced). */
+export async function declineResourceTrade(
+  proposalId: string,
+): Promise<GenieTradeProposalRecord> {
+  const data = await postGraphQL<{ declineResourceTrade: GenieTradeProposalRecord }>(
+    DECLINE_RESOURCE_TRADE_MUTATION,
+    { proposalId },
+  );
+  return data.declineResourceTrade;
+}
+
 const SPEND_RESOURCE_ON_PUZZLE_CLOCK_MUTATION = `
   mutation SpendResourceOnPuzzleClock(
     $clockId: UUID!

@@ -109,6 +109,22 @@ test.describe("Spec 019: Session Resource trading between two real players", () 
     await expect(playerPage.getByText("Incoming Trade Proposals")).toBeVisible({ timeout: 10_000 });
     await expect(playerPage.getByText(/GM Trader offers 2/)).toBeVisible();
 
+    // Spec 019: declining removes it from the recipient's own view and
+    // flips its status server-side (not deleted — declineResourceTrade
+    // sets status to "rejected", the DB's existing but previously-unused
+    // check-constraint value for this).
+    await playerPage.getByRole("button", { name: "Decline" }).click();
+    await expect(playerPage.getByText("Incoming Trade Proposals")).toHaveCount(0, { timeout: 10_000 });
+
+    const declined = await graphql<{
+      data: { genieTradeProposals: { fromActorId: string }[] };
+    }>(
+      playerPage,
+      `query($actorId: UUID!) { genieTradeProposals(actorId: $actorId) { fromActorId } }`,
+      { actorId: playerActorId },
+    );
+    expect(declined.data.genieTradeProposals).toHaveLength(0);
+
     await gmContext.close();
     await playerContext.close();
   });
