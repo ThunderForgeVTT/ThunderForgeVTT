@@ -94,6 +94,14 @@ export default defineConfig({
   server: {
     host: "127.0.0.1",
     port: 5173,
+    // Vite's DNS-rebinding protection rejects any request whose Host
+    // header it doesn't recognize — including one forwarded through a
+    // `cloudflared tunnel --url http://localhost:5173` quick tunnel
+    // (scripts/dev.mjs's `--tunnel` flag), where the browser's Host
+    // header is the tunnel's own random *.trycloudflare.com subdomain,
+    // not localhost. Allowing that suffix (not disabling the check
+    // entirely) keeps the protection for every other unrecognized host.
+    allowedHosts: [".trycloudflare.com"],
     proxy: {
       "/api": {
         target: "http://127.0.0.1:30000",

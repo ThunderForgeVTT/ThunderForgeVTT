@@ -31,6 +31,7 @@ const PREFIX_COLORS = {
   engine: "\x1b[35m",
   backend: "\x1b[31m",
   frontend: "\x1b[32m",
+  tunnel: "\x1b[33m",
 };
 
 const runningChildren = new Set();
@@ -283,10 +284,11 @@ export async function runCommand(command, { name, cwd = ROOT_DIR, prefix }) {
 }
 
 export function parseArgs(argv = process.argv.slice(2), options = {}) {
-  const { allowOnlyWasm = false } = options;
+  const { allowOnlyWasm = false, allowTunnel = false } = options;
   const args = {
     force: false,
     onlyWasm: false,
+    tunnel: false,
   };
 
   for (const arg of argv) {
@@ -299,6 +301,12 @@ export function parseArgs(argv = process.argv.slice(2), options = {}) {
           throw new Error("--only-wasm is only supported by scripts/build.mjs");
         }
         args.onlyWasm = true;
+        break;
+      case "--tunnel":
+        if (!allowTunnel) {
+          throw new Error("--tunnel is only supported by scripts/dev.mjs");
+        }
+        args.tunnel = true;
         break;
       default:
         throw new Error(`Unknown argument: ${arg}`);

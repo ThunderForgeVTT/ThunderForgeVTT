@@ -13,7 +13,7 @@ import {
 let shuttingDown = false;
 
 async function run() {
-  const args = parseArgs(process.argv.slice(2), { allowOnlyWasm: false });
+  const args = parseArgs(process.argv.slice(2), { allowOnlyWasm: false, allowTunnel: true });
 
   const handleSignal = async (signal) => {
     shuttingDown = true;
@@ -57,12 +57,28 @@ async function run() {
     prefix: "backend",
   });
 
-  const frontendWait = waitForProcess(frontend, "frontend");
-  const backendWait = waitForProcess(backend, "backend");
-  const firstExit = await Promise.race([
-    frontendWait.then((result) => ({ name: "frontend", result })),
-    backendWait.then((result) => ({ name: "backend", result })),
-  ]);
+  const waits = [
+    waitForProcess(frontend, "frontend").then((result) => ({ name: "frontend", result })),
+    waitForProcess(backend, "backend").then((result) => ({ name: "backend", result })),
+  ];
+
+  if (args.tunnel) {
+    // A Cloudflare "quick tunnel" — no account/config needed, just an
+    // ephemeral https://<random>.trycloudflare.com forwarding to the
+    // Vite dev server. cloudflared logs (including the tunnel URL
+    // itself) go to stderr, which spawnManaged already pipes through
+    // with the "tunnel" prefix, so it just shows up in the console.
+    // vite.config.mts's server.allowedHosts is what actually lets Vite
+    // accept requests forwarded through that hostname.
+    log("dev", "Starting cloudflared tunnel (watch for the [tunnel] line below for the URL to share)...");
+    const tunnel = spawnManaged("cloudflared tunnel --url http://localhost:5173", {
+      cwd: ROOT_DIR,
+      prefix: "tunnel",
+    });
+    waits.push(waitForProcess(tunnel, "tunnel").then((result) => ({ name: "tunnel", result })));
+  }
+
+  const firstExit = await Promise.race(waits);
 
   if (!shuttingDown) {
     const { name, result } = firstExit;
