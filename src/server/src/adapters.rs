@@ -201,6 +201,7 @@ impl From<CoreWorld> for DbWorld {
             updated_at: core.updated_at,
             session_notes: None,
             allow_player_created_actors: false,
+            genie_resource_carryover_enabled: false,
         }
     }
 }

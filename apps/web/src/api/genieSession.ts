@@ -48,6 +48,33 @@ export interface GenieResourceHoldingRecord {
   quantity: number;
 }
 
+export type GenieShopPriceKind = "RESOURCE" | "ITEM";
+export type GenieRewardRecipientMode = "TRIGGERING_ACTOR" | "WHOLE_PARTY";
+
+export interface GenieShopListingRecord {
+  id: string;
+  actorId: string;
+  itemId: string;
+  priceKind: string;
+  priceResourceType: string | null;
+  priceResourceAmount: number | null;
+  priceItemId: string | null;
+  priceItemQuantity: number | null;
+  stockQuantity: number;
+}
+
+export interface GeniePuzzleClockRewardRecord {
+  id: string;
+  clockId: string;
+  triggerSegment: number;
+  rewardResourceType: string | null;
+  rewardResourceAmount: number | null;
+  rewardItemId: string | null;
+  rewardItemQuantity: number | null;
+  recipientMode: string;
+  grantedAt: string | null;
+}
+
 export interface GenieTradeProposalRecord {
   id: string;
   sessionId: string;
@@ -257,8 +284,8 @@ export async function createPuzzleClock(
 }
 
 const ADVANCE_PUZZLE_CLOCK_MUTATION = `
-  mutation AdvancePuzzleClock($clockId: UUID!, $delta: Int!) {
-    advancePuzzleClock(clockId: $clockId, delta: $delta) {
+  mutation AdvancePuzzleClock($clockId: UUID!, $delta: Int!, $actorId: UUID) {
+    advancePuzzleClock(clockId: $clockId, delta: $delta, actorId: $actorId) {
       id
       sessionId
       label
@@ -269,14 +296,18 @@ const ADVANCE_PUZZLE_CLOCK_MUTATION = `
   }
 `;
 
-/** GM-only (server-enforced). */
+/** GM-only (server-enforced). `actorId` is optional (spec 020 FR-006a) —
+ * attributes a `"triggering_actor"`-mode Puzzle Clock reward crossed by
+ * this advance to that actor; omitted, such a reward falls back to a
+ * whole-party split. */
 export async function advancePuzzleClock(
   clockId: string,
   delta: number,
+  actorId?: string,
 ): Promise<GeniePuzzleClockRecord> {
   const data = await postGraphQL<{ advancePuzzleClock: GeniePuzzleClockRecord }>(
     ADVANCE_PUZZLE_CLOCK_MUTATION,
-    { clockId, delta },
+    { clockId, delta, actorId: actorId ?? null },
   );
   return data.advancePuzzleClock;
 }
@@ -419,4 +450,230 @@ export async function spendResourceOnPuzzleClock(
     { clockId, actorId, resourceType, quantity },
   );
   return data.spendResourceOnPuzzleClock;
+}
+
+// ============================================================================
+// Spec 020: grants, NPC shops, Puzzle Clock rewards
+// ============================================================================
+
+const GENIE_SHOP_LISTINGS_QUERY = `
+  query GenieShopListings($actorId: UUID!) {
+    genieShopListings(actorId: $actorId) {
+      id
+      actorId
+      itemId
+      priceKind
+      priceResourceType
+      priceResourceAmount
+      priceItemId
+      priceItemQuantity
+      stockQuantity
+    }
+  }
+`;
+
+/** Readable by any world member (FR-004's shop is player-facing). Empty
+ * for an NPC with no configured listings — the shop panel should render
+ * nothing in that case (Scenario 6). */
+export async function fetchGenieShopListings(actorId: string): Promise<GenieShopListingRecord[]> {
+  const data = await postGraphQL<{ genieShopListings: GenieShopListingRecord[] }>(
+    GENIE_SHOP_LISTINGS_QUERY,
+    { actorId },
+  );
+  return data.genieShopListings;
+}
+
+const GRANT_SESSION_RESOURCE_MUTATION = `
+  mutation GrantSessionResource($sessionId: UUID!, $actorId: UUID!, $resourceType: String!, $amount: Int!) {
+    grantSessionResource(sessionId: $sessionId, actorId: $actorId, resourceType: $resourceType, amount: $amount) {
+      actorId
+      resourceType
+      quantity
+    }
+  }
+`;
+
+/** GM-only (server-enforced, FR-001). Rejects if no active session exists. */
+export async function grantSessionResource(
+  sessionId: string,
+  actorId: string,
+  resourceType: string,
+  amount: number,
+): Promise<GenieResourceHoldingRecord> {
+  const data = await postGraphQL<{ grantSessionResource: GenieResourceHoldingRecord }>(
+    GRANT_SESSION_RESOURCE_MUTATION,
+    { sessionId, actorId, resourceType, amount },
+  );
+  return data.grantSessionResource;
+}
+
+const SHOP_LISTING_FIELDS = `
+  id
+  actorId
+  itemId
+  priceKind
+  priceResourceType
+  priceResourceAmount
+  priceItemId
+  priceItemQuantity
+  stockQuantity
+`;
+
+const CREATE_SHOP_LISTING_MUTATION = `
+  mutation CreateShopListing(
+    $actorId: UUID!
+    $itemId: UUID!
+    $priceKind: GenieShopPriceKind!
+    $priceResourceType: String
+    $priceResourceAmount: Int
+    $priceItemId: UUID
+    $priceItemQuantity: Int
+  ) {
+    createShopListing(
+      actorId: $actorId
+      itemId: $itemId
+      priceKind: $priceKind
+      priceResourceType: $priceResourceType
+      priceResourceAmount: $priceResourceAmount
+      priceItemId: $priceItemId
+      priceItemQuantity: $priceItemQuantity
+    ) {
+      ${SHOP_LISTING_FIELDS}
+    }
+  }
+`;
+
+export interface CreateShopListingInput {
+  actorId: string;
+  itemId: string;
+  priceKind: GenieShopPriceKind;
+  priceResourceType?: string;
+  priceResourceAmount?: number;
+  priceItemId?: string;
+  priceItemQuantity?: number;
+}
+
+/** GM-only (server-enforced, FR-004). Exactly one of the resource or item
+ * price pair must be provided, matching priceKind. */
+export async function createShopListing(input: CreateShopListingInput): Promise<GenieShopListingRecord> {
+  const data = await postGraphQL<{ createShopListing: GenieShopListingRecord }>(
+    CREATE_SHOP_LISTING_MUTATION,
+    {
+      actorId: input.actorId,
+      itemId: input.itemId,
+      priceKind: input.priceKind,
+      priceResourceType: input.priceResourceType ?? null,
+      priceResourceAmount: input.priceResourceAmount ?? null,
+      priceItemId: input.priceItemId ?? null,
+      priceItemQuantity: input.priceItemQuantity ?? null,
+    },
+  );
+  return data.createShopListing;
+}
+
+const PURCHASE_FROM_SHOP_MUTATION = `
+  mutation PurchaseFromShop($listingId: UUID!, $buyerActorId: UUID!) {
+    purchaseFromShop(listingId: $listingId, buyerActorId: $buyerActorId) {
+      ${SHOP_LISTING_FIELDS}
+    }
+  }
+`;
+
+/** Caller must control buyerActorId (server-enforced). Atomic: verifies
+ * afford, deducts/transfers price, transfers the item, and decrements
+ * stock with a race-safe conditional UPDATE (FR-005/FR-005a) — a
+ * concurrent buyer racing for the last unit gets a clean "out of stock"
+ * error. */
+export async function purchaseFromShop(
+  listingId: string,
+  buyerActorId: string,
+): Promise<GenieShopListingRecord> {
+  const data = await postGraphQL<{ purchaseFromShop: GenieShopListingRecord }>(
+    PURCHASE_FROM_SHOP_MUTATION,
+    { listingId, buyerActorId },
+  );
+  return data.purchaseFromShop;
+}
+
+const PUZZLE_CLOCK_REWARD_FIELDS = `
+  id
+  clockId
+  triggerSegment
+  rewardResourceType
+  rewardResourceAmount
+  rewardItemId
+  rewardItemQuantity
+  recipientMode
+  grantedAt
+`;
+
+const CONFIGURE_PUZZLE_CLOCK_REWARD_MUTATION = `
+  mutation ConfigurePuzzleClockReward(
+    $clockId: UUID!
+    $triggerSegment: Int!
+    $rewardResourceType: String
+    $rewardResourceAmount: Int
+    $rewardItemId: UUID
+    $rewardItemQuantity: Int
+    $recipientMode: GenieRewardRecipientMode!
+  ) {
+    configurePuzzleClockReward(
+      clockId: $clockId
+      triggerSegment: $triggerSegment
+      rewardResourceType: $rewardResourceType
+      rewardResourceAmount: $rewardResourceAmount
+      rewardItemId: $rewardItemId
+      rewardItemQuantity: $rewardItemQuantity
+      recipientMode: $recipientMode
+    ) {
+      ${PUZZLE_CLOCK_REWARD_FIELDS}
+    }
+  }
+`;
+
+export interface ConfigurePuzzleClockRewardInput {
+  clockId: string;
+  triggerSegment: number;
+  rewardResourceType?: string;
+  rewardResourceAmount?: number;
+  rewardItemId?: string;
+  rewardItemQuantity?: number;
+  recipientMode: GenieRewardRecipientMode;
+}
+
+const GENIE_PUZZLE_CLOCK_REWARDS_QUERY = `
+  query GeniePuzzleClockRewards($clockId: UUID!) {
+    geniePuzzleClockRewards(clockId: $clockId) {
+      ${PUZZLE_CLOCK_REWARD_FIELDS}
+    }
+  }
+`;
+
+/** Readable by any world member. */
+export async function fetchGeniePuzzleClockRewards(clockId: string): Promise<GeniePuzzleClockRewardRecord[]> {
+  const data = await postGraphQL<{ geniePuzzleClockRewards: GeniePuzzleClockRewardRecord[] }>(
+    GENIE_PUZZLE_CLOCK_REWARDS_QUERY,
+    { clockId },
+  );
+  return data.geniePuzzleClockRewards;
+}
+
+/** GM-only (server-enforced, FR-006). Exactly one of the resource or item
+ * reward pair must be provided. */
+export async function configurePuzzleClockReward(
+  input: ConfigurePuzzleClockRewardInput,
+): Promise<GeniePuzzleClockRewardRecord> {
+  const data = await postGraphQL<{ configurePuzzleClockReward: GeniePuzzleClockRewardRecord }>(
+    CONFIGURE_PUZZLE_CLOCK_REWARD_MUTATION,
+    {
+      clockId: input.clockId,
+      triggerSegment: input.triggerSegment,
+      rewardResourceType: input.rewardResourceType ?? null,
+      rewardResourceAmount: input.rewardResourceAmount ?? null,
+      rewardItemId: input.rewardItemId ?? null,
+      rewardItemQuantity: input.rewardItemQuantity ?? null,
+      recipientMode: input.recipientMode,
+    },
+  );
+  return data.configurePuzzleClockReward;
 }

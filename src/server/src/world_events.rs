@@ -33,8 +33,9 @@ pub const EVENT_CODE_TOKEN_CHANGED: i32 = 14;
 /// R7); consumed by the same `worldEventsCreated(worldId)` subscription
 /// every world-member client already holds open. Payload shape
 /// (`token_event` JSON column):
-/// `{ "kind": "wish_pool" | "doom_clock" | "puzzle_clock" | "resource_trade", "session_id": "...", ...kind-specific fields }`
-/// (contracts/genie-session-loop.md).
+/// `{ "kind": "wish_pool" | "doom_clock" | "puzzle_clock" | "resource_trade" | "resource_grant" | "purchase" | "clock_reward", "session_id": "...", ...kind-specific fields }`
+/// (contracts/genie-session-loop.md; the last three kinds added by spec
+/// 020, contracts/genie-economy.md).
 pub const EVENT_CODE_GENIE_SESSION_STATE: i32 = 15;
 
 /// Record a world event to the audit trail and trigger NOTIFY for real-time sync.

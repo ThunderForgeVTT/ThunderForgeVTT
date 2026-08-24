@@ -12,6 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/loader/Loader";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
+import { GenieShopPanel } from "@/components/world/GenieShopPanel";
+import { useAuth } from "@/hooks/useAuth";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import { ActorInventoryPanel } from "@/pages/world/actor/ActorInventoryPanel";
 import { ActorOwnershipBlock } from "@/pages/world/actor/ActorOwnershipBlock";
@@ -48,6 +50,7 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
   const [isRevoking, setIsRevoking] = useState(false);
   const [isUpdatingClaim, setIsUpdatingClaim] = useState(false);
   const { isGm: isDm } = useWorldRole(worldId, world);
+  const { user } = useAuth();
 
   useEffect(() => {
     let active = true;
@@ -323,6 +326,15 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
         })()}
 
         <ActorInventoryPanel actorId={actorId} worldId={worldId} canManage={canEdit} />
+
+        {/* Spec 020 (User Story 2): NPC shop — Genie-only for now (no
+            other pack has Session Resources to price against), shown for
+            any NPC actor so a GM can author listings even before stocking
+            it, and hidden entirely from non-GM viewers when it has none
+            (GenieShopPanel's own "Scenario 6" check). */}
+        {actor.gameSystemId === "genie" && actor.isNpc ? (
+          <GenieShopPanel worldId={worldId} npcActorId={actorId} currentUserId={user?.id} isGm={isDm} />
+        ) : null}
 
         {/* Spec 017 (T028, US3): GM-only, PC-only "available for claiming"
             control plus who currently has this character claimed. */}

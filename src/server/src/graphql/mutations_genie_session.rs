@@ -48,12 +48,14 @@ use crate::auth::actor_permissions::is_dm_of_world;
 use crate::auth::world_membership::require_world_member;
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{
-    GenieResourceHolding, GeniePuzzleClock, GenieSession, GenieTradeProposal, NewGeniePuzzleClock,
-    NewGenieSession, NewGenieTradeProposal,
+    GenieResourceHolding, GeniePuzzleClock, GeniePuzzleClockReward, GenieShopListing,
+    GenieSession, GenieTradeProposal, NewGeniePuzzleClock, NewGeniePuzzleClockReward,
+    NewGenieSession, NewGenieShopListing, NewGenieTradeProposal,
 };
 use crate::schema::{
-    world_genie_puzzle_clocks, world_genie_resource_holdings, world_genie_sessions,
-    world_genie_trade_proposals,
+    world_actor_inventory, world_actors, world_genie_puzzle_clock_rewards,
+    world_genie_puzzle_clocks, world_genie_resource_holdings, world_genie_shop_listings,
+    world_genie_sessions, world_genie_trade_proposals, world_items, worlds,
 };
 use crate::state::AppState;
 use crate::world_events::{record_world_event, EVENT_CODE_GENIE_SESSION_STATE};
@@ -163,6 +165,80 @@ impl From<GenieTradeProposal> for GraphQLGenieTradeProposal {
             to_resource_type: row.to_resource_type,
             to_quantity: row.to_quantity,
             status: row.status,
+        }
+    }
+}
+
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq, Debug)]
+pub enum GenieShopPriceKind {
+    Resource,
+    Item,
+}
+
+impl GenieShopPriceKind {
+    fn as_db_str(self) -> &'static str {
+        match self {
+            GenieShopPriceKind::Resource => "resource",
+            GenieShopPriceKind::Item => "item",
+        }
+    }
+}
+
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq, Debug)]
+pub enum GenieRewardRecipientMode {
+    TriggeringActor,
+    WholeParty,
+}
+
+impl GenieRewardRecipientMode {
+    fn as_db_str(self) -> &'static str {
+        match self {
+            GenieRewardRecipientMode::TriggeringActor => "triggering_actor",
+            GenieRewardRecipientMode::WholeParty => "whole_party",
+        }
+    }
+}
+
+#[derive(async_graphql::SimpleObject, Debug, Clone)]
+pub struct GraphQLGenieShopListing {
+    pub id: Uuid,
+    pub actor_id: Uuid,
+    pub item_id: Uuid,
+    pub price_kind: String,
+    pub price_resource_type: Option<String>,
+    pub price_resource_amount: Option<i32>,
+    pub price_item_id: Option<Uuid>,
+    pub price_item_quantity: Option<i32>,
+    /// Derived, not stored: `world_actor_inventory.quantity` for
+    /// `(actor_id, item_id)` (contracts/genie-economy.md).
+    pub stock_quantity: i32,
+}
+
+#[derive(async_graphql::SimpleObject, Debug, Clone)]
+pub struct GraphQLGeniePuzzleClockReward {
+    pub id: Uuid,
+    pub clock_id: Uuid,
+    pub trigger_segment: i32,
+    pub reward_resource_type: Option<String>,
+    pub reward_resource_amount: Option<i32>,
+    pub reward_item_id: Option<Uuid>,
+    pub reward_item_quantity: Option<i32>,
+    pub recipient_mode: String,
+    pub granted_at: Option<chrono::NaiveDateTime>,
+}
+
+impl From<GeniePuzzleClockReward> for GraphQLGeniePuzzleClockReward {
+    fn from(row: GeniePuzzleClockReward) -> Self {
+        GraphQLGeniePuzzleClockReward {
+            id: row.id,
+            clock_id: row.clock_id,
+            trigger_segment: row.trigger_segment,
+            reward_resource_type: row.reward_resource_type,
+            reward_resource_amount: row.reward_resource_amount,
+            reward_item_id: row.reward_item_id,
+            reward_item_quantity: row.reward_item_quantity,
+            recipient_mode: row.recipient_mode,
+            granted_at: row.granted_at,
         }
     }
 }
@@ -395,6 +471,40 @@ pub async fn start_genie_session_impl(
     let doom_clock_max = input.doom_clock_max;
 
     let session = tokio::task::spawn_blocking(move || -> Result<GenieSession, String> {
+        // FR-003 (research.md R1): per-world GM setting. When enabled,
+        // copy every character's ending holdings from the most recently
+        // concluded session (by created_at) into the new session before
+        // returning — "the rope doesn't disappear." When disabled
+        // (default), holdings simply start empty, same as before this
+        // spec.
+        let carryover_enabled = worlds::table
+            .filter(worlds::id.eq(world_id))
+            .select(worlds::genie_resource_carryover_enabled)
+            .first::<bool>(&mut conn)
+            .map_err(|e| format!("Failed to load world: {e}"))?;
+
+        let prior_holdings: Vec<GenieResourceHolding> = if carryover_enabled {
+            let prior_session_id = world_genie_sessions::table
+                .filter(world_genie_sessions::world_id.eq(world_id))
+                .filter(world_genie_sessions::status.ne("active"))
+                .order(world_genie_sessions::created_at.desc())
+                .select(world_genie_sessions::id)
+                .first::<Uuid>(&mut conn)
+                .optional()
+                .map_err(|e| format!("Failed to load prior session: {e}"))?;
+
+            match prior_session_id {
+                Some(prior_id) => world_genie_resource_holdings::table
+                    .filter(world_genie_resource_holdings::session_id.eq(prior_id))
+                    .select(GenieResourceHolding::as_select())
+                    .load::<GenieResourceHolding>(&mut conn)
+                    .map_err(|e| format!("Failed to load prior holdings: {e}"))?,
+                None => Vec::new(),
+            }
+        } else {
+            Vec::new()
+        };
+
         let new_session =
             NewGenieSession { world_id, doom_clock_max, created_by: user_id };
         let session = diesel::insert_into(world_genie_sessions::table)
@@ -402,6 +512,11 @@ pub async fn start_genie_session_impl(
             .returning(GenieSession::as_returning())
             .get_result::<GenieSession>(&mut conn)
             .map_err(|e| format!("Failed to start session: {e}"))?;
+
+        for holding in &prior_holdings {
+            set_holding_quantity(&mut conn, session.id, holding.actor_id, &holding.resource_type, holding.quantity)
+                .map_err(|e| format!("Failed to carry over holding: {e}"))?;
+        }
 
         let _ = record_world_event(
             &mut conn,
@@ -412,6 +527,7 @@ pub async fn start_genie_session_impl(
                 "session_id": session.id,
                 "action": "session_started",
                 "wishes_remaining": session.wishes_remaining,
+                "carried_over_holdings": prior_holdings.len(),
             })),
             user_id,
         );
@@ -423,6 +539,74 @@ pub async fn start_genie_session_impl(
     .map_err(Error::new)?;
 
     Ok(build_graphql_session(session, Vec::new()))
+}
+
+// ============================================================================
+// grantSessionResource (spec 020, FR-001) — GM-only direct grant, the
+// bootstrapping fix: the only way a Session Resource holding could
+// previously come to exist was a trade or a Puzzle Clock spend, both of
+// which require holdings to already exist.
+// ============================================================================
+
+pub async fn grant_session_resource_impl(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    session_id: Uuid,
+    actor_id: Uuid,
+    resource_type: String,
+    amount: i32,
+) -> GraphQLResult<GraphQLGenieResourceHolding> {
+    if amount <= 0 {
+        return Err(Error::new("amount must be greater than zero"));
+    }
+
+    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let session = tokio::task::spawn_blocking(move || load_session_row(&mut conn, session_id))
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(Error::new)?;
+
+    if !is_dm_of_world(state, user_id, is_admin, session.world_id).await? {
+        return Err(Error::new("Only the GM may grant Session Resources"));
+    }
+    if session.status != "active" {
+        return Err(Error::new("Start a session first — there is no active Genie session for this world"));
+    }
+
+    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let world_id = session.world_id;
+
+    let holding = tokio::task::spawn_blocking(move || -> Result<GenieResourceHolding, String> {
+        conn.transaction(|conn| -> Result<GenieResourceHolding, TxError> {
+            let current = load_holding_quantity(conn, session_id, actor_id, &resource_type).map_err(TxError::Msg)?;
+            let updated =
+                set_holding_quantity(conn, session_id, actor_id, &resource_type, current + amount).map_err(TxError::Msg)?;
+
+            let _ = record_world_event(
+                conn,
+                world_id,
+                EVENT_CODE_GENIE_SESSION_STATE,
+                Some(serde_json::json!({
+                    "kind": "resource_grant",
+                    "session_id": session_id,
+                    "actor_id": actor_id,
+                    "resource_type": updated.resource_type,
+                    "quantity": updated.quantity,
+                    "amount_granted": amount,
+                })),
+                user_id,
+            );
+
+            Ok(updated)
+        })
+        .map_err(String::from)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(Error::new)?;
+
+    Ok(GraphQLGenieResourceHolding::from(holding))
 }
 
 // ============================================================================
@@ -628,12 +812,138 @@ pub async fn create_puzzle_clock_impl(
 // advancePuzzleClock (T032/T033) — GM-only; win check per FR-016
 // ============================================================================
 
+/// Spec 020 (research.md R4, FR-006/FR-006a): grants every configured
+/// reward row for `clock_id` whose `trigger_segment` falls in
+/// `(old_segments, new_segments]` and whose `granted_at` is still NULL
+/// (the "exactly once" guard), inside the caller's already-open
+/// transaction. `actor_id` is the optional actor to credit for
+/// `"triggering_actor"`-mode rows (FR-006a); when `None`, those rows
+/// fall back to the same whole-party split every `"whole_party"` row
+/// uses. Returns the number of reward rows granted (for the `world_events`
+/// payload's `rewards_granted` field).
+fn grant_puzzle_clock_rewards(
+    conn: &mut PgConnection,
+    clock_id: Uuid,
+    world_id: Uuid,
+    session_id: Uuid,
+    old_segments: i32,
+    new_segments: i32,
+    actor_id: Option<Uuid>,
+) -> Result<i32, diesel::result::Error> {
+    let due_rewards = world_genie_puzzle_clock_rewards::table
+        .filter(world_genie_puzzle_clock_rewards::clock_id.eq(clock_id))
+        .filter(world_genie_puzzle_clock_rewards::granted_at.is_null())
+        .filter(world_genie_puzzle_clock_rewards::trigger_segment.gt(old_segments))
+        .filter(world_genie_puzzle_clock_rewards::trigger_segment.le(new_segments))
+        .select(GeniePuzzleClockReward::as_select())
+        .load::<GeniePuzzleClockReward>(conn)?;
+
+    if due_rewards.is_empty() {
+        return Ok(0);
+    }
+
+    // "Whole party" = every non-NPC actor in this clock's world — the
+    // same definition the client's useGenieSession.ts already applies
+    // locally when it computes partyMembers.
+    let party_member_ids: Vec<Uuid> = world_actors::table
+        .filter(world_actors::world_id.eq(world_id))
+        .filter(world_actors::is_npc.eq(false))
+        .order(world_actors::id.asc())
+        .select(world_actors::id)
+        .load::<Uuid>(conn)?;
+
+    let now = Utc::now().naive_utc();
+
+    for reward in &due_rewards {
+        let recipients: Vec<Uuid> = if reward.recipient_mode == "triggering_actor" {
+            match actor_id {
+                Some(id) => vec![id],
+                // FR-006a fallback: no actor attributed on this advance —
+                // treat exactly like a whole_party row rather than
+                // failing or crediting no one.
+                None => party_member_ids.clone(),
+            }
+        } else {
+            party_member_ids.clone()
+        };
+
+        if !recipients.is_empty() {
+            if let (Some(resource_type), Some(amount)) = (&reward.reward_resource_type, reward.reward_resource_amount) {
+                // Split as evenly as possible; any remainder goes to the
+                // first recipients (by id order) so the full configured
+                // amount is always granted, never lost to rounding.
+                let base_share = amount / recipients.len() as i32;
+                let remainder = amount % recipients.len() as i32;
+                for (idx, recipient_id) in recipients.iter().enumerate() {
+                    let share = base_share + if (idx as i32) < remainder { 1 } else { 0 };
+                    if share <= 0 {
+                        continue;
+                    }
+                    let current = load_holding_quantity(conn, session_id, *recipient_id, resource_type)
+                        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+                    set_holding_quantity(conn, session_id, *recipient_id, resource_type, current + share)
+                        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+                }
+            } else if let (Some(item_id), Some(quantity)) = (reward.reward_item_id, reward.reward_item_quantity) {
+                // Item rewards aren't divisible — every recipient gets
+                // the full configured quantity (a "whole_party" item
+                // reward means "everyone gets one," not "split one item
+                // between everyone").
+                for recipient_id in &recipients {
+                    grant_item_to_actor_in_tx(conn, *recipient_id, item_id, quantity)?;
+                }
+            }
+        }
+
+        diesel::update(world_genie_puzzle_clock_rewards::table.filter(world_genie_puzzle_clock_rewards::id.eq(reward.id)))
+            .set(world_genie_puzzle_clock_rewards::granted_at.eq(now))
+            .execute(conn)?;
+    }
+
+    Ok(due_rewards.len() as i32)
+}
+
+/// Sync upsert of one item into an actor's inventory, for use inside an
+/// already-open transaction (mirrors `add_item_to_inventory_impl`'s
+/// upsert query — that function owns its own connection/spawn_blocking
+/// and can't be called from inside this transaction closure, so the
+/// core upsert is duplicated here rather than reused).
+fn grant_item_to_actor_in_tx(
+    conn: &mut PgConnection,
+    actor_id: Uuid,
+    item_id: Uuid,
+    quantity: i32,
+) -> Result<(), diesel::result::Error> {
+    let item_name = world_items::table
+        .filter(world_items::id.eq(item_id))
+        .select(world_items::name)
+        .first::<String>(conn)?;
+
+    diesel::insert_into(world_actor_inventory::table)
+        .values((
+            world_actor_inventory::actor_id.eq(actor_id),
+            world_actor_inventory::item_id.eq(item_id),
+            world_actor_inventory::item_name_snapshot.eq(item_name.clone()),
+            world_actor_inventory::quantity.eq(quantity),
+        ))
+        .on_conflict((world_actor_inventory::actor_id, world_actor_inventory::item_id))
+        .do_update()
+        .set((
+            world_actor_inventory::quantity.eq(world_actor_inventory::quantity + quantity),
+            world_actor_inventory::item_name_snapshot.eq(item_name),
+            world_actor_inventory::updated_at.eq(Utc::now().naive_utc()),
+        ))
+        .execute(conn)?;
+    Ok(())
+}
+
 pub async fn advance_puzzle_clock_impl(
     state: &AppState,
     user_id: Uuid,
     is_admin: bool,
     clock_id: Uuid,
     delta: i32,
+    actor_id: Option<Uuid>,
 ) -> GraphQLResult<GraphQLGeniePuzzleClock> {
     let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
     let (clock, session) = tokio::task::spawn_blocking(move || -> Result<(GeniePuzzleClock, GenieSession), String> {
@@ -661,6 +971,7 @@ pub async fn advance_puzzle_clock_impl(
     let new_segments = (clock.segments_current + delta).clamp(0, clock.segments_max);
     let resolves_now = new_segments >= clock.segments_max;
 
+    let old_segments = clock.segments_current;
     let updated_clock = tokio::task::spawn_blocking(move || -> Result<GeniePuzzleClock, String> {
         conn.transaction(|conn| -> Result<GeniePuzzleClock, diesel::result::Error> {
             let now = Utc::now().naive_utc();
@@ -692,6 +1003,11 @@ pub async fn advance_puzzle_clock_impl(
                 }
             }
 
+            // FR-006/FR-006a: grant any reward rows newly crossed by this
+            // advance, exactly once each, in this same transaction.
+            let rewards_granted =
+                grant_puzzle_clock_rewards(conn, clock_id, world_id, session_id, old_segments, new_segments, actor_id)?;
+
             let _ = record_world_event(
                 conn,
                 world_id,
@@ -708,6 +1024,22 @@ pub async fn advance_puzzle_clock_impl(
                 user_id,
             );
 
+            if rewards_granted > 0 {
+                let _ = record_world_event(
+                    conn,
+                    world_id,
+                    EVENT_CODE_GENIE_SESSION_STATE,
+                    Some(serde_json::json!({
+                        "kind": "clock_reward",
+                        "session_id": session_id,
+                        "clock_id": updated_clock.id,
+                        "actor_id": actor_id,
+                        "rewards_granted": rewards_granted,
+                    })),
+                    user_id,
+                );
+            }
+
             Ok(updated_clock)
         })
         .map_err(|e| format!("Failed to advance Puzzle Clock: {e}"))
@@ -717,6 +1049,74 @@ pub async fn advance_puzzle_clock_impl(
     .map_err(Error::new)?;
 
     Ok(GraphQLGeniePuzzleClock::from(updated_clock))
+}
+
+// ============================================================================
+// configurePuzzleClockReward (spec 020, FR-006) — GM-only
+// ============================================================================
+
+#[allow(clippy::too_many_arguments)]
+pub async fn configure_puzzle_clock_reward_impl(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    clock_id: Uuid,
+    trigger_segment: i32,
+    reward_resource_type: Option<String>,
+    reward_resource_amount: Option<i32>,
+    reward_item_id: Option<Uuid>,
+    reward_item_quantity: Option<i32>,
+    recipient_mode: GenieRewardRecipientMode,
+) -> GraphQLResult<GraphQLGeniePuzzleClockReward> {
+    if trigger_segment <= 0 {
+        return Err(Error::new("triggerSegment must be greater than zero"));
+    }
+    let is_resource_reward = reward_resource_type.is_some() && reward_resource_amount.is_some();
+    let is_item_reward = reward_item_id.is_some() && reward_item_quantity.is_some();
+    if is_resource_reward == is_item_reward {
+        return Err(Error::new(
+            "Exactly one of a resource reward or an item reward must be configured per entry",
+        ));
+    }
+
+    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let (clock, session) = tokio::task::spawn_blocking(move || -> Result<(GeniePuzzleClock, GenieSession), String> {
+        let clock = load_puzzle_clock_row(&mut conn, clock_id)?;
+        let session = load_session_row(&mut conn, clock.session_id)?;
+        Ok((clock, session))
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(Error::new)?;
+
+    if !is_dm_of_world(state, user_id, is_admin, session.world_id).await? {
+        return Err(Error::new("Only the GM may configure Puzzle Clock rewards"));
+    }
+    let _ = clock;
+
+    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let reward = tokio::task::spawn_blocking(move || -> Result<GeniePuzzleClockReward, String> {
+        let new_reward = NewGeniePuzzleClockReward {
+            clock_id,
+            trigger_segment,
+            reward_resource_type,
+            reward_resource_amount,
+            reward_item_id,
+            reward_item_quantity,
+            recipient_mode: recipient_mode.as_db_str().to_string(),
+            created_by: user_id,
+        };
+        diesel::insert_into(world_genie_puzzle_clock_rewards::table)
+            .values(&new_reward)
+            .returning(GeniePuzzleClockReward::as_returning())
+            .get_result::<GeniePuzzleClockReward>(&mut conn)
+            .map_err(|e| format!("Failed to configure Puzzle Clock reward: {e}"))
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(Error::new)?;
+
+    Ok(GraphQLGeniePuzzleClockReward::from(reward))
 }
 
 // ============================================================================
@@ -1125,6 +1525,280 @@ pub async fn spend_resource_on_puzzle_clock_impl(
 }
 
 // ============================================================================
+// createShopListing / purchaseFromShop (spec 020, FR-004/FR-005/FR-005a)
+// ============================================================================
+
+fn load_stock_quantity(conn: &mut PgConnection, actor_id: Uuid, item_id: Uuid) -> Result<i32, diesel::result::Error> {
+    world_actor_inventory::table
+        .filter(world_actor_inventory::actor_id.eq(actor_id))
+        .filter(world_actor_inventory::item_id.eq(item_id))
+        .select(world_actor_inventory::quantity)
+        .first::<i32>(conn)
+        .optional()
+        .map(|v| v.unwrap_or(0))
+}
+
+fn build_graphql_shop_listing(row: GenieShopListing, stock_quantity: i32) -> GraphQLGenieShopListing {
+    GraphQLGenieShopListing {
+        id: row.id,
+        actor_id: row.actor_id,
+        item_id: row.item_id,
+        price_kind: row.price_kind,
+        price_resource_type: row.price_resource_type,
+        price_resource_amount: row.price_resource_amount,
+        price_item_id: row.price_item_id,
+        price_item_quantity: row.price_item_quantity,
+        stock_quantity,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn create_shop_listing_impl(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    actor_id: Uuid,
+    item_id: Uuid,
+    price_kind: GenieShopPriceKind,
+    price_resource_type: Option<String>,
+    price_resource_amount: Option<i32>,
+    price_item_id: Option<Uuid>,
+    price_item_quantity: Option<i32>,
+) -> GraphQLResult<GraphQLGenieShopListing> {
+    let is_resource_price = price_resource_type.is_some() && price_resource_amount.is_some();
+    let is_item_price = price_item_id.is_some() && price_item_quantity.is_some();
+    if is_resource_price == is_item_price {
+        return Err(Error::new("Exactly one of a resource price or an item price must be configured"));
+    }
+    match price_kind {
+        GenieShopPriceKind::Resource if !is_resource_price => {
+            return Err(Error::new("priceKind is RESOURCE but no resource price was provided"));
+        }
+        GenieShopPriceKind::Item if !is_item_price => {
+            return Err(Error::new("priceKind is ITEM but no item price was provided"));
+        }
+        _ => {}
+    }
+
+    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let world_id = tokio::task::spawn_blocking(move || -> Result<Uuid, String> {
+        world_actors::table
+            .filter(world_actors::id.eq(actor_id))
+            .select(world_actors::world_id)
+            .first::<Uuid>(&mut conn)
+            .map_err(|_| "Actor not found".to_string())
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(Error::new)?;
+
+    if !is_dm_of_world(state, user_id, is_admin, world_id).await? {
+        return Err(Error::new("Only the GM may create a shop listing"));
+    }
+
+    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let listing = tokio::task::spawn_blocking(move || -> Result<GenieShopListing, String> {
+        let new_listing = NewGenieShopListing {
+            actor_id,
+            item_id,
+            price_kind: price_kind.as_db_str().to_string(),
+            price_resource_type,
+            price_resource_amount,
+            price_item_id,
+            price_item_quantity,
+            created_by: user_id,
+        };
+        diesel::insert_into(world_genie_shop_listings::table)
+            .values(&new_listing)
+            .returning(GenieShopListing::as_returning())
+            .get_result::<GenieShopListing>(&mut conn)
+            .map_err(|e| format!("Failed to create shop listing: {e}"))
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(Error::new)?;
+
+    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let stock_quantity = tokio::task::spawn_blocking(move || load_stock_quantity(&mut conn, actor_id, item_id))
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|e| Error::new(format!("Failed to load stock: {e}")))?;
+
+    Ok(build_graphql_shop_listing(listing, stock_quantity))
+}
+
+/// FR-005/FR-005a: atomic purchase. Verifies the buyer can afford the
+/// listing's configured price (resource balance or held item quantity),
+/// deducts/transfers that price, transfers one unit of the listed item,
+/// and performs a single atomic conditional stock decrement — all in one
+/// transaction, so two buyers racing for the last unit can't both
+/// succeed (the losing UPDATE affects 0 rows and the whole transaction
+/// rolls back with a clean "out of stock" error).
+pub async fn purchase_from_shop_impl(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    listing_id: Uuid,
+    buyer_actor_id: Uuid,
+) -> GraphQLResult<GraphQLGenieShopListing> {
+    require_caller_controls_actor(state, user_id, is_admin, buyer_actor_id).await?;
+
+    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let listing = tokio::task::spawn_blocking(move || -> Result<GenieShopListing, String> {
+        world_genie_shop_listings::table
+            .filter(world_genie_shop_listings::id.eq(listing_id))
+            .select(GenieShopListing::as_select())
+            .first::<GenieShopListing>(&mut conn)
+            .map_err(|_| "Shop listing not found".to_string())
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(Error::new)?;
+
+    // A resource-priced purchase needs an active Genie session to draw
+    // holdings from — `load_holding_quantity`/`set_holding_quantity` are
+    // keyed by session_id. An item-priced (barter) purchase touches only
+    // world_actor_inventory and needs no session at all.
+    let session_id = if listing.price_kind == "resource" {
+        let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+        let seller_actor_id = listing.actor_id;
+        let world_id = tokio::task::spawn_blocking(move || -> Result<Uuid, String> {
+            world_actors::table
+                .filter(world_actors::id.eq(seller_actor_id))
+                .select(world_actors::world_id)
+                .first::<Uuid>(&mut conn)
+                .map_err(|_| "Actor not found".to_string())
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(Error::new)?;
+
+        let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+        let session = tokio::task::spawn_blocking(move || -> Result<GenieSession, String> {
+            world_genie_sessions::table
+                .filter(world_genie_sessions::world_id.eq(world_id))
+                .filter(world_genie_sessions::status.eq("active"))
+                .select(GenieSession::as_select())
+                .first::<GenieSession>(&mut conn)
+                .map_err(|_| "There is no active Genie session for this world".to_string())
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(Error::new)?;
+        Some(session.id)
+    } else {
+        None
+    };
+
+    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let world_id_for_event = {
+        let seller_actor_id = listing.actor_id;
+        let mut lookup_conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+        tokio::task::spawn_blocking(move || -> Result<Uuid, String> {
+            world_actors::table
+                .filter(world_actors::id.eq(seller_actor_id))
+                .select(world_actors::world_id)
+                .first::<Uuid>(&mut lookup_conn)
+                .map_err(|_| "Actor not found".to_string())
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(Error::new)?
+    };
+
+    let updated_listing = tokio::task::spawn_blocking(move || -> Result<GenieShopListing, String> {
+        conn.transaction(|conn| -> Result<GenieShopListing, TxError> {
+            // FR-005a: atomic conditional stock decrement first — if this
+            // affects 0 rows, either the listing never had stock or a
+            // concurrent purchase just took the last unit; either way,
+            // fail cleanly with no other state touched.
+            let decremented = diesel::update(
+                world_actor_inventory::table
+                    .filter(world_actor_inventory::actor_id.eq(listing.actor_id))
+                    .filter(world_actor_inventory::item_id.eq(listing.item_id))
+                    .filter(world_actor_inventory::quantity.gt(0)),
+            )
+            .set((
+                world_actor_inventory::quantity.eq(world_actor_inventory::quantity - 1),
+                world_actor_inventory::updated_at.eq(Utc::now().naive_utc()),
+            ))
+            .execute(conn)?;
+
+            if decremented == 0 {
+                return Err(TxError::Msg("This item is out of stock".to_string()));
+            }
+
+            // Pay the price.
+            if listing.price_kind == "resource" {
+                let resource_type = listing.price_resource_type.clone().unwrap_or_default();
+                let amount = listing.price_resource_amount.unwrap_or(0);
+                let session_id = session_id.expect("resource-priced listing always resolves a session_id above");
+                let current =
+                    load_holding_quantity(conn, session_id, buyer_actor_id, &resource_type).map_err(TxError::Msg)?;
+                if current < amount {
+                    return Err(TxError::Msg("You do not have enough of this resource to afford this purchase".to_string()));
+                }
+                set_holding_quantity(conn, session_id, buyer_actor_id, &resource_type, current - amount)
+                    .map_err(TxError::Msg)?;
+            } else {
+                let required_item_id = listing.price_item_id.expect("item-priced listing always has price_item_id");
+                let required_qty = listing.price_item_quantity.unwrap_or(0);
+                let held_qty = load_stock_quantity(conn, buyer_actor_id, required_item_id)?;
+                if held_qty < required_qty {
+                    return Err(TxError::Msg("You do not hold the required item(s) to afford this purchase".to_string()));
+                }
+                // Remove the traded-in item from the buyer, add it to the
+                // seller's inventory (the NPC "collects" what it's paid).
+                diesel::update(
+                    world_actor_inventory::table
+                        .filter(world_actor_inventory::actor_id.eq(buyer_actor_id))
+                        .filter(world_actor_inventory::item_id.eq(required_item_id)),
+                )
+                .set((
+                    world_actor_inventory::quantity.eq(world_actor_inventory::quantity - required_qty),
+                    world_actor_inventory::updated_at.eq(Utc::now().naive_utc()),
+                ))
+                .execute(conn)?;
+                grant_item_to_actor_in_tx(conn, listing.actor_id, required_item_id, required_qty)?;
+            }
+
+            // Transfer the listed item to the buyer.
+            grant_item_to_actor_in_tx(conn, buyer_actor_id, listing.item_id, 1)?;
+
+            let _ = record_world_event(
+                conn,
+                world_id_for_event,
+                EVENT_CODE_GENIE_SESSION_STATE,
+                Some(serde_json::json!({
+                    "kind": "purchase",
+                    "listing_id": listing.id,
+                    "buyer_actor_id": buyer_actor_id,
+                    "seller_actor_id": listing.actor_id,
+                    "item_id": listing.item_id,
+                })),
+                user_id,
+            );
+
+            Ok(listing.clone())
+        })
+        .map_err(String::from)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(Error::new)?;
+
+    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let stock_quantity = tokio::task::spawn_blocking(move || {
+        load_stock_quantity(&mut conn, updated_listing.actor_id, updated_listing.item_id)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|e| Error::new(format!("Failed to load stock: {e}")))?;
+
+    Ok(build_graphql_shop_listing(updated_listing, stock_quantity))
+}
+
+// ============================================================================
 // GraphQL object wiring
 // ============================================================================
 
@@ -1172,10 +1846,98 @@ impl GenieSessionMutation {
         create_puzzle_clock_impl(state, auth_user.user_id, auth_user.is_admin, session_id, label, segments_max).await
     }
 
-    async fn advance_puzzle_clock(&self, ctx: &Context<'_>, clock_id: Uuid, delta: i32) -> GraphQLResult<GraphQLGeniePuzzleClock> {
+    async fn advance_puzzle_clock(
+        &self,
+        ctx: &Context<'_>,
+        clock_id: Uuid,
+        delta: i32,
+        actor_id: Option<Uuid>,
+    ) -> GraphQLResult<GraphQLGeniePuzzleClock> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        advance_puzzle_clock_impl(state, auth_user.user_id, auth_user.is_admin, clock_id, delta).await
+        advance_puzzle_clock_impl(state, auth_user.user_id, auth_user.is_admin, clock_id, delta, actor_id).await
+    }
+
+    async fn grant_session_resource(
+        &self,
+        ctx: &Context<'_>,
+        session_id: Uuid,
+        actor_id: Uuid,
+        resource_type: String,
+        amount: i32,
+    ) -> GraphQLResult<GraphQLGenieResourceHolding> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        grant_session_resource_impl(state, auth_user.user_id, auth_user.is_admin, session_id, actor_id, resource_type, amount).await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn create_shop_listing(
+        &self,
+        ctx: &Context<'_>,
+        actor_id: Uuid,
+        item_id: Uuid,
+        price_kind: GenieShopPriceKind,
+        price_resource_type: Option<String>,
+        price_resource_amount: Option<i32>,
+        price_item_id: Option<Uuid>,
+        price_item_quantity: Option<i32>,
+    ) -> GraphQLResult<GraphQLGenieShopListing> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        create_shop_listing_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            actor_id,
+            item_id,
+            price_kind,
+            price_resource_type,
+            price_resource_amount,
+            price_item_id,
+            price_item_quantity,
+        )
+        .await
+    }
+
+    async fn purchase_from_shop(
+        &self,
+        ctx: &Context<'_>,
+        listing_id: Uuid,
+        buyer_actor_id: Uuid,
+    ) -> GraphQLResult<GraphQLGenieShopListing> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        purchase_from_shop_impl(state, auth_user.user_id, auth_user.is_admin, listing_id, buyer_actor_id).await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn configure_puzzle_clock_reward(
+        &self,
+        ctx: &Context<'_>,
+        clock_id: Uuid,
+        trigger_segment: i32,
+        reward_resource_type: Option<String>,
+        reward_resource_amount: Option<i32>,
+        reward_item_id: Option<Uuid>,
+        reward_item_quantity: Option<i32>,
+        recipient_mode: GenieRewardRecipientMode,
+    ) -> GraphQLResult<GraphQLGeniePuzzleClockReward> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        configure_puzzle_clock_reward_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            clock_id,
+            trigger_segment,
+            reward_resource_type,
+            reward_resource_amount,
+            reward_item_id,
+            reward_item_quantity,
+            recipient_mode,
+        )
+        .await
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1391,7 +2153,7 @@ mod tests {
             .unwrap();
 
         // Resolve the only Puzzle Clock first — this must fire the win.
-        let resolved = advance_puzzle_clock_impl(&state, owner_id, false, clock.id, 2).await.unwrap();
+        let resolved = advance_puzzle_clock_impl(&state, owner_id, false, clock.id, 2, None).await.unwrap();
         assert!(resolved.resolved_at.is_some());
 
         let mut conn = state.db_pool.get().unwrap();
@@ -1594,6 +2356,440 @@ mod tests {
             proposal.is_ok(),
             "a player who claimed (not owns) their character should control it for Session Resource actions: {:?}",
             proposal.err()
+        );
+    }
+
+    // ========================================================================
+    // Spec 020: grantSessionResource (FR-001), resource carryover (FR-003)
+    // ========================================================================
+
+    #[tokio::test]
+    async fn grant_session_resource_increases_holding_and_requires_gm_and_active_session() {
+        let state = test_app_state();
+        let (world_id, owner_id, player_id, session_id) = setup_active_session(&state).await;
+        let mut conn = state.db_pool.get().unwrap();
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        let actor = insert_test_actor(&mut conn, world_id, scene_id, player_id);
+        drop(conn);
+
+        let holding =
+            grant_session_resource_impl(&state, owner_id, false, session_id, actor, "essence".to_string(), 3)
+                .await
+                .expect("GM should be able to grant a resource");
+        assert_eq!(holding.quantity, 3);
+
+        // Non-GM caller rejected (Scenario 4).
+        let denied =
+            grant_session_resource_impl(&state, player_id, false, session_id, actor, "essence".to_string(), 1).await;
+        assert!(denied.is_err(), "a non-GM caller must not be able to grant a resource");
+    }
+
+    #[tokio::test]
+    async fn grant_session_resource_rejects_when_no_active_session() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        let actor = insert_test_actor(&mut conn, world_id, scene_id, owner_id);
+        drop(conn);
+
+        // No session started at all — grant must be rejected (Scenario 3).
+        let session = start_genie_session_impl(&state, owner_id, false, StartGenieSessionInput { world_id, doom_clock_max: 2 })
+            .await
+            .unwrap();
+        // Force the session to a concluded state so "no active session" is exercised.
+        let mut conn = state.db_pool.get().unwrap();
+        diesel::update(world_genie_sessions::table.filter(world_genie_sessions::id.eq(session.id)))
+            .set(world_genie_sessions::status.eq("won"))
+            .execute(&mut conn)
+            .unwrap();
+        drop(conn);
+
+        let denied =
+            grant_session_resource_impl(&state, owner_id, false, session.id, actor, "essence".to_string(), 1).await;
+        assert!(denied.is_err(), "granting against a concluded session must be rejected");
+    }
+
+    #[tokio::test]
+    async fn resource_carryover_copies_holdings_when_enabled_and_resets_when_disabled() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        let actor = insert_test_actor(&mut conn, world_id, scene_id, owner_id);
+        drop(conn);
+
+        let first_session =
+            start_genie_session_impl(&state, owner_id, false, StartGenieSessionInput { world_id, doom_clock_max: 2 })
+                .await
+                .unwrap();
+        grant_session_resource_impl(&state, owner_id, false, first_session.id, actor, "favor".to_string(), 5)
+            .await
+            .unwrap();
+        let mut conn = state.db_pool.get().unwrap();
+        diesel::update(world_genie_sessions::table.filter(world_genie_sessions::id.eq(first_session.id)))
+            .set(world_genie_sessions::status.eq("won"))
+            .execute(&mut conn)
+            .unwrap();
+        drop(conn);
+
+        // Carryover disabled (default): the new session starts empty.
+        let second_session =
+            start_genie_session_impl(&state, owner_id, false, StartGenieSessionInput { world_id, doom_clock_max: 2 })
+                .await
+                .unwrap();
+        let mut conn = state.db_pool.get().unwrap();
+        let qty = load_holding_quantity(&mut conn, second_session.id, actor, "favor").unwrap();
+        assert_eq!(qty, 0, "carryover disabled by default — new session should start at 0");
+        diesel::update(world_genie_sessions::table.filter(world_genie_sessions::id.eq(second_session.id)))
+            .set(world_genie_sessions::status.eq("won"))
+            .execute(&mut conn)
+            .unwrap();
+        drop(conn);
+
+        // Enable carryover, end the second session, start a third — holdings should carry.
+        let mut conn = state.db_pool.get().unwrap();
+        diesel::update(worlds::table.filter(worlds::id.eq(world_id)))
+            .set(worlds::genie_resource_carryover_enabled.eq(true))
+            .execute(&mut conn)
+            .unwrap();
+        drop(conn);
+
+        let third_session =
+            start_genie_session_impl(&state, owner_id, false, StartGenieSessionInput { world_id, doom_clock_max: 2 })
+                .await
+                .unwrap();
+        let mut conn = state.db_pool.get().unwrap();
+        let qty = load_holding_quantity(&mut conn, third_session.id, actor, "favor").unwrap();
+        assert_eq!(qty, 0, "carryover should only copy the immediately prior session's holdings, which were 0");
+    }
+
+    // ========================================================================
+    // Spec 020: createShopListing / purchaseFromShop (FR-004/FR-005/FR-005a)
+    // ========================================================================
+
+    fn insert_test_item(conn: &mut PgConnection, world_id: Uuid, owner_id: Uuid, name: &str) -> Uuid {
+        use crate::schema::world_items;
+        let now = Utc::now().naive_utc();
+        let item_id = Uuid::now_v7();
+        diesel::insert_into(world_items::table)
+            .values((
+                world_items::id.eq(item_id),
+                world_items::world_id.eq(world_id),
+                world_items::name.eq(name),
+                world_items::created_by.eq(owner_id),
+                world_items::created_at.eq(now),
+                world_items::updated_at.eq(now),
+            ))
+            .execute(conn)
+            .expect("failed to insert test item");
+        item_id
+    }
+
+    fn stock_item(conn: &mut PgConnection, actor_id: Uuid, item_id: Uuid, quantity: i32) {
+        use crate::schema::world_actor_inventory;
+        diesel::insert_into(world_actor_inventory::table)
+            .values((
+                world_actor_inventory::actor_id.eq(actor_id),
+                world_actor_inventory::item_id.eq(item_id),
+                world_actor_inventory::item_name_snapshot.eq("Test Item"),
+                world_actor_inventory::quantity.eq(quantity),
+            ))
+            .execute(conn)
+            .expect("failed to stock item");
+    }
+
+    #[tokio::test]
+    async fn purchase_from_shop_resource_priced_happy_path_and_insufficient_funds() {
+        let state = test_app_state();
+        let (world_id, owner_id, player_id, session_id) = setup_active_session(&state).await;
+        let mut conn = state.db_pool.get().unwrap();
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        let npc = insert_test_actor(&mut conn, world_id, scene_id, owner_id);
+        let buyer = insert_test_actor(&mut conn, world_id, scene_id, player_id);
+        let item = insert_test_item(&mut conn, world_id, owner_id, "Rusty Lantern");
+        stock_item(&mut conn, npc, item, 1);
+        drop(conn);
+
+        let listing = create_shop_listing_impl(
+            &state,
+            owner_id,
+            false,
+            npc,
+            item,
+            GenieShopPriceKind::Resource,
+            Some("insight".to_string()),
+            Some(2),
+            None,
+            None,
+        )
+        .await
+        .expect("GM should be able to create a listing");
+        assert_eq!(listing.stock_quantity, 1);
+
+        // Insufficient funds (Scenario 2).
+        let denied = purchase_from_shop_impl(&state, player_id, false, listing.id, buyer).await;
+        assert!(denied.is_err(), "buyer with insufficient Insight must be rejected");
+
+        // Fund the buyer, then purchase succeeds (Scenario 1).
+        grant_session_resource_impl(&state, owner_id, false, session_id, buyer, "insight".to_string(), 2)
+            .await
+            .unwrap();
+        let purchased = purchase_from_shop_impl(&state, player_id, false, listing.id, buyer)
+            .await
+            .expect("funded buyer should be able to purchase");
+        assert_eq!(purchased.stock_quantity, 0, "last unit purchased — stock decremented to 0");
+
+        let mut conn = state.db_pool.get().unwrap();
+        let buyer_insight = load_holding_quantity(&mut conn, session_id, buyer, "insight").unwrap();
+        assert_eq!(buyer_insight, 0, "2 Insight deducted for a 2-Insight purchase");
+        let buyer_stock = load_stock_quantity(&mut conn, buyer, item).unwrap();
+        assert_eq!(buyer_stock, 1, "purchased item transferred into buyer's inventory");
+    }
+
+    #[tokio::test]
+    async fn purchase_from_shop_barter_happy_path_and_missing_item() {
+        let state = test_app_state();
+        let (world_id, owner_id, player_id, _session_id) = setup_active_session(&state).await;
+        let mut conn = state.db_pool.get().unwrap();
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        let npc = insert_test_actor(&mut conn, world_id, scene_id, owner_id);
+        let buyer = insert_test_actor(&mut conn, world_id, scene_id, player_id);
+        let lantern = insert_test_item(&mut conn, world_id, owner_id, "Rusty Lantern");
+        let flask = insert_test_item(&mut conn, world_id, owner_id, "Sealed Flask");
+        stock_item(&mut conn, npc, lantern, 1);
+        drop(conn);
+
+        let listing = create_shop_listing_impl(
+            &state,
+            owner_id,
+            false,
+            npc,
+            lantern,
+            GenieShopPriceKind::Item,
+            None,
+            None,
+            Some(flask),
+            Some(1),
+        )
+        .await
+        .expect("GM should be able to create a barter listing");
+
+        // Buyer doesn't hold the flask yet (Scenario 4).
+        let denied = purchase_from_shop_impl(&state, player_id, false, listing.id, buyer).await;
+        assert!(denied.is_err(), "buyer without the required barter item must be rejected");
+
+        let mut conn = state.db_pool.get().unwrap();
+        stock_item(&mut conn, buyer, flask, 1);
+        drop(conn);
+
+        purchase_from_shop_impl(&state, player_id, false, listing.id, buyer)
+            .await
+            .expect("buyer holding the barter item should be able to purchase");
+
+        let mut conn = state.db_pool.get().unwrap();
+        assert_eq!(load_stock_quantity(&mut conn, buyer, flask).unwrap(), 0, "flask traded away");
+        assert_eq!(load_stock_quantity(&mut conn, buyer, lantern).unwrap(), 1, "lantern received");
+        assert_eq!(load_stock_quantity(&mut conn, npc, flask).unwrap(), 1, "NPC collected the traded-in flask");
+    }
+
+    #[tokio::test]
+    async fn purchase_from_shop_last_unit_race_only_one_buyer_succeeds() {
+        // FR-005a: two buyers racing for the last unit — exactly one
+        // succeeds, the other gets a clean "out of stock" error, no
+        // partial state change on the loser.
+        let state = test_app_state();
+        let (world_id, owner_id, player_id, session_id) = setup_active_session(&state).await;
+        let mut conn = state.db_pool.get().unwrap();
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        let npc = insert_test_actor(&mut conn, world_id, scene_id, owner_id);
+        let player_two = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world_id, player_two, "Player");
+        let buyer_a = insert_test_actor(&mut conn, world_id, scene_id, player_id);
+        let buyer_b = insert_test_actor(&mut conn, world_id, scene_id, player_two);
+        let item = insert_test_item(&mut conn, world_id, owner_id, "Sole Survivor Blade");
+        stock_item(&mut conn, npc, item, 1);
+        drop(conn);
+
+        let listing = create_shop_listing_impl(
+            &state,
+            owner_id,
+            false,
+            npc,
+            item,
+            GenieShopPriceKind::Resource,
+            Some("insight".to_string()),
+            Some(1),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        grant_session_resource_impl(&state, owner_id, false, session_id, buyer_a, "insight".to_string(), 1)
+            .await
+            .unwrap();
+        grant_session_resource_impl(&state, owner_id, false, session_id, buyer_b, "insight".to_string(), 1)
+            .await
+            .unwrap();
+
+        let (result_a, result_b) = tokio::join!(
+            purchase_from_shop_impl(&state, player_id, false, listing.id, buyer_a),
+            purchase_from_shop_impl(&state, player_two, false, listing.id, buyer_b),
+        );
+
+        let successes = [&result_a, &result_b].iter().filter(|r| r.is_ok()).count();
+        assert_eq!(successes, 1, "exactly one of the two concurrent purchases should succeed");
+
+        let mut conn = state.db_pool.get().unwrap();
+        assert_eq!(load_stock_quantity(&mut conn, npc, item).unwrap(), 0, "stock never goes negative or double-decrements");
+
+        // The loser must have no partial state change.
+        if result_a.is_err() {
+            assert_eq!(load_holding_quantity(&mut conn, session_id, buyer_a, "insight").unwrap(), 1);
+            assert_eq!(load_stock_quantity(&mut conn, buyer_a, item).unwrap(), 0);
+        } else {
+            assert_eq!(load_holding_quantity(&mut conn, session_id, buyer_b, "insight").unwrap(), 1);
+            assert_eq!(load_stock_quantity(&mut conn, buyer_b, item).unwrap(), 0);
+        }
+    }
+
+    // ========================================================================
+    // Spec 020: configurePuzzleClockReward / advancePuzzleClock actorId (FR-006/FR-006a)
+    // ========================================================================
+
+    #[tokio::test]
+    async fn per_segment_reward_grants_exactly_once_per_advance_not_a_lump_sum() {
+        let state = test_app_state();
+        let (world_id, owner_id, _player_id, session_id) = setup_active_session(&state).await;
+        let mut conn = state.db_pool.get().unwrap();
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        let smith = insert_test_actor(&mut conn, world_id, scene_id, owner_id);
+        let dagger = insert_test_item(&mut conn, world_id, owner_id, "Dagger");
+        drop(conn);
+
+        let clock = create_puzzle_clock_impl(&state, owner_id, false, session_id, "Forge Daggers".to_string(), 3)
+            .await
+            .unwrap();
+
+        for segment in 1..=3 {
+            configure_puzzle_clock_reward_impl(
+                &state,
+                owner_id,
+                false,
+                clock.id,
+                segment,
+                None,
+                None,
+                Some(dagger),
+                Some(1),
+                GenieRewardRecipientMode::TriggeringActor,
+            )
+            .await
+            .unwrap();
+        }
+
+        for _ in 0..3 {
+            advance_puzzle_clock_impl(&state, owner_id, false, clock.id, 1, Some(smith)).await.unwrap();
+        }
+
+        let mut conn = state.db_pool.get().unwrap();
+        let dagger_count = load_stock_quantity(&mut conn, smith, dagger).unwrap();
+        assert_eq!(dagger_count, 3, "one dagger granted per advance, not a lump sum");
+    }
+
+    #[tokio::test]
+    async fn single_final_segment_reward_grants_once_split_across_party() {
+        let state = test_app_state();
+        let (world_id, owner_id, player_id, session_id) = setup_active_session(&state).await;
+        let mut conn = state.db_pool.get().unwrap();
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        let pc_a = insert_test_actor(&mut conn, world_id, scene_id, owner_id);
+        let pc_b = insert_test_actor(&mut conn, world_id, scene_id, player_id);
+        drop(conn);
+
+        let clock = create_puzzle_clock_impl(&state, owner_id, false, session_id, "Recover the Sealed Lamp".to_string(), 4)
+            .await
+            .unwrap();
+        configure_puzzle_clock_reward_impl(
+            &state,
+            owner_id,
+            false,
+            clock.id,
+            4,
+            Some("favor".to_string()),
+            Some(2),
+            None,
+            None,
+            GenieRewardRecipientMode::WholeParty,
+        )
+        .await
+        .unwrap();
+
+        advance_puzzle_clock_impl(&state, owner_id, false, clock.id, 4, None).await.unwrap();
+
+        let mut conn = state.db_pool.get().unwrap();
+        let a_favor = load_holding_quantity(&mut conn, session_id, pc_a, "favor").unwrap();
+        let b_favor = load_holding_quantity(&mut conn, session_id, pc_b, "favor").unwrap();
+        assert_eq!(a_favor + b_favor, 2, "the full configured amount is split across the party, none lost");
+        assert!(a_favor >= 1 && b_favor >= 1, "both party members should receive a share of an even split");
+    }
+
+    #[tokio::test]
+    async fn zero_configured_rewards_clock_behaves_unchanged() {
+        let state = test_app_state();
+        let (_world_id, owner_id, _player_id, session_id) = setup_active_session(&state).await;
+        let clock = create_puzzle_clock_impl(&state, owner_id, false, session_id, "Plain Clock".to_string(), 2)
+            .await
+            .unwrap();
+
+        let resolved = advance_puzzle_clock_impl(&state, owner_id, false, clock.id, 2, None).await.unwrap();
+        assert!(resolved.resolved_at.is_some(), "a zero-reward clock still resolves normally");
+    }
+
+    #[tokio::test]
+    async fn triggering_actor_reward_falls_back_to_whole_party_when_no_actor_id_supplied() {
+        // FR-006a: a plain advancePuzzleClock call with no actorId hits a
+        // triggering_actor-mode reward — it must fall back to whole-party
+        // split rather than failing or crediting no one.
+        let state = test_app_state();
+        let (world_id, owner_id, player_id, session_id) = setup_active_session(&state).await;
+        let mut conn = state.db_pool.get().unwrap();
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        let pc_a = insert_test_actor(&mut conn, world_id, scene_id, owner_id);
+        let pc_b = insert_test_actor(&mut conn, world_id, scene_id, player_id);
+        drop(conn);
+
+        let clock = create_puzzle_clock_impl(&state, owner_id, false, session_id, "Untended Forge".to_string(), 2)
+            .await
+            .unwrap();
+        configure_puzzle_clock_reward_impl(
+            &state,
+            owner_id,
+            false,
+            clock.id,
+            1,
+            Some("essence".to_string()),
+            Some(2),
+            None,
+            None,
+            GenieRewardRecipientMode::TriggeringActor,
+        )
+        .await
+        .unwrap();
+
+        // No actorId supplied — plain GM "Advance" click.
+        advance_puzzle_clock_impl(&state, owner_id, false, clock.id, 1, None).await.unwrap();
+
+        let mut conn = state.db_pool.get().unwrap();
+        let a_essence = load_holding_quantity(&mut conn, session_id, pc_a, "essence").unwrap();
+        let b_essence = load_holding_quantity(&mut conn, session_id, pc_b, "essence").unwrap();
+        assert_eq!(
+            a_essence + b_essence,
+            2,
+            "an unattributed triggering_actor reward must fall back to a whole-party grant, not be dropped"
         );
     }
 }

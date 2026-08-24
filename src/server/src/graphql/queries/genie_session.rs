@@ -8,13 +8,17 @@ use uuid::Uuid;
 
 use crate::auth::world_membership::require_world_member;
 use crate::graphql::mutations_genie_session::{
-    require_caller_controls_actor, GraphQLGenieResourceHolding, GraphQLGenieSession,
-    GraphQLGenieTradeProposal,
+    require_caller_controls_actor, GraphQLGenieResourceHolding, GraphQLGenieShopListing,
+    GraphQLGenieSession, GraphQLGenieTradeProposal, GraphQLGeniePuzzleClockReward,
 };
 use crate::graphql::{app_state, authenticated_user};
-use crate::models::{GenieResourceHolding, GenieSession, GeniePuzzleClock, GenieTradeProposal};
+use crate::models::{
+    GenieResourceHolding, GenieSession, GeniePuzzleClock, GeniePuzzleClockReward,
+    GenieShopListing, GenieTradeProposal,
+};
 use crate::schema::{
-    world_genie_puzzle_clocks, world_genie_resource_holdings, world_genie_sessions,
+    world_actor_inventory, world_genie_puzzle_clock_rewards, world_genie_puzzle_clocks,
+    world_genie_resource_holdings, world_genie_shop_listings, world_genie_sessions,
     world_genie_trade_proposals,
 };
 use crate::state::AppState;
@@ -158,6 +162,119 @@ pub async fn genie_trade_proposals_impl(
     Ok(proposals.into_iter().map(GraphQLGenieTradeProposal::from).collect())
 }
 
+/// Spec 020: any world member (not just the GM) may browse an NPC's
+/// shop listings — matches `genie_session_impl`'s "readable by any world
+/// member" precedent above. `stockQuantity` is derived from
+/// `world_actor_inventory.quantity` for `(actorId, itemId)`
+/// (contracts/genie-economy.md), not stored on the listing row.
+pub async fn genie_shop_listings_impl(
+    state: &AppState,
+    user_id: Uuid,
+    actor_id: Uuid,
+) -> GraphQLResult<Vec<GraphQLGenieShopListing>> {
+    use crate::schema::world_actors;
+
+    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let world_id = tokio::task::spawn_blocking(move || -> Result<Uuid, String> {
+        world_actors::table
+            .filter(world_actors::id.eq(actor_id))
+            .select(world_actors::world_id)
+            .first::<Uuid>(&mut conn)
+            .map_err(|_| "Actor not found".to_string())
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(Error::new)?;
+
+    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    require_world_member(&mut conn, user_id, world_id).map_err(|_| Error::new("You must be a member of this world"))?;
+
+    let listings = tokio::task::spawn_blocking(move || -> Result<Vec<(GenieShopListing, i32)>, String> {
+        let rows = world_genie_shop_listings::table
+            .filter(world_genie_shop_listings::actor_id.eq(actor_id))
+            .order(world_genie_shop_listings::created_at.asc())
+            .select(GenieShopListing::as_select())
+            .load::<GenieShopListing>(&mut conn)
+            .map_err(|e| format!("Failed to load shop listings: {e}"))?;
+
+        rows.into_iter()
+            .map(|row| {
+                let stock = world_actor_inventory::table
+                    .filter(world_actor_inventory::actor_id.eq(row.actor_id))
+                    .filter(world_actor_inventory::item_id.eq(row.item_id))
+                    .select(world_actor_inventory::quantity)
+                    .first::<i32>(&mut conn)
+                    .optional()
+                    .map_err(|e| format!("Failed to load stock: {e}"))?
+                    .unwrap_or(0);
+                Ok((row, stock))
+            })
+            .collect()
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(Error::new)?;
+
+    Ok(listings
+        .into_iter()
+        .map(|(row, stock)| GraphQLGenieShopListing {
+            id: row.id,
+            actor_id: row.actor_id,
+            item_id: row.item_id,
+            price_kind: row.price_kind,
+            price_resource_type: row.price_resource_type,
+            price_resource_amount: row.price_resource_amount,
+            price_item_id: row.price_item_id,
+            price_item_quantity: row.price_item_quantity,
+            stock_quantity: stock,
+        })
+        .collect())
+}
+
+/// Any world member may view a clock's configured rewards (the GM's
+/// authoring UI and, potentially, a player checking what a clock pays
+/// out both need this — no reason to restrict reads when configuration
+/// itself is already GM-only).
+pub async fn genie_puzzle_clock_rewards_impl(
+    state: &AppState,
+    user_id: Uuid,
+    clock_id: Uuid,
+) -> GraphQLResult<Vec<GraphQLGeniePuzzleClockReward>> {
+    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let world_id = tokio::task::spawn_blocking(move || -> Result<Uuid, String> {
+        let session_id = world_genie_puzzle_clocks::table
+            .filter(world_genie_puzzle_clocks::id.eq(clock_id))
+            .select(world_genie_puzzle_clocks::session_id)
+            .first::<Uuid>(&mut conn)
+            .map_err(|_| "Puzzle Clock not found".to_string())?;
+        world_genie_sessions::table
+            .filter(world_genie_sessions::id.eq(session_id))
+            .select(world_genie_sessions::world_id)
+            .first::<Uuid>(&mut conn)
+            .map_err(|_| "Genie session not found".to_string())
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(Error::new)?;
+
+    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    require_world_member(&mut conn, user_id, world_id).map_err(|_| Error::new("You must be a member of this world"))?;
+
+    let rewards = tokio::task::spawn_blocking(move || -> Result<Vec<GeniePuzzleClockReward>, String> {
+        world_genie_puzzle_clock_rewards::table
+            .filter(world_genie_puzzle_clock_rewards::clock_id.eq(clock_id))
+            .order(world_genie_puzzle_clock_rewards::trigger_segment.asc())
+            .select(GeniePuzzleClockReward::as_select())
+            .load::<GeniePuzzleClockReward>(&mut conn)
+            .map_err(|e| format!("Failed to load Puzzle Clock rewards: {e}"))
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(Error::new)?;
+
+    Ok(rewards.into_iter().map(GraphQLGeniePuzzleClockReward::from).collect())
+}
+
 #[derive(Default)]
 pub struct GenieSessionQuery;
 
@@ -188,6 +305,22 @@ impl GenieSessionQuery {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         genie_trade_proposals_impl(state, auth_user.user_id, auth_user.is_admin, actor_id).await
+    }
+
+    async fn genie_shop_listings(&self, ctx: &Context<'_>, actor_id: Uuid) -> GraphQLResult<Vec<GraphQLGenieShopListing>> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        genie_shop_listings_impl(state, auth_user.user_id, actor_id).await
+    }
+
+    async fn genie_puzzle_clock_rewards(
+        &self,
+        ctx: &Context<'_>,
+        clock_id: Uuid,
+    ) -> GraphQLResult<Vec<GraphQLGeniePuzzleClockReward>> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        genie_puzzle_clock_rewards_impl(state, auth_user.user_id, clock_id).await
     }
 }
 
@@ -335,5 +468,63 @@ mod tests {
 
         let result = genie_trade_proposals_impl(&state, stranger_id, false, to_actor).await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn genie_shop_listings_readable_by_any_world_member_and_derives_stock() {
+        use crate::graphql::mutations_genie_session::{create_shop_listing_impl, GenieShopPriceKind};
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let player_id = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world_id, player_id, "Player");
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        let npc = insert_test_actor(&mut conn, world_id, scene_id, owner_id);
+
+        use crate::schema::{world_actor_inventory, world_items};
+        let item_id = Uuid::now_v7();
+        let now = chrono::Utc::now().naive_utc();
+        diesel::insert_into(world_items::table)
+            .values((
+                world_items::id.eq(item_id),
+                world_items::world_id.eq(world_id),
+                world_items::name.eq("Test Item"),
+                world_items::created_by.eq(owner_id),
+                world_items::created_at.eq(now),
+                world_items::updated_at.eq(now),
+            ))
+            .execute(&mut conn)
+            .unwrap();
+        diesel::insert_into(world_actor_inventory::table)
+            .values((
+                world_actor_inventory::actor_id.eq(npc),
+                world_actor_inventory::item_id.eq(item_id),
+                world_actor_inventory::item_name_snapshot.eq("Test Item"),
+                world_actor_inventory::quantity.eq(2),
+            ))
+            .execute(&mut conn)
+            .unwrap();
+        drop(conn);
+
+        create_shop_listing_impl(
+            &state,
+            owner_id,
+            false,
+            npc,
+            item_id,
+            GenieShopPriceKind::Resource,
+            Some("insight".to_string()),
+            Some(1),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let listings = genie_shop_listings_impl(&state, player_id, npc).await.unwrap();
+        assert_eq!(listings.len(), 1);
+        assert_eq!(listings[0].stock_quantity, 2, "stock is derived from world_actor_inventory.quantity");
     }
 }

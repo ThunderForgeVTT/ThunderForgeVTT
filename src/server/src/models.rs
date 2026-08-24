@@ -6,7 +6,8 @@ use crate::schema::{
     shapes, tokens, user_oauth_accounts, user_sessions, users, walls, world_actor_claims,
     world_actor_inventory,
     world_actor_permissions, world_actor_shares, world_actor_system_data, world_actors,
-    world_events, world_genie_puzzle_clocks, world_genie_resource_holdings,
+    world_events, world_genie_puzzle_clock_rewards, world_genie_puzzle_clocks,
+    world_genie_resource_holdings, world_genie_shop_listings,
     world_genie_sessions, world_genie_trade_proposals, world_invites, world_item_effects,
     world_item_permissions, world_item_shares,
     world_items, world_lore_entries, world_lore_image_assets, world_lore_links,
@@ -334,6 +335,10 @@ pub struct World {
     /// Spec 017 (FR-007): GM-controlled, defaults to false. Gates whether
     /// the Actor Selection screen offers "create your own character".
     pub allow_player_created_actors: bool,
+    /// Spec 020 (FR-003, research.md R1): GM-controlled, defaults to
+    /// false. When true, Genie Session Resource holdings carry over into
+    /// the next session instead of resetting to 0.
+    pub genie_resource_carryover_enabled: bool,
 }
 
 // Policy struct disabled - table not implemented
@@ -1498,5 +1503,70 @@ pub struct NewGenieTradeProposal {
     pub to_actor_id: uuid::Uuid,
     pub to_resource_type: String,
     pub to_quantity: i32,
+    pub created_by: uuid::Uuid,
+}
+
+// ============================================================================
+// Spec 020: Genie Session Resource Economy — NPC shop listings and
+// configurable Puzzle Clock rewards. data-model.md
+// "world_genie_shop_listings", "world_genie_puzzle_clock_rewards".
+// ============================================================================
+
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_genie_shop_listings)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct GenieShopListing {
+    pub id: uuid::Uuid,
+    pub actor_id: uuid::Uuid,
+    pub item_id: uuid::Uuid,
+    pub price_kind: String,
+    pub price_resource_type: Option<String>,
+    pub price_resource_amount: Option<i32>,
+    pub price_item_id: Option<uuid::Uuid>,
+    pub price_item_quantity: Option<i32>,
+    pub created_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_genie_shop_listings)]
+pub struct NewGenieShopListing {
+    pub actor_id: uuid::Uuid,
+    pub item_id: uuid::Uuid,
+    pub price_kind: String,
+    pub price_resource_type: Option<String>,
+    pub price_resource_amount: Option<i32>,
+    pub price_item_id: Option<uuid::Uuid>,
+    pub price_item_quantity: Option<i32>,
+    pub created_by: uuid::Uuid,
+}
+
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_genie_puzzle_clock_rewards)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct GeniePuzzleClockReward {
+    pub id: uuid::Uuid,
+    pub clock_id: uuid::Uuid,
+    pub trigger_segment: i32,
+    pub reward_resource_type: Option<String>,
+    pub reward_resource_amount: Option<i32>,
+    pub reward_item_id: Option<uuid::Uuid>,
+    pub reward_item_quantity: Option<i32>,
+    pub recipient_mode: String,
+    pub granted_at: Option<chrono::NaiveDateTime>,
+    pub created_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_genie_puzzle_clock_rewards)]
+pub struct NewGeniePuzzleClockReward {
+    pub clock_id: uuid::Uuid,
+    pub trigger_segment: i32,
+    pub reward_resource_type: Option<String>,
+    pub reward_resource_amount: Option<i32>,
+    pub reward_item_id: Option<uuid::Uuid>,
+    pub reward_item_quantity: Option<i32>,
+    pub recipient_mode: String,
     pub created_by: uuid::Uuid,
 }

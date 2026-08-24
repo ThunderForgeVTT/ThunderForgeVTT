@@ -18,6 +18,9 @@ export interface WorldRecord {
   /** Spec 017 (FR-007): gates the Actor Selection screen's
    * "create your own character" option. */
   allowPlayerCreatedActors: boolean;
+  /** Spec 020 (FR-003): when true, Genie Session Resource holdings carry
+   * over into the next session instead of resetting to 0. */
+  genieResourceCarryoverEnabled: boolean;
 }
 
 /** One entry in `myWorldsWithRole` — a world the caller owns or is an

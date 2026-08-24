@@ -8,10 +8,11 @@
  * rather than a scene-scoped canvas primitive.
  *
  * Per data-model.md's `world_events` section and
- * `contracts/genie-session-loop.md`, the notify payload (`token_event`
- * JSON column) is a discriminated union on `kind`:
- * `"wish_pool" | "doom_clock" | "puzzle_clock" | "resource_trade"`, each
- * carrying `session_id` plus kind-specific fields — never the full
+ * `contracts/genie-session-loop.md`/`contracts/genie-economy.md`, the
+ * notify payload (`token_event` JSON column) is a discriminated union on
+ * `kind`: `"wish_pool" | "doom_clock" | "puzzle_clock" | "resource_trade"
+ * | "resource_grant" | "purchase" | "clock_reward"` (the last three added
+ * by spec 020), each carrying `session_id` plus kind-specific fields — never the full
  * session/clock/holdings shape, the same "notify carries an id, the
  * client re-fetches" convention `tokens.ts`/`walls.ts` already use for
  * their own event codes (10/14). This module intentionally does NOT
@@ -31,7 +32,14 @@
 
 export const GENIE_SESSION_EVENT_CODE = 15;
 
-export type GenieSessionEventKind = "wish_pool" | "doom_clock" | "puzzle_clock" | "resource_trade";
+export type GenieSessionEventKind =
+  | "wish_pool"
+  | "doom_clock"
+  | "puzzle_clock"
+  | "resource_trade"
+  | "resource_grant"
+  | "purchase"
+  | "clock_reward";
 
 export interface GenieSessionWorldEventPayload {
   kind: GenieSessionEventKind;
@@ -74,7 +82,15 @@ export function applyGenieSessionWorldEvent(
     return;
   }
 
-  if (payload.kind === "resource_trade") {
+  // Spec 020: resource_grant/purchase change a single actor's holdings
+  // (and, for purchase, inventory) the same way an accepted trade does —
+  // route them through onResourceTradeChanged too. clock_reward can
+  // change BOTH the clock's segment state and a recipient's holdings, so
+  // it fires both handlers rather than picking one.
+  if (payload.kind === "resource_trade" || payload.kind === "resource_grant" || payload.kind === "purchase") {
+    handlers.onResourceTradeChanged?.(payload);
+  } else if (payload.kind === "clock_reward") {
+    handlers.onSessionStateChanged?.(payload);
     handlers.onResourceTradeChanged?.(payload);
   } else {
     handlers.onSessionStateChanged?.(payload);

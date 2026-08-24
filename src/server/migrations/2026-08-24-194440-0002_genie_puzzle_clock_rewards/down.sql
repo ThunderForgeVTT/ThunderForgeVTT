@@ -1,0 +1,1 @@
+DROP TABLE world_genie_puzzle_clock_rewards;

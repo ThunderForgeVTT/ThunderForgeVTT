@@ -1371,6 +1371,7 @@ pub async fn create_world_impl(
         updated_at: now,
         session_notes: None,
         allow_player_created_actors: false,
+        genie_resource_carryover_enabled: false,
     };
 
     let inserted_world = new_world.clone();
@@ -1567,6 +1568,52 @@ pub async fn update_world_allow_player_created_actors_impl(
     Ok(GraphQLWorld::from(updated))
 }
 
+/// Spec 020 (FR-003, research.md R1): the GM-controlled per-world setting
+/// gating whether Genie Session Resource holdings carry over into the
+/// next session.
+#[derive(InputObject, Debug, Clone)]
+pub struct UpdateWorldGenieResourceCarryoverInput {
+    pub world_id: uuid::Uuid,
+    pub enabled: bool,
+}
+
+/// Testable core of `WorldMutation::update_world_genie_resource_carryover`
+/// (mirrors `update_world_allow_player_created_actors_impl`'s identical
+/// shape/rationale). DM/GM-only.
+pub async fn update_world_genie_resource_carryover_impl(
+    state: &AppState,
+    user_id: uuid::Uuid,
+    is_admin: bool,
+    input: UpdateWorldGenieResourceCarryoverInput,
+) -> GraphQLResult<GraphQLWorld> {
+    if !crate::auth::actor_permissions::is_dm_of_world(state, user_id, is_admin, input.world_id)
+        .await?
+    {
+        return Err(Error::new(
+            "Only the DM (Owner or GM) may change this world's resource carryover setting",
+        ));
+    }
+
+    let world_id = input.world_id;
+    let enabled = input.enabled;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    let updated = tokio::task::spawn_blocking(move || {
+        diesel::update(worlds::table.filter(worlds::id.eq(world_id)))
+            .set(worlds::genie_resource_carryover_enabled.eq(enabled))
+            .returning(World::as_returning())
+            .get_result::<World>(&mut conn)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to update genie_resource_carryover_enabled"))?;
+
+    Ok(GraphQLWorld::from(updated))
+}
+
 #[derive(Default)]
 pub struct WorldMutation;
 
@@ -1618,6 +1665,16 @@ impl WorldMutation {
             input,
         )
         .await
+    }
+
+    async fn update_world_genie_resource_carryover(
+        &self,
+        ctx: &Context<'_>,
+        input: UpdateWorldGenieResourceCarryoverInput,
+    ) -> GraphQLResult<GraphQLWorld> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        update_world_genie_resource_carryover_impl(state, auth_user.user_id, auth_user.is_admin, input).await
     }
 
     async fn rename_world(

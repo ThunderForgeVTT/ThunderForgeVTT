@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { BUNDLED_SYSTEM_IDS, getGameSystemManifest } from "@/api/gameSystems";
-import { getWorld, updateWorldGameSystem } from "@/api/world";
+import { getWorld, updateWorldGameSystem, updateWorldGenieResourceCarryover } from "@/api/world";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
@@ -109,6 +109,19 @@ export default function WorldSystemSettingsPage() {
     setPendingManifest(null);
   };
 
+  const [isSavingCarryover, setIsSavingCarryover] = useState(false);
+  const handleToggleCarryover = async (enabled: boolean) => {
+    setIsSavingCarryover(true);
+    try {
+      const updated = await updateWorldGenieResourceCarryover(worldId, enabled);
+      setWorld(updated);
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Failed to update resource carryover setting");
+    } finally {
+      setIsSavingCarryover(false);
+    }
+  };
+
   if (isLoading) {
     return <Loader fullScreen label="Loading system settings" />;
   }
@@ -204,6 +217,26 @@ export default function WorldSystemSettingsPage() {
                 {status}
               </StatusBadge>
             ) : null}
+          </Card>
+        ) : null}
+
+        {isGm && world.gameSystemId === "genie" ? (
+          <Card className="grid gap-3 p-6" data-testid="genie-resource-carryover-card">
+            <h2 className="text-lg font-semibold">Session Resource carryover</h2>
+            <p className="text-sm text-muted-foreground">
+              When enabled, players' Insight/Favor/Essence holdings carry over into the next Genie
+              session instead of resetting to 0 — "the rope doesn't disappear."
+            </p>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={world.genieResourceCarryoverEnabled}
+                disabled={isSavingCarryover}
+                onChange={(event) => void handleToggleCarryover(event.target.checked)}
+                data-testid="genie-resource-carryover-toggle"
+              />
+              Carry over Session Resource holdings between sessions
+            </label>
           </Card>
         ) : null}
 

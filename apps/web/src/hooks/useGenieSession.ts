@@ -21,16 +21,26 @@ import {
   acceptResourceTrade as acceptResourceTradeRequest,
   advanceDoomClock as advanceDoomClockRequest,
   advancePuzzleClock as advancePuzzleClockRequest,
+  configurePuzzleClockReward as configurePuzzleClockRewardRequest,
+  type ConfigurePuzzleClockRewardInput,
   createPuzzleClock as createPuzzleClockRequest,
+  createShopListing as createShopListingRequest,
+  type CreateShopListingInput,
   declineResourceTrade as declineResourceTradeRequest,
   fetchGenieResourceHoldings,
+  fetchGeniePuzzleClockRewards,
   fetchGenieSession,
+  fetchGenieShopListings,
   fetchGenieTradeProposals,
   type GenieResourceHoldingRecord,
+  type GeniePuzzleClockRewardRecord,
   type GenieSessionRecord,
+  type GenieShopListingRecord,
   type GenieTradeProposalRecord,
+  grantSessionResource as grantSessionResourceRequest,
   proposeResourceTrade as proposeResourceTradeRequest,
   type ProposeResourceTradeInput,
+  purchaseFromShop as purchaseFromShopRequest,
   spendResourceOnPuzzleClock as spendResourceOnPuzzleClockRequest,
   spendWish as spendWishRequest,
   startGenieSession as startGenieSessionRequest,
@@ -46,7 +56,8 @@ export interface UseGenieSessionResult {
   spendWish: (narrativeEffect: string) => Promise<void>;
   advanceDoomClock: (delta: number) => Promise<void>;
   createPuzzleClock: (label: string, segmentsMax: number) => Promise<void>;
-  advancePuzzleClock: (clockId: string, delta: number) => Promise<void>;
+  /** `actorId` optional (spec 020 FR-006a): attributes a triggering_actor-mode reward to that actor; omitted, falls back to a whole-party split. */
+  advancePuzzleClock: (clockId: string, delta: number, actorId?: string) => Promise<void>;
   proposeResourceTrade: (input: ProposeResourceTradeInput) => Promise<void>;
   acceptResourceTrade: (proposalId: string) => Promise<GenieResourceHoldingRecord[]>;
   declineResourceTrade: (proposalId: string) => Promise<void>;
@@ -56,6 +67,18 @@ export interface UseGenieSessionResult {
     resourceType: string,
     quantity: number,
   ) => Promise<void>;
+  /** Spec 020 (FR-001): GM-only direct grant. */
+  grantSessionResource: (actorId: string, resourceType: string, amount: number) => Promise<void>;
+  /** Spec 020 (FR-004): GM-only. Refreshes shopListings for actorId on success. */
+  createShopListing: (input: CreateShopListingInput) => Promise<void>;
+  /** Spec 020 (FR-005/FR-005a). Refreshes shopListings for the purchased listing's actor on success. */
+  purchaseFromShop: (listingId: string, buyerActorId: string, sellerActorId: string) => Promise<void>;
+  /** Spec 020 (FR-006): GM-only Puzzle Clock reward configuration. */
+  configurePuzzleClockReward: (input: ConfigurePuzzleClockRewardInput) => Promise<void>;
+  /** Spec 020: fetches (and caches by actorId) an NPC's shop listings for display. */
+  fetchShopListings: (actorId: string) => Promise<GenieShopListingRecord[]>;
+  /** Spec 020: fetches a Puzzle Clock's configured reward entries for display. */
+  fetchPuzzleClockRewards: (clockId: string) => Promise<GeniePuzzleClockRewardRecord[]>;
   /** Spec 019: the viewer's own PC in this world (first non-NPC actor they
    * own), and every *other* PC — the two things `SessionResourceTrade`
    * needs to offer a trade to someone. `null` while unresolved/absent. */
@@ -231,8 +254,8 @@ export function useGenieSession(
   // the persisted status, this is just keeping the client in sync with
   // what that same mutation just did, the same way advanceDoomClock/
   // spendWish already set state straight from their own responses.
-  const advancePuzzleClock = useCallback(async (clockId: string, delta: number) => {
-    const updatedClock = await advancePuzzleClockRequest(clockId, delta);
+  const advancePuzzleClock = useCallback(async (clockId: string, delta: number, actorId?: string) => {
+    const updatedClock = await advancePuzzleClockRequest(clockId, delta, actorId);
     setSession((prev) => {
       if (!prev) return prev;
       const puzzleClocks = prev.puzzleClocks.map((c) => (c.id === clockId ? updatedClock : c));
@@ -287,6 +310,40 @@ export function useGenieSession(
     [],
   );
 
+  // Spec 020 (FR-001): a direct GM grant is exactly the same holdings
+  // mutation shape as a resource trade — update local myHoldings
+  // straight from the response for the granting GM's own client (the
+  // recipient's client, if different, updates via live sync's
+  // "resource_grant" -> onResourceTradeChanged routing).
+  const grantSessionResource = useCallback(
+    async (actorId: string, resourceType: string, amount: number) => {
+      if (!session) return;
+      await grantSessionResourceRequest(session.id, actorId, resourceType, amount);
+      await refetchTrades();
+    },
+    [session, refetchTrades],
+  );
+
+  const createShopListing = useCallback(async (input: CreateShopListingInput) => {
+    await createShopListingRequest(input);
+  }, []);
+
+  const purchaseFromShop = useCallback(
+    async (listingId: string, buyerActorId: string, _sellerActorId: string) => {
+      await purchaseFromShopRequest(listingId, buyerActorId);
+      await refetchTrades();
+    },
+    [refetchTrades],
+  );
+
+  const configurePuzzleClockReward = useCallback(async (input: ConfigurePuzzleClockRewardInput) => {
+    await configurePuzzleClockRewardRequest(input);
+  }, []);
+
+  const fetchShopListings = useCallback((actorId: string) => fetchGenieShopListings(actorId), []);
+
+  const fetchPuzzleClockRewards = useCallback((clockId: string) => fetchGeniePuzzleClockRewards(clockId), []);
+
   return {
     session,
     loading,
@@ -301,6 +358,12 @@ export function useGenieSession(
     acceptResourceTrade,
     declineResourceTrade,
     spendResourceOnPuzzleClock,
+    grantSessionResource,
+    createShopListing,
+    purchaseFromShop,
+    configurePuzzleClockReward,
+    fetchShopListings,
+    fetchPuzzleClockRewards,
     myActor,
     partyMembers,
     myHoldings,

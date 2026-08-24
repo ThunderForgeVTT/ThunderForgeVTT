@@ -103,6 +103,9 @@ pub struct GraphQLWorld {
     /// Spec 017 (FR-007): gates the Actor Selection screen's "create your
     /// own character" option. GM-controlled, defaults to false.
     pub allow_player_created_actors: bool,
+    /// Spec 020 (FR-003): when true, Genie Session Resource holdings
+    /// carry over into the next session instead of resetting to 0.
+    pub genie_resource_carryover_enabled: bool,
 }
 
 impl From<World> for GraphQLWorld {
@@ -125,6 +128,7 @@ impl From<World> for GraphQLWorld {
             updated_at: world.updated_at,
             session_notes: world.session_notes,
             allow_player_created_actors: world.allow_player_created_actors,
+            genie_resource_carryover_enabled: world.genie_resource_carryover_enabled,
         }
     }
 }
