@@ -29,7 +29,7 @@ dev-tunnel: services-up migrate
 		echo "cloudflared not found. Install it: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/"; \
 		exit 1; \
 	}
-	pnpm dev -- --tunnel
+	pnpm dev --tunnel
 
 services-up:
 	@if [ ! -f .env ]; then \
