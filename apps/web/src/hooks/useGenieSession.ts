@@ -109,19 +109,33 @@ export function useGenieSession(worldId: string | undefined): UseGenieSessionRes
   const createPuzzleClock = useCallback(
     async (label: string, segmentsMax: number) => {
       if (!session) return;
-      await createPuzzleClockRequest(session.id, label, segmentsMax);
-      await refetch();
+      const clock = await createPuzzleClockRequest(session.id, label, segmentsMax);
+      setSession((prev) => (prev ? { ...prev, puzzleClocks: [...prev.puzzleClocks, clock] } : prev));
     },
-    [session, refetch],
+    [session],
   );
 
-  const advancePuzzleClock = useCallback(
-    async (clockId: string, delta: number) => {
-      await advancePuzzleClockRequest(clockId, delta);
-      await refetch();
-    },
-    [refetch],
-  );
+  // Deliberately not a refetch() after the mutation: genieSession(worldId)
+  // only ever returns the *active* session for a world
+  // (queries/genie_session.rs filters status="active"), so a mutation
+  // that resolves the last unresolved Puzzle Clock and wins the session
+  // would make the very next refetch come back null and blank the whole
+  // panel instead of showing the won state. Merge the mutation's
+  // response locally instead, and mirror the server's own win rule
+  // (mutations_genie_session.rs's all_puzzle_clocks_resolved) so the UI
+  // reflects "won" immediately — the server is still the authority on
+  // the persisted status, this is just keeping the client in sync with
+  // what that same mutation just did, the same way advanceDoomClock/
+  // spendWish already set state straight from their own responses.
+  const advancePuzzleClock = useCallback(async (clockId: string, delta: number) => {
+    const updatedClock = await advancePuzzleClockRequest(clockId, delta);
+    setSession((prev) => {
+      if (!prev) return prev;
+      const puzzleClocks = prev.puzzleClocks.map((c) => (c.id === clockId ? updatedClock : c));
+      const allResolved = puzzleClocks.length > 0 && puzzleClocks.every((c) => c.resolvedAt);
+      return { ...prev, puzzleClocks, status: allResolved ? "WON" : prev.status };
+    });
+  }, []);
 
   const proposeResourceTrade = useCallback(async (input: ProposeResourceTradeInput) => {
     await proposeResourceTradeRequest(input);
@@ -131,12 +145,25 @@ export function useGenieSession(worldId: string | undefined): UseGenieSessionRes
     return acceptResourceTradeRequest(proposalId);
   }, []);
 
+  // Same rationale as advancePuzzleClock above: this can also resolve the
+  // clock and win the session, so it merges the response locally instead
+  // of refetching into a null-because-concluded genieSession(worldId).
   const spendResourceOnPuzzleClock = useCallback(
     async (clockId: string, actorId: string, resourceType: string, quantity: number) => {
-      await spendResourceOnPuzzleClockRequest(clockId, actorId, resourceType, quantity);
-      await refetch();
+      const updatedClock = await spendResourceOnPuzzleClockRequest(
+        clockId,
+        actorId,
+        resourceType,
+        quantity,
+      );
+      setSession((prev) => {
+        if (!prev) return prev;
+        const puzzleClocks = prev.puzzleClocks.map((c) => (c.id === clockId ? updatedClock : c));
+        const allResolved = puzzleClocks.length > 0 && puzzleClocks.every((c) => c.resolvedAt);
+        return { ...prev, puzzleClocks, status: allResolved ? "WON" : prev.status };
+      });
     },
-    [refetch],
+    [],
   );
 
   return {
