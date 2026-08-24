@@ -274,4 +274,101 @@ mod tests {
         assert_eq!(records.len(), 2);
         assert_ne!(records[0].triggered_by, records[1].triggered_by);
     }
+
+    /// US3 (T021): `RollDiceInput.bindings` correctly maps into
+    /// `resolve()`'s `PlaceholderBindings`, and a missing placeholder
+    /// surfaces as a specific, distinguishable error message rather than
+    /// a generic failure.
+    #[tokio::test]
+    async fn placeholder_bindings_flow_through_and_missing_ones_are_specific_errors() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let mut rng = StepRng::new(0, 1);
+        let low = roll_dice_impl(
+            &state,
+            owner_id,
+            RollDiceInput {
+                world_id,
+                formula: "1d20 + STAT".to_string(),
+                bindings: Some(vec![PlaceholderBindingInput { name: "STAT".to_string(), value: 3.0 }]),
+            },
+            &mut rng,
+        )
+        .await
+        .unwrap();
+
+        let mut rng = StepRng::new(0, 1);
+        let high = roll_dice_impl(
+            &state,
+            owner_id,
+            RollDiceInput {
+                world_id,
+                formula: "1d20 + STAT".to_string(),
+                bindings: Some(vec![PlaceholderBindingInput { name: "STAT".to_string(), value: 8.0 }]),
+            },
+            &mut rng,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(high.result_value - low.result_value, 5.0);
+
+        let mut rng = StepRng::new(0, 1);
+        let err = roll_dice_impl(
+            &state,
+            owner_id,
+            RollDiceInput { world_id, formula: "1d20 + STAT".to_string(), bindings: None },
+            &mut rng,
+        )
+        .await
+        .unwrap_err();
+        assert!(err.message.contains("STAT"), "error should name the missing placeholder: {}", err.message);
+    }
+
+    /// US3 (T022, SC-005): a spec 013 Item Effect-style formula (attack
+    /// roll with a stat + flat modifiers placeholder) resolves through
+    /// `rollDice` with no schema changes needed on either side.
+    #[tokio::test]
+    async fn spec_013_item_effect_formula_resolves_unchanged() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        // A "Longsword" damage effect's stored formula (spec 013).
+        let mut rng = StepRng::new(0, 1);
+        let damage = roll_dice_impl(
+            &state,
+            owner_id,
+            RollDiceInput { world_id, formula: "2d8".to_string(), bindings: None },
+            &mut rng,
+        )
+        .await
+        .unwrap();
+        assert_eq!(damage.dice.len(), 2);
+
+        // An attack-roll effect's stored formula.
+        let mut rng = StepRng::new(0, 1);
+        let attack = roll_dice_impl(
+            &state,
+            owner_id,
+            RollDiceInput {
+                world_id,
+                formula: "1d20 + STAT + MODIFIERS".to_string(),
+                bindings: Some(vec![
+                    PlaceholderBindingInput { name: "STAT".to_string(), value: 3.0 },
+                    PlaceholderBindingInput { name: "MODIFIERS".to_string(), value: 2.0 },
+                ]),
+            },
+            &mut rng,
+        )
+        .await
+        .unwrap();
+        assert_eq!(attack.dice.len(), 1);
+    }
 }

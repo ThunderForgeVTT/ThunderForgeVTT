@@ -96,8 +96,8 @@ New workspace crate `crates/thunderforge-dice/` (path-dependency from both `src/
 
 ### Implementation for User Story 3
 
-- [ ] T021 [US3] Confirm (resolver test in `mutations_roll.rs`) that `RollDiceInput.bindings` (a list of `PlaceholderBindingInput{name, value}`) is correctly converted to the crate's `PlaceholderBindings` map before calling `resolve()`, and that a `MissingPlaceholder` error surfaces as a specific, distinguishable GraphQL error (not a generic failure) — this is primarily a wiring/mapping check since T007/T010 already prove the underlying logic (depends on T016)
-- [ ] T022 [US3] [P] Resolve an actual spec 013 Item Effect formula (e.g. a "Longsword" damage effect's stored `2d8`, or an attack-roll's `1d20 + STAT + MODIFIERS` with test bindings) through `rollDice` in a resolver test, confirming zero changes are needed to spec 013's `world_item_effects` schema (SC-005, quickstart.md's "spec 013 unlock" cross-cutting check) (depends on T016)
+- [X] T021 [US3] Confirm (resolver test in `mutations_roll.rs`) that `RollDiceInput.bindings` (a list of `PlaceholderBindingInput{name, value}`) is correctly converted to the crate's `PlaceholderBindings` map before calling `resolve()`, and that a `MissingPlaceholder` error surfaces as a specific, distinguishable GraphQL error (not a generic failure) — this is primarily a wiring/mapping check since T007/T010 already prove the underlying logic (depends on T016)
+- [X] T022 [US3] [P] Resolve an actual spec 013 Item Effect formula (e.g. a "Longsword" damage effect's stored `2d8`, or an attack-roll's `1d20 + STAT + MODIFIERS` with test bindings) through `rollDice` in a resolver test, confirming zero changes are needed to spec 013's `world_item_effects` schema (SC-005, quickstart.md's "spec 013 unlock" cross-cutting check) (depends on T016)
 
 **Checkpoint**: User Stories 1-3 all work independently — a formula authored once (e.g. spec 013's Item Effects) resolves correctly for different characters' different stat values.
 
