@@ -15,6 +15,12 @@ pub async fn scenes_impl(
     // 🔐 SECURITY: Verify user has access to this world before returning scenes
     require_visible_world(state, user_id, is_admin, world_id).await?;
 
+    // Spec 022 (FR-008/FR-009): GM/Owner see every scene, hidden or not;
+    // everyone else only sees non-hidden scenes — mirrors the
+    // GM-vs-player branching already used for `shapes.visible_to_players`.
+    let is_dm = crate::auth::actor_permissions::is_dm_of_world(state, user_id, is_admin, world_id)
+        .await?;
+
     let mut conn = state
         .db_pool
         .get()
@@ -22,8 +28,13 @@ pub async fn scenes_impl(
 
     tokio::task::spawn_blocking(move || {
         use crate::schema::scenes;
-        scenes::table
+        let mut query = scenes::table
             .filter(scenes::world_id.eq(world_id))
+            .into_boxed();
+        if !is_dm {
+            query = query.filter(scenes::hidden.eq(false));
+        }
+        query
             .select(crate::models::Scene::as_select())
             .load::<crate::models::Scene>(&mut conn)
     })
@@ -48,6 +59,12 @@ pub async fn scene_impl(
         return Ok(None);
     }
 
+    // Spec 022 (FR-008): a non-GM caller must not be able to fetch a
+    // hidden scene's detail even by guessing/bookmarking its URL — mirrors
+    // `scenes_impl`'s list-level filtering.
+    let is_dm = crate::auth::actor_permissions::is_dm_of_world(state, user_id, is_admin, world_id)
+        .await?;
+
     let mut conn = state
         .db_pool
         .get()
@@ -55,8 +72,11 @@ pub async fn scene_impl(
 
     tokio::task::spawn_blocking(move || {
         use crate::schema::scenes;
-        scenes::table
-            .filter(scenes::scene_id.eq(scene_id))
+        let mut query = scenes::table.filter(scenes::scene_id.eq(scene_id)).into_boxed();
+        if !is_dm {
+            query = query.filter(scenes::hidden.eq(false));
+        }
+        query
             .select(crate::models::Scene::as_select())
             .first::<crate::models::Scene>(&mut conn)
             .optional()
@@ -381,6 +401,89 @@ mod tests {
         assert!(
             result.is_none(),
             "a user with no ownership or world_members row must not see the scene"
+        );
+    }
+
+    // ===== Spec 022: hidden-scene filtering (FR-008/FR-009) =====
+
+    #[tokio::test]
+    async fn scenes_excludes_hidden_scenes_for_a_non_dm_but_not_for_the_owner() {
+        use crate::schema::scenes;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let player_id = insert_test_user(&mut conn);
+        crate::test_support::insert_test_world_member(&mut conn, world_id, player_id, "Player");
+
+        // insert_test_scene's raw insert relies on the `hidden` column's
+        // DB default (true) — explicit here for clarity. It also always
+        // names the scene "Test Scene" (unique per world), so the second
+        // scene is inserted directly with a distinct name.
+        let hidden_scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        diesel::update(scenes::table.filter(scenes::scene_id.eq(hidden_scene_id)))
+            .set(scenes::hidden.eq(true))
+            .execute(&mut conn)
+            .unwrap();
+        let visible_scene_id = uuid::Uuid::now_v7();
+        diesel::insert_into(scenes::table)
+            .values((
+                scenes::scene_id.eq(visible_scene_id),
+                scenes::world_id.eq(world_id),
+                scenes::name.eq("Second Test Scene"),
+                scenes::type_.eq("battlemap"),
+                scenes::grid_size.eq(5),
+                scenes::grid_type.eq("square"),
+                scenes::width.eq(100),
+                scenes::height.eq(100),
+                scenes::owner_id.eq(owner_id),
+                scenes::hidden.eq(false),
+            ))
+            .execute(&mut conn)
+            .unwrap();
+        drop(conn);
+
+        let owner_scenes = scenes_impl(&state, owner_id, false, world_id)
+            .await
+            .expect("owner should be able to list scenes");
+        assert_eq!(owner_scenes.len(), 2, "GM/Owner must see hidden and visible scenes (FR-009)");
+
+        let player_scenes = scenes_impl(&state, player_id, false, world_id)
+            .await
+            .expect("player should be able to list scenes");
+        assert_eq!(player_scenes.len(), 1, "a non-DM must only see non-hidden scenes (FR-008)");
+        assert_eq!(player_scenes[0].scene_id, visible_scene_id);
+    }
+
+    #[tokio::test]
+    async fn scene_by_id_is_hidden_from_a_non_dm_but_visible_to_the_owner() {
+        use crate::schema::scenes;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let player_id = insert_test_user(&mut conn);
+        crate::test_support::insert_test_world_member(&mut conn, world_id, player_id, "Player");
+        let hidden_scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        diesel::update(scenes::table.filter(scenes::scene_id.eq(hidden_scene_id)))
+            .set(scenes::hidden.eq(true))
+            .execute(&mut conn)
+            .unwrap();
+        drop(conn);
+
+        let owner_result = scene_impl(&state, owner_id, false, hidden_scene_id)
+            .await
+            .expect("query should not error");
+        assert!(owner_result.is_some(), "GM/Owner must be able to fetch a hidden scene's detail");
+
+        let player_result = scene_impl(&state, player_id, false, hidden_scene_id)
+            .await
+            .expect("query should not error");
+        assert!(
+            player_result.is_none(),
+            "a non-DM must not be able to fetch a hidden scene's detail even by id (FR-008)"
         );
     }
 

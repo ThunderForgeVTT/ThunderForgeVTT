@@ -139,6 +139,11 @@ pub async fn import_uvtt_impl(
     // Postgres anyway); if it fails we bail before any DB writes happen.
     let saved_background =
         save_background_image(user_id, world_id, scene_id, &parsed.file.image).await?;
+    // Spec 022 (FR-012): a preview/thumbnail rendition, generated
+    // alongside the full-resolution background from the same source
+    // bytes. Best-effort — a preview-generation failure must not fail the
+    // whole import (the map itself already saved successfully above).
+    let saved_preview = save_scene_preview_image(&parsed.file.image).await.ok();
 
     let walls: Vec<WallInsert> =
         walls_from_line_of_sight(&parsed.file.line_of_sight, target_grid_size)
@@ -229,6 +234,21 @@ pub async fn import_uvtt_impl(
             diesel::update(scenes::table.filter(scenes::scene_id.eq(scene_id)))
                 .set(scenes::background_asset_id.eq(saved_background.asset_id))
                 .execute(conn)?;
+
+            if let Some(preview) = &saved_preview {
+                use crate::schema::scene_preview_images;
+                diesel::insert_into(scene_preview_images::table)
+                    .values((
+                        scene_preview_images::id.eq(preview.asset_id),
+                        scene_preview_images::scene_id.eq(scene_id),
+                        scene_preview_images::byte_size.eq(preview.byte_size),
+                        scene_preview_images::created_at.eq(now),
+                    ))
+                    .execute(conn)?;
+                diesel::update(scenes::table.filter(scenes::scene_id.eq(scene_id)))
+                    .set(scenes::preview_asset_id.eq(preview.asset_id))
+                    .execute(conn)?;
+            }
 
             // T027: best-effort NOTIFY for the whole batch — do not fail
             // the import if this fails.

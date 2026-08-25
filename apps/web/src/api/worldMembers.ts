@@ -1,5 +1,11 @@
 import { withCsrf } from "@/api/auth";
 
+/** Spec 023 (FR-004): the character a member has claimed, if any. */
+export interface WorldMemberClaimedActor {
+  id: string;
+  label: string;
+}
+
 export interface WorldMemberRecord {
   id: string;
   userId: string;
@@ -8,6 +14,7 @@ export interface WorldMemberRecord {
   worldId?: string;
   createdAt?: string;
   updatedAt?: string;
+  claimedActor: WorldMemberClaimedActor | null;
 }
 
 type GraphQLError = {
@@ -73,9 +80,61 @@ export function getWorldMembers(worldId: string): Promise<WorldMemberRecord[]> {
           joinedAt
           createdAt
           updatedAt
+          claimedActor {
+            id
+            label
+          }
         }
       }
     `,
     { worldId },
   ).then((data) => data.worldMembers);
+}
+
+type UpdateMemberRoleMutation = {
+  updateMemberRole: WorldMemberRecord;
+};
+
+/** Spec 023 (T004): promoted out of `CampaignSettingsPanel.tsx`'s inline-only call. */
+export function updateMemberRole(
+  worldId: string,
+  userId: string,
+  role: string,
+): Promise<WorldMemberRecord> {
+  return postGraphQL<UpdateMemberRoleMutation>(
+    `
+      mutation UpdateMemberRole($input: UpdateMemberRoleInput!) {
+        updateMemberRole(input: $input) {
+          id
+          worldId
+          userId
+          role
+          joinedAt
+          createdAt
+          updatedAt
+          claimedActor {
+            id
+            label
+          }
+        }
+      }
+    `,
+    { input: { worldId, userId, role } },
+  ).then((data) => data.updateMemberRole);
+}
+
+type RemoveMemberMutation = {
+  removeMember: boolean;
+};
+
+/** Spec 023 (T004): promoted out of `CampaignSettingsPanel.tsx`'s inline-only call. */
+export function removeMember(worldId: string, userId: string): Promise<boolean> {
+  return postGraphQL<RemoveMemberMutation>(
+    `
+      mutation RemoveMember($worldId: ID!, $userId: ID!) {
+        removeMember(worldId: $worldId, userId: $userId)
+      }
+    `,
+    { worldId, userId },
+  ).then((data) => data.removeMember);
 }

@@ -12,4 +12,12 @@ export type SceneRecord = {
   ownerId: string;
   createdAt: string;
   updatedAt: string;
+  /** Spec 022: GM-authored Markdown source for the scene's player-facing summary. */
+  summaryMarkdown: string | null;
+  /** Spec 022: sanitized HTML rendered from `summaryMarkdown` — render this, not the raw markdown. */
+  summaryRenderedHtml: string | null;
+  /** Spec 022 (FR-003/FR-008/FR-009): player-facing visibility, hidden by default on creation. */
+  hidden: boolean;
+  /** Spec 022 (FR-011/FR-012): computed URL for the scene's reduced-size preview image, null until generated. */
+  previewUrl: string | null;
 };

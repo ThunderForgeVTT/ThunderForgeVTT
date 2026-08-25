@@ -14,6 +14,7 @@ import {
   loadShapesIntoStore,
   loadTokensIntoStore,
   loadWallsIntoStore,
+  parseSceneLaunchedEvent,
   startLightMutationBridge,
   startShapeMutationBridge,
   startTokenMutationBridge,
@@ -205,6 +206,14 @@ export default function WorldPage() {
       .then((response) => {
         if (active) {
           setWorld(response);
+          // Spec 022 (FR-002d, ADR-046): scene selection is now
+          // server-authoritative (`world.activeSceneId`), not "default to
+          // the first scene" — a world nothing has ever been launched in
+          // shows the empty/unloaded canvas state rather than picking one
+          // arbitrarily. The functional update only fires if nothing has
+          // set `selectedSceneId` yet (e.g. a live launch event, handled
+          // elsewhere), so this never clobbers a switch already in flight.
+          setSelectedSceneId((current) => current ?? response?.activeSceneId ?? null);
         }
       })
       .catch(() => {
@@ -231,13 +240,6 @@ export default function WorldPage() {
           return;
         }
         setScenes(response);
-        // Default to the first scene once scenes load, but don't clobber
-        // a scene the user (or a previous load) already picked.
-        setSelectedSceneId((current) =>
-          current && response.some((scene) => scene.sceneId === current)
-            ? current
-            : (response[0]?.sceneId ?? null),
-        );
       })
       .catch((error) => {
         console.error("Failed to load world scenes:", error);
@@ -583,6 +585,43 @@ export default function WorldPage() {
     markSceneResourceFailed,
   ]);
 
+  // Spec 022 (FR-002b/FR-002d, ADR-046): a second, independent
+  // subscription that's open as soon as `id` is known — deliberately NOT
+  // gated on `sceneId`/`bridgeReady` like the content-sync subscription
+  // below, because its whole job is to *set* `selectedSceneId` (including
+  // from `null`, before anything has ever been launched). Two open
+  // subscriptions to the same `worldEventsCreated` stream once a scene is
+  // selected is an accepted tradeoff for keeping this concern decoupled
+  // from the content-sync effect's sceneId-scoped lifecycle.
+  useEffect(() => {
+    if (!id) {
+      return;
+    }
+
+    const iterator = subscribeToWorldEvents(id)[Symbol.asyncIterator]();
+    let cancelled = false;
+
+    (async () => {
+      try {
+        while (!cancelled) {
+          const { value: event, done } = await iterator.next();
+          if (done || cancelled || !event) break;
+          const launchedSceneId = parseSceneLaunchedEvent(event);
+          if (launchedSceneId) {
+            setSelectedSceneId(launchedSceneId);
+          }
+        }
+      } catch (error) {
+        console.error("Scene-launch live-sync error:", error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      void iterator.return?.();
+    };
+  }, [id]);
+
   // Live cross-client sync: one subscription per mounted scene, feeding
   // every apply*WorldEvent for this scene's canvas primitives — each of
   // those already filters by its own event code internally (walls=10,
@@ -909,7 +948,14 @@ export default function WorldPage() {
             <div
               style={{
                 position: "absolute",
-                bottom: "1rem",
+                // 4.5rem, not 1rem: WorldLayout.tsx's "Back to setup"/"Tools"
+                // buttons dock at bottom-4/left-4 (z-40) — sitting this panel
+                // at bottom-1rem/z-900 the same corner visually covered and
+                // pointer-event-intercepted them (found via e2e flake: clicks
+                // on those buttons kept hitting this panel's dice-formula
+                // input instead). Clearing the button row's height keeps
+                // both reachable.
+                bottom: "4.5rem",
                 left: "1rem",
                 zIndex: 900,
               }}

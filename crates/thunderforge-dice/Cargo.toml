@@ -6,7 +6,7 @@ name = "thunderforge_dice"
 version = "0.1.0"
 edition = "2024"
 repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
-license = "BSD 3-Clause License"
+license.workspace = true
 
 [lib]
 crate-type = ["rlib"]

@@ -232,6 +232,15 @@ diesel::table! {
 }
 
 diesel::table! {
+    scene_preview_images (id) {
+        id -> Uuid,
+        scene_id -> Uuid,
+        byte_size -> Int8,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     scenes (scene_id) {
         scene_id -> Uuid,
         world_id -> Uuid,
@@ -249,6 +258,10 @@ diesel::table! {
         updated_at -> Timestamp,
         background_image_path -> Nullable<Text>,
         background_asset_id -> Nullable<Uuid>,
+        summary_markdown -> Nullable<Text>,
+        summary_rendered_html -> Nullable<Text>,
+        hidden -> Bool,
+        preview_asset_id -> Nullable<Uuid>,
     }
 }
 
@@ -726,6 +739,8 @@ diesel::table! {
         session_notes -> Nullable<Text>,
         allow_player_created_actors -> Bool,
         genie_resource_carryover_enabled -> Bool,
+        default_scene_grid_type -> Text,
+        active_scene_id -> Nullable<Uuid>,
     }
 }
 
@@ -744,7 +759,6 @@ diesel::joinable!(players_online -> users (player_id));
 diesel::joinable!(players_online -> worlds (world_id));
 diesel::joinable!(policies -> worlds (world_id));
 diesel::joinable!(scenes -> users (owner_id));
-diesel::joinable!(scenes -> worlds (world_id));
 diesel::joinable!(shapes -> scenes (scene_id));
 diesel::joinable!(tokens -> scenes (scene_id));
 diesel::joinable!(tokens -> users (owner_user_id));
@@ -815,6 +829,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     oauth_providers,
     players_online,
     policies,
+    scene_preview_images,
     scenes,
     shapes,
     tokens,

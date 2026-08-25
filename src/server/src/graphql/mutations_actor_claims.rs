@@ -99,6 +99,34 @@ pub async fn claimed_by_impl(
     }))
 }
 
+/// Spec 023 (FR-004): the character `member_id` has claimed, if any — the
+/// reverse of `claimed_by_impl` (this reads the same `world_actor_claims`
+/// row, joined the other direction). `None` when the member hasn't
+/// claimed a character.
+pub async fn claimed_actor_impl(
+    state: &AppState,
+    member_id: Uuid,
+) -> GraphQLResult<Option<GraphQLWorldActor>> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    let actor = tokio::task::spawn_blocking(move || {
+        world_actor_claims::table
+            .inner_join(world_actors::table)
+            .filter(world_actor_claims::world_member_id.eq(member_id))
+            .select(WorldActor::as_select())
+            .first::<WorldActor>(&mut conn)
+            .optional()
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|e| Error::new(format!("Failed to look up claimed actor: {e}")))?;
+
+    Ok(actor.map(GraphQLWorldActor::from))
+}
+
 /// `myActorClaim(worldId)`: `None` for the GM/Owner role (FR-003) or a
 /// non-GM member with no claim; otherwise the claimed `GraphQLActorClaim`.
 pub async fn my_actor_claim_impl(
@@ -627,6 +655,48 @@ mod tests {
             .await
             .unwrap();
         assert!(my_claim.is_some(), "the claiming player should now see their claim");
+    }
+
+    // ===== Spec 023: claimed_actor_impl (the Players section's roster join) =====
+
+    #[tokio::test]
+    async fn claimed_actor_impl_returns_none_before_a_claim_and_the_actor_after() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        let actor_id = insert_test_pc(&mut conn, world_id, scene_id, owner_id, "Aria");
+        mark_available(&mut conn, actor_id, true);
+        let player_id = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world_id, player_id, "Player");
+        drop(conn);
+
+        // Need the member's own `world_members.id` (not `user_id`) — fetch
+        // it the same way `claimed_by_impl`'s reverse resolver does.
+        let mut conn = state.db_pool.get().unwrap();
+        let member_id: Uuid = world_members::table
+            .filter(world_members::world_id.eq(world_id))
+            .filter(world_members::user_id.eq(player_id))
+            .select(world_members::id)
+            .first(&mut conn)
+            .unwrap();
+        drop(conn);
+
+        let before = claimed_actor_impl(&state, member_id).await.unwrap();
+        assert!(before.is_none(), "no claim yet — must be None, not an error");
+
+        let claim = claim_actor_impl(&state, player_id, world_id, actor_id)
+            .await
+            .expect("claim should succeed");
+        assert_eq!(claim.world_member_id, member_id);
+
+        let after = claimed_actor_impl(&state, member_id).await.unwrap();
+        assert_eq!(
+            after.map(|a| a.id),
+            Some(actor_id),
+            "after claiming, claimed_actor_impl must return that same actor"
+        );
     }
 
     #[tokio::test]

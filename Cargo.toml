@@ -24,6 +24,14 @@ members = [
 ]
 default-members = ["src/server", "src/core"]
 
+[workspace.package]
+# Relicensed from BSD 3-Clause to AGPL-3.0-or-later (2026-08-25) — see
+# docs/research/session-hosting-architecture-spike.md §9 for the full
+# rationale. Sole-copyright-holder relicense, going-forward only (prior
+# BSD-licensed snapshots remain under those terms for anyone who already
+# has them — this does not and cannot retroactively change that).
+license = "AGPL-3.0-or-later"
+
 # Opt-in lints beyond clippy's own defaults, verified against the current
 # codebase before enabling (`cargo clippy --workspace --all-targets -- -W
 # clippy::<lint>` per lint, checked for zero/near-zero existing violations) —

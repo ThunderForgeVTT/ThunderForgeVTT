@@ -23,6 +23,7 @@ export {
   startTokenMutationBridge,
 } from "./tokens";
 export { subscribeToWorldEvents, type WorldEventLike } from "./subscriptionClient";
+export { parseSceneLaunchedEvent } from "./scenes";
 export {
   applyGenieSessionWorldEvent,
   startGenieSessionEventSync,

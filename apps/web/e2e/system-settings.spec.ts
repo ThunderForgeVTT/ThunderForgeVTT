@@ -134,3 +134,22 @@ test.describe("Spec 016: GM assigns a game system and its legal notice is persis
     await playerContext.close();
   });
 });
+
+test.describe("Spec 022 User Story 4: System Settings relabel + Default Scene Grid Type control", () => {
+  test("the system-picker card reads 'System Settings', the picker is labeled 'Change System', and a Default Scene Grid Type control is present", async ({
+    page,
+  }) => {
+    await register(page, freshCredentials("e2esystemlabel"));
+    const worldId = await createWorld(page, `E2E System Settings Labels ${uniqueSuffix()}`);
+    await page.goto(`/world/${worldId}/settings/system`);
+
+    await expect(page.getByTestId("system-picker-card").getByRole("heading", { name: "System Settings" })).toBeVisible();
+    await expect(page.getByLabel("Change System")).toBeVisible();
+    await expect(page.getByLabel("Default Scene Grid Type")).toBeVisible();
+
+    await page.getByTestId("default-scene-grid-type-picker").click();
+    await expect(page.getByRole("option", { name: "None" })).toBeVisible();
+    await expect(page.getByRole("option", { name: "Squares" })).toBeVisible();
+    await expect(page.getByRole("option", { name: "Hexagons" })).toBeVisible();
+  });
+});

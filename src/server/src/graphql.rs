@@ -18,11 +18,12 @@ use crate::admin::{
     update_two_factor_policy as persist_two_factor_policy,
 };
 use crate::models::{
+    NewGenieSession,
     World,
     WorldActor,
     // Policy - disabled pending schema
 };
-use crate::schema::{world_actors, worlds}; // policies disabled
+use crate::schema::{world_actors, world_genie_sessions, worlds}; // policies disabled
 use crate::state::AppState;
 use crate::users::{UserDataDeleteSummary, UserDataExport, delete_user_data_owned};
 // Phase 4.8.1: dnd5e_server will be loaded at runtime via game system registry
@@ -272,6 +273,18 @@ pub struct GraphQLScene {
     /// Spec 002 (FR-018): the RustFS-backed `canvas_image_assets` row
     /// for this scene's background, when migrated.
     background_asset_id: Option<uuid::Uuid>,
+    /// Spec 022: GM-authored Markdown source for the scene's player-facing
+    /// summary.
+    summary_markdown: Option<String>,
+    /// Spec 022: sanitized HTML rendered from `summary_markdown` — render
+    /// this, never `summary_markdown` directly.
+    summary_rendered_html: Option<String>,
+    /// Spec 022 (FR-003, Clarifications): player-facing visibility, hidden
+    /// by default on creation.
+    hidden: bool,
+    /// Spec 022 (FR-011): computed URL for the scene's reduced-size
+    /// preview image, `None` until one has been generated.
+    preview_url: Option<String>,
 }
 
 impl From<crate::models::Scene> for GraphQLScene {
@@ -292,6 +305,12 @@ impl From<crate::models::Scene> for GraphQLScene {
             updated_at: scene.updated_at,
             background_image_path: scene.background_image_path,
             background_asset_id: scene.background_asset_id,
+            summary_markdown: scene.summary_markdown,
+            summary_rendered_html: scene.summary_rendered_html,
+            hidden: scene.hidden,
+            preview_url: scene
+                .preview_asset_id
+                .map(|id| format!("/scene-assets/{id}/thumb")),
         }
     }
 }
@@ -1129,6 +1148,118 @@ impl ActorSystemDataMutation {
 
 // Query structs moved to queries modules (Phase 4.9.Z Step 5)
 
+/// Testable core of `SceneMutation::update_scene_hidden` (spec 022,
+/// FR-007/FR-019). Unlike `update_scene` (owner-of-scene-gated,
+/// pre-existing), this uses the broader `is_dm_of_world` check — any
+/// GM/Owner of the scene's world may toggle visibility, not just whoever
+/// created the scene, matching spec.md's "GM/Owner members" wording.
+pub async fn update_scene_hidden_impl(
+    state: &AppState,
+    user_id: uuid::Uuid,
+    is_admin: bool,
+    scene_id: uuid::Uuid,
+    hidden: bool,
+) -> GraphQLResult<GraphQLScene> {
+    use crate::schema::scenes;
+    use diesel::prelude::*;
+
+    let mut lookup_conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    let world_id = tokio::task::spawn_blocking(move || {
+        scenes::table
+            .filter(scenes::scene_id.eq(scene_id))
+            .select(scenes::world_id)
+            .first::<uuid::Uuid>(&mut lookup_conn)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Scene not found"))?;
+
+    if !crate::auth::actor_permissions::is_dm_of_world(state, user_id, is_admin, world_id).await? {
+        return Err(Error::new(
+            "Only the DM (Owner or GM) may change a scene's visibility",
+        ));
+    }
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    let updated_scene = tokio::task::spawn_blocking(move || {
+        diesel::update(scenes::table.filter(scenes::scene_id.eq(scene_id)))
+            .set(scenes::hidden.eq(hidden))
+            .returning(crate::models::Scene::as_returning())
+            .get_result(&mut conn)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to update scene visibility"))?;
+
+    Ok(GraphQLScene::from(updated_scene))
+}
+
+/// Testable core of `SceneMutation::launch_scene` (spec 022,
+/// FR-002a/FR-002b/FR-002c, ADR-046). Sets the world's server-authoritative
+/// active scene and broadcasts the change over the existing `world_events`
+/// transport so every world member currently in Play live-switches to it
+/// (research.md §6).
+pub async fn launch_scene_impl(
+    state: &AppState,
+    user_id: uuid::Uuid,
+    is_admin: bool,
+    world_id: uuid::Uuid,
+    scene_id: uuid::Uuid,
+) -> GraphQLResult<GraphQLWorld> {
+    use crate::schema::{scenes, worlds};
+    use diesel::prelude::*;
+
+    if !crate::auth::actor_permissions::is_dm_of_world(state, user_id, is_admin, world_id).await? {
+        return Err(Error::new("Only the DM (Owner or GM) may launch a scene"));
+    }
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    let updated_world = tokio::task::spawn_blocking(move || {
+        // The scene must belong to this world — a GM of world A must
+        // not be able to point world B's active scene at one of A's
+        // scenes (FR-002b implicitly assumes same-world).
+        let scene_world_id = scenes::table
+            .filter(scenes::scene_id.eq(scene_id))
+            .select(scenes::world_id)
+            .first::<uuid::Uuid>(&mut conn)?;
+
+        if scene_world_id != world_id {
+            return Err(diesel::result::Error::RollbackTransaction);
+        }
+
+        let world = diesel::update(worlds::table.filter(worlds::id.eq(world_id)))
+            .set(worlds::active_scene_id.eq(scene_id))
+            .returning(World::as_returning())
+            .get_result::<World>(&mut conn)?;
+
+        crate::world_events::record_world_event(
+            &mut conn,
+            world_id,
+            crate::world_events::EVENT_CODE_SCENE_LAUNCHED,
+            Some(serde_json::json!({ "sceneId": scene_id.to_string() })),
+            user_id,
+        )
+        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+
+        Ok(world)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to launch scene — it may not belong to this world"))?;
+
+    Ok(GraphQLWorld::from(updated_world))
+}
+
 #[derive(Default)]
 pub struct SceneMutation;
 
@@ -1149,27 +1280,58 @@ impl SceneMutation {
         let now = Utc::now().naive_utc();
 
         let scene_id = uuid::Uuid::now_v7();
-        let new_scene = crate::models::Scene {
-            scene_id,
-            world_id: input.world_id,
-            name: input.name,
-            description: input.description,
-            type_: input.type_.unwrap_or_else(|| "battlemap".to_string()),
-            grid_size: input.grid_size.unwrap_or(5),
-            grid_type: input.grid_type.unwrap_or_else(|| "square".to_string()),
-            width: input.width.unwrap_or(100),
-            height: input.height.unwrap_or(100),
-            metadata: input.metadata.map(|j| j.0),
-            owner_id: user_id,
-            created_at: now,
-            updated_at: now,
-            background_image_path: None,
-            background_asset_id: None,
-        };
+        let world_id = input.world_id;
+        let explicit_grid_type = input.grid_type;
+        let name = input.name;
+        let description = input.description;
+        let type_ = input.type_.unwrap_or_else(|| "battlemap".to_string());
+        let grid_size = input.grid_size.unwrap_or(5);
+        let width = input.width.unwrap_or(100);
+        let height = input.height.unwrap_or(100);
+        let metadata = input.metadata.map(|j| j.0);
 
         let inserted_scene = tokio::task::spawn_blocking(move || {
-            use crate::schema::scenes;
+            use crate::schema::{scenes, worlds};
             use diesel::prelude::*;
+
+            // Spec 022 (FR-015): a scene that doesn't explicitly choose a
+            // grid type inherits the world's configured default instead of
+            // always defaulting to "square" — the world row is already the
+            // source of truth for this, no separate lookup table needed.
+            let grid_type = match explicit_grid_type {
+                Some(gt) => gt,
+                None => worlds::table
+                    .filter(worlds::id.eq(world_id))
+                    .select(worlds::default_scene_grid_type)
+                    .first::<String>(&mut conn)
+                    .unwrap_or_else(|_| "square".to_string()),
+            };
+
+            let new_scene = crate::models::Scene {
+                scene_id,
+                world_id,
+                name,
+                description,
+                type_,
+                grid_size,
+                grid_type,
+                width,
+                height,
+                metadata,
+                owner_id: user_id,
+                created_at: now,
+                updated_at: now,
+                background_image_path: None,
+                background_asset_id: None,
+                summary_markdown: None,
+                summary_rendered_html: None,
+                // Spec 022 (FR-003, Clarifications): every newly created
+                // scene starts hidden regardless of caller input — there is
+                // no `hidden` field on this input type by design, so a
+                // GM must explicitly un-hide via `updateSceneHidden`.
+                hidden: true,
+                preview_asset_id: None,
+            };
 
             let values = (
                 scenes::scene_id.eq(new_scene.scene_id),
@@ -1218,6 +1380,15 @@ impl SceneMutation {
             use crate::schema::scenes;
             use diesel::prelude::*;
 
+            // Spec 022 (FR-006): summaryRenderedHtml is derived from
+            // summaryMarkdown at write time (not on read, unlike lore
+            // entries — scenes have no `[[link]]` resolution need, so
+            // there's no staleness concern to justify computing it lazily).
+            let summary_rendered_html = input
+                .summary_markdown
+                .as_deref()
+                .map(crate::markdown::render_to_safe_html);
+
             let update_data = crate::models::SceneUpdate {
                 name: input.name,
                 description: input.description,
@@ -1226,6 +1397,10 @@ impl SceneMutation {
                 width: input.width,
                 height: input.height,
                 metadata: input.metadata.map(|j| j.0),
+                summary_markdown: input.summary_markdown,
+                summary_rendered_html,
+                hidden: None,
+                preview_asset_id: None,
             };
 
             diesel::update(
@@ -1242,6 +1417,30 @@ impl SceneMutation {
         .map_err(|_| Error::new("Failed to update scene"))?;
 
         Ok(GraphQLScene::from(updated_scene))
+    }
+
+    /// Spec 022 (FR-007, FR-019). See `update_scene_hidden_impl`.
+    async fn update_scene_hidden(
+        &self,
+        ctx: &Context<'_>,
+        scene_id: uuid::Uuid,
+        hidden: bool,
+    ) -> GraphQLResult<GraphQLScene> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        update_scene_hidden_impl(state, auth_user.user_id, auth_user.is_admin, scene_id, hidden).await
+    }
+
+    /// Spec 022 (FR-002a/FR-002b/FR-002c, ADR-046). See `launch_scene_impl`.
+    async fn launch_scene(
+        &self,
+        ctx: &Context<'_>,
+        world_id: uuid::Uuid,
+        scene_id: uuid::Uuid,
+    ) -> GraphQLResult<GraphQLWorld> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        launch_scene_impl(state, auth_user.user_id, auth_user.is_admin, world_id, scene_id).await
     }
 
     async fn delete_scene(&self, ctx: &Context<'_>, scene_id: uuid::Uuid) -> GraphQLResult<bool> {
@@ -1372,10 +1571,23 @@ pub async fn create_world_impl(
         session_notes: None,
         allow_player_created_actors: false,
         genie_resource_carryover_enabled: false,
+        default_scene_grid_type: "square".to_string(),
+        active_scene_id: None,
     };
 
     let inserted_world = new_world.clone();
     let world_name_for_scene = new_world.name.clone();
+    // Spec 022 (FR-002d, ADR-046): Play now shows an empty/unloaded canvas
+    // whenever `worlds.active_scene_id` is null — but spec 010 (FR-004)
+    // already guarantees every freshly created world has its default
+    // scene ready to play immediately, with no separate "create a scene"
+    // step. Reconciling the two: the default scene created here is also
+    // immediately set as the world's active scene, so a brand-new world
+    // is never stuck in the empty-canvas state; `active_scene_id` only
+    // stays null for a world where nothing has ever been created/launched
+    // (not reachable via normal world creation).
+    let default_scene_id = uuid::Uuid::now_v7();
+    let is_genie_world = inserted_world.game_system_id.as_deref() == Some("genie");
     tokio::task::spawn_blocking(move || {
         use crate::schema::scenes;
 
@@ -1385,7 +1597,7 @@ pub async fn create_world_impl(
                 .execute(conn)?;
 
             let scene_values = (
-                scenes::scene_id.eq(uuid::Uuid::now_v7()),
+                scenes::scene_id.eq(default_scene_id),
                 scenes::world_id.eq(inserted_world.id),
                 scenes::name.eq(&world_name_for_scene),
                 scenes::description.eq::<Option<String>>(None),
@@ -1404,6 +1616,27 @@ pub async fn create_world_impl(
                 .values(scene_values)
                 .execute(conn)?;
 
+            diesel::update(worlds::table.filter(worlds::id.eq(inserted_world.id)))
+                .set(worlds::active_scene_id.eq(default_scene_id))
+                .execute(conn)?;
+
+            // Genie session UI (GenieSessionPanel.tsx) previously required
+            // the GM to manually click "Start Genie session" before Wish
+            // Pool/Doom Clock/grants became usable. Removed that manual
+            // gate in favor of the session simply existing from world
+            // creation on — doomClockMax 6 matches that button's prior
+            // hardcoded default.
+            if is_genie_world {
+                let new_session = NewGenieSession {
+                    world_id: inserted_world.id,
+                    doom_clock_max: 6,
+                    created_by: user_id,
+                };
+                diesel::insert_into(world_genie_sessions::table)
+                    .values(&new_session)
+                    .execute(conn)?;
+            }
+
             Ok::<_, diesel::result::Error>(())
         })
     })
@@ -1417,7 +1650,9 @@ pub async fn create_world_impl(
     // gap. See that module's doc comment for the full story — fixing it
     // at the source (inserting an owner world_members row here) is a
     // separate, deliberate follow-up, not done as part of this cleanup.
-    Ok(GraphQLWorld::from(new_world))
+    let mut returned_world = new_world;
+    returned_world.active_scene_id = Some(default_scene_id);
+    Ok(GraphQLWorld::from(returned_world))
 }
 
 /// Spec 011: "Last Session Notes" — a single per-world freeform recap,
@@ -1614,6 +1849,60 @@ pub async fn update_world_genie_resource_carryover_impl(
     Ok(GraphQLWorld::from(updated))
 }
 
+/// Spec 022 (FR-014): the GM-controlled per-world default grid type
+/// applied to newly created scenes.
+#[derive(InputObject, Debug, Clone)]
+pub struct UpdateWorldDefaultSceneGridTypeInput {
+    pub world_id: uuid::Uuid,
+    pub grid_type: String,
+}
+
+/// Testable core of `WorldMutation::update_world_default_scene_grid_type`
+/// (mirrors `update_world_genie_resource_carryover_impl`'s identical
+/// shape). DM/GM-only. `grid_type` is validated against the same set the
+/// `scenes.grid_type`/`worlds.default_scene_grid_type` CHECK constraints
+/// already enforce at the DB layer — this just turns a constraint
+/// violation into a clean GraphQL error instead of a raw SQL error.
+pub async fn update_world_default_scene_grid_type_impl(
+    state: &AppState,
+    user_id: uuid::Uuid,
+    is_admin: bool,
+    input: UpdateWorldDefaultSceneGridTypeInput,
+) -> GraphQLResult<GraphQLWorld> {
+    if !crate::auth::actor_permissions::is_dm_of_world(state, user_id, is_admin, input.world_id)
+        .await?
+    {
+        return Err(Error::new(
+            "Only the DM (Owner or GM) may change this world's default scene grid type",
+        ));
+    }
+
+    if !matches!(input.grid_type.as_str(), "square" | "hex" | "gridless") {
+        return Err(Error::new(
+            "gridType must be one of \"square\", \"hex\", \"gridless\"",
+        ));
+    }
+
+    let world_id = input.world_id;
+    let grid_type = input.grid_type;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    let updated = tokio::task::spawn_blocking(move || {
+        diesel::update(worlds::table.filter(worlds::id.eq(world_id)))
+            .set(worlds::default_scene_grid_type.eq(grid_type))
+            .returning(World::as_returning())
+            .get_result::<World>(&mut conn)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to update default_scene_grid_type"))?;
+
+    Ok(GraphQLWorld::from(updated))
+}
+
 #[derive(Default)]
 pub struct WorldMutation;
 
@@ -1675,6 +1964,16 @@ impl WorldMutation {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         update_world_genie_resource_carryover_impl(state, auth_user.user_id, auth_user.is_admin, input).await
+    }
+
+    async fn update_world_default_scene_grid_type(
+        &self,
+        ctx: &Context<'_>,
+        input: UpdateWorldDefaultSceneGridTypeInput,
+    ) -> GraphQLResult<GraphQLWorld> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        update_world_default_scene_grid_type_impl(state, auth_user.user_id, auth_user.is_admin, input).await
     }
 
     async fn rename_world(
@@ -2557,4 +2856,139 @@ mod tests {
             "a Player-role world member must not be able to change the world's game system"
         );
     }
+
+    // ===== Spec 022: Scene Management Overhaul =====
+
+    #[tokio::test]
+    async fn update_scene_hidden_requires_dm_role() {
+        use super::update_scene_hidden_impl;
+        use crate::test_support::*;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        let player_id = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world_id, player_id, "Player");
+        drop(conn);
+
+        let result = update_scene_hidden_impl(&state, player_id, false, scene_id, false).await;
+        assert!(
+            result.is_err(),
+            "a Player-role world member must not be able to toggle a scene's hidden state"
+        );
+
+        let updated = update_scene_hidden_impl(&state, owner_id, false, scene_id, false)
+            .await
+            .expect("the DM (Owner) toggling hidden should succeed");
+        assert!(!updated.hidden, "hidden should now be false");
+    }
+
+    #[tokio::test]
+    async fn launch_scene_requires_dm_role_and_rejects_cross_world_scene() {
+        use super::launch_scene_impl;
+        use crate::test_support::*;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        let player_id = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world_id, player_id, "Player");
+
+        // A second, unrelated world/scene pair — launching this scene into
+        // the first world must be rejected (FR-002b implicitly assumes
+        // same-world).
+        let other_owner_id = insert_test_user(&mut conn);
+        let other_world_id = insert_test_world(&mut conn, other_owner_id);
+        let other_scene_id = insert_test_scene(&mut conn, other_world_id, other_owner_id);
+        drop(conn);
+
+        let player_result = launch_scene_impl(&state, player_id, false, world_id, scene_id).await;
+        assert!(
+            player_result.is_err(),
+            "a Player-role world member must not be able to launch a scene"
+        );
+
+        let cross_world_result =
+            launch_scene_impl(&state, owner_id, false, world_id, other_scene_id).await;
+        assert!(
+            cross_world_result.is_err(),
+            "launching a scene that belongs to a different world must be rejected"
+        );
+
+        let updated_world = launch_scene_impl(&state, owner_id, false, world_id, scene_id)
+            .await
+            .expect("the DM launching an in-world scene should succeed");
+        assert_eq!(
+            updated_world.active_scene_id,
+            Some(scene_id),
+            "active_scene_id should now be the launched scene"
+        );
+    }
+
+    #[tokio::test]
+    async fn update_world_default_scene_grid_type_requires_dm_role_and_valid_value() {
+        use super::{UpdateWorldDefaultSceneGridTypeInput, update_world_default_scene_grid_type_impl};
+        use crate::test_support::*;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let player_id = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world_id, player_id, "Player");
+        drop(conn);
+
+        let player_result = update_world_default_scene_grid_type_impl(
+            &state,
+            player_id,
+            false,
+            UpdateWorldDefaultSceneGridTypeInput {
+                world_id,
+                grid_type: "hex".to_string(),
+            },
+        )
+        .await;
+        assert!(
+            player_result.is_err(),
+            "a Player-role world member must not be able to change the default scene grid type"
+        );
+
+        let invalid_result = update_world_default_scene_grid_type_impl(
+            &state,
+            owner_id,
+            false,
+            UpdateWorldDefaultSceneGridTypeInput {
+                world_id,
+                grid_type: "triangles".to_string(),
+            },
+        )
+        .await;
+        assert!(invalid_result.is_err(), "an invalid gridType must be rejected");
+
+        let updated = update_world_default_scene_grid_type_impl(
+            &state,
+            owner_id,
+            false,
+            UpdateWorldDefaultSceneGridTypeInput {
+                world_id,
+                grid_type: "hex".to_string(),
+            },
+        )
+        .await
+        .expect("the DM setting a valid gridType should succeed");
+        assert_eq!(updated.default_scene_grid_type, "hex");
+    }
+
+    // Note: `create_scene`'s "inherit world.default_scene_grid_type when
+    // gridType is omitted" behavior (FR-015) is exercised end-to-end by
+    // the Playwright e2e spec (apps/web/e2e/scene-default-grid-type.spec.ts)
+    // instead of a unit test here — `create_scene` is an inline
+    // `#[Object]` method (pre-existing, not extracted to a testable
+    // `_impl` by this feature) whose GraphQL context is impractical to
+    // construct in a focused unit test without also duplicating the
+    // full `MutationRoot`/`QueryRoot` wiring.
 }

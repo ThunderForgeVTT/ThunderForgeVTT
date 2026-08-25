@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "repository": "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git",
-  "author": "mbround18 <12646562+mbround18@users.noreply.github.com>",
-  "license": "BSD 3-Clause License",
+  "author": "mbround18 <michael.bruno1337@gmail.com>",
+  "license": "AGPL-3.0-or-later",
   "packageManager": "pnpm@10.33.2",
   "scripts": {
     "build": "./scripts/build.mjs",

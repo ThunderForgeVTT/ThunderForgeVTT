@@ -46,6 +46,42 @@ pub struct SavedBackgroundImage {
     pub byte_size: i64,
 }
 
+/// Spec 022 (FR-012): a scene's reduced-size preview/thumbnail image,
+/// ready to be inserted as a `scene_preview_images` row and referenced
+/// from `scenes::preview_asset_id`.
+pub struct SavedScenePreview {
+    pub asset_id: Uuid,
+    pub byte_size: i64,
+}
+
+/// Decodes the same UVTT `image` field `save_background_image` decodes
+/// (called alongside it, not instead of it) and writes a single
+/// max-dimension-capped WebP preview rendition to RustFS, distinct from
+/// the full-resolution background. Reuses `storage/transcode.rs`'s
+/// `transcode_scene_preview` (research.md §5) — the same decode/resize/
+/// encode machinery `save_background_image` already depends on.
+pub async fn save_scene_preview_image(
+    image_base64: &str,
+) -> Result<SavedScenePreview, MapImportError> {
+    let bytes = BASE64_STANDARD
+        .decode(image_base64)
+        .map_err(|e| MapImportError::InvalidImageBase64(e.to_string()))?;
+    detect_image_extension(&bytes).ok_or(MapImportError::InvalidImageMagicBytes)?;
+
+    let preview = crate::storage::transcode::transcode_scene_preview(&bytes)
+        .map_err(|e| MapImportError::Storage(e.to_string()))?;
+
+    let asset_id = Uuid::now_v7();
+    let key = crate::scene_assets_serve::preview_key(asset_id);
+    let byte_size = preview.webp_bytes.len() as i64;
+    let cfg = crate::storage::rustfs::RustFsConfig::from_env();
+    crate::storage::rustfs::write_object(&cfg, &key, preview.webp_bytes, "image/webp")
+        .await
+        .map_err(|e| MapImportError::Storage(e.to_string()))?;
+
+    Ok(SavedScenePreview { asset_id, byte_size })
+}
+
 /// Decode the UVTT file's base64 `image` field, sanity-check it looks
 /// like a PNG or WebP file (both are valid per the format), transcode it
 /// to WebP, and write it to RustFS via a single-object-scoped,

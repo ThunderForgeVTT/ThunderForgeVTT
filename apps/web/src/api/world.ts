@@ -36,6 +36,8 @@ const WORLD_FIELDS = `
   sessionNotes
   allowPlayerCreatedActors
   genieResourceCarryoverEnabled
+  defaultSceneGridType
+  activeSceneId
 `;
 
 async function postGraphQL<TData>(
@@ -330,4 +332,26 @@ export function updateWorldGenieResourceCarryover(
     `,
     { input: { worldId, enabled } },
   ).then((data) => data.updateWorldGenieResourceCarryover);
+}
+
+type UpdateWorldDefaultSceneGridTypeMutation = {
+  updateWorldDefaultSceneGridType: WorldRecord;
+};
+
+/** Spec 022 (FR-014): DM/GM-only, server-enforced. `gridType` must be
+ * one of "square" | "hex" | "gridless". */
+export function updateWorldDefaultSceneGridType(
+  worldId: string,
+  gridType: string,
+): Promise<WorldRecord> {
+  return postGraphQL<UpdateWorldDefaultSceneGridTypeMutation>(
+    `
+      mutation UpdateWorldDefaultSceneGridType($input: UpdateWorldDefaultSceneGridTypeInput!) {
+        updateWorldDefaultSceneGridType(input: $input) {
+          ${WORLD_FIELDS}
+        }
+      }
+    `,
+    { input: { worldId, gridType } },
+  ).then((data) => data.updateWorldDefaultSceneGridType);
 }

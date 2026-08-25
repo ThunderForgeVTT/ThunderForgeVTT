@@ -65,7 +65,13 @@ pub struct WorldInvitePayload {
     pub status: String,
 }
 
+// Spec 023 (FR-004): `claimedActor` is a per-request-computed field (a
+// `world_actor_claims` lookup, not a stored column on this payload), so
+// this type is `#[graphql(complex)]` — mirrors `GraphQLWorldActor`'s own
+// `claimed_by` computed field (graphql.rs), just resolved from the other
+// direction.
 #[derive(SimpleObject, Debug, Clone)]
+#[graphql(complex)]
 pub struct WorldMembershipPayload {
     pub id: Uuid,
     pub world_id: Uuid,
@@ -74,6 +80,19 @@ pub struct WorldMembershipPayload {
     pub joined_at: String,
     pub created_at: String,
     pub updated_at: String,
+}
+
+#[async_graphql::ComplexObject]
+impl WorldMembershipPayload {
+    /// Spec 023 (FR-004/FR-005): the character this member has claimed,
+    /// if any — `None` when they haven't claimed one yet.
+    async fn claimed_actor(
+        &self,
+        ctx: &Context<'_>,
+    ) -> GraphQLResult<Option<crate::graphql::GraphQLWorldActor>> {
+        let state = get_app_state(ctx)?;
+        crate::graphql::mutations_actor_claims::claimed_actor_impl(&state, self.id).await
+    }
 }
 
 // ========== Helper Functions ==========
@@ -338,6 +357,240 @@ pub async fn join_world_impl(
     })
 }
 
+/// Testable core of `InviteMutation::update_member_role` (spec 023 —
+/// extracted from an inline `#[Object]` method so the Owner-fallback fix
+/// below has direct test coverage, mirroring `generate_invite_code_impl`'s
+/// existing shape).
+pub async fn update_member_role_impl(
+    state: &AppState,
+    user_id: Uuid,
+    input: UpdateMemberRoleInput,
+) -> GraphQLResult<WorldMembershipPayload> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    let world_id = input.world_id;
+    let target_user_id = input.user_id;
+    let new_role_str = input.role.clone();
+
+    // Parse and validate new role
+    match new_role_str.as_str() {
+        "Owner" | "GM" | "Player" => {}
+        _ => return Err(Error::new("Invalid role. Must be Owner, GM, or Player")),
+    };
+
+    // Verify caller is Owner/GM. Spec 023 (research.md §3): uses
+    // `require_world_member`'s Owner-fallback (a world's creator may
+    // have no `world_members` row of their own — `create_world`
+    // never backfills one) instead of a raw row lookup, so the
+    // world's actual Owner isn't wrongly rejected here.
+    let caller_role_str = require_world_member(&mut conn, user_id, world_id)
+        .map_err(|_| Error::new("You are not a member of this world"))?;
+    let caller_role = WorldMemberRole::from_str(&caller_role_str).unwrap_or(WorldMemberRole::Player);
+
+    if !caller_role.can_change_roles() {
+        return Err(Error::new(
+            "You do not have permission to change member roles",
+        ));
+    }
+
+    // Get target member
+    let target_member: WorldMember = world_members::table
+        .filter(world_members::world_id.eq(world_id))
+        .filter(world_members::user_id.eq(target_user_id))
+        .select(WorldMember::as_select())
+        .first::<WorldMember>(&mut conn)
+        .map_err(|e| match e {
+            diesel::result::Error::NotFound => {
+                Error::new("Target user is not a member of this world")
+            }
+            _ => Error::new(format!("Database error: {}", e)),
+        })?;
+
+    let target_role =
+        WorldMemberRole::from_str(&target_member.role).unwrap_or(WorldMemberRole::Player);
+
+    // Check permission
+    if !caller_role.can_manage(target_role) {
+        return Err(Error::new(
+            "You do not have permission to manage this member's role",
+        ));
+    }
+
+    // Update role
+    let now = Utc::now().naive_utc();
+    diesel::update(world_members::table.find(target_member.id))
+        .set((
+            world_members::role.eq(new_role_str.clone()),
+            world_members::updated_at.eq(now),
+        ))
+        .execute(&mut conn)
+        .map_err(|e| Error::new(format!("Failed to update member: {}", e)))?;
+
+    // Record event for audit trail and real-time sync
+    let event_payload = serde_json::json!({
+        "user_id": target_member.user_id,
+        "old_role": target_member.role,
+        "new_role": new_role_str.clone(),
+    });
+    record_world_event(
+        &mut conn,
+        world_id,
+        EVENT_CODE_MEMBER_ROLE_CHANGED,
+        Some(event_payload),
+        user_id,
+    )?;
+
+    Ok(WorldMembershipPayload {
+        id: target_member.id,
+        world_id: target_member.world_id,
+        user_id: target_member.user_id,
+        role: new_role_str,
+        joined_at: target_member.joined_at.to_string(),
+        created_at: target_member.created_at.to_string(),
+        updated_at: now.to_string(),
+    })
+}
+
+/// Testable core of `InviteMutation::remove_member` (spec 023 — same
+/// extraction rationale as `update_member_role_impl` above).
+pub async fn remove_member_impl(
+    state: &AppState,
+    caller_id: Uuid,
+    world_id: Uuid,
+    user_id: Uuid,
+) -> GraphQLResult<bool> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    // Prevent self-removal
+    if caller_id == user_id {
+        return Err(Error::new("You cannot remove yourself from the world"));
+    }
+
+    // Get caller's role. Spec 023 (research.md §3): same Owner-fallback
+    // fix as `update_member_role_impl` above.
+    let caller_role_str = require_world_member(&mut conn, caller_id, world_id)
+        .map_err(|_| Error::new("You are not a member of this world"))?;
+    let caller_role = WorldMemberRole::from_str(&caller_role_str).unwrap_or(WorldMemberRole::Player);
+
+    // Check permission: Only Owner or GM can remove members
+    if caller_role != WorldMemberRole::Owner && caller_role != WorldMemberRole::GM {
+        return Err(Error::new("You do not have permission to remove members"));
+    }
+
+    // Get target member
+    let target_member: Option<WorldMember> = world_members::table
+        .filter(world_members::world_id.eq(world_id))
+        .filter(world_members::user_id.eq(user_id))
+        .select(WorldMember::as_select())
+        .first::<WorldMember>(&mut conn)
+        .optional()
+        .map_err(|e| Error::new(format!("Database error: {}", e)))?;
+
+    let target_member =
+        target_member.ok_or_else(|| Error::new("Target user is not a member of this world"))?;
+
+    let target_role =
+        WorldMemberRole::from_str(&target_member.role).unwrap_or(WorldMemberRole::Player);
+
+    // Check permission: Can't remove someone of equal or higher rank
+    if !caller_role.can_manage(target_role) {
+        return Err(Error::new(
+            "You cannot remove a member of equal or higher rank",
+        ));
+    }
+
+    // Delete the membership
+    diesel::delete(world_members::table.find(target_member.id))
+        .execute(&mut conn)
+        .map_err(|e| Error::new(format!("Failed to remove member: {}", e)))?;
+
+    // Spec 010 (research.md §7, FR-022): a removed member's actor
+    // ownership-block entries don't get a DB-level cascade (there is
+    // no direct FK from `world_members` to `world_actor_permissions`
+    // — the relationship is via `world_id` on the joined
+    // `world_actors` row), so this is deleted explicitly here,
+    // alongside the membership removal.
+    {
+        use crate::schema::{world_actor_permissions, world_actors};
+        diesel::delete(
+            world_actor_permissions::table
+                .filter(world_actor_permissions::user_id.eq(user_id))
+                .filter(
+                    world_actor_permissions::actor_id.eq_any(
+                        world_actors::table
+                            .filter(world_actors::world_id.eq(world_id))
+                            .select(world_actors::id),
+                    ),
+                ),
+        )
+        .execute(&mut conn)
+        .map_err(|e| Error::new(format!("Failed to clean up actor permissions: {}", e)))?;
+    }
+
+    // Spec 013: same rationale as the actor-permissions cleanup above,
+    // generalized to item ownership-block entries (no direct FK from
+    // `world_members` to `world_item_permissions`).
+    {
+        use crate::schema::{world_item_permissions, world_items};
+        diesel::delete(
+            world_item_permissions::table
+                .filter(world_item_permissions::user_id.eq(user_id))
+                .filter(
+                    world_item_permissions::item_id.eq_any(
+                        world_items::table
+                            .filter(world_items::world_id.eq(world_id))
+                            .select(world_items::id),
+                    ),
+                ),
+        )
+        .execute(&mut conn)
+        .map_err(|e| Error::new(format!("Failed to clean up item permissions: {}", e)))?;
+    }
+
+    // Spec 012 (data-model.md, mirrors FR-022 from spec 010 verbatim
+    // per spec.md's Assumptions): same story for a removed member's
+    // lore entry ownership-block entries — no direct FK from
+    // `world_members` to `world_lore_permissions`, so cleaned up
+    // explicitly here too.
+    {
+        use crate::schema::{world_lore_entries, world_lore_permissions};
+        diesel::delete(
+            world_lore_permissions::table
+                .filter(world_lore_permissions::world_member_user_id.eq(user_id))
+                .filter(
+                    world_lore_permissions::lore_entry_id.eq_any(
+                        world_lore_entries::table
+                            .filter(world_lore_entries::world_id.eq(world_id))
+                            .select(world_lore_entries::id),
+                    ),
+                ),
+        )
+        .execute(&mut conn)
+        .map_err(|e| Error::new(format!("Failed to clean up lore permissions: {}", e)))?;
+    }
+
+    // Record event for audit trail
+    let event_payload = serde_json::json!({
+        "user_id": target_member.user_id,
+        "role": target_member.role,
+    });
+    record_world_event(
+        &mut conn,
+        world_id,
+        EVENT_CODE_MEMBER_REMOVED,
+        Some(event_payload),
+        caller_id,
+    )?;
+
+    Ok(true)
+}
+
 // ========== Mutations ==========
 
 #[derive(Default)]
@@ -375,98 +628,7 @@ impl InviteMutation {
     ) -> GraphQLResult<WorldMembershipPayload> {
         let state = get_app_state(ctx)?;
         let auth_user = get_authenticated_user(ctx)?;
-        let user_id = auth_user.user_id;
-        let mut conn = state
-            .db_pool
-            .get()
-            .map_err(|_| Error::new("Failed to get DB connection"))?;
-
-        let world_id = input.world_id;
-        let target_user_id = input.user_id;
-        let new_role_str = input.role.clone();
-
-        // Parse and validate new role
-        match new_role_str.as_str() {
-            "Owner" | "GM" | "Player" => {}
-            _ => return Err(Error::new("Invalid role. Must be Owner, GM, or Player")),
-        };
-
-        // Verify caller is Owner/GM
-        let caller_member: Option<WorldMember> = world_members::table
-            .filter(world_members::world_id.eq(world_id))
-            .filter(world_members::user_id.eq(user_id))
-            .select(WorldMember::as_select())
-            .first::<WorldMember>(&mut conn)
-            .optional()
-            .map_err(|e| Error::new(format!("Database error: {}", e)))?;
-
-        let caller =
-            caller_member.ok_or_else(|| Error::new("You are not a member of this world"))?;
-        let caller_role =
-            WorldMemberRole::from_str(&caller.role).unwrap_or(WorldMemberRole::Player);
-
-        if !caller_role.can_change_roles() {
-            return Err(Error::new(
-                "You do not have permission to change member roles",
-            ));
-        }
-
-        // Get target member
-        let target_member: WorldMember = world_members::table
-            .filter(world_members::world_id.eq(world_id))
-            .filter(world_members::user_id.eq(target_user_id))
-            .select(WorldMember::as_select())
-            .first::<WorldMember>(&mut conn)
-            .map_err(|e| match e {
-                diesel::result::Error::NotFound => {
-                    Error::new("Target user is not a member of this world")
-                }
-                _ => Error::new(format!("Database error: {}", e)),
-            })?;
-
-        let target_role =
-            WorldMemberRole::from_str(&target_member.role).unwrap_or(WorldMemberRole::Player);
-
-        // Check permission
-        if !caller_role.can_manage(target_role) {
-            return Err(Error::new(
-                "You do not have permission to manage this member's role",
-            ));
-        }
-
-        // Update role
-        let now = Utc::now().naive_utc();
-        diesel::update(world_members::table.find(target_member.id))
-            .set((
-                world_members::role.eq(new_role_str.clone()),
-                world_members::updated_at.eq(now),
-            ))
-            .execute(&mut conn)
-            .map_err(|e| Error::new(format!("Failed to update member: {}", e)))?;
-
-        // Record event for audit trail and real-time sync
-        let event_payload = serde_json::json!({
-            "user_id": target_member.user_id,
-            "old_role": target_member.role,
-            "new_role": new_role_str.clone(),
-        });
-        record_world_event(
-            &mut conn,
-            world_id,
-            EVENT_CODE_MEMBER_ROLE_CHANGED,
-            Some(event_payload),
-            user_id,
-        )?;
-
-        Ok(WorldMembershipPayload {
-            id: target_member.id,
-            world_id: target_member.world_id,
-            user_id: target_member.user_id,
-            role: new_role_str,
-            joined_at: target_member.joined_at.to_string(),
-            created_at: target_member.created_at.to_string(),
-            updated_at: now.to_string(),
-        })
+        update_member_role_impl(&state, auth_user.user_id, input).await
     }
 
     /// Remove a member from a world (Owner/GM only)
@@ -478,143 +640,7 @@ impl InviteMutation {
     ) -> GraphQLResult<bool> {
         let state = get_app_state(ctx)?;
         let auth_user = get_authenticated_user(ctx)?;
-        let caller_id = auth_user.user_id;
-        let mut conn = state
-            .db_pool
-            .get()
-            .map_err(|_| Error::new("Failed to get DB connection"))?;
-
-        // Prevent self-removal
-        if caller_id == user_id {
-            return Err(Error::new("You cannot remove yourself from the world"));
-        }
-
-        // Get caller's role
-        let caller_member: Option<WorldMember> = world_members::table
-            .filter(world_members::world_id.eq(world_id))
-            .filter(world_members::user_id.eq(caller_id))
-            .select(WorldMember::as_select())
-            .first::<WorldMember>(&mut conn)
-            .optional()
-            .map_err(|e| Error::new(format!("Database error: {}", e)))?;
-
-        let caller_member =
-            caller_member.ok_or_else(|| Error::new("You are not a member of this world"))?;
-
-        let caller_role =
-            WorldMemberRole::from_str(&caller_member.role).unwrap_or(WorldMemberRole::Player);
-
-        // Check permission: Only Owner or GM can remove members
-        if caller_role != WorldMemberRole::Owner && caller_role != WorldMemberRole::GM {
-            return Err(Error::new("You do not have permission to remove members"));
-        }
-
-        // Get target member
-        let target_member: Option<WorldMember> = world_members::table
-            .filter(world_members::world_id.eq(world_id))
-            .filter(world_members::user_id.eq(user_id))
-            .select(WorldMember::as_select())
-            .first::<WorldMember>(&mut conn)
-            .optional()
-            .map_err(|e| Error::new(format!("Database error: {}", e)))?;
-
-        let target_member =
-            target_member.ok_or_else(|| Error::new("Target user is not a member of this world"))?;
-
-        let target_role =
-            WorldMemberRole::from_str(&target_member.role).unwrap_or(WorldMemberRole::Player);
-
-        // Check permission: Can't remove someone of equal or higher rank
-        if !caller_role.can_manage(target_role) {
-            return Err(Error::new(
-                "You cannot remove a member of equal or higher rank",
-            ));
-        }
-
-        // Delete the membership
-        diesel::delete(world_members::table.find(target_member.id))
-            .execute(&mut conn)
-            .map_err(|e| Error::new(format!("Failed to remove member: {}", e)))?;
-
-        // Spec 010 (research.md §7, FR-022): a removed member's actor
-        // ownership-block entries don't get a DB-level cascade (there is
-        // no direct FK from `world_members` to `world_actor_permissions`
-        // — the relationship is via `world_id` on the joined
-        // `world_actors` row), so this is deleted explicitly here,
-        // alongside the membership removal.
-        {
-            use crate::schema::{world_actor_permissions, world_actors};
-            diesel::delete(
-                world_actor_permissions::table
-                    .filter(world_actor_permissions::user_id.eq(user_id))
-                    .filter(
-                        world_actor_permissions::actor_id.eq_any(
-                            world_actors::table
-                                .filter(world_actors::world_id.eq(world_id))
-                                .select(world_actors::id),
-                        ),
-                    ),
-            )
-            .execute(&mut conn)
-            .map_err(|e| Error::new(format!("Failed to clean up actor permissions: {}", e)))?;
-        }
-
-        // Spec 013: same rationale as the actor-permissions cleanup above,
-        // generalized to item ownership-block entries (no direct FK from
-        // `world_members` to `world_item_permissions`).
-        {
-            use crate::schema::{world_item_permissions, world_items};
-            diesel::delete(
-                world_item_permissions::table
-                    .filter(world_item_permissions::user_id.eq(user_id))
-                    .filter(
-                        world_item_permissions::item_id.eq_any(
-                            world_items::table
-                                .filter(world_items::world_id.eq(world_id))
-                                .select(world_items::id),
-                        ),
-                    ),
-            )
-            .execute(&mut conn)
-            .map_err(|e| Error::new(format!("Failed to clean up item permissions: {}", e)))?;
-        }
-
-        // Spec 012 (data-model.md, mirrors FR-022 from spec 010 verbatim
-        // per spec.md's Assumptions): same story for a removed member's
-        // lore entry ownership-block entries — no direct FK from
-        // `world_members` to `world_lore_permissions`, so cleaned up
-        // explicitly here too.
-        {
-            use crate::schema::{world_lore_entries, world_lore_permissions};
-            diesel::delete(
-                world_lore_permissions::table
-                    .filter(world_lore_permissions::world_member_user_id.eq(user_id))
-                    .filter(
-                        world_lore_permissions::lore_entry_id.eq_any(
-                            world_lore_entries::table
-                                .filter(world_lore_entries::world_id.eq(world_id))
-                                .select(world_lore_entries::id),
-                        ),
-                    ),
-            )
-            .execute(&mut conn)
-            .map_err(|e| Error::new(format!("Failed to clean up lore permissions: {}", e)))?;
-        }
-
-        // Record event for audit trail
-        let event_payload = serde_json::json!({
-            "user_id": target_member.user_id,
-            "role": target_member.role,
-        });
-        record_world_event(
-            &mut conn,
-            world_id,
-            EVENT_CODE_MEMBER_REMOVED,
-            Some(event_payload),
-            caller_id,
-        )?;
-
-        Ok(true)
+        remove_member_impl(&state, auth_user.user_id, world_id, user_id).await
     }
 }
 
@@ -884,5 +910,50 @@ mod tests {
         assert_eq!(payload.max_uses, 7);
         assert_eq!(payload.used_count, 0);
         assert_eq!(payload.invite_code.len(), 8);
+    }
+
+    #[tokio::test]
+    async fn owner_with_no_membership_row_can_change_roles_and_remove_members() {
+        // Spec 023 (research.md §3): identical bug class to
+        // `owner_can_be_authorized_for_invites_immediately_after_world_creation`
+        // above, now fixed in `update_member_role_impl`/`remove_member_impl`
+        // via `require_world_member`'s Owner-fallback.
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        // No insert_test_world_member for the owner — deliberately, matching
+        // what `create_world` actually leaves behind.
+        let target_id = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world_id, target_id, "Player");
+        drop(conn);
+
+        let payload = update_member_role_impl(
+            &state,
+            owner_id,
+            UpdateMemberRoleInput {
+                world_id,
+                user_id: target_id,
+                role: "GM".to_string(),
+            },
+        )
+        .await
+        .expect("the world's own owner, with no world_members row, must be able to change roles");
+        assert_eq!(payload.role, "GM");
+
+        let removed = remove_member_impl(&state, owner_id, world_id, target_id)
+            .await
+            .expect("the world's own owner, with no world_members row, must be able to remove members");
+        assert!(removed);
+
+        let mut conn = state.db_pool.get().unwrap();
+        let remaining: Option<WorldMember> = world_members::table
+            .filter(world_members::world_id.eq(world_id))
+            .filter(world_members::user_id.eq(target_id))
+            .select(WorldMember::as_select())
+            .first(&mut conn)
+            .optional()
+            .unwrap();
+        assert!(remaining.is_none(), "removed member's row must be gone");
     }
 }

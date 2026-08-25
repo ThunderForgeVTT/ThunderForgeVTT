@@ -26,6 +26,8 @@ export interface WorldMemberDoc {
   // Client-side metadata
   is_current_user?: boolean;
   display_name?: string | null;
+  /** Spec 023 (FR-004): the character this member has claimed, if any. */
+  claimed_actor?: { id: string; label: string } | null;
 }
 
 /**

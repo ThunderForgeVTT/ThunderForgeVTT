@@ -339,6 +339,15 @@ pub struct World {
     /// false. When true, Genie Session Resource holdings carry over into
     /// the next session instead of resetting to 0.
     pub genie_resource_carryover_enabled: bool,
+    /// Spec 022 (FR-014/FR-015): GM-controlled default grid type
+    /// ("square" | "hex" | "gridless") applied to a newly created scene
+    /// when its own `gridType` isn't explicitly set. Never retroactively
+    /// changes existing scenes.
+    pub default_scene_grid_type: String,
+    /// Spec 022 (FR-002a/FR-002b, ADR-046): the world's server-authoritative
+    /// "currently launched" scene for Play. `None` = nothing launched yet
+    /// (Play shows an empty/unloaded canvas). Set only via `launchScene`.
+    pub active_scene_id: Option<uuid::Uuid>,
 }
 
 // Policy struct disabled - table not implemented
@@ -438,6 +447,23 @@ pub struct Scene {
     /// `Background`) backing this scene's background image via RustFS,
     /// replacing `background_image_path`'s bare filesystem path.
     pub background_asset_id: Option<uuid::Uuid>,
+    /// Spec 022: GM-authored Markdown source for the scene's player-facing
+    /// summary (distinct from `description`, which predates this feature
+    /// and is treated as plain text elsewhere).
+    pub summary_markdown: Option<String>,
+    /// Spec 022: sanitized HTML rendered from `summary_markdown` via the
+    /// same Markdown pipeline lore entries use (`crate::markdown`), kept in
+    /// sync on every write — never rendered client-side.
+    pub summary_rendered_html: Option<String>,
+    /// Spec 022: player-facing visibility. Defaults to `true` (hidden) at
+    /// creation per spec.md's Clarifications — a GM explicitly un-hides a
+    /// scene once it's ready to be seen.
+    pub hidden: bool,
+    /// Spec 022: the `scene_preview_images` row backing this scene's
+    /// reduced-size preview/thumbnail image, distinct from the
+    /// full-resolution background used in Play. `None` until a background
+    /// image has been set and a preview successfully generated.
+    pub preview_asset_id: Option<uuid::Uuid>,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
@@ -466,6 +492,18 @@ pub struct SceneUpdate {
     pub width: Option<i32>,
     pub height: Option<i32>,
     pub metadata: Option<serde_json::Value>,
+    /// Spec 022: `Some(_)` writes both `summary_markdown` and its rendered
+    /// HTML together (set by the mutation impl, not passed through
+    /// directly) — `None` leaves the summary untouched, matching this
+    /// struct's existing "`None` = don't touch column" convention.
+    pub summary_markdown: Option<String>,
+    pub summary_rendered_html: Option<String>,
+    /// Spec 022: set only by `updateSceneHidden`'s impl, not by the
+    /// general `updateScene` mutation.
+    pub hidden: Option<bool>,
+    /// Spec 022: set only by preview-generation code after a background
+    /// image is (re)set, not exposed through any GraphQL input.
+    pub preview_asset_id: Option<uuid::Uuid>,
 }
 
 // ========== Canvas Image Asset Models (Spec 002) ==========

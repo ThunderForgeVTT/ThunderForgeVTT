@@ -106,6 +106,13 @@ pub struct GraphQLWorld {
     /// Spec 020 (FR-003): when true, Genie Session Resource holdings
     /// carry over into the next session instead of resetting to 0.
     pub genie_resource_carryover_enabled: bool,
+    /// Spec 022 (FR-014/FR-015): GM-controlled default grid type
+    /// ("square" | "hex" | "gridless") applied to a newly created scene
+    /// when its own `gridType` isn't explicitly set.
+    pub default_scene_grid_type: String,
+    /// Spec 022 (FR-002a/FR-002b, ADR-046): the world's server-authoritative
+    /// currently-launched scene for Play. `None` = nothing launched yet.
+    pub active_scene_id: Option<uuid::Uuid>,
 }
 
 impl From<World> for GraphQLWorld {
@@ -129,6 +136,8 @@ impl From<World> for GraphQLWorld {
             session_notes: world.session_notes,
             allow_player_created_actors: world.allow_player_created_actors,
             genie_resource_carryover_enabled: world.genie_resource_carryover_enabled,
+            default_scene_grid_type: world.default_scene_grid_type,
+            active_scene_id: world.active_scene_id,
         }
     }
 }

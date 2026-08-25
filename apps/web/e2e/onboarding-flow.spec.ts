@@ -91,13 +91,15 @@ test.describe("US1: zero-world registration goes straight to world creation, the
     await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
 
     // The default scene already exists (create_world's atomic transaction,
-    // T005) — the staging page's scene switcher shows it selected, and
-    // the "New scene" modal never had to appear.
-    await expect(page.getByTestId("scene-switcher")).toBeVisible({
-      timeout: 10_000,
-    });
-    await expect(page.getByTestId("scene-switcher")).toContainText(worldName);
-    await expect(page.getByTestId("new-scene-name-input")).toHaveCount(0);
+    // T005) and is already the world's launched active scene (spec 022,
+    // FR-002d reconciled with FR-004) — Session Setup itself has no scene
+    // controls anymore (spec 022, FR-002); the Scenes section shows it.
+    await expect(page.getByTestId("scene-switcher")).toHaveCount(0);
+    await page.getByTestId("world-nav-scenes").click();
+    await page.waitForURL((url) => url.pathname.endsWith("/scenes"), { timeout: 10_000 });
+    await expect(page.getByRole("link", { name: worldName })).toBeVisible({ timeout: 10_000 });
+    await page.goBack();
+    await page.waitForURL(/\/staging$/, { timeout: 10_000 });
 
     // Clicking Play enters full-screen canvas mode, where the same
     // default scene is already loaded and rendered.

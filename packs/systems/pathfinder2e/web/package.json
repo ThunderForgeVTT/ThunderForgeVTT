@@ -1,6 +1,7 @@
 {
   "name": "@thunderforge/pathfinder2e",
   "version": "0.1.0",
+  "license": "AGPL-3.0-or-later",
   "description": "Pathfinder Second Edition (Remaster) ruleset for ThunderForgeVTT",
   "type": "module",
   "main": "dist/index.js",

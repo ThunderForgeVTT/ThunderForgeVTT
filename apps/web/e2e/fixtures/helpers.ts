@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Browser, type Page } from "@playwright/test";
 
 /**
  * Shared UI-driven e2e helpers, extracted from the near-identical
@@ -55,7 +55,21 @@ export async function register(page: Page, creds: Credentials): Promise<void> {
   // that already wait for a more specific URL right after this
   // (registerAndCreateWorld's own `/worlds/create$` wait, etc.) are
   // unaffected — this resolves immediately once already past /register.
-  await page.waitForURL((url) => !url.pathname.startsWith("/register"), { timeout: 15_000 });
+  // `waitUntil: "commit"` (rather than the default "load"): WelcomePage
+  // immediately client-side-redirects a zero-world account straight to
+  // /worlds/create (see WelcomePage.tsx's zero-worlds redirect), so a
+  // freshly registered account can chain two navigations
+  // (/register → /welcome → /worlds/create) within milliseconds. Waiting
+  // for the "load" lifecycle event of a navigation that gets superseded
+  // by the next one before it fires left this hanging until timeout even
+  // though the URL predicate was already satisfied — most reproducible
+  // under load (many concurrent contexts/requests, as most multi-account
+  // specs have). "commit" only waits for navigation to start, which is
+  // enough to observe the URL change and is not racy the same way.
+  await page.waitForURL((url) => !url.pathname.startsWith("/register"), {
+    timeout: 15_000,
+    waitUntil: "commit",
+  });
 }
 
 /** Registers a fresh user (prefixed for readability in failure output) and
@@ -126,6 +140,53 @@ export async function ensureSidebarOpen(page: Page): Promise<void> {
 export async function clickPlay(page: Page): Promise<void> {
   await page.getByTestId("play-button").click();
   await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
+}
+
+/**
+ * Invites a fresh registered user into `worldId` as a Player and returns
+ * their logged-in `Page`, in a separate browser context (so GM and
+ * player sessions are genuinely independent cookies/tabs, matching how
+ * two real people would connect). `gmPage` must already be on a page
+ * showing the "Generate Join Link" control (e.g. the world dashboard).
+ */
+export async function inviteAndJoinAsPlayer(
+  browser: Browser,
+  gmPage: Page,
+  worldId: string,
+  credentialPrefix = "e2eplayer",
+): Promise<Page> {
+  await gmPage.goto(`/world/${worldId}`);
+  await gmPage.getByRole("button", { name: "Generate Join Link" }).click();
+  const inviteInput = gmPage.locator("input[readonly]").first();
+  await expect(inviteInput).toBeVisible({ timeout: 10_000 });
+  const inviteUrl = await inviteInput.inputValue();
+  const inviteCode = new URL(inviteUrl).pathname.split("/").pop();
+  if (!inviteCode) {
+    throw new Error("Could not extract invite code");
+  }
+
+  const playerContext = await browser.newContext();
+  const playerPage = await playerContext.newPage();
+  await register(playerPage, freshCredentials(credentialPrefix));
+  await playerPage.goto(`/join/${inviteCode}`);
+  await playerPage.getByRole("button", { name: "Join Campaign" }).click();
+  await playerPage.waitForURL((url) => url.pathname.startsWith(`/world/${worldId}`), {
+    timeout: 15_000,
+  });
+  return playerPage;
+}
+
+/**
+ * Spec 022: launches `sceneName` from the Scenes section — the one way
+ * to select what's being played (FR-002/FR-002a). `page` must belong to
+ * a GM/Owner of `worldId`.
+ */
+export async function launchSceneByName(page: Page, worldId: string, sceneName: string): Promise<void> {
+  await page.goto(`/world/${worldId}/scenes`);
+  await page.getByRole("link", { name: sceneName }).click();
+  await page.waitForURL(new RegExp(`/world/${worldId}/scenes/[^/]+$`), { timeout: 10_000 });
+  await page.getByTestId("launch-scene-button").click();
+  await expect(page.getByText("Scene launched.")).toBeVisible({ timeout: 10_000 });
 }
 
 export async function waitForEngineReady(page: Page): Promise<void> {

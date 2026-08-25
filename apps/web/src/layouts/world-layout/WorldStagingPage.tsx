@@ -1,21 +1,12 @@
-import { Badge } from "@/components/ui/badge";
 import { Panel } from "@/components/ui/panel/Panel";
-import { ScrollArea } from "@/components/ui/scroll-area/ScrollArea";
 import { GenieSessionPanel } from "@/components/world/GenieSessionPanel/GenieSessionPanel";
-import { SceneSwitcher } from "@/components/world/SceneSwitcher";
 import { SessionNotesPanel } from "@/components/world/SessionNotesPanel/SessionNotesPanel";
 import { SessionSetupInviteLink } from "@/components/world/SessionSetupInviteLink";
-import { useWorldMembers } from "@/hooks/useWorldMembers";
-import type { SceneRecord } from "@/types/scene";
 import type { WorldRecord } from "@/types/world";
 
 export interface WorldStagingPageProps {
   worldId: string;
   world: WorldRecord | null;
-  scenes: SceneRecord[];
-  sceneId: string | null;
-  onSceneChange: (sceneId: string) => void;
-  onSceneCreated: (scene: SceneRecord) => void;
   /** Whether the current user may create scenes — GM/Owner only (FR-012). */
   isGm: boolean;
   /** Called when Last Session Notes is saved, so the caller's own world
@@ -23,19 +14,14 @@ export interface WorldStagingPageProps {
   onSessionNotesSaved: (notes: string) => void;
 }
 
-/** Same Owner/GM → "Game Master", else "Player" collapse used on the
- * Welcome page hub (roleBadgeLabel there) — kept local since this is the
- * only other place a member's role becomes a badge today. */
-function roleBadgeLabel(role: string): "Game Master" | "Player" {
-  return role === "Owner" || role === "GM" ? "Game Master" : "Player";
-}
-
 /**
  * Spec 009 (T009, US1): the staging page every world member sees first at
  * `/world/:id/play`. Spec 011 (US3): simplified down to exactly Play,
  * Players, and Last Session Notes — the NPC catalog and the old "Lore —
  * coming soon" placeholder moved to the dedicated `/world/:id/compendium`
- * portal (linked from here).
+ * portal (linked from here). Spec 023: the player roster itself moved to
+ * its own dedicated Players sidebar section — this page now only keeps
+ * the invite link, not the roster list.
  *
  * Layout reads top-to-bottom as the actual pre-session checklist: confirm
  * the scene and who's in the room in one glanceable strip, catch up on
@@ -45,21 +31,15 @@ function roleBadgeLabel(role: string): "Game Master" | "Player" {
 export function WorldStagingPage({
   worldId,
   world,
-  scenes,
-  sceneId,
-  onSceneChange,
-  onSceneCreated,
   isGm,
   onSessionNotesSaved,
 }: WorldStagingPageProps) {
-  const { members } = useWorldMembers(worldId);
-
   return (
     <main className="grid w-full gap-6" data-testid="world-staging-page">
       <header className="grid gap-3">
         <div>
           <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-            Session setup
+            Overview
           </p>
           <h1 className="text-3xl font-semibold">{world?.name ?? "World"}</h1>
         </div>
@@ -88,46 +68,13 @@ export function WorldStagingPage({
         />
       </Panel>
 
-      {/* "At a glance" strip: scene + roster together, since checking both
-       * is one mental step ("what are we playing, who's here") rather than
-       * two separately-weighted panels. */}
-      <Panel variant="stone" className="grid gap-5 rounded-xl border border-border sm:grid-cols-[1fr_auto] sm:items-start">
-        <div className="grid gap-2">
-          <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-            Scene
-          </p>
-          <SceneSwitcher
-            worldId={worldId}
-            scenes={scenes}
-            sceneId={sceneId}
-            onSceneChange={onSceneChange}
-            onSceneCreated={onSceneCreated}
-            canCreateScene={isGm}
-            testIdPrefix="staging-"
-          />
-        </div>
-
-        <div className="grid gap-2 sm:w-64 sm:border-l sm:border-border sm:pl-5">
-          <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-            Players ({members.length})
-          </p>
-          <ScrollArea className="h-32">
-            <ul className="grid gap-2" data-testid="staging-player-list">
-              {members.map((member) => (
-                <li key={member.id} className="flex items-center justify-between gap-2">
-                  <span className="text-sm">{member.display_name ?? member.user_id}</span>
-                  <Badge
-                    variant={member.role === "Owner" || member.role === "GM" ? "default" : "secondary"}
-                  >
-                    {roleBadgeLabel(member.role)}
-                  </Badge>
-                </li>
-              ))}
-            </ul>
-          </ScrollArea>
-          {isGm ? <SessionSetupInviteLink worldId={worldId} /> : null}
-        </div>
-      </Panel>
+      {/* Spec 023: the roster itself lives in its own Players sidebar
+       * section now — this stays just the invite link. */}
+      {isGm ? (
+        <Panel variant="stone" className="grid gap-2 rounded-xl border border-border sm:max-w-xs">
+          <SessionSetupInviteLink worldId={worldId} />
+        </Panel>
+      ) : null}
 
       {/* Spec 018 US7: the Genie session loop (Wish Pool, Doom Clock,
        * Puzzle Clocks) — only relevant for Genie-system worlds. */}

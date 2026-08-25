@@ -6,11 +6,17 @@ import {
   IMPLEMENTED_SYSTEM_IDS,
   getGameSystemManifest,
 } from "@/api/gameSystems";
-import { getWorld, updateWorldGameSystem, updateWorldGenieResourceCarryover } from "@/api/world";
+import {
+  getWorld,
+  updateWorldDefaultSceneGridType,
+  updateWorldGameSystem,
+  updateWorldGenieResourceCarryover,
+} from "@/api/world";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import { Container } from "@/components/ui/container/Container";
+import { Field } from "@/components/ui/field/Field";
 import { Loader } from "@/components/ui/loader/Loader";
 import {
   Select,
@@ -129,6 +135,19 @@ export default function WorldSystemSettingsPage() {
     }
   };
 
+  const [isSavingGridType, setIsSavingGridType] = useState(false);
+  const handleChangeDefaultGridType = async (gridType: string) => {
+    setIsSavingGridType(true);
+    try {
+      const updated = await updateWorldDefaultSceneGridType(worldId, gridType);
+      setWorld(updated);
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Failed to update default scene grid type");
+    } finally {
+      setIsSavingGridType(false);
+    }
+  };
+
   if (isLoading) {
     return <Loader fullScreen label="Loading system settings" />;
   }
@@ -160,7 +179,7 @@ export default function WorldSystemSettingsPage() {
           className="justify-self-start"
           onClick={() => navigate(`/world/${worldId}/staging`)}
         >
-          Back to Session Setup
+          Back to Overview
         </Button>
 
         <div>
@@ -188,25 +207,26 @@ export default function WorldSystemSettingsPage() {
 
         {isGm ? (
           <Card className="grid gap-4 p-6" data-testid="system-picker-card">
-            <h2 className="text-lg font-semibold">
-              {activeManifest ? "Change system" : "Assign a system"}
-            </h2>
-            <Select value={pendingSystemId ?? undefined} onValueChange={(v) => void handlePickSystem(v)}>
-              <SelectTrigger aria-label="System" data-testid="system-picker">
-                <SelectValue placeholder="Select a system" />
-              </SelectTrigger>
-              <SelectContent>
-                {BUNDLED_SYSTEM_IDS.map((systemId) => {
-                  const isImplemented = IMPLEMENTED_SYSTEM_IDS.has(systemId);
-                  return (
-                    <SelectItem key={systemId} value={systemId} disabled={!isImplemented}>
-                      {BUNDLED_SYSTEM_LABELS[systemId] ?? systemId}
-                      {isImplemented ? null : " (TBD)"}
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
+            <h2 className="text-lg font-semibold">System Settings</h2>
+
+            <Field label="Change System" htmlFor="system-picker">
+              <Select value={pendingSystemId ?? undefined} onValueChange={(v) => void handlePickSystem(v)}>
+                <SelectTrigger id="system-picker" aria-label="Change System" data-testid="system-picker">
+                  <SelectValue placeholder="Select a system" />
+                </SelectTrigger>
+                <SelectContent>
+                  {BUNDLED_SYSTEM_IDS.map((systemId) => {
+                    const isImplemented = IMPLEMENTED_SYSTEM_IDS.has(systemId);
+                    return (
+                      <SelectItem key={systemId} value={systemId} disabled={!isImplemented}>
+                        {BUNDLED_SYSTEM_LABELS[systemId] ?? systemId}
+                        {isImplemented ? null : " (TBD)"}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </Field>
 
             {pendingManifest ? (
               <div className="grid gap-3" data-testid="pending-system-confirmation">
@@ -231,6 +251,31 @@ export default function WorldSystemSettingsPage() {
                 {status}
               </StatusBadge>
             ) : null}
+
+            <Field
+              label="Default Scene Grid Type"
+              htmlFor="default-scene-grid-type"
+              hint="Applied to every newly created scene unless the GM picks a different grid type at creation time."
+            >
+              <Select
+                value={world.defaultSceneGridType}
+                onValueChange={(v) => void handleChangeDefaultGridType(v)}
+                disabled={isSavingGridType}
+              >
+                <SelectTrigger
+                  id="default-scene-grid-type"
+                  aria-label="Default Scene Grid Type"
+                  data-testid="default-scene-grid-type-picker"
+                >
+                  <SelectValue placeholder="Select a grid type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="gridless">None</SelectItem>
+                  <SelectItem value="square">Squares</SelectItem>
+                  <SelectItem value="hex">Hexagons</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
           </Card>
         ) : null}
 
@@ -258,7 +303,7 @@ export default function WorldSystemSettingsPage() {
           <p className="text-sm text-muted-foreground">
             This world's GM hasn't assigned a system yet.{" "}
             <Link to={`/world/${worldId}/staging`} className="underline underline-offset-2">
-              Back to Session Setup
+              Back to Overview
             </Link>
           </p>
         ) : null}

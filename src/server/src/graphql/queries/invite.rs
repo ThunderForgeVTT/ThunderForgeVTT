@@ -6,7 +6,7 @@ use uuid::Uuid;
 use crate::auth::world_membership::{WorldMembershipError, require_world_member};
 use crate::graphql::*;
 use crate::models::{WorldInvite, WorldMember};
-use crate::schema::{world_invites, world_members};
+use crate::schema::{world_invites, world_members, worlds};
 use crate::state::AppState;
 
 /// Testable core of `InviteQuery::world_invites` (see `actor.rs`'s
@@ -96,7 +96,7 @@ pub async fn world_members_impl(
         .load::<WorldMember>(&mut conn)
         .map_err(|e| Error::new(format!("Failed to load members: {}", e)))?;
 
-    Ok(members
+    let mut payloads: Vec<crate::graphql::mutations_invites::WorldMembershipPayload> = members
         .into_iter()
         .map(
             |member| crate::graphql::mutations_invites::WorldMembershipPayload {
@@ -109,7 +109,41 @@ pub async fn world_members_impl(
                 updated_at: member.updated_at.to_string(),
             },
         )
-        .collect())
+        .collect();
+
+    // Spec 023 (quickstart.md §1: "Confirm the world's GM/Owner appears
+    // in the list"): the same missing-row gap `require_world_member`
+    // works around above also means the raw `world_members` load just
+    // above can omit the world's own creator entirely, since
+    // `create_world` never backfills a row for them. Synthesize an
+    // Owner entry from `worlds.created_by`/`created_at` when no real row
+    // for them exists, so the roster this feature's Players section
+    // relies on actually includes the GM/Owner rather than silently
+    // dropping them.
+    let owner_already_listed = payloads.iter().any(|p| p.role == "Owner");
+    if !owner_already_listed {
+        let (created_by, created_at): (Uuid, chrono::NaiveDateTime) = worlds::table
+            .filter(worlds::id.eq(world_id))
+            .select((worlds::created_by, worlds::created_at))
+            .first(&mut conn)
+            .map_err(|e| Error::new(format!("Failed to load world: {}", e)))?;
+        if !payloads.iter().any(|p| p.user_id == created_by) {
+            payloads.insert(
+                0,
+                crate::graphql::mutations_invites::WorldMembershipPayload {
+                    id: world_id,
+                    world_id,
+                    user_id: created_by,
+                    role: "Owner".to_string(),
+                    joined_at: created_at.to_string(),
+                    created_at: created_at.to_string(),
+                    updated_at: created_at.to_string(),
+                },
+            );
+        }
+    }
+
+    Ok(payloads)
 }
 
 /// Testable core of `InviteQuery::world_member`.
@@ -390,10 +424,32 @@ mod tests {
             .await
             .expect("the world's own owner must be able to list its members, even with no world_members row");
 
-        assert!(
-            members.is_empty(),
-            "owner has no explicit world_members row of their own"
-        );
+        // Spec 023 (quickstart.md §1): with no explicit world_members row
+        // of their own, the owner must still be synthesized into the
+        // returned list rather than silently omitted.
+        assert_eq!(members.len(), 1, "the synthesized owner entry must be present");
+        assert_eq!(members[0].user_id, owner_id);
+        assert_eq!(members[0].role, "Owner");
+    }
+
+    #[tokio::test]
+    async fn world_members_does_not_duplicate_an_owner_with_a_real_row() {
+        // Spec 023: if the owner *does* have a real `world_members` row
+        // (e.g. backfilled some other way), the synthesized fallback
+        // entry must not also be added alongside it.
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        insert_test_world_member(&mut conn, world_id, owner_id, "Owner");
+        drop(conn);
+
+        let members = world_members_impl(&state, owner_id, world_id)
+            .await
+            .expect("the world's own owner must be able to list its members");
+
+        assert_eq!(members.len(), 1, "no duplicate synthesized owner entry");
+        assert_eq!(members[0].user_id, owner_id);
     }
 
     #[tokio::test]

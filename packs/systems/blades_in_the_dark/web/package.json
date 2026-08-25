@@ -1,6 +1,7 @@
 {
   "name": "@thunderforge/blades-in-the-dark",
   "version": "0.1.0",
+  "license": "AGPL-3.0-or-later",
   "description": "Blades in the Dark ruleset for ThunderForgeVTT",
   "type": "module",
   "main": "dist/index.js",

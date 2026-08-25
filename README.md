@@ -67,3 +67,7 @@ This simplified approach is designed to not be pretty for a version 0.0.1 and if
 ## Timelines
 
 This project is a larger project inspired by many great providers such as FoundryVTT, Roll20, and BattleMapp. The current initial release cannot be given a date becuase it takes time to create great software but rest assured this project is getting worked on daily.
+
+## License
+
+ThunderForgeVTT is licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0-or-later)](LICENSE). Self-hosting is always free, including for commercial/community use — the AGPL's only additional condition beyond ordinary open-source terms is that anyone who runs a *modified* version of this software as a network service must also make that modified source available to their users (AGPL §13). No further restriction exists.

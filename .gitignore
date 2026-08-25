@@ -179,6 +179,7 @@ graphify-out/
 
 ### local research notes (not part of the shipped repo) ###
 /research/
+/docs/research/
 
 ### scratch resume notes (delete after resuming, never shipped) ###
 /TOMORROW.md

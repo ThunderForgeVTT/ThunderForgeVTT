@@ -88,14 +88,24 @@ test.describe("US1: GM sees a real staging page, not the old placeholder shell",
     });
     await expect(page.locator("canvas")).toHaveCount(0);
 
-    // Real scene data (the auto-created default scene) and real player
-    // list (at least the GM). Spec 011: NPC management moved to the
-    // dedicated /compendium route — this page now only links out to it
-    // (see world-compendium.spec.ts for NPC-roster coverage) and shows a
-    // Last Session Notes panel instead.
-    await expect(page.getByTestId("scene-switcher")).toContainText(worldName);
-    await expect(page.getByText("Players")).toBeVisible();
-    await expect(page.getByTestId("staging-player-list")).toHaveCount(1);
+    // Spec 022: scene management (incl. the auto-created default scene)
+    // moved to the dedicated Scenes section. Spec 011: NPC management
+    // similarly moved to /compendium (see world-compendium.spec.ts for
+    // NPC-roster coverage). Spec 023: the player roster itself moved to
+    // its own dedicated Players sidebar section — Overview now only
+    // shows session notes and the invite link.
+    await expect(page.getByTestId("scene-switcher")).toHaveCount(0);
+    await expect(page.getByTestId("world-nav-scenes")).toBeVisible();
+    await page.getByTestId("world-nav-scenes").click();
+    await page.waitForURL(`**/world/${worldId}/scenes`, { timeout: 10_000 });
+    await expect(page.getByRole("link", { name: worldName })).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.goBack();
+    await page.waitForURL(`**/world/${worldId}/staging`, { timeout: 10_000 });
+
+    await expect(page.getByTestId("staging-player-list")).toHaveCount(0);
+    await expect(page.getByTestId("world-nav-players")).toBeVisible();
     await expect(page.getByTestId("world-nav-npcs")).toBeVisible();
     await expect(page.getByTestId("session-notes-panel")).toBeVisible();
 
@@ -212,8 +222,13 @@ test.describe("US3: players get the same shell, read-only and independent of the
       await expect(playerPage.getByTestId("world-staging-page")).toBeVisible({
         timeout: 15_000,
       });
-      // GM-only controls are absent for a Player.
-      await expect(playerPage.getByTestId("staging-new-scene-button")).toHaveCount(0);
+      // GM-only controls are absent for a Player — Session Setup has no
+      // scene controls at all now (spec 022), and the Scenes section
+      // itself hides the "New scene" creation form from non-GM members.
+      await expect(playerPage.getByTestId("scene-switcher")).toHaveCount(0);
+      await playerPage.goto(`/world/${worldId}/scenes`);
+      await expect(playerPage.getByTestId("new-scene-name-input")).toHaveCount(0);
+      await playerPage.goto(`/world/${worldId}/staging`);
 
       // The player enters full-screen independently — the GM's own,
       // separate browser session is unaffected by the player's navigation.

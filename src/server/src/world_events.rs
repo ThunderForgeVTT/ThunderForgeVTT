@@ -37,6 +37,11 @@ pub const EVENT_CODE_TOKEN_CHANGED: i32 = 14;
 /// (contracts/genie-session-loop.md; the last three kinds added by spec
 /// 020, contracts/genie-economy.md).
 pub const EVENT_CODE_GENIE_SESSION_STATE: i32 = 15;
+/// Spec 022 (Scene Management Overhaul, ADR-046): a GM launched a scene
+/// (`worlds.active_scene_id` changed). Payload: `{ "sceneId": "..." }`.
+/// Consumed by every world member's already-open `worldEventsCreated`
+/// subscription while in Play to live-switch which scene is loaded.
+pub const EVENT_CODE_SCENE_LAUNCHED: i32 = 16;
 
 /// Record a world event to the audit trail and trigger NOTIFY for real-time sync.
 pub fn record_world_event(

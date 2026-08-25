@@ -43,6 +43,11 @@ pub struct GraphQLUpdateSceneInput {
     pub width: Option<i32>,
     pub height: Option<i32>,
     pub metadata: Option<Json<serde_json::Value>>,
+    /// Spec 022 (FR-005/FR-006): GM-authored Markdown source for the
+    /// scene's player-facing summary. `Some(_)` (including `Some("")`)
+    /// re-renders `summaryRenderedHtml`; `None` leaves the summary
+    /// untouched.
+    pub summary_markdown: Option<String>,
 }
 
 // ========== Walls (Phase 6; door semantics: native canvas authoring FR-017) ==========

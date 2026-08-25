@@ -4,10 +4,10 @@ workspace = true
 [package]
 name = "thunderforge"
 version = "0.1.0"
-authors = ["mbround18 <12646562+mbround18@users.noreply.github.com>"]
+authors = ["mbround18 <michael.bruno1337@gmail.com>"]
 edition = "2024"
 repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
-license = "BSD 3-Clause License"
+license.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

@@ -202,6 +202,8 @@ impl From<CoreWorld> for DbWorld {
             session_notes: None,
             allow_player_created_actors: false,
             genie_resource_carryover_enabled: false,
+            default_scene_grid_type: "square".to_string(),
+            active_scene_id: None,
         }
     }
 }

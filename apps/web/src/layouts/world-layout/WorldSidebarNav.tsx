@@ -53,10 +53,22 @@ export function WorldSidebarNav({ worldId, isGm }: WorldSidebarNavProps) {
 
   const categories: WorldNavCategory[] = [
     {
-      label: "Session Setup",
+      label: "Overview",
       icon: "compass",
       to: `/world/${worldId}/staging`,
-      testId: "world-nav-staging",
+      testId: "world-nav-overview",
+    },
+    {
+      label: "Scenes",
+      icon: "map",
+      to: `/world/${worldId}/scenes`,
+      testId: "world-nav-scenes",
+    },
+    {
+      label: "Players",
+      icon: "actors",
+      to: `/world/${worldId}/players`,
+      testId: "world-nav-players",
     },
     {
       label: "NPCs",

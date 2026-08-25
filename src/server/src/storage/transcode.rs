@@ -116,6 +116,38 @@ fn resize_to_max_dimension(img: &DynamicImage, max_dimension: u32) -> DynamicIma
     }
 }
 
+/// Spec 022 (research.md §5): scene preview/thumbnail images use the same
+/// max-dimension-capped WebP approach as lore thumbnails, reusing this
+/// module's existing decode/resize/encode helpers rather than
+/// reimplementing them. "Roughly 1/16 scale" (spec.md FR-012) is
+/// interpreted as this capped-max-dimension approach, consistent with how
+/// `LORE_IMAGE_THUMBNAIL_DIMENSION` above already handles the same
+/// "small preview regardless of wildly varying source size" problem.
+pub const SCENE_PREVIEW_MAX_DIMENSION: u32 = 256;
+
+/// Decodes an already-known-good image (`bytes`, e.g. a scene's own
+/// background image already accepted by `transcode_to_webp` or the dd2vtt
+/// importer) and produces a single max-dimension-capped WebP preview
+/// rendition. Does not re-enforce an upload size ceiling — callers pass
+/// bytes that already passed a ceiling check earlier in their own
+/// pipeline (map import / canvas upload), so this never gates on size
+/// again.
+pub fn transcode_scene_preview(bytes: &[u8]) -> Result<TranscodedImage, TranscodeError> {
+    let format = image::guess_format(bytes).map_err(|e| TranscodeError::Decode(e.to_string()))?;
+    let img =
+        image::load_from_memory_with_format(bytes, format).map_err(|e| TranscodeError::Decode(e.to_string()))?;
+
+    let preview = resize_to_max_dimension(&img, SCENE_PREVIEW_MAX_DIMENSION);
+    let webp_bytes = encode_webp(&preview)?;
+
+    Ok(TranscodedImage {
+        webp_bytes,
+        width: preview.width(),
+        height: preview.height(),
+        original_format: format!("{format:?}").to_lowercase(),
+    })
+}
+
 /// Decodes `bytes` (enforcing `MAX_LORE_IMAGE_UPLOAD_BYTES` before any
 /// decode work, per FR-010) and produces both a normalized full-size
 /// WebP rendition and a WebP thumbnail (FR-009).

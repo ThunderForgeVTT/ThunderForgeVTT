@@ -57,6 +57,7 @@ export function useWorldMembers(worldId: string): UseWorldMembersResult {
           joined_at: record.joinedAt,
           created_at: record.createdAt ?? record.joinedAt,
           updated_at: record.updatedAt ?? record.joinedAt,
+          claimed_actor: record.claimedActor,
         }));
 
       // Sort by role hierarchy: Owner, GM, Player

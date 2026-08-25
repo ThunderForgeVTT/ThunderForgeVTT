@@ -6,7 +6,7 @@ name = "genie-engine"
 version = "0.1.0"
 edition = "2021"
 repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
-license = "BSD 3-Clause License"
+license.workspace = true
 
 [dependencies]
 bevy = { version = "0.18.1", default-features = false, features = [

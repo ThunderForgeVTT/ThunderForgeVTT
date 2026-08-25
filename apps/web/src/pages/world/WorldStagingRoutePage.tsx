@@ -1,13 +1,11 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { getScenes } from "@/api/scenes";
 import { getWorld } from "@/api/world";
 import { SEO } from "@/components/seo/SEO";
 import { Loader } from "@/components/ui/loader/Loader";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import { WorldSectionShell } from "@/layouts/world-layout/WorldSectionShell";
 import { WorldStagingPage } from "@/layouts/world-layout/WorldStagingPage";
-import type { SceneRecord } from "@/types/scene";
 import type { SeoConfig } from "@/types/seo";
 import type { WorldRecord } from "@/types/world";
 
@@ -19,12 +17,13 @@ import type { WorldRecord } from "@/types/world";
  * container is never mounted here, so there is no risk to the Bevy
  * engine's canvas handle (research.md §1) — `/play` itself is now
  * canvas-only (see `WorldPage.tsx`).
+ *
+ * Spec 022 (FR-002): no longer fetches/owns scenes — scene selection now
+ * happens exclusively via the Scenes section's Launch action.
  */
 export default function WorldStagingRoutePage() {
   const { id = "" } = useParams();
   const [world, setWorld] = useState<WorldRecord | null>(null);
-  const [scenes, setScenes] = useState<SceneRecord[]>([]);
-  const [sceneId, setSceneId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { isGm, loading: roleLoading } = useWorldRole(id, world);
 
@@ -32,14 +31,11 @@ export default function WorldStagingRoutePage() {
     let active = true;
     setIsLoading(true);
 
-    Promise.all([getWorld(id), getScenes(id)])
-      .then(([worldResult, scenesResult]) => {
-        if (!active) {
-          return;
+    getWorld(id)
+      .then((worldResult) => {
+        if (active) {
+          setWorld(worldResult);
         }
-        setWorld(worldResult);
-        setScenes(scenesResult);
-        setSceneId((current) => current ?? scenesResult[0]?.sceneId ?? null);
       })
       .finally(() => {
         if (active) {
@@ -70,10 +66,6 @@ export default function WorldStagingRoutePage() {
         <WorldStagingPage
           worldId={id}
           world={world}
-          scenes={scenes}
-          sceneId={sceneId}
-          onSceneChange={setSceneId}
-          onSceneCreated={(scene) => setScenes((current) => [...current, scene])}
           isGm={isGm}
           onSessionNotesSaved={(notes) =>
             setWorld((current) => (current ? { ...current, sessionNotes: notes } : current))

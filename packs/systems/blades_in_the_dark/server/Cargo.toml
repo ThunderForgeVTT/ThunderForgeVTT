@@ -6,7 +6,7 @@ name = "blades-server"
 version = "0.1.0"
 edition = "2021"
 repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
-license = "BSD 3-Clause License"
+license.workspace = true
 
 [dependencies]
 serde = { version = "1.0.228", features = ["derive"] }
