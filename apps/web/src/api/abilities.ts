@@ -1,4 +1,4 @@
-import { withCsrf } from "@/api/auth";
+import { postGraphQL } from "@/api/graphqlClient";
 import type {
   AbilityClassification,
   AbilityEffectRecord,
@@ -22,16 +22,8 @@ import type {
  *   * flat scalar args → deleteAbility, setAbilityGmOnly, and every query
  */
 
-type GraphQLError = {
-  message?: string;
-};
 
-type GraphQLResponse<TData> = {
-  data?: TData;
-  errors?: GraphQLError[];
-};
 
-const GRAPHQL_ENDPOINT = "/api/graphql";
 
 const ABILITY_EFFECT_FIELDS = `
   id
@@ -65,31 +57,6 @@ const WORLD_ABILITY_FIELDS = `
   }
 `;
 
-async function postGraphQL<TData>(
-  query: string,
-  variables?: Record<string, unknown>,
-): Promise<TData> {
-  const response = await fetch(GRAPHQL_ENDPOINT, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: withCsrf({
-      "Content-Type": "application/json",
-    }),
-    body: JSON.stringify({ query, variables }),
-  });
-
-  const payload = (await response.json()) as GraphQLResponse<TData>;
-  if (!response.ok) {
-    throw new Error(payload.errors?.[0]?.message || "GraphQL request failed");
-  }
-  if (payload.errors?.length) {
-    throw new Error(payload.errors[0]?.message || "GraphQL request failed");
-  }
-  if (!payload.data) {
-    throw new Error("GraphQL response did not include data");
-  }
-  return payload.data;
-}
 
 /**
  * FR-005: every world member may browse. GM-only abilities are filtered

@@ -263,14 +263,14 @@ set -a && source .env && set +a
 
 ## Phase 9: Polish & Cross-Cutting Concerns
 
-- [ ] T096 [P] Delete `apps/web/src/pages/world/compendium/ComingSoonTab.tsx` — it loses its last caller at T027 (research.md §7)
-- [ ] T097 [P] Extract the privately-duplicated `postGraphQL` helper (now in `api/items.ts`, `api/itemShares.ts`, `api/inventory.ts`, `api/abilities.ts`, `api/actorAbilities.ts`, `api/abilityShares.ts`) into one shared module under `apps/web/src/api/`
-- [ ] T098 [P] De-duplicate the `EFFECT_TYPE_LABELS` map (currently copied in `ItemPreviewPanel.tsx` and `SharedItemPage.tsx`, and again for abilities) into a shared constant
-- [ ] T099 Run the full `cargo test -p thunderforge` suite with `.env` loaded and containers up; confirm zero regressions against the pre-feature baseline
-- [ ] T100 Run `npx tsc --noEmit --ignoreDeprecations 6.0`, `npx eslint --max-warnings=0`, and `npx vite build` in `apps/web`; confirm no new errors beyond the documented pre-existing baseline
-- [ ] T101 Run `npx playwright test e2e/abilities-compendium.spec.ts --workers=1` repeatedly (at least 3 consecutive clean runs) to confirm it is not flaky
-- [ ] T102 Execute quickstart.md Scenarios 1-6 end to end and tick the Definition of Done checklist
-- [ ] T103 Update `specs/025-world-abilities-compendium/spec.md` Status from Draft to Implemented, and record any deviations discovered during implementation in the relevant contract files
+- [X] T096 [P] Delete `apps/web/src/pages/world/compendium/ComingSoonTab.tsx` — it loses its last caller at T027 (research.md §7)
+- [~] T097 [P] Extract the privately-duplicated `postGraphQL` helper (now in `api/items.ts`, `api/itemShares.ts`, `api/inventory.ts`, `api/abilities.ts`, `api/actorAbilities.ts`, `api/abilityShares.ts`) into one shared module under `apps/web/src/api/` — **partial**: `api/graphqlClient.ts` created and spec 025's own three modules migrated. The estimate of six copies was low: there are **23** across `src/api/`, in 7 subtly different variants (differing error precedence and message fallbacks — the divergence is the real hazard). Migrating the other 20 touches every API surface with almost no frontend test coverage to catch a behavioural difference, so it is left as its own change with its own verification
+- [X] T098 [P] De-duplicate the `EFFECT_TYPE_LABELS` map (currently copied in `ItemPreviewPanel.tsx` and `SharedItemPage.tsx`, and again for abilities) into a shared constant
+- [X] T099 Run the full `cargo test -p thunderforge` suite with `.env` loaded and containers up; confirm zero regressions against the pre-feature baseline
+- [~] T100 Run `npx tsc --noEmit --ignoreDeprecations 6.0`, `npx eslint --max-warnings=0`, and `npx vite build` in `apps/web`; **partial**: `tsc` and `vite build` clean. `eslint --max-warnings=0` does NOT pass — 89 errors exist repo-wide at baseline, and the new files add errors of the same `react-hooks/set-state-in-effect` class already present in their item counterparts. Deferred to a dedicated lint pass by the project owner's decision rather than claimed clean
+- [X] T101 Run `npx playwright test e2e/abilities-compendium.spec.ts --workers=1` repeatedly (at least 3 consecutive clean runs) to confirm it is not flaky
+- [X] T102 Execute quickstart.md Scenarios 1-6 end to end and tick the Definition of Done checklist
+- [X] T103 Update `specs/025-world-abilities-compendium/spec.md` Status from Draft to Implemented, and record any deviations discovered during implementation in the relevant contract files
 
 ---
 

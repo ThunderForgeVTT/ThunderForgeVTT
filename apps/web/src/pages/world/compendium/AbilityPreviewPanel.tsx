@@ -7,6 +7,7 @@ import {
   toAbilityClassificationKey,
   type AbilityFacetsLookup,
 } from "@/utils/abilityFacets";
+import { effectTypeLabel } from "@/utils/effectLabels";
 
 export interface AbilityPreviewPanelProps {
   worldId: string;
@@ -16,12 +17,6 @@ export interface AbilityPreviewPanelProps {
   onClose: () => void;
 }
 
-const EFFECT_TYPE_LABELS: Record<string, string> = {
-  HEAL: "Heal",
-  DAMAGE: "Damage",
-  MODIFIER: "Modifier",
-  ATTACK_ROLL: "Attack Roll",
-};
 
 /**
  * Spec 025 (T026): the Abilities tab's row-select preview. Mirrors
@@ -103,7 +98,7 @@ export function AbilityPreviewPanel({
             {ability.effects.map((effect) => (
               <li key={effect.id} className="text-muted-foreground">
                 <span className="font-medium text-foreground">
-                  {EFFECT_TYPE_LABELS[effect.effectType] ?? effect.effectType}
+                  {effectTypeLabel(effect.effectType)}
                 </span>{" "}
                 — {effect.formula} → {effect.target}
               </li>

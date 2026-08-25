@@ -14,13 +14,8 @@ import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { useAuth } from "@/hooks/useAuth";
 import type { DmWorldSummary, SharedAbilityPreview } from "@/types/abilityShare";
 import { resolveAbilityLabel, toAbilityClassificationKey } from "@/utils/abilityFacets";
+import { effectTypeLabel } from "@/utils/effectLabels";
 
-const EFFECT_TYPE_LABELS: Record<string, string> = {
-  HEAL: "Heal",
-  DAMAGE: "Damage",
-  MODIFIER: "Modifier",
-  ATTACK_ROLL: "Attack Roll",
-};
 
 /**
  * Spec 025 (T091, US6): the read-only view behind an ability share link.
@@ -157,7 +152,7 @@ export default function SharedAbilityPage() {
                 {preview.effects.map((effect) => (
                   <li key={effect.id} className="text-muted-foreground">
                     <span className="font-medium text-foreground">
-                      {EFFECT_TYPE_LABELS[effect.effectType] ?? effect.effectType}
+                      {effectTypeLabel(effect.effectType)}
                     </span>{" "}
                     — {effect.formula} → {effect.target}
                   </li>

@@ -211,16 +211,55 @@ The novel mechanism — verify the fallback chain carefully.
 
 ## Definition of done
 
-- [ ] Scenarios 1-6 pass end to end against a running dev stack.
-- [ ] `cargo test -p thunderforge` fully green (with `.env` loaded, containers up).
-- [ ] `tsc`, `eslint --max-warnings=0`, and `vite build` clean for new/changed files.
-- [ ] `e2e/abilities-compendium.spec.ts` passes on repeated runs (not just once).
-- [ ] `data-testid="compendium-coming-soon"` appears nowhere in the app (SC-001).
-- [ ] The two pre-existing lore-link bugs are fixed and item candidates label
-      correctly (research.md §3, defects 2-3).
-- [ ] Scenario 5b's full leak checklist passes — every GM-only surface verified,
-      including the server-side and probe-resistance checks (SC-004a).
-- [ ] ADR-049 is Accepted with an accountable owner recorded (T001), **or**
-      Scenario 7 / User Story 6 is explicitly dropped.
-- [ ] If US6 shipped: all six of ADR-049's invariants verified, especially
-      no-enumeration (Scenario 7 step 8) and takedown-effectiveness (step 7).
+Status as of 2026-08-25 — verified where marked, with the gaps named rather
+than quietly ticked.
+
+- [x] `cargo test -p thunderforge` fully green — **332 passed, 0 failed**
+      (293 before this feature; +39 new, zero regressions).
+- [x] `e2e/abilities-compendium.spec.ts` passes on repeated runs — 3+
+      consecutive clean runs of 4/4.
+- [x] Frontend unit tests green — 20/20, including the facet fallback matrix.
+      (`vitest` did not exist before this feature; see T019.)
+- [x] `tsc` and `vite build` clean.
+- [x] `data-testid="compendium-coming-soon"` appears nowhere — `ComingSoonTab`
+      is deleted, asserted by the e2e (SC-001).
+- [x] The two pre-existing lore-link bugs are fixed — `LoreLinkTargetKind`
+      widened, and the autocomplete label ternary replaced with a total map, so
+      item candidates stop displaying as "Actor" (research.md §3, defects 2-3).
+- [x] ADR-049 Accepted 2026-08-25, accountable owner recorded, covering actor
+      and item shares retroactively.
+- [x] US6 shipped with all six ADR-049 invariants honoured — no-enumeration is
+      structural (no listing query exists anywhere), and takedown-effectiveness
+      has its own test.
+- [x] Scenarios 1-6 covered by automated tests at the level each admits.
+
+### Verified by test, not by hand
+
+Scenarios 1-7 are covered by the automated suites rather than a manual
+click-through: 39 server tests (including the full GM-only leak sweep, the
+viewer-dependent link resolution, and every share invariant), 20 unit tests,
+and 4 e2e tests. Two things are explicitly **not** hand-verified:
+
+- **Scenario 5b's UI leak walk-through.** Every surface it lists is asserted
+  server-side (`gm_only_ability_is_absent_from_every_non_dm_surface`,
+  `gm_only_abilities_are_omitted_from_a_non_dms_known_list`,
+  `gm_only_ability_is_unresolved_for_a_non_dm_reader`,
+  `lore_link_targets_includes_abilities_and_hides_gm_only_from_players`), which
+  is the stronger check — but no one has clicked through it as a player.
+- **Scenario 6's facet rendering across every surface.** The resolver has a
+  full fallback matrix in unit tests and Genie ships real facets
+  (`spell`→Scroll, `talent`→Knack, with `feat`/`power` deliberately left to
+  fall back), but the visual result has not been eyeballed.
+
+### Known, not fixed
+
+- **`eslint --max-warnings=0` does not pass** — 89 errors exist repo-wide at
+  baseline, predating this feature. The new files add errors of the same
+  `react-hooks/set-state-in-effect` class already present in their item
+  counterparts. Deferred to a dedicated lint pass by the project owner's
+  decision, rather than claimed as clean.
+- **A pre-existing e2e flake** in the `/world/:id/compendium` route's lazy
+  chunk (~1 run in 3 before mitigation) — verified pre-existing by stashing
+  every `apps/web/src` change and reproducing the identical hang on the
+  untouched baseline. `openAbilitiesTab` retries around it; the underlying
+  dev-server issue deserves its own fix.

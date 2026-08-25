@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-25
 
-**Status**: Draft
+**Status**: Implemented (2026-08-25) — all six user stories complete; see quickstart.md's Definition of Done for what is verified by test versus by hand
 
 **Input**: User description: "World Abilities compendium — GM-authored abilities (spells, feats, powers, talents) as first-class world artifacts, closing out the 'Coming Soon' placeholder that spec 011 deliberately left on the Compendium's Abilities tab (FR-008). Model this on spec 013 (items-inventory), which is the direct precedent: it graduated the Items tab out of that same placeholder state with its own tables, GraphQL surface, permissions, detail/edit pages, compendium tab + preview panel, and lore cross-linking. Abilities should follow that established shape rather than inventing a parallel one."
 

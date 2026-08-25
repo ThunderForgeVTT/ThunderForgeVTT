@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import type { WorldItemRecord } from "@/types/item";
+import { effectTypeLabel } from "@/utils/effectLabels";
 
 export interface ItemPreviewPanelProps {
   worldId: string;
@@ -9,12 +10,6 @@ export interface ItemPreviewPanelProps {
   onClose: () => void;
 }
 
-const EFFECT_TYPE_LABELS: Record<string, string> = {
-  HEAL: "Heal",
-  DAMAGE: "Damage",
-  MODIFIER: "Modifier",
-  ATTACK_ROLL: "Attack Roll",
-};
 
 /**
  * Spec 013 (T025): the Compendium Items tab's row-select preview, mirrors
@@ -63,7 +58,7 @@ export function ItemPreviewPanel({ worldId, item, onClose }: ItemPreviewPanelPro
             {item.effects.map((effect) => (
               <li key={effect.id} className="text-muted-foreground">
                 <span className="font-medium text-foreground">
-                  {EFFECT_TYPE_LABELS[effect.effectType] ?? effect.effectType}
+                  {effectTypeLabel(effect.effectType)}
                 </span>{" "}
                 — {effect.formula} → {effect.target}
               </li>
