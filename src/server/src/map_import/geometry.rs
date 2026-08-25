@@ -4,9 +4,11 @@
 use super::types::{UvttLight, UvttPoint, UvttPortal};
 
 /// Convert a grid-unit coordinate from the source file into the target
-/// scene's pixel space. Per research.md §8, the source file's own
-/// `pixels_per_grid` cancels out once working in grid units — only the
-/// *target* scene's `grid_size` matters.
+/// scene's pixel space. `target_grid_size` is the *target* scene's
+/// `grid_size` in pixels — callers importing a UVTT file pass the source
+/// file's own `resolution.pixels_per_grid` here (adopted as the scene's
+/// new `grid_size` by `import_uvtt_impl`), so imported geometry stays
+/// aligned with the imported background image.
 pub fn grid_units_to_scene_px(grid_units: f64, target_grid_size: f64) -> f64 {
     grid_units * target_grid_size
 }

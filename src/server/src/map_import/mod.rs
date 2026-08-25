@@ -112,10 +112,11 @@ pub async fn import_uvtt_impl(
 
     let db_pool = state.db_pool.clone();
 
-    // Ownership check (T026a) — resolve the scene's grid_size + world_id
-    // at the same time, since we need both regardless.
+    // Ownership check (T026a) — we only need world_id back from this
+    // (the scene's *existing* grid_size no longer matters: the import now
+    // adopts the source file's own grid, below).
     let ownership_pool = db_pool.clone();
-    let scene_row = tokio::task::spawn_blocking(move || -> Result<(i32, Uuid), MapImportError> {
+    let world_id = tokio::task::spawn_blocking(move || -> Result<Uuid, MapImportError> {
         use crate::schema::scenes;
         let mut conn = ownership_pool
             .get()
@@ -123,16 +124,32 @@ pub async fn import_uvtt_impl(
         scenes::table
             .filter(scenes::scene_id.eq(scene_id))
             .filter(scenes::owner_id.eq(user_id))
-            .select((scenes::grid_size, scenes::world_id))
-            .first::<(i32, Uuid)>(&mut conn)
+            .select(scenes::world_id)
+            .first::<Uuid>(&mut conn)
             .optional()?
             .ok_or(MapImportError::SceneNotOwned)
     })
     .await
     .map_err(|_| MapImportError::Io("Failed to spawn blocking task".to_string()))??;
 
-    let (grid_size, world_id) = scene_row;
-    let target_grid_size = grid_size as f64;
+    // Adopt the source file's own grid instead of the scene's existing
+    // one: a UVTT file's line_of_sight/portal/light coordinates are in
+    // *that file's* grid units, and its background image's own squares
+    // are `resolution.pixels_per_grid` pixels apart. Converting those
+    // grid-unit coordinates using anything other than the file's own
+    // pixels_per_grid would place walls/doors/lights out of alignment
+    // with the very background image being imported alongside them
+    // whenever the file's native grid differs from whatever grid the
+    // target scene happened to have before (every bundled example map is
+    // coincidentally 128px/256px square, which made this invisible until
+    // a real map with a different native grid was tried). The scene's
+    // `grid_size` is updated to match, below, so the frontend's grid
+    // overlay stays aligned with the newly imported background too. Any
+    // tokens already placed on the scene keep their absolute pixel
+    // position — only the grid overlay/new geometry moves to the file's
+    // native scale.
+    let target_grid_size = parsed.file.resolution.pixels_per_grid;
+    let new_grid_size = target_grid_size.round() as i32;
 
     // Decode + transcode + write the background image to RustFS outside
     // the DB transaction (the RustFS write isn't transactional with
@@ -232,7 +249,11 @@ pub async fn import_uvtt_impl(
                 .execute(conn)?;
 
             diesel::update(scenes::table.filter(scenes::scene_id.eq(scene_id)))
-                .set(scenes::background_asset_id.eq(saved_background.asset_id))
+                .set((
+                    scenes::background_asset_id.eq(saved_background.asset_id),
+                    scenes::grid_size.eq(new_grid_size),
+                    scenes::grid_type.eq("square"),
+                ))
                 .execute(conn)?;
 
             if let Some(preview) = &saved_preview {
@@ -767,11 +788,13 @@ mod tests {
         let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
         drop(conn);
 
-        // test_support::insert_test_scene always uses grid_size 5.
-        let target_grid_size = 5.0;
-
         let raw = read_fixture(fixture_name);
         let parsed = parse_uvtt(&raw).expect("fixture should parse");
+
+        // Import now adopts the source file's own grid (regardless of
+        // `test_support::insert_test_scene`'s fixed grid_size of 5) — see
+        // `import_uvtt_impl`'s comment on why.
+        let target_grid_size = parsed.file.resolution.pixels_per_grid;
 
         let mut expected_walls: Vec<WallSignature> =
             walls_from_line_of_sight(&parsed.file.line_of_sight, target_grid_size)
@@ -834,14 +857,19 @@ mod tests {
             "reloaded lights must exactly match {fixture_name}'s source lights"
         );
 
-        let background_asset_id = scenes::table
+        let (background_asset_id, reloaded_grid_size) = scenes::table
             .filter(scenes::scene_id.eq(scene_id))
-            .select(scenes::background_asset_id)
-            .first::<Option<Uuid>>(&mut conn)
+            .select((scenes::background_asset_id, scenes::grid_size))
+            .first::<(Option<Uuid>, i32)>(&mut conn)
             .expect("scene should reload");
         assert!(
             background_asset_id.is_some(),
             "reloaded scene must reference the background image asset created by import"
+        );
+        assert_eq!(
+            reloaded_grid_size,
+            target_grid_size.round() as i32,
+            "import must adopt {fixture_name}'s own pixels_per_grid as the scene's grid_size"
         );
     }
 

@@ -26,14 +26,19 @@ pub struct UvttPoint {
     pub y: f64,
 }
 
-/// Parsed for shape/round-trip fidelity; not read downstream (see
-/// `UvttFile::resolution`'s doc comment for why).
 #[derive(Debug, Deserialize)]
-#[allow(dead_code)]
 pub struct UvttResolution {
+    /// Parsed for round-trip fidelity; not read downstream.
     #[serde(default)]
+    #[allow(dead_code)]
     pub map_origin: Option<UvttPoint>,
+    /// Parsed for round-trip fidelity; not read downstream.
+    #[allow(dead_code)]
     pub map_size: UvttPoint,
+    /// The source file's own grid pitch, in pixels — adopted directly as
+    /// the target scene's `grid_size` by `import_uvtt_impl`, so imported
+    /// geometry/lights and the imported background image stay aligned
+    /// regardless of whatever grid the scene had before.
     pub pixels_per_grid: f64,
 }
 
@@ -88,11 +93,10 @@ pub struct UvttLight {
 #[derive(Debug, Deserialize)]
 pub struct UvttFile {
     pub format: f64,
-    /// Not read by T024's conversion math: `grid_units_to_scene_px` takes
-    /// the *target* scene's grid_size directly, so the source's own
-    /// `pixels_per_grid` cancels out per research.md §8 and is never
-    /// needed here.
-    #[allow(dead_code)]
+    /// `resolution.pixels_per_grid` is adopted as the target scene's own
+    /// `grid_size` by `import_uvtt_impl`, so `grid_units_to_scene_px`'s
+    /// `target_grid_size` argument is this value, not whatever grid the
+    /// scene had before import.
     pub resolution: UvttResolution,
     #[serde(default)]
     pub line_of_sight: Vec<Vec<UvttPoint>>,
