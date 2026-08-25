@@ -6,6 +6,19 @@ import CodeMirror from "@uiw/react-codemirror";
 import { getLoreLinkTargets, uploadLoreImage } from "@/api/lore";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { useTheme } from "@/hooks/useTheme";
+import type { LoreLinkTargetKind } from "@/types/lore";
+
+/** Spec 025 (T003): a total map, replacing a binary ternary that labelled every
+ * non-lore candidate "Actor" — so item candidates (returned by the backend
+ * since spec 013) displayed as "Actor" in the `[[` autocomplete. A map also
+ * makes adding a fifth target kind a one-line change that the type checker
+ * enforces, rather than a silently-wrong fallback. */
+const LORE_LINK_TARGET_LABELS: Record<LoreLinkTargetKind, string> = {
+  LORE_ENTRY: "Lore",
+  ACTOR: "Actor",
+  ITEM: "Item",
+  ABILITY: "Ability",
+};
 
 export interface LoreMarkdownEditorProps {
   loreEntryId: string;
@@ -89,7 +102,7 @@ export function LoreMarkdownEditor({
       // replaces [from, to).
       const options: Completion[] = targets.map((target) => ({
         label: target.title,
-        detail: target.kind === "LORE_ENTRY" ? "Lore" : "Actor",
+        detail: LORE_LINK_TARGET_LABELS[target.kind] ?? "Link",
         apply: (view: EditorView, _completion: Completion, _from: number, to: number) => {
           const text = `[[${target.title}]]`;
           view.dispatch({

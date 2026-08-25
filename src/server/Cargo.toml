@@ -85,6 +85,9 @@ path = "../../crates/thunderforge-dice"
 [dependencies.pack_system_spec]
 path = "../../crates/pack_system_spec"
 
+[dependencies.thunderforge_crucible]
+path = "../../crates/thunderforge-crucible"
+
 [dependencies.dnd5e_server]
 path = "../../packs/systems/dnd5e/server"
 package = "dnd5e-server"

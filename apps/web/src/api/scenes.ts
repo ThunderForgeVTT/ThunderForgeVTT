@@ -23,6 +23,7 @@ const SCENE_FIELDS = `
   width
   height
   backgroundImagePath
+  backgroundUrl
   ownerId
   createdAt
   updatedAt
@@ -71,9 +72,8 @@ type ScenesQuery = {
 /**
  * Fetch every scene in a world, for the scene switcher (WorldPage). Each
  * scene carries its own walls/lights/shapes and optional imported
- * background art (`backgroundImagePath`) — switching scenes means
- * re-pointing all of that at a different `sceneId`, not just changing a
- * label.
+ * background art (`backgroundUrl`) — switching scenes means re-pointing
+ * all of that at a different `sceneId`, not just changing a label.
  */
 export function getScenes(worldId: string): Promise<SceneRecord[]> {
   return postGraphQL<ScenesQuery>(

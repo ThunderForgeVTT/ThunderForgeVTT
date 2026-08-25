@@ -769,6 +769,11 @@ pub enum ModerationEntityType {
     WorldActor,
     WorldItem,
     WorldLoreEntry,
+    /// Spec 025: abilities are moderatable per spec 015 FR-010's
+    /// individual-compendium-entry granularity requirement. Without this a
+    /// share link would be a moderation bypass for exactly the content type
+    /// ADR-049's DMCA determination concerns.
+    WorldAbility,
 }
 
 impl ModerationEntityType {
@@ -777,6 +782,7 @@ impl ModerationEntityType {
             ModerationEntityType::WorldActor => "world_actor",
             ModerationEntityType::WorldItem => "world_item",
             ModerationEntityType::WorldLoreEntry => "world_lore_entry",
+            ModerationEntityType::WorldAbility => "world_ability",
         }
     }
 
@@ -785,6 +791,7 @@ impl ModerationEntityType {
             "world_actor" => Some(ModerationEntityType::WorldActor),
             "world_item" => Some(ModerationEntityType::WorldItem),
             "world_lore_entry" => Some(ModerationEntityType::WorldLoreEntry),
+            "world_ability" => Some(ModerationEntityType::WorldAbility),
             _ => None,
         }
     }
@@ -991,6 +998,218 @@ impl From<RollRecord> for GraphQLRollRecord {
             triggered_by: row.triggered_by,
             resolution: GraphQLRollResolution::from(&resolution),
             created_at: row.created_at.to_rfc3339(),
+        }
+    }
+}
+
+// ============================================================================
+// Spec 025: World Abilities Compendium
+// ============================================================================
+
+use crate::models::{AbilityPermission, WorldAbility};
+
+/// Spec 025 (FR-009): the fixed, system-agnostic classification set. Shared by
+/// every game system so ability data stays portable across a system change
+/// (FR-013); systems re-label these via optional presentation facets
+/// (`abilityFacets` in `system.json`, FR-010) but cannot add to the set.
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq, Debug)]
+pub enum AbilityClassification {
+    Spell,
+    Feat,
+    Power,
+    Talent,
+}
+
+impl AbilityClassification {
+    pub fn as_db_str(self) -> &'static str {
+        match self {
+            AbilityClassification::Spell => "spell",
+            AbilityClassification::Feat => "feat",
+            AbilityClassification::Power => "power",
+            AbilityClassification::Talent => "talent",
+        }
+    }
+
+    pub fn from_db_str(value: &str) -> Option<Self> {
+        match value {
+            "spell" => Some(AbilityClassification::Spell),
+            "feat" => Some(AbilityClassification::Feat),
+            "power" => Some(AbilityClassification::Power),
+            "talent" => Some(AbilityClassification::Talent),
+            _ => None,
+        }
+    }
+}
+
+/// Spec 025 (FR-016): effect types, matching `ItemEffectType`'s set exactly so
+/// a future resolution engine can consume item and ability effects through one
+/// code path.
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq, Debug)]
+pub enum AbilityEffectType {
+    Heal,
+    Damage,
+    Modifier,
+    AttackRoll,
+}
+
+impl AbilityEffectType {
+    pub fn as_db_str(self) -> &'static str {
+        match self {
+            AbilityEffectType::Heal => "heal",
+            AbilityEffectType::Damage => "damage",
+            AbilityEffectType::Modifier => "modifier",
+            AbilityEffectType::AttackRoll => "attack_roll",
+        }
+    }
+
+    pub fn from_db_str(value: &str) -> Option<Self> {
+        match value {
+            "heal" => Some(AbilityEffectType::Heal),
+            "damage" => Some(AbilityEffectType::Damage),
+            "modifier" => Some(AbilityEffectType::Modifier),
+            "attack_roll" => Some(AbilityEffectType::AttackRoll),
+            _ => None,
+        }
+    }
+}
+
+/// Spec 025 (FR-020): scaffolded, never evaluated in this pass — exists so a
+/// future resolution spec can add real triggering without redesigning the table.
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq, Debug)]
+pub enum AbilityEffectTrigger {
+    OnUse,
+    Passive,
+}
+
+impl AbilityEffectTrigger {
+    pub fn as_db_str(self) -> &'static str {
+        match self {
+            AbilityEffectTrigger::OnUse => "on_use",
+            AbilityEffectTrigger::Passive => "passive",
+        }
+    }
+
+    pub fn from_db_str(value: &str) -> Option<Self> {
+        match value {
+            "on_use" => Some(AbilityEffectTrigger::OnUse),
+            "passive" => Some(AbilityEffectTrigger::Passive),
+            _ => None,
+        }
+    }
+}
+
+/// One authored effect on an ability. Inert data (FR-019) — nothing in this
+/// spec resolves, rolls, or applies it.
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLAbilityEffect {
+    pub id: uuid::Uuid,
+    pub ability_id: uuid::Uuid,
+    pub effect_type: AbilityEffectType,
+    pub formula: String,
+    pub target: String,
+    pub trigger_kind: Option<AbilityEffectTrigger>,
+    pub sort_order: i32,
+}
+
+/// An Ability's GraphQL projection. Mirrors `GraphQLItem`, including its
+/// `#[graphql(complex)]` backlink field.
+/// NOTE: gains `#[graphql(complex)]` and a `linkedFromLore` field in US4
+/// (T063), once `world_lore_links.target_ability_id` and
+/// `lore_entries_linking_to_ability` exist. Deliberately absent until then
+/// rather than stubbed to an empty list, which would be a lie in the schema.
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLAbility {
+    pub id: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub classification: AbilityClassification,
+    /// Spec 025 (FR-024a): visibility, deliberately separate from
+    /// `my_permission_level`. Only ever `true` in a response to a DM — every
+    /// non-DM read path filters GM-only abilities out entirely (FR-024b), so a
+    /// player can never receive a row with this set.
+    pub gm_only: bool,
+    pub effects: Vec<GraphQLAbilityEffect>,
+    /// Edit rights only — NOT visibility. See `auth::ability_permissions`.
+    pub my_permission_level: ActorPermissionLevel,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    /// Spec 015: true when disabled by a DMCA takedown; the content fields are
+    /// then a placeholder for every caller including the owner.
+    pub moderated: bool,
+    pub moderation_case_id: Option<uuid::Uuid>,
+}
+
+impl GraphQLAbility {
+    pub fn from_row(
+        row: WorldAbility,
+        effects: Vec<GraphQLAbilityEffect>,
+        my_permission_level: ActorPermissionLevel,
+    ) -> Self {
+        Self {
+            id: row.id,
+            world_id: row.world_id,
+            name: row.name,
+            description: row.description,
+            // An unrecognized DB string falls back rather than erroring,
+            // mirroring GraphQLItemEffect's handling — a row written by a
+            // newer version must not break an older reader.
+            classification: AbilityClassification::from_db_str(&row.classification)
+                .unwrap_or(AbilityClassification::Spell),
+            gm_only: row.gm_only,
+            effects,
+            my_permission_level,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            moderated: false,
+            moderation_case_id: None,
+        }
+    }
+
+    /// Spec 015: the placeholder returned in place of real content for a
+    /// moderation-disabled ability.
+    pub fn moderated_placeholder(
+        id: uuid::Uuid,
+        world_id: uuid::Uuid,
+        my_permission_level: ActorPermissionLevel,
+        moderation_case_id: Option<uuid::Uuid>,
+    ) -> Self {
+        let now = chrono::Utc::now().naive_utc();
+        Self {
+            id,
+            world_id,
+            name: "[Content removed in response to a takedown notice]".to_string(),
+            description: None,
+            classification: AbilityClassification::Spell,
+            gm_only: false,
+            effects: Vec::new(),
+            my_permission_level,
+            created_at: now,
+            updated_at: now,
+            moderated: true,
+            moderation_case_id,
+        }
+    }
+}
+
+/// Spec 025 (FR-024): an ability's ownership-block entry. Governs edit rights;
+/// visibility is `GraphQLAbility::gm_only`.
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLAbilityPermission {
+    pub ability_id: uuid::Uuid,
+    pub user_id: uuid::Uuid,
+    pub level: ActorPermissionLevel,
+    pub updated_at: NaiveDateTime,
+}
+
+impl From<AbilityPermission> for GraphQLAbilityPermission {
+    fn from(row: AbilityPermission) -> Self {
+        Self {
+            ability_id: row.ability_id,
+            user_id: row.user_id,
+            level: ActorPermissionLevel::from_db_str(&row.level)
+                .unwrap_or(ActorPermissionLevel::Viewer),
+            updated_at: row.updated_at,
         }
     }
 }

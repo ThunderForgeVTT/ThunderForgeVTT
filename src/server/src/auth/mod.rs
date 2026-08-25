@@ -52,6 +52,7 @@ pub mod lore_permissions;
 
 /// Spec 013: item ownership/permission enforcement (`require_item_permission`),
 /// a direct structural mirror of `actor_permissions`.
+pub mod ability_permissions;
 pub mod item_permissions;
 
 /// Registration/bootstrap identity concerns (input validation, registration

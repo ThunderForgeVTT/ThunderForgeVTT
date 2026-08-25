@@ -223,6 +223,107 @@ struct Cli {
     redis_url: String,
 }
 
+/// Spec 024 (FR-004, FR-005), ADR-047: which `SessionAdjudicator`
+/// implementation `CRUCIBLE_MODE`/`CRUCIBLE_ENDPOINT` resolve to — the pure,
+/// testable half of adjudicator selection (see T016, quickstart.md §3).
+/// `mode` unset/`"local"` (the default, zero-config path every self-hosted
+/// deployment gets — SC-001) resolves to `Local`. `"remote"` requires a
+/// valid `endpoint` and resolves to `Remote`. Any other `mode`, or
+/// `"remote"` with a missing/malformed `endpoint`, is an `Err` naming the
+/// problem — this function never exits the process itself; `build_adjudicator`
+/// (below) is the impure wrapper that does that (SC-003).
+enum CrucibleModeChoice {
+    Local,
+    Remote(reqwest::Url),
+}
+
+fn resolve_crucible_mode(
+    mode: Option<&str>,
+    endpoint: Option<&str>,
+) -> Result<CrucibleModeChoice, String> {
+    match mode.unwrap_or("local") {
+        "local" => Ok(CrucibleModeChoice::Local),
+        "remote" => {
+            let endpoint = endpoint.ok_or_else(|| {
+                "CRUCIBLE_MODE=remote requires CRUCIBLE_ENDPOINT to be set".to_string()
+            })?;
+            let url = reqwest::Url::parse(endpoint).map_err(|err| {
+                format!("CRUCIBLE_ENDPOINT is not a valid URL ({endpoint:?}): {err}")
+            })?;
+            Ok(CrucibleModeChoice::Remote(url))
+        }
+        other => Err(format!(
+            "Unrecognized CRUCIBLE_MODE {other:?} — accepted values are \"local\" or \"remote\""
+        )),
+    }
+}
+
+/// Reads `CRUCIBLE_MODE`/`CRUCIBLE_ENDPOINT`, resolves them via
+/// [`resolve_crucible_mode`], and constructs the corresponding
+/// `SessionAdjudicator` — or exits the process immediately with a clear
+/// error (SC-003), before the server begins accepting connections, per
+/// research.md §4's fail-fast-at-boot convention.
+fn build_adjudicator()
+-> std::sync::Arc<dyn thunderforge_crucible::SessionAdjudicator + Send + Sync> {
+    let mode = std::env::var("CRUCIBLE_MODE").ok();
+    let endpoint = std::env::var("CRUCIBLE_ENDPOINT").ok();
+
+    match resolve_crucible_mode(mode.as_deref(), endpoint.as_deref()) {
+        Ok(CrucibleModeChoice::Local) => {
+            std::sync::Arc::new(thunderforge_crucible::local::LocalAdjudicator)
+        }
+        Ok(CrucibleModeChoice::Remote(url)) => {
+            std::sync::Arc::new(thunderforge_crucible::remote::RemoteAdjudicator::new(url))
+        }
+        Err(message) => {
+            eprintln!("[Server] {message} — exiting.");
+            std::process::exit(1);
+        }
+    }
+}
+
+#[cfg(test)]
+mod crucible_mode_tests {
+    use super::*;
+
+    #[test]
+    fn defaults_to_local_when_unset() {
+        assert!(matches!(
+            resolve_crucible_mode(None, None),
+            Ok(CrucibleModeChoice::Local)
+        ));
+    }
+
+    #[test]
+    fn explicit_local_resolves_to_local() {
+        assert!(matches!(
+            resolve_crucible_mode(Some("local"), None),
+            Ok(CrucibleModeChoice::Local)
+        ));
+    }
+
+    #[test]
+    fn remote_with_a_valid_endpoint_resolves_to_remote() {
+        let result = resolve_crucible_mode(Some("remote"), Some("http://127.0.0.1:8090"));
+        assert!(matches!(result, Ok(CrucibleModeChoice::Remote(_))));
+    }
+
+    #[test]
+    fn remote_with_no_endpoint_is_an_error() {
+        assert!(resolve_crucible_mode(Some("remote"), None).is_err());
+    }
+
+    #[test]
+    fn remote_with_a_malformed_endpoint_is_an_error() {
+        assert!(resolve_crucible_mode(Some("remote"), Some("not a url")).is_err());
+    }
+
+    #[test]
+    fn an_unrecognized_mode_is_an_error() {
+        assert!(resolve_crucible_mode(Some("not-a-real-mode"), None).is_err());
+    }
+}
+
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok();
@@ -257,6 +358,11 @@ async fn main() {
         .build(manager)
         .expect("Failed to create DB pool.");
 
+    // Spec 024, ADR-047: which `SessionAdjudicator` to use, read once at
+    // startup — mirrors the `DATABASE_URL` fail-fast-at-boot convention
+    // above (research.md §4) rather than validating lazily on first use.
+    let adjudicator = build_adjudicator();
+
     let app_state = AppState {
         config,
         directories: directories.clone(),
@@ -265,6 +371,7 @@ async fn main() {
         key,
         db_pool: db_pool.clone(),
         system_hooks: std::sync::Arc::new(tokio::sync::RwLock::new(system_hooks::SystemHookRegistry::new())),
+        adjudicator,
     };
 
     // Materialize any OAUTH_*-env-var-configured provider instances (ADR-041)

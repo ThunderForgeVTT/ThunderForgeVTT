@@ -37,6 +37,7 @@ pub fn test_app_state() -> AppState {
         system_hooks: std::sync::Arc::new(tokio::sync::RwLock::new(
             crate::system_hooks::SystemHookRegistry::new(),
         )),
+        adjudicator: std::sync::Arc::new(thunderforge_crucible::local::LocalAdjudicator),
     }
 }
 
@@ -138,4 +139,22 @@ pub fn tiny_png_bytes() -> Vec<u8> {
         .write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png)
         .unwrap();
     bytes
+}
+
+/// Spec 025: inserts a minimal, visible (non-GM-only) `world_abilities` row.
+/// Callers that need a hidden ability flip `gm_only` themselves, so the
+/// default here matches the DB default and the common case.
+pub fn insert_test_ability(conn: &mut PgConnection, world_id: Uuid, created_by: Uuid) -> Uuid {
+    use crate::schema::world_abilities;
+    diesel::insert_into(world_abilities::table)
+        .values((
+            world_abilities::world_id.eq(world_id),
+            world_abilities::name.eq("Test Ability"),
+            world_abilities::classification.eq("spell"),
+            world_abilities::created_by.eq(created_by),
+            world_abilities::updated_by.eq(created_by),
+        ))
+        .returning(world_abilities::id)
+        .get_result::<Uuid>(conn)
+        .expect("failed to insert test ability")
 }

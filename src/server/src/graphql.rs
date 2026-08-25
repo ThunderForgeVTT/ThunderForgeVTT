@@ -69,8 +69,8 @@ pub use helpers::{
 // Phase 4.9.Z Step 5: Query extraction into separate modules
 pub mod queries;
 pub use queries::{
-    ActorQuery, AdminQuery, GenieSessionQuery, HealthcheckQuery, InventoryQuery, InviteQuery,
-    ItemQuery, LoreQuery, ModerationQuery, RollQuery, SceneQuery, UserQuery,
+    AbilityQuery, ActorQuery, AdminQuery, GenieSessionQuery, HealthcheckQuery, InventoryQuery,
+    InviteQuery, ItemQuery, LoreQuery, ModerationQuery, RollQuery, SceneQuery, UserQuery,
 };
 
 // Phase 4.10.B: Invite & Membership mutations for multiplayer campaigns
@@ -122,7 +122,9 @@ pub mod mutations_lore_images;
 pub use mutations_lore_images::LoreImageMutation;
 
 // Spec 013: item creation/field-editing/deletion and effect CRUD
+pub mod mutations_abilities;
 pub mod mutations_items;
+pub use mutations_abilities::AbilityMutation;
 pub use mutations_items::ItemMutation;
 
 // Spec 013: the item "ownership block" (Viewer/Editor/Owner grants)
@@ -273,6 +275,19 @@ pub struct GraphQLScene {
     /// Spec 002 (FR-018): the RustFS-backed `canvas_image_assets` row
     /// for this scene's background, when migrated.
     background_asset_id: Option<uuid::Uuid>,
+    /// Bug fix (found while investigating "map import doesn't take the
+    /// image"): `background_asset_id` alone is a bare UUID with no
+    /// fetchable URL — the frontend's canvas-loading path
+    /// (`WorldPage.tsx`) only ever read `background_image_path`, which
+    /// dd2vtt import (spec 022/002, `save_background_image`) never sets,
+    /// since it writes to RustFS via `background_asset_id` instead. This
+    /// computed field is the fetchable URL for whichever mechanism is
+    /// actually populated (`background_asset_id` preferred — RustFS via
+    /// `canvas_assets_serve.rs`'s existing `GET /canvas-assets/{id}`
+    /// route, already used by `AssetPasteTool`; falls back to the legacy
+    /// `background_image_path` static-file route for scenes never
+    /// migrated to RustFS), mirroring `preview_url`'s existing pattern.
+    background_url: Option<String>,
     /// Spec 022: GM-authored Markdown source for the scene's player-facing
     /// summary.
     summary_markdown: Option<String>,
@@ -303,6 +318,22 @@ impl From<crate::models::Scene> for GraphQLScene {
             owner_id: scene.owner_id,
             created_at: scene.created_at,
             updated_at: scene.updated_at,
+            // Bug fix: both these routes are nested under `/api` in
+            // main.rs (`.nest("/api", api_router...)`, which merges in
+            // `canvas_assets_serve::router()`/`scene_assets_serve::router()`)
+            // — their own `Router::new().route("/canvas-assets/{id}", ...)`
+            // declarations show only the path *before* that nesting.
+            // `preview_url` (pre-existing, spec 022) had this same missing
+            // `/api` prefix bug, found while fixing `background_url`
+            // (live-verified: without the prefix, dev's Vite proxy only
+            // forwards `/api/*`/`/assets/*` to the backend, so the bare
+            // path fell through to the SPA's `index.html`, not a 404 —
+            // the image request "succeeded" with an HTML body instead of
+            // image bytes).
+            background_url: scene
+                .background_asset_id
+                .map(|id| format!("/api/canvas-assets/{id}"))
+                .or_else(|| scene.background_image_path.clone()),
             background_image_path: scene.background_image_path,
             background_asset_id: scene.background_asset_id,
             summary_markdown: scene.summary_markdown,
@@ -310,7 +341,7 @@ impl From<crate::models::Scene> for GraphQLScene {
             hidden: scene.hidden,
             preview_url: scene
                 .preview_asset_id
-                .map(|id| format!("/scene-assets/{id}/thumb")),
+                .map(|id| format!("/api/scene-assets/{id}/thumb")),
         }
     }
 }
@@ -2407,6 +2438,7 @@ pub struct QueryRoot(
     ActorShareQuery,
     LoreQuery,
     LorePermissionQuery,
+    AbilityQuery,
     ItemQuery,
     ItemPermissionQuery,
     ItemShareQuery,
@@ -2438,6 +2470,7 @@ pub struct MutationRoot(
     LoreMutation,
     LorePermissionMutation,
     LoreImageMutation,
+    AbilityMutation,
     ItemMutation,
     ItemPermissionMutation,
     ItemShareMutation,

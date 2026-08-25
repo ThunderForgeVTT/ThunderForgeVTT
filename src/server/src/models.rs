@@ -5,6 +5,7 @@ use crate::schema::{
     oauth_authorization_sessions, oauth_link_challenges, oauth_providers, players_online, scenes,
     shapes, tokens, user_oauth_accounts, user_sessions, users, walls, world_actor_claims,
     world_actor_inventory,
+    world_abilities, world_ability_permissions,
     world_actor_permissions, world_actor_shares, world_actor_system_data, world_actors,
     world_events, world_genie_puzzle_clock_rewards, world_genie_puzzle_clocks,
     world_genie_resource_holdings, world_genie_shop_listings,
@@ -1607,4 +1608,76 @@ pub struct NewGeniePuzzleClockReward {
     pub reward_item_quantity: Option<i32>,
     pub recipient_mode: String,
     pub created_by: uuid::Uuid,
+}
+
+// ============================================================================
+// Spec 025: World Abilities Compendium
+// ============================================================================
+
+/// Spec 025: a world-scoped Ability (spell / feat / power / talent). Mirrors
+/// `WorldItem`'s shape with two deliberate differences:
+///
+/// * `updated_by` is present — `WorldItem` carries only `created_by`, but
+///   spec 025 FR-027 requires both per Constitution Principle III.
+/// * `gm_only` is the visibility control (FR-024a). It is deliberately NOT a
+///   level in the ownership block: `ActorPermissionLevel`'s lowest value
+///   (`Viewer`) is also its default for a member with no row, so the permission
+///   model structurally cannot express "hidden". Mirrors `scenes.hidden`.
+///
+/// Name is NOT unique per world (FR-006); `suggest_ability_name` nudges with
+/// "did you mean?" rather than enforcing uniqueness.
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_abilities)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct WorldAbility {
+    pub id: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub classification: String,
+    pub gm_only: bool,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+/// New ability for insertion. `id`/timestamps come from DB defaults.
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_abilities)]
+pub struct NewWorldAbility {
+    pub world_id: uuid::Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub classification: String,
+    pub gm_only: bool,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+}
+
+/// Spec 025: an ability's ownership-block entry — structural mirror of
+/// `ItemPermission` (spec 013). Governs EDIT RIGHTS ONLY; absence of a row
+/// means Viewer (read-only), never hidden — see `WorldAbility::gm_only`.
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_ability_permissions)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct AbilityPermission {
+    pub id: uuid::Uuid,
+    pub ability_id: uuid::Uuid,
+    pub user_id: uuid::Uuid,
+    pub level: String,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+/// New ability-permission row. Unlike `NewWorldAbility`, this carries `id`
+/// explicitly — `world_ability_permissions.id` has no DB default, matching
+/// `world_item_permissions`; callers supply `Uuid::now_v7()`.
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_ability_permissions)]
+pub struct NewAbilityPermission {
+    pub id: uuid::Uuid,
+    pub ability_id: uuid::Uuid,
+    pub user_id: uuid::Uuid,
+    pub level: String,
 }

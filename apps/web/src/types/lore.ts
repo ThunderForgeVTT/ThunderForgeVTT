@@ -50,7 +50,12 @@ export type LoreImageAssetRecord = {
   createdAt: string;
 };
 
-export type LoreLinkTargetKind = "LORE_ENTRY" | "ACTOR";
+/** Spec 025 (T002): widened to the full set the backend actually returns.
+ * `ITEM` has been returned by `lore_link_targets_impl` since spec 013 but was
+ * never added here, so item candidates were mislabelled in the `[[`
+ * autocomplete; `ABILITY` is added by spec 025. Keep this in sync with
+ * `GraphQLLoreLinkTargetKind` (src/server/src/graphql/queries/lore.rs). */
+export type LoreLinkTargetKind = "LORE_ENTRY" | "ACTOR" | "ITEM" | "ABILITY";
 
 export type LoreLinkTargetRecord = {
   id: string;

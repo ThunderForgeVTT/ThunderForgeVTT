@@ -717,9 +717,31 @@ fn apply_external_commands(
                 height,
             } => {
                 if let Some(background) = background.as_deref_mut() {
-                    background.path = path;
-                    background.width = width;
-                    background.height = height;
+                    // Bug fix: writing through `ResMut::deref_mut` trips
+                    // Bevy's change detection unconditionally, even when
+                    // `path`/`width`/`height` are identical to the current
+                    // value — every repeat dispatch of an already-applied
+                    // background (WorldPage.tsx's effect can legitimately
+                    // re-run with an equivalent `selectedScene` object,
+                    // e.g. after an unrelated scene-list refetch) then made
+                    // `sync_scene_background` (systems/background.rs) see
+                    // `is_changed() == true` again, despawning the sprite
+                    // and re-issuing `asset_server.load(&path)` — dropping
+                    // the previous `Handle<Image>` cancels that in-flight
+                    // load (found live: a real imported background's fetch
+                    // reliably got `net::ERR_ABORTED` moments after
+                    // starting, leaving Play's canvas permanently blank).
+                    // Comparing first keeps the write — and the spurious
+                    // respawn/reload cycle — from happening at all when
+                    // nothing actually changed.
+                    let unchanged = background.path == path
+                        && background.width == width
+                        && background.height == height;
+                    if !unchanged {
+                        background.path = path;
+                        background.width = width;
+                        background.height = height;
+                    }
                 }
             }
             ExternalCommand::SetIsGameMaster {
@@ -738,16 +760,20 @@ fn apply_external_commands(
                 height,
             } => {
                 if let Some(placed_canvas_images) = placed_canvas_images.as_deref_mut() {
-                    placed_canvas_images.0.insert(
-                        asset_id,
-                        PlacedCanvasImage {
-                            path,
-                            x,
-                            y,
-                            width,
-                            height,
-                        },
-                    );
+                    // Same fix as `SetSceneBackground` above: skip the
+                    // write (and the spurious despawn/respawn/reload it
+                    // would trigger in `sync_placed_canvas_images`) when a
+                    // repeat dispatch carries an identical value.
+                    let new_image = PlacedCanvasImage {
+                        path,
+                        x,
+                        y,
+                        width,
+                        height,
+                    };
+                    if placed_canvas_images.0.get(&asset_id) != Some(&new_image) {
+                        placed_canvas_images.0.insert(asset_id, new_image);
+                    }
                 }
             }
             ExternalCommand::RemoveCanvasImageAsset { asset_id } => {

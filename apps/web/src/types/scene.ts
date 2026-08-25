@@ -9,6 +9,15 @@ export type SceneRecord = {
   width: number;
   height: number;
   backgroundImagePath: string | null;
+  /**
+   * Bug fix: the fetchable URL for this scene's background image,
+   * regardless of which storage mechanism produced it (RustFS via
+   * `background_asset_id`, preferred, or the legacy
+   * `backgroundImagePath` static-file route) — `null` when no background
+   * has been set. Use this to load the background, not
+   * `backgroundImagePath` directly (which dd2vtt/map import never sets).
+   */
+  backgroundUrl: string | null;
   ownerId: string;
   createdAt: string;
   updatedAt: string;

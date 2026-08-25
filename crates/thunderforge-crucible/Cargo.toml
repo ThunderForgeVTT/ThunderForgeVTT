@@ -1,0 +1,32 @@
+[lints]
+workspace = true
+
+[package]
+name = "thunderforge_crucible"
+version = "0.1.0"
+edition = "2024"
+repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
+license.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+[[bin]]
+name = "crucible-server"
+path = "src/bin/crucible-server.rs"
+
+[dependencies]
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+uuid = { version = "1.23.1", features = ["serde", "v7"] }
+tokio = { version = "1.52.1", features = ["full"] }
+axum = "0.8.9"
+reqwest = { version = "0.13.3", default-features = false, features = [
+  "json",
+  "rustls",
+] }
+async-trait = "0.1.89"
+thiserror = "2.0.18"
+
+[dev-dependencies]
+tower = { version = "0.5.3", features = ["util"] }

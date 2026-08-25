@@ -51,7 +51,7 @@ fn resolve_entity_owner(
     entity_type: ModerationEntityType,
     entity_id: Uuid,
 ) -> Result<(Uuid, Option<Uuid>), String> {
-    use crate::schema::{world_actors, world_items, world_lore_entries};
+    use crate::schema::{world_abilities, world_actors, world_items, world_lore_entries};
 
     match entity_type {
         ModerationEntityType::WorldActor => world_actors::table
@@ -72,6 +72,14 @@ fn resolve_entity_owner(
             .first::<(Uuid, Uuid)>(conn)
             .map(|(w, a)| (w, Some(a)))
             .map_err(|_| "Lore entry not found".to_string()),
+        // Spec 025 (T010): abilities are moderatable at individual-entry
+        // granularity, per spec 015 FR-010.
+        ModerationEntityType::WorldAbility => world_abilities::table
+            .filter(world_abilities::id.eq(entity_id))
+            .select((world_abilities::world_id, world_abilities::created_by))
+            .first::<(Uuid, Uuid)>(conn)
+            .map(|(w, a)| (w, Some(a)))
+            .map_err(|_| "Ability not found".to_string()),
     }
 }
 

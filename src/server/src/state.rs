@@ -19,6 +19,10 @@ pub struct AppState {
     pub key: Key,
     pub db_pool: DbPool,
     pub system_hooks: std::sync::Arc<tokio::sync::RwLock<SystemHookRegistry>>,
+    // Spec 024, ADR-047: which `SessionAdjudicator` implementation is active
+    // (`LocalAdjudicator` by default, or `RemoteAdjudicator` when
+    // `CRUCIBLE_MODE=remote` — selected once at startup in `main.rs`).
+    pub adjudicator: std::sync::Arc<dyn thunderforge_crucible::SessionAdjudicator + Send + Sync>,
 }
 
 impl FromRef<AppState> for Key {
