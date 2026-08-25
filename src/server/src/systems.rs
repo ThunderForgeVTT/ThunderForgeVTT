@@ -959,6 +959,35 @@ mod manifest_legal_enforcement_tests {
             .is_empty());
     }
 
+    /// Spec 016 (Edge Cases, "no external license at all"): the real,
+    /// shipped `basic-game-system` manifest — a minimal, generic starter
+    /// template pack with no third-party-derived content — has a compliant
+    /// `legal` object declaring original, ThunderForgeVTT-owned content.
+    /// Mirrors genie_system_json_has_a_compliant_legal_object above.
+    #[tokio::test]
+    async fn basic_game_system_json_has_a_compliant_legal_object() {
+        let mut state = test_app_state();
+        let real_systems_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../packs/systems")
+            .canonicalize()
+            .expect("packs/systems must exist relative to src/server");
+        state.directories.systems_dir = real_systems_dir.to_str().unwrap().to_string();
+
+        let result =
+            get_system_manifest(AxumPath("basic-game-system".to_string()), State(state)).await;
+
+        let Json(manifest) =
+            result.expect("basic-game-system's real manifest must pass legal validation");
+        assert_eq!(
+            manifest["legal"]["licenseName"],
+            "ThunderForgeVTT Original Content"
+        );
+        assert!(manifest["legal"]["trademarkRestrictions"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+    }
+
     /// Shared helper for the five research-digest-backed packs below —
     /// mirrors dnd5e/genie's own compliance tests but parameterized, since
     /// all five follow the identical assertion shape (real manifest,

@@ -1,0 +1,11 @@
+/**
+ * Basic Game System — minimal starter stylesheet.
+ *
+ * Intentionally minimal: this template pack has no bespoke UI, so this
+ * file only establishes a small, sane baseline for anyone forking the
+ * pack to build on.
+ */
+
+.basic-game-system {
+  font-family: sans-serif;
+}
