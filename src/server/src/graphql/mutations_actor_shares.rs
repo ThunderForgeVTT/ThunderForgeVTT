@@ -12,17 +12,8 @@ use crate::graphql::types::{ActorPermissionLevel, GraphQLActorShareLink, SharedA
 use crate::graphql::{app_state, authenticated_user, GraphQLActorSystemData, GraphQLWorldActor};
 use crate::models::{ActorShare, ActorSystemData, NewActorShare, NewWorldActor, WorldActor};
 use crate::schema::{scenes, world_actor_shares, world_actor_system_data, world_actors};
+use crate::graphql::share_codes::generate_link_code;
 use crate::state::AppState;
-
-fn generate_share_code() -> String {
-    Uuid::new_v4()
-        .to_string()
-        .replace('-', "")
-        .chars()
-        .take(20)
-        .collect::<String>()
-        .to_uppercase()
-}
 
 #[derive(InputObject, Debug, Clone)]
 pub struct CopySharedActorInput {
@@ -136,7 +127,7 @@ pub async fn create_actor_share_link_impl(
         let new_share = NewActorShare {
             id: Uuid::now_v7(),
             actor_id,
-            share_code: generate_share_code(),
+            share_code: generate_link_code(),
             created_by: user_id,
         };
 

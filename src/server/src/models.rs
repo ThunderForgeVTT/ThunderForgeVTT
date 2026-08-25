@@ -1024,6 +1024,12 @@ pub struct WorldInvite {
     pub created_by: uuid::Uuid,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// Spec 027 (FR-002): explicit retirement. Distinct from expiry and from
+    /// exhaustion — a GM sets this to kill a leaked link outright.
+    pub revoked: bool,
+    /// Spec 027 (FR-003): the link this one replaced, when it was created by
+    /// rotation. `None` on an original.
+    pub rotated_from: Option<uuid::Uuid>,
 }
 
 /// New world invite for insertion
@@ -1039,6 +1045,13 @@ pub struct NewWorldInvite {
     pub created_by: uuid::Uuid,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// Spec 027: a freshly issued link is never born revoked. Present on the
+    /// insert struct so a rotation cannot accidentally rely on the column
+    /// default while setting `rotated_from` beside it.
+    pub revoked: bool,
+    /// Spec 027 (FR-003): set to the retired link's id when this row is a
+    /// rotation replacement; `None` for a link created from scratch.
+    pub rotated_from: Option<uuid::Uuid>,
 }
 
 // NOTE: WorldMember models - table created via migration 2026-05-06-120100-0008

@@ -15,17 +15,8 @@ use crate::graphql::types::{ActorPermissionLevel, GraphQLItem, GraphQLItemEffect
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{ItemEffect, ItemShare, NewItemEffect, NewItemShare, NewWorldItem, WorldItem};
 use crate::schema::{world_item_effects, world_item_shares, world_items};
+use crate::graphql::share_codes::generate_link_code;
 use crate::state::AppState;
-
-fn generate_share_code() -> String {
-    Uuid::new_v4()
-        .to_string()
-        .replace('-', "")
-        .chars()
-        .take(20)
-        .collect::<String>()
-        .to_uppercase()
-}
 
 #[derive(InputObject, Debug, Clone)]
 pub struct CopySharedItemInput {
@@ -127,7 +118,7 @@ pub async fn create_item_share_link_impl(
         let new_share = NewItemShare {
             id: Uuid::now_v7(),
             item_id,
-            share_code: generate_share_code(),
+            share_code: generate_link_code(),
             created_by: user_id,
         };
 

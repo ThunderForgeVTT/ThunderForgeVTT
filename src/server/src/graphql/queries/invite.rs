@@ -43,22 +43,18 @@ pub async fn world_invites_impl(
         .load::<WorldInvite>(&mut conn)
         .map_err(|e| Error::new(format!("Failed to load invites: {}", e)))?;
 
+    // Spec 027 (T035, FR-010): payloads are built by `from_row`, which derives
+    // `state` and `remainingUses` rather than leaving each call site to
+    // recompute them — the panel previously got only a `"3/10 uses"` string,
+    // which cannot express revocation, so a revoked link rendered identically
+    // to a working one.
+    //
+    // Revoked links are deliberately **included**: a GM should be able to see
+    // what they retired. This listing stays world-scoped and DM-gated, so it
+    // is not the cross-world enumeration FR-009 forbids.
     Ok(invites
-        .into_iter()
-        .map(
-            |invite| crate::graphql::mutations_invites::WorldInvitePayload {
-                id: invite.id,
-                world_id: invite.world_id,
-                invite_code: invite.invite_code,
-                max_uses: invite.max_uses,
-                used_count: invite.used_count,
-                expires_at: invite.expires_at.map(|dt| dt.to_string()),
-                created_by: invite.created_by,
-                created_at: invite.created_at.to_string(),
-                updated_at: invite.updated_at.to_string(),
-                status: format!("{}/{} uses", invite.used_count, invite.max_uses),
-            },
-        )
+        .iter()
+        .map(crate::graphql::mutations_invites::WorldInvitePayload::from_row)
         .collect())
 }
 
@@ -358,6 +354,20 @@ mod tests {
         used_count: i32,
         expires_at: Option<chrono::NaiveDateTime>,
     ) -> String {
+        insert_test_invite_with_revocation(
+            conn, world_id, created_by, max_uses, used_count, expires_at, false,
+        )
+    }
+
+    fn insert_test_invite_with_revocation(
+        conn: &mut diesel::PgConnection,
+        world_id: uuid::Uuid,
+        created_by: uuid::Uuid,
+        max_uses: i32,
+        used_count: i32,
+        expires_at: Option<chrono::NaiveDateTime>,
+        revoked: bool,
+    ) -> String {
         let now = chrono::Utc::now().naive_utc();
         let code = format!("T{}", &uuid::Uuid::now_v7().simple().to_string()[..20]);
         let invite = NewWorldInvite {
@@ -370,6 +380,8 @@ mod tests {
             created_by,
             created_at: now,
             updated_at: now,
+            revoked,
+            rotated_from: None,
         };
         diesel::insert_into(world_invites::table)
             .values(&invite)

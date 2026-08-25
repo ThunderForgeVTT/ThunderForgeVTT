@@ -12,6 +12,7 @@ use crate::models::{NewWorldInvite, NewWorldMember, WorldInvite, WorldMember};
 use crate::schema::world_events;
 use crate::schema::world_invites;
 use crate::schema::world_members;
+use crate::graphql::share_codes::generate_link_code;
 use crate::state::AppState;
 use thunderforge_core::models::invites::{WorldInvite as CoreWorldInvite, WorldMemberRole};
 
@@ -51,6 +52,68 @@ pub struct UpdateMemberRoleInput {
 
 // ========== Output Types ==========
 
+/// Spec 027 (T010, FR-010): whether a link works right now, and if not, why.
+///
+/// **Derived, never stored.** Computing this from the row means it cannot
+/// drift from the facts that produce it — there is no column to forget to
+/// update when a link expires or its last use is consumed.
+#[derive(async_graphql::Enum, Copy, Clone, Debug, Eq, PartialEq)]
+pub enum WorldAccessLinkState {
+    /// Usable right now.
+    Active,
+    /// Past its expiry time.
+    Expired,
+    /// Its use cap is spent.
+    Exhausted,
+    /// Explicitly retired by a GM, by revocation or by rotation.
+    Revoked,
+}
+
+/// Derives a link's state from its row.
+///
+/// The precedence order (revoked → expired → exhausted → active) matters for
+/// **display only**: a link can be simultaneously revoked and expired, and the
+/// GM should see the most decisive reason.
+///
+/// For **enforcement** these collapse to a single boolean, and the caller is
+/// never told which applied — see FR-011. Do not reach for this function to
+/// gate a join; the authoritative check is the SQL predicate in
+/// `join_world_impl`, which evaluates the same conditions atomically with the
+/// use increment.
+pub fn derive_link_state(
+    revoked: bool,
+    expires_at: Option<chrono::NaiveDateTime>,
+    max_uses: i32,
+    used_count: i32,
+) -> WorldAccessLinkState {
+    if revoked {
+        return WorldAccessLinkState::Revoked;
+    }
+    if let Some(expires) = expires_at
+        && Utc::now().naive_utc() >= expires
+    {
+        return WorldAccessLinkState::Expired;
+    }
+    // `max_uses == 0` is unlimited, so it can never be exhausted. See
+    // `WorldInvite::is_valid` in src/core for why that branch still exists.
+    if max_uses > 0 && used_count >= max_uses {
+        return WorldAccessLinkState::Exhausted;
+    }
+    WorldAccessLinkState::Active
+}
+
+/// Uses left on a link, or `None` when it is uncapped (`max_uses == 0`).
+///
+/// Saturates at zero rather than reporting a negative remainder, so a row that
+/// somehow over-consumed reads as spent instead of nonsensical.
+pub fn remaining_uses(max_uses: i32, used_count: i32) -> Option<i32> {
+    if max_uses <= 0 {
+        None
+    } else {
+        Some((max_uses - used_count).max(0))
+    }
+}
+
 #[derive(SimpleObject, Debug, Clone)]
 pub struct WorldInvitePayload {
     pub id: Uuid,
@@ -62,7 +125,46 @@ pub struct WorldInvitePayload {
     pub created_by: Uuid,
     pub created_at: String,
     pub updated_at: String,
+
+    /// Spec 027 (FR-010): whether this link currently works, and why not.
+    pub state: WorldAccessLinkState,
+    /// Spec 027 (FR-010): uses left, or `null` when uncapped.
+    pub remaining_uses: Option<i32>,
+    /// Spec 027 (FR-003): the link this one replaced, if created by rotation.
+    pub rotated_from: Option<Uuid>,
+
+    /// **Deprecated** — retained for one release. A free-form string like
+    /// `"3/10 uses"` cannot express revocation, so a revoked link rendered
+    /// identically to a working one. Prefer `state` and `remainingUses`.
+    #[graphql(deprecation = "Use `state` and `remainingUses`; this cannot express revocation.")]
     pub status: String,
+}
+
+impl WorldInvitePayload {
+    /// Builds a payload from a stored row, deriving state rather than trusting
+    /// a caller to compute it consistently at each call site.
+    pub fn from_row(invite: &WorldInvite) -> Self {
+        Self {
+            id: invite.id,
+            world_id: invite.world_id,
+            invite_code: invite.invite_code.clone(),
+            max_uses: invite.max_uses,
+            used_count: invite.used_count,
+            expires_at: invite.expires_at.map(|dt| dt.to_string()),
+            created_by: invite.created_by,
+            created_at: invite.created_at.to_string(),
+            updated_at: invite.updated_at.to_string(),
+            state: derive_link_state(
+                invite.revoked,
+                invite.expires_at,
+                invite.max_uses,
+                invite.used_count,
+            ),
+            remaining_uses: remaining_uses(invite.max_uses, invite.used_count),
+            rotated_from: invite.rotated_from,
+            status: format!("{}/{} uses", invite.used_count, invite.max_uses),
+        }
+    }
 }
 
 // Spec 023 (FR-004): `claimedActor` is a per-request-computed field (a
@@ -196,15 +298,13 @@ pub async fn generate_invite_code_impl(
     // collide on `world_invites_invite_code_key`. Deriving the code
     // from an independent, fully-random v4 UUID instead removes that
     // collision class entirely.
+    // Spec 027 (T023, FR-006): the row's `id` stays v7 for index locality, but
+    // the human-facing code comes from the shared generator — 20 characters
+    // from an independent v4 UUID, up from the 8 taken here before. The full
+    // reasoning, including the v7 collision this must never regress to, lives
+    // in `graphql::share_codes`.
     let invite_id = Uuid::now_v7();
-    let invite_code = Uuid::new_v4()
-        .to_string()
-        .replace("-", "")
-        .chars()
-        .take(8)
-        .collect::<String>()
-        .to_string()
-        .to_uppercase();
+    let invite_code = generate_link_code();
 
     let now = Utc::now().naive_utc();
     let expires_at = input.expires_at.as_ref().and_then(|s| {
@@ -223,6 +323,8 @@ pub async fn generate_invite_code_impl(
         created_by: user_id,
         created_at: now,
         updated_at: now,
+        revoked: false,
+        rotated_from: None,
     };
 
     diesel::insert_into(world_invites::table)
@@ -254,6 +356,9 @@ pub async fn generate_invite_code_impl(
         created_by: new_invite.created_by,
         created_at: new_invite.created_at.to_string(),
         updated_at: new_invite.updated_at.to_string(),
+        state: derive_link_state(false, new_invite.expires_at, max_uses, 0),
+        remaining_uses: remaining_uses(max_uses, 0),
+        rotated_from: None,
         status: format!("0/{} uses", max_uses),
     })
 }
@@ -748,6 +853,10 @@ mod tests {
     use super::*;
     use crate::test_support::{insert_test_user, insert_test_world, insert_test_world_member, test_app_state};
 
+    /// Inserts an invite row. The **8-character** code is deliberate: it is
+    /// exactly the shape codes had before spec 027, so every test built on
+    /// this helper doubles as coverage that pre-existing links still work
+    /// (FR-007 / SC-006).
     fn insert_test_invite(
         conn: &mut PgConnection,
         world_id: Uuid,
@@ -755,6 +864,21 @@ mod tests {
         max_uses: i32,
         used_count: i32,
         expires_at: Option<chrono::NaiveDateTime>,
+    ) -> (Uuid, String) {
+        insert_test_invite_with_revocation(
+            conn, world_id, created_by, max_uses, used_count, expires_at, false,
+        )
+    }
+
+    /// As above, but lets a test build an already-retired link.
+    fn insert_test_invite_with_revocation(
+        conn: &mut PgConnection,
+        world_id: Uuid,
+        created_by: Uuid,
+        max_uses: i32,
+        used_count: i32,
+        expires_at: Option<chrono::NaiveDateTime>,
+        revoked: bool,
     ) -> (Uuid, String) {
         let id = Uuid::now_v7();
         let code = Uuid::new_v4()
@@ -776,6 +900,8 @@ mod tests {
                 created_by,
                 created_at: now,
                 updated_at: now,
+                revoked,
+                rotated_from: None,
             })
             .execute(conn)
             .expect("failed to insert test invite");
@@ -938,7 +1064,113 @@ mod tests {
         assert_eq!(payload.world_id, world_id);
         assert_eq!(payload.max_uses, 7);
         assert_eq!(payload.used_count, 0);
-        assert_eq!(payload.invite_code.len(), 8);
+
+        // Spec 027 (FR-006): this assertion previously expected 8 characters.
+        // Raising it to 20 is a **deliberate behaviour change**, not a test
+        // relaxed to fit an accident: an invite code grants membership in a
+        // world, and ~32 bits did not meet ADR-049's unguessable-code
+        // invariant while content share links already used ~80.
+        assert_eq!(
+            payload.invite_code.len(),
+            20,
+            "invite codes must match content-share-link strength"
+        );
+
+        // A freshly issued link is usable, with its whole cap intact.
+        assert_eq!(payload.state, WorldAccessLinkState::Active);
+        assert_eq!(payload.remaining_uses, Some(7));
+        assert_eq!(payload.rotated_from, None);
+    }
+
+    // ===== Spec 027 (T012, FR-010): link-state derivation =====
+    //
+    // Pure functions over a row's fields, so these need no database.
+
+    fn in_the_past() -> Option<chrono::NaiveDateTime> {
+        Some(Utc::now().naive_utc() - chrono::Duration::hours(1))
+    }
+
+    fn in_the_future() -> Option<chrono::NaiveDateTime> {
+        Some(Utc::now().naive_utc() + chrono::Duration::hours(1))
+    }
+
+    #[test]
+    fn a_fresh_capped_link_is_active() {
+        assert_eq!(
+            derive_link_state(false, None, 10, 0),
+            WorldAccessLinkState::Active
+        );
+        assert_eq!(
+            derive_link_state(false, in_the_future(), 10, 3),
+            WorldAccessLinkState::Active
+        );
+    }
+
+    #[test]
+    fn a_past_expiry_reads_expired() {
+        assert_eq!(
+            derive_link_state(false, in_the_past(), 10, 0),
+            WorldAccessLinkState::Expired
+        );
+    }
+
+    #[test]
+    fn a_spent_cap_reads_exhausted() {
+        assert_eq!(
+            derive_link_state(false, None, 5, 5),
+            WorldAccessLinkState::Exhausted
+        );
+        // Over-consumption still reads exhausted rather than active.
+        assert_eq!(
+            derive_link_state(false, None, 5, 7),
+            WorldAccessLinkState::Exhausted
+        );
+    }
+
+    #[test]
+    fn revocation_reads_revoked() {
+        assert_eq!(
+            derive_link_state(true, None, 10, 0),
+            WorldAccessLinkState::Revoked
+        );
+    }
+
+    /// The precedence case from data-model.md §2: a link can be revoked *and*
+    /// expired *and* exhausted at once. The GM should see the most decisive
+    /// reason, which is revocation — it is the one a human deliberately did.
+    #[test]
+    fn revoked_outranks_expired_and_exhausted() {
+        assert_eq!(
+            derive_link_state(true, in_the_past(), 5, 5),
+            WorldAccessLinkState::Revoked,
+            "revocation must outrank every other reason"
+        );
+        assert_eq!(
+            derive_link_state(false, in_the_past(), 5, 5),
+            WorldAccessLinkState::Expired,
+            "expiry must outrank exhaustion"
+        );
+    }
+
+    /// `max_uses == 0` means unlimited, so it can never be exhausted and has
+    /// no remaining count to report. Unreachable via the API today, but the
+    /// model still branches on it — see `WorldInvite::is_valid`.
+    #[test]
+    fn an_uncapped_link_never_exhausts_and_reports_no_remainder() {
+        assert_eq!(
+            derive_link_state(false, None, 0, 9_999),
+            WorldAccessLinkState::Active
+        );
+        assert_eq!(remaining_uses(0, 9_999), None);
+    }
+
+    #[test]
+    fn remaining_uses_counts_down_and_saturates_at_zero() {
+        assert_eq!(remaining_uses(10, 0), Some(10));
+        assert_eq!(remaining_uses(10, 4), Some(6));
+        assert_eq!(remaining_uses(10, 10), Some(0));
+        // Never negative, even if a row somehow over-consumed.
+        assert_eq!(remaining_uses(10, 12), Some(0));
     }
 
     // ===== Spec 027 US2: member removal must clear grants on EVERY type =====

@@ -257,6 +257,7 @@ impl From<crate::models::WorldInvite> for thunderforge_core::models::invites::Wo
             created_by: db.created_by,
             created_at: db.created_at,
             updated_at: db.updated_at,
+            revoked: db.revoked,
         }
     }
 }
@@ -274,6 +275,12 @@ impl From<thunderforge_core::models::invites::WorldInvite> for crate::models::Wo
             created_by: core.created_by,
             created_at: core.created_at,
             updated_at: core.updated_at,
+            revoked: core.revoked,
+            // The core model carries no lineage: rotation is a server-side
+            // storage concern, not part of the shared validity contract.
+            // Round-tripping through core therefore drops it, which is why
+            // nothing in the rotation path uses this conversion.
+            rotated_from: None,
         }
     }
 }

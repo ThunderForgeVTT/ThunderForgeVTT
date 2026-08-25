@@ -91,12 +91,34 @@ pub struct WorldInvite {
 
     /// Last update timestamp
     pub updated_at: chrono::NaiveDateTime,
+
+    /// Spec 027 (FR-002): explicitly retired by a GM. Independent of expiry
+    /// and of the use cap — this is how a leaked link is killed.
+    #[serde(default)]
+    pub revoked: bool,
 }
 
 impl WorldInvite {
-    /// Check if this invite code is still valid
+    /// Check if this invite code is still valid.
+    ///
+    /// # This is not the authorization check
+    ///
+    /// Spec 027: the authoritative validity test lives in the SQL predicate of
+    /// the atomic consume in `join_world_impl`, which evaluates the same three
+    /// conditions inside the `UPDATE` that increments `used_count`. Checking
+    /// here and writing afterwards is precisely the read-validate-write
+    /// sequence that let two concurrent joins claim one remaining use.
+    ///
+    /// Keep this method for display and for callers reasoning about a link
+    /// they already hold — not to gate access.
     pub fn is_valid(&self) -> bool {
         let now = chrono::Utc::now().naive_utc();
+
+        // Spec 027 (FR-002): explicit revocation outranks everything else. A
+        // revoked link is dead regardless of remaining uses or expiry.
+        if self.revoked {
+            return false;
+        }
 
         // Check expiry
         if let Some(expires) = self.expires_at
@@ -104,7 +126,13 @@ impl WorldInvite {
             return false;
         }
 
-        // Check max uses
+        // Check max uses.
+        //
+        // `max_uses == 0` means unlimited. Note that no API path creates such
+        // a row today — `generate_invite_code_impl` rejects `max_uses <= 0` —
+        // so this branch is unreachable in practice. It is preserved
+        // deliberately: removing it would change behaviour for any row that
+        // does have one, which is outside spec 027's scope (research §7).
         if self.max_uses > 0 && self.used_count >= self.max_uses {
             return false;
         }

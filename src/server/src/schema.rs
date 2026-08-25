@@ -628,6 +628,8 @@ diesel::table! {
         created_by -> Uuid,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        revoked -> Bool,
+        rotated_from -> Nullable<Uuid>,
     }
 }
 

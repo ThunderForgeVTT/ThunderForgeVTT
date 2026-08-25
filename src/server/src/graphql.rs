@@ -74,6 +74,7 @@ pub use queries::{
 };
 
 // Phase 4.10.B: Invite & Membership mutations for multiplayer campaigns
+pub mod share_codes;
 pub mod mutations_invites;
 pub use mutations_invites::InviteMutation;
 

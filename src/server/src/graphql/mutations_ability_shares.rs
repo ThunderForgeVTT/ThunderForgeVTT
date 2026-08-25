@@ -31,22 +31,8 @@ use crate::models::{
     AbilityEffect, AbilityShare, NewAbilityEffect, NewAbilityShare, NewWorldAbility, WorldAbility,
 };
 use crate::schema::{world_abilities, world_ability_effects, world_ability_shares};
+use crate::graphql::share_codes::generate_link_code;
 use crate::state::AppState;
-
-/// ⚠️ **v4, never v7.** Spec 005 found a real collision bug where codes taken
-/// from a **v7** UUID's leading hex characters collided for anything generated
-/// within the same millisecond, because v7 front-loads a timestamp. The row's
-/// own `id` stays v7 for index locality; only this human-facing code must be
-/// v4-derived. Do not "optimize" this.
-fn generate_share_code() -> String {
-    Uuid::new_v4()
-        .to_string()
-        .replace('-', "")
-        .chars()
-        .take(20)
-        .collect::<String>()
-        .to_uppercase()
-}
 
 #[derive(InputObject, Debug, Clone)]
 pub struct CopySharedAbilityInput {
@@ -164,7 +150,7 @@ pub async fn create_ability_share_link_impl(
     let new_share = NewAbilityShare {
         id: Uuid::now_v7(),
         ability_id,
-        share_code: generate_share_code(),
+        share_code: generate_link_code(),
         created_by: user_id,
     };
 
