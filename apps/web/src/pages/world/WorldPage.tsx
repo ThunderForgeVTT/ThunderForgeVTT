@@ -10,6 +10,7 @@ import {
   applyShapeWorldEvent,
   applyTokenWorldEvent,
   applyWallWorldEvent,
+  getLiveSyncState,
   loadLightsIntoStore,
   loadShapesIntoStore,
   loadTokensIntoStore,
@@ -19,7 +20,9 @@ import {
   startShapeMutationBridge,
   startTokenMutationBridge,
   startWallMutationBridge,
+  subscribeToLiveSyncState,
   subscribeToWorldEvents,
+  type LiveSyncState,
 } from "@/engine/world/sync";
 import { useCanvasEngine } from "@/engine/bevy/useCanvasEngine";
 import { getWorld } from "@/api/world";
@@ -389,10 +392,17 @@ export default function WorldPage() {
     // WorldCommand is relayed — no direct engine-bridge call needed.
     // Gated on `bridgeReady` (see its declaration) so this dispatch isn't
     // lost to the bindWorldStore-registration race.
+    // Bug fix: this used to read `backgroundImagePath` directly, which
+    // dd2vtt/map import (spec 022/002) never sets — it writes the
+    // background to RustFS via `background_asset_id` instead, so an
+    // imported map's art silently never loaded into the canvas.
+    // `backgroundUrl` (GraphQLScene, graphql.rs) is the fetchable URL for
+    // whichever mechanism actually populated the scene, computed
+    // server-side — use that here instead.
     worldStore.dispatch(
       {
         type: "set_scene_background",
-        backgroundImagePath: selectedScene.backgroundImagePath,
+        backgroundImagePath: selectedScene.backgroundUrl,
         width: selectedScene.width,
         height: selectedScene.height,
         worldId: id,
@@ -407,13 +417,13 @@ export default function WorldPage() {
     // surface "the background asset is unreachable" per FR-013 rather
     // than leaving the canvas silently blank).
     const generation = sceneLoadGeneration;
-    if (!selectedScene.backgroundImagePath) {
+    if (!selectedScene.backgroundUrl) {
       markSceneResourceLoaded("background", generation);
       return;
     }
 
     let cancelled = false;
-    void fetch(selectedScene.backgroundImagePath, {
+    void fetch(selectedScene.backgroundUrl, {
       method: "HEAD",
       credentials: "same-origin",
     })
@@ -672,6 +682,50 @@ export default function WorldPage() {
     };
   }, [id, sceneId, bridgeReady, worldStore]);
 
+  // Spec 005 (T014-T016, data-model.md "LiveSyncState"): track this tab's
+  // one shared subscription-transport connection state, so a persistent
+  // "reconnecting" indicator can render (FR-009/FR-009a) and so a dropped
+  // connection triggers a full scene re-fetch once it comes back — the
+  // real gap this project's earlier audit found (subscriptionClient.ts
+  // had automatic WebSocket retry via graphql-ws, but nothing reacted to
+  // a reconnect to recover events missed during the outage).
+  const [liveSyncState, setLiveSyncState] = useState<LiveSyncState>(() => getLiveSyncState());
+  const sceneIdRef = useRef(sceneId);
+  useEffect(() => {
+    sceneIdRef.current = sceneId;
+  }, [sceneId]);
+  // Only a transition into `live` *after* having already been live once
+  // counts as a reconnect worth re-fetching for — the very first
+  // `connecting` -> `live` transition on initial mount is already covered
+  // by the four loadXIntoStore effects above, and re-running them again
+  // here would just be redundant (harmless, since they're idempotent
+  // upserts per research.md §5, but pointless).
+  const wasLiveRef = useRef(false);
+  useEffect(() => {
+    const unsubscribe = subscribeToLiveSyncState((state) => {
+      setLiveSyncState(state);
+      if (state.status === "live") {
+        const currentSceneId = sceneIdRef.current;
+        if (wasLiveRef.current && currentSceneId) {
+          void loadWallsIntoStore(worldStore, currentSceneId).catch((error) => {
+            console.error("Failed to re-fetch scene walls after reconnect:", error);
+          });
+          void loadLightsIntoStore(worldStore, currentSceneId).catch((error) => {
+            console.error("Failed to re-fetch scene lights after reconnect:", error);
+          });
+          void loadShapesIntoStore(worldStore, currentSceneId).catch((error) => {
+            console.error("Failed to re-fetch scene shapes after reconnect:", error);
+          });
+          void loadTokensIntoStore(worldStore, currentSceneId).catch((error) => {
+            console.error("Failed to re-fetch scene tokens after reconnect:", error);
+          });
+        }
+        wasLiveRef.current = true;
+      }
+    });
+    return unsubscribe;
+  }, [worldStore]);
+
   const handleMapImportComplete = useCallback(() => {
     if (!sceneId || !id) {
       return;
@@ -690,8 +744,9 @@ export default function WorldPage() {
     void loadShapesIntoStore(worldStore, sceneId).catch((error) => {
       console.error("Failed to reload scene shapes after map import:", error);
     });
-    // Import also sets the scene's backgroundImagePath — refetch scenes so
-    // the background-dispatch effect above picks up the new art.
+    // Import also sets the scene's background_asset_id — refetch scenes so
+    // the background-dispatch effect above (reading `backgroundUrl`) picks
+    // up the new art.
     void getScenes(id)
       .then(setScenes)
       .catch((error) => {
@@ -851,6 +906,33 @@ export default function WorldPage() {
                 >
                   Retry
                 </Button>
+              </div>
+            ) : null}
+            {liveSyncState.status !== "live" ? (
+              // Spec 005 (FR-009/FR-009a): a persistent, non-blocking
+              // indicator — unlike sceneLoadState's centered overlay above,
+              // this must never block interaction with an already-loaded
+              // scene, and must never present a dead-end/terminal state:
+              // it just keeps showing "Reconnecting…" for as long as
+              // liveSyncState says so, since the underlying transport
+              // retries indefinitely.
+              <div
+                data-testid="live-sync-reconnecting-indicator"
+                style={{
+                  position: "absolute",
+                  top: "1rem",
+                  right: "1rem",
+                  zIndex: 1000,
+                  padding: "0.4rem 0.75rem",
+                  borderRadius: "0.375rem",
+                  background: "rgba(0, 0, 0, 0.75)",
+                  color: "white",
+                  fontSize: "0.8rem",
+                }}
+              >
+                {liveSyncState.status === "connecting"
+                  ? "Connecting…"
+                  : `Reconnecting… (attempt ${liveSyncState.attempt})`}
               </div>
             ) : null}
             {isSceneOwner && sceneId ? (

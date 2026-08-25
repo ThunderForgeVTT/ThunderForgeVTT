@@ -22,7 +22,13 @@ export {
   loadTokensIntoStore,
   startTokenMutationBridge,
 } from "./tokens";
-export { subscribeToWorldEvents, type WorldEventLike } from "./subscriptionClient";
+export {
+  subscribeToWorldEvents,
+  getLiveSyncState,
+  subscribeToLiveSyncState,
+  type WorldEventLike,
+  type LiveSyncState,
+} from "./subscriptionClient";
 export { parseSceneLaunchedEvent } from "./scenes";
 export {
   applyGenieSessionWorldEvent,
