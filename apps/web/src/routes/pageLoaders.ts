@@ -28,6 +28,7 @@ export const pageLoaders = {
   sharedActor: () => import("@/pages/actor-share/SharedActorPage"),
   abilityView: () => import("@/pages/world/ability/AbilityDetailPage"),
   abilityEdit: () => import("@/pages/world/ability/AbilityDetailPage"),
+  sharedAbility: () => import("@/pages/ability-share/SharedAbilityPage"),
   itemView: () => import("@/pages/world/item/ItemDetailPage"),
   itemEdit: () => import("@/pages/world/item/ItemDetailPage"),
   worldSystemSettings: () => import("@/pages/world/settings/WorldSystemSettingsPage"),

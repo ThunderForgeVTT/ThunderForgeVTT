@@ -5,7 +5,8 @@ use crate::schema::{
     oauth_authorization_sessions, oauth_link_challenges, oauth_providers, players_online, scenes,
     shapes, tokens, user_oauth_accounts, user_sessions, users, walls, world_actor_claims,
     world_actor_inventory,
-    world_abilities, world_ability_effects, world_ability_permissions, world_actor_abilities,
+    world_abilities, world_ability_effects, world_ability_permissions, world_ability_shares,
+    world_actor_abilities,
     world_actor_permissions, world_actor_shares, world_actor_system_data, world_actors,
     world_events, world_genie_puzzle_clock_rewards, world_genie_puzzle_clocks,
     world_genie_resource_holdings, world_genie_shop_listings,
@@ -1743,4 +1744,30 @@ pub struct NewActorAbilityEntry {
     pub actor_id: uuid::Uuid,
     pub ability_id: Option<uuid::Uuid>,
     pub ability_name_snapshot: String,
+}
+
+/// Spec 025 (FR-032): a share link for one ability. `revoked` is a soft flag,
+/// never a row delete — FR-036 needs a revoked link to render a distinct "no
+/// longer available" state, which a deleted row could not distinguish from a
+/// code that never existed.
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_ability_shares)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct AbilityShare {
+    pub id: uuid::Uuid,
+    pub ability_id: uuid::Uuid,
+    pub share_code: String,
+    pub created_by: uuid::Uuid,
+    pub revoked: bool,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_ability_shares)]
+pub struct NewAbilityShare {
+    pub id: uuid::Uuid,
+    pub ability_id: uuid::Uuid,
+    pub share_code: String,
+    pub created_by: uuid::Uuid,
 }

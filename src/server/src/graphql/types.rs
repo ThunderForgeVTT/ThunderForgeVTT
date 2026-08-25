@@ -1261,3 +1261,26 @@ pub struct GraphQLActorAbilityEntry {
     pub classification: Option<AbilityClassification>,
     pub gm_only: bool,
 }
+
+/// Spec 025 (FR-032): an ability share link.
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLAbilityShareLink {
+    pub id: uuid::Uuid,
+    pub ability_id: uuid::Uuid,
+    pub share_code: String,
+    pub revoked: bool,
+    pub created_at: NaiveDateTime,
+}
+
+/// Spec 025 (FR-033): what a share-link viewer sees.
+///
+/// Deliberately carries **no** `id`, `world_id`, `created_by`, or ownership
+/// block: a viewer must not be able to identify the source world or its
+/// members. Mirrors `SharedItemPreview`.
+#[derive(SimpleObject, Debug, Clone)]
+pub struct SharedAbilityPreview {
+    pub name: String,
+    pub description: Option<String>,
+    pub classification: AbilityClassification,
+    pub effects: Vec<GraphQLAbilityEffect>,
+}

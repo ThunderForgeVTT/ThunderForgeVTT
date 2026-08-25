@@ -124,10 +124,12 @@ pub use mutations_lore_images::LoreImageMutation;
 // Spec 013: item creation/field-editing/deletion and effect CRUD
 pub mod mutations_abilities;
 pub mod mutations_ability_permissions;
+pub mod mutations_ability_shares;
 pub mod mutations_actor_abilities;
 pub mod mutations_items;
 pub use mutations_abilities::AbilityMutation;
 pub use mutations_ability_permissions::{AbilityPermissionMutation, AbilityPermissionQuery};
+pub use mutations_ability_shares::{AbilityShareMutation, AbilityShareQuery};
 pub use mutations_actor_abilities::{ActorAbilityMutation, ActorAbilityQuery};
 pub use mutations_items::ItemMutation;
 
@@ -2444,6 +2446,7 @@ pub struct QueryRoot(
     LorePermissionQuery,
     AbilityQuery,
     AbilityPermissionQuery,
+    AbilityShareQuery,
     ActorAbilityQuery,
     ItemQuery,
     ItemPermissionQuery,
@@ -2478,6 +2481,7 @@ pub struct MutationRoot(
     LoreImageMutation,
     AbilityMutation,
     AbilityPermissionMutation,
+    AbilityShareMutation,
     ActorAbilityMutation,
     ItemMutation,
     ItemPermissionMutation,
@@ -2553,7 +2557,13 @@ mod tests {
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let user_id = insert_test_user(&mut conn);
+        // Scoped to this test's own throwaway user, NOT a global world count.
+        // A global count is not isolation-safe: any concurrently-running test
+        // that creates a world lands between the two reads and fails this
+        // assertion spuriously. Scoping preserves the intent exactly — "this
+        // rejected call wrote nothing" — while being immune to neighbours.
         let before_count = worlds::table
+            .filter(worlds::created_by.eq(user_id))
             .count()
             .get_result::<i64>(&mut conn)
             .expect("world count query should succeed");
@@ -2575,6 +2585,7 @@ mod tests {
 
         let mut conn = state.db_pool.get().unwrap();
         let after_count = worlds::table
+            .filter(worlds::created_by.eq(user_id))
             .count()
             .get_result::<i64>(&mut conn)
             .expect("world count query should succeed");

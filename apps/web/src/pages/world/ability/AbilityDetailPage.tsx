@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { deleteAbility, getAbility, setAbilityGmOnly, updateAbility } from "@/api/abilities";
+import { createAbilityShareLink, revokeAbilityShareLink } from "@/api/abilityShares";
 import { getGameSystemManifest } from "@/api/gameSystems";
 import { getWorld } from "@/api/world";
 import { SEO } from "@/components/seo/SEO";
@@ -60,6 +61,9 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isTogglingVisibility, setIsTogglingVisibility] = useState(false);
   const [facets, setFacets] = useState<AbilityFacetsLookup | undefined>(undefined);
+  const [shareLink, setShareLink] = useState<string | null>(null);
+  const [shareLinkId, setShareLinkId] = useState<string | null>(null);
+  const [isSharing, setIsSharing] = useState(false);
 
   const { isGm: isDm } = useWorldRole(worldId, world);
 
@@ -201,6 +205,40 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
     }
   };
 
+  const handleShare = async () => {
+    setIsSharing(true);
+    setStatus(null);
+    try {
+      const link = await createAbilityShareLink(abilityId);
+      const url = `${window.location.origin}/shared/ability/${link.shareCode}`;
+      setShareLink(url);
+      setShareLinkId(link.id);
+      await navigator.clipboard.writeText(url).catch(() => {});
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Failed to create share link");
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  const handleRevokeShare = async () => {
+    if (!shareLinkId) {
+      return;
+    }
+    setIsSharing(true);
+    setStatus(null);
+    try {
+      await revokeAbilityShareLink(shareLinkId);
+      setShareLink(null);
+      setShareLinkId(null);
+      setStatus("Share link revoked.");
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Failed to revoke share link");
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
   const handleToggleGmOnly = async () => {
     setIsTogglingVisibility(true);
     setStatus(null);
@@ -273,6 +311,18 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
                 {ability.gmOnly ? "Reveal to players" : "Make GM-only"}
               </Button>
             ) : null}
+            {/* FR-032: Owner-level only. ADR-049: sharing is an explicit act —
+                nothing leaves the world unless someone clicks this. */}
+            {ability.myPermissionLevel === "OWNER" ? (
+              <Button
+                variant="secondary"
+                onClick={() => void handleShare()}
+                disabled={isSharing}
+                data-testid="ability-share-button"
+              >
+                Share
+              </Button>
+            ) : null}
             {mode === "edit" && ability.myPermissionLevel === "OWNER" ? (
               <Button
                 variant="danger"
@@ -285,6 +335,29 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
             ) : null}
           </div>
         </div>
+
+        {shareLink ? (
+          <Card className="grid gap-2 p-5">
+            <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+              Share link
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Anyone with this link can view the ability and copy it into a world they run. It
+              is not listed or discoverable anywhere — revoke it to stop it working.
+            </p>
+            <Input readOnly value={shareLink} data-testid="ability-share-link-input" />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="justify-self-start"
+              onClick={() => void handleRevokeShare()}
+              disabled={isSharing}
+              data-testid="ability-share-revoke"
+            >
+              Revoke
+            </Button>
+          </Card>
+        ) : null}
 
         <Card className="grid gap-4 p-5">
           {mode === "edit" ? (

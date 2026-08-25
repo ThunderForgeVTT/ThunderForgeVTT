@@ -240,22 +240,22 @@ set -a && source .env && set +a
 
 ### Tests for User Story 6
 
-- [ ] T083 [P] [US6] Server test `create_ability_share_link_requires_owner_level` in `src/server/src/graphql/mutations_ability_shares.rs` (FR-032)
-- [ ] T084 [P] [US6] Server test `copy_produces_independent_ability_with_cloned_effects` in `src/server/src/graphql/mutations_ability_shares.rs` — non-DM at the destination rejected; the copy has a new id, the destination `world_id`, re-parented effects, and an empty ownership block (FR-035, SC-008)
-- [ ] T085 [P] [US6] Server test `revoked_share_link_is_unavailable` in `src/server/src/graphql/mutations_ability_shares.rs` (FR-036)
-- [ ] T086 [P] [US6] Server test `shared_ability_is_unavailable_once_moderation_disabled` in `src/server/src/graphql/mutations_ability_shares.rs` — a share must never be a moderation bypass
-- [ ] T087 [P] [US6] Server test `shared_ability_preview_omits_source_world_identity` in `src/server/src/graphql/mutations_ability_shares.rs` (FR-033)
+- [X] T083 [P] [US6] Server test `create_ability_share_link_requires_owner_level` in `src/server/src/graphql/mutations_ability_shares.rs` (FR-032)
+- [X] T084 [P] [US6] Server test `copy_produces_independent_ability_with_cloned_effects` in `src/server/src/graphql/mutations_ability_shares.rs` — non-DM at the destination rejected; the copy has a new id, the destination `world_id`, re-parented effects, and an empty ownership block (FR-035, SC-008)
+- [X] T085 [P] [US6] Server test `revoked_share_link_is_unavailable` in `src/server/src/graphql/mutations_ability_shares.rs` (FR-036)
+- [X] T086 [P] [US6] Server test `shared_ability_is_unavailable_once_moderation_disabled` in `src/server/src/graphql/mutations_ability_shares.rs` — a share must never be a moderation bypass
+- [X] T087 [P] [US6] Server test `shared_ability_preview_omits_source_world_identity` in `src/server/src/graphql/mutations_ability_shares.rs` (FR-033)
 
 ### Implementation for User Story 6
 
-- [ ] T088 [US6] Create migration `src/server/migrations/<ts>_create_world_ability_shares/{up,down}.sql` per data-model.md §4 — app-supplied PK, `share_code VARCHAR(32) NOT NULL UNIQUE`
-- [ ] T089 [US6] Add the `world_ability_shares` `table!` block, joinables, and `allow_tables_to_appear_in_same_query!` entry in `src/server/src/schema.rs`, plus `AbilityShare`/`NewAbilityShare` structs in `src/server/src/models.rs`
-- [ ] T090 [US6] Add `GraphQLAbilityShareLink` and `SharedAbilityPreview` (deliberately carrying no `id`/`worldId`/`createdBy`/ownership block) in `src/server/src/graphql/types.rs`
-- [ ] T091 [US6] Create `src/server/src/graphql/mutations_ability_shares.rs` with `sharedAbility`, `createAbilityShareLink`, `revokeAbilityShareLink`, `copySharedAbilityToWorld` per contracts/ability-share.md — reuse `generate_share_code()`'s **v4**-derived code (never v7 — spec 005 fixed a real same-millisecond collision bug), re-validate effect formulas on copy, and add **no** list-shares query (FR-037); register it in `src/server/src/graphql.rs`
-- [ ] T092 [P] [US6] Create `apps/web/src/api/abilityShares.ts` and `apps/web/src/types/abilityShare.ts`
-- [ ] T093 [US6] Create `apps/web/src/pages/ability-share/SharedAbilityPage.tsx` mirroring `SharedItemPage.tsx` — login required but not world membership, `idle → confirming → copying → done` step machine, empty-`dmWorlds` message, classifications rendered with **default** labels (the preview has no world context by design)
-- [ ] T094 [US6] Register `/shared/ability/:code` in `apps/web/src/routes/AppRoutes.tsx` with a `sharedAbility` entry in `apps/web/src/routes/pageLoaders.ts`, and add Owner-gated Share/Revoke controls to `apps/web/src/pages/world/ability/AbilityDetailPage.tsx`
-- [ ] T095 [US6] Verify quickstart.md Scenario 7 against a running dev stack, including the enumeration check that no query returns a world's or user's share links
+- [X] T088 [US6] Create migration `src/server/migrations/<ts>_create_world_ability_shares/{up,down}.sql` per data-model.md §4 — app-supplied PK, `share_code VARCHAR(32) NOT NULL UNIQUE`
+- [X] T089 [US6] Add the `world_ability_shares` `table!` block, joinables, and `allow_tables_to_appear_in_same_query!` entry in `src/server/src/schema.rs`, plus `AbilityShare`/`NewAbilityShare` structs in `src/server/src/models.rs`
+- [X] T090 [US6] Add `GraphQLAbilityShareLink` and `SharedAbilityPreview` (deliberately carrying no `id`/`worldId`/`createdBy`/ownership block) in `src/server/src/graphql/types.rs`
+- [X] T091 [US6] Create `src/server/src/graphql/mutations_ability_shares.rs` with `sharedAbility`, `createAbilityShareLink`, `revokeAbilityShareLink`, `copySharedAbilityToWorld` per contracts/ability-share.md — reuse `generate_share_code()`'s **v4**-derived code (never v7 — spec 005 fixed a real same-millisecond collision bug), re-validate effect formulas on copy, and add **no** list-shares query (FR-037); register it in `src/server/src/graphql.rs`
+- [X] T092 [P] [US6] Create `apps/web/src/api/abilityShares.ts` and `apps/web/src/types/abilityShare.ts`
+- [X] T093 [US6] Create `apps/web/src/pages/ability-share/SharedAbilityPage.tsx` mirroring `SharedItemPage.tsx` — login required but not world membership, `idle → confirming → copying → done` step machine, empty-`dmWorlds` message, classifications rendered with **default** labels (the preview has no world context by design)
+- [X] T094 [US6] Register `/shared/ability/:code` in `apps/web/src/routes/AppRoutes.tsx` with a `sharedAbility` entry in `apps/web/src/routes/pageLoaders.ts`, and add Owner-gated Share/Revoke controls to `apps/web/src/pages/world/ability/AbilityDetailPage.tsx`
+- [X] T095 [US6] Verify quickstart.md Scenario 7 against a running dev stack, including the enumeration check that no query returns a world's or user's share links
 
 **Checkpoint**: All six user stories complete.
 
