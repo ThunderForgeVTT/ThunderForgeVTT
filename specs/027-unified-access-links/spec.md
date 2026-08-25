@@ -262,9 +262,19 @@ rather than written out by hand.
 - **FR-013**: A retired or revoked code MUST NOT become usable again, whether
   by later rotation, later link creation, or code reissue.
 - **FR-014**: On rotation, the replacement link MUST inherit the retired
-  link's configured use cap with its use count reset to zero, and MUST retain
-  the retired link's expiry setting. A rotated link is therefore a clean
-  instance of the same link, not a continuation of its remaining budget.
+  link's configured use cap with its use count reset to zero, and MUST inherit
+  the retired link's chosen **lifetime**, measured again from the moment of
+  rotation. A rotated link is therefore a clean instance of the same link, not
+  a continuation of its remaining budget or its remaining time.
+  - *Amended 2026-08-26 during implementation.* This originally said the
+    replacement retains the retired link's **expiry**, which contradicted
+    User Story 1 scenario 4: inheriting a past expiry means a link rotated
+    after it lapsed is born already dead, so rotation could not "yield a
+    usable link". The amendment applies the principle already settled for the
+    use cap — uses-spent is consumed state while the cap is the setting, and
+    elapsed time is consumed state while the chosen lifetime is the setting.
+    Cap resets, clock resets, both settings survive. A link with no expiry
+    still has none.
 
 ### Functional Requirements — Permission Resolution
 

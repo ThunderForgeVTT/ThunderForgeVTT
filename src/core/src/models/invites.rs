@@ -251,6 +251,7 @@ mod tests {
             created_by: Uuid::new_v4(),
             created_at: chrono::Utc::now().naive_utc(),
             updated_at: chrono::Utc::now().naive_utc(),
+            revoked: false,
         };
 
         assert!(invite.is_valid());
@@ -263,6 +264,16 @@ mod tests {
         invite.expires_at = Some(future);
         invite.used_count = 5;
         assert!(!invite.is_valid());
+
+        // Spec 027 (FR-002): revocation invalidates a link that is otherwise
+        // perfectly usable — unexpired, with uses to spare.
+        invite.used_count = 0;
+        assert!(invite.is_valid());
+        invite.revoked = true;
+        assert!(
+            !invite.is_valid(),
+            "a revoked link must be invalid regardless of expiry or remaining uses"
+        );
     }
 
     #[test]
@@ -277,6 +288,7 @@ mod tests {
             created_by: Uuid::new_v4(),
             created_at: chrono::Utc::now().naive_utc(),
             updated_at: chrono::Utc::now().naive_utc(),
+            revoked: false,
         };
 
         assert!(invite.use_invite().is_ok());

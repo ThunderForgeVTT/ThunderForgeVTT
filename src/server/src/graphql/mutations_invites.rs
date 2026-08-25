@@ -1,6 +1,8 @@
 //! GraphQL mutations for campaign invites and world membership (Phase 4.10)
 
-use async_graphql::{Context, Error, InputObject, Result as GraphQLResult, SimpleObject};
+use async_graphql::{
+    Context, Error, ErrorExtensions, InputObject, Result as GraphQLResult, SimpleObject,
+};
 use chrono::Utc;
 use diesel::prelude::*;
 use std::str::FromStr;
@@ -14,7 +16,7 @@ use crate::schema::world_invites;
 use crate::schema::world_members;
 use crate::graphql::share_codes::generate_link_code;
 use crate::state::AppState;
-use thunderforge_core::models::invites::{WorldInvite as CoreWorldInvite, WorldMemberRole};
+use thunderforge_core::models::invites::WorldMemberRole;
 
 // Event codes for world_events audit trail
 const EVENT_CODE_INVITE_CREATED: i32 = 2;
@@ -375,73 +377,125 @@ pub async fn join_world_impl(
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
-    // Look up invite code
-    let invite: WorldInvite = world_invites::table
-        .filter(world_invites::invite_code.eq(input.invite_code.clone()))
-        .select(WorldInvite::as_select())
-        .first::<WorldInvite>(&mut conn)
-        .map_err(|e| match e {
-            diesel::result::Error::NotFound => Error::new("Invalid invite code"),
-            _ => Error::new(format!("Database error: {}", e)),
-        })?;
+    let submitted_code = input.invite_code.clone();
 
-    // Convert to core model to use validation
-    let mut core_invite: CoreWorldInvite = invite.clone().into();
-
-    // Validate invite
-    if !core_invite.is_valid() {
-        return Err(Error::new("Invite code is no longer valid"));
-    }
-
-    let world_id = invite.world_id;
-
-    // Check if user is already a member
-    let existing: Option<WorldMember> = world_members::table
-        .filter(world_members::world_id.eq(world_id))
-        .filter(world_members::user_id.eq(user_id))
-        .select(WorldMember::as_select())
-        .first::<WorldMember>(&mut conn)
-        .optional()
-        .map_err(|e| Error::new(format!("Database error: {}", e)))?;
-
-    if existing.is_some() {
-        return Err(Error::new("You are already a member of this world"));
-    }
-
-    // Increment usage
-    core_invite.use_invite().map_err(Error::new)?;
-
-    // Update invite usage count
-    let updated_count = core_invite.used_count;
-    diesel::update(world_invites::table.find(invite.id))
-        .set(world_invites::used_count.eq(updated_count))
-        .execute(&mut conn)
-        .map_err(|e| Error::new(format!("Failed to update invite: {}", e)))?;
-
-    // Create membership record
-    let membership_id = Uuid::now_v7();
-    let now = Utc::now().naive_utc();
-
-    let new_member = NewWorldMember {
-        id: membership_id,
-        world_id,
-        user_id,
-        role: "Player".to_string(),
-        joined_at: now,
-        created_at: now,
-        updated_at: now,
+    // Spec 027 (T042, US4-2): the already-a-member check runs FIRST, before any
+    // use is consumed. A player who clicks a link twice must not burn a use of
+    // their GM's cap on the second click. It is also not a failure — it needs
+    // its own message, and it requires a *valid* code, so it reveals nothing a
+    // uniform response would have protected.
+    let already_a_member = {
+        let code = submitted_code.clone();
+        let mut probe_conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+        tokio::task::spawn_blocking(move || {
+            world_invites::table
+                .inner_join(
+                    world_members::table
+                        .on(world_members::world_id.eq(world_invites::world_id)),
+                )
+                .filter(world_invites::invite_code.eq(code))
+                .filter(world_members::user_id.eq(user_id))
+                .select(world_members::id)
+                .first::<Uuid>(&mut probe_conn)
+                .optional()
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|e| Error::new(format!("Database error: {}", e)))?
     };
 
-    diesel::insert_into(world_members::table)
-        .values(&new_member)
-        .execute(&mut conn)
-        .map_err(|e| Error::new(format!("Failed to create membership: {}", e)))?;
+    if already_a_member.is_some() {
+        return Err(Error::new(ALREADY_A_MEMBER_MESSAGE));
+    }
 
-    // Record event for audit trail and real-time sync
+    // Spec 027 (T019/T020, FR-011/FR-012): validate-and-consume atomically,
+    // then create the membership in the same transaction.
+    //
+    // This replaces a read, an in-memory `is_valid()`, and a write-back of a
+    // computed count. That sequence lost updates: two joins racing for the
+    // last use both read `used_count = N`, both computed `N + 1`, and both
+    // wrote it — admitting two members against one remaining use. Carrying the
+    // whole validity predicate in the UPDATE's WHERE clause makes the check
+    // and the increment one indivisible step.
+    //
+    // It also delivers FR-011's uniform failure for free: zero rows updated
+    // means unusable, and the reason — unknown, revoked, expired, or
+    // exhausted — is never distinguished, here or to the caller.
+    let mut txn_conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    let code_for_txn = submitted_code.clone();
+
+    let new_member = tokio::task::spawn_blocking(move || {
+        txn_conn.transaction::<NewWorldMember, diesel::result::Error, _>(|conn| {
+            let now = Utc::now().naive_utc();
+
+            let consumed: Option<(Uuid, Uuid)> = diesel::update(
+                world_invites::table
+                    .filter(world_invites::invite_code.eq(&code_for_txn))
+                    .filter(world_invites::revoked.eq(false))
+                    .filter(
+                        world_invites::expires_at
+                            .is_null()
+                            .or(world_invites::expires_at.gt(now)),
+                    )
+                    .filter(
+                        world_invites::max_uses
+                            .eq(0)
+                            .or(world_invites::used_count.lt(world_invites::max_uses)),
+                    ),
+            )
+            .set((
+                world_invites::used_count.eq(world_invites::used_count + 1),
+                world_invites::updated_at.eq(now),
+            ))
+            .returning((world_invites::id, world_invites::world_id))
+            .get_result::<(Uuid, Uuid)>(conn)
+            .optional()?;
+
+            // No row matched the predicate: the link is unusable. Rolling back
+            // with NotFound keeps the caller from learning which condition
+            // applied.
+            let (_invite_id, world_id) = consumed.ok_or(diesel::result::Error::NotFound)?;
+
+            let new_member = NewWorldMember {
+                id: Uuid::now_v7(),
+                world_id,
+                user_id,
+                role: "Player".to_string(),
+                joined_at: now,
+                created_at: now,
+                updated_at: now,
+            };
+
+            // Inside the transaction: if this fails, the use is returned.
+            diesel::insert_into(world_members::table)
+                .values(&new_member)
+                .execute(conn)?;
+
+            Ok(new_member)
+        })
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new(LINK_UNAVAILABLE_MESSAGE))?;
+
+    let world_id = new_member.world_id;
+
+    // Record event for audit trail and real-time sync. Deliberately outside
+    // the transaction: a failure to announce the join must not undo it.
+    //
+    // The invite code is NOT included in the payload. It used to be, but that
+    // put a live credential into an audit row readable by anyone who can read
+    // world events — and now that a code can be rotated to contain a leak,
+    // copying it into a second place defeats the point.
     let event_payload = serde_json::json!({
         "user_id": new_member.user_id,
         "role": new_member.role,
-        "invite_code": invite.invite_code,
     });
     record_world_event(
         &mut conn,
@@ -460,6 +514,211 @@ pub async fn join_world_impl(
         created_at: new_member.created_at.to_string(),
         updated_at: new_member.updated_at.to_string(),
     })
+}
+
+/// Spec 027 (FR-011 / SC-005): the single message every unusable link gets.
+///
+/// Unknown, revoked, expired, and exhausted codes are indistinguishable —
+/// identical text, identical shape. Possessing a dead code must reveal nothing
+/// about whether it was ever real or what world it belonged to. Wording
+/// deliberately matches `load_active_share`'s, so invites and content shares
+/// fail the same way.
+pub const LINK_UNAVAILABLE_MESSAGE: &str = "This invite link is no longer available.";
+
+/// Distinct from the uniform failure on purpose: reaching this requires a
+/// *valid* code, so it leaks nothing an attacker could not already establish,
+/// and a player who clicks their own link twice deserves a message that tells
+/// them what actually happened.
+pub const ALREADY_A_MEMBER_MESSAGE: &str = "You are already a member of this world.";
+
+/// Spec 027 (T021, FR-002): retire a link permanently, with no replacement.
+///
+/// Idempotent — revoking an already-revoked link succeeds and returns it
+/// unchanged, so a double-click is not an error. Has no effect on anyone who
+/// already joined (FR-005).
+pub async fn revoke_invite_code_impl(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    invite_id: Uuid,
+) -> GraphQLResult<WorldInvitePayload> {
+    let world_id = world_id_of_invite(state, invite_id).await?;
+    require_dm_of_world(state, user_id, is_admin, world_id).await?;
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    let updated = tokio::task::spawn_blocking(move || {
+        diesel::update(world_invites::table.find(invite_id))
+            .set((
+                world_invites::revoked.eq(true),
+                world_invites::updated_at.eq(Utc::now().naive_utc()),
+            ))
+            .returning(WorldInvite::as_select())
+            .get_result::<WorldInvite>(&mut conn)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|e| Error::new(format!("Failed to revoke invite: {}", e)))?;
+
+    Ok(WorldInvitePayload::from_row(&updated))
+}
+
+/// Spec 027 (T022, FR-003/FR-004/FR-014): retire a link and issue its
+/// replacement in one atomic action. Returns the **new** link.
+///
+/// The replacement inherits the retired link's cap and expiry with its count
+/// reset to zero — a refresh yields "this link, but new". Note the consequence
+/// recorded in ADR-050: because the count resets, a DM can rotate a 1-use link
+/// indefinitely. That is accepted (a DM can already create unlimited links),
+/// which is why the cap is a convenience control and must never be described
+/// to GMs as a security boundary.
+///
+/// Rotation is allowed on an expired or exhausted link — a GM can always
+/// revive a dead link. It is refused on an already-revoked one, which would
+/// otherwise produce two replacements for a single original.
+pub async fn rotate_invite_code_impl(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    invite_id: Uuid,
+) -> GraphQLResult<WorldInvitePayload> {
+    let world_id = world_id_of_invite(state, invite_id).await?;
+    require_dm_of_world(state, user_id, is_admin, world_id).await?;
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    let new_code = generate_link_code();
+
+    let replacement = tokio::task::spawn_blocking(move || {
+        conn.transaction::<WorldInvite, diesel::result::Error, _>(|conn| {
+            let now = Utc::now().naive_utc();
+
+            // Retire the source, guarded on it not already being retired. Zero
+            // rows means it was — abort rather than mint a second replacement.
+            let retired: Option<WorldInvite> = diesel::update(
+                world_invites::table
+                    .find(invite_id)
+                    .filter(world_invites::revoked.eq(false)),
+            )
+            .set((
+                world_invites::revoked.eq(true),
+                world_invites::updated_at.eq(now),
+            ))
+            .returning(WorldInvite::as_select())
+            .get_result::<WorldInvite>(conn)
+            .optional()?;
+
+            let retired = retired.ok_or(diesel::result::Error::NotFound)?;
+
+            // Issue the replacement in the same transaction. FR-004: a failure
+            // here rolls the retirement back, leaving exactly one usable link.
+            let replacement = NewWorldInvite {
+                id: Uuid::now_v7(),
+                world_id: retired.world_id,
+                invite_code: new_code,
+                max_uses: retired.max_uses,
+                used_count: 0,
+                expires_at: rotated_expiry(&retired, now),
+                // The rotating GM, who need not be the original creator.
+                created_by: user_id,
+                created_at: now,
+                updated_at: now,
+                revoked: false,
+                rotated_from: Some(retired.id),
+            };
+
+            diesel::insert_into(world_invites::table)
+                .values(&replacement)
+                .returning(WorldInvite::as_select())
+                .get_result::<WorldInvite>(conn)
+        })
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|e| match e {
+        diesel::result::Error::NotFound => {
+            Error::new("This link has already been revoked and cannot be rotated.")
+        }
+        other => Error::new(format!("Failed to rotate invite: {}", other)),
+    })?;
+
+    Ok(WorldInvitePayload::from_row(&replacement))
+}
+
+/// Spec 027: the expiry a rotation's replacement should carry.
+///
+/// # Why this is not a plain copy
+///
+/// FR-014 says the replacement inherits the retired link's expiry, and US1
+/// scenario 4 says rotating an **expired** link yields a **usable** one.
+/// Copying the expiry verbatim satisfies the first and breaks the second: the
+/// replacement is born already dead. Implementation surfaced the conflict;
+/// this resolves it.
+///
+/// The resolution follows the same principle already settled for the use cap.
+/// Rotation resets `used_count` because uses-spent is *consumed state*, while
+/// the cap is the GM's *setting*. Elapsed time is consumed state by exactly the
+/// same logic, and the chosen lifetime is the setting. So a rotated link keeps
+/// the lifetime the GM picked — "this link lasts a week" — measured again from
+/// now. Cap resets, clock resets, and both settings survive.
+///
+/// A link with no expiry still has none. A degenerate row whose expiry does not
+/// follow its creation keeps its original absolute expiry rather than having a
+/// nonsensical duration projected forward.
+fn rotated_expiry(
+    retired: &WorldInvite,
+    now: chrono::NaiveDateTime,
+) -> Option<chrono::NaiveDateTime> {
+    let expires_at = retired.expires_at?;
+    let lifetime = expires_at - retired.created_at;
+    if lifetime > chrono::Duration::zero() {
+        Some(now + lifetime)
+    } else {
+        Some(expires_at)
+    }
+}
+
+/// Resolves the world a link belongs to, so authorization can be checked
+/// against it. A missing link is reported as unavailable rather than "not
+/// found", keeping this consistent with FR-011.
+async fn world_id_of_invite(state: &AppState, invite_id: Uuid) -> GraphQLResult<Uuid> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    tokio::task::spawn_blocking(move || {
+        world_invites::table
+            .find(invite_id)
+            .select(world_invites::world_id)
+            .first::<Uuid>(&mut conn)
+            .optional()
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|e| Error::new(format!("Database error: {}", e)))?
+    .ok_or_else(|| Error::new(LINK_UNAVAILABLE_MESSAGE))
+}
+
+/// Spec 027 (FR-008): only a world's DM may create, revoke, or rotate its
+/// links.
+async fn require_dm_of_world(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    world_id: Uuid,
+) -> GraphQLResult<()> {
+    if crate::auth::actor_permissions::is_dm_of_world(state, user_id, is_admin, world_id).await? {
+        Ok(())
+    } else {
+        Err(Error::new("Only Owners and GMs can manage this world's invite links")
+            .extend_with(|_, ext| ext.set("code", "FORBIDDEN")))
+    }
 }
 
 /// Testable core of `InviteMutation::update_member_role` (spec 023 —
@@ -741,6 +1000,31 @@ impl InviteMutation {
         let state = get_app_state(ctx)?;
         let auth_user = get_authenticated_user(ctx)?;
         generate_invite_code_impl(&state, auth_user.user_id, input).await
+    }
+
+    /// Spec 027 (FR-002): permanently retire an invite link, with no
+    /// replacement. Owner/GM only. Idempotent.
+    pub async fn revoke_invite_code(
+        &self,
+        ctx: &Context<'_>,
+        invite_id: Uuid,
+    ) -> GraphQLResult<WorldInvitePayload> {
+        let state = get_app_state(ctx)?;
+        let auth_user = get_authenticated_user(ctx)?;
+        revoke_invite_code_impl(&state, auth_user.user_id, auth_user.is_admin, invite_id).await
+    }
+
+    /// Spec 027 (FR-003): retire an invite link and issue its replacement in
+    /// one atomic action — the old code stops working immediately. Owner/GM
+    /// only. Returns the **new** link.
+    pub async fn rotate_invite_code(
+        &self,
+        ctx: &Context<'_>,
+        invite_id: Uuid,
+    ) -> GraphQLResult<WorldInvitePayload> {
+        let state = get_app_state(ctx)?;
+        let auth_user = get_authenticated_user(ctx)?;
+        rotate_invite_code_impl(&state, auth_user.user_id, auth_user.is_admin, invite_id).await
     }
 
     /// Join a world using an invite code
@@ -1080,6 +1364,408 @@ mod tests {
         assert_eq!(payload.state, WorldAccessLinkState::Active);
         assert_eq!(payload.remaining_uses, Some(7));
         assert_eq!(payload.rotated_from, None);
+    }
+
+    // ===== Spec 027 US1: revoke and rotate =====
+
+    fn load_invite(conn: &mut PgConnection, id: Uuid) -> WorldInvite {
+        world_invites::table
+            .find(id)
+            .select(WorldInvite::as_select())
+            .first(conn)
+            .expect("invite row must exist")
+    }
+
+    /// FR-003 / SC-001: the retired code fails on its very next use, and the
+    /// replacement works. This is the whole point of the feature.
+    #[tokio::test]
+    async fn rotating_kills_the_old_code_immediately_and_issues_a_working_one() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let (invite_id, old_code) = insert_test_invite(&mut conn, world_id, owner_id, 10, 0, None);
+        drop(conn);
+
+        // Control: the code works before rotation.
+        let first_joiner = {
+            let mut conn = state.db_pool.get().unwrap();
+            insert_test_user(&mut conn)
+        };
+        join_world_impl(
+            &state,
+            first_joiner,
+            JoinWorldInput { invite_code: old_code.clone() },
+        )
+        .await
+        .expect("the code must work before rotation — otherwise this proves nothing");
+
+        let replacement = rotate_invite_code_impl(&state, owner_id, false, invite_id)
+            .await
+            .expect("a DM must be able to rotate their world's link");
+
+        assert_ne!(replacement.invite_code, old_code, "a new code must be issued");
+        assert_eq!(replacement.state, WorldAccessLinkState::Active);
+
+        // The retired code fails on its next use, with no grace window.
+        let second_joiner = {
+            let mut conn = state.db_pool.get().unwrap();
+            insert_test_user(&mut conn)
+        };
+        let refused = join_world_impl(
+            &state,
+            second_joiner,
+            JoinWorldInput { invite_code: old_code },
+        )
+        .await;
+        assert!(
+            refused.is_err(),
+            "the retired code must fail on its very next use (SC-001)"
+        );
+
+        // The replacement works.
+        let third_joiner = {
+            let mut conn = state.db_pool.get().unwrap();
+            insert_test_user(&mut conn)
+        };
+        join_world_impl(
+            &state,
+            third_joiner,
+            JoinWorldInput { invite_code: replacement.invite_code },
+        )
+        .await
+        .expect("the replacement code must work");
+    }
+
+    /// FR-014: the replacement is a clean instance of the same link — same
+    /// cap, same expiry, count back at zero.
+    #[tokio::test]
+    async fn rotation_inherits_cap_and_expiry_but_resets_the_count() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let expiry = Utc::now().naive_utc() + chrono::Duration::days(3);
+        let (invite_id, _) = insert_test_invite(&mut conn, world_id, owner_id, 10, 3, Some(expiry));
+        drop(conn);
+
+        let replacement = rotate_invite_code_impl(&state, owner_id, false, invite_id)
+            .await
+            .expect("rotation should succeed");
+
+        assert_eq!(replacement.max_uses, 10, "cap must be inherited");
+        assert_eq!(replacement.used_count, 0, "count must reset (FR-014)");
+        assert_eq!(replacement.remaining_uses, Some(10));
+
+        // The GM chose a ~3-day lifetime; the replacement carries that same
+        // lifetime measured from now (see `rotated_expiry`). The source was
+        // created moments ago in this test, so the new expiry lands within a
+        // few seconds of the original — asserted as a window rather than an
+        // equality, since Postgres stores microseconds while chrono carries
+        // nanoseconds.
+        let new_expiry = chrono::NaiveDateTime::parse_from_str(
+            replacement
+                .expires_at
+                .as_ref()
+                .expect("an expiring link must rotate into an expiring link"),
+            "%Y-%m-%d %H:%M:%S%.f",
+        )
+        .expect("expiry must round-trip as a timestamp");
+        let drift = (new_expiry - expiry).num_seconds().abs();
+        assert!(
+            drift <= 5,
+            "the chosen lifetime must be preserved; drifted {drift}s"
+        );
+        assert!(
+            new_expiry > Utc::now().naive_utc(),
+            "a rotated link must not be born expired"
+        );
+
+        assert_eq!(
+            replacement.rotated_from,
+            Some(invite_id),
+            "the replacement must record what it replaced"
+        );
+
+        let mut conn = state.db_pool.get().unwrap();
+        assert!(
+            load_invite(&mut conn, invite_id).revoked,
+            "the source link must be retired by the same action"
+        );
+    }
+
+    /// FR-005: rotation governs future joins only. Anyone already admitted
+    /// stays — it is not a retroactive removal.
+    #[tokio::test]
+    async fn rotation_leaves_existing_members_untouched() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let (invite_id, code) = insert_test_invite(&mut conn, world_id, owner_id, 10, 0, None);
+        let joiner = insert_test_user(&mut conn);
+        drop(conn);
+
+        join_world_impl(&state, joiner, JoinWorldInput { invite_code: code })
+            .await
+            .expect("join should succeed");
+
+        rotate_invite_code_impl(&state, owner_id, false, invite_id)
+            .await
+            .expect("rotation should succeed");
+
+        let mut conn = state.db_pool.get().unwrap();
+        let still_a_member = world_members::table
+            .filter(world_members::world_id.eq(world_id))
+            .filter(world_members::user_id.eq(joiner))
+            .select(WorldMember::as_select())
+            .first::<WorldMember>(&mut conn)
+            .optional()
+            .unwrap();
+        assert!(
+            still_a_member.is_some(),
+            "rotation must never retroactively remove someone who already joined"
+        );
+    }
+
+    /// US1-4: a dead link can always be revived by rotation. But rotating an
+    /// already-revoked link is refused — it would yield two replacements for
+    /// one original.
+    #[tokio::test]
+    async fn expired_and_exhausted_links_rotate_but_revoked_ones_do_not() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+
+        // A realistically expired link: created two days ago with a one-day
+        // lifetime, so it lapsed a day ago. `insert_test_invite` stamps
+        // `created_at` as now, which would describe a link that expired before
+        // it existed — impossible through the API, and it would exercise
+        // `rotated_expiry`'s defensive branch instead of the real path.
+        let past = Utc::now().naive_utc() - chrono::Duration::days(1);
+        let (expired_id, _) = insert_test_invite(&mut conn, world_id, owner_id, 5, 0, Some(past));
+        diesel::update(world_invites::table.find(expired_id))
+            .set(world_invites::created_at.eq(Utc::now().naive_utc() - chrono::Duration::days(2)))
+            .execute(&mut conn)
+            .expect("backdate the expired link's creation");
+        let (exhausted_id, _) = insert_test_invite(&mut conn, world_id, owner_id, 3, 3, None);
+        let (revoked_id, _) =
+            insert_test_invite_with_revocation(&mut conn, world_id, owner_id, 5, 0, None, true);
+        drop(conn);
+
+        let from_expired = rotate_invite_code_impl(&state, owner_id, false, expired_id)
+            .await
+            .expect("rotating an expired link must yield a usable one");
+        assert_eq!(from_expired.state, WorldAccessLinkState::Active);
+
+        let from_exhausted = rotate_invite_code_impl(&state, owner_id, false, exhausted_id)
+            .await
+            .expect("rotating an exhausted link must yield a usable one");
+        assert_eq!(from_exhausted.state, WorldAccessLinkState::Active);
+        assert_eq!(from_exhausted.used_count, 0);
+
+        assert!(
+            rotate_invite_code_impl(&state, owner_id, false, revoked_id)
+                .await
+                .is_err(),
+            "an already-revoked link must not rotate again"
+        );
+    }
+
+    /// FR-002 / FR-008: revoke is idempotent, and neither operation is open to
+    /// a non-DM.
+    #[tokio::test]
+    async fn revoke_is_idempotent_and_both_operations_are_dm_only() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let (invite_id, _) = insert_test_invite(&mut conn, world_id, owner_id, 10, 0, None);
+        let player_id = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world_id, player_id, "Player");
+        let outsider_id = insert_test_user(&mut conn);
+        drop(conn);
+
+        // A plain member and a non-member are both refused, for both verbs.
+        for actor in [player_id, outsider_id] {
+            assert!(
+                revoke_invite_code_impl(&state, actor, false, invite_id)
+                    .await
+                    .is_err(),
+                "only a DM may revoke"
+            );
+            assert!(
+                rotate_invite_code_impl(&state, actor, false, invite_id)
+                    .await
+                    .is_err(),
+                "only a DM may rotate"
+            );
+        }
+
+        let first = revoke_invite_code_impl(&state, owner_id, false, invite_id)
+            .await
+            .expect("the DM must be able to revoke");
+        assert_eq!(first.state, WorldAccessLinkState::Revoked);
+
+        let second = revoke_invite_code_impl(&state, owner_id, false, invite_id)
+            .await
+            .expect("revoking twice must succeed rather than error");
+        assert_eq!(second.state, WorldAccessLinkState::Revoked);
+    }
+
+    /// FR-012 — **fails before spec 027's atomic consume**.
+    ///
+    /// The previous implementation read the invite, validated it in memory,
+    /// then wrote back a computed count. Two joins racing for the last use
+    /// both read `used_count = N`, both computed `N + 1`, and both wrote it —
+    /// admitting two members against one remaining use.
+    #[tokio::test]
+    async fn concurrent_joins_on_the_last_use_admit_exactly_one() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        // Cap 5 with 4 spent: exactly one use remains.
+        let (invite_id, code) = insert_test_invite(&mut conn, world_id, owner_id, 5, 4, None);
+
+        // Enough contenders that a lost update is near-certain if the race is
+        // still present, rather than relying on catching a two-way tie.
+        let racers: Vec<Uuid> = (0..8).map(|_| insert_test_user(&mut conn)).collect();
+        drop(conn);
+
+        let attempts = racers.into_iter().map(|user_id| {
+            let state = state.clone();
+            let code = code.clone();
+            tokio::spawn(async move {
+                join_world_impl(&state, user_id, JoinWorldInput { invite_code: code })
+                    .await
+                    .is_ok()
+            })
+        });
+
+        let mut succeeded = 0;
+        for attempt in attempts {
+            if attempt.await.expect("join task must not panic") {
+                succeeded += 1;
+            }
+        }
+
+        assert_eq!(
+            succeeded, 1,
+            "exactly one racer may claim the last use (FR-012)"
+        );
+
+        let mut conn = state.db_pool.get().unwrap();
+        let invite = load_invite(&mut conn, invite_id);
+        assert_eq!(
+            invite.used_count, 5,
+            "used_count must land exactly on the cap, never past it"
+        );
+
+        let members: i64 = world_members::table
+            .filter(world_members::world_id.eq(world_id))
+            .count()
+            .get_result(&mut conn)
+            .unwrap();
+        assert_eq!(members, 1, "only one membership may be created");
+    }
+
+    // ===== Spec 027 US4: unusable links fail identically =====
+
+    /// FR-011 / SC-005: unknown, expired, exhausted and revoked are
+    /// indistinguishable. Possessing a dead code must reveal nothing about
+    /// whether it was ever real, or which world it belonged to.
+    #[tokio::test]
+    async fn every_unusable_code_fails_with_the_same_message() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+
+        let past = Utc::now().naive_utc() - chrono::Duration::days(1);
+        let (_, expired) = insert_test_invite(&mut conn, world_id, owner_id, 5, 0, Some(past));
+        let (_, exhausted) = insert_test_invite(&mut conn, world_id, owner_id, 3, 3, None);
+        let (_, revoked) =
+            insert_test_invite_with_revocation(&mut conn, world_id, owner_id, 5, 0, None, true);
+        let never_issued = "ZZZZZZZZZZZZZZZZZZZZ".to_string();
+        drop(conn);
+
+        let mut messages = Vec::new();
+        for (label, code) in [
+            ("expired", expired),
+            ("exhausted", exhausted),
+            ("revoked", revoked),
+            ("never issued", never_issued),
+        ] {
+            let joiner = {
+                let mut conn = state.db_pool.get().unwrap();
+                insert_test_user(&mut conn)
+            };
+            let err = join_world_impl(&state, joiner, JoinWorldInput { invite_code: code })
+                .await
+                .expect_err(&format!("a {label} code must be refused"));
+            messages.push((label, err.message));
+        }
+
+        for (label, message) in &messages {
+            assert_eq!(
+                message, LINK_UNAVAILABLE_MESSAGE,
+                "a {label} code must return the uniform message, not its own"
+            );
+        }
+
+        // Belt and braces: prove they are all literally equal to each other,
+        // so a future change that gives one case its own wording fails here.
+        let first = &messages[0].1;
+        assert!(
+            messages.iter().all(|(_, m)| m == first),
+            "all unusable-code failures must be indistinguishable: {messages:?}"
+        );
+    }
+
+    /// US4-2: an existing member gets their own message — and critically, this
+    /// consumes **no use**, so a repeat click never burns the GM's cap.
+    #[tokio::test]
+    async fn an_existing_member_gets_a_distinct_message_and_consumes_no_use() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let (invite_id, code) = insert_test_invite(&mut conn, world_id, owner_id, 10, 0, None);
+        let joiner = insert_test_user(&mut conn);
+        drop(conn);
+
+        join_world_impl(&state, joiner, JoinWorldInput { invite_code: code.clone() })
+            .await
+            .expect("first join should succeed");
+
+        let count_after_first = {
+            let mut conn = state.db_pool.get().unwrap();
+            load_invite(&mut conn, invite_id).used_count
+        };
+        assert_eq!(count_after_first, 1);
+
+        let err = join_world_impl(&state, joiner, JoinWorldInput { invite_code: code })
+            .await
+            .expect_err("a second join by the same user must be refused");
+        assert_eq!(
+            err.message, ALREADY_A_MEMBER_MESSAGE,
+            "an existing member deserves a message that says what happened"
+        );
+        assert_ne!(
+            err.message, LINK_UNAVAILABLE_MESSAGE,
+            "the link is fine — do not report it as dead"
+        );
+
+        let count_after_second = {
+            let mut conn = state.db_pool.get().unwrap();
+            load_invite(&mut conn, invite_id).used_count
+        };
+        assert_eq!(
+            count_after_second, 1,
+            "a repeat click must not burn a use of the GM's cap"
+        );
     }
 
     // ===== Spec 027 (T012, FR-010): link-state derivation =====

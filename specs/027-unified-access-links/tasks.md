@@ -71,21 +71,21 @@ under `src/core/`, React app under `apps/web/`.
 
 > Write these first; they must fail before implementation.
 
-- [ ] T013 [P] [US1] Test that a rotated link's old code fails on its next use, and the new code succeeds, in `src/server/src/graphql/mutations_invites.rs` tests (contract assertion 1, SC-001)
-- [ ] T014 [P] [US1] Test that rotation inherits `max_uses` and `expires_at` while resetting `used_count` to 0, in `src/server/src/graphql/mutations_invites.rs` tests (assertion 4, FR-014)
-- [ ] T015 [P] [US1] Test that members who joined via the retired code keep their membership after rotation, in `src/server/src/graphql/mutations_invites.rs` tests (assertion 3, FR-005)
-- [ ] T016 [P] [US1] Test that rotating an expired or exhausted link yields a usable link, and rotating an already-revoked link is refused, in `src/server/src/graphql/mutations_invites.rs` tests (assertions 5–6)
-- [ ] T017 [P] [US1] Test that revoke is idempotent and that a non-DM is refused for both revoke and rotate, in `src/server/src/graphql/mutations_invites.rs` tests (assertions 7–8, FR-008)
-- [ ] T018 [P] [US1] **Regression test that fails on `main`**: two concurrent joins against a link with one use remaining — exactly one succeeds, and final `used_count` never exceeds `max_uses`, in `src/server/src/graphql/mutations_invites.rs` tests (assertion 11, FR-012, research §5)
+- [X] T013 [P] [US1] Test that a rotated link's old code fails on its next use, and the new code succeeds, in `src/server/src/graphql/mutations_invites.rs` tests (contract assertion 1, SC-001)
+- [X] T014 [P] [US1] Test that rotation inherits `max_uses` and `expires_at` while resetting `used_count` to 0, in `src/server/src/graphql/mutations_invites.rs` tests (assertion 4, FR-014)
+- [X] T015 [P] [US1] Test that members who joined via the retired code keep their membership after rotation, in `src/server/src/graphql/mutations_invites.rs` tests (assertion 3, FR-005)
+- [X] T016 [P] [US1] Test that rotating an expired or exhausted link yields a usable link, and rotating an already-revoked link is refused, in `src/server/src/graphql/mutations_invites.rs` tests (assertions 5–6)
+- [X] T017 [P] [US1] Test that revoke is idempotent and that a non-DM is refused for both revoke and rotate, in `src/server/src/graphql/mutations_invites.rs` tests (assertions 7–8, FR-008)
+- [X] T018 [P] [US1] **Regression test that fails on `main`**: two concurrent joins against a link with one use remaining — exactly one succeeds, and final `used_count` never exceeds `max_uses`, in `src/server/src/graphql/mutations_invites.rs` tests (assertion 11, FR-012, research §5)
 
 ### Implementation for User Story 1
 
-- [ ] T019 [US1] Replace the read-validate-write sequence in `join_world_impl` (`src/server/src/graphql/mutations_invites.rs`, currently ~lines 284–314) with the single conditional `UPDATE … WHERE` from data-model.md §4 that carries the whole validity predicate and returns `id, world_id`. Zero rows means unusable
-- [ ] T020 [US1] Wrap the use-consumption and the `world_members` insert in one transaction in `join_world_impl` in `src/server/src/graphql/mutations_invites.rs`, so a failed membership insert returns the use
-- [ ] T021 [US1] Implement `revoke_invite_code_impl(&AppState, user_id, is_admin, invite_id)` in `src/server/src/graphql/mutations_invites.rs` — DM-gated, idempotent, returns the updated payload
-- [ ] T022 [US1] Implement `rotate_invite_code_impl(&AppState, user_id, is_admin, invite_id)` in `src/server/src/graphql/mutations_invites.rs` as the two-statement transaction in data-model.md §3: revoke the old row guarded on `revoked = FALSE`, insert the replacement with inherited cap/expiry, `used_count = 0`, and `rotated_from` set. Returns the **new** link
+- [X] T019 [US1] Replace the read-validate-write sequence in `join_world_impl` (`src/server/src/graphql/mutations_invites.rs`, currently ~lines 284–314) with the single conditional `UPDATE … WHERE` from data-model.md §4 that carries the whole validity predicate and returns `id, world_id`. Zero rows means unusable
+- [X] T020 [US1] Wrap the use-consumption and the `world_members` insert in one transaction in `join_world_impl` in `src/server/src/graphql/mutations_invites.rs`, so a failed membership insert returns the use
+- [X] T021 [US1] Implement `revoke_invite_code_impl(&AppState, user_id, is_admin, invite_id)` in `src/server/src/graphql/mutations_invites.rs` — DM-gated, idempotent, returns the updated payload
+- [X] T022 [US1] Implement `rotate_invite_code_impl(&AppState, user_id, is_admin, invite_id)` in `src/server/src/graphql/mutations_invites.rs` as the two-statement transaction in data-model.md §3: revoke the old row guarded on `revoked = FALSE`, insert the replacement with inherited cap/expiry, `used_count = 0`, and `rotated_from` set. Returns the **new** link
 - [X] T023 [US1] Switch `generate_invite_code_impl` in `src/server/src/graphql/mutations_invites.rs` to `generate_link_code()`, replacing the 8-character derivation
-- [ ] T024 [US1] Expose `revokeInviteCode` and `rotateInviteCode` on `InviteMutation` in `src/server/src/graphql/mutations_invites.rs`, following the existing thin-resolver-over-`_impl` convention
+- [X] T024 [US1] Expose `revokeInviteCode` and `rotateInviteCode` on `InviteMutation` in `src/server/src/graphql/mutations_invites.rs`, following the existing thin-resolver-over-`_impl` convention
 - [ ] T025 [P] [US1] Add `revokeInviteCode` and `rotateInviteCode` operations to `apps/web/src/api/world.ts` using the shared `postGraphQL` transport
 - [ ] T026 [US1] Add explicit refetch after a successful revoke or rotate in `apps/web/src/hooks/useWorldInvites.ts` — the hook has no live push transport, so nothing else will deliver the change (research §8)
 - [ ] T027 [US1] Add refresh and revoke controls to `apps/web/src/components/campaign/CampaignSettingsPanel.tsx`, with a confirm step on revoke since it is irreversible
@@ -148,13 +148,13 @@ under `src/core/`, React app under `apps/web/`.
 
 ### Tests for User Story 4 ⚠️
 
-- [ ] T040 [P] [US4] Test that unknown, expired, exhausted, and revoked codes all fail with an identical message and identical error extensions, in `src/server/src/graphql/mutations_invites.rs` tests (assertion 9, SC-005)
-- [ ] T041 [P] [US4] Test that an existing member opening a valid link gets the distinct already-a-member message and that **no use is consumed**, in `src/server/src/graphql/mutations_invites.rs` tests (assertion 10, US4-2)
+- [X] T040 [P] [US4] Test that unknown, expired, exhausted, and revoked codes all fail with an identical message and identical error extensions, in `src/server/src/graphql/mutations_invites.rs` tests (assertion 9, SC-005)
+- [X] T041 [P] [US4] Test that an existing member opening a valid link gets the distinct already-a-member message and that **no use is consumed**, in `src/server/src/graphql/mutations_invites.rs` tests (assertion 10, US4-2)
 
 ### Implementation for User Story 4
 
-- [ ] T042 [US4] Move the already-a-member check **before** use consumption in `join_world_impl` (`src/server/src/graphql/mutations_invites.rs`), per the contractual order of operations in contracts/graphql-access-links.md
-- [ ] T043 [US4] Collapse the distinct failure strings in `join_world_impl` in `src/server/src/graphql/mutations_invites.rs` to the single uniform message `This invite link is no longer available.`, matching the wording `load_active_share` already uses for content shares. Ensure the unknown-code path and the zero-rows-updated path return the identical error value
+- [X] T042 [US4] Move the already-a-member check **before** use consumption in `join_world_impl` (`src/server/src/graphql/mutations_invites.rs`), per the contractual order of operations in contracts/graphql-access-links.md
+- [X] T043 [US4] Collapse the distinct failure strings in `join_world_impl` in `src/server/src/graphql/mutations_invites.rs` to the single uniform message `This invite link is no longer available.`, matching the wording `load_active_share` already uses for content shares. Ensure the unknown-code path and the zero-rows-updated path return the identical error value
 - [ ] T044 [P] [US4] Surface the uniform message without embellishment in `apps/web/src/pages/world/JoinWorldPage.tsx`, and extend `apps/web/e2e/access-links.spec.ts` with quickstart Scenario 4
 
 **Checkpoint**: Failure reveals nothing; a valid link never loses a use to a double click

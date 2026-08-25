@@ -116,12 +116,20 @@ FR-004). **Returns the new link**, not the retired one.
 | Authorization | Owner or GM of the link's world |
 | Atomicity | Single transaction. Partial failure leaves exactly one usable link (FR-004) |
 | Old code | Fails on its **next** use — no cache or grace window (SC-001) |
-| Inherits | `maxUses`, `expiresAt`, `worldId` |
-| Resets | `usedCount` → 0 (FR-014) |
+| Inherits | `maxUses`, `worldId`, and the chosen **lifetime** (see below) |
+| Resets | `usedCount` → 0, and the expiry clock (FR-014) |
 | Fresh | `id`, `inviteCode`, `createdBy` = the rotating GM |
 | Links back | `rotatedFrom` = the retired link's id |
 | Expired / exhausted source | **Allowed** — produces a usable link (US1 scenario 4) |
 | Already-revoked source | **Refused** — would yield two replacements for one original |
+
+**Expiry is re-based, not copied.** The replacement carries the lifetime the
+GM originally chose, measured again from the rotation. Copying the absolute
+expiry would mean a link rotated after it lapsed is born already dead, which
+contradicts the row above allowing rotation of an expired source. Uses-spent
+and elapsed time are both *consumed state*; the cap and the lifetime are both
+*settings*. Rotation resets the state and keeps the settings. A link with no
+expiry still has none.
 
 **Cap reset is intentional and is not a security boundary.** Because
 `usedCount` resets, a DM can rotate a 1-use link repeatedly to admit any
