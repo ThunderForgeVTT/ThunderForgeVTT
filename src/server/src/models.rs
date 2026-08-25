@@ -5,7 +5,7 @@ use crate::schema::{
     oauth_authorization_sessions, oauth_link_challenges, oauth_providers, players_online, scenes,
     shapes, tokens, user_oauth_accounts, user_sessions, users, walls, world_actor_claims,
     world_actor_inventory,
-    world_abilities, world_ability_effects, world_ability_permissions,
+    world_abilities, world_ability_effects, world_ability_permissions, world_actor_abilities,
     world_actor_permissions, world_actor_shares, world_actor_system_data, world_actors,
     world_events, world_genie_puzzle_clock_rewards, world_genie_puzzle_clocks,
     world_genie_resource_holdings, world_genie_shop_listings,
@@ -1712,4 +1712,30 @@ pub struct NewAbilityEffect {
     pub target: String,
     pub trigger_kind: Option<String>,
     pub sort_order: i32,
+}
+
+/// Spec 025 (FR-021): one ability an actor knows.
+///
+/// `ability_id` is nullable and `ON DELETE SET NULL` — deleting an ability
+/// never blocks on actors knowing it (FR-023). `ability_name_snapshot` keeps a
+/// tombstoned row identifiable. No quantity: an actor either knows an ability
+/// or does not.
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_actor_abilities)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct ActorAbilityEntry {
+    pub id: uuid::Uuid,
+    pub actor_id: uuid::Uuid,
+    pub ability_id: Option<uuid::Uuid>,
+    pub ability_name_snapshot: String,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_actor_abilities)]
+pub struct NewActorAbilityEntry {
+    pub actor_id: uuid::Uuid,
+    pub ability_id: Option<uuid::Uuid>,
+    pub ability_name_snapshot: String,
 }

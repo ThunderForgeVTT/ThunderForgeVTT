@@ -1234,3 +1234,18 @@ impl From<AbilityPermission> for GraphQLAbilityPermission {
         }
     }
 }
+
+/// Spec 025 (FR-021): an actor's known-ability entry.
+///
+/// `ability_id`/`classification` are null for a tombstoned row — the ability
+/// was deleted — while `ability_name` always survives so the entry stays
+/// identifiable (FR-023).
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLActorAbilityEntry {
+    pub id: uuid::Uuid,
+    pub actor_id: uuid::Uuid,
+    pub ability_id: Option<uuid::Uuid>,
+    pub ability_name: String,
+    pub classification: Option<AbilityClassification>,
+    pub gm_only: bool,
+}

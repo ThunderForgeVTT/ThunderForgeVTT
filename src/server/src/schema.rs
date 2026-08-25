@@ -410,6 +410,17 @@ diesel::table! {
 }
 
 diesel::table! {
+    world_actor_abilities (id) {
+        id -> Uuid,
+        actor_id -> Uuid,
+        ability_id -> Nullable<Uuid>,
+        ability_name_snapshot -> Text,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     world_actor_claims (id) {
         id -> Uuid,
         actor_id -> Uuid,
@@ -814,6 +825,8 @@ diesel::joinable!(world_abilities -> worlds (world_id));
 diesel::joinable!(world_ability_effects -> world_abilities (ability_id));
 diesel::joinable!(world_ability_permissions -> users (user_id));
 diesel::joinable!(world_ability_permissions -> world_abilities (ability_id));
+diesel::joinable!(world_actor_abilities -> world_abilities (ability_id));
+diesel::joinable!(world_actor_abilities -> world_actors (actor_id));
 diesel::joinable!(world_actor_claims -> world_actors (actor_id));
 diesel::joinable!(world_actor_claims -> world_members (world_member_id));
 diesel::joinable!(world_actor_inventory -> world_actors (actor_id));
@@ -888,6 +901,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     world_abilities,
     world_ability_effects,
     world_ability_permissions,
+    world_actor_abilities,
     world_actor_claims,
     world_actor_inventory,
     world_actor_permissions,

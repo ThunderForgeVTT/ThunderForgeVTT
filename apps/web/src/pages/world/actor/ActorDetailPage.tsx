@@ -15,6 +15,7 @@ import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { GenieShopPanel } from "@/components/world/GenieShopPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorldRole } from "@/hooks/useWorldRole";
+import { ActorAbilitiesPanel } from "@/pages/world/actor/ActorAbilitiesPanel";
 import { ActorInventoryPanel } from "@/pages/world/actor/ActorInventoryPanel";
 import { ActorOwnershipBlock } from "@/pages/world/actor/ActorOwnershipBlock";
 import { SYSTEM_ACTOR_SHEETS } from "@/pages/world/actor/systemActorSheets";
@@ -326,6 +327,17 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
         })()}
 
         <ActorInventoryPanel actorId={actorId} worldId={worldId} canManage={canEdit} />
+
+        {/* Spec 025 (T055): known abilities, beside inventory. `canManage` is
+            the ACTOR's own permission (FR-022) — not the caller's permission on
+            any ability — and, matching inventory, it is available from the view
+            route rather than gated on `mode === "edit"`. */}
+        <ActorAbilitiesPanel
+          actorId={actorId}
+          worldId={worldId}
+          gameSystemId={actor.gameSystemId}
+          canManage={canEdit}
+        />
 
         {/* Spec 020 (User Story 2): NPC shop — Genie-only for now (no
             other pack has Session Resources to price against), shown for

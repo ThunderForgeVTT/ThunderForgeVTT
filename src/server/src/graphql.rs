@@ -123,8 +123,10 @@ pub use mutations_lore_images::LoreImageMutation;
 
 // Spec 013: item creation/field-editing/deletion and effect CRUD
 pub mod mutations_abilities;
+pub mod mutations_actor_abilities;
 pub mod mutations_items;
 pub use mutations_abilities::AbilityMutation;
+pub use mutations_actor_abilities::{ActorAbilityMutation, ActorAbilityQuery};
 pub use mutations_items::ItemMutation;
 
 // Spec 013: the item "ownership block" (Viewer/Editor/Owner grants)
@@ -2439,6 +2441,7 @@ pub struct QueryRoot(
     LoreQuery,
     LorePermissionQuery,
     AbilityQuery,
+    ActorAbilityQuery,
     ItemQuery,
     ItemPermissionQuery,
     ItemShareQuery,
@@ -2471,6 +2474,7 @@ pub struct MutationRoot(
     LorePermissionMutation,
     LoreImageMutation,
     AbilityMutation,
+    ActorAbilityMutation,
     ItemMutation,
     ItemPermissionMutation,
     ItemShareMutation,

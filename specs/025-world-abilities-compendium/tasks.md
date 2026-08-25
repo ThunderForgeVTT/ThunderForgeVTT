@@ -139,22 +139,22 @@ set -a && source .env && set +a
 
 ### Tests for User Story 3
 
-- [ ] T043 [P] [US3] Server test `actor_ability_permission_follows_actor_not_ability` in `src/server/src/graphql/mutations_actor_abilities.rs` — Editor on the actor + Viewer on the ability succeeds; Owner on the ability + Viewer on the actor is rejected (FR-022)
-- [ ] T044 [P] [US3] Server test `attaching_same_ability_twice_is_a_noop` in `src/server/src/graphql/mutations_actor_abilities.rs` — one row, no error, returns the existing entry (FR-021)
-- [ ] T045 [P] [US3] Server test `attaching_cross_world_ability_is_rejected` in `src/server/src/graphql/mutations_actor_abilities.rs` — neither the FKs nor the UNIQUE constraint prevent this, so it needs an explicit guard
-- [ ] T046 [P] [US3] Server test `deleting_an_ability_tombstones_actor_entries_instead_of_blocking` in `src/server/src/graphql/mutations_actor_abilities.rs` — delete succeeds, entry survives with null `ability_id` and an intact name snapshot (FR-023)
-- [ ] T047 [P] [US3] Server test `gm_only_abilities_are_omitted_from_a_non_dms_known_list` in `src/server/src/graphql/mutations_actor_abilities.rs` — a DM sees the entry, a Viewer-on-actor player does not, and nothing in the player's response (placeholder, count, ordering gap) hints an entry was filtered (FR-023, FR-024b)
-- [ ] T048 [P] [US3] Server test `detaching_does_not_delete_the_ability` in `src/server/src/graphql/mutations_actor_abilities.rs` (US3 scenario 6)
+- [X] T043 [P] [US3] Server test `actor_ability_permission_follows_actor_not_ability` in `src/server/src/graphql/mutations_actor_abilities.rs` — Editor on the actor + Viewer on the ability succeeds; Owner on the ability + Viewer on the actor is rejected (FR-022)
+- [X] T044 [P] [US3] Server test `attaching_same_ability_twice_is_a_noop` in `src/server/src/graphql/mutations_actor_abilities.rs` — one row, no error, returns the existing entry (FR-021)
+- [X] T045 [P] [US3] Server test `attaching_cross_world_ability_is_rejected` in `src/server/src/graphql/mutations_actor_abilities.rs` — neither the FKs nor the UNIQUE constraint prevent this, so it needs an explicit guard
+- [X] T046 [P] [US3] Server test `deleting_an_ability_tombstones_actor_entries_instead_of_blocking` in `src/server/src/graphql/mutations_actor_abilities.rs` — delete succeeds, entry survives with null `ability_id` and an intact name snapshot (FR-023)
+- [X] T047 [P] [US3] Server test `gm_only_abilities_are_omitted_from_a_non_dms_known_list` in `src/server/src/graphql/mutations_actor_abilities.rs` — a DM sees the entry, a Viewer-on-actor player does not, and nothing in the player's response (placeholder, count, ordering gap) hints an entry was filtered (FR-023, FR-024b)
+- [X] T048 [P] [US3] Server test `detaching_does_not_delete_the_ability` in `src/server/src/graphql/mutations_actor_abilities.rs` (US3 scenario 6)
 
 ### Implementation for User Story 3
 
-- [ ] T049 [US3] Create migration `src/server/migrations/<ts>_create_world_actor_abilities/{up,down}.sql` per data-model.md §5 — `ability_id` nullable with `ON DELETE SET NULL`, `ability_name_snapshot NOT NULL`, `UNIQUE (actor_id, ability_id)`, and **no quantity column**
-- [ ] T050 [US3] Add the `world_actor_abilities` `table!` block, joinables, and `allow_tables_to_appear_in_same_query!` entry in `src/server/src/schema.rs`, plus `ActorAbilityEntry`/`NewActorAbilityEntry` structs in `src/server/src/models.rs`
-- [ ] T051 [US3] Add `GraphQLActorAbilityEntry` (with nullable `abilityId`/`classification` and non-null `abilityName`) in `src/server/src/graphql/types.rs`
-- [ ] T052 [US3] Create `src/server/src/graphql/mutations_actor_abilities.rs` with `actorAbilities` query, `attachAbilityToActor`, and `detachAbilityFromActor` per contracts/graphql-actor-abilities.md — all permission checks against the **actor**, plus the cross-world guard, `ON CONFLICT DO NOTHING` de-duplication, and a `gm_only` join-filter on `actorAbilities` for non-DM callers (FR-023); register it in `src/server/src/graphql.rs`'s `QueryRoot`/`MutationRoot`
-- [ ] T053 [P] [US3] Create `apps/web/src/api/actorAbilities.ts` and `apps/web/src/types/actorAbility.ts`
-- [ ] T054 [US3] Create `apps/web/src/pages/world/actor/ActorAbilitiesPanel.tsx` mirroring `ActorInventoryPanel.tsx` — catalog fetched only when `canManage`, non-optimistic refresh after each mutation, list always visible, tombstoned rows marked "(deleted ability)", classifications through `resolveAbilityLabel`
-- [ ] T055 [US3] Mount `<ActorAbilitiesPanel canManage={canEdit} />` beside `ActorInventoryPanel` in `apps/web/src/pages/world/actor/ActorDetailPage.tsx` (available from the view route, matching inventory) and verify quickstart.md Scenario 3
+- [X] T049 [US3] Create migration `src/server/migrations/<ts>_create_world_actor_abilities/{up,down}.sql` per data-model.md §5 — `ability_id` nullable with `ON DELETE SET NULL`, `ability_name_snapshot NOT NULL`, `UNIQUE (actor_id, ability_id)`, and **no quantity column**
+- [X] T050 [US3] Add the `world_actor_abilities` `table!` block, joinables, and `allow_tables_to_appear_in_same_query!` entry in `src/server/src/schema.rs`, plus `ActorAbilityEntry`/`NewActorAbilityEntry` structs in `src/server/src/models.rs`
+- [X] T051 [US3] Add `GraphQLActorAbilityEntry` (with nullable `abilityId`/`classification` and non-null `abilityName`) in `src/server/src/graphql/types.rs`
+- [X] T052 [US3] Create `src/server/src/graphql/mutations_actor_abilities.rs` with `actorAbilities` query, `attachAbilityToActor`, and `detachAbilityFromActor` per contracts/graphql-actor-abilities.md — all permission checks against the **actor**, plus the cross-world guard, `ON CONFLICT DO NOTHING` de-duplication, and a `gm_only` join-filter on `actorAbilities` for non-DM callers (FR-023); register it in `src/server/src/graphql.rs`'s `QueryRoot`/`MutationRoot`
+- [X] T053 [P] [US3] Create `apps/web/src/api/actorAbilities.ts` and `apps/web/src/types/actorAbility.ts`
+- [X] T054 [US3] Create `apps/web/src/pages/world/actor/ActorAbilitiesPanel.tsx` mirroring `ActorInventoryPanel.tsx` — catalog fetched only when `canManage`, non-optimistic refresh after each mutation, list always visible, tombstoned rows marked "(deleted ability)", classifications through `resolveAbilityLabel`
+- [X] T055 [US3] Mount `<ActorAbilitiesPanel canManage={canEdit} />` beside `ActorInventoryPanel` in `apps/web/src/pages/world/actor/ActorDetailPage.tsx` (available from the view route, matching inventory) and verify quickstart.md Scenario 3
 
 **Checkpoint**: Abilities are attached to characters. US1-US3 all work independently.
 
