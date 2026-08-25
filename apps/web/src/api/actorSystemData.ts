@@ -1,4 +1,4 @@
-import { withCsrf } from "@/api/auth";
+import { postGraphQL } from "@/api/graphqlClient";
 
 /**
  * Read counterpart to `updateActorSystemData` (spec 018 fix): the
@@ -10,17 +10,6 @@ import { withCsrf } from "@/api/auth";
  * to mirror it has no replication registered — a separate, larger,
  * still-open gap this query sidesteps for direct on-demand reads).
  */
-
-type GraphQLError = {
-  message?: string;
-};
-
-type GraphQLResponse<TData> = {
-  data?: TData;
-  errors?: GraphQLError[];
-};
-
-const GRAPHQL_ENDPOINT = "/api/graphql";
 
 export interface ActorSystemDataRecord {
   id: string;
@@ -51,32 +40,6 @@ const ACTOR_SYSTEM_DATA_QUERY = `
     }
   }
 `;
-
-async function postGraphQL<TData>(
-  query: string,
-  variables?: Record<string, unknown>,
-): Promise<TData> {
-  const response = await fetch(GRAPHQL_ENDPOINT, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: withCsrf({
-      "Content-Type": "application/json",
-    }),
-    body: JSON.stringify({ query, variables }),
-  });
-
-  const payload = (await response.json()) as GraphQLResponse<TData>;
-  if (!response.ok) {
-    throw new Error(payload.errors?.[0]?.message || "GraphQL request failed");
-  }
-  if (payload.errors?.length) {
-    throw new Error(payload.errors[0]?.message || "GraphQL request failed");
-  }
-  if (!payload.data) {
-    throw new Error("GraphQL response did not include data");
-  }
-  return payload.data;
-}
 
 /** Fetches an actor's system data directly (bypassing RxDB entirely — see
  * file header). Returns `null` if the actor has no system data row yet. */

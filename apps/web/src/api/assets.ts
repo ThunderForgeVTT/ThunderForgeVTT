@@ -1,4 +1,4 @@
-import { withCsrf } from "@/api/auth";
+import { postGraphQL, postGraphQLMultipart } from "@/api/graphqlClient";
 
 export interface CanvasImageAsset {
   id: string;
@@ -12,17 +12,6 @@ export interface CanvasImageAsset {
   byteSize: number;
   createdAt: string;
 }
-
-type GraphQLError = {
-  message?: string;
-};
-
-type GraphQLResponse<TData> = {
-  data?: TData;
-  errors?: GraphQLError[];
-};
-
-const GRAPHQL_ENDPOINT = "/api/graphql";
 
 const ASSET_FIELDS = `
   id
@@ -44,41 +33,6 @@ const ASSET_FIELDS = `
  * uses (see `api/walls.ts`'s `postGraphQL`) — a JSON body cannot carry
  * binary file data.
  */
-async function postGraphQLMultipart<TData>(
-  query: string,
-  variables: Record<string, unknown>,
-  file: Blob,
-  filePathInVariables: string,
-): Promise<TData> {
-  const operations = JSON.stringify({
-    query,
-    variables: { ...variables, [filePathInVariables]: null },
-  });
-  const map = JSON.stringify({ "0": [`variables.${filePathInVariables}`] });
-
-  const formData = new FormData();
-  formData.append("operations", operations);
-  formData.append("map", map);
-  formData.append("0", file);
-
-  const response = await fetch(GRAPHQL_ENDPOINT, {
-    method: "POST",
-    credentials: "same-origin",
-    // Deliberately no Content-Type header: the browser sets the
-    // multipart boundary itself when the body is a FormData instance.
-    headers: withCsrf(),
-    body: formData,
-  });
-
-  const payload = (await response.json()) as GraphQLResponse<TData>;
-  if (!response.ok || payload.errors?.length) {
-    throw new Error(payload.errors?.[0]?.message || `Upload failed with status ${response.status}`);
-  }
-  if (!payload.data) {
-    throw new Error("GraphQL response did not include data");
-  }
-  return payload.data;
-}
 
 /**
  * FR-011, FR-012, FR-013: uploads `file` (any image the browser can
@@ -118,17 +72,13 @@ export async function fetchCanvasImageAssetsForScene(sceneId: string): Promise<C
       }
     }
   `;
-  const response = await fetch(GRAPHQL_ENDPOINT, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: withCsrf({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ query, variables: { sceneId } }),
+  // Previously a hand-rolled fetch that ended in `?? []`, which turned a
+  // failed or malformed response into a silent "this scene has no assets" —
+  // indistinguishable from the real empty case. It now throws like every other
+  // call, so a background-image load failure is visible rather than looking
+  // like an empty scene.
+  const data = await postGraphQL<{ canvasImageAssetsForScene: CanvasImageAsset[] }>(query, {
+    sceneId,
   });
-  const payload = (await response.json()) as GraphQLResponse<{
-    canvasImageAssetsForScene: CanvasImageAsset[];
-  }>;
-  if (!response.ok || payload.errors?.length) {
-    throw new Error(payload.errors?.[0]?.message || "Failed to load scene assets");
-  }
-  return payload.data?.canvasImageAssetsForScene ?? [];
+  return data.canvasImageAssetsForScene;
 }

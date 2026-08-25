@@ -1,4 +1,4 @@
-import { withCsrf } from "@/api/auth";
+import { postGraphQL, postGraphQLMultipart } from "@/api/graphqlClient";
 import type {
   LoreEntryRecord,
   LoreImageAssetRecord,
@@ -7,17 +7,6 @@ import type {
   LoreRevisionRecord,
 } from "@/types/lore";
 import type { ActorPermissionLevel } from "@/types/actor";
-
-type GraphQLError = {
-  message?: string;
-};
-
-type GraphQLResponse<TData> = {
-  data?: TData;
-  errors?: GraphQLError[];
-};
-
-const GRAPHQL_ENDPOINT = "/api/graphql";
 
 const LORE_ENTRY_FIELDS = `
   id
@@ -40,69 +29,11 @@ const LORE_ENTRY_FIELDS = `
   }
 `;
 
-async function postGraphQL<TData>(
-  query: string,
-  variables?: Record<string, unknown>,
-): Promise<TData> {
-  const response = await fetch(GRAPHQL_ENDPOINT, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: withCsrf({
-      "Content-Type": "application/json",
-    }),
-    body: JSON.stringify({ query, variables }),
-  });
-
-  const payload = (await response.json()) as GraphQLResponse<TData>;
-  if (!response.ok || payload.errors?.length) {
-    throw new Error(payload.errors?.[0]?.message || "GraphQL request failed");
-  }
-  if (!payload.data) {
-    throw new Error("GraphQL response did not include data");
-  }
-  return payload.data;
-}
-
 /**
  * uploadLoreImage sends `file` as an `Upload!` scalar, which requires the
  * GraphQL multipart request spec rather than a plain JSON body — mirrors
  * `api/assets.ts`'s `postGraphQLMultipart` for `uploadCanvasImage`.
  */
-async function postGraphQLMultipart<TData>(
-  query: string,
-  variables: Record<string, unknown>,
-  file: Blob,
-  filePathInVariables: string,
-): Promise<TData> {
-  const operations = JSON.stringify({
-    query,
-    variables: { ...variables, [filePathInVariables]: null },
-  });
-  const map = JSON.stringify({ "0": [`variables.${filePathInVariables}`] });
-
-  const formData = new FormData();
-  formData.append("operations", operations);
-  formData.append("map", map);
-  formData.append("0", file);
-
-  const response = await fetch(GRAPHQL_ENDPOINT, {
-    method: "POST",
-    credentials: "same-origin",
-    // Deliberately no Content-Type header: the browser sets the
-    // multipart boundary itself when the body is a FormData instance.
-    headers: withCsrf(),
-    body: formData,
-  });
-
-  const payload = (await response.json()) as GraphQLResponse<TData>;
-  if (!response.ok || payload.errors?.length) {
-    throw new Error(payload.errors?.[0]?.message || `Upload failed with status ${response.status}`);
-  }
-  if (!payload.data) {
-    throw new Error("GraphQL response did not include data");
-  }
-  return payload.data;
-}
 
 /** FR-001: every lore entry in the world, visible to any member. */
 export function getWorldLoreEntries(worldId: string): Promise<LoreEntryRecord[]> {

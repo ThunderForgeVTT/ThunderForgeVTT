@@ -1,4 +1,4 @@
-import { withCsrf } from "@/api/auth";
+import { postGraphQL } from "@/api/graphqlClient";
 import type {
   ModerationActionType,
   ModerationCaseRecord,
@@ -6,16 +6,6 @@ import type {
   SubmitTakedownNoticeInput,
 } from "@/types/moderation";
 
-type GraphQLError = {
-  message?: string;
-};
-
-type GraphQLResponse<TData> = {
-  data?: TData;
-  errors?: GraphQLError[];
-};
-
-const GRAPHQL_ENDPOINT = "/api/graphql";
 // `/api/graphql` sits behind a router-level auth gate, so the one mutation
 // that must be reachable by an anonymous rights holder (FR-002) is served
 // from a separate, unauthenticated route. See `graphql_public_handler` in
@@ -46,39 +36,6 @@ const MODERATION_CASE_FIELDS = `
   }
 `;
 
-async function postGraphQL<TData>(
-  query: string,
-  variables?: Record<string, unknown>,
-  endpoint: string = GRAPHQL_ENDPOINT,
-): Promise<TData> {
-  const response = await fetch(endpoint, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: withCsrf({
-      "Content-Type": "application/json",
-    }),
-    body: JSON.stringify({
-      query,
-      variables,
-    }),
-  });
-
-  const payload = (await response.json()) as GraphQLResponse<TData>;
-  if (!response.ok) {
-    throw new Error(payload.errors?.[0]?.message || "GraphQL request failed");
-  }
-
-  if (payload.errors?.length) {
-    throw new Error(payload.errors[0]?.message || "GraphQL request failed");
-  }
-
-  if (!payload.data) {
-    throw new Error("GraphQL response did not include data");
-  }
-
-  return payload.data;
-}
-
 type SubmitTakedownNoticeMutation = {
   submitTakedownNotice: ModerationCaseRecord;
 };
@@ -96,7 +53,7 @@ export function submitTakedownNotice(
       }
     `,
     { input },
-    GRAPHQL_PUBLIC_ENDPOINT,
+    { endpoint: GRAPHQL_PUBLIC_ENDPOINT },
   ).then((data) => data.submitTakedownNotice);
 }
 

@@ -1,4 +1,4 @@
-import { withCsrf } from "@/api/auth";
+import { postGraphQL } from "@/api/graphqlClient";
 
 /** Spec 023 (FR-004): the character a member has claimed, if any. */
 export interface WorldMemberClaimedActor {
@@ -15,43 +15,6 @@ export interface WorldMemberRecord {
   createdAt?: string;
   updatedAt?: string;
   claimedActor: WorldMemberClaimedActor | null;
-}
-
-type GraphQLError = {
-  message?: string;
-};
-
-type GraphQLResponse<TData> = {
-  data?: TData;
-  errors?: GraphQLError[];
-};
-
-const GRAPHQL_ENDPOINT = "/api/graphql";
-
-async function postGraphQL<TData>(
-  query: string,
-  variables?: Record<string, unknown>,
-): Promise<TData> {
-  const response = await fetch(GRAPHQL_ENDPOINT, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: withCsrf({
-      "Content-Type": "application/json",
-    }),
-    body: JSON.stringify({ query, variables }),
-  });
-
-  const payload = (await response.json()) as GraphQLResponse<TData>;
-  if (!response.ok) {
-    throw new Error(payload.errors?.[0]?.message || "GraphQL request failed");
-  }
-  if (payload.errors?.length) {
-    throw new Error(payload.errors[0]?.message || "GraphQL request failed");
-  }
-  if (!payload.data) {
-    throw new Error("GraphQL response did not include data");
-  }
-  return payload.data;
 }
 
 type WorldMembersQuery = {
