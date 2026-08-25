@@ -6,94 +6,25 @@
 //! `world_lore_permissions` row says otherwise. See
 //! `specs/012-lore-wiki/data-model.md` and `contracts/lore-crud.md`.
 
-use diesel::prelude::*;
-use uuid::Uuid;
 
-pub use crate::auth::actor_permissions::is_dm_of_world;
-use crate::graphql::types::ActorPermissionLevel;
-use crate::schema::{world_lore_entries, world_lore_permissions};
-use crate::state::AppState;
-use async_graphql::{Error, ErrorExtensions, Result as GraphQLResult};
 
-/// Resolves the caller's effective permission level on one lore entry:
-/// DM of the entry's world → always `Owner`; else the caller's explicit
-/// `world_lore_permissions` row, if any; else `Viewer`.
-pub async fn effective_lore_permission(
-    state: &AppState,
-    user_id: Uuid,
-    is_admin: bool,
-    lore_entry_id: Uuid,
-) -> GraphQLResult<ActorPermissionLevel> {
-    let mut conn = state
-        .db_pool
-        .get()
-        .map_err(|_| Error::new("Failed to get DB connection"))?;
-
-    let world_id = tokio::task::spawn_blocking(move || {
-        world_lore_entries::table
-            .filter(world_lore_entries::id.eq(lore_entry_id))
-            .select(world_lore_entries::world_id)
-            .first::<Uuid>(&mut conn)
-            .optional()
-    })
-    .await
-    .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to load lore entry"))?
-    .ok_or_else(|| Error::new("Lore entry not found"))?;
-
-    if is_dm_of_world(state, user_id, is_admin, world_id).await? {
-        return Ok(ActorPermissionLevel::Owner);
-    }
-
-    let mut conn = state
-        .db_pool
-        .get()
-        .map_err(|_| Error::new("Failed to get DB connection"))?;
-
-    let level = tokio::task::spawn_blocking(move || {
-        world_lore_permissions::table
-            .filter(world_lore_permissions::lore_entry_id.eq(lore_entry_id))
-            .filter(world_lore_permissions::world_member_user_id.eq(user_id))
-            .select(world_lore_permissions::level)
-            .first::<String>(&mut conn)
-            .optional()
-    })
-    .await
-    .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to load lore permission"))?;
-
-    Ok(level
-        .and_then(|value| ActorPermissionLevel::from_db_str(&value))
-        .unwrap_or(ActorPermissionLevel::Viewer))
-}
-
-/// Rejects the caller unless their effective permission on `lore_entry_id`
-/// is at least `minimum`. Every lore-entry-mutating GraphQL resolver
-/// (`updateLoreEntry`, `deleteLoreEntry`, `uploadLoreImage`,
-/// `restoreLoreRevision`) calls this instead of re-deriving permission
-/// logic inline.
-pub async fn require_lore_permission(
-    state: &AppState,
-    user_id: Uuid,
-    is_admin: bool,
-    lore_entry_id: Uuid,
-    minimum: ActorPermissionLevel,
-) -> GraphQLResult<()> {
-    let level = effective_lore_permission(state, user_id, is_admin, lore_entry_id).await?;
-
-    if level.rank() >= minimum.rank() {
-        Ok(())
-    } else {
-        Err(
-            Error::new("You do not have sufficient permission on this lore entry")
-                .extend_with(|_, ext| ext.set("code", "FORBIDDEN")),
-        )
-    }
-}
+// Spec 027 (US5): the `effective_lore_permission` / `require_lore_permission` pair that
+// lived here is now generated from the single declaration in
+// `auth::permissioned_entities`, under the same names and signatures — so no
+// caller changed. Three other modules carried a near-verbatim copy of the same
+// logic; one of them shipped without its member-removal cleanup, which is the
+// privilege leak that motivated consolidating them.
+//
+// Re-exported here so existing import paths keep working.
+pub use crate::auth::permissioned_entities::{effective_lore_permission, require_lore_permission};
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use diesel::prelude::*;
+    use uuid::Uuid;
+
+    use crate::graphql::types::ActorPermissionLevel;
     use crate::schema::world_lore_entries;
     use crate::test_support::{
         insert_test_user, insert_test_world, insert_test_world_member, test_app_state,

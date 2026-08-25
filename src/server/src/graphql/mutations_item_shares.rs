@@ -9,7 +9,7 @@ use chrono::Utc;
 use diesel::prelude::*;
 use uuid::Uuid;
 
-use crate::auth::actor_permissions::is_dm_of_world;
+use crate::auth::world_membership::is_dm_of_world;
 use crate::auth::item_permissions::effective_item_permission;
 use crate::graphql::types::{ActorPermissionLevel, GraphQLItem, GraphQLItemEffect, GraphQLItemShareLink, SharedItemPreview};
 use crate::graphql::{app_state, authenticated_user};

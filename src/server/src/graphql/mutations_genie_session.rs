@@ -44,7 +44,7 @@ use diesel::prelude::*;
 use diesel::PgConnection;
 use uuid::Uuid;
 
-use crate::auth::actor_permissions::is_dm_of_world;
+use crate::auth::world_membership::is_dm_of_world;
 use crate::auth::world_membership::require_world_member;
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{

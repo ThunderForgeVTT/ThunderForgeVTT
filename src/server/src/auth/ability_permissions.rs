@@ -16,86 +16,23 @@
 use diesel::prelude::*;
 use uuid::Uuid;
 
-use crate::auth::actor_permissions::is_dm_of_world;
-use crate::graphql::types::ActorPermissionLevel;
-use crate::schema::{world_abilities, world_ability_permissions};
+use crate::auth::world_membership::is_dm_of_world;
+use crate::schema::world_abilities;
 use crate::state::AppState;
-use async_graphql::{Error, ErrorExtensions, Result as GraphQLResult};
+use async_graphql::{Error, Result as GraphQLResult};
 
-/// Resolves the caller's effective permission level on one ability:
-/// DM of the ability's world → always `Owner`;
-/// else the caller's explicit `world_ability_permissions` row, if any;
-/// else `Viewer` (FR-024).
-pub async fn effective_ability_permission(
-    state: &AppState,
-    user_id: Uuid,
-    is_admin: bool,
-    ability_id: Uuid,
-) -> GraphQLResult<ActorPermissionLevel> {
-    let mut conn = state
-        .db_pool
-        .get()
-        .map_err(|_| Error::new("Failed to get DB connection"))?;
-
-    let world_id = tokio::task::spawn_blocking(move || {
-        world_abilities::table
-            .filter(world_abilities::id.eq(ability_id))
-            .select(world_abilities::world_id)
-            .first::<Uuid>(&mut conn)
-            .optional()
-    })
-    .await
-    .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to load ability"))?
-    .ok_or_else(|| Error::new("Ability not found"))?;
-
-    if is_dm_of_world(state, user_id, is_admin, world_id).await? {
-        return Ok(ActorPermissionLevel::Owner);
-    }
-
-    let mut conn = state
-        .db_pool
-        .get()
-        .map_err(|_| Error::new("Failed to get DB connection"))?;
-
-    let level = tokio::task::spawn_blocking(move || {
-        world_ability_permissions::table
-            .filter(world_ability_permissions::ability_id.eq(ability_id))
-            .filter(world_ability_permissions::user_id.eq(user_id))
-            .select(world_ability_permissions::level)
-            .first::<String>(&mut conn)
-            .optional()
-    })
-    .await
-    .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to load ability permission"))?;
-
-    Ok(level
-        .and_then(|value| ActorPermissionLevel::from_db_str(&value))
-        .unwrap_or(ActorPermissionLevel::Viewer))
-}
-
-/// Rejects the caller unless their effective permission on `ability_id` is at
-/// least `minimum`. Every ability-mutating resolver calls this rather than
-/// re-deriving permission logic inline.
-pub async fn require_ability_permission(
-    state: &AppState,
-    user_id: Uuid,
-    is_admin: bool,
-    ability_id: Uuid,
-    minimum: ActorPermissionLevel,
-) -> GraphQLResult<()> {
-    let level = effective_ability_permission(state, user_id, is_admin, ability_id).await?;
-
-    if level.rank() >= minimum.rank() {
-        Ok(())
-    } else {
-        Err(
-            Error::new("You do not have sufficient permission on this ability")
-                .extend_with(|_, ext| ext.set("code", "FORBIDDEN")),
-        )
-    }
-}
+// Spec 027 (US5): the `effective_ability_permission` / `require_ability_permission`
+// pair is now generated from the single declaration in
+// `auth::permissioned_entities`, under the same names and signatures.
+//
+// `is_ability_visible_to` below stays hand-written, and deliberately so — see
+// this module's header. Visibility is a separate axis from the permission
+// ladder, and the macro must never grow a visibility parameter "for symmetry":
+// that would invite the next content type to express hidden-ness as a
+// permission level, which is exactly the confusion spec 025 documented.
+pub use crate::auth::permissioned_entities::{
+    effective_ability_permission, require_ability_permission,
+};
 
 /// Spec 025 (FR-024b/FR-025): is this ability *visible* to the caller at all?
 ///
@@ -142,6 +79,8 @@ pub async fn is_ability_visible_to(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::graphql::types::ActorPermissionLevel;
+    use crate::schema::world_ability_permissions;
     use crate::test_support::*;
 
     /// FR-024: a member with no explicit row gets `Viewer`, not an error and

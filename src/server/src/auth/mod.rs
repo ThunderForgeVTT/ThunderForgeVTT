@@ -43,6 +43,11 @@ pub mod world_membership;
 
 /// Spec 010: actor ownership/permission enforcement (`require_actor_permission`,
 /// `is_dm_of_world`).
+/// Spec 027 (US5): the single declaration of every permissioned content type,
+/// generating permission resolution and member-removal cleanup for all of
+/// them. The four `*_permissions` modules below re-export from here.
+pub mod permissioned_entities;
+
 pub mod actor_permissions;
 
 /// Spec 012: lore entry ownership/permission enforcement

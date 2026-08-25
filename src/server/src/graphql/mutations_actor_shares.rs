@@ -7,7 +7,8 @@ use chrono::Utc;
 use diesel::prelude::*;
 use uuid::Uuid;
 
-use crate::auth::actor_permissions::{effective_actor_permission, is_dm_of_world};
+use crate::auth::actor_permissions::effective_actor_permission;
+use crate::auth::world_membership::is_dm_of_world;
 use crate::graphql::types::{ActorPermissionLevel, GraphQLActorShareLink, SharedActorPreview};
 use crate::graphql::{app_state, authenticated_user, GraphQLActorSystemData, GraphQLWorldActor};
 use crate::models::{ActorShare, ActorSystemData, NewActorShare, NewWorldActor, WorldActor};

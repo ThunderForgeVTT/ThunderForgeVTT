@@ -28,7 +28,7 @@ pub async fn render_lore_content(
 ) -> GraphQLResult<String> {
     let state = app_state(ctx)?;
     let auth_user = authenticated_user(ctx)?;
-    let viewer_is_dm = crate::auth::actor_permissions::is_dm_of_world(
+    let viewer_is_dm = crate::auth::world_membership::is_dm_of_world(
         state,
         auth_user.user_id,
         auth_user.is_admin,
@@ -330,7 +330,7 @@ pub async fn lore_link_targets_impl(
     // FR-024b: computed here, outside the blocking closure, so the ability
     // branch below can hide GM-only names from a non-DM author.
     let caller_is_dm =
-        crate::auth::actor_permissions::is_dm_of_world(state, user_id, is_admin, world_id).await?;
+        crate::auth::world_membership::is_dm_of_world(state, user_id, is_admin, world_id).await?;
 
     let pattern = format!("{}%", prefix.replace('%', "\\%").replace('_', "\\_"));
 

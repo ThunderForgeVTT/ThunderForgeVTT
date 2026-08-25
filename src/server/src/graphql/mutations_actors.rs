@@ -4,7 +4,8 @@
 use async_graphql::{Context, Error, InputObject, Result as GraphQLResult};
 use diesel::prelude::*;
 
-use crate::auth::actor_permissions::{is_dm_of_world, require_actor_permission};
+use crate::auth::actor_permissions::require_actor_permission;
+use crate::auth::world_membership::is_dm_of_world;
 use crate::graphql::types::ActorPermissionLevel;
 use crate::graphql::{GraphQLWorldActor, app_state, authenticated_user};
 use crate::models::{NewWorldActor, WorldActor};

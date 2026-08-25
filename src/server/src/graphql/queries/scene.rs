@@ -18,7 +18,7 @@ pub async fn scenes_impl(
     // Spec 022 (FR-008/FR-009): GM/Owner see every scene, hidden or not;
     // everyone else only sees non-hidden scenes — mirrors the
     // GM-vs-player branching already used for `shapes.visible_to_players`.
-    let is_dm = crate::auth::actor_permissions::is_dm_of_world(state, user_id, is_admin, world_id)
+    let is_dm = crate::auth::world_membership::is_dm_of_world(state, user_id, is_admin, world_id)
         .await?;
 
     let mut conn = state
@@ -62,7 +62,7 @@ pub async fn scene_impl(
     // Spec 022 (FR-008): a non-GM caller must not be able to fetch a
     // hidden scene's detail even by guessing/bookmarking its URL — mirrors
     // `scenes_impl`'s list-level filtering.
-    let is_dm = crate::auth::actor_permissions::is_dm_of_world(state, user_id, is_admin, world_id)
+    let is_dm = crate::auth::world_membership::is_dm_of_world(state, user_id, is_admin, world_id)
         .await?;
 
     let mut conn = state

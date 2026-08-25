@@ -5,85 +5,15 @@
 //! member defaults to `Viewer` unless an explicit `world_item_permissions`
 //! row says otherwise. See specs/013-items-inventory/research.md.
 
-use diesel::prelude::*;
-use uuid::Uuid;
 
-use crate::auth::actor_permissions::is_dm_of_world;
-use crate::graphql::types::ActorPermissionLevel;
-use crate::schema::{world_item_permissions, world_items};
-use crate::state::AppState;
-use async_graphql::{Error, ErrorExtensions, Result as GraphQLResult};
 
-/// Resolves the caller's effective permission level on one item:
-/// DM of the item's world → always `Owner` (mirrors FR-017 of spec 010);
-/// else the caller's explicit `world_item_permissions` row, if any;
-/// else `Viewer` (FR-003).
-pub async fn effective_item_permission(
-    state: &AppState,
-    user_id: Uuid,
-    is_admin: bool,
-    item_id: Uuid,
-) -> GraphQLResult<ActorPermissionLevel> {
-    let mut conn = state
-        .db_pool
-        .get()
-        .map_err(|_| Error::new("Failed to get DB connection"))?;
+// Spec 027 (US5): the `effective_item_permission` / `require_item_permission` pair that
+// lived here is now generated from the single declaration in
+// `auth::permissioned_entities`, under the same names and signatures — so no
+// caller changed. Three other modules carried a near-verbatim copy of the same
+// logic; one of them shipped without its member-removal cleanup, which is the
+// privilege leak that motivated consolidating them.
+//
+// Re-exported here so existing import paths keep working.
+pub use crate::auth::permissioned_entities::{effective_item_permission, require_item_permission};
 
-    let world_id = tokio::task::spawn_blocking(move || {
-        world_items::table
-            .filter(world_items::id.eq(item_id))
-            .select(world_items::world_id)
-            .first::<Uuid>(&mut conn)
-            .optional()
-    })
-    .await
-    .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to load item"))?
-    .ok_or_else(|| Error::new("Item not found"))?;
-
-    if is_dm_of_world(state, user_id, is_admin, world_id).await? {
-        return Ok(ActorPermissionLevel::Owner);
-    }
-
-    let mut conn = state
-        .db_pool
-        .get()
-        .map_err(|_| Error::new("Failed to get DB connection"))?;
-
-    let level = tokio::task::spawn_blocking(move || {
-        world_item_permissions::table
-            .filter(world_item_permissions::item_id.eq(item_id))
-            .filter(world_item_permissions::user_id.eq(user_id))
-            .select(world_item_permissions::level)
-            .first::<String>(&mut conn)
-            .optional()
-    })
-    .await
-    .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to load item permission"))?;
-
-    Ok(level
-        .and_then(|value| ActorPermissionLevel::from_db_str(&value))
-        .unwrap_or(ActorPermissionLevel::Viewer))
-}
-
-/// Rejects the caller unless their effective permission on `item_id` is
-/// at least `minimum`. Every item-mutating GraphQL resolver in spec 013
-/// (`updateItem`, `addItemEffect`, ownership-block edits, share-link
-/// creation) calls this instead of re-deriving permission logic inline.
-pub async fn require_item_permission(
-    state: &AppState,
-    user_id: Uuid,
-    is_admin: bool,
-    item_id: Uuid,
-    minimum: ActorPermissionLevel,
-) -> GraphQLResult<()> {
-    let level = effective_item_permission(state, user_id, is_admin, item_id).await?;
-
-    if level.rank() >= minimum.rank() {
-        Ok(())
-    } else {
-        Err(Error::new("You do not have sufficient permission on this item")
-            .extend_with(|_, ext| ext.set("code", "FORBIDDEN")))
-    }
-}

@@ -21,7 +21,10 @@
 use diesel::prelude::*;
 use uuid::Uuid;
 
+use async_graphql::{Error, Result as GraphQLResult};
+
 use crate::schema::{world_members, worlds};
+use crate::state::AppState;
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum WorldMembershipError {
@@ -99,5 +102,97 @@ mod tests {
         // review of every call site.
         let err = WorldMembershipError::NotAMember;
         assert_eq!(err.to_string(), "user is not a member of this world");
+    }
+}
+
+// ============================================================================
+// Spec 027 (T049): `is_dm_of_world` moved here from `auth::actor_permissions`.
+//
+// It answers a world-level membership question and is already implemented by
+// calling `require_world_member` just above — it lived in an actor-specific
+// module only because spec 010 needed it first. With 49 call sites spanning
+// moderation, dice, items, abilities, lore and world mutations, that location
+// was actively misleading; `lore_permissions` had resorted to laundering the
+// import with `pub use`.
+//
+// The signature difference below is deliberate and should not be "harmonised":
+// `require_world_member` is synchronous over a borrowed connection, while this
+// is async over `AppState`. They answer the same question at two layers.
+// ============================================================================
+
+/// Whether `user_id` is "the DM" of `world_id` — holds the world's Owner
+/// or GM role (or is an admin). This is the single check every
+/// DM-only mutation in spec 010 (actor creation, ownership-block edits,
+/// share-link revocation) should call, per research.md §3.
+pub async fn is_dm_of_world(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    world_id: Uuid,
+) -> GraphQLResult<bool> {
+    if is_admin {
+        return Ok(true);
+    }
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    tokio::task::spawn_blocking(move || {
+        match require_world_member(&mut conn, user_id, world_id) {
+            Ok(role) => Ok(role == "Owner" || role == "GM"),
+            Err(_) => Ok(false),
+        }
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+}
+
+#[cfg(test)]
+mod dm_tests {
+    use super::*;
+    use crate::test_support::{
+        insert_test_user, insert_test_world, insert_test_world_member, test_app_state,
+    };
+
+    // Spec 027 (T049): these moved here verbatim from `auth::actor_permissions`
+    // alongside `is_dm_of_world` itself. The assertions are unchanged — only
+    // their location is, so a test sits beside the function it exercises.
+
+    /// FR-021 (research.md §3): a GM-role member counts as DM, same as Owner.
+    #[tokio::test]
+    async fn gm_role_counts_as_dm() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let gm_id = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world_id, gm_id, "GM");
+        drop(conn);
+
+        let is_dm = is_dm_of_world(&state, gm_id, false, world_id)
+            .await
+            .expect("dm check should succeed");
+
+        assert!(is_dm, "a GM-role member must count as DM");
+    }
+
+    /// A Player-role member is not DM.
+    #[tokio::test]
+    async fn player_role_is_not_dm() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let player_id = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world_id, player_id, "Player");
+        drop(conn);
+
+        let is_dm = is_dm_of_world(&state, player_id, false, world_id)
+            .await
+            .expect("dm check should succeed");
+
+        assert!(!is_dm, "a Player-role member must not count as DM");
     }
 }

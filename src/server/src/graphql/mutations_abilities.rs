@@ -9,7 +9,7 @@ use diesel::prelude::*;
 use uuid::Uuid;
 
 use crate::auth::ability_permissions::require_ability_permission;
-use crate::auth::actor_permissions::is_dm_of_world;
+use crate::auth::world_membership::is_dm_of_world;
 use crate::graphql::types::{
     AbilityClassification, AbilityEffectTrigger, AbilityEffectType, ActorPermissionLevel,
     GraphQLAbility, GraphQLAbilityEffect,

@@ -713,7 +713,7 @@ async fn require_dm_of_world(
     is_admin: bool,
     world_id: Uuid,
 ) -> GraphQLResult<()> {
-    if crate::auth::actor_permissions::is_dm_of_world(state, user_id, is_admin, world_id).await? {
+    if crate::auth::world_membership::is_dm_of_world(state, user_id, is_admin, world_id).await? {
         Ok(())
     } else {
         Err(Error::new("Only Owners and GMs can manage this world's invite links")
@@ -874,99 +874,21 @@ pub async fn remove_member_impl(
         .execute(&mut conn)
         .map_err(|e| Error::new(format!("Failed to remove member: {}", e)))?;
 
-    // Spec 010 (research.md §7, FR-022): a removed member's actor
-    // ownership-block entries don't get a DB-level cascade (there is
-    // no direct FK from `world_members` to `world_actor_permissions`
-    // — the relationship is via `world_id` on the joined
-    // `world_actors` row), so this is deleted explicitly here,
-    // alongside the membership removal.
-    {
-        use crate::schema::{world_actor_permissions, world_actors};
-        diesel::delete(
-            world_actor_permissions::table
-                .filter(world_actor_permissions::user_id.eq(user_id))
-                .filter(
-                    world_actor_permissions::actor_id.eq_any(
-                        world_actors::table
-                            .filter(world_actors::world_id.eq(world_id))
-                            .select(world_actors::id),
-                    ),
-                ),
-        )
-        .execute(&mut conn)
-        .map_err(|e| Error::new(format!("Failed to clean up actor permissions: {}", e)))?;
-    }
-
-    // Spec 013: same rationale as the actor-permissions cleanup above,
-    // generalized to item ownership-block entries (no direct FK from
-    // `world_members` to `world_item_permissions`).
-    {
-        use crate::schema::{world_item_permissions, world_items};
-        diesel::delete(
-            world_item_permissions::table
-                .filter(world_item_permissions::user_id.eq(user_id))
-                .filter(
-                    world_item_permissions::item_id.eq_any(
-                        world_items::table
-                            .filter(world_items::world_id.eq(world_id))
-                            .select(world_items::id),
-                    ),
-                ),
-        )
-        .execute(&mut conn)
-        .map_err(|e| Error::new(format!("Failed to clean up item permissions: {}", e)))?;
-    }
-
-    // Spec 012 (data-model.md, mirrors FR-022 from spec 010 verbatim
-    // per spec.md's Assumptions): same story for a removed member's
-    // lore entry ownership-block entries — no direct FK from
-    // `world_members` to `world_lore_permissions`, so cleaned up
-    // explicitly here too.
-    {
-        use crate::schema::{world_lore_entries, world_lore_permissions};
-        diesel::delete(
-            world_lore_permissions::table
-                .filter(world_lore_permissions::world_member_user_id.eq(user_id))
-                .filter(
-                    world_lore_permissions::lore_entry_id.eq_any(
-                        world_lore_entries::table
-                            .filter(world_lore_entries::world_id.eq(world_id))
-                            .select(world_lore_entries::id),
-                    ),
-                ),
-        )
-        .execute(&mut conn)
-        .map_err(|e| Error::new(format!("Failed to clean up lore permissions: {}", e)))?;
-    }
-
-    // Spec 027 (US2, FR-018): the fourth block, missing until now. Spec 025
-    // added `world_ability_permissions` but never extended this path, so a
-    // removed member kept their ability ownership-block entries — and
-    // re-adding them silently restored Editor/Owner rights on those
-    // abilities. Same story as the three above: no direct FK from
-    // `world_members` to the grant table, so cleanup is explicit.
+    // Spec 027 (T058, FR-018): one call replaces four hand-written cleanup
+    // blocks — actors, items, lore entries and abilities.
     //
-    // Written out by hand deliberately. Spec 027 US5 replaces all four of
-    // these blocks with a single `purge_member_grants` call derived from the
-    // permissioned-entity declaration, so the omission cannot recur — but
-    // this fix ships first, independently, because it closes a live
-    // privilege leak and must not wait on that refactor.
-    {
-        use crate::schema::{world_abilities, world_ability_permissions};
-        diesel::delete(
-            world_ability_permissions::table
-                .filter(world_ability_permissions::user_id.eq(user_id))
-                .filter(
-                    world_ability_permissions::ability_id.eq_any(
-                        world_abilities::table
-                            .filter(world_abilities::world_id.eq(world_id))
-                            .select(world_abilities::id),
-                    ),
-                ),
-        )
-        .execute(&mut conn)
-        .map_err(|e| Error::new(format!("Failed to clean up ability permissions: {}", e)))?;
-    }
+    // There is no FK from `world_members` to the grant tables (the
+    // relationship runs through `world_id` on the parent content table), so a
+    // removed member's grants do not cascade and must be deleted explicitly.
+    // That was previously written out once per content type, and spec 025
+    // added a fourth type without adding a fourth block — a removed member
+    // kept their ability grants and silently regained them on readmission.
+    //
+    // The set of types walked is now the declaration in
+    // `auth::permissioned_entities` itself, so a content type cannot be
+    // declared and then forgotten here.
+    crate::auth::permissioned_entities::purge_member_grants(&mut conn, world_id, user_id)
+        .map_err(|e| Error::new(format!("Failed to clean up content permissions: {}", e)))?;
 
     // Record event for audit trail
     let event_payload = serde_json::json!({

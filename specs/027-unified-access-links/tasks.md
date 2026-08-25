@@ -171,24 +171,24 @@ under `src/core/`, React app under `apps/web/`.
 
 ### Tests for User Story 5 ⚠️
 
-- [ ] T045 [P] [US5] Parity tests asserting all four content types resolve identically under identical conditions, in `src/server/src/auth/permissioned_entities.rs` tests (assertions 1–3, US5-1/2)
-- [ ] T046 [P] [US5] Tests pinning the preserved edge behaviours before the refactor: unparseable `level` falls back to Viewer, `is_admin` short-circuits to Owner, multiple simultaneous Owners are accepted, a missing content row errors while a missing grant row does not — in `src/server/src/auth/permissioned_entities.rs` tests (assertions 4–7)
-- [ ] T047 [P] [US5] Test that a member with **Editor** on a GM-only ability still cannot see it, in `src/server/src/auth/ability_permissions.rs` tests (assertion 8, FR-019, US5-3)
-- [ ] T048 [US5] Structural test that the type set walked by `purge_member_grants` is derived from the declaration, not a hardcoded list of four, in `src/server/src/auth/permissioned_entities.rs` tests (assertion 13, SC-002). **Must fail if a declared type is skipped by cleanup** — a test restating the list cannot catch the bug it exists to prevent
+- [X] T045 [P] [US5] Parity tests asserting all four content types resolve identically under identical conditions, in `src/server/src/auth/permissioned_entities.rs` tests (assertions 1–3, US5-1/2)
+- [X] T046 [P] [US5] Tests pinning the preserved edge behaviours before the refactor: unparseable `level` falls back to Viewer, `is_admin` short-circuits to Owner, multiple simultaneous Owners are accepted, a missing content row errors while a missing grant row does not — in `src/server/src/auth/permissioned_entities.rs` tests (assertions 4–7)
+- [X] T047 [P] [US5] Test that a member with **Editor** on a GM-only ability still cannot see it, in `src/server/src/auth/ability_permissions.rs` tests (assertion 8, FR-019, US5-3)
+- [X] T048 [US5] Structural test that the type set walked by `purge_member_grants` is derived from the declaration, not a hardcoded list of four, in `src/server/src/auth/permissioned_entities.rs` tests (assertion 13, SC-002). **Must fail if a declared type is skipped by cleanup** — a test restating the list cannot catch the bug it exists to prevent
 
 ### Implementation for User Story 5
 
-- [ ] T049 [US5] Move `is_dm_of_world` from `src/server/src/auth/actor_permissions.rs` into `src/server/src/auth/world_membership.rs`, beside the `require_world_member` it already calls (research §2)
-- [ ] T050 [US5] Delete the `pub use crate::auth::actor_permissions::is_dm_of_world;` shim at `src/server/src/auth/lore_permissions.rs:12` rather than repointing it
-- [ ] T051 [US5] Update all `is_dm_of_world` import paths across the ~49 call sites — 20 `use` statements plus 7 fully-qualified inline paths in `src/server/src/graphql.rs`. Every miss is a compile error, not a runtime bug
-- [ ] T052 [US5] Create `src/server/src/auth/permissioned_entities.rs` with the `permissioned_entities!` macro and the single four-entry declaration from contracts/permission-resolution.md. Generated function **names and signatures must match today's exactly** so no resolver call site changes
-- [ ] T053 [US5] Generate `purge_member_grants(conn, world_id, user_id)` over all declared entries in `src/server/src/auth/permissioned_entities.rs`, summing rows removed
-- [ ] T054 [US5] Reduce `src/server/src/auth/actor_permissions.rs` to the macro-generated resolution, removing the hand-written `effective_actor_permission`/`require_actor_permission` bodies while keeping the module's doc comment and its existing tests untouched
-- [ ] T055 [P] [US5] Same reduction for `src/server/src/auth/item_permissions.rs`
-- [ ] T056 [P] [US5] Same reduction for `src/server/src/auth/lore_permissions.rs`, with `world_member_user_id` supplied as the declaration's `user_fk` — absorbed, never migrated (research §3)
-- [ ] T057 [US5] Same reduction for `src/server/src/auth/ability_permissions.rs`, **keeping `is_ability_visible_to` hand-written and outside the macro** along with its doc comment. The macro must not gain a visibility parameter "for symmetry" (FR-019)
-- [ ] T058 [US5] Replace all four hand-written cleanup blocks in `remove_member_impl` (`src/server/src/graphql/mutations_invites.rs`, ~lines 519–576) — including T032's — with one `purge_member_grants` call
-- [ ] T059 [US5] Run the full `cargo test -p thunderforge` suite and **confirm no pre-existing test was modified** (SC-003). An edited expectation means behaviour moved; investigate rather than accept
+- [X] T049 [US5] Move `is_dm_of_world` from `src/server/src/auth/actor_permissions.rs` into `src/server/src/auth/world_membership.rs`, beside the `require_world_member` it already calls (research §2)
+- [X] T050 [US5] Delete the `pub use crate::auth::actor_permissions::is_dm_of_world;` shim at `src/server/src/auth/lore_permissions.rs:12` rather than repointing it
+- [X] T051 [US5] Update all `is_dm_of_world` import paths across the ~49 call sites — 20 `use` statements plus 7 fully-qualified inline paths in `src/server/src/graphql.rs`. Every miss is a compile error, not a runtime bug
+- [X] T052 [US5] Create `src/server/src/auth/permissioned_entities.rs` with the `permissioned_entities!` macro and the single four-entry declaration from contracts/permission-resolution.md. Generated function **names and signatures must match today's exactly** so no resolver call site changes
+- [X] T053 [US5] Generate `purge_member_grants(conn, world_id, user_id)` over all declared entries in `src/server/src/auth/permissioned_entities.rs`, summing rows removed
+- [X] T054 [US5] Reduce `src/server/src/auth/actor_permissions.rs` to the macro-generated resolution, removing the hand-written `effective_actor_permission`/`require_actor_permission` bodies while keeping the module's doc comment and its existing tests untouched
+- [X] T055 [P] [US5] Same reduction for `src/server/src/auth/item_permissions.rs`
+- [X] T056 [P] [US5] Same reduction for `src/server/src/auth/lore_permissions.rs`, with `world_member_user_id` supplied as the declaration's `user_fk` — absorbed, never migrated (research §3)
+- [X] T057 [US5] Same reduction for `src/server/src/auth/ability_permissions.rs`, **keeping `is_ability_visible_to` hand-written and outside the macro** along with its doc comment. The macro must not gain a visibility parameter "for symmetry" (FR-019)
+- [X] T058 [US5] Replace all four hand-written cleanup blocks in `remove_member_impl` (`src/server/src/graphql/mutations_invites.rs`, ~lines 519–576) — including T032's — with one `purge_member_grants` call
+- [X] T059 [US5] Run the full `cargo test -p thunderforge` suite and **confirm no pre-existing test was modified** (SC-003). An edited expectation means behaviour moved; investigate rather than accept
 
 **Checkpoint**: One declaration governs resolution and cleanup for every content type
 

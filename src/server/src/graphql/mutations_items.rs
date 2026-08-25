@@ -6,7 +6,7 @@ use async_graphql::{Context, Error, InputObject, Result as GraphQLResult};
 use diesel::prelude::*;
 use uuid::Uuid;
 
-use crate::auth::actor_permissions::is_dm_of_world;
+use crate::auth::world_membership::is_dm_of_world;
 use crate::auth::item_permissions::require_item_permission;
 use crate::graphql::types::{ActorPermissionLevel, GraphQLItem, GraphQLItemEffect, ItemEffectType, ItemEffectTrigger};
 use crate::graphql::{app_state, authenticated_user};

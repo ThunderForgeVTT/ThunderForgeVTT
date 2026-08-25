@@ -8,7 +8,7 @@ use async_graphql::{Context, Error, InputObject, Result as GraphQLResult};
 use diesel::prelude::*;
 use uuid::Uuid;
 
-use crate::auth::lore_permissions::is_dm_of_world;
+use crate::auth::world_membership::is_dm_of_world;
 use crate::graphql::types::{ActorPermissionLevel, GraphQLLorePermission};
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{LorePermission, NewLorePermission};

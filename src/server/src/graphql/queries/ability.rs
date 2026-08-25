@@ -10,7 +10,7 @@ use async_graphql::Context;
 use diesel::dsl::sql;
 use diesel::sql_types::{Bool, Double, Text};
 
-use crate::auth::actor_permissions::is_dm_of_world;
+use crate::auth::world_membership::is_dm_of_world;
 use crate::graphql::types::{GraphQLAbility, GraphQLAbilityEffect};
 use crate::graphql::*;
 use crate::models::WorldAbility;

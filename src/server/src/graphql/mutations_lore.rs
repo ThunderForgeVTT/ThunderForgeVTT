@@ -8,7 +8,8 @@ use chrono::Utc;
 use diesel::prelude::*;
 use uuid::Uuid;
 
-use crate::auth::lore_permissions::{is_dm_of_world, require_lore_permission};
+use crate::auth::lore_permissions::require_lore_permission;
+use crate::auth::world_membership::is_dm_of_world;
 use crate::graphql::types::{ActorPermissionLevel, GraphQLLoreEntry};
 use crate::graphql::{app_state, authenticated_user};
 use crate::markdown::links::PreparedLink;

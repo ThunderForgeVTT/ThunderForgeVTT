@@ -1215,7 +1215,7 @@ pub async fn update_scene_hidden_impl(
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(|_| Error::new("Scene not found"))?;
 
-    if !crate::auth::actor_permissions::is_dm_of_world(state, user_id, is_admin, world_id).await? {
+    if !crate::auth::world_membership::is_dm_of_world(state, user_id, is_admin, world_id).await? {
         return Err(Error::new(
             "Only the DM (Owner or GM) may change a scene's visibility",
         ));
@@ -1253,7 +1253,7 @@ pub async fn launch_scene_impl(
     use crate::schema::{scenes, worlds};
     use diesel::prelude::*;
 
-    if !crate::auth::actor_permissions::is_dm_of_world(state, user_id, is_admin, world_id).await? {
+    if !crate::auth::world_membership::is_dm_of_world(state, user_id, is_admin, world_id).await? {
         return Err(Error::new("Only the DM (Owner or GM) may launch a scene"));
     }
 
@@ -1712,7 +1712,7 @@ pub async fn update_world_session_notes_impl(
     is_admin: bool,
     input: UpdateWorldSessionNotesInput,
 ) -> GraphQLResult<GraphQLWorld> {
-    if !crate::auth::actor_permissions::is_dm_of_world(state, user_id, is_admin, input.world_id)
+    if !crate::auth::world_membership::is_dm_of_world(state, user_id, is_admin, input.world_id)
         .await?
     {
         return Err(Error::new(
@@ -1764,7 +1764,7 @@ pub async fn update_world_game_system_impl(
     is_admin: bool,
     input: UpdateWorldGameSystemInput,
 ) -> GraphQLResult<GraphQLWorld> {
-    if !crate::auth::actor_permissions::is_dm_of_world(state, user_id, is_admin, input.world_id)
+    if !crate::auth::world_membership::is_dm_of_world(state, user_id, is_admin, input.world_id)
         .await?
     {
         return Err(Error::new(
@@ -1813,7 +1813,7 @@ pub async fn update_world_allow_player_created_actors_impl(
     is_admin: bool,
     input: UpdateWorldAllowPlayerCreatedActorsInput,
 ) -> GraphQLResult<GraphQLWorld> {
-    if !crate::auth::actor_permissions::is_dm_of_world(state, user_id, is_admin, input.world_id)
+    if !crate::auth::world_membership::is_dm_of_world(state, user_id, is_admin, input.world_id)
         .await?
     {
         return Err(Error::new(
@@ -1859,7 +1859,7 @@ pub async fn update_world_genie_resource_carryover_impl(
     is_admin: bool,
     input: UpdateWorldGenieResourceCarryoverInput,
 ) -> GraphQLResult<GraphQLWorld> {
-    if !crate::auth::actor_permissions::is_dm_of_world(state, user_id, is_admin, input.world_id)
+    if !crate::auth::world_membership::is_dm_of_world(state, user_id, is_admin, input.world_id)
         .await?
     {
         return Err(Error::new(
@@ -1907,7 +1907,7 @@ pub async fn update_world_default_scene_grid_type_impl(
     is_admin: bool,
     input: UpdateWorldDefaultSceneGridTypeInput,
 ) -> GraphQLResult<GraphQLWorld> {
-    if !crate::auth::actor_permissions::is_dm_of_world(state, user_id, is_admin, input.world_id)
+    if !crate::auth::world_membership::is_dm_of_world(state, user_id, is_admin, input.world_id)
         .await?
     {
         return Err(Error::new(
