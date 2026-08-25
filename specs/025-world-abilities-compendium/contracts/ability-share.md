@@ -3,7 +3,7 @@
 User Story 6 (FR-032..FR-037). Mirrors
 `specs/013-items-inventory/contracts/item-share.md`.
 
-> ## Guardrail prerequisite — T001 must land first
+> ## Guardrail: CLEARED (ADR-049 Accepted 2026-08-25)
 >
 > Constitution v1.1.0's DMCA guardrail requires, **before implementation
 > begins**, both:
@@ -11,14 +11,17 @@ User Story 6 (FR-032..FR-037). Mirrors
 > - **(a)** the notice-and-takedown program is operational — **SATISFIED**
 >   (spec 015 complete, 41/41).
 > - **(b)** an on-record "centralized public repository" determination —
->   drafted as
->   `docs/adrs/20260825-049-share_link_dmca_repository_determination.md`,
->   pending acceptance by an accountable owner. That is **task T001**, the first
->   task in this feature.
+>   **SATISFIED**. `docs/adrs/20260825-049-share_link_dmca_repository_determination.md`
+>   is Accepted, and covers actor (spec 010) and item (spec 013) shares
+>   retroactively — no determination had ever been recorded for any of them.
 >
-> ADR-049 finds that share links are **not** a centralized public repository,
-> and covers actor (spec 010) and item (spec 013) shares retroactively — no
-> determination had ever been recorded for any of them.
+> ADR-049 also fixes the surrounding model: **the world owner owns what they
+> author**, the platform hosts it and reserves the right to forward a DMCA
+> notice to that owner, and sharing is **non-shared and non-discoverable by
+> default**. A public registry is explicitly a future consideration only, not
+> planned work. Multi-artifact **content packs** are stubbed as spec 026 and
+> do NOT inherit this determination — bundling changes the unit of
+> distribution and needs its own FR-012 review.
 >
 > **The finding is conditional on six invariants.** Everything in this contract
 > is designed to satisfy them; violating any one re-opens the determination:

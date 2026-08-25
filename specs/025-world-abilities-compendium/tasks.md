@@ -37,11 +37,11 @@ set -a && source .env && set +a
 
 **Purpose**: Clear the one governance gate this feature depends on, plus two shipped bugs that affect **items today** and make correct four-kind link labelling impossible (research.md §3, defects 2-3).
 
-- [ ] T001 Obtain acceptance of the DMCA guardrail determination in `docs/adrs/20260825-049-share_link_dmca_repository_determination.md` — the ADR is drafted (finding: share links are **not** a centralized public repository, conditional on six named invariants, covering actor/item shares retroactively). Record the accountable owner in its "Risk accepted" section and move Status from Proposed to Accepted. **Gates Phase 8 (US6) only**; US1-US5 do not depend on it
+- [X] T001 Obtain acceptance of the DMCA guardrail determination in `docs/adrs/20260825-049-share_link_dmca_repository_determination.md` — the ADR is drafted (finding: share links are **not** a centralized public repository, conditional on six named invariants, covering actor/item shares retroactively). Record the accountable owner in its "Risk accepted" section and move Status from Proposed to Accepted. **Gates Phase 8 (US6) only**; US1-US5 do not depend on it
 - [X] T002 [P] Widen `LoreLinkTargetKind` from `"LORE_ENTRY" | "ACTOR"` to include `"ITEM"` and `"ABILITY"` in `apps/web/src/types/lore.ts` — the `ITEM` variant was never added despite the backend returning it since spec 013
 - [X] T003 [P] Replace the binary `detail:` ternary with a `Record<LoreLinkTargetKind, string>` label map in `apps/web/src/pages/world/lore/LoreMarkdownEditor.tsx` (~line 92) so item candidates stop displaying as "Actor"
 
-**Checkpoint**: The guardrail is cleared (or US6 is knowingly dropped), and item link candidates label correctly in the `[[` autocomplete — both verifiable before any ability code exists.
+**Checkpoint**: The guardrail is cleared — ADR-049 Accepted 2026-08-25 by the project owner, with a content-ownership model (world owner owns what they author; the platform hosts and may forward notices), non-shared/non-discoverable/no-enumeration defaults, and a public registry explicitly deferred to future consideration. Phase 8 is unblocked.
 
 **Follow-up worth doing, outside this feature's scope**: spec 015's Assumptions section states the platform "currently has no public compendium-sharing … feature" and that its guardrails are "preventative … not a retrofit of an existing one." That was factually wrong when written — actor sharing had already shipped. Correcting it would stop the same miss recurring.
 

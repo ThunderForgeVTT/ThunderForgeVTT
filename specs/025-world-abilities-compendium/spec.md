@@ -551,9 +551,9 @@ outside that world. It requires, before implementation begins, both:
   **satisfied**, spec 015 is complete (41/41).
 - **(b)** An explicit, on-record determination of whether Ability share links
   constitute "a centralized public repository" for user-shared,
-  potentially-copyrighted content.
+  potentially-copyrighted content — **satisfied**, ADR-049 Accepted 2026-08-25.
 
-**This is handled as a prerequisite task inside this feature, not as a deferral.**
+**Both prerequisites are now met; User Story 6 is unblocked.**
 Planning found that (b) had never been recorded for *any* share-link feature —
 actor shares (spec 010, FR-023) and item shares (spec 013, FR-022..FR-027) both
 shipped without one, because spec 015's own Assumptions incorrectly stated that

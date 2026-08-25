@@ -2,7 +2,9 @@
 
 **Date**: 2026-08-25
 
-**Status**: Proposed — requires acceptance by an accountable owner before it takes effect
+**Status**: Accepted (2026-08-25)
+
+**Accountable owner**: Michael Bruno, project owner
 
 **Supersedes/Amends**: none. Satisfies the review requirement in spec
 `015-dmca-notice-takedown` FR-012 and Constitution v1.1.0's "DMCA / Content
@@ -103,6 +105,53 @@ A share link is closer to sending someone a file than to publishing to a
 storefront. The recipient must be given the code by the owner; nothing about the
 system helps a stranger find it.
 
+### Content ownership model
+
+The determination rests on who owns what, so state it plainly:
+
+- **A world's owner owns the content authored in that world.** NPCs, items,
+  lore entries, abilities — if you create it, it is yours.
+- **The platform hosts that content; it does not own it** and claims no rights
+  over it. Hosting is a conduit role, in the shape YouTube and comparable
+  platforms operate: the host stores and serves what users author, and responds
+  to notices about it.
+- **The platform reserves the right to forward a DMCA notice to the world owner
+  responsible for the content it names.** A notice about material in someone's
+  world is, in the first instance, a matter between the rights holder and the
+  person who put it there.
+
+The practical rule this creates for users is simple and worth stating in those
+terms on the compliance page: **if you create it, you own it. If you copied it
+from a source you do not hold rights to, and shared it without the original
+owner's permission, that is a problem — and a notice about it can be forwarded
+to you.** Authoring your own material carries no such exposure; reproducing
+someone else's does.
+
+### Sharing defaults
+
+Three defaults follow, and every present and future sharing feature inherits
+them:
+
+1. **Non-shared by default.** Nothing a user authors leaves its world unless
+   they take an explicit action to share it.
+2. **Non-discoverable by default.** A shared artifact is reachable only by
+   possessing its link. Nothing about the system helps a stranger find it.
+3. **No enumeration, and therefore no public registry.** There is no query that
+   lists shares — by world, by user, or globally — and none may be added
+   without re-opening this determination.
+
+### Sharing granularity: singletons now, packs later
+
+Today a share link covers exactly **one artifact** — one ability, one item, one
+actor. That is the whole surface this determination evaluates.
+
+A future **content pack** concept — correlating items, actors, scenes,
+abilities and the rest into a single versioned bundle a user can share as a
+unit — is anticipated but not designed here. It is stubbed as
+`specs/026-content-packs/spec.md`. Packs inherit all three defaults above; the
+bundling changes what a link points at, not whether it is discoverable. That
+spec will need its own FR-012 review before it ships.
+
 ### Decision
 
 **Share links, as currently designed and constrained below, do NOT constitute a
@@ -134,12 +183,13 @@ re-opens this determination:
 Residual risk, explicitly acknowledged rather than designed away: a determined
 user can still redistribute infringing content by pasting a share code publicly.
 This is the same residual risk carried by any unlisted-URL sharing mechanism.
-It is mitigated — not eliminated — by revocation, per-entry takedown, and
-repeat-infringer tracking, all operational per prerequisite (a). The platform
-does not aggregate, index, promote, or profit from shared content, which is what
-the safe-harbor posture depends on.
+It is mitigated — not eliminated — by revocation, per-entry takedown,
+repeat-infringer tracking (all operational per prerequisite (a)), and by the
+notice-forwarding path in the content ownership model above. The platform does
+not aggregate, index, promote, or profit from shared content, which is what the
+safe-harbor posture depends on.
 
-**Accountable owner**: _(to be recorded on acceptance)_
+Accepted by Michael Bruno, project owner, 2026-08-25.
 
 ## Consequences
 
@@ -159,6 +209,30 @@ the safe-harbor posture depends on.
   covered by this ADR **provided** they satisfy all six invariants; they do not
   each need a fresh determination, but they do need to be checked against the
   list.
+- **Content packs (spec 026) do NOT inherit this determination automatically.**
+  They satisfy the invariants in principle, but bundling changes the unit of
+  distribution, and that is a material enough change to warrant its own FR-012
+  review before shipping.
+- The public-facing compliance page should carry the ownership rule in plain
+  language (see Content ownership model), so the responsibility a user takes on
+  by sharing is stated before they share rather than discovered afterward.
+
+## Future considerations (explicitly not the current focus)
+
+Recorded so they are visible without being mistaken for planned work:
+
+- **A public registry / browsable community compendium.** Deliberately out of
+  scope. It is the one feature shape spec 015's own research names as the
+  platform's highest-liability move, and it would invert every default above.
+  If substantial user demand emerges, it can be designed toward deliberately —
+  with a fresh FR-012 review, since it would plainly re-open this
+  determination rather than inherit it.
+- **Content packs** — versioned, multi-artifact bundles. Stubbed as spec 026.
+  Anticipated, inheriting these defaults, but not designed here.
+
+Neither is a commitment. Both are listed because a reader six months from now
+should be able to tell what was considered and set aside from what was simply
+never thought about.
 
 ## Alternatives Considered
 
