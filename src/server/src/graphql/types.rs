@@ -1006,7 +1006,7 @@ impl From<RollRecord> for GraphQLRollRecord {
 // Spec 025: World Abilities Compendium
 // ============================================================================
 
-use crate::models::{AbilityPermission, WorldAbility};
+use crate::models::{AbilityEffect, AbilityPermission, WorldAbility};
 
 /// Spec 025 (FR-009): the fixed, system-agnostic classification set. Shared by
 /// every game system so ability data stays portable across a system change
@@ -1109,6 +1109,27 @@ pub struct GraphQLAbilityEffect {
     pub target: String,
     pub trigger_kind: Option<AbilityEffectTrigger>,
     pub sort_order: i32,
+}
+
+impl From<AbilityEffect> for GraphQLAbilityEffect {
+    fn from(row: AbilityEffect) -> Self {
+        Self {
+            id: row.id,
+            ability_id: row.ability_id,
+            // An unrecognized DB string falls back rather than erroring,
+            // mirroring GraphQLItemEffect — a row written by a newer version
+            // must not break an older reader.
+            effect_type: AbilityEffectType::from_db_str(&row.effect_type)
+                .unwrap_or(AbilityEffectType::Modifier),
+            formula: row.formula,
+            target: row.target,
+            trigger_kind: row
+                .trigger_kind
+                .as_deref()
+                .and_then(AbilityEffectTrigger::from_db_str),
+            sort_order: row.sort_order,
+        }
+    }
 }
 
 /// An Ability's GraphQL projection. Mirrors `GraphQLItem`, including its

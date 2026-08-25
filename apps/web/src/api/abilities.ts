@@ -1,6 +1,9 @@
 import { withCsrf } from "@/api/auth";
 import type {
   AbilityClassification,
+  AbilityEffectRecord,
+  AbilityEffectTrigger,
+  AbilityEffectType,
   AbilityPermissionRecord,
   WorldAbilityRecord,
 } from "@/types/ability";
@@ -223,6 +226,64 @@ export function setAbilityGmOnly(
     `,
     { abilityId, gmOnly },
   ).then((data) => data.setAbilityGmOnly);
+}
+
+export type AbilityEffectInput = {
+  effectType: AbilityEffectType;
+  formula: string;
+  target: string;
+  triggerKind?: AbilityEffectTrigger | null;
+  sortOrder?: number;
+};
+
+/**
+ * FR-017/FR-018. Flat args, matching `add_ability_effect`'s resolver signature
+ * — effect mutations deliberately do NOT take an `input:` object (see the
+ * argument-shape note at the top of this file).
+ *
+ * Permission is checked against the parent ability (Editor), not the effect.
+ */
+export function addAbilityEffect(
+  abilityId: string,
+  effect: AbilityEffectInput,
+): Promise<AbilityEffectRecord> {
+  return postGraphQL<{ addAbilityEffect: AbilityEffectRecord }>(
+    `
+      mutation AddAbilityEffect($abilityId: UUID!, $effect: AbilityEffectInput!) {
+        addAbilityEffect(abilityId: $abilityId, effect: $effect) {
+          ${ABILITY_EFFECT_FIELDS}
+        }
+      }
+    `,
+    { abilityId, effect },
+  ).then((data) => data.addAbilityEffect);
+}
+
+export function updateAbilityEffect(
+  effectId: string,
+  effect: AbilityEffectInput,
+): Promise<AbilityEffectRecord> {
+  return postGraphQL<{ updateAbilityEffect: AbilityEffectRecord }>(
+    `
+      mutation UpdateAbilityEffect($effectId: UUID!, $effect: AbilityEffectInput!) {
+        updateAbilityEffect(effectId: $effectId, effect: $effect) {
+          ${ABILITY_EFFECT_FIELDS}
+        }
+      }
+    `,
+    { effectId, effect },
+  ).then((data) => data.updateAbilityEffect);
+}
+
+export function removeAbilityEffect(effectId: string): Promise<boolean> {
+  return postGraphQL<{ removeAbilityEffect: boolean }>(
+    `
+      mutation RemoveAbilityEffect($effectId: UUID!) {
+        removeAbilityEffect(effectId: $effectId)
+      }
+    `,
+    { effectId },
+  ).then((data) => data.removeAbilityEffect);
 }
 
 export type { AbilityPermissionRecord };

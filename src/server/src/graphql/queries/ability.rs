@@ -17,13 +17,20 @@ use crate::models::WorldAbility;
 use crate::schema::world_abilities;
 use crate::state::AppState;
 
-/// Effects arrive in US2 (T035-T038). Until that table exists there is nothing
-/// to load, and an ability legitimately has none.
+/// Delegates to the single loader in `mutations_abilities`, rather than
+/// re-declaring a private copy the way `queries/item.rs` and
+/// `mutations_items.rs` each do.
 async fn load_ability_effects(
-    _state: &AppState,
-    _ability_id: uuid::Uuid,
+    state: &AppState,
+    ability_id: uuid::Uuid,
 ) -> GraphQLResult<Vec<GraphQLAbilityEffect>> {
-    Ok(Vec::new())
+    Ok(
+        crate::graphql::mutations_abilities::load_ability_effects(state, ability_id)
+            .await?
+            .into_iter()
+            .map(GraphQLAbilityEffect::from)
+            .collect(),
+    )
 }
 
 async fn to_graphql_ability(

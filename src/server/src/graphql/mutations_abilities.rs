@@ -10,10 +10,13 @@ use uuid::Uuid;
 
 use crate::auth::ability_permissions::require_ability_permission;
 use crate::auth::actor_permissions::is_dm_of_world;
-use crate::graphql::types::{AbilityClassification, ActorPermissionLevel, GraphQLAbility};
+use crate::graphql::types::{
+    AbilityClassification, AbilityEffectTrigger, AbilityEffectType, ActorPermissionLevel,
+    GraphQLAbility, GraphQLAbilityEffect,
+};
 use crate::graphql::{app_state, authenticated_user};
-use crate::models::{NewWorldAbility, WorldAbility};
-use crate::schema::world_abilities;
+use crate::models::{AbilityEffect, NewAbilityEffect, NewWorldAbility, WorldAbility};
+use crate::schema::{world_abilities, world_ability_effects};
 use crate::state::AppState;
 
 #[derive(InputObject, Debug, Clone)]
@@ -45,6 +48,211 @@ pub struct UpdateAbilityInput {
     /// which makes clearing a description **impossible** once set — a real
     /// defect this deliberately does not inherit (research.md §3, defect 1).
     pub clear_description: Option<bool>,
+}
+
+#[derive(InputObject, Debug, Clone)]
+pub struct AbilityEffectInput {
+    pub effect_type: AbilityEffectType,
+    pub formula: String,
+    pub target: String,
+    pub trigger_kind: Option<AbilityEffectTrigger>,
+    pub sort_order: Option<i32>,
+}
+
+/// FR-018: a minimal *structural* check, not a ruleset-aware evaluator.
+///
+/// Rejects empty/whitespace-only formulas and formulas with no alphanumeric
+/// content at all. Anything past that — dice notation, bare stat words,
+/// `+`/`-` combinations — is accepted as authored, because FR-019 forbids this
+/// spec from ever resolving the formula. Copied from `mutations_items.rs`.
+fn validate_formula(formula: &str) -> GraphQLResult<()> {
+    let trimmed = formula.trim();
+    if trimmed.is_empty() {
+        return Err(Error::new("Effect formula must not be empty"));
+    }
+    if !trimmed.chars().any(|c| c.is_ascii_alphanumeric()) {
+        return Err(Error::new(
+            "Effect formula must contain at least one letter or digit (e.g. \"3d6\", \"STAT\")",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_target(target: &str) -> GraphQLResult<()> {
+    if target.trim().is_empty() {
+        return Err(Error::new("Effect target must not be empty"));
+    }
+    Ok(())
+}
+
+/// Loads an ability's effects in display order.
+pub async fn load_ability_effects(
+    state: &AppState,
+    ability_id: Uuid,
+) -> GraphQLResult<Vec<AbilityEffect>> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    tokio::task::spawn_blocking(move || {
+        world_ability_effects::table
+            .filter(world_ability_effects::ability_id.eq(ability_id))
+            .order(world_ability_effects::sort_order.asc())
+            .select(AbilityEffect::as_select())
+            .load::<AbilityEffect>(&mut conn)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to load ability effects"))
+}
+
+/// Resolves the ability an effect belongs to, so permission can be checked
+/// against the parent rather than the effect row.
+async fn parent_ability_id(state: &AppState, effect_id: Uuid) -> GraphQLResult<Uuid> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    tokio::task::spawn_blocking(move || {
+        world_ability_effects::table
+            .filter(world_ability_effects::id.eq(effect_id))
+            .select(world_ability_effects::ability_id)
+            .first::<Uuid>(&mut conn)
+            .optional()
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to load ability effect"))?
+    .ok_or_else(|| Error::new("Ability effect not found"))
+}
+
+/// FR-017: add one effect. Requires `Editor` on the parent ability.
+pub async fn add_ability_effect_impl(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    ability_id: Uuid,
+    effect: AbilityEffectInput,
+) -> GraphQLResult<AbilityEffect> {
+    require_ability_permission(
+        state,
+        user_id,
+        is_admin,
+        ability_id,
+        ActorPermissionLevel::Editor,
+    )
+    .await?;
+
+    validate_formula(&effect.formula)?;
+    validate_target(&effect.target)?;
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    let new_effect = NewAbilityEffect {
+        ability_id,
+        effect_type: effect.effect_type.as_db_str().to_string(),
+        formula: effect.formula,
+        target: effect.target,
+        trigger_kind: effect.trigger_kind.map(|t| t.as_db_str().to_string()),
+        sort_order: effect.sort_order.unwrap_or(0),
+    };
+
+    tokio::task::spawn_blocking(move || {
+        diesel::insert_into(world_ability_effects::table)
+            .values(&new_effect)
+            .returning(AbilityEffect::as_returning())
+            .get_result::<AbilityEffect>(&mut conn)
+            .map_err(|e| format!("Failed to add ability effect: {e}"))
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(Error::new)
+}
+
+/// FR-017: edit one effect without disturbing its siblings.
+pub async fn update_ability_effect_impl(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    effect_id: Uuid,
+    effect: AbilityEffectInput,
+) -> GraphQLResult<AbilityEffect> {
+    validate_formula(&effect.formula)?;
+    validate_target(&effect.target)?;
+
+    let ability_id = parent_ability_id(state, effect_id).await?;
+    require_ability_permission(
+        state,
+        user_id,
+        is_admin,
+        ability_id,
+        ActorPermissionLevel::Editor,
+    )
+    .await?;
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    tokio::task::spawn_blocking(move || {
+        diesel::update(world_ability_effects::table.filter(world_ability_effects::id.eq(effect_id)))
+            .set((
+                world_ability_effects::effect_type.eq(effect.effect_type.as_db_str()),
+                world_ability_effects::formula.eq(effect.formula),
+                world_ability_effects::target.eq(effect.target),
+                world_ability_effects::trigger_kind
+                    .eq(effect.trigger_kind.map(|t| t.as_db_str().to_string())),
+                world_ability_effects::sort_order.eq(effect.sort_order.unwrap_or(0)),
+                world_ability_effects::updated_at.eq(chrono::Utc::now().naive_utc()),
+            ))
+            .returning(AbilityEffect::as_returning())
+            .get_result::<AbilityEffect>(&mut conn)
+            .map_err(|e| format!("Failed to update ability effect: {e}"))
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(Error::new)
+}
+
+/// FR-017: remove one effect.
+pub async fn remove_ability_effect_impl(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    effect_id: Uuid,
+) -> GraphQLResult<bool> {
+    let ability_id = parent_ability_id(state, effect_id).await?;
+    require_ability_permission(
+        state,
+        user_id,
+        is_admin,
+        ability_id,
+        ActorPermissionLevel::Editor,
+    )
+    .await?;
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    tokio::task::spawn_blocking(move || {
+        diesel::delete(
+            world_ability_effects::table.filter(world_ability_effects::id.eq(effect_id)),
+        )
+        .execute(&mut conn)
+        .map(|rows| rows > 0)
+        .map_err(|e| format!("Failed to remove ability effect: {e}"))
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(Error::new)
 }
 
 /// Testable core of `AbilityMutation::create_ability` (FR-002).
@@ -246,7 +454,12 @@ async fn to_graphql_ability(
         state, user_id, is_admin, row.id,
     )
     .await?;
-    Ok(GraphQLAbility::from_row(row, Vec::new(), my_permission_level))
+    let effects = load_ability_effects(state, row.id)
+        .await?
+        .into_iter()
+        .map(GraphQLAbilityEffect::from)
+        .collect();
+    Ok(GraphQLAbility::from_row(row, effects, my_permission_level))
 }
 
 #[derive(Default)]
@@ -286,6 +499,54 @@ impl AbilityMutation {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         delete_ability_impl(state, auth_user.user_id, auth_user.is_admin, ability_id).await
+    }
+
+    async fn add_ability_effect(
+        &self,
+        ctx: &Context<'_>,
+        ability_id: Uuid,
+        effect: AbilityEffectInput,
+    ) -> GraphQLResult<GraphQLAbilityEffect> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        let row = add_ability_effect_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            ability_id,
+            effect,
+        )
+        .await?;
+        Ok(GraphQLAbilityEffect::from(row))
+    }
+
+    async fn update_ability_effect(
+        &self,
+        ctx: &Context<'_>,
+        effect_id: Uuid,
+        effect: AbilityEffectInput,
+    ) -> GraphQLResult<GraphQLAbilityEffect> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        let row = update_ability_effect_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            effect_id,
+            effect,
+        )
+        .await?;
+        Ok(GraphQLAbilityEffect::from(row))
+    }
+
+    async fn remove_ability_effect(
+        &self,
+        ctx: &Context<'_>,
+        effect_id: Uuid,
+    ) -> GraphQLResult<bool> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        remove_ability_effect_impl(state, auth_user.user_id, auth_user.is_admin, effect_id).await
     }
 
     async fn set_ability_gm_only(
@@ -473,5 +734,201 @@ mod tests {
             .await
             .expect("the DM may reveal it again");
         assert!(!shown.gm_only, "unhiding must be possible (US5 scenario 3)");
+    }
+}
+
+#[cfg(test)]
+mod effect_tests {
+    use super::*;
+    use crate::test_support::*;
+
+    fn ability_input(world_id: Uuid, name: &str) -> CreateAbilityInput {
+        CreateAbilityInput {
+            world_id,
+            name: name.to_string(),
+            description: None,
+            classification: AbilityClassification::Spell,
+            gm_only: None,
+        }
+    }
+
+    fn effect_input(formula: &str, target: &str) -> AbilityEffectInput {
+        AbilityEffectInput {
+            effect_type: AbilityEffectType::Damage,
+            formula: formula.to_string(),
+            target: target.to_string(),
+            trigger_kind: None,
+            sort_order: None,
+        }
+    }
+
+    /// FR-018: an empty/whitespace-only formula errors before any write.
+    #[tokio::test]
+    async fn add_ability_effect_rejects_empty_formula() {
+        dotenvy::dotenv().ok();
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let ability = create_ability_impl(&state, owner_id, false, ability_input(world_id, "Bolt"))
+            .await
+            .unwrap();
+
+        let err = add_ability_effect_impl(
+            &state,
+            owner_id,
+            false,
+            ability.id,
+            effect_input("   ", "Hit Points"),
+        )
+        .await
+        .expect_err("a whitespace-only formula must be rejected");
+        assert!(err.message.contains("must not be empty"));
+
+        // A formula with no alphanumeric content is also structurally invalid.
+        let err = add_ability_effect_impl(
+            &state,
+            owner_id,
+            false,
+            ability.id,
+            effect_input("+++", "Hit Points"),
+        )
+        .await
+        .expect_err("a formula with no letters or digits must be rejected");
+        assert!(err.message.contains("at least one letter or digit"));
+
+        // Nothing was persisted by either rejection.
+        assert!(
+            load_ability_effects(&state, ability.id).await.unwrap().is_empty(),
+            "a rejected effect must not be written"
+        );
+
+        // An empty target is rejected too.
+        add_ability_effect_impl(&state, owner_id, false, ability.id, effect_input("3d6", "  "))
+            .await
+            .expect_err("an empty target must be rejected");
+    }
+
+    /// FR-017: effects are independent — editing or removing one leaves the
+    /// others untouched.
+    #[tokio::test]
+    async fn ability_can_carry_multiple_effects() {
+        dotenvy::dotenv().ok();
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let ability =
+            create_ability_impl(&state, owner_id, false, ability_input(world_id, "Fireball"))
+                .await
+                .unwrap();
+
+        let mut first = effect_input("3d6", "Hit Points");
+        first.sort_order = Some(0);
+        let first = add_ability_effect_impl(&state, owner_id, false, ability.id, first)
+            .await
+            .unwrap();
+
+        let mut second = effect_input("1d20 + STAT", "Attack Roll");
+        second.effect_type = AbilityEffectType::AttackRoll;
+        second.sort_order = Some(1);
+        let second = add_ability_effect_impl(&state, owner_id, false, ability.id, second)
+            .await
+            .unwrap();
+
+        assert_eq!(load_ability_effects(&state, ability.id).await.unwrap().len(), 2);
+
+        // Editing the first must not disturb the second.
+        let mut edited = effect_input("4d6", "Hit Points");
+        edited.sort_order = Some(0);
+        update_ability_effect_impl(&state, owner_id, false, first.id, edited)
+            .await
+            .unwrap();
+
+        let reloaded = load_ability_effects(&state, ability.id).await.unwrap();
+        assert_eq!(reloaded.len(), 2);
+        let untouched = reloaded.iter().find(|e| e.id == second.id).unwrap();
+        assert_eq!(untouched.formula, "1d20 + STAT");
+        assert_eq!(untouched.target, "Attack Roll");
+
+        // Removing one leaves the other.
+        assert!(remove_ability_effect_impl(&state, owner_id, false, first.id)
+            .await
+            .unwrap());
+        let remaining = load_ability_effects(&state, ability.id).await.unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].id, second.id);
+    }
+
+    /// FR-019: effects are inert authored data. Nothing here resolves, rolls,
+    /// or evaluates a formula — it round-trips byte-for-byte, including
+    /// notation this spec deliberately does not understand.
+    #[tokio::test]
+    async fn ability_effect_formula_is_not_evaluated() {
+        dotenvy::dotenv().ok();
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let ability = create_ability_impl(&state, owner_id, false, ability_input(world_id, "Odd"))
+            .await
+            .unwrap();
+
+        // Ruleset-specific notation this spec has no opinion about.
+        let exotic = "2d8kh1 + PROF - resistance(fire)";
+        let created = add_ability_effect_impl(
+            &state,
+            owner_id,
+            false,
+            ability.id,
+            effect_input(exotic, "Mana"),
+        )
+        .await
+        .expect("structurally valid notation must be accepted as-authored");
+
+        assert_eq!(created.formula, exotic, "the formula must be stored verbatim");
+        assert_eq!(
+            created.target, "Mana",
+            "a target naming a resource this system lacks is still accepted"
+        );
+
+        let reloaded = load_ability_effects(&state, ability.id).await.unwrap();
+        assert_eq!(reloaded[0].formula, exotic, "and it must round-trip unchanged");
+        // FR-020: trigger_kind is scaffolded but nothing sets or evaluates it.
+        assert_eq!(reloaded[0].trigger_kind, None);
+    }
+
+    /// Effect edits require Editor on the parent ability, not on the effect
+    /// row — a Viewer must not be able to rewrite an ability's mechanics.
+    #[tokio::test]
+    async fn effect_edits_require_editor_on_the_parent_ability() {
+        dotenvy::dotenv().ok();
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let member_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        insert_test_world_member(&mut conn, world_id, member_id, "Player");
+        drop(conn);
+
+        let ability = create_ability_impl(&state, owner_id, false, ability_input(world_id, "Ward"))
+            .await
+            .unwrap();
+
+        add_ability_effect_impl(
+            &state,
+            member_id,
+            false,
+            ability.id,
+            effect_input("2d6", "Hit Points"),
+        )
+        .await
+        .expect_err("a Viewer must not add effects");
     }
 }

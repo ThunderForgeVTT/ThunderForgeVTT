@@ -14,6 +14,7 @@ import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { Textarea } from "@/components/ui/textarea";
 import { ModeratedContentBanner } from "@/components/world/ModeratedContentBanner";
 import { useWorldRole } from "@/hooks/useWorldRole";
+import { AbilityEffectEditor } from "@/pages/world/ability/AbilityEffectEditor";
 import type { AbilityClassification, WorldAbilityRecord } from "@/types/ability";
 import type { WorldRecord } from "@/types/world";
 import {
@@ -37,8 +38,8 @@ export interface AbilityDetailPageProps {
  *   * a DM-only GM-only toggle (FR-024c) with a visible badge (FR-024d) —
  *     deliberately separate from the Save form, because visibility is DM-gated
  *     while editing only needs Editor;
- *   * the effect editor is NOT mounted here yet (US2/T040 adds it, gated on
- *     `canEdit` — unlike the item version, which renders it for VIEWERs).
+ *   * the effect editor is gated on `canEdit` — unlike the item version,
+ *     which renders it for VIEWERs in view mode.
  *
  * Share controls arrive with US6, which is gated on the DMCA determination.
  */
@@ -353,6 +354,13 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
             </>
           )}
         </Card>
+
+        <AbilityEffectEditor
+          abilityId={abilityId}
+          effects={ability.effects}
+          canEdit={canEdit}
+          onChanged={(effects) => setAbility({ ...ability, effects })}
+        />
       </Container>
     </>
   );

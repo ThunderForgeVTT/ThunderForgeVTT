@@ -382,6 +382,22 @@ diesel::table! {
 }
 
 diesel::table! {
+    world_ability_effects (id) {
+        id -> Uuid,
+        ability_id -> Uuid,
+        #[max_length = 16]
+        effect_type -> Varchar,
+        formula -> Text,
+        target -> Text,
+        #[max_length = 16]
+        trigger_kind -> Nullable<Varchar>,
+        sort_order -> Int4,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     world_ability_permissions (id) {
         id -> Uuid,
         ability_id -> Uuid,
@@ -795,6 +811,7 @@ diesel::joinable!(user_oauth_accounts -> users (user_id));
 diesel::joinable!(user_sessions -> users (user_id));
 diesel::joinable!(walls -> scenes (scene_id));
 diesel::joinable!(world_abilities -> worlds (world_id));
+diesel::joinable!(world_ability_effects -> world_abilities (ability_id));
 diesel::joinable!(world_ability_permissions -> users (user_id));
 diesel::joinable!(world_ability_permissions -> world_abilities (ability_id));
 diesel::joinable!(world_actor_claims -> world_actors (actor_id));
@@ -869,6 +886,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     users,
     walls,
     world_abilities,
+    world_ability_effects,
     world_ability_permissions,
     world_actor_claims,
     world_actor_inventory,

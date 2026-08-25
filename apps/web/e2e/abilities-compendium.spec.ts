@@ -178,4 +178,71 @@ test.describe("Abilities compendium (US1)", () => {
       timeout: 15_000,
     });
   });
+
+  /** quickstart.md Scenario 2 (US2): structured effects. */
+  test("a GM adds, edits, and removes effects; invalid formulas are rejected", async ({
+    page,
+  }) => {
+    await registerGm(page);
+    const worldId = await createWorld(page, `E2E Ability Effects ${uniqueSuffix()}`);
+    await openAbilitiesTab(page, worldId);
+
+    const name = `Lightning ${uniqueSuffix()}`;
+    await page.getByTestId("new-ability-name-input").fill(name);
+    await page.getByTestId("add-ability-button").click();
+    await expect(page.getByTestId("ability-catalog-table")).toContainText(name, {
+      timeout: 15_000,
+    });
+
+    // Effects are edited on the detail page, in edit mode.
+    await page.locator('[data-testid^="ability-catalog-edit-"]').first().click();
+    await page.waitForURL(/\/ability\/[^/]+\/edit$/, { timeout: 15_000 });
+    const editor = page.getByTestId("ability-effect-editor");
+    await expect(editor).toBeVisible({ timeout: 15_000 });
+    await expect(editor).toContainText("No effects yet.");
+
+    // FR-018: a formula with no letters or digits is rejected, nothing saved.
+    await page.getByTestId("new-ability-effect-formula").fill("+++");
+    await page.getByTestId("new-ability-effect-target").fill("Hit Points");
+    await page.getByTestId("add-ability-effect-button").click();
+    await expect(editor).toContainText(/at least one letter or digit/, { timeout: 15_000 });
+    await expect(page.locator('[data-testid^="ability-effect-row-"]')).toHaveCount(0);
+
+    // A valid effect saves.
+    await page.getByTestId("new-ability-effect-formula").fill("3d6");
+    await page.getByTestId("add-ability-effect-button").click();
+    await expect(page.locator('[data-testid^="ability-effect-row-"]')).toHaveCount(1, {
+      timeout: 15_000,
+    });
+
+    // A second, independent effect (FR-017).
+    await page.getByTestId("new-ability-effect-formula").fill("1d20 + STAT");
+    await page.getByTestId("new-ability-effect-target").fill("Attack Roll");
+    await page.getByTestId("add-ability-effect-button").click();
+    await expect(page.locator('[data-testid^="ability-effect-row-"]')).toHaveCount(2, {
+      timeout: 15_000,
+    });
+
+    // Removing one leaves the other untouched.
+    await page.locator('[data-testid^="ability-effect-remove-"]').first().click();
+    await expect(page.locator('[data-testid^="ability-effect-row-"]')).toHaveCount(1, {
+      timeout: 15_000,
+    });
+    // The surviving row's formula lives in an input value, not the card's
+    // text — assert on the value, not innerText.
+    await expect(
+      page
+        .locator('[data-testid^="ability-effect-row-"]')
+        .first()
+        .getByLabel("Formula"),
+    ).toHaveValue("1d20 + STAT");
+
+    // And the surviving effect shows in the Compendium preview panel.
+    await openAbilitiesTab(page, worldId);
+    await page.getByRole("cell", { name, exact: false }).first().click();
+    const preview = page.getByTestId("ability-preview-panel");
+    await expect(preview).toBeVisible({ timeout: 15_000 });
+    await expect(preview).toContainText("1d20 + STAT");
+    await expect(preview).toContainText("Attack Roll");
+  });
 });

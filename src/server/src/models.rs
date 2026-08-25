@@ -5,7 +5,7 @@ use crate::schema::{
     oauth_authorization_sessions, oauth_link_challenges, oauth_providers, players_online, scenes,
     shapes, tokens, user_oauth_accounts, user_sessions, users, walls, world_actor_claims,
     world_actor_inventory,
-    world_abilities, world_ability_permissions,
+    world_abilities, world_ability_effects, world_ability_permissions,
     world_actor_permissions, world_actor_shares, world_actor_system_data, world_actors,
     world_events, world_genie_puzzle_clock_rewards, world_genie_puzzle_clocks,
     world_genie_resource_holdings, world_genie_shop_listings,
@@ -1680,4 +1680,36 @@ pub struct NewAbilityPermission {
     pub ability_id: uuid::Uuid,
     pub user_id: uuid::Uuid,
     pub level: String,
+}
+
+/// Spec 025 (FR-015): one authored effect on an ability. Structurally
+/// identical to `ItemEffect` so a future resolution engine can consume both
+/// through one path. Inert data — FR-019 forbids this spec from resolving,
+/// rolling, or applying it.
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_ability_effects)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct AbilityEffect {
+    pub id: uuid::Uuid,
+    pub ability_id: uuid::Uuid,
+    pub effect_type: String,
+    pub formula: String,
+    pub target: String,
+    /// Scaffolded per FR-020; evaluated by nothing in this pass.
+    pub trigger_kind: Option<String>,
+    pub sort_order: i32,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+/// New ability effect for insertion. `id`/timestamps come from DB defaults.
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_ability_effects)]
+pub struct NewAbilityEffect {
+    pub ability_id: uuid::Uuid,
+    pub effect_type: String,
+    pub formula: String,
+    pub target: String,
+    pub trigger_kind: Option<String>,
+    pub sort_order: i32,
 }

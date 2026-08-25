@@ -113,19 +113,19 @@ set -a && source .env && set +a
 
 ### Tests for User Story 2
 
-- [ ] T033 [P] [US2] Server test `add_ability_effect_rejects_empty_formula` in `src/server/src/graphql/mutations_abilities.rs` — a whitespace-only formula errors before any write (FR-018)
-- [ ] T034 [P] [US2] Server test `ability_can_carry_multiple_effects` in `src/server/src/graphql/mutations_abilities.rs` — two effects added independently, editing one leaves the other untouched (FR-017)
-- [ ] T035 [P] [US2] Server test `ability_effect_formula_is_not_evaluated` in `src/server/src/graphql/mutations_abilities.rs` — asserts effects are stored verbatim and no resolution occurs (FR-019)
+- [X] T033 [P] [US2] Server test `add_ability_effect_rejects_empty_formula` in `src/server/src/graphql/mutations_abilities.rs` — a whitespace-only formula errors before any write (FR-018)
+- [X] T034 [P] [US2] Server test `ability_can_carry_multiple_effects` in `src/server/src/graphql/mutations_abilities.rs` — two effects added independently, editing one leaves the other untouched (FR-017)
+- [X] T035 [P] [US2] Server test `ability_effect_formula_is_not_evaluated` in `src/server/src/graphql/mutations_abilities.rs` — asserts effects are stored verbatim and no resolution occurs (FR-019)
 
 ### Implementation for User Story 2
 
-- [ ] T036 [US2] Create migration `src/server/migrations/<ts>_create_world_ability_effects/{up,down}.sql` per data-model.md §2
-- [ ] T037 [US2] Add the `world_ability_effects` `table!` block, joinable, and `allow_tables_to_appear_in_same_query!` entry in `src/server/src/schema.rs`, plus `AbilityEffect`/`NewAbilityEffect` structs in `src/server/src/models.rs`
-- [ ] T038 [US2] Add `AbilityEffectType`, `AbilityEffectTrigger`, and `GraphQLAbilityEffect` in `src/server/src/graphql/types.rs`, and the `effects` field on `GraphQLAbility` (fallback to `Modifier` on an unknown DB string, mirroring `GraphQLItemEffect`)
-- [ ] T039 [US2] Implement `addAbilityEffect`, `updateAbilityEffect`, `removeAbilityEffect`, plus private `validate_formula`/`validate_target` (structural only — non-empty, ≥1 alphanumeric, never ruleset-aware) in `src/server/src/graphql/mutations_abilities.rs`
-- [ ] T040 [US2] Add `addAbilityEffect`, `updateAbilityEffect`, `removeAbilityEffect` and the `ItemEffect`-shaped selection set to `apps/web/src/api/abilities.ts`, and `AbilityEffectRecord`/`AbilityEffectInput` types to `apps/web/src/types/ability.ts`
-- [ ] T041 [US2] Create `apps/web/src/pages/world/ability/AbilityEffectEditor.tsx` mirroring `ItemEffectEditor.tsx` and mount it in `AbilityDetailPage.tsx` — **gated on `canEdit`**, unlike the item version which renders for VIEWERs in view mode (research.md §3, defect 5)
-- [ ] T042 [US2] Render effects in `AbilityPreviewPanel.tsx` and verify quickstart.md Scenario 2 against a running dev stack
+- [X] T036 [US2] Create migration `src/server/migrations/<ts>_create_world_ability_effects/{up,down}.sql` per data-model.md §2
+- [X] T037 [US2] Add the `world_ability_effects` `table!` block, joinable, and `allow_tables_to_appear_in_same_query!` entry in `src/server/src/schema.rs`, plus `AbilityEffect`/`NewAbilityEffect` structs in `src/server/src/models.rs`
+- [X] T038 [US2] Add `AbilityEffectType`, `AbilityEffectTrigger`, and `GraphQLAbilityEffect` in `src/server/src/graphql/types.rs`, and the `effects` field on `GraphQLAbility` (fallback to `Modifier` on an unknown DB string, mirroring `GraphQLItemEffect`)
+- [X] T039 [US2] Implement `addAbilityEffect`, `updateAbilityEffect`, `removeAbilityEffect`, plus private `validate_formula`/`validate_target` (structural only — non-empty, ≥1 alphanumeric, never ruleset-aware) in `src/server/src/graphql/mutations_abilities.rs`
+- [X] T040 [US2] Add `addAbilityEffect`, `updateAbilityEffect`, `removeAbilityEffect` and the `ItemEffect`-shaped selection set to `apps/web/src/api/abilities.ts`, and `AbilityEffectRecord`/`AbilityEffectInput` types to `apps/web/src/types/ability.ts`
+- [X] T041 [US2] Create `apps/web/src/pages/world/ability/AbilityEffectEditor.tsx` mirroring `ItemEffectEditor.tsx` and mount it in `AbilityDetailPage.tsx` — **gated on `canEdit`**, unlike the item version which renders for VIEWERs in view mode (research.md §3, defect 5)
+- [X] T042 [US2] Render effects in `AbilityPreviewPanel.tsx` and verify quickstart.md Scenario 2 against a running dev stack
 
 **Checkpoint**: Abilities carry structured mechanical data. US1 and US2 both work independently.
 
