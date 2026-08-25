@@ -20,7 +20,22 @@ pub fn test_app_state() -> AppState {
     let database_url = std::env::var("DATABASE_URL")
         .expect("DATABASE_URL must be set to run spec-002 integration tests");
     let manager = ConnectionManager::<PgConnection>::new(database_url);
+    // Every test builds its own pool, and `cargo test` defaults to one thread
+    // per core. r2d2's defaults (max_size 10, and `build()` eagerly filling to
+    // max_size because min_idle defaults to None) therefore try to open
+    // cores x 10 connections at once — 320 on a 32-core machine, against
+    // Postgres's default max_connections of 100. The result was a suite that
+    // passed under `--test-threads=4` and failed ~240 tests at full
+    // parallelism with "sorry, too many clients already": an environment
+    // error that reads exactly like a code failure.
+    //
+    // `min_idle(Some(0))` makes connections lazy so a pool costs nothing until
+    // used, and a small max_size caps the worst case. 4 leaves room for the
+    // few tests that genuinely hold more than one connection at a time (the
+    // concurrent-join test in `mutations_invites.rs` needs two).
     let db_pool = Pool::builder()
+        .max_size(4)
+        .min_idle(Some(0))
         .build(manager)
         .expect("failed to build test DB pool");
 
@@ -157,4 +172,221 @@ pub fn insert_test_ability(conn: &mut PgConnection, world_id: Uuid, created_by: 
         .returning(world_abilities::id)
         .get_result::<Uuid>(conn)
         .expect("failed to insert test ability")
+}
+
+/// Spec 027: inserts a minimal `world_actors` row. Actors are scene-scoped,
+/// so callers supply a scene from `insert_test_scene`.
+pub fn insert_test_actor(
+    conn: &mut PgConnection,
+    world_id: Uuid,
+    scene_id: Uuid,
+    created_by: Uuid,
+) -> Uuid {
+    use crate::schema::world_actors;
+    let id = Uuid::now_v7();
+    let now = chrono::Utc::now().naive_utc();
+    diesel::insert_into(world_actors::table)
+        .values((
+            world_actors::id.eq(id),
+            world_actors::world_id.eq(world_id),
+            world_actors::scene_id.eq(scene_id),
+            world_actors::actor_type.eq("npc"),
+            world_actors::game_system_id.eq("dnd5e"),
+            world_actors::label.eq("Test Actor"),
+            world_actors::created_by.eq(created_by),
+            world_actors::owned_by.eq(created_by),
+            world_actors::is_public.eq(false),
+            world_actors::is_npc.eq(true),
+            world_actors::created_at.eq(now),
+            world_actors::updated_at.eq(now),
+        ))
+        .execute(conn)
+        .expect("failed to insert test actor");
+    id
+}
+
+/// Spec 027: inserts a minimal `world_items` row.
+pub fn insert_test_item(conn: &mut PgConnection, world_id: Uuid, created_by: Uuid) -> Uuid {
+    use crate::schema::world_items;
+    let id = Uuid::now_v7();
+    let now = chrono::Utc::now().naive_utc();
+    diesel::insert_into(world_items::table)
+        .values((
+            world_items::id.eq(id),
+            world_items::world_id.eq(world_id),
+            world_items::name.eq("Test Item"),
+            world_items::created_by.eq(created_by),
+            world_items::created_at.eq(now),
+            world_items::updated_at.eq(now),
+        ))
+        .execute(conn)
+        .expect("failed to insert test item");
+    id
+}
+
+/// Spec 027: inserts a minimal `world_lore_entries` row. `slug` is unique per
+/// world, so it is derived from the generated id rather than a fixed string —
+/// otherwise a second call for the same world collides.
+pub fn insert_test_lore_entry(conn: &mut PgConnection, world_id: Uuid, created_by: Uuid) -> Uuid {
+    use crate::schema::world_lore_entries;
+    let id = Uuid::now_v7();
+    let now = chrono::Utc::now().naive_utc();
+    diesel::insert_into(world_lore_entries::table)
+        .values((
+            world_lore_entries::id.eq(id),
+            world_lore_entries::world_id.eq(world_id),
+            world_lore_entries::title.eq("Test Lore Entry"),
+            world_lore_entries::slug.eq(format!("test-lore-{}", id.simple())),
+            world_lore_entries::content.eq(""),
+            world_lore_entries::created_by.eq(created_by),
+            world_lore_entries::created_at.eq(now),
+            world_lore_entries::updated_at.eq(now),
+        ))
+        .execute(conn)
+        .expect("failed to insert test lore entry");
+    id
+}
+
+/// Spec 027: grants `user_id` an explicit permission level on one content row
+/// of each of the four permissioned types.
+///
+/// Exists so a test can set up "this member has a grant on everything" in one
+/// call — which is what the member-removal cleanup contract
+/// (`specs/027-unified-access-links/contracts/permission-resolution.md`) has
+/// to hold for. Note `world_lore_permissions` names its user column
+/// `world_member_user_id` rather than `user_id`; that asymmetry is real and is
+/// absorbed here rather than migrated.
+pub fn grant_all_content_permissions(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    actor_id: Uuid,
+    item_id: Uuid,
+    lore_entry_id: Uuid,
+    ability_id: Uuid,
+    level: &str,
+) {
+    use crate::schema::{
+        world_ability_permissions, world_actor_permissions, world_item_permissions,
+        world_lore_permissions,
+    };
+    let now = chrono::Utc::now().naive_utc();
+
+    diesel::insert_into(world_actor_permissions::table)
+        .values((
+            world_actor_permissions::id.eq(Uuid::now_v7()),
+            world_actor_permissions::actor_id.eq(actor_id),
+            world_actor_permissions::user_id.eq(user_id),
+            world_actor_permissions::level.eq(level),
+            world_actor_permissions::created_at.eq(now),
+            world_actor_permissions::updated_at.eq(now),
+        ))
+        .execute(conn)
+        .expect("failed to grant actor permission");
+
+    diesel::insert_into(world_item_permissions::table)
+        .values((
+            world_item_permissions::id.eq(Uuid::now_v7()),
+            world_item_permissions::item_id.eq(item_id),
+            world_item_permissions::user_id.eq(user_id),
+            world_item_permissions::level.eq(level),
+            world_item_permissions::created_at.eq(now),
+            world_item_permissions::updated_at.eq(now),
+        ))
+        .execute(conn)
+        .expect("failed to grant item permission");
+
+    diesel::insert_into(world_lore_permissions::table)
+        .values((
+            world_lore_permissions::id.eq(Uuid::now_v7()),
+            world_lore_permissions::lore_entry_id.eq(lore_entry_id),
+            world_lore_permissions::world_member_user_id.eq(user_id),
+            world_lore_permissions::level.eq(level),
+            world_lore_permissions::created_at.eq(now),
+            world_lore_permissions::updated_at.eq(now),
+        ))
+        .execute(conn)
+        .expect("failed to grant lore permission");
+
+    diesel::insert_into(world_ability_permissions::table)
+        .values((
+            world_ability_permissions::id.eq(Uuid::now_v7()),
+            world_ability_permissions::ability_id.eq(ability_id),
+            world_ability_permissions::user_id.eq(user_id),
+            world_ability_permissions::level.eq(level),
+            world_ability_permissions::created_at.eq(now),
+            world_ability_permissions::updated_at.eq(now),
+        ))
+        .execute(conn)
+        .expect("failed to grant ability permission");
+}
+
+/// Spec 027: counts a user's explicit grants across all four permissioned
+/// content types within one world. Returns
+/// `(actors, items, lore_entries, abilities)`.
+///
+/// The member-removal contract requires every one of these to be zero after
+/// removal; today the ability count survives, which is the defect US2 fixes.
+pub fn count_content_permissions(
+    conn: &mut PgConnection,
+    world_id: Uuid,
+    user_id: Uuid,
+) -> (i64, i64, i64, i64) {
+    use crate::schema::{
+        world_abilities, world_ability_permissions, world_actor_permissions, world_actors,
+        world_item_permissions, world_items, world_lore_entries, world_lore_permissions,
+    };
+
+    let actors = world_actor_permissions::table
+        .filter(world_actor_permissions::user_id.eq(user_id))
+        .filter(
+            world_actor_permissions::actor_id.eq_any(
+                world_actors::table
+                    .filter(world_actors::world_id.eq(world_id))
+                    .select(world_actors::id),
+            ),
+        )
+        .count()
+        .get_result::<i64>(conn)
+        .expect("failed to count actor permissions");
+
+    let items = world_item_permissions::table
+        .filter(world_item_permissions::user_id.eq(user_id))
+        .filter(
+            world_item_permissions::item_id.eq_any(
+                world_items::table
+                    .filter(world_items::world_id.eq(world_id))
+                    .select(world_items::id),
+            ),
+        )
+        .count()
+        .get_result::<i64>(conn)
+        .expect("failed to count item permissions");
+
+    let lore = world_lore_permissions::table
+        .filter(world_lore_permissions::world_member_user_id.eq(user_id))
+        .filter(
+            world_lore_permissions::lore_entry_id.eq_any(
+                world_lore_entries::table
+                    .filter(world_lore_entries::world_id.eq(world_id))
+                    .select(world_lore_entries::id),
+            ),
+        )
+        .count()
+        .get_result::<i64>(conn)
+        .expect("failed to count lore permissions");
+
+    let abilities = world_ability_permissions::table
+        .filter(world_ability_permissions::user_id.eq(user_id))
+        .filter(
+            world_ability_permissions::ability_id.eq_any(
+                world_abilities::table
+                    .filter(world_abilities::world_id.eq(world_id))
+                    .select(world_abilities::id),
+            ),
+        )
+        .count()
+        .get_result::<i64>(conn)
+        .expect("failed to count ability permissions");
+
+    (actors, items, lore, abilities)
 }
