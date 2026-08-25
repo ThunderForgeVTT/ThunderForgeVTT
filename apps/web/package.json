@@ -13,7 +13,9 @@
     "start:vite": "vite build --watch",
     "dev": "vite",
     "e2e": "playwright test",
-    "e2e:ui": "playwright test --ui"
+    "e2e:ui": "playwright test --ui",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -39,7 +41,8 @@
     "vite": "^8.0.10",
     "vite-plugin-html": "^3.2.2",
     "vite-plugin-static-copy": "^4.1.0",
-    "vite-tsconfig-paths": "^5.1.4"
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",

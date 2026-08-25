@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { getGameSystemManifest } from "@/api/gameSystems";
 import { getLoreEntry } from "@/api/lore";
 import { COMPENDIUM_OVERVIEW_SLUG } from "@/api/compendiumOverview";
 import { Tabs } from "@/components/ui/tabs/Tabs";
 import { ActorPreviewPanel } from "@/pages/world/compendium/ActorPreviewPanel";
-import { ComingSoonTab } from "@/pages/world/compendium/ComingSoonTab";
+import { AbilityCompendiumTab } from "@/pages/world/compendium/AbilityCompendiumTab";
+import { AbilityPreviewPanel } from "@/pages/world/compendium/AbilityPreviewPanel";
 import { ItemCompendiumTab } from "@/pages/world/compendium/ItemCompendiumTab";
 import { ItemPreviewPanel } from "@/pages/world/compendium/ItemPreviewPanel";
 import { LoreCompendiumTab } from "@/pages/world/compendium/LoreCompendiumTab";
@@ -12,7 +14,9 @@ import { NpcCompendiumTab } from "@/pages/world/compendium/NpcCompendiumTab";
 import { LoreMarkdownRenderer } from "@/pages/world/lore/LoreMarkdownRenderer";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import type { WorldActorRecord } from "@/types/actor";
+import type { WorldAbilityRecord } from "@/types/ability";
 import type { WorldItemRecord } from "@/types/item";
+import type { AbilityFacetsLookup } from "@/utils/abilityFacets";
 import type { WorldRecord } from "@/types/world";
 
 export interface WorldCompendiumPageProps {
@@ -22,8 +26,9 @@ export interface WorldCompendiumPageProps {
 
 /**
  * Spec 011: `/world/:id/compendium` — the DM/player-shared portal for
- * curating world artifacts (NPCs real in this pass; Items/Abilities
- * placeholder), reached via a link from Session Setup. Renders inside the
+ * curating world artifacts. All four tabs are real as of spec 025 —
+ * the Abilities placeholder was the last one (SC-001). Reached via a link
+ * from Session Setup. Renders inside the
  * normal app chrome, never the full-screen canvas.
  *
  * The tabbed shell (`CompendiumTabDef[]`, data-model.md) is deliberately
@@ -43,6 +48,13 @@ export function WorldCompendiumPage({ worldId, world }: WorldCompendiumPageProps
   const [roster, setRoster] = useState<WorldActorRecord[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [itemCatalog, setItemCatalog] = useState<WorldItemRecord[]>([]);
+  const [selectedAbilityId, setSelectedAbilityId] = useState<string | null>(null);
+  const [abilityCatalog, setAbilityCatalog] = useState<WorldAbilityRecord[]>([]);
+  // Spec 025 (T028, FR-010/FR-012): the active system's optional ability
+  // presentation facets. `undefined` (no system, no facets block, or a failed
+  // manifest fetch) means every classification renders its built-in default
+  // label — the resolver is total, so this never needs a loading state.
+  const [abilityFacets, setAbilityFacets] = useState<AbilityFacetsLookup | undefined>(undefined);
   const { isGm } = useWorldRole(worldId, world);
 
   // Spec 021: the header blurb is GM-authored Markdown (a reserved lore
@@ -68,6 +80,31 @@ export function WorldCompendiumPage({ worldId, world }: WorldCompendiumPageProps
     };
   }, [worldId]);
 
+  useEffect(() => {
+    const gameSystemId = world?.gameSystemId;
+    if (!gameSystemId) {
+      setAbilityFacets(undefined);
+      return;
+    }
+    let active = true;
+    getGameSystemManifest(gameSystemId)
+      .then((manifest) => {
+        if (active) {
+          setAbilityFacets(manifest.abilityFacets as AbilityFacetsLookup | undefined);
+        }
+      })
+      .catch(() => {
+        // A manifest fetch failure degrades to default labels rather than
+        // breaking the tab.
+        if (active) {
+          setAbilityFacets(undefined);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [world?.gameSystemId]);
+
   const selectedActor = useMemo(
     () => roster.find((actor) => actor.id === selectedActorId) ?? null,
     [roster, selectedActorId],
@@ -76,6 +113,11 @@ export function WorldCompendiumPage({ worldId, world }: WorldCompendiumPageProps
   const selectedItem = useMemo(
     () => itemCatalog.find((item) => item.id === selectedItemId) ?? null,
     [itemCatalog, selectedItemId],
+  );
+
+  const selectedAbility = useMemo(
+    () => abilityCatalog.find((ability) => ability.id === selectedAbilityId) ?? null,
+    [abilityCatalog, selectedAbilityId],
   );
 
   return (
@@ -148,7 +190,24 @@ export function WorldCompendiumPage({ worldId, world }: WorldCompendiumPageProps
             value: "abilities",
             label: "Abilities",
             icon: "spells",
-            content: <ComingSoonTab label="Abilities" />,
+            content: (
+              <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
+                <AbilityCompendiumTab
+                  worldId={worldId}
+                  onSelect={setSelectedAbilityId}
+                  selectedAbilityId={selectedAbilityId}
+                  isGm={isGm}
+                  facets={abilityFacets}
+                  onCatalogLoaded={setAbilityCatalog}
+                />
+                <AbilityPreviewPanel
+                  worldId={worldId}
+                  ability={selectedAbility}
+                  facets={abilityFacets}
+                  onClose={() => setSelectedAbilityId(null)}
+                />
+              </div>
+            ),
           },
         ]}
       />

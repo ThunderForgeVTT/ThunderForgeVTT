@@ -31,6 +31,7 @@ const ActorDetailPage = lazy(pageLoaders.actorView);
 const LoreEntryDetailPage = lazy(pageLoaders.loreEntryView);
 const LoreRevisionHistory = lazy(pageLoaders.loreEntryHistory);
 const SharedActorPage = lazy(pageLoaders.sharedActor);
+const AbilityDetailPage = lazy(pageLoaders.abilityView);
 const ItemDetailPage = lazy(pageLoaders.itemView);
 const SharedItemPage = lazy(pageLoaders.sharedItem);
 const WorldSystemSettingsPage = lazy(pageLoaders.worldSystemSettings);
@@ -501,6 +502,22 @@ export default function AppRoutes({
           element={
             <RequireAuthenticated>
               {renderLazyPage(<SharedActorPage />, "Loading shared actor")}
+            </RequireAuthenticated>
+          }
+        />
+        <Route
+          path="/world/:id/ability/:abilityId/view"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(<AbilityDetailPage mode="view" />, "Loading ability")}
+            </RequireAuthenticated>
+          }
+        />
+        <Route
+          path="/world/:id/ability/:abilityId/edit"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(<AbilityDetailPage mode="edit" />, "Loading ability")}
             </RequireAuthenticated>
           }
         />

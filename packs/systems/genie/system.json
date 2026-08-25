@@ -11,48 +11,115 @@
     "verified": "0.1.0",
     "maximum": "1.0.0"
   },
-  "esmodules": ["web/dist/index.js"],
-  "styles": ["web/dist/index.css"],
+  "esmodules": [
+    "web/dist/index.js"
+  ],
+  "styles": [
+    "web/dist/index.css"
+  ],
   "packages": {
     "server": "./server",
     "engine": "./engine",
     "web": "./web"
   },
   "abilities": {
-    "might": { "label": "Might", "abbreviation": "MGT" },
-    "cunning": { "label": "Cunning", "abbreviation": "CUN" },
-    "spirit": { "label": "Spirit", "abbreviation": "SPI" }
+    "might": {
+      "label": "Might",
+      "abbreviation": "MGT"
+    },
+    "cunning": {
+      "label": "Cunning",
+      "abbreviation": "CUN"
+    },
+    "spirit": {
+      "label": "Spirit",
+      "abbreviation": "SPI"
+    }
+  },
+  "abilityFacets": {
+    "spell": {
+      "label": "Scroll",
+      "pluralLabel": "Scrolls"
+    },
+    "talent": {
+      "label": "Knack",
+      "pluralLabel": "Knacks"
+    }
   },
   "skills": {},
   "sessionResources": {
-    "insight": { "label": "Insight" },
-    "favor": { "label": "Favor" },
-    "essence": { "label": "Essence" }
+    "insight": {
+      "label": "Insight"
+    },
+    "favor": {
+      "label": "Favor"
+    },
+    "essence": {
+      "label": "Essence"
+    }
   },
   "wishPoints": {
-    "1": [2],
-    "2": [3],
-    "3": [4],
-    "4": [5],
-    "5": [6],
-    "6": [7],
-    "7": [8],
-    "8": [9],
-    "9": [10],
-    "10": [12]
+    "1": [
+      2
+    ],
+    "2": [
+      3
+    ],
+    "3": [
+      4
+    ],
+    "4": [
+      5
+    ],
+    "5": [
+      6
+    ],
+    "6": [
+      7
+    ],
+    "7": [
+      8
+    ],
+    "8": [
+      9
+    ],
+    "9": [
+      10
+    ],
+    "10": [
+      12
+    ]
   },
   "sizeCategories": {
-    "diminutive": { "scale": 0.5, "label": "Diminutive" },
-    "small": { "scale": 0.75, "label": "Small" },
-    "medium": { "scale": 1.0, "label": "Medium" },
-    "large": { "scale": 2.0, "label": "Large" },
-    "huge": { "scale": 3.0, "label": "Huge" },
-    "colossal": { "scale": 4.0, "label": "Colossal" }
+    "diminutive": {
+      "scale": 0.5,
+      "label": "Diminutive"
+    },
+    "small": {
+      "scale": 0.75,
+      "label": "Small"
+    },
+    "medium": {
+      "scale": 1.0,
+      "label": "Medium"
+    },
+    "large": {
+      "scale": 2.0,
+      "label": "Large"
+    },
+    "huge": {
+      "scale": 3.0,
+      "label": "Huge"
+    },
+    "colossal": {
+      "scale": 4.0,
+      "label": "Colossal"
+    }
   },
   "conditions": {
     "bound": {
       "label": "Bound",
-      "description": "The Genie's power is constrained by their vessel, a Patron's rule, or a captor's ward — wish-granting abilities are suppressed or restricted until the binding is broken."
+      "description": "The Genie's power is constrained by their vessel, a Patron's rule, or a captor's ward \u2014 wish-granting abilities are suppressed or restricted until the binding is broken."
     },
     "exposed": {
       "label": "Exposed",
@@ -80,35 +147,90 @@
     "ability_data": {
       "description": "Genie ability scores",
       "properties": {
-        "might": { "type": "integer", "label": "Might" },
-        "cunning": { "type": "integer", "label": "Cunning" },
-        "spirit": { "type": "integer", "label": "Spirit" }
+        "might": {
+          "type": "integer",
+          "label": "Might"
+        },
+        "cunning": {
+          "type": "integer",
+          "label": "Cunning"
+        },
+        "spirit": {
+          "type": "integer",
+          "label": "Spirit"
+        }
       },
-      "required": ["might", "cunning", "spirit"]
+      "required": [
+        "might",
+        "cunning",
+        "spirit"
+      ]
     },
     "resource_data": {
       "description": "Wish Points and Health",
       "properties": {
-        "current_wish_points": { "type": "integer", "min": 0, "label": "Current Wish Points" },
-        "max_wish_points": { "type": "integer", "min": 0, "label": "Maximum Wish Points" },
-        "current_health": { "type": "integer", "min": 0, "label": "Current Health" },
-        "max_health": { "type": "integer", "min": 1, "label": "Maximum Health" }
+        "current_wish_points": {
+          "type": "integer",
+          "min": 0,
+          "label": "Current Wish Points"
+        },
+        "max_wish_points": {
+          "type": "integer",
+          "min": 0,
+          "label": "Maximum Wish Points"
+        },
+        "current_health": {
+          "type": "integer",
+          "min": 0,
+          "label": "Current Health"
+        },
+        "max_health": {
+          "type": "integer",
+          "min": 1,
+          "label": "Maximum Health"
+        }
       },
-      "required": ["max_wish_points", "max_health"]
+      "required": [
+        "max_wish_points",
+        "max_health"
+      ]
     },
     "proficiency_data": {
       "description": "Trained skills",
       "properties": {
-        "trained_skills": { "type": "array", "items": { "type": "string" }, "label": "Trained Skills" }
+        "trained_skills": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "label": "Trained Skills"
+        }
       }
     },
     "trait_data": {
       "description": "Active conditions, Patron/lineage link, (NPC-only) size category, and character level",
       "properties": {
-        "active_conditions": { "type": "array", "items": { "type": "string" }, "label": "Active Conditions" },
-        "patron_lore_entry_id": { "type": "string", "label": "Patron (Lore Entry)" },
-        "size_category": { "type": "string", "label": "Size Category" },
-        "level": { "type": "integer", "min": 1, "max": 10, "label": "Level" }
+        "active_conditions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "label": "Active Conditions"
+        },
+        "patron_lore_entry_id": {
+          "type": "string",
+          "label": "Patron (Lore Entry)"
+        },
+        "size_category": {
+          "type": "string",
+          "label": "Size Category"
+        },
+        "level": {
+          "type": "integer",
+          "min": 1,
+          "max": 10,
+          "label": "Level"
+        }
       }
     }
   }

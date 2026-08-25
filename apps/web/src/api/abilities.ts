@@ -1,0 +1,228 @@
+import { withCsrf } from "@/api/auth";
+import type {
+  AbilityClassification,
+  AbilityPermissionRecord,
+  WorldAbilityRecord,
+} from "@/types/ability";
+
+/**
+ * Spec 025 (T024): the Ability GraphQL client.
+ *
+ * **Argument shapes are per-operation and must match the resolver exactly**
+ * (research.md §5). This codebase has a documented bug class here: spec 005
+ * found five separate calls sending flat arguments where the resolver expected
+ * a single `input` object, silently breaking the invite panel and join flow.
+ * The rule is to write the resolver first, then match the query string to it —
+ * so, mirroring `mutations_abilities.rs`:
+ *
+ *   * `input:` object  → createAbility, updateAbility
+ *   * flat scalar args → deleteAbility, setAbilityGmOnly, and every query
+ */
+
+type GraphQLError = {
+  message?: string;
+};
+
+type GraphQLResponse<TData> = {
+  data?: TData;
+  errors?: GraphQLError[];
+};
+
+const GRAPHQL_ENDPOINT = "/api/graphql";
+
+const ABILITY_EFFECT_FIELDS = `
+  id
+  abilityId
+  effectType
+  formula
+  target
+  triggerKind
+  sortOrder
+`;
+
+/**
+ * NOTE: `linkedFromLore` is deliberately absent until US4 (T063) adds it to
+ * `GraphQLAbility`. Requesting a field the schema does not define is a hard
+ * GraphQL error, not a null — so it is added here only when the server side
+ * lands, not stubbed in advance.
+ */
+const WORLD_ABILITY_FIELDS = `
+  id
+  worldId
+  name
+  description
+  classification
+  gmOnly
+  effects {
+    ${ABILITY_EFFECT_FIELDS}
+  }
+  myPermissionLevel
+  moderated
+  moderationCaseId
+  createdAt
+  updatedAt
+`;
+
+async function postGraphQL<TData>(
+  query: string,
+  variables?: Record<string, unknown>,
+): Promise<TData> {
+  const response = await fetch(GRAPHQL_ENDPOINT, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: withCsrf({
+      "Content-Type": "application/json",
+    }),
+    body: JSON.stringify({ query, variables }),
+  });
+
+  const payload = (await response.json()) as GraphQLResponse<TData>;
+  if (!response.ok) {
+    throw new Error(payload.errors?.[0]?.message || "GraphQL request failed");
+  }
+  if (payload.errors?.length) {
+    throw new Error(payload.errors[0]?.message || "GraphQL request failed");
+  }
+  if (!payload.data) {
+    throw new Error("GraphQL response did not include data");
+  }
+  return payload.data;
+}
+
+/**
+ * FR-005: every world member may browse. GM-only abilities are filtered
+ * server-side for non-DMs (FR-024b) — there is no client-side visibility
+ * filtering to do, and none should be added.
+ */
+export function getWorldAbilities(
+  worldId: string,
+  search?: string,
+): Promise<WorldAbilityRecord[]> {
+  return postGraphQL<{ worldAbilities: WorldAbilityRecord[] }>(
+    `
+      query WorldAbilities($worldId: UUID!, $search: String) {
+        worldAbilities(worldId: $worldId, search: $search) {
+          ${WORLD_ABILITY_FIELDS}
+        }
+      }
+    `,
+    { worldId, search },
+  ).then((data) => data.worldAbilities);
+}
+
+/** FR-025: a GM-only ability errors identically to a nonexistent one for a
+ * non-DM, so callers must not try to distinguish the two. */
+export function getAbility(abilityId: string): Promise<WorldAbilityRecord> {
+  return postGraphQL<{ ability: WorldAbilityRecord }>(
+    `
+      query Ability($abilityId: UUID!) {
+        ability(abilityId: $abilityId) {
+          ${WORLD_ABILITY_FIELDS}
+        }
+      }
+    `,
+    { abilityId },
+  ).then((data) => data.ability);
+}
+
+/** FR-007: advisory "did you mean?" only — never gates creation. */
+export function suggestAbilityName(
+  worldId: string,
+  name: string,
+): Promise<WorldAbilityRecord[]> {
+  return postGraphQL<{ suggestAbilityName: WorldAbilityRecord[] }>(
+    `
+      query SuggestAbilityName($worldId: UUID!, $name: String!) {
+        suggestAbilityName(worldId: $worldId, name: $name) {
+          ${WORLD_ABILITY_FIELDS}
+        }
+      }
+    `,
+    { worldId, name },
+  ).then((data) => data.suggestAbilityName);
+}
+
+export type CreateAbilityInput = {
+  worldId: string;
+  name: string;
+  description?: string | null;
+  classification: AbilityClassification;
+  gmOnly?: boolean;
+};
+
+/** FR-002: DM-only, enforced server-side. */
+export function createAbility(input: CreateAbilityInput): Promise<WorldAbilityRecord> {
+  return postGraphQL<{ createAbility: WorldAbilityRecord }>(
+    `
+      mutation CreateAbility($input: CreateAbilityInput!) {
+        createAbility(input: $input) {
+          ${WORLD_ABILITY_FIELDS}
+        }
+      }
+    `,
+    { input },
+  ).then((data) => data.createAbility);
+}
+
+export type UpdateAbilityInput = {
+  abilityId: string;
+  name?: string;
+  description?: string | null;
+  classification?: AbilityClassification;
+  /**
+   * Explicit clear. `description: null` alone cannot mean "clear it", because
+   * an omitted field is also null over the wire — which is precisely why
+   * `updateItem` (spec 013) can never clear a description once set. Pass
+   * `clearDescription: true` to actually blank it.
+   */
+  clearDescription?: boolean;
+};
+
+export function updateAbility(input: UpdateAbilityInput): Promise<WorldAbilityRecord> {
+  return postGraphQL<{ updateAbility: WorldAbilityRecord }>(
+    `
+      mutation UpdateAbility($input: UpdateAbilityInput!) {
+        updateAbility(input: $input) {
+          ${WORLD_ABILITY_FIELDS}
+        }
+      }
+    `,
+    { input },
+  ).then((data) => data.updateAbility);
+}
+
+/** Requires Owner on the ability. Never blocked by references — actor
+ * known-ability entries and lore links tombstone instead (FR-023, FR-031). */
+export function deleteAbility(abilityId: string): Promise<boolean> {
+  return postGraphQL<{ deleteAbility: boolean }>(
+    `
+      mutation DeleteAbility($abilityId: UUID!) {
+        deleteAbility(abilityId: $abilityId)
+      }
+    `,
+    { abilityId },
+  ).then((data) => data.deleteAbility);
+}
+
+/**
+ * FR-024c: **DM-only** — Owner-level permission on the ability is not
+ * sufficient. Its own mutation rather than a field on `updateAbility`, which
+ * needs only Editor and would otherwise let an Editor un-hide a GM's secret.
+ */
+export function setAbilityGmOnly(
+  abilityId: string,
+  gmOnly: boolean,
+): Promise<WorldAbilityRecord> {
+  return postGraphQL<{ setAbilityGmOnly: WorldAbilityRecord }>(
+    `
+      mutation SetAbilityGmOnly($abilityId: UUID!, $gmOnly: Boolean!) {
+        setAbilityGmOnly(abilityId: $abilityId, gmOnly: $gmOnly) {
+          ${WORLD_ABILITY_FIELDS}
+        }
+      }
+    `,
+    { abilityId, gmOnly },
+  ).then((data) => data.setAbilityGmOnly);
+}
+
+export type { AbilityPermissionRecord };
