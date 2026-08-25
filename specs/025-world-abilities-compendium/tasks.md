@@ -204,22 +204,22 @@ set -a && source .env && set +a
 
 ### Tests for User Story 5
 
-- [ ] T071 [P] [US5] Server test `only_dm_can_set_or_view_ability_permissions` in `src/server/src/graphql/mutations_ability_permissions.rs` — a non-DM is rejected; a DM's grant persists with the correct level string (FR-026)
-- [ ] T072 [P] [US5] Server test `removing_a_permission_reverts_to_implicit_viewer` in `src/server/src/graphql/mutations_ability_permissions.rs` — idempotent delete (FR-024)
-- [ ] T073 [P] [US5] Server test `ability_detail_is_denied_without_viewer_access` in `src/server/src/graphql/queries/ability.rs` — verifies enforcement server-side, independent of any UI (FR-025, SC-004)
+- [X] T071 [P] [US5] Server test `only_dm_can_set_or_view_ability_permissions` in `src/server/src/graphql/mutations_ability_permissions.rs` — a non-DM is rejected; a DM's grant persists with the correct level string (FR-026)
+- [X] T072 [P] [US5] Server test `removing_a_permission_reverts_to_implicit_viewer` in `src/server/src/graphql/mutations_ability_permissions.rs` — idempotent delete (FR-024)
+- [X] T073 [P] [US5] Server test `ability_detail_is_denied_without_viewer_access` in `src/server/src/graphql/queries/ability.rs` — verifies enforcement server-side, independent of any UI (FR-025, SC-004)
 
-- [ ] T074 [P] [US5] Server test `only_dm_can_set_gm_only` in `src/server/src/graphql/mutations_abilities.rs` — an Editor and an ability-level Owner are both rejected; a DM succeeds (FR-024c)
-- [ ] T075 [P] [US5] Server test `gm_only_ability_is_absent_from_every_non_dm_surface` in `src/server/src/graphql/queries/ability.rs` — the leak sweep: `worldAbilities`, its search, `ability`, and `suggestAbilityName` all exclude it for a non-DM, and `ability`'s rejection is indistinguishable from a nonexistent id (FR-024b, FR-025, SC-004a)
+- [X] T074 [P] [US5] Server test `only_dm_can_set_gm_only` in `src/server/src/graphql/mutations_abilities.rs` — an Editor and an ability-level Owner are both rejected; a DM succeeds (FR-024c)
+- [X] T075 [P] [US5] Server test `gm_only_ability_is_absent_from_every_non_dm_surface` in `src/server/src/graphql/queries/ability.rs` — the leak sweep: `worldAbilities`, its search, `ability`, and `suggestAbilityName` all exclude it for a non-DM, and `ability`'s rejection is indistinguishable from a nonexistent id (FR-024b, FR-025, SC-004a)
 
 ### Implementation for User Story 5
 
-- [ ] T076 [US5] Create `src/server/src/graphql/mutations_ability_permissions.rs` with the `abilityPermissions` query, `setAbilityPermission` (UPSERT on the `(ability_id, user_id)` conflict target), `removeAbilityPermission`, and the private `require_dm_of_abilitys_world` guard; register it in `src/server/src/graphql.rs`'s `QueryRoot`/`MutationRoot`
-- [ ] T077 [P] [US5] Add `getAbilityPermissions`, `setAbilityPermission`, `removeAbilityPermission` to `apps/web/src/api/abilities.ts`
-- [ ] T078 [US5] Create `apps/web/src/pages/world/ability/AbilityOwnershipBlock.tsx` mirroring `ItemOwnershipBlock.tsx` — world creator synthesised into the subject list, `""` option meaning "Default (Viewer)" which calls remove, optimistic local patch after each await
-- [ ] T079 [US5] Implement `setAbilityGmOnly(abilityId, gmOnly)` in `src/server/src/graphql/mutations_abilities.rs`, DM-gated via `require_dm_of_abilitys_world` — deliberately its own mutation rather than a field on `UpdateAbilityInput`, since `updateAbility` only requires Editor and would otherwise let an Editor un-hide a GM's secret ability. Follows the existing `updateSceneHidden` precedent
+- [X] T076 [US5] Create `src/server/src/graphql/mutations_ability_permissions.rs` with the `abilityPermissions` query, `setAbilityPermission` (UPSERT on the `(ability_id, user_id)` conflict target), `removeAbilityPermission`, and the private `require_dm_of_abilitys_world` guard; register it in `src/server/src/graphql.rs`'s `QueryRoot`/`MutationRoot`
+- [X] T077 [P] [US5] Add `getAbilityPermissions`, `setAbilityPermission`, `removeAbilityPermission` to `apps/web/src/api/abilities.ts`
+- [X] T078 [US5] Create `apps/web/src/pages/world/ability/AbilityOwnershipBlock.tsx` mirroring `ItemOwnershipBlock.tsx` — world creator synthesised into the subject list, `""` option meaning "Default (Viewer)" which calls remove, optimistic local patch after each await
+- [X] T079 [US5] Implement `setAbilityGmOnly(abilityId, gmOnly)` in `src/server/src/graphql/mutations_abilities.rs`, DM-gated via `require_dm_of_abilitys_world` — deliberately its own mutation rather than a field on `UpdateAbilityInput`, since `updateAbility` only requires Editor and would otherwise let an Editor un-hide a GM's secret ability. Follows the existing `updateSceneHidden` precedent
 - [X] T080 [US5] Add `setAbilityGmOnly` to `apps/web/src/api/abilities.ts`, a DM-only GM-only toggle plus a clear "GM-only" badge on `apps/web/src/pages/world/ability/AbilityDetailPage.tsx` (FR-024d), and a GM-only marker on the row in `apps/web/src/pages/world/compendium/AbilityCompendiumTab.tsx`
-- [ ] T081 [US5] Mount `{isDm && mode === "edit" ? <AbilityOwnershipBlock … /> : null}` in `apps/web/src/pages/world/ability/AbilityDetailPage.tsx`
-- [ ] T082 [US5] Verify quickstart.md Scenario 5 against a running dev stack — **both halves**: 5a (edit rights) and 5b's full GM-only leak checklist, including the server-side and probe-resistance checks (SC-004a)
+- [X] T081 [US5] Mount `{isDm && mode === "edit" ? <AbilityOwnershipBlock … /> : null}` in `apps/web/src/pages/world/ability/AbilityDetailPage.tsx`
+- [X] T082 [US5] Verify quickstart.md Scenario 5 against a running dev stack — **both halves**: 5a (edit rights) and 5b's full GM-only leak checklist, including the server-side and probe-resistance checks (SC-004a)
 
 **Checkpoint**: US1-US5 complete. The feature is fully functional within a single world.
 

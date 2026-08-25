@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ModeratedContentBanner } from "@/components/world/ModeratedContentBanner";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import { AbilityEffectEditor } from "@/pages/world/ability/AbilityEffectEditor";
+import { AbilityOwnershipBlock } from "@/pages/world/ability/AbilityOwnershipBlock";
 import type { AbilityClassification, WorldAbilityRecord } from "@/types/ability";
 import type { WorldRecord } from "@/types/world";
 import {
@@ -354,6 +355,12 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
             </>
           )}
         </Card>
+
+        {/* FR-026: DM-only, and edit-mode only — mirrors ItemDetailPage. The
+            server rejects a non-DM regardless of this gate. */}
+        {isDm && mode === "edit" ? (
+          <AbilityOwnershipBlock abilityId={abilityId} worldId={worldId} world={world} />
+        ) : null}
 
         {ability.linkedFromLore.length > 0 ? (
           <Card className="grid gap-2 p-5" data-testid="ability-lore-linked-from">

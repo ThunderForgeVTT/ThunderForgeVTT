@@ -439,4 +439,47 @@ mod tests {
             .await
             .expect("the DM may open their own hidden ability");
     }
+
+    /// SC-004/FR-025: enforcement is server-side, not UI gating.
+    ///
+    /// Note what this can and cannot assert. The ownership block's lowest level
+    /// is `Viewer`, which is also the default — so there is no "below Viewer"
+    /// state and a world member can never be denied an *ordinary* ability.
+    /// Denial of detail data therefore comes from two places only: GM-only
+    /// visibility, and world membership. Both are checked here directly against
+    /// the resolver, with no UI involved.
+    #[tokio::test]
+    async fn ability_detail_is_denied_without_viewer_access() {
+        dotenvy::dotenv().ok();
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let member_id = insert_test_user(&mut conn);
+        let outsider_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        insert_test_world_member(&mut conn, world_id, member_id, "Player");
+        let open_id = make_ability(&mut conn, world_id, owner_id, "Open Book", false);
+        let secret_id = make_ability(&mut conn, world_id, owner_id, "Sealed", true);
+        drop(conn);
+
+        // A member reaches an ordinary ability — the ownership block cannot
+        // deny this, by construction.
+        ability_impl(&state, member_id, false, open_id)
+            .await
+            .expect("a world member may open a visible ability");
+
+        // ...but not a GM-only one.
+        ability_impl(&state, member_id, false, secret_id)
+            .await
+            .expect_err("a member must be denied a GM-only ability");
+
+        // A non-member is denied even the ordinary one.
+        ability_impl(&state, outsider_id, false, open_id)
+            .await
+            .expect_err("a non-member must be denied entirely");
+
+        // The DM reaches both.
+        ability_impl(&state, owner_id, false, open_id).await.unwrap();
+        ability_impl(&state, owner_id, false, secret_id).await.unwrap();
+    }
 }

@@ -123,9 +123,11 @@ pub use mutations_lore_images::LoreImageMutation;
 
 // Spec 013: item creation/field-editing/deletion and effect CRUD
 pub mod mutations_abilities;
+pub mod mutations_ability_permissions;
 pub mod mutations_actor_abilities;
 pub mod mutations_items;
 pub use mutations_abilities::AbilityMutation;
+pub use mutations_ability_permissions::{AbilityPermissionMutation, AbilityPermissionQuery};
 pub use mutations_actor_abilities::{ActorAbilityMutation, ActorAbilityQuery};
 pub use mutations_items::ItemMutation;
 
@@ -2441,6 +2443,7 @@ pub struct QueryRoot(
     LoreQuery,
     LorePermissionQuery,
     AbilityQuery,
+    AbilityPermissionQuery,
     ActorAbilityQuery,
     ItemQuery,
     ItemPermissionQuery,
@@ -2474,6 +2477,7 @@ pub struct MutationRoot(
     LorePermissionMutation,
     LoreImageMutation,
     AbilityMutation,
+    AbilityPermissionMutation,
     ActorAbilityMutation,
     ItemMutation,
     ItemPermissionMutation,

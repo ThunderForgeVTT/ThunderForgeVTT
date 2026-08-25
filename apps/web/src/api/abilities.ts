@@ -285,4 +285,54 @@ export function removeAbilityEffect(effectId: string): Promise<boolean> {
   ).then((data) => data.removeAbilityEffect);
 }
 
+/** FR-026: DM-only, enforced server-side. */
+export function getAbilityPermissions(abilityId: string): Promise<AbilityPermissionRecord[]> {
+  return postGraphQL<{ abilityPermissions: AbilityPermissionRecord[] }>(
+    `
+      query AbilityPermissions($abilityId: UUID!) {
+        abilityPermissions(abilityId: $abilityId) {
+          abilityId
+          userId
+          level
+          updatedAt
+        }
+      }
+    `,
+    { abilityId },
+  ).then((data) => data.abilityPermissions);
+}
+
+export function setAbilityPermission(
+  abilityId: string,
+  userId: string,
+  level: AbilityPermissionRecord["level"],
+): Promise<AbilityPermissionRecord> {
+  return postGraphQL<{ setAbilityPermission: AbilityPermissionRecord }>(
+    `
+      mutation SetAbilityPermission($input: SetAbilityPermissionInput!) {
+        setAbilityPermission(input: $input) {
+          abilityId
+          userId
+          level
+          updatedAt
+        }
+      }
+    `,
+    { input: { abilityId, userId, level } },
+  ).then((data) => data.setAbilityPermission);
+}
+
+/** Idempotent — removing a nonexistent grant resolves false, and removing an
+ * existing one reverts that member to the implicit Viewer default (FR-024). */
+export function removeAbilityPermission(abilityId: string, userId: string): Promise<boolean> {
+  return postGraphQL<{ removeAbilityPermission: boolean }>(
+    `
+      mutation RemoveAbilityPermission($abilityId: UUID!, $userId: UUID!) {
+        removeAbilityPermission(abilityId: $abilityId, userId: $userId)
+      }
+    `,
+    { abilityId, userId },
+  ).then((data) => data.removeAbilityPermission);
+}
+
 export type { AbilityPermissionRecord };
