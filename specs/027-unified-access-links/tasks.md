@@ -86,9 +86,9 @@ under `src/core/`, React app under `apps/web/`.
 - [X] T022 [US1] Implement `rotate_invite_code_impl(&AppState, user_id, is_admin, invite_id)` in `src/server/src/graphql/mutations_invites.rs` as the two-statement transaction in data-model.md §3: revoke the old row guarded on `revoked = FALSE`, insert the replacement with inherited cap/expiry, `used_count = 0`, and `rotated_from` set. Returns the **new** link
 - [X] T023 [US1] Switch `generate_invite_code_impl` in `src/server/src/graphql/mutations_invites.rs` to `generate_link_code()`, replacing the 8-character derivation
 - [X] T024 [US1] Expose `revokeInviteCode` and `rotateInviteCode` on `InviteMutation` in `src/server/src/graphql/mutations_invites.rs`, following the existing thin-resolver-over-`_impl` convention
-- [ ] T025 [P] [US1] Add `revokeInviteCode` and `rotateInviteCode` operations to `apps/web/src/api/world.ts` using the shared `postGraphQL` transport
-- [ ] T026 [US1] Add explicit refetch after a successful revoke or rotate in `apps/web/src/hooks/useWorldInvites.ts` — the hook has no live push transport, so nothing else will deliver the change (research §8)
-- [ ] T027 [US1] Add refresh and revoke controls to `apps/web/src/components/campaign/CampaignSettingsPanel.tsx`, with a confirm step on revoke since it is irreversible
+- [X] T025 [P] [US1] Add `revokeInviteCode` and `rotateInviteCode` operations to `apps/web/src/api/world.ts` using the shared `postGraphQL` transport
+- [X] T026 [US1] Add explicit refetch after a successful revoke or rotate in `apps/web/src/hooks/useWorldInvites.ts` — the hook has no live push transport, so nothing else will deliver the change (research §8)
+- [X] T027 [US1] Add refresh and revoke controls to `apps/web/src/components/campaign/CampaignSettingsPanel.tsx`, with a confirm step on revoke since it is irreversible
 - [ ] T028 [P] [US1] Create `apps/web/e2e/access-links.spec.ts` covering quickstart Scenario 1: generate → join → rotate → old code refused → new code works
 
 **Checkpoint**: A GM can kill a leaked link. US1 is independently shippable.
@@ -125,16 +125,16 @@ under `src/core/`, React app under `apps/web/`.
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T033 [P] [US3] Unit tests for client-side link-state derivation across all four states in `apps/web/src/db/collections/__tests__/worldInvitesCollection.test.ts`
-- [ ] T034 [P] [US3] Test that `worldInvites` includes revoked links so a GM can see what they retired, in `src/server/src/graphql/queries/invite.rs` tests (contract: query rules)
+- [X] T033 [P] [US3] Unit tests for client-side link-state derivation across all four states in `apps/web/src/db/collections/__tests__/worldInvitesCollection.test.ts`
+- [X] T034 [P] [US3] Test that `worldInvites` includes revoked links so a GM can see what they retired, in `src/server/src/graphql/queries/invite.rs` tests (contract: query rules)
 
 ### Implementation for User Story 3
 
 - [X] T035 [US3] Map `state`, `remainingUses`, and `rotatedFrom` into the payload returned by `world_invites_impl` in `src/server/src/graphql/queries/invite.rs`, keeping newest-first stable ordering
-- [ ] T036 [US3] Extend `WorldInviteDoc` and `computeInviteDerivedData` in `apps/web/src/db/collections/worldInvitesCollection.ts` to carry server-supplied `state` rather than recomputing validity client-side; keep client derivation display-only (data-model.md §2)
-- [ ] T037 [US3] Map the new fields through `getWorldInvites` in `apps/web/src/api/world.ts` and the doc construction in `apps/web/src/hooks/useWorldInvites.ts`
-- [ ] T038 [US3] Render state badges, remaining uses, and expiry per link in `apps/web/src/components/campaign/CampaignSettingsPanel.tsx`, replacing the bare `status` string. **No copy may describe the use cap as a security control** (spec Edge Cases)
-- [ ] T039 [P] [US3] Reflect link state in `apps/web/src/components/world/SessionSetupInviteLink.tsx` so an unusable link is never presented as shareable
+- [X] T036 [US3] Extend `WorldInviteDoc` and `computeInviteDerivedData` in `apps/web/src/db/collections/worldInvitesCollection.ts` to carry server-supplied `state` rather than recomputing validity client-side; keep client derivation display-only (data-model.md §2)
+- [X] T037 [US3] Map the new fields through `getWorldInvites` in `apps/web/src/api/world.ts` and the doc construction in `apps/web/src/hooks/useWorldInvites.ts`
+- [X] T038 [US3] Render state badges, remaining uses, and expiry per link in `apps/web/src/components/campaign/CampaignSettingsPanel.tsx`, replacing the bare `status` string. **No copy may describe the use cap as a security control** (spec Edge Cases)
+- [X] T039 [P] [US3] Reflect link state in `apps/web/src/components/world/SessionSetupInviteLink.tsx` so an unusable link is never presented as shareable
 
 **Checkpoint**: Link state is legible everywhere it is shown
 
@@ -155,7 +155,7 @@ under `src/core/`, React app under `apps/web/`.
 
 - [X] T042 [US4] Move the already-a-member check **before** use consumption in `join_world_impl` (`src/server/src/graphql/mutations_invites.rs`), per the contractual order of operations in contracts/graphql-access-links.md
 - [X] T043 [US4] Collapse the distinct failure strings in `join_world_impl` in `src/server/src/graphql/mutations_invites.rs` to the single uniform message `This invite link is no longer available.`, matching the wording `load_active_share` already uses for content shares. Ensure the unknown-code path and the zero-rows-updated path return the identical error value
-- [ ] T044 [P] [US4] Surface the uniform message without embellishment in `apps/web/src/pages/world/JoinWorldPage.tsx`, and extend `apps/web/e2e/access-links.spec.ts` with quickstart Scenario 4
+- [X] T044 [P] [US4] Surface the uniform message without embellishment in `apps/web/src/pages/world/JoinWorldPage.tsx`, and extend `apps/web/e2e/access-links.spec.ts` with quickstart Scenario 4
 
 **Checkpoint**: Failure reveals nothing; a valid link never loses a use to a double click
 

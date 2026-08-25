@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { withCsrf } from "@/api/auth";
+import { postGraphQL } from "@/api/graphqlClient";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
@@ -19,45 +19,6 @@ interface WorldInfo {
 interface JoinResponse {
   world: WorldInfo;
   alreadyMember: boolean;
-}
-
-const GRAPHQL_ENDPOINT = "/api/graphql";
-
-async function postGraphQL<TData>(
-  query: string,
-  variables?: Record<string, unknown>,
-): Promise<TData> {
-  const response = await fetch(GRAPHQL_ENDPOINT, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: withCsrf({
-      "Content-Type": "application/json",
-    }),
-    body: JSON.stringify({
-      query,
-      variables,
-    }),
-  });
-
-  type GraphQLResponse<T> = {
-    data?: T;
-    errors?: Array<{ message?: string }>;
-  };
-
-  const payload = (await response.json()) as GraphQLResponse<TData>;
-  if (!response.ok) {
-    throw new Error(payload.errors?.[0]?.message || "GraphQL request failed");
-  }
-
-  if (payload.errors?.length) {
-    throw new Error(payload.errors[0]?.message || "GraphQL request failed");
-  }
-
-  if (!payload.data) {
-    throw new Error("GraphQL response did not include data");
-  }
-
-  return payload.data;
 }
 
 export const joinWorldPageSeo: SeoConfig = {
@@ -218,10 +179,14 @@ export default function JoinWorldPage() {
             >
               <StatusBadge variant="danger">{worldState.status}</StatusBadge>
               <h1 className="text-2xl font-semibold">
-                Could not load campaign
+                This link is no longer available
               </h1>
+              {/* Spec 027 (FR-011 / SC-005): one message for every dead link.
+                  Listing possible causes — invalid, expired, used up, revoked —
+                  tells the holder of a killed link which one applied, which is
+                  exactly what the server refuses to disclose. */}
               <p className="text-muted-foreground">
-                This invite code may be invalid, expired, or already used.
+                Ask your GM for a new invite link.
               </p>
               <Button onClick={() => navigate("/worlds")}>
                 Return to my campaigns
@@ -232,9 +197,11 @@ export default function JoinWorldPage() {
               surface="stone"
               className="grid w-full max-w-lg gap-4 p-6 text-center"
             >
-              <h1 className="text-2xl font-semibold">Campaign not found</h1>
+              <h1 className="text-2xl font-semibold">
+                This link is no longer available
+              </h1>
               <p className="text-muted-foreground">
-                This invite code does not exist or has expired.
+                Ask your GM for a new invite link.
               </p>
               <Button onClick={() => navigate("/worlds")}>
                 Return to my campaigns

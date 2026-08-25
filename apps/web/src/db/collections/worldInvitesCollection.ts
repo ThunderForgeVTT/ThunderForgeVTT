@@ -14,6 +14,8 @@
  * `worldInvites` GraphQL query (mapped from camelCase to this snake_case
  * shape for backward-compatible field names across consumers).
  */
+import type { WorldAccessLinkState } from "@/api/world";
+
 export interface WorldInviteDoc {
   id: string;
   world_id: string;
@@ -25,30 +27,70 @@ export interface WorldInviteDoc {
   created_at: string;
   updated_at: string;
 
-  // Client-side computed
+  /**
+   * Spec 027 (FR-010): supplied by the server, not recomputed here.
+   *
+   * The client cannot see revocation by inspecting counts and dates, so a
+   * locally-derived verdict rendered a revoked link as perfectly healthy.
+   */
+  state: WorldAccessLinkState;
+  /** Uses left, or `null` when uncapped. Server-supplied. */
+  remaining_uses?: number | null;
+  /** The link this one replaced, when created by rotation. */
+  rotated_from?: string | null;
+
+  // Client-side computed, for display only
   status?: string;
   is_valid?: boolean;
 }
 
 /**
- * Compute derived data for an invite (called on client to avoid network overhead).
- * 
- * Derives:
- * - status: "2/5 uses" format for display
- * - is_valid: true if not expired and usage < max_uses
+ * Human-readable label for a link's state.
+ *
+ * Deliberately says nothing about the use cap being enforcement — rotation
+ * resets the count, so a DM can rotate indefinitely. ADR-050 records the cap
+ * as a convenience control, and GM-facing copy must not imply otherwise.
+ */
+export function inviteStateLabel(state: WorldAccessLinkState): string {
+  switch (state) {
+    case "ACTIVE":
+      return "Active";
+    case "EXPIRED":
+      return "Expired";
+    case "EXHAUSTED":
+      return "All uses claimed";
+    case "REVOKED":
+      return "Revoked";
+    default:
+      // A state the client does not recognise must not render as working.
+      return "Unavailable";
+  }
+}
+
+/**
+ * Compute display-only derived data for an invite.
+ *
+ * Spec 027: `is_valid` now comes straight from the server's `state` rather
+ * than being re-derived from counts and dates. The previous local derivation
+ * could not see revocation at all, so a revoked link reported itself valid.
+ *
+ * This remains **display only**. Enforcement happens server-side inside the
+ * atomic consume; nothing here gates access, and a stale value is expected —
+ * `useWorldInvites` has no live push transport.
  */
 export function computeInviteDerivedData(invite: WorldInviteDoc): {
   status: string;
   is_valid: boolean;
 } {
-  const status = `${invite.used_count}/${invite.max_uses} uses`;
+  const remaining =
+    invite.remaining_uses ?? (invite.max_uses > 0 ? invite.max_uses - invite.used_count : null);
 
-  let is_valid = invite.used_count < invite.max_uses;
-  if (invite.expires_at) {
-    const expiresAt = new Date(invite.expires_at).getTime();
-    const now = new Date().getTime();
-    is_valid = is_valid && expiresAt > now;
-  }
+  const status =
+    invite.state === "ACTIVE"
+      ? remaining === null
+        ? "Active · unlimited uses"
+        : `Active · ${remaining} of ${invite.max_uses} uses left`
+      : inviteStateLabel(invite.state);
 
-  return { status, is_valid };
+  return { status, is_valid: invite.state === "ACTIVE" };
 }

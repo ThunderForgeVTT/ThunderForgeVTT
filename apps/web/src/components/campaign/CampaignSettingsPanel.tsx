@@ -1,62 +1,15 @@
 import { useState, useEffect } from "react";
-import { withCsrf } from "@/api/auth";
-import { getWorld, updateWorldAllowPlayerCreatedActors } from "@/api/world";
+import { generateInviteCode, getWorld, updateWorldAllowPlayerCreatedActors } from "@/api/world";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/loader/Loader";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
-
-interface Invite {
-  id: string;
-  inviteCode: string;
-  maxUses: number;
-  usedCount: number;
-  expiresAt?: string;
-  createdAt: string;
-}
+import { inviteStateLabel } from "@/db/collections/worldInvitesCollection";
+import { useWorldInvites } from "@/hooks/useWorldInvites";
 
 interface CampaignSettingsPanelProps {
   worldId: string;
-}
-
-const GRAPHQL_ENDPOINT = "/api/graphql";
-
-async function postGraphQL<TData>(
-  query: string,
-  variables?: Record<string, unknown>,
-): Promise<TData> {
-  const response = await fetch(GRAPHQL_ENDPOINT, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: withCsrf({
-      "Content-Type": "application/json",
-    }),
-    body: JSON.stringify({
-      query,
-      variables,
-    }),
-  });
-
-  type GraphQLResponse<T> = {
-    data?: T;
-    errors?: Array<{ message?: string }>;
-  };
-
-  const payload = (await response.json()) as GraphQLResponse<TData>;
-  if (!response.ok) {
-    throw new Error(payload.errors?.[0]?.message || "GraphQL request failed");
-  }
-
-  if (payload.errors?.length) {
-    throw new Error(payload.errors[0]?.message || "GraphQL request failed");
-  }
-
-  if (!payload.data) {
-    throw new Error("GraphQL response did not include data");
-  }
-
-  return payload.data;
 }
 
 /**
@@ -66,25 +19,34 @@ async function postGraphQL<TData>(
  * - Generate new invite codes
  * - Display active invites with usage counters
  * - Copy-to-clipboard invite URLs
- * - Show expiry and max uses
- * - Toggle whether players may create their own actors
- *
+ * - Show each link's real state, and revoke or refresh it
  * Spec 023 (FR-011): the player roster and its role-change/remove-member
  * controls moved to the dedicated Players sidebar section
  * (`PlayersPage.tsx`) — this panel no longer duplicates them.
  */
 export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
-  const [invites, setInvites] = useState<Invite[]>([]);
-  const [invitesLoading, setInvitesLoading] = useState(true);
+  // Spec 027: this panel used to run its own inline query through a private
+  // `postGraphQL` copy. It now shares `useWorldInvites`, so there is one place
+  // that knows how to read a link's state — and it goes through the hardened
+  // transport like everything else.
+  const {
+    invites,
+    loading: invitesLoading,
+    error: invitesError,
+    refetch: loadInvites,
+    revoke,
+    rotate,
+  } = useWorldInvites(worldId);
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [busyInviteId, setBusyInviteId] = useState<string | null>(null);
+  const [confirmingRevokeId, setConfirmingRevokeId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [allowPlayerCreatedActors, setAllowPlayerCreatedActors] = useState(false);
   const [isUpdatingAllowSetting, setIsUpdatingAllowSetting] = useState(false);
 
-  // Load invites on mount
   useEffect(() => {
-    void loadInvites();
     void getWorld(worldId).then((world) => {
       if (world) {
         setAllowPlayerCreatedActors(world.allowPlayerCreatedActors);
@@ -105,66 +67,25 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
     }
   };
 
-  const loadInvites = async () => {
+  const generateInviteUrl = (code: string) => `${window.location.origin}/join/${code}`;
+
+  const copyLink = async (code: string) => {
     try {
-      setInvitesLoading(true);
-      const data = await postGraphQL<{ worldInvites: Invite[] }>(
-        `
-          query worldInvites($worldId: ID!) {
-            worldInvites(worldId: $worldId) {
-              id
-              inviteCode
-              maxUses
-              usedCount
-              expiresAt
-              createdAt
-            }
-          }
-        `,
-        { worldId },
-      );
-      setInvites(data.worldInvites || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load invites");
-    } finally {
-      setInvitesLoading(false);
+      await navigator.clipboard.writeText(generateInviteUrl(code));
+      setCopiedCode(code);
+      setTimeout(() => setCopiedCode(null), 2000);
+    } catch {
+      setError("Failed to copy to clipboard");
     }
   };
 
   const handleGenerateInvite = async () => {
+    setError(null);
+    setIsGenerating(true);
     try {
-      setError(null);
-      setIsGenerating(true);
-
-      const data = await postGraphQL<{
-        generateInviteCode: {
-          inviteCode: string;
-        };
-      }>(
-        `
-          mutation generateInviteCode($input: GenerateInviteCodeInput!) {
-            generateInviteCode(input: $input) {
-              inviteCode
-            }
-          }
-        `,
-        {
-          input: {
-            worldId,
-            maxUses: 5,
-          },
-        },
-      );
-
-      const code = data.generateInviteCode?.inviteCode;
-      if (code) {
-        await navigator.clipboard.writeText(generateInviteUrl(code));
-        setCopiedCode(code);
-        setTimeout(() => setCopiedCode(null), 2000);
-
-        // Reload invites to show the new one
-        await loadInvites();
-      }
+      const created = await generateInviteCode(worldId, 5);
+      await copyLink(created.inviteCode);
+      await loadInvites();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate invite code");
     } finally {
@@ -172,32 +93,41 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
     }
   };
 
-  const handleCopyToClipboard = async (code: string) => {
+  /**
+   * Spec 027 (FR-003): the replacement code is copied straight to the
+   * clipboard. A GM refreshes a link precisely because they need to hand out a
+   * new one, so making them hunt for it afterwards misses the point.
+   */
+  const handleRotate = async (inviteId: string) => {
+    setError(null);
+    setBusyInviteId(inviteId);
     try {
-      await navigator.clipboard.writeText(generateInviteUrl(code));
-      setCopiedCode(code);
-      setTimeout(() => setCopiedCode(null), 2000);
+      const newCode = await rotate(inviteId);
+      await copyLink(newCode);
     } catch (err) {
-      setError("Failed to copy to clipboard");
+      setError(err instanceof Error ? err.message : "Failed to refresh this link");
+    } finally {
+      setBusyInviteId(null);
     }
   };
 
-  const generateInviteUrl = (code: string) => {
-    return `${window.location.origin}/join/${code}`;
+  const handleRevoke = async (inviteId: string) => {
+    setError(null);
+    setBusyInviteId(inviteId);
+    try {
+      await revoke(inviteId);
+      setConfirmingRevokeId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to revoke this link");
+    } finally {
+      setBusyInviteId(null);
+    }
   };
 
-  const getInviteStatus = (invite: Invite) => {
-    const used = invite.usedCount || 0;
-    const max = invite.maxUses || 0;
-    return `${used}/${max} uses`;
-  };
+  const stateVariant = (state: string) =>
+    state === "ACTIVE" ? "success" : state === "REVOKED" ? "danger" : "warning";
 
-  const isInviteValid = (invite: Invite) => {
-    const usedCount = invite.usedCount || 0;
-    const maxUses = invite.maxUses || 0;
-    const isExpired = invite.expiresAt && new Date(invite.expiresAt) < new Date();
-    return usedCount < maxUses && !isExpired;
-  };
+  const displayError = error ?? invitesError?.message ?? null;
 
   return (
     <section>
@@ -209,7 +139,7 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
           </p>
         </div>
 
-        {error && <StatusBadge variant="danger">{error}</StatusBadge>}
+        {displayError && <StatusBadge variant="danger">{displayError}</StatusBadge>}
 
         {/* Invite Players Section */}
         <div className="grid gap-3">
@@ -234,45 +164,119 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
               No active invites yet. Generate one to get started.
             </p>
           ) : (
-            <div className="grid gap-3">
-              {invites.map((invite) => (
-                <div
-                  key={invite.id}
-                  className="grid gap-3 rounded-lg border border-border p-4"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm text-muted-foreground">
-                      {getInviteStatus(invite)}
-                    </span>
-                    {!isInviteValid(invite) && (
-                      <StatusBadge variant="warning">Expired</StatusBadge>
-                    )}
-                  </div>
+            <div className="grid gap-3" data-testid="invite-link-list">
+              {invites.map((invite) => {
+                const isBusy = busyInviteId === invite.id;
+                const isRevoked = invite.state === "REVOKED";
+                return (
+                  <div
+                    key={invite.id}
+                    className="grid gap-3 rounded-lg border border-border p-4"
+                    data-testid="invite-link-row"
+                    data-invite-state={invite.state}
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* Spec 027 (FR-010): the real state, not a bare
+                          "3/10 uses" string. Before this, a revoked link
+                          rendered identically to a working one, and anything
+                          unusable was labelled "Expired" regardless of why. */}
+                      <StatusBadge
+                        variant={stateVariant(invite.state)}
+                        data-testid="invite-link-state"
+                      >
+                        {inviteStateLabel(invite.state)}
+                      </StatusBadge>
+                      <span className="text-sm text-muted-foreground">
+                        {invite.remaining_uses === null || invite.remaining_uses === undefined
+                          ? `${invite.used_count} joins`
+                          : `${invite.remaining_uses} of ${invite.max_uses} uses left`}
+                      </span>
+                      {invite.rotated_from && (
+                        <span className="text-xs text-muted-foreground italic">
+                          replaced an earlier link
+                        </span>
+                      )}
+                    </div>
 
-                  <div className="flex gap-2">
-                    <Input
-                      type="text"
-                      readOnly
-                      value={generateInviteUrl(invite.inviteCode)}
-                    />
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => void handleCopyToClipboard(invite.inviteCode)}
-                      icon={copiedCode === invite.inviteCode ? "check" : "copy"}
-                    >
-                      {copiedCode === invite.inviteCode ? "Copied!" : "Copy link"}
-                    </Button>
-                  </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Input
+                        type="text"
+                        readOnly
+                        value={generateInviteUrl(invite.invite_code)}
+                        aria-label="Invite link"
+                      />
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={isRevoked}
+                        onClick={() => void copyLink(invite.invite_code)}
+                        icon={copiedCode === invite.invite_code ? "check" : "copy"}
+                      >
+                        {copiedCode === invite.invite_code ? "Copied!" : "Copy link"}
+                      </Button>
+                      {/* Refresh works on an expired or exhausted link too —
+                          a GM can always revive a dead one. Only an already
+                          revoked link has nothing left to rotate. */}
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={isBusy || isRevoked}
+                        onClick={() => void handleRotate(invite.id)}
+                        icon="spark"
+                        data-testid="invite-link-refresh"
+                      >
+                        {isBusy ? "Working…" : "Refresh"}
+                      </Button>
+                      {!isRevoked &&
+                        (confirmingRevokeId === invite.id ? (
+                          <>
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              disabled={isBusy}
+                              onClick={() => void handleRevoke(invite.id)}
+                              data-testid="invite-link-revoke-confirm"
+                            >
+                              Revoke permanently
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={isBusy}
+                              onClick={() => setConfirmingRevokeId(null)}
+                            >
+                              Cancel
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={isBusy}
+                            onClick={() => setConfirmingRevokeId(invite.id)}
+                            data-testid="invite-link-revoke"
+                          >
+                            Revoke
+                          </Button>
+                        ))}
+                    </div>
 
-                  <div className="flex gap-4 text-xs text-muted-foreground">
-                    <span>Created: {new Date(invite.createdAt).toLocaleDateString()}</span>
-                    {invite.expiresAt && (
-                      <span>Expires: {new Date(invite.expiresAt).toLocaleDateString()}</span>
+                    {confirmingRevokeId === invite.id && (
+                      <p className="text-xs text-muted-foreground">
+                        This cannot be undone. Anyone who already joined with this link keeps
+                        their place — only future joins are stopped.
+                      </p>
                     )}
+
+                    <div className="flex gap-4 text-xs text-muted-foreground">
+                      <span>Created: {new Date(invite.created_at).toLocaleDateString()}</span>
+                      {invite.expires_at && (
+                        <span>Expires: {new Date(invite.expires_at).toLocaleDateString()}</span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

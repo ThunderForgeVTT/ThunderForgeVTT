@@ -1,37 +1,7 @@
 import { useState } from "react";
-import { withCsrf } from "@/api/auth";
+import { generateInviteCode } from "@/api/world";
 import { Button } from "@/components/ui/button/Button";
 import { Input } from "@/components/ui/input";
-
-const GRAPHQL_ENDPOINT = "/api/graphql";
-
-async function postGraphQL<TData>(
-  query: string,
-  variables?: Record<string, unknown>,
-): Promise<TData> {
-  const response = await fetch(GRAPHQL_ENDPOINT, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: withCsrf({
-      "Content-Type": "application/json",
-    }),
-    body: JSON.stringify({ query, variables }),
-  });
-
-  type GraphQLResponse<T> = {
-    data?: T;
-    errors?: Array<{ message?: string }>;
-  };
-
-  const payload = (await response.json()) as GraphQLResponse<TData>;
-  if (!response.ok || payload.errors?.length) {
-    throw new Error(payload.errors?.[0]?.message || "GraphQL request failed");
-  }
-  if (!payload.data) {
-    throw new Error("GraphQL response did not include data");
-  }
-  return payload.data;
-}
 
 interface SessionSetupInviteLinkProps {
   worldId: string;
@@ -53,23 +23,14 @@ export function SessionSetupInviteLink({ worldId }: SessionSetupInviteLinkProps)
     setIsGenerating(true);
     setStatus(null);
     try {
-      const data = await postGraphQL<{ generateInviteCode: { inviteCode: string } }>(
-        `
-          mutation generateInviteCode($input: GenerateInviteCodeInput!) {
-            generateInviteCode(input: $input) {
-              inviteCode
-            }
-          }
-        `,
-        { input: { worldId, maxUses: 5 } },
-      );
-      const code = data.generateInviteCode?.inviteCode;
-      if (code) {
-        const url = `${window.location.origin}/join/${code}`;
-        setInviteUrl(url);
-        await navigator.clipboard.writeText(url).catch(() => {});
-        setStatus("Copied to clipboard.");
-      }
+      // Spec 027: was a private `postGraphQL` copy — one the transport
+      // consolidation missed because it lived in a component rather than
+      // `src/api/`. Now shares the hardened client like everything else.
+      const created = await generateInviteCode(worldId, 5);
+      const url = `${window.location.origin}/join/${created.inviteCode}`;
+      setInviteUrl(url);
+      await navigator.clipboard.writeText(url).catch(() => {});
+      setStatus("Copied to clipboard.");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Failed to generate invite link");
     } finally {

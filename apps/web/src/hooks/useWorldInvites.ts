@@ -19,7 +19,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { getWorldInvites } from '@/api/world';
+import { getWorldInvites, revokeInviteCode, rotateInviteCode } from '@/api/world';
 import type { WorldInviteDoc } from '../db/collections/worldInvitesCollection';
 import { computeInviteDerivedData } from '../db/collections/worldInvitesCollection';
 
@@ -28,6 +28,17 @@ export interface UseWorldInvitesResult {
   loading: boolean;
   error: Error | null;
   refetch: () => Promise<void>;
+  /**
+   * Spec 027 (FR-002): permanently retire a link. Irreversible.
+   * Refetches on success — there is no push transport to deliver the change.
+   */
+  revoke: (inviteId: string) => Promise<void>;
+  /**
+   * Spec 027 (FR-003): retire a link and issue its replacement. The old code
+   * stops working immediately. Returns the new code so the caller can show it
+   * without waiting for the refetch to land.
+   */
+  rotate: (inviteId: string) => Promise<string>;
 }
 
 export function useWorldInvites(worldId: string): UseWorldInvitesResult {
@@ -57,6 +68,11 @@ export function useWorldInvites(worldId: string): UseWorldInvitesResult {
             created_by: record.createdBy,
             created_at: record.createdAt,
             updated_at: record.updatedAt,
+            // Spec 027 (FR-010): server-supplied. The client cannot see
+            // revocation by inspecting counts and dates.
+            state: record.state,
+            remaining_uses: record.remainingUses ?? null,
+            rotated_from: record.rotatedFrom ?? null,
           };
           const derived = computeInviteDerivedData(doc);
           return { ...doc, ...derived };
@@ -75,5 +91,26 @@ export function useWorldInvites(worldId: string): UseWorldInvitesResult {
     void fetchInvites();
   }, [fetchInvites]);
 
-  return { invites, loading, error, refetch: fetchInvites };
+  // Spec 027 (T026): both mutations refetch on success. There is no live push
+  // transport here (see this file's header), so nothing else will reflect the
+  // change — and a panel that kept showing a revoked link as active would be
+  // worse than one that never showed state at all.
+  const revoke = useCallback(
+    async (inviteId: string) => {
+      await revokeInviteCode(inviteId);
+      await fetchInvites();
+    },
+    [fetchInvites],
+  );
+
+  const rotate = useCallback(
+    async (inviteId: string) => {
+      const replacement = await rotateInviteCode(inviteId);
+      await fetchInvites();
+      return replacement.inviteCode;
+    },
+    [fetchInvites],
+  );
+
+  return { invites, loading, error, refetch: fetchInvites, revoke, rotate };
 }

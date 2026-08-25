@@ -209,7 +209,19 @@ pub async fn world_by_invite_code_impl(
         None => return Ok(None), // Code not found
     };
 
-    // Check if invite is still valid
+    // Spec 027 (FR-011 / SC-005): this preview resolves a code **without**
+    // joining, so its validity check has to be exactly as strict as the join
+    // path's. Anything it lets through it discloses — the world's name and
+    // description — to whoever holds the code.
+    //
+    // Revocation was missing here entirely: a revoked code still returned the
+    // world, which would have made `joinWorld`'s uniform failure pointless.
+    // Someone holding a killed link could still confirm it was real and see
+    // what it pointed at.
+    if invite.revoked {
+        return Ok(None);
+    }
+
     if let Some(expires_at) = invite.expires_at {
         use chrono::Utc;
         if expires_at < Utc::now().naive_utc() {
@@ -217,7 +229,10 @@ pub async fn world_by_invite_code_impl(
         }
     }
 
-    if invite.used_count >= invite.max_uses {
+    // `max_uses == 0` means unlimited, matching the join predicate and
+    // `WorldInvite::is_valid`. Without that guard an uncapped link read as
+    // exhausted immediately, since `0 >= 0`.
+    if invite.max_uses > 0 && invite.used_count >= invite.max_uses {
         return Ok(None); // Invite exhausted
     }
 
@@ -369,7 +384,12 @@ mod tests {
         revoked: bool,
     ) -> String {
         let now = chrono::Utc::now().naive_utc();
-        let code = format!("T{}", &uuid::Uuid::now_v7().simple().to_string()[..20]);
+        // Spec 027: was `format!("T{}", now_v7()...)`. A v7 UUID front-loads a
+        // millisecond timestamp, so invites created back-to-back shared a
+        // prefix and collided on `world_invites_invite_code_key` — the exact
+        // defect spec 005 fixed in production code, still living here. Uses
+        // the shared v4-based generator now.
+        let code = crate::graphql::share_codes::generate_link_code();
         let invite = NewWorldInvite {
             id: uuid::Uuid::now_v7(),
             world_id,
@@ -578,5 +598,73 @@ mod tests {
         // owner has no world_members row, so is_member is computed purely
         // from world_members — the owner fallback does not apply here.
         assert!(matches!(not_yet, Ok(false)));
+    }
+
+    /// Spec 027 (FR-011 / SC-005): the preview must not disclose a world
+    /// behind a dead code. Revocation was previously unchecked here, so a
+    /// revoked link still returned the world's name — which would have made
+    /// `joinWorld`'s uniform failure pointless, since the holder of a killed
+    /// link could confirm it was real and see what it pointed at.
+    #[tokio::test]
+    async fn world_by_invite_code_hides_the_world_behind_every_dead_code() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+
+        let past = chrono::Utc::now().naive_utc() - chrono::Duration::days(1);
+        let expired = insert_test_invite(&mut conn, world_id, owner_id, 5, 0, Some(past));
+        let exhausted = insert_test_invite(&mut conn, world_id, owner_id, 3, 3, None);
+        let revoked =
+            insert_test_invite_with_revocation(&mut conn, world_id, owner_id, 5, 0, None, true);
+        drop(conn);
+
+        for (label, code) in [
+            ("expired", expired),
+            ("exhausted", exhausted),
+            ("revoked", revoked),
+        ] {
+            let result = world_by_invite_code_impl(&state, &code)
+                .await
+                .expect("query should not error");
+            assert!(
+                result.is_none(),
+                "a {label} code must not disclose the world it points at"
+            );
+        }
+    }
+
+    /// FR-010: revoked links stay listed for their GM — they need to see what
+    /// they retired. This is world-scoped and DM-gated, so it is not the
+    /// cross-world enumeration FR-009 forbids.
+    #[tokio::test]
+    async fn world_invites_lists_revoked_links_with_their_state() {
+        use crate::graphql::mutations_invites::WorldAccessLinkState;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let active = insert_test_invite(&mut conn, world_id, owner_id, 5, 1, None);
+        let revoked =
+            insert_test_invite_with_revocation(&mut conn, world_id, owner_id, 5, 0, None, true);
+        drop(conn);
+
+        let listed = world_invites_impl(&state, owner_id, world_id)
+            .await
+            .expect("a DM may list their own world's links");
+
+        let active_row = listed
+            .iter()
+            .find(|i| i.invite_code == active)
+            .expect("the active link must be listed");
+        assert_eq!(active_row.state, WorldAccessLinkState::Active);
+        assert_eq!(active_row.remaining_uses, Some(4));
+
+        let revoked_row = listed
+            .iter()
+            .find(|i| i.invite_code == revoked)
+            .expect("a revoked link must remain visible to its GM");
+        assert_eq!(revoked_row.state, WorldAccessLinkState::Revoked);
     }
 }

@@ -201,6 +201,12 @@ export function getMyWorldMemberRole(worldId: string, userId: string): Promise<s
   ).then((data) => data.worldMember?.role ?? null);
 }
 
+/**
+ * Spec 027 (FR-010): whether a link works right now, and if not, why.
+ * Derived server-side from the row, never stored, so it cannot drift.
+ */
+export type WorldAccessLinkState = "ACTIVE" | "EXPIRED" | "EXHAUSTED" | "REVOKED";
+
 export interface WorldInviteRecord {
   id: string;
   worldId: string;
@@ -211,8 +217,36 @@ export interface WorldInviteRecord {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+
+  /** Spec 027 (FR-010): supersedes `status`, which could not express revoked. */
+  state: WorldAccessLinkState;
+  /** Uses left, or `null` when the link is uncapped. */
+  remainingUses?: number | null;
+  /** The link this one replaced, when created by rotation. */
+  rotatedFrom?: string | null;
+
+  /**
+   * @deprecated Spec 027: a `"3/10 uses"` string cannot express revocation, so
+   * a revoked link rendered identically to a working one. Use `state`.
+   */
   status: string;
 }
+
+/** Every field the panel needs, in one place so the three operations agree. */
+const INVITE_FIELDS = `
+  id
+  worldId
+  inviteCode
+  maxUses
+  usedCount
+  expiresAt
+  createdBy
+  createdAt
+  updatedAt
+  state
+  remainingUses
+  rotatedFrom
+`;
 
 type WorldInvitesQuery = {
   worldInvites: WorldInviteRecord[];
@@ -231,21 +265,77 @@ export function getWorldInvites(worldId: string): Promise<WorldInviteRecord[]> {
     `
       query WorldInvites($worldId: ID!) {
         worldInvites(worldId: $worldId) {
-          id
-          worldId
-          inviteCode
-          maxUses
-          usedCount
-          expiresAt
-          createdBy
-          createdAt
-          updatedAt
-          status
+          ${INVITE_FIELDS}
         }
       }
     `,
     { worldId },
   ).then((data) => data.worldInvites);
+}
+
+/**
+ * Issues a new invite link for a world. Owner/GM only.
+ *
+ * Spec 027: moved here from an inline query inside `CampaignSettingsPanel`,
+ * which carried its own private `postGraphQL` copy — one the transport
+ * consolidation missed because it lived in a component rather than `src/api/`.
+ * That copy called `response.json()` unconditionally, surfaced only the first
+ * error, and had no timeout.
+ */
+export function generateInviteCode(
+  worldId: string,
+  maxUses: number,
+  expiresAt?: string | null,
+): Promise<WorldInviteRecord> {
+  return postGraphQL<{ generateInviteCode: WorldInviteRecord }>(
+    `
+      mutation GenerateInviteCode($input: GenerateInviteCodeInput!) {
+        generateInviteCode(input: $input) {
+          ${INVITE_FIELDS}
+        }
+      }
+    `,
+    { input: { worldId, maxUses, expiresAt: expiresAt ?? null } },
+  ).then((data) => data.generateInviteCode);
+}
+
+/**
+ * Spec 027 (FR-002): permanently retire a link, with no replacement.
+ *
+ * Irreversible — a revoked code never becomes usable again. Anyone who already
+ * joined with it keeps their membership; this governs future joins only.
+ */
+export function revokeInviteCode(inviteId: string): Promise<WorldInviteRecord> {
+  return postGraphQL<{ revokeInviteCode: WorldInviteRecord }>(
+    `
+      mutation RevokeInviteCode($inviteId: UUID!) {
+        revokeInviteCode(inviteId: $inviteId) {
+          ${INVITE_FIELDS}
+        }
+      }
+    `,
+    { inviteId },
+  ).then((data) => data.revokeInviteCode);
+}
+
+/**
+ * Spec 027 (FR-003): retire a link and issue its replacement atomically.
+ *
+ * Returns the **new** link. The old code stops working on its very next use —
+ * this is what makes a leaked link recoverable. The replacement carries the
+ * same use cap and the same chosen lifetime, both measured afresh.
+ */
+export function rotateInviteCode(inviteId: string): Promise<WorldInviteRecord> {
+  return postGraphQL<{ rotateInviteCode: WorldInviteRecord }>(
+    `
+      mutation RotateInviteCode($inviteId: UUID!) {
+        rotateInviteCode(inviteId: $inviteId) {
+          ${INVITE_FIELDS}
+        }
+      }
+    `,
+    { inviteId },
+  ).then((data) => data.rotateInviteCode);
 }
 
 type UpdateWorldGameSystemMutation = {
