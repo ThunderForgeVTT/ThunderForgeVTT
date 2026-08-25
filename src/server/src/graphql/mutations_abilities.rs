@@ -931,4 +931,69 @@ mod effect_tests {
         .await
         .expect_err("a Viewer must not add effects");
     }
+
+    /// FR-031: deleting an ability must not be blocked by lore linking to it;
+    /// the link row survives with a null FK and renders unresolved.
+    #[tokio::test]
+    async fn deleting_an_ability_nulls_referencing_lore_links_instead_of_blocking() {
+        use crate::schema::{world_lore_entries, world_lore_links};
+        dotenvy::dotenv().ok();
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let ability = create_ability_impl(&state, owner_id, false, ability_input(world_id, "Linked"))
+            .await
+            .unwrap();
+
+        let mut conn = state.db_pool.get().unwrap();
+        let entry_id = Uuid::now_v7();
+        diesel::insert_into(world_lore_entries::table)
+            .values((
+                world_lore_entries::id.eq(entry_id),
+                world_lore_entries::world_id.eq(world_id),
+                world_lore_entries::title.eq("Source Entry"),
+                world_lore_entries::slug.eq(format!("source-{}", entry_id.simple())),
+                world_lore_entries::content.eq("Refers to [[Linked]]."),
+                world_lore_entries::created_by.eq(owner_id),
+            ))
+            .execute(&mut conn)
+            .expect("insert lore entry");
+        let link_id = Uuid::now_v7();
+        diesel::insert_into(world_lore_links::table)
+            .values((
+                world_lore_links::id.eq(link_id),
+                world_lore_links::source_lore_entry_id.eq(entry_id),
+                world_lore_links::raw_title.eq("Linked"),
+                world_lore_links::target_kind.eq("ability"),
+                world_lore_links::target_ability_id.eq(ability.id),
+            ))
+            .execute(&mut conn)
+            .expect("insert lore link");
+        drop(conn);
+
+        assert!(
+            delete_ability_impl(&state, owner_id, false, ability.id).await.unwrap(),
+            "deletion must not be blocked by an inbound lore link"
+        );
+
+        let mut conn = state.db_pool.get().unwrap();
+        let (surviving, target): (Uuid, Option<Uuid>) = world_lore_links::table
+            .filter(world_lore_links::id.eq(link_id))
+            .select((world_lore_links::id, world_lore_links::target_ability_id))
+            .first(&mut conn)
+            .expect("the link row must survive");
+        assert_eq!(surviving, link_id);
+        assert_eq!(target, None, "its FK is nulled, so it renders unresolved");
+
+        // The source entry itself is untouched.
+        let title: String = world_lore_entries::table
+            .filter(world_lore_entries::id.eq(entry_id))
+            .select(world_lore_entries::title)
+            .first(&mut conn)
+            .expect("source entry must be untouched");
+        assert_eq!(title, "Source Entry");
+    }
 }

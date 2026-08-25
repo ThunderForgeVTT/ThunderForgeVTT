@@ -1134,11 +1134,8 @@ impl From<AbilityEffect> for GraphQLAbilityEffect {
 
 /// An Ability's GraphQL projection. Mirrors `GraphQLItem`, including its
 /// `#[graphql(complex)]` backlink field.
-/// NOTE: gains `#[graphql(complex)]` and a `linkedFromLore` field in US4
-/// (T063), once `world_lore_links.target_ability_id` and
-/// `lore_entries_linking_to_ability` exist. Deliberately absent until then
-/// rather than stubbed to an empty list, which would be a lie in the schema.
 #[derive(SimpleObject, Debug, Clone)]
+#[graphql(complex)]
 pub struct GraphQLAbility {
     pub id: uuid::Uuid,
     pub world_id: uuid::Uuid,
@@ -1210,6 +1207,21 @@ impl GraphQLAbility {
             moderated: true,
             moderation_case_id,
         }
+    }
+}
+
+#[async_graphql::ComplexObject]
+impl GraphQLAbility {
+    /// Spec 025 (FR-029): every lore entry whose body currently contains a
+    /// resolved in-text link to this ability. Named `linkedFromLore` to match
+    /// `GraphQLItem` (the newer convention; actors use the older
+    /// `loreLinkedFrom`).
+    async fn linked_from_lore(
+        &self,
+        ctx: &async_graphql::Context<'_>,
+    ) -> async_graphql::Result<Vec<GraphQLLoreEntry>> {
+        let state = crate::graphql::app_state(ctx)?;
+        crate::graphql::queries::lore::lore_entries_linking_to_ability(state, self.id).await
     }
 }
 

@@ -18,7 +18,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use uuid::Uuid;
 
-use crate::schema::{world_actors, world_items, world_lore_entries};
+use crate::schema::{world_abilities, world_actors, world_items, world_lore_entries};
 
 /// Matches `[[Title]]` or `[[Title|Display Text]]`. Title/Display may not
 /// contain `]` or `|`.
@@ -40,6 +40,7 @@ pub struct PreparedLink {
     pub target_lore_entry_id: Option<Uuid>,
     pub target_actor_id: Option<Uuid>,
     pub target_item_id: Option<Uuid>,
+    pub target_ability_id: Option<Uuid>,
     /// `None` for an unresolved link.
     pub href: Option<String>,
 }
@@ -66,10 +67,21 @@ fn html_escape(s: &str) -> String {
 /// time (FR-007a).
 ///
 /// Blocking — callers run this inside `tokio::task::spawn_blocking`.
+///
+/// **Viewer-dependent since spec 025.** `viewer_is_dm` gates whether GM-only
+/// abilities are resolvable (FR-030b), so the same lore entry can legitimately
+/// render a working link for a DM and an unresolved span for a player. Callers:
+///
+/// * **Save time** (`mutations_lore.rs`) passes `true` — `world_lore_links` is
+///   a canonical index driving backlinks, not a per-viewer view, so a GM's link
+///   to their own hidden ability must still be recorded.
+/// * **Render time** (`queries::lore::render_lore_content`) passes the actual
+///   reader's DM status, which is what withholds the link from a player.
 pub fn extract_and_resolve(
     conn: &mut PgConnection,
     world_id: Uuid,
     markdown: &str,
+    viewer_is_dm: bool,
 ) -> Result<(String, Vec<PreparedLink>), diesel::result::Error> {
     let mut links = Vec::new();
     let mut counter = 0usize;
@@ -88,6 +100,10 @@ pub fn extract_and_resolve(
             let lore_match = world_lore_entries::table
                 .filter(world_lore_entries::world_id.eq(world_id))
                 .filter(world_lore_entries::title.ilike(&title))
+                // FR-030a: deterministic — without an explicit order Postgres
+                // may return either of two same-titled rows, so the same link
+                // could resolve differently between reads.
+                .order(world_lore_entries::created_at.asc())
                 .select((world_lore_entries::id, world_lore_entries::slug))
                 .first::<(Uuid, String)>(conn)
                 .optional()
@@ -102,12 +118,14 @@ pub fn extract_and_resolve(
                     target_lore_entry_id: Some(entry_id),
                     target_actor_id: None,
                     target_item_id: None,
+                    target_ability_id: None,
                     href: Some(format!("/world/{world_id}/lore/{slug}/view")),
                 }
             } else {
                 let actor_match = world_actors::table
                     .filter(world_actors::world_id.eq(world_id))
                     .filter(world_actors::label.ilike(&title))
+                    .order(world_actors::created_at.asc())
                     .select(world_actors::id)
                     .first::<Uuid>(conn)
                     .optional()
@@ -122,12 +140,14 @@ pub fn extract_and_resolve(
                         target_lore_entry_id: None,
                         target_actor_id: Some(actor_id),
                         target_item_id: None,
+                        target_ability_id: None,
                         href: Some(format!("/world/{world_id}/actor/{actor_id}/view")),
                     }
                 } else {
                     let item_match = world_items::table
                         .filter(world_items::world_id.eq(world_id))
                         .filter(world_items::name.ilike(&title))
+                        .order(world_items::created_at.asc())
                         .select(world_items::id)
                         .first::<Uuid>(conn)
                         .optional()
@@ -142,18 +162,54 @@ pub fn extract_and_resolve(
                             target_lore_entry_id: None,
                             target_actor_id: None,
                             target_item_id: Some(item_id),
+                            target_ability_id: None,
                             href: Some(format!("/world/{world_id}/item/{item_id}/view")),
                         }
                     } else {
-                        PreparedLink {
-                            placeholder: placeholder.clone(),
-                            raw_title: title.clone(),
-                            display,
-                            target_kind: "unresolved",
-                            target_lore_entry_id: None,
-                            target_actor_id: None,
-                            target_item_id: None,
-                            href: None,
+                        // Spec 025: abilities append LAST, after items. FR-030a
+                        // orders by created_at so a duplicate name always
+                        // resolves to the earliest; FR-030b hides GM-only
+                        // abilities from a non-DM reader, which is why this
+                        // whole function is viewer-dependent.
+                        let mut ability_query = world_abilities::table
+                            .filter(world_abilities::world_id.eq(world_id))
+                            .filter(world_abilities::name.ilike(&title))
+                            .into_boxed();
+                        if !viewer_is_dm {
+                            ability_query =
+                                ability_query.filter(world_abilities::gm_only.eq(false));
+                        }
+                        let ability_match = ability_query
+                            .order(world_abilities::created_at.asc())
+                            .select(world_abilities::id)
+                            .first::<Uuid>(conn)
+                            .optional()
+                            .unwrap_or(None);
+
+                        if let Some(ability_id) = ability_match {
+                            PreparedLink {
+                                placeholder: placeholder.clone(),
+                                raw_title: title.clone(),
+                                display,
+                                target_kind: "ability",
+                                target_lore_entry_id: None,
+                                target_actor_id: None,
+                                target_item_id: None,
+                                target_ability_id: Some(ability_id),
+                                href: Some(format!("/world/{world_id}/ability/{ability_id}/view")),
+                            }
+                        } else {
+                            PreparedLink {
+                                placeholder: placeholder.clone(),
+                                raw_title: title.clone(),
+                                display,
+                                target_kind: "unresolved",
+                                target_lore_entry_id: None,
+                                target_actor_id: None,
+                                target_item_id: None,
+                                target_ability_id: None,
+                                href: None,
+                            }
                         }
                     }
                 }
@@ -247,7 +303,7 @@ mod tests {
         let entry_id = insert_lore_entry(&mut conn, world_id, owner_id, "Entry B", "entry-b");
 
         let (rewritten, links) =
-            extract_and_resolve(&mut conn, world_id, "See [[Entry B]] for details.")
+            extract_and_resolve(&mut conn, world_id, "See [[Entry B]] for details.", true)
                 .expect("resolution should succeed");
 
         assert_eq!(links.len(), 1);
@@ -274,7 +330,7 @@ mod tests {
         let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
         let actor_id = insert_actor(&mut conn, world_id, scene_id, owner_id, "Bo Jangles");
 
-        let (_rewritten, links) = extract_and_resolve(&mut conn, world_id, "Meet [[Bo Jangles]].")
+        let (_rewritten, links) = extract_and_resolve(&mut conn, world_id, "Meet [[Bo Jangles]].", true)
             .expect("resolution should succeed");
 
         assert_eq!(links.len(), 1);
@@ -291,7 +347,7 @@ mod tests {
         let owner_id = insert_test_user(&mut conn);
         let world_id = insert_test_world(&mut conn, owner_id);
 
-        let (rewritten, links) = extract_and_resolve(&mut conn, world_id, "[[Nonexistent Title]]")
+        let (rewritten, links) = extract_and_resolve(&mut conn, world_id, "[[Nonexistent Title]]", true)
             .expect("resolution should succeed even with no match");
 
         assert_eq!(links.len(), 1);
@@ -314,7 +370,7 @@ mod tests {
         let entry_id = insert_lore_entry(&mut conn, world_id, owner_id, "Ambiguous", "ambiguous");
         insert_actor(&mut conn, world_id, scene_id, owner_id, "Ambiguous");
 
-        let (_rewritten, links) = extract_and_resolve(&mut conn, world_id, "[[Ambiguous]]")
+        let (_rewritten, links) = extract_and_resolve(&mut conn, world_id, "[[Ambiguous]]", true)
             .expect("resolution should succeed");
 
         assert_eq!(links[0].target_kind, "lore_entry");
@@ -332,9 +388,160 @@ mod tests {
         insert_lore_entry(&mut conn, world_id, owner_id, "Entry B", "entry-b");
 
         let (_rewritten, links) =
-            extract_and_resolve(&mut conn, world_id, "[[Entry B|the ruins]]").expect("should resolve");
+            extract_and_resolve(&mut conn, world_id, "[[Entry B|the ruins]]", true).expect("should resolve");
 
         assert_eq!(links[0].raw_title, "Entry B");
         assert_eq!(links[0].display, "the ruins");
+    }
+
+    fn insert_ability(
+        conn: &mut PgConnection,
+        world_id: Uuid,
+        owner_id: Uuid,
+        name: &str,
+        gm_only: bool,
+    ) -> Uuid {
+        use crate::schema::world_abilities;
+        diesel::insert_into(world_abilities::table)
+            .values((
+                world_abilities::world_id.eq(world_id),
+                world_abilities::name.eq(name),
+                world_abilities::classification.eq("spell"),
+                world_abilities::gm_only.eq(gm_only),
+                world_abilities::created_by.eq(owner_id),
+                world_abilities::updated_by.eq(owner_id),
+            ))
+            .returning(world_abilities::id)
+            .get_result::<Uuid>(conn)
+            .expect("insert ability")
+    }
+
+    /// FR-028: a title matching only an ability resolves to it.
+    #[tokio::test]
+    async fn resolves_link_to_existing_ability() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let ability_id = insert_ability(&mut conn, world_id, owner_id, "Fireball", false);
+
+        let (_rewritten, links) =
+            extract_and_resolve(&mut conn, world_id, "Cast [[Fireball]] now.", true)
+                .expect("should resolve");
+
+        assert_eq!(links[0].target_kind, "ability");
+        assert_eq!(links[0].target_ability_id, Some(ability_id));
+        assert!(links[0]
+            .href
+            .as_deref()
+            .unwrap()
+            .contains(&format!("/ability/{ability_id}/view")));
+    }
+
+    /// Abilities append LAST in the cascade, so an item of the same name still
+    /// wins. Appending rather than inserting is what guarantees no
+    /// already-saved link changes target when abilities were introduced.
+    #[tokio::test]
+    async fn item_wins_over_ability_on_title_collision() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+
+        use crate::schema::world_items;
+        let item_id = diesel::insert_into(world_items::table)
+            .values((
+                world_items::world_id.eq(world_id),
+                world_items::name.eq("Overlap"),
+                world_items::created_by.eq(owner_id),
+            ))
+            .returning(world_items::id)
+            .get_result::<Uuid>(&mut conn)
+            .expect("insert item");
+        insert_ability(&mut conn, world_id, owner_id, "Overlap", false);
+
+        let (_rewritten, links) = extract_and_resolve(&mut conn, world_id, "[[Overlap]]", true)
+            .expect("should resolve");
+
+        assert_eq!(links[0].target_kind, "item");
+        assert_eq!(links[0].target_item_id, Some(item_id));
+    }
+
+    /// FR-030a: duplicate ability names are permitted (FR-006), so resolution
+    /// must be deterministic — the earliest-created wins, stably. Without the
+    /// explicit ORDER BY, Postgres may return either row.
+    #[tokio::test]
+    async fn duplicate_ability_names_resolve_to_the_oldest() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+
+        let first = insert_ability(&mut conn, world_id, owner_id, "Twin", false);
+        // Ensure a distinct created_at ordering.
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        let second = insert_ability(&mut conn, world_id, owner_id, "Twin", false);
+        assert_ne!(first, second);
+
+        for _ in 0..5 {
+            let (_r, links) = extract_and_resolve(&mut conn, world_id, "[[Twin]]", true)
+                .expect("should resolve");
+            assert_eq!(
+                links[0].target_ability_id,
+                Some(first),
+                "the earliest-created ability must win, stably across reads"
+            );
+        }
+    }
+
+    /// FR-030b: resolution is viewer-dependent. The same Markdown yields a
+    /// working link for a DM and an unresolved span for a player.
+    #[tokio::test]
+    async fn gm_only_ability_is_unresolved_for_a_non_dm_reader() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let secret_id = insert_ability(&mut conn, world_id, owner_id, "Soul Harvest", true);
+
+        let (_r, dm_links) =
+            extract_and_resolve(&mut conn, world_id, "[[Soul Harvest]]", true).unwrap();
+        assert_eq!(dm_links[0].target_kind, "ability");
+        assert_eq!(dm_links[0].target_ability_id, Some(secret_id));
+
+        let (_r, player_links) =
+            extract_and_resolve(&mut conn, world_id, "[[Soul Harvest]]", false).unwrap();
+        assert_eq!(
+            player_links[0].target_kind, "unresolved",
+            "a player must not get a working link to a GM-only ability"
+        );
+        assert_eq!(player_links[0].target_ability_id, None);
+        assert!(player_links[0].href.is_none());
+    }
+
+    /// A non-DM's link falls through to the earliest *visible* match, skipping
+    /// a hidden one — so the same title can legitimately resolve differently
+    /// for a DM and a player. That is the intended effect of hiding.
+    #[tokio::test]
+    async fn a_player_resolves_past_a_hidden_ability_to_the_visible_one() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+
+        let hidden = insert_ability(&mut conn, world_id, owner_id, "Echo", true);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        let visible = insert_ability(&mut conn, world_id, owner_id, "Echo", false);
+
+        let (_r, dm_links) = extract_and_resolve(&mut conn, world_id, "[[Echo]]", true).unwrap();
+        assert_eq!(dm_links[0].target_ability_id, Some(hidden), "DM gets the oldest overall");
+
+        let (_r, player_links) =
+            extract_and_resolve(&mut conn, world_id, "[[Echo]]", false).unwrap();
+        assert_eq!(
+            player_links[0].target_ability_id,
+            Some(visible),
+            "a player resolves past the hidden one to the earliest visible match"
+        );
     }
 }

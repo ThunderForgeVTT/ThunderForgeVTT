@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { deleteAbility, getAbility, setAbilityGmOnly, updateAbility } from "@/api/abilities";
 import { getGameSystemManifest } from "@/api/gameSystems";
 import { getWorld } from "@/api/world";
@@ -354,6 +354,26 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
             </>
           )}
         </Card>
+
+        {ability.linkedFromLore.length > 0 ? (
+          <Card className="grid gap-2 p-5" data-testid="ability-lore-linked-from">
+            <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+              Linked from (lore)
+            </p>
+            <ul className="grid gap-1 text-sm">
+              {ability.linkedFromLore.map((entry) => (
+                <li key={entry.id}>
+                  <Link
+                    to={`/world/${worldId}/lore/${entry.slug}/view`}
+                    className="text-primary hover:underline"
+                  >
+                    {entry.title}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        ) : null}
 
         <AbilityEffectEditor
           abilityId={abilityId}

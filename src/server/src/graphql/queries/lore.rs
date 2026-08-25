@@ -11,18 +11,31 @@ use crate::auth::lore_permissions::require_lore_permission;
 use crate::graphql::types::{ActorPermissionLevel, GraphQLLoreEntry, GraphQLLoreRevision};
 use crate::graphql::{app_state, authenticated_user, require_visible_world};
 use crate::models::{LoreEntry, LoreRevision};
-use crate::schema::{world_actors, world_items, world_lore_entries, world_lore_links, world_lore_revisions};
+use crate::schema::{world_abilities, world_actors, world_items, world_lore_entries, world_lore_links, world_lore_revisions};
 use crate::state::AppState;
 
 /// Shared by `GraphQLLoreEntry::rendered_html` and
 /// `GraphQLLoreRevision::rendered_html` — takes a `Context` directly
 /// since both call sites are `#[ComplexObject]` field resolvers.
+/// Spec 025 (FR-030b): rendering re-resolves links on **every read**, and does
+/// so against the *current viewer*. A lore entry referencing a GM-only ability
+/// therefore renders a working link for a DM and an unresolved span for a
+/// player, from the same stored Markdown.
 pub async fn render_lore_content(
     ctx: &Context<'_>,
     world_id: Uuid,
     content: &str,
 ) -> GraphQLResult<String> {
     let state = app_state(ctx)?;
+    let auth_user = authenticated_user(ctx)?;
+    let viewer_is_dm = crate::auth::actor_permissions::is_dm_of_world(
+        state,
+        auth_user.user_id,
+        auth_user.is_admin,
+        world_id,
+    )
+    .await?;
+
     let mut conn = state
         .db_pool
         .get()
@@ -31,7 +44,7 @@ pub async fn render_lore_content(
     let content = content.to_string();
     tokio::task::spawn_blocking(move || {
         let (rewritten, links) =
-            crate::markdown::links::extract_and_resolve(&mut conn, world_id, &content)
+            crate::markdown::links::extract_and_resolve(&mut conn, world_id, &content, viewer_is_dm)
                 .map_err(|_| Error::new("Failed to resolve lore links"))?;
         let html = crate::markdown::render_to_safe_html(&rewritten);
         Ok::<_, Error>(crate::markdown::links::substitute_placeholders_into_html(&html, &links))
@@ -154,6 +167,41 @@ pub async fn lore_entries_linking_to_item(
     Ok(rows.into_iter().map(GraphQLLoreEntry::from).collect())
 }
 
+/// Spec 025 (FR-029): every lore entry whose body currently contains a
+/// resolved in-text link to this ability. Verbatim copy of
+/// `lore_entries_linking_to_item`, including its moderation filter — a
+/// DMCA-disabled source entry must not leak its title through a backlink list.
+///
+/// Reachable only through `GraphQLAbility`, whose own query already denies a
+/// non-DM access to a GM-only ability, so no extra visibility filter is needed
+/// here.
+pub async fn lore_entries_linking_to_ability(
+    state: &AppState,
+    target_ability_id: Uuid,
+) -> GraphQLResult<Vec<GraphQLLoreEntry>> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    let rows = tokio::task::spawn_blocking(move || {
+        world_lore_links::table
+            .filter(world_lore_links::target_ability_id.eq(target_ability_id))
+            .inner_join(
+                world_lore_entries::table
+                    .on(world_lore_links::source_lore_entry_id.eq(world_lore_entries::id)),
+            )
+            .select(LoreEntry::as_select())
+            .load::<LoreEntry>(&mut conn)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to load linked-from entries"))?;
+
+    let rows = crate::moderation::filter_visible(state, "world_lore_entry", rows, |e| e.id).await?;
+    Ok(rows.into_iter().map(GraphQLLoreEntry::from).collect())
+}
+
 /// Testable core of `LoreQuery::world_lore_entries`. Listing is not
 /// permission-gated beyond world membership — `myPermissionLevel` on
 /// each entry tells the client what UI to show (contracts/lore-crud.md).
@@ -249,6 +297,7 @@ pub enum GraphQLLoreLinkTargetKind {
     LoreEntry,
     Actor,
     Item,
+    Ability,
 }
 
 /// One autocomplete candidate for the editor's `[[`-trigger popover
@@ -277,6 +326,11 @@ pub async fn lore_link_targets_impl(
         .db_pool
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    // FR-024b: computed here, outside the blocking closure, so the ability
+    // branch below can hide GM-only names from a non-DM author.
+    let caller_is_dm =
+        crate::auth::actor_permissions::is_dm_of_world(state, user_id, is_admin, world_id).await?;
 
     let pattern = format!("{}%", prefix.replace('%', "\\%").replace('_', "\\_"));
 
@@ -320,6 +374,24 @@ pub async fn lore_link_targets_impl(
             id,
             title,
             kind: GraphQLLoreLinkTargetKind::Item,
+        }));
+
+        // Spec 025 (FR-024b/FR-030b): a non-DM author must not discover
+        // GM-only ability names through the `[[` popover.
+        let mut ability_query = world_abilities::table
+            .filter(world_abilities::world_id.eq(world_id))
+            .filter(world_abilities::name.ilike(&pattern))
+            .into_boxed();
+        if !caller_is_dm {
+            ability_query = ability_query.filter(world_abilities::gm_only.eq(false));
+        }
+        let ability_matches = ability_query
+            .select((world_abilities::id, world_abilities::name))
+            .load::<(Uuid, String)>(&mut conn)?;
+        results.extend(ability_matches.into_iter().map(|(id, title)| GraphQLLoreLinkTarget {
+            id,
+            title,
+            kind: GraphQLLoreLinkTargetKind::Ability,
         }));
 
         Ok::<_, diesel::result::Error>(results)
@@ -559,5 +631,54 @@ mod tests {
 
         let allowed = lore_entry_revisions_impl(&state, player_id, false, entry_id).await;
         assert!(allowed.is_ok(), "a default-Viewer world member should be able to view history");
+    }
+
+    /// FR-030: an ability appears as its own disambiguated autocomplete
+    /// candidate, and FR-024b keeps GM-only names out of a non-DM's popover.
+    #[tokio::test]
+    async fn lore_link_targets_includes_abilities_and_hides_gm_only_from_players() {
+        use crate::schema::world_abilities;
+        dotenvy::dotenv().ok();
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let player_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        insert_test_world_member(&mut conn, world_id, player_id, "Player");
+
+        for (name, gm_only) in [("Zephyr Bolt", false), ("Zephyr Secret", true)] {
+            diesel::insert_into(world_abilities::table)
+                .values((
+                    world_abilities::world_id.eq(world_id),
+                    world_abilities::name.eq(name),
+                    world_abilities::classification.eq("spell"),
+                    world_abilities::gm_only.eq(gm_only),
+                    world_abilities::created_by.eq(owner_id),
+                    world_abilities::updated_by.eq(owner_id),
+                ))
+                .execute(&mut conn)
+                .expect("insert ability");
+        }
+        drop(conn);
+
+        let dm_hits = lore_link_targets_impl(&state, owner_id, false, world_id, "Zephyr")
+            .await
+            .unwrap();
+        let dm_titles: Vec<&str> = dm_hits.iter().map(|t| t.title.as_str()).collect();
+        assert!(dm_titles.contains(&"Zephyr Bolt"));
+        assert!(dm_titles.contains(&"Zephyr Secret"), "the DM sees their hidden ability");
+        assert!(dm_hits
+            .iter()
+            .any(|t| matches!(t.kind, GraphQLLoreLinkTargetKind::Ability)));
+
+        let player_hits = lore_link_targets_impl(&state, player_id, false, world_id, "Zephyr")
+            .await
+            .unwrap();
+        let player_titles: Vec<&str> = player_hits.iter().map(|t| t.title.as_str()).collect();
+        assert!(player_titles.contains(&"Zephyr Bolt"));
+        assert!(
+            !player_titles.contains(&"Zephyr Secret"),
+            "a GM-only ability name must not leak through the autocomplete"
+        );
     }
 }

@@ -709,6 +709,7 @@ diesel::table! {
         target_actor_id -> Nullable<Uuid>,
         created_at -> Timestamp,
         target_item_id -> Nullable<Uuid>,
+        target_ability_id -> Nullable<Uuid>,
     }
 }
 
@@ -864,6 +865,7 @@ diesel::joinable!(world_lore_entries -> users (created_by));
 diesel::joinable!(world_lore_entries -> worlds (world_id));
 diesel::joinable!(world_lore_image_assets -> users (uploaded_by));
 diesel::joinable!(world_lore_image_assets -> world_lore_entries (lore_entry_id));
+diesel::joinable!(world_lore_links -> world_abilities (target_ability_id));
 diesel::joinable!(world_lore_links -> world_actors (target_actor_id));
 diesel::joinable!(world_lore_links -> world_items (target_item_id));
 diesel::joinable!(world_lore_permissions -> users (world_member_user_id));

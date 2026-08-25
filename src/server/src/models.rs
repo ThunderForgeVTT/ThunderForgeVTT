@@ -1174,7 +1174,11 @@ pub struct LoreLink {
     pub target_lore_entry_id: Option<uuid::Uuid>,
     pub target_actor_id: Option<uuid::Uuid>,
     pub created_at: chrono::NaiveDateTime,
+    // Field order must match schema.rs: both target_item_id (spec 013) and
+    // target_ability_id (spec 025) were added by ALTER TABLE, so diesel
+    // appends them after created_at rather than beside their siblings.
     pub target_item_id: Option<uuid::Uuid>,
+    pub target_ability_id: Option<uuid::Uuid>,
 }
 
 /// New lore link for insertion.
@@ -1188,6 +1192,7 @@ pub struct NewLoreLink {
     pub target_lore_entry_id: Option<uuid::Uuid>,
     pub target_actor_id: Option<uuid::Uuid>,
     pub target_item_id: Option<uuid::Uuid>,
+    pub target_ability_id: Option<uuid::Uuid>,
 }
 
 /// An uploaded/pasted image attached to a lore entry (FR-008/009),

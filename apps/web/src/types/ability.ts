@@ -48,13 +48,8 @@ export type WorldAbilityRecord = {
   moderationCaseId: string | null;
   createdAt: string;
   updatedAt: string;
-  /**
-   * Optional until US4 (T063) adds `linkedFromLore` to `GraphQLAbility`.
-   * The field does not exist in the schema yet, so querying it would be a
-   * hard GraphQL error — the API layer deliberately omits it from its
-   * selection set for now rather than stubbing an empty array server-side.
-   */
-  linkedFromLore?: LoreLinkSourceRecord[];
+  /** FR-029: every lore entry currently linking to this ability. */
+  linkedFromLore: LoreLinkSourceRecord[];
 };
 
 export type AbilityPermissionRecord = {

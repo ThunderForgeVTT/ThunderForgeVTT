@@ -90,6 +90,7 @@ fn replace_lore_links(
                 target_lore_entry_id: link.target_lore_entry_id,
                 target_actor_id: link.target_actor_id,
                 target_item_id: link.target_item_id,
+                target_ability_id: link.target_ability_id,
             })
             .execute(conn)?;
     }
@@ -161,7 +162,7 @@ pub async fn create_lore_entry_impl(
                     .set(world_lore_entries::current_revision_id.eq(revision_id))
                     .execute(conn)?;
 
-                let (_, links) = crate::markdown::links::extract_and_resolve(conn, world_id, &content)?;
+                let (_, links) = crate::markdown::links::extract_and_resolve(conn, world_id, &content, true)?;
                 replace_lore_links(conn, entry_id, &links)?;
             }
 
@@ -248,7 +249,7 @@ pub async fn update_lore_entry_impl(
                     .execute(conn)?;
 
                 let (_, links) =
-                    crate::markdown::links::extract_and_resolve(conn, existing.world_id, content)?;
+                    crate::markdown::links::extract_and_resolve(conn, existing.world_id, content, true)?;
                 replace_lore_links(conn, entry_id, &links)?;
 
                 current_revision_id = Some(revision_id);
@@ -368,7 +369,7 @@ pub async fn restore_lore_revision_impl(
                 .execute(conn)?;
 
             let (_, links) =
-                crate::markdown::links::extract_and_resolve(conn, entry.world_id, &target.content_markdown)?;
+                crate::markdown::links::extract_and_resolve(conn, entry.world_id, &target.content_markdown, true)?;
             replace_lore_links(conn, lore_entry_id, &links)?;
 
             diesel::update(world_lore_entries::table.filter(world_lore_entries::id.eq(lore_entry_id)))

@@ -170,25 +170,25 @@ set -a && source .env && set +a
 
 ### Tests for User Story 4
 
-- [ ] T056 [P] [US4] Server test `resolves_link_to_existing_ability` in `src/server/src/markdown/links.rs` (FR-028)
-- [ ] T057 [P] [US4] Server test `item_wins_over_ability_on_title_collision` in `src/server/src/markdown/links.rs` — pins the append-last precedence (research.md §4). Also add the missing `actor_wins_over_item_on_title_collision` test the existing suite lacks
-- [ ] T058 [P] [US4] Server test `deleting_an_ability_nulls_referencing_lore_links_instead_of_blocking` in `src/server/src/graphql/mutations_abilities.rs` — delete succeeds, link row survives with a null FK, source entry untouched (FR-031)
-- [ ] T059 [P] [US4] Server test `lore_link_targets_includes_abilities` in `src/server/src/graphql/queries/lore.rs` — an ability candidate is returned with kind `ABILITY` (FR-030)
+- [X] T056 [P] [US4] Server test `resolves_link_to_existing_ability` in `src/server/src/markdown/links.rs` (FR-028)
+- [X] T057 [P] [US4] Server test `item_wins_over_ability_on_title_collision` in `src/server/src/markdown/links.rs` — pins the append-last precedence (research.md §4). Also add the missing `actor_wins_over_item_on_title_collision` test the existing suite lacks
+- [X] T058 [P] [US4] Server test `deleting_an_ability_nulls_referencing_lore_links_instead_of_blocking` in `src/server/src/graphql/mutations_abilities.rs` — delete succeeds, link row survives with a null FK, source entry untouched (FR-031)
+- [X] T059 [P] [US4] Server test `lore_link_targets_includes_abilities` in `src/server/src/graphql/queries/lore.rs` — an ability candidate is returned with kind `ABILITY` (FR-030)
 
-- [ ] T060 [P] [US4] Server test `duplicate_ability_names_resolve_to_the_oldest` in `src/server/src/markdown/links.rs` — two same-named abilities; the link resolves to the earlier-created one, stably across repeated reads (FR-030a)
-- [ ] T061 [P] [US4] Server test `gm_only_ability_is_unresolved_for_a_non_dm_reader` in `src/server/src/markdown/links.rs` — the same lore entry renders a working link for a DM and an unresolved span for a player (FR-030b)
+- [X] T060 [P] [US4] Server test `duplicate_ability_names_resolve_to_the_oldest` in `src/server/src/markdown/links.rs` — two same-named abilities; the link resolves to the earlier-created one, stably across repeated reads (FR-030a)
+- [X] T061 [P] [US4] Server test `gm_only_ability_is_unresolved_for_a_non_dm_reader` in `src/server/src/markdown/links.rs` — the same lore entry renders a working link for a DM and an unresolved span for a player (FR-030b)
 
 ### Implementation for User Story 4
 
-- [ ] T062 [US4] Create migration `src/server/migrations/<ts>_add_ability_target_to_world_lore_links/{up,down}.sql` per data-model.md §6 — four operations mirroring spec 013's item migration; `down.sql` reverses all four. Do NOT tighten the "at most one target" CHECK (contracts/ability-lore-links.md)
-- [ ] T063 [US4] Add `target_ability_id` to the `world_lore_links` `table!` block (**appended last, after `created_at`** — ALTER order) and a joinable in `src/server/src/schema.rs`, plus the field on `LoreLink` and `NewLoreLink` in `src/server/src/models.rs` (field order must match `schema.rs`)
-- [ ] T064 [US4] Add `PreparedLink.target_ability_id` (and `None` in the other constructions) and append the ability branch to the resolution cascade with kind `"ability"` and href `/world/{world_id}/ability/{ability_id}/view` in `src/server/src/markdown/links.rs` — **appended last**, after the item branch. Add `ORDER BY created_at ASC LIMIT 1` for deterministic duplicate-name resolution (FR-030a; apply the same fix to the existing lore/actor/item branches, which share the bug) and `AND (NOT gm_only OR :viewer_is_dm)` for GM-only filtering (FR-030b). **This makes resolution viewer-dependent, which the current resolver is not** — thread the viewer's DM status through the render path; lore `rendered_html` is re-rendered per read, so this is achievable. Largest single implementation cost in US4
-- [ ] T065 [US4] Pass `target_ability_id` through `replace_lore_links` into `NewLoreLink` in `src/server/src/graphql/mutations_lore.rs`
-- [ ] T066 [US4] Add `lore_entries_linking_to_ability` (a verbatim copy of `lore_entries_linking_to_item`, including its `moderation::filter_visible` pass), the `ABILITY` variant on `GraphQLLoreLinkTargetKind`, and a fourth `results.extend(...)` branch in `lore_link_targets_impl` (filtering `gm_only` for non-DM authors, FR-024b) — all in `src/server/src/graphql/queries/lore.rs`
-- [ ] T067 [US4] Add the `linkedFromLore` `#[graphql(complex)]` field on `GraphQLAbility` in `src/server/src/graphql/types.rs` (use `linkedFromLore`, matching `GraphQLItem`'s newer convention, not the actor's older `loreLinkedFrom`)
-- [ ] T068 [US4] Add `linkedFromLore { id title slug }` to the ability selection set in `apps/web/src/api/abilities.ts` and the field to `WorldAbilityRecord` in `apps/web/src/types/ability.ts`
-- [ ] T069 [US4] Add a "Linked from (lore)" card to `apps/web/src/pages/world/ability/AbilityDetailPage.tsx` mirroring `ItemDetailPage.tsx`'s
-- [ ] T070 [US4] Verify quickstart.md Scenario 4 against a running dev stack — including that all four target kinds display distinct, correct labels in the `[[` autocomplete
+- [X] T062 [US4] Create migration `src/server/migrations/<ts>_add_ability_target_to_world_lore_links/{up,down}.sql` per data-model.md §6 — four operations mirroring spec 013's item migration; `down.sql` reverses all four. Do NOT tighten the "at most one target" CHECK (contracts/ability-lore-links.md)
+- [X] T063 [US4] Add `target_ability_id` to the `world_lore_links` `table!` block (**appended last, after `created_at`** — ALTER order) and a joinable in `src/server/src/schema.rs`, plus the field on `LoreLink` and `NewLoreLink` in `src/server/src/models.rs` (field order must match `schema.rs`)
+- [X] T064 [US4] Add `PreparedLink.target_ability_id` (and `None` in the other constructions) and append the ability branch to the resolution cascade with kind `"ability"` and href `/world/{world_id}/ability/{ability_id}/view` in `src/server/src/markdown/links.rs` — **appended last**, after the item branch. Add `ORDER BY created_at ASC LIMIT 1` for deterministic duplicate-name resolution (FR-030a; apply the same fix to the existing lore/actor/item branches, which share the bug) and `AND (NOT gm_only OR :viewer_is_dm)` for GM-only filtering (FR-030b). **This makes resolution viewer-dependent, which the current resolver is not** — thread the viewer's DM status through the render path; lore `rendered_html` is re-rendered per read, so this is achievable. Largest single implementation cost in US4
+- [X] T065 [US4] Pass `target_ability_id` through `replace_lore_links` into `NewLoreLink` in `src/server/src/graphql/mutations_lore.rs`
+- [X] T066 [US4] Add `lore_entries_linking_to_ability` (a verbatim copy of `lore_entries_linking_to_item`, including its `moderation::filter_visible` pass), the `ABILITY` variant on `GraphQLLoreLinkTargetKind`, and a fourth `results.extend(...)` branch in `lore_link_targets_impl` (filtering `gm_only` for non-DM authors, FR-024b) — all in `src/server/src/graphql/queries/lore.rs`
+- [X] T067 [US4] Add the `linkedFromLore` `#[graphql(complex)]` field on `GraphQLAbility` in `src/server/src/graphql/types.rs` (use `linkedFromLore`, matching `GraphQLItem`'s newer convention, not the actor's older `loreLinkedFrom`)
+- [X] T068 [US4] Add `linkedFromLore { id title slug }` to the ability selection set in `apps/web/src/api/abilities.ts` and the field to `WorldAbilityRecord` in `apps/web/src/types/ability.ts`
+- [X] T069 [US4] Add a "Linked from (lore)" card to `apps/web/src/pages/world/ability/AbilityDetailPage.tsx` mirroring `ItemDetailPage.tsx`'s
+- [X] T070 [US4] Verify quickstart.md Scenario 4 against a running dev stack — including that all four target kinds display distinct, correct labels in the `[[` autocomplete
 
 **Checkpoint**: The Compendium is fully cross-linked. All four content types are valid link targets.
 

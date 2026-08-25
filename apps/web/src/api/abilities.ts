@@ -43,12 +43,6 @@ const ABILITY_EFFECT_FIELDS = `
   sortOrder
 `;
 
-/**
- * NOTE: `linkedFromLore` is deliberately absent until US4 (T063) adds it to
- * `GraphQLAbility`. Requesting a field the schema does not define is a hard
- * GraphQL error, not a null — so it is added here only when the server side
- * lands, not stubbed in advance.
- */
 const WORLD_ABILITY_FIELDS = `
   id
   worldId
@@ -64,6 +58,11 @@ const WORLD_ABILITY_FIELDS = `
   moderationCaseId
   createdAt
   updatedAt
+  linkedFromLore {
+    id
+    title
+    slug
+  }
 `;
 
 async function postGraphQL<TData>(
