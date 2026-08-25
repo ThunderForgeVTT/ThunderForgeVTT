@@ -180,12 +180,15 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
                           "3/10 uses" string. Before this, a revoked link
                           rendered identically to a working one, and anything
                           unusable was labelled "Expired" regardless of why. */}
-                      <StatusBadge
-                        variant={stateVariant(invite.state)}
-                        data-testid="invite-link-state"
-                      >
-                        {inviteStateLabel(invite.state)}
-                      </StatusBadge>
+                      {/* Wrapped rather than passing `data-testid` to
+                          StatusBadge: that component takes only children,
+                          variant and className, so extra props are silently
+                          dropped and the hook never reaches the DOM. */}
+                      <span data-testid="invite-link-state">
+                        <StatusBadge variant={stateVariant(invite.state)}>
+                          {inviteStateLabel(invite.state)}
+                        </StatusBadge>
+                      </span>
                       <span className="text-sm text-muted-foreground">
                         {invite.remaining_uses === null || invite.remaining_uses === undefined
                           ? `${invite.used_count} joins`

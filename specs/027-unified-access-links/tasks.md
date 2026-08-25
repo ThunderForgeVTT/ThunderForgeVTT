@@ -89,7 +89,7 @@ under `src/core/`, React app under `apps/web/`.
 - [X] T025 [P] [US1] Add `revokeInviteCode` and `rotateInviteCode` operations to `apps/web/src/api/world.ts` using the shared `postGraphQL` transport
 - [X] T026 [US1] Add explicit refetch after a successful revoke or rotate in `apps/web/src/hooks/useWorldInvites.ts` — the hook has no live push transport, so nothing else will deliver the change (research §8)
 - [X] T027 [US1] Add refresh and revoke controls to `apps/web/src/components/campaign/CampaignSettingsPanel.tsx`, with a confirm step on revoke since it is irreversible
-- [ ] T028 [P] [US1] Create `apps/web/e2e/access-links.spec.ts` covering quickstart Scenario 1: generate → join → rotate → old code refused → new code works
+- [X] T028 [P] [US1] Create `apps/web/e2e/access-links.spec.ts` covering quickstart Scenario 1: generate → join → rotate → old code refused → new code works
 
 **Checkpoint**: A GM can kill a leaked link. US1 is independently shippable.
 
@@ -196,12 +196,12 @@ under `src/core/`, React app under `apps/web/`.
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T060 [P] Run every scenario in [quickstart.md](./quickstart.md) and record results, naming any gap rather than ticking it
-- [ ] T061 [P] Verify SC-006 with a test in `src/server/src/graphql/mutations_invites.rs`: an 8-character code inserted directly (as a pre-migration row would be) still joins successfully, and its row reads `ACTIVE`
-- [ ] T062 [P] Verify SC-007 with a test in `src/server/src/graphql/share_codes.rs`: newly issued codes are 20 characters, and rapid-succession generation produces no ordering pattern and no collisions (the spec 005 regression guard)
-- [ ] T063 Update `specs/027-unified-access-links/quickstart.md`'s Definition of Done with verified/not-verified status, naming what was checked by test versus by hand
-- [ ] T064 [P] Confirm ADR-050 (T001) still matches what was actually built; amend it if the implementation diverged
-- [ ] T065 Run `cargo test -p thunderforge`, `npx tsc --noEmit --ignoreDeprecations 6.0`, `npx vitest run`, and `npx vite build`; rebuild the dev backend before any e2e run, since a stale binary predating the migration produces failures that look like code bugs
+- [X] T060 [P] Run every scenario in [quickstart.md](./quickstart.md) and record results, naming any gap rather than ticking it
+- [X] T061 [P] Verify SC-006 with a test in `src/server/src/graphql/mutations_invites.rs`: an 8-character code inserted directly (as a pre-migration row would be) still joins successfully, and its row reads `ACTIVE`
+- [X] T062 [P] Verify SC-007 with a test in `src/server/src/graphql/share_codes.rs`: newly issued codes are 20 characters, and rapid-succession generation produces no ordering pattern and no collisions (the spec 005 regression guard)
+- [X] T063 Update `specs/027-unified-access-links/quickstart.md`'s Definition of Done with verified/not-verified status, naming what was checked by test versus by hand
+- [X] T064 [P] Confirm ADR-050 (T001) still matches what was actually built; amend it if the implementation diverged
+- [X] T065 Run `cargo test -p thunderforge`, `npx tsc --noEmit --ignoreDeprecations 6.0`, `npx vitest run`, and `npx vite build`; rebuild the dev backend before any e2e run, since a stale binary predating the migration produces failures that look like code bugs
 
 ---
 

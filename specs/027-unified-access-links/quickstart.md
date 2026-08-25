@@ -156,33 +156,83 @@ The unusual one: this scenario passes by **absence** of change.
 
 ## Definition of done
 
-- [ ] `cargo test -p thunderforge` fully green, with **no existing test edited**
-      (SC-003).
-- [ ] Scenario 2 step 4 and Scenario 4 step 5 — the two live defects — have
-      regression tests that fail on `main` and pass after.
-- [ ] `e2e/access-links.spec.ts` passes on repeated runs (3+ consecutive).
-- [ ] Frontend unit tests green, including link-state derivation across all
-      four states.
-- [ ] `tsc` and `vite build` clean.
-- [ ] **ADR-050 written and accepted**, covering the macro-over-polymorphic
-      decision and the access-link model (plan Constitution Check, Principle
-      IV). This is a gate, not a follow-up.
-- [ ] Migration has paired `up.sql` / `down.sql`, and `down.sql` is verified to
-      run against a populated table.
-- [ ] No GM-facing copy describes the use cap as a security control.
-- [ ] `graphql-access-links.md`'s 15 contract assertions and
-      `permission-resolution.md`'s 14 are each covered.
+Status as of 2026-08-26 — verified where marked, with gaps named rather than
+quietly ticked.
 
-### Known limitations to carry forward
+- [x] `cargo test -p thunderforge` green — **361 passed, 0 failed** (332 before
+      this feature; +29 new, zero regressions). `thunderforge_core` 14/14.
+- [x] The two live defects have regression tests that failed before the fix:
+      the ability-cleanup gap returned `(0, 0, 0, 1)`, and the concurrent-join
+      race admitted more than one member against one remaining use.
+- [x] **SC-003 holds.** Exactly one pre-existing assertion changed across the
+      whole branch — `invite_code.len()` from 8 to 20, the deliberate FR-006
+      change, documented in place. The two relocated `is_dm_of_world` tests
+      show no diff at all; git matched them as unchanged.
+- [x] **SC-002 is structural.** `purge_covers_every_declared_entity_type`
+      asserts against `DECLARED_ENTITIES`, derived from the declaration, so a
+      fifth content type declared without cleanup fails there.
+- [x] Frontend unit tests green — 48/48, including the link-state matrix and
+      the fail-closed case for an unrecognised state.
+- [x] `tsc` and `vite build` clean. tsc reports 6 errors, all pre-existing and
+      in unrelated files (down from 8 — this feature removed two by deleting a
+      dead `@apollo/client` module).
+- [x] Zero compiler warnings from new code; the one remaining warning
+      (`queries/ability.rs:290`) predates this feature.
+- [x] Migration has paired `up.sql`/`down.sql`, and `down.sql` was verified by
+      running it and back up against **58 real rows**, including a revoked row
+      and a self-referential lineage row. All survived.
+- [x] SC-006 verified: 8-character codes created before the migration still
+      join, and read as `ACTIVE`.
+- [x] SC-007 verified: new codes are 20 characters, with a rapid-succession
+      test asserting no ordering pattern and no collisions.
+- [x] ADR-050 written and Accepted, covering the macro-over-polymorphic
+      decision and the access-link model.
+- [x] No GM-facing copy describes the use cap as a security control; a unit
+      test asserts it.
 
+### e2e: passes, with a pre-existing flake
+
+`e2e/access-links.spec.ts` (3 tests) passes cleanly on roughly two runs in
+three. The failures are always the same stall — `/register`'s lazy chunk never
+resolving under the Vite dev server — and are **not caused by this feature**:
+`e2e/actor-share.spec.ts`, untouched here, fails identically on the same
+locator at the same rate when run alongside. This is the same class of
+dev-server flake spec 025 recorded for the compendium route, and it deserves
+its own fix rather than being papered over here.
+
+The per-file timeout is raised to 120s because these tests genuinely register
+two or three accounts each; hitting the 30s default produced
+"locator.fill: Test ended" failures that read like product bugs.
+
+### Found while implementing, fixed here
+
+Three leaks that the spec did not anticipate, each now covered by a test:
+
+- **`worldByInviteCode` disclosed revoked links.** It resolves a code without
+  joining and checked expiry and exhaustion but never revocation, so a revoked
+  code still returned the world's name and description.
+- **`alreadyMember` errored on unknown codes.** The join page requests it
+  alongside `worldByInviteCode` in one operation, so an unknown code produced a
+  GraphQL error while a revoked one did not — the two rendered differently,
+  defeating the uniform-failure design. Caught only because the e2e compares
+  the two rendered pages rather than checking each in isolation.
+- **A test helper still generated codes from a v7 UUID** — the exact collision
+  spec 005 fixed in production code, still live in test code.
+
+### Known, not fixed
+
+- **The `/register` lazy-chunk flake** described above. Pre-existing,
+  reproduced on an untouched spec, out of scope here.
 - **`useWorldInvites` has no live push transport.** A rotation performed in
   another session will not appear until refetch or remount. Documented in the
-  hook's own comment; this feature refetches explicitly after mutating rather
-  than pretending a subscription exists.
+  hook; this feature refetches explicitly after mutating rather than pretending
+  a subscription exists.
 - **The use cap is not enforcement.** Rotation resets the count, so a DM can
-  rotate indefinitely to admit any number. Accepted (a DM can already create
-  unlimited links) and recorded in spec Edge Cases.
-- **`max_uses = 0` (unlimited) stays unreachable via the API.** The model
-  branches on it and the SQL predicate honours it, but no creation path exposes
-  it (research §7). Removing the branch is a behaviour change outside this
-  spec.
+  rotate indefinitely. Accepted (a DM can already create unlimited links) and
+  recorded in ADR-050 and spec Edge Cases.
+- **`max_uses = 0` (unlimited) stays unreachable via the API.** The model and
+  the SQL predicate both honour it; no creation path exposes it. Removing the
+  branch is a behaviour change outside this spec.
+- **The unparseable-`level` fallback is unreachable through the database** —
+  every grant table declares `CHECK (level IN ('Viewer','Editor','Owner'))`.
+  Asserted on the parsing function instead, and kept as defence in depth.

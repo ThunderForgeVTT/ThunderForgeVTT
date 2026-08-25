@@ -270,7 +270,21 @@ pub async fn already_member_impl(
         .optional()
         .map_err(|e| Error::new(format!("Database error: {}", e)))?;
 
-    let invite = invite.ok_or_else(|| Error::new("Invalid invite code"))?;
+    // Spec 027 (FR-011 / SC-005): an unknown code answers `false`, not an
+    // error. You cannot be a member via a code that does not exist, so `false`
+    // is both correct and non-disclosing.
+    //
+    // This previously returned `Error::new("Invalid invite code")`. The join
+    // page requests `worldByInviteCode` and `alreadyMember` in one operation,
+    // so an unknown code produced a GraphQL error while a revoked one — whose
+    // row exists — returned cleanly. The two rendered differently, which made
+    // the whole uniform-failure design pointless: a visitor could tell a code
+    // that was never real from one that had been killed. Caught by
+    // `access-links.spec.ts` comparing the two rendered pages rather than
+    // checking each in isolation.
+    let Some(invite) = invite else {
+        return Ok(false);
+    };
 
     // Check if user is already a member
     let is_member: bool = world_members::table
@@ -666,5 +680,34 @@ mod tests {
             .find(|i| i.invite_code == revoked)
             .expect("a revoked link must remain visible to its GM");
         assert_eq!(revoked_row.state, WorldAccessLinkState::Revoked);
+    }
+
+    /// FR-011 / SC-005: `alreadyMember` must not become the side channel that
+    /// distinguishes a never-issued code from a revoked one. The join page
+    /// requests it alongside `worldByInviteCode` in a single operation, so an
+    /// error here changes what the visitor sees.
+    #[tokio::test]
+    async fn already_member_answers_false_for_an_unknown_code_rather_than_erroring() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let revoked =
+            insert_test_invite_with_revocation(&mut conn, world_id, owner_id, 5, 0, None, true);
+        let visitor = insert_test_user(&mut conn);
+        drop(conn);
+
+        let unknown = already_member_impl(&state, visitor, "ZZZZZZZZZZZZZZZZZZZZ")
+            .await
+            .expect("an unknown code must answer, not error");
+        let for_revoked = already_member_impl(&state, visitor, &revoked)
+            .await
+            .expect("a revoked code must answer, not error");
+
+        assert!(!unknown);
+        assert_eq!(
+            unknown, for_revoked,
+            "an unknown code and a revoked one must be indistinguishable here"
+        );
     }
 }
