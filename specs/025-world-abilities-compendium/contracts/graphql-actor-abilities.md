@@ -39,11 +39,21 @@ A non-DM's list simply omits GM-only abilities. It MUST NOT include a redacted
 placeholder, a "N hidden" count, or a gap in ordering — a player must not be able
 to infer that anything was withheld (FR-023, Clarification Session 2026-08-25).
 
-Note the tombstone interaction: an entry whose ability was **deleted** keeps its
-`ability_name_snapshot` and stays visible to everyone, because there is no longer
-a `gm_only` flag to consult. A GM who deletes a GM-only ability therefore reveals
-its name to anyone who could see the actor. If that matters, detach before
-deleting — worth surfacing in the UI's delete confirmation.
+### Tombstones are redacted for non-DMs (FR-023a)
+
+An entry whose ability was **deleted** keeps its `ability_name_snapshot` and
+stays listed, but a tombstone carries no `gm_only` flag to consult — so the
+system cannot tell whether the deleted ability was secret.
+
+It therefore **fails closed**: `actorAbilities` returns `ability_name:
+"REDACTED"` for every tombstone to a non-DM caller, secret or not. A DM still
+receives the real snapshot.
+
+The cost is that a player also stops seeing the name of an ordinary deleted
+ability. That is the accepted trade: a deleted ability's name is of little use
+to a player, and the alternative leaks exactly the names the GM-only flag
+exists to protect. Redaction happens **server-side** — a UI-only treatment
+would still ship the name over the wire.
 
 ## Mutations
 
@@ -146,5 +156,8 @@ see `ability-facets.md`.
 - `gm_only_abilities_are_omitted_from_a_non_dms_known_list` — a DM sees the
   entry, a Viewer-on-actor player does not, and nothing in the player's response
   hints that an entry was filtered.
+- `tombstoned_ability_names_are_redacted_for_non_dms` — after deleting both a
+  GM-only and an ordinary ability, a player sees two tombstones both reading
+  `REDACTED`; the DM still sees both real names.
 - `attach_catalog_excludes_gm_only_for_non_dm` — the catalog offered when
   attaching comes from `worldAbilities` and inherits its filter.

@@ -30,6 +30,7 @@ Three scope questions were resolved with the requester on 2026-08-25:
 - Q: Should a GM be able to hide an individual ability from players entirely, or does the ownership block only control who can *edit* it? (FR-025, US5) → A: Option C — add a per-ability `gmOnly` flag, separate from the ownership block, mirroring `scenes.hidden`. The ownership block continues to mean edit rights only.
 - Q: When a GM attaches a GM-only ability to an NPC, should a player who can view that NPC see it in the NPC's known-abilities list? (FR-023 vs FR-024b, US3/US5) → A: Option A — hidden entirely. Non-DMs get a filtered list with GM-only abilities silently omitted; they cannot tell anything was withheld.
 - Q: When two abilities in the same world share a name, which one should `[[That Name]]` in a lore entry link to? (FR-006 vs FR-028, US4) → A: Option A — oldest wins, via a deterministic `ORDER BY created_at ASC`. Apply the same fix to items, which carry the identical latent bug.
+- Q: A deleted ability leaves a tombstone entry on any actor that knew it, but the tombstone carries no `gm_only` flag — so deleting a GM-only ability would leak its name. How should a tombstone read to a player? (FR-023, raised during US3 implementation) → A: Redact it. Every tombstone reads `REDACTED` to a non-DM, secret or not, enforced server-side rather than in the UI.
 
 ## Context: why this spec exists
 
@@ -414,6 +415,12 @@ source; revoke the link and confirm it no longer resolves.
   delete the Ability itself, and deleting an Ability MUST NOT be blocked by
   Actors knowing it — such entries MUST remain visible but be clearly marked as
   referencing a deleted Ability.
+- **FR-023a**: A tombstoned known-ability entry (its Ability deleted) MUST have
+  its name redacted for any non-DM viewer, enforced server-side. A tombstone
+  retains no GM-only flag to consult, so the system cannot tell whether it was
+  secret; it therefore fails closed and redacts every tombstone rather than risk
+  leaking the name of a deleted GM-only Ability. A DM continues to see the real
+  name snapshot.
 
 #### Access control (User Story 5)
 

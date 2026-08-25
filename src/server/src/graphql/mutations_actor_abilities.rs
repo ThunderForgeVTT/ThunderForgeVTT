@@ -31,13 +31,23 @@ pub struct AttachAbilityToActorInput {
 /// A joined row: the entry plus whatever survives of its ability.
 type EntryRow = (ActorAbilityEntry, Option<String>, Option<bool>);
 
-fn to_graphql(row: EntryRow) -> GraphQLActorAbilityEntry {
+/// The name shown in place of a tombstoned ability for a non-DM caller.
+pub const REDACTED_ABILITY_NAME: &str = "REDACTED";
+
+fn to_graphql(row: EntryRow, caller_is_dm: bool) -> GraphQLActorAbilityEntry {
     let (entry, classification, gm_only) = row;
+    let is_tombstone = entry.ability_id.is_none();
     GraphQLActorAbilityEntry {
         id: entry.id,
         actor_id: entry.actor_id,
         ability_id: entry.ability_id,
-        ability_name: entry.ability_name_snapshot,
+        // Fail closed: a tombstone carries no gm_only flag to check, so a
+        // non-DM never sees the snapshotted name.
+        ability_name: if is_tombstone && !caller_is_dm {
+            REDACTED_ABILITY_NAME.to_string()
+        } else {
+            entry.ability_name_snapshot
+        },
         classification: classification
             .as_deref()
             .and_then(AbilityClassification::from_db_str),
@@ -70,10 +80,16 @@ async fn actor_world_id(state: &AppState, actor_id: Uuid) -> GraphQLResult<Uuid>
 /// non-DM, silently — no placeholder, no count, no ordering gap, so a player
 /// cannot infer that anything was withheld (FR-024b).
 ///
-/// Tombstoned entries (ability deleted) stay visible to everyone: there is no
-/// longer a `gm_only` flag to consult. A GM who deletes a GM-only ability
-/// therefore reveals its name to anyone who can see the actor — detach before
-/// deleting if that matters.
+/// Tombstoned entries (ability deleted) keep their row so the actor's history
+/// stays legible, but their **name is redacted for non-DMs**.
+///
+/// Once an ability row is gone there is no `gm_only` flag left to consult, so
+/// there is no way to tell whether a tombstone used to be secret. Rather than
+/// leak the name of a deleted GM-only ability, this fails closed: every
+/// tombstone reads `REDACTED` to a non-DM. The cost is that a player also
+/// stops seeing the name of an ordinary deleted ability — an acceptable trade,
+/// since a deleted ability's name is of little use to a player and the
+/// alternative leaks secrets.
 pub async fn actor_abilities_impl(
     state: &AppState,
     user_id: Uuid,
@@ -121,7 +137,7 @@ pub async fn actor_abilities_impl(
         // FR-024b: a live GM-only ability is omitted for a non-DM. A
         // tombstoned row (gm_only = None) is kept — see the doc comment.
         .filter(|(_, _, gm_only)| caller_is_dm || !gm_only.unwrap_or(false))
-        .map(to_graphql)
+        .map(|row| to_graphql(row, caller_is_dm))
         .collect())
 }
 
@@ -219,7 +235,9 @@ pub async fn attach_ability_to_actor_impl(
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(|_| Error::new("Failed to attach ability to actor"))?;
 
-    Ok(to_graphql((entry, Some(classification), Some(gm_only))))
+    // A freshly attached entry is never a tombstone, so redaction cannot
+    // apply — pass `true` rather than re-deriving DM status.
+    Ok(to_graphql((entry, Some(classification), Some(gm_only)), true))
 }
 
 /// Testable core of `detach_ability_from_actor` (FR-023).
@@ -528,9 +546,72 @@ mod tests {
         assert_eq!(entries[0].ability_id, None, "its reference is nulled");
         assert_eq!(
             entries[0].ability_name, "Doomed",
-            "the name snapshot keeps it identifiable"
+            "the DM still sees the name snapshot"
         );
         assert_eq!(entries[0].classification, None);
+    }
+
+    /// A tombstone carries no `gm_only` flag to consult, so a non-DM must not
+    /// see its name at all — otherwise deleting a GM-only ability would leak
+    /// the very name that was being hidden. Fails closed: every tombstone
+    /// reads REDACTED to a player, secret or not.
+    #[tokio::test]
+    async fn tombstoned_ability_names_are_redacted_for_non_dms() {
+        dotenvy::dotenv().ok();
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let player_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        insert_test_world_member(&mut conn, world_id, player_id, "Player");
+        let actor_id = make_actor(&mut conn, world_id, scene_id, owner_id);
+        grant_actor(&mut conn, actor_id, player_id, "Viewer");
+        drop(conn);
+
+        // A GM-only ability the player could never see while it existed...
+        let mut secret_input = ability_input(world_id, "Soul Harvest");
+        secret_input.gm_only = Some(true);
+        let secret = create_ability_impl(&state, owner_id, false, secret_input)
+            .await
+            .unwrap();
+        // ...and an ordinary one.
+        let open = create_ability_impl(&state, owner_id, false, ability_input(world_id, "Cleave"))
+            .await
+            .unwrap();
+
+        for ability_id in [secret.id, open.id] {
+            attach_ability_to_actor_impl(
+                &state,
+                owner_id,
+                false,
+                AttachAbilityToActorInput { actor_id, ability_id },
+            )
+            .await
+            .unwrap();
+            delete_ability_impl(&state, owner_id, false, ability_id)
+                .await
+                .unwrap();
+        }
+
+        let player_view = actor_abilities_impl(&state, player_id, false, actor_id).await.unwrap();
+        assert_eq!(player_view.len(), 2, "tombstones stay listed");
+        for entry in &player_view {
+            assert_eq!(
+                entry.ability_name, REDACTED_ABILITY_NAME,
+                "a player must not see any tombstoned ability's name"
+            );
+        }
+        assert!(
+            !player_view.iter().any(|e| e.ability_name.contains("Soul Harvest")),
+            "the deleted GM-only ability's name must not leak"
+        );
+
+        // The DM still sees the real names — redaction is for players only.
+        let dm_view = actor_abilities_impl(&state, owner_id, false, actor_id).await.unwrap();
+        let dm_names: Vec<&str> = dm_view.iter().map(|e| e.ability_name.as_str()).collect();
+        assert!(dm_names.contains(&"Soul Harvest"));
+        assert!(dm_names.contains(&"Cleave"));
     }
 
     /// FR-023/FR-024b: a non-DM's list silently omits GM-only abilities.

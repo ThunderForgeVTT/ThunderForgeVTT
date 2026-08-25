@@ -178,7 +178,18 @@ export function ActorAbilitiesPanel({
               data-testid={`actor-ability-${entry.id}`}
             >
               <span>
-                <span className="font-medium">{entry.abilityName}</span>
+                {/* A tombstoned ability reads REDACTED for non-DMs — the
+                    server withholds the name, since a deleted row carries no
+                    gm_only flag to check (fail closed). */}
+                <span
+                  className={
+                    entry.abilityId === null
+                      ? "font-medium text-muted-foreground"
+                      : "font-medium"
+                  }
+                >
+                  {entry.abilityName}
+                </span>
                 {entry.classification ? (
                   <span className="ml-2 text-muted-foreground">
                     {resolveAbilityLabel(
