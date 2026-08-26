@@ -37,6 +37,7 @@ import { TokenTool } from "@/components/canvas-tools/TokenTool";
 import { TokenPanel } from "@/components/TokenPanel";
 import { DiceRollerPanel } from "@/components/world/DiceRollerPanel/DiceRollerPanel";
 import { startCanvasKeyboardRouting } from "@/engine/canvasKeyboard";
+import { installWorldProbe } from "@/engine/world/probe";
 import { GmToolRail } from "@/components/world/GmToolRail/GmToolRail";
 import { WorldDock, type DockSection } from "@/components/world/PlayDock/WorldDock";
 import { ChatPanel } from "@/components/world/PlayDock/ChatPanel";
@@ -370,6 +371,10 @@ export default function WorldPage() {
   // clicked again. See `engine/canvasKeyboard.ts` for why winit makes this
   // necessary.
   useEffect(() => startCanvasKeyboardRouting(), []);
+
+  // Development-only introspection for the world store; see
+  // `engine/world/probe.ts`. Compiled out of production builds.
+  useEffect(() => installWorldProbe(worldStore), [worldStore]);
 
   useEffect(
     () => worldStore.subscribe((event) => setWorldState(event.state)),

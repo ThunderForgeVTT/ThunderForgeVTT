@@ -1,4 +1,11 @@
 import { test, expect, type Page, type Browser } from "@playwright/test";
+import type { WorldProbe } from "../src/engine/world/probe";
+
+declare global {
+  interface Window {
+    __worldProbe?: WorldProbe;
+  }
+}
 
 /**
  * specs/004-token-canvas-authoring, User Story 1 (T008/T009): a GM can
@@ -960,16 +967,65 @@ test.describe("Token resize/rotate (US1, spec 006 T001-T003)", () => {
     const box = await canvasBox(page);
     const cx = box.x + box.width / 2;
     const cy = box.y + box.height / 2;
-    const selectToken = async () => {
-      await page.mouse.move(cx, cy);
+    // Click where the token actually is, not where the canvas centre is.
+    // Tokens do not spawn at the world origin — the probe reports this
+    // scene's at (-192.5, -62.5) — so a centre click lands on empty canvas
+    // and the engine emits a *deselect*, which looks exactly like "the
+    // panel is broken" from the DOM. World units map 1:1 to pixels at the
+    // default zoom, with the origin at the canvas centre and y pointing up.
+    const probeState = () =>
+      page.evaluate(() => {
+        const state = window.__worldProbe?.state();
+        if (!state) throw new Error("world probe unavailable (dev build only)");
+        return state;
+      });
+
+    const clickWorld = async (x: number, y: number) => {
+      await page.mouse.move(cx + x, cy - y);
       await page.mouse.down();
       await page.waitForTimeout(80);
       await page.mouse.up();
       await page.waitForTimeout(500);
     };
 
+    /**
+     * Selects a *persisted* token — one with a server-side row.
+     *
+     * Every token in a fresh scene spawns at the same spot, and the engine's
+     * own demo token (id `"player"`, no server row) is one of them, so a
+     * plain click selects whichever the hit-test finds on top. Art set on
+     * the demo token cannot survive a reload: the mutation bridge has no
+     * `tokenId` to update. So drag whatever comes up off the pile until a
+     * UUID-identified token is the one selected.
+     */
+    const isPersisted = (id: string | null) => id !== null && /^[0-9a-f-]{36}$/.test(id);
+
+    const selectToken = async () => {
+      const { tokens } = await probeState();
+      const target = tokens[0];
+      if (!target) throw new Error("no tokens in the world store to select");
+
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        await clickWorld(target.x, target.y);
+        const { selectedTokenId } = await probeState();
+        if (isPersisted(selectedTokenId)) return;
+        if (selectedTokenId === null) continue;
+
+        // Selected the demo token: drag it clear so the next click reaches
+        // whatever is underneath it.
+        await page.mouse.move(cx + target.x, cy - target.y);
+        await page.mouse.down();
+        await page.mouse.move(cx + target.x + 260, cy - target.y - 160, { steps: 12 });
+        await page.mouse.up();
+        await page.waitForTimeout(600);
+      }
+      throw new Error("could not select a persisted token");
+    };
+
     await selectToken();
     await openTokenTool(page);
+
+
     await expect(page.getByTestId("token-tool-art")).toBeVisible({ timeout: 5_000 });
 
     // A token with no art has no preview and nothing to remove.
