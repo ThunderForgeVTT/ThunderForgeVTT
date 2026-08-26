@@ -1,4 +1,12 @@
 import React, { useState } from 'react';
+import {
+  cardClass,
+  cardTitleClass,
+  hintClass,
+  primaryButtonClass,
+  sectionHeadingClass,
+  textareaClass,
+} from './styles';
 
 /**
  * Spec 018 (Genie) User Story 7 — the Session Wish Pool (FR-013).
@@ -52,31 +60,37 @@ export const SessionWishPool: React.FC<SessionWishPoolProps> = ({
   };
 
   return (
-    <div className="p-4 border rounded-lg bg-white shadow-sm" data-testid="session-wish-pool">
-      <h2 className="text-lg font-bold mb-2">Session Wish Pool</h2>
-      <div className="flex items-center gap-2 mb-3" aria-label={`${wishesRemaining} of ${TOTAL_WISHES} wishes remaining`}>
+    <div className={cardClass} data-testid="session-wish-pool">
+      <h2 className={cardTitleClass}>Session Wish Pool</h2>
+      <div
+        className="mt-3 flex items-center gap-2"
+        aria-label={`${wishesRemaining} of ${TOTAL_WISHES} wishes remaining`}
+      >
         {Array.from({ length: TOTAL_WISHES }).map((_, i) => (
           <span
             key={i}
-            className={`text-2xl ${i < wishesRemaining ? 'text-purple-500' : 'text-gray-300'}`}
+            className={`text-2xl leading-none ${i < wishesRemaining ? 'text-violet-500' : 'text-muted-foreground/25'}`}
             aria-hidden="true"
           >
             ✦
           </span>
         ))}
-        <span className="text-sm text-gray-600 ml-2">
+        <span className={`ml-1 ${hintClass}`}>
           {wishesRemaining} / {TOTAL_WISHES} remaining
         </span>
       </div>
 
       {isGm && (
-        <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-          <label htmlFor="wish-narrative-effect" className="text-sm font-semibold text-gray-700">
-            Wish Effect (GM-adjudicated, FR-014 — not a dice roll)
+        <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
+          {/* FR-014: a Wish is GM-adjudicated narration, never a dice roll —
+            * hence free text plus the hint below, not a roll control. */}
+          <label htmlFor="wish-narrative-effect" className={sectionHeadingClass}>
+            Wish Effect
           </label>
+          <p className={hintClass}>Narrated by the GM — not a dice roll.</p>
           <textarea
             id="wish-narrative-effect"
-            className="border rounded p-2 text-sm"
+            className={textareaClass}
             rows={2}
             placeholder="e.g. Undo that failed roll's consequence, reveal a hidden clue, remove an obstacle..."
             value={narrativeEffect}
@@ -85,12 +99,14 @@ export const SessionWishPool: React.FC<SessionWishPoolProps> = ({
           />
           <button
             type="submit"
-            className="self-start px-4 py-1.5 bg-purple-600 text-white rounded font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`self-start ${primaryButtonClass}`}
             disabled={!canSpend || submitting || !narrativeEffect.trim()}
           >
             {submitting ? 'Spending…' : 'Spend a Wish'}
           </button>
-          {wishesRemaining === 0 && <p className="text-sm text-red-600">No wishes remaining in the pool.</p>}
+          {wishesRemaining === 0 && (
+            <p className="text-sm text-destructive">No wishes remaining in the pool.</p>
+          )}
         </form>
       )}
     </div>

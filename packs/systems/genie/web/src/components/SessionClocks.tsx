@@ -1,4 +1,14 @@
 import React, { useState } from 'react';
+import {
+  cardClass,
+  cardTitleClass,
+  dangerButtonClass,
+  fieldClass,
+  hintClass,
+  primaryButtonClass,
+  sectionHeadingClass,
+  smallButtonClass,
+} from './styles';
 
 /**
  * Spec 018 (Genie) User Story 7 — the Doom Clock and Puzzle Clocks
@@ -35,11 +45,11 @@ const ClockSegments: React.FC<{ current: number; max: number; filledClassName: s
   max,
   filledClassName,
 }) => (
-  <div className="flex gap-1" role="img" aria-label={`${current} of ${max} segments filled`}>
+  <div className="flex flex-wrap gap-1" role="img" aria-label={`${current} of ${max} segments filled`}>
     {Array.from({ length: max }).map((_, i) => (
       <span
         key={i}
-        className={`inline-block w-4 h-4 rounded-sm border ${i < current ? filledClassName : 'bg-gray-100 border-gray-300'}`}
+        className={`inline-block h-4 w-4 rounded-sm border ${i < current ? filledClassName : 'border-border bg-muted'}`}
       />
     ))}
   </div>
@@ -69,103 +79,129 @@ export const SessionClocks: React.FC<SessionClocksProps> = ({
   };
 
   return (
-    <div className="p-4 border rounded-lg bg-white shadow-sm" data-testid="session-clocks">
-      <h2 className="text-lg font-bold mb-2">Doom Clock</h2>
-      <div className="flex items-center gap-3 mb-1">
-        <ClockSegments current={doomClockCurrent} max={doomClockMax} filledClassName="bg-red-600 border-red-700" />
-        <span className="text-sm text-gray-600">
+    <div className={cardClass} data-testid="session-clocks">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className={cardTitleClass}>Doom Clock</h2>
+        <span className={hintClass}>
           {doomClockCurrent} / {doomClockMax}
         </span>
       </div>
-      {controlsEnabled && onAdvanceDoomClock && (
-        <button
-          type="button"
-          className="mt-1 mb-4 px-3 py-1 text-sm bg-red-600 text-white rounded font-semibold disabled:opacity-50"
-          onClick={() => onAdvanceDoomClock(1)}
-          disabled={doomClockCurrent >= doomClockMax}
-        >
-          Advance Doom Clock
-        </button>
-      )}
-
-      <h2 className="text-lg font-bold mt-4 mb-2">Puzzle Clocks</h2>
-      {puzzleClocks.length === 0 && <p className="text-sm text-gray-500 mb-2">No Puzzle Clocks yet.</p>}
-      <ul className="flex flex-col gap-2 mb-4">
-        {puzzleClocks.map((clock) => {
-          const resolved = !!clock.resolvedAt;
-          return (
-            <li key={clock.id} className="flex items-center justify-between gap-3 border-b pb-2 last:border-0">
-              <div className="flex flex-col gap-1">
-                <span className={`text-sm font-semibold ${resolved ? 'text-green-700' : ''}`}>
-                  {clock.label}
-                  {resolved && ' (Resolved)'}
-                </span>
-                <div className="flex items-center gap-2">
-                  <ClockSegments
-                    current={clock.segmentsCurrent}
-                    max={clock.segmentsMax}
-                    filledClassName="bg-blue-600 border-blue-700"
-                  />
-                  <span className="text-xs text-gray-600">
-                    {clock.segmentsCurrent} / {clock.segmentsMax}
-                  </span>
-                </div>
-              </div>
-              {controlsEnabled && onAdvancePuzzleClock && !resolved && (
-                <button
-                  type="button"
-                  className="px-2 py-1 text-xs bg-blue-600 text-white rounded font-semibold"
-                  onClick={() => onAdvancePuzzleClock(clock.id, 1)}
-                >
-                  Advance
-                </button>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-
-      {controlsEnabled && onCreatePuzzleClock && (
-        <form onSubmit={handleCreate} className="flex items-end gap-2">
-          <div className="flex flex-col">
-            <label htmlFor="new-clock-label" className="text-xs font-semibold text-gray-700">
-              New Puzzle Clock
-            </label>
-            <input
-              id="new-clock-label"
-              type="text"
-              className="border rounded p-1 text-sm"
-              placeholder="Objective / station name"
-              value={newLabel}
-              onChange={(e) => setNewLabel(e.target.value)}
-            />
-          </div>
-          <div className="flex flex-col">
-            <label htmlFor="new-clock-segments" className="text-xs font-semibold text-gray-700">
-              Segments
-            </label>
-            <input
-              id="new-clock-segments"
-              type="number"
-              min={1}
-              className="border rounded p-1 text-sm w-16"
-              value={newSegmentsMax}
-              onChange={(e) => setNewSegmentsMax(Number(e.target.value))}
-            />
-          </div>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <ClockSegments
+          current={doomClockCurrent}
+          max={doomClockMax}
+          filledClassName="border-destructive bg-destructive"
+        />
+        {controlsEnabled && onAdvanceDoomClock && (
           <button
-            type="submit"
-            className="px-3 py-1.5 bg-gray-800 text-white rounded text-sm font-semibold disabled:opacity-50"
-            disabled={!newLabel.trim() || newSegmentsMax <= 0}
+            type="button"
+            className={dangerButtonClass}
+            /* Visible text is just "Advance" (the heading beside it already
+             * says Doom Clock), but the accessible name stays fully
+             * qualified — it has to distinguish this from each Puzzle
+             * Clock's own "Advance" button. */
+            aria-label="Advance Doom Clock"
+            onClick={() => onAdvanceDoomClock(1)}
+            disabled={doomClockCurrent >= doomClockMax}
           >
-            Create
+            Advance
           </button>
-        </form>
-      )}
+        )}
+      </div>
 
+      <div className="mt-5 border-t border-border pt-4">
+        <h3 className={sectionHeadingClass}>Puzzle Clocks</h3>
+        {puzzleClocks.length === 0 ? (
+          <p className={`mt-2 ${hintClass}`}>No Puzzle Clocks yet.</p>
+        ) : (
+          <ul className="mt-3 flex flex-col gap-2">
+            {puzzleClocks.map((clock) => {
+              const resolved = !!clock.resolvedAt;
+              return (
+                <li
+                  key={clock.id}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 p-3"
+                >
+                  <div className="flex flex-col gap-1.5">
+                    <span
+                      className={`text-sm font-medium ${resolved ? 'text-emerald-600 dark:text-emerald-400' : ''}`}
+                    >
+                      {clock.label}
+                      {resolved && ' (Resolved)'}
+                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <ClockSegments
+                        current={clock.segmentsCurrent}
+                        max={clock.segmentsMax}
+                        filledClassName="border-sky-600 bg-sky-500"
+                      />
+                      <span className={hintClass}>
+                        {clock.segmentsCurrent} / {clock.segmentsMax}
+                      </span>
+                    </div>
+                  </div>
+                  {controlsEnabled && onAdvancePuzzleClock && !resolved && (
+                    <button
+                      type="button"
+                      className={smallButtonClass}
+                      onClick={() => onAdvancePuzzleClock(clock.id, 1)}
+                    >
+                      Advance
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {controlsEnabled && onCreatePuzzleClock && (
+          <form onSubmit={handleCreate} className="mt-3 flex flex-wrap items-end gap-2">
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <label htmlFor="new-clock-label" className={hintClass}>
+                New Puzzle Clock
+              </label>
+              <input
+                id="new-clock-label"
+                type="text"
+                className={`w-full ${fieldClass}`}
+                placeholder="Objective / station name"
+                value={newLabel}
+                onChange={(e) => setNewLabel(e.target.value)}
+              />
+            </div>
+            <div className="flex w-20 flex-col gap-1">
+              <label htmlFor="new-clock-segments" className={hintClass}>
+                Segments
+              </label>
+              <input
+                id="new-clock-segments"
+                type="number"
+                min={1}
+                className={`w-full ${fieldClass}`}
+                value={newSegmentsMax}
+                onChange={(e) => setNewSegmentsMax(Number(e.target.value))}
+              />
+            </div>
+            <button
+              type="submit"
+              className={primaryButtonClass}
+              disabled={!newLabel.trim() || newSegmentsMax <= 0}
+            >
+              Create
+            </button>
+          </form>
+        )}
+      </div>
+
+      {/* FR-016: once the session is won or lost, every clock mutation is closed. */}
       {sessionStatus !== 'ACTIVE' && (
-        <p className={`mt-3 font-bold ${sessionStatus === 'WON' ? 'text-green-700' : 'text-red-700'}`}>
-          Session {sessionStatus === 'WON' ? 'won' : 'lost'} — all clock mutations are now closed (FR-016).
+        <p
+          className={`mt-4 border-t border-border pt-3 text-sm font-semibold ${
+            sessionStatus === 'WON' ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'
+          }`}
+        >
+          Session {sessionStatus === 'WON' ? 'won' : 'lost'} — clocks are locked.
         </p>
       )}
     </div>

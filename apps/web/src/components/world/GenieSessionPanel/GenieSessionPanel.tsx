@@ -162,7 +162,7 @@ export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
     <div className="grid gap-4" data-testid="genie-session-panel">
       {isGm ? (
         <Card className="grid gap-2 p-4" data-testid="genie-grant-resource-panel">
-          <h4 className="text-sm font-semibold">Grant Session Resource</h4>
+          <h4 className="text-sm font-semibold tracking-tight">Grant Session Resource</h4>
           {grantError ? <p className="text-sm text-destructive">{grantError}</p> : null}
           <div className="grid grid-cols-3 gap-2">
             <select
@@ -229,7 +229,7 @@ export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
       />
       {isGm && session.puzzleClocks.length > 0 ? (
         <Card className="grid gap-3 p-4" data-testid="genie-puzzle-clock-rewards-panel">
-          <h4 className="text-sm font-semibold">Puzzle Clock Rewards</h4>
+          <h4 className="text-sm font-semibold tracking-tight">Puzzle Clock Rewards</h4>
           {rewardError ? <p className="text-sm text-destructive">{rewardError}</p> : null}
           <div className="grid gap-2">
             <select
@@ -342,8 +342,8 @@ export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
           </div>
 
           <div className="grid gap-2 border-t border-border pt-3">
-            <h5 className="text-xs font-semibold text-muted-foreground uppercase">
-              Advance with actor attribution (FR-006a)
+            <h5 className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+              Advance with attribution
             </h5>
             <div className="grid grid-cols-3 gap-2">
               <select

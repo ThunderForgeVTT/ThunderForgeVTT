@@ -1,4 +1,14 @@
 import React, { useState } from 'react';
+import {
+  cardClass,
+  cardTitleClass,
+  fieldClass,
+  hintClass,
+  primaryButtonClass,
+  sectionHeadingClass,
+  smallButtonClass,
+  smallPrimaryButtonClass,
+} from './styles';
 
 /**
  * Spec 018 (Genie) User Story 7 — Session Resources (FR-017/FR-018): the
@@ -87,31 +97,37 @@ export const SessionResourceTrade: React.FC<SessionResourceTradeProps> = ({
   };
 
   return (
-    <div className="p-4 border rounded-lg bg-white shadow-sm" data-testid="session-resource-trade">
-      <h2 className="text-lg font-bold mb-2">Your Session Resources</h2>
-      <ul className="flex gap-4 mb-4">
+    <div className={cardClass} data-testid="session-resource-trade">
+      <h2 className={cardTitleClass}>Your Session Resources</h2>
+      <ul className="mt-3 flex flex-wrap gap-2">
         {resourceTypes.map((rt) => (
-          <li key={rt.key} className="flex flex-col items-center border rounded px-3 py-2">
-            <span className="text-xs text-gray-600">{rt.label}</span>
-            <span className="text-xl font-bold">{holdingFor(rt.key)}</span>
+          <li
+            key={rt.key}
+            className="flex min-w-20 flex-col items-center gap-0.5 rounded-lg border border-border bg-muted/40 px-3 py-2"
+          >
+            <span className={hintClass}>{rt.label}</span>
+            <span className="text-xl leading-none font-semibold">{holdingFor(rt.key)}</span>
           </li>
         ))}
       </ul>
 
       {incomingProposals.length > 0 && (
-        <div className="mb-4">
-          <h3 className="font-semibold text-sm mb-1">Incoming Trade Proposals</h3>
-          <ul className="flex flex-col gap-2">
+        <div className="mt-5 border-t border-border pt-4">
+          <h3 className={sectionHeadingClass}>Incoming Trade Proposals</h3>
+          <ul className="mt-3 flex flex-col gap-2">
             {incomingProposals.map((p) => (
-              <li key={p.id} className="flex items-center justify-between border rounded p-2 text-sm">
+              <li
+                key={p.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 p-3 text-sm"
+              >
                 <span>
-                  <strong>{p.fromActorLabel}</strong> offers {p.fromQuantity} {p.fromResourceType} for your{' '}
-                  {p.toQuantity} {p.toResourceType}
+                  <strong className="font-medium">{p.fromActorLabel}</strong> offers {p.fromQuantity}{' '}
+                  {p.fromResourceType} for your {p.toQuantity} {p.toResourceType}
                 </span>
-                <div className="flex gap-1">
+                <div className="flex gap-2">
                   <button
                     type="button"
-                    className="px-2 py-1 bg-green-600 text-white rounded text-xs font-semibold"
+                    className={smallPrimaryButtonClass}
                     onClick={() => onAcceptProposal?.(p.id)}
                     disabled={!onAcceptProposal}
                   >
@@ -119,7 +135,7 @@ export const SessionResourceTrade: React.FC<SessionResourceTradeProps> = ({
                   </button>
                   <button
                     type="button"
-                    className="px-2 py-1 bg-gray-400 text-white rounded text-xs font-semibold"
+                    className={smallButtonClass}
                     onClick={() => onDeclineProposal?.(p.id)}
                     disabled={!onDeclineProposal}
                   >
@@ -133,41 +149,58 @@ export const SessionResourceTrade: React.FC<SessionResourceTradeProps> = ({
       )}
 
       {partyMembers.length > 0 && resourceTypes.length > 0 && (
-        <form onSubmit={handlePropose} className="flex flex-col gap-2">
-          <h3 className="font-semibold text-sm">Propose a Trade</h3>
-          <div className="flex items-center gap-2 flex-wrap text-sm">
-            <span>Give</span>
+        <form onSubmit={handlePropose} className="mt-5 flex flex-col gap-3 border-t border-border pt-4">
+          <h3 className={sectionHeadingClass}>Propose a Trade</h3>
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Give</span>
             <input
               type="number"
               min={1}
-              className="border rounded p-1 w-16"
+              aria-label="Quantity to give"
+              className={`w-16 ${fieldClass}`}
               value={fromQuantity}
               onChange={(e) => setFromQuantity(Number(e.target.value))}
             />
-            <select className="border rounded p-1" value={fromResourceType} onChange={(e) => setFromResourceType(e.target.value)}>
+            <select
+              aria-label="Resource to give"
+              className={fieldClass}
+              value={fromResourceType}
+              onChange={(e) => setFromResourceType(e.target.value)}
+            >
               {resourceTypes.map((rt) => (
                 <option key={rt.key} value={rt.key}>
                   {rt.label}
                 </option>
               ))}
             </select>
-            <span>to</span>
-            <select className="border rounded p-1" value={toActorId} onChange={(e) => setToActorId(e.target.value)}>
+            <span className="text-muted-foreground">to</span>
+            <select
+              aria-label="Trade partner"
+              className={fieldClass}
+              value={toActorId}
+              onChange={(e) => setToActorId(e.target.value)}
+            >
               {partyMembers.map((m) => (
                 <option key={m.actorId} value={m.actorId}>
                   {m.label}
                 </option>
               ))}
             </select>
-            <span>for</span>
+            <span className="text-muted-foreground">for</span>
             <input
               type="number"
               min={1}
-              className="border rounded p-1 w-16"
+              aria-label="Quantity to receive"
+              className={`w-16 ${fieldClass}`}
               value={toQuantity}
               onChange={(e) => setToQuantity(Number(e.target.value))}
             />
-            <select className="border rounded p-1" value={toResourceType} onChange={(e) => setToResourceType(e.target.value)}>
+            <select
+              aria-label="Resource to receive"
+              className={fieldClass}
+              value={toResourceType}
+              onChange={(e) => setToResourceType(e.target.value)}
+            >
               {resourceTypes.map((rt) => (
                 <option key={rt.key} value={rt.key}>
                   {rt.label}
@@ -175,11 +208,7 @@ export const SessionResourceTrade: React.FC<SessionResourceTradeProps> = ({
               ))}
             </select>
           </div>
-          <button
-            type="submit"
-            className="self-start px-4 py-1.5 bg-indigo-600 text-white rounded font-semibold disabled:opacity-50"
-            disabled={!canPropose}
-          >
+          <button type="submit" className={`self-start ${primaryButtonClass}`} disabled={!canPropose}>
             Propose Trade
           </button>
         </form>

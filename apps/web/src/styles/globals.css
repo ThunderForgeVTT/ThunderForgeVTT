@@ -3,6 +3,16 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
 
+/* Tailwind v4's automatic content detection only walks this app's own
+ * source tree, so it never saw packs/systems/genie/web/src — the Genie
+ * pack whose components vite.config.mts aliases straight into this bundle.
+ * Every utility class those components use but apps/web/src doesn't
+ * (bg-sky-500, the session cards' spacing, …) was silently dropped from
+ * the compiled stylesheet, leaving the Genie session panel half-styled.
+ * Genie is the only pack aliased into this build; add a line here if
+ * another pack's web source is ever consumed the same way. */
+@source "../../../../packs/systems/genie/web/src";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
