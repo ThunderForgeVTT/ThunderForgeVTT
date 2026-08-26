@@ -750,7 +750,14 @@ pub struct TokenUpdate {
     pub metadata: Option<serde_json::Value>,
     pub owner_user_id: Option<uuid::Uuid>,
     pub is_primary: Option<bool>,
-    pub photo_url: Option<String>,
+    /// Doubly-optional so art can be *removed*, not only replaced.
+    ///
+    /// `AsChangeset` reads a plain `Option<T>` as "skip this column when
+    /// `None`", which is what makes every other field here a partial
+    /// update — and which left no way to express "set this column to
+    /// NULL". Diesel reads the nested form as: outer `None` skips the
+    /// column, `Some(None)` writes NULL, `Some(Some(v))` writes `v`.
+    pub photo_url: Option<Option<String>>,
     pub health: Option<i32>,
     pub max_health: Option<i32>,
 }

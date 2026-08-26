@@ -16,6 +16,7 @@ use chrono::Utc;
 use diesel::prelude::*;
 use diesel::result::Error as DieselError;
 
+use async_graphql::MaybeUndefined;
 use crate::graphql::{app_state, authenticated_user, GraphQLCreateTokenInput, GraphQLToken, GraphQLUpdateTokenInput};
 use crate::world_events::{record_world_event, world_id_for_scene, EVENT_CODE_TOKEN_CHANGED};
 
@@ -126,7 +127,14 @@ impl TokenMutation {
             metadata: input.metadata.map(|j| j.0),
             owner_user_id: input.owner_user_id,
             is_primary: input.is_primary,
-            photo_url: input.photo_url,
+            // Undefined leaves the column alone; an explicit null clears
+            // it back to the flat colour swatch the engine draws for a
+            // token with no art.
+            photo_url: match input.photo_url {
+                MaybeUndefined::Undefined => None,
+                MaybeUndefined::Null => Some(None),
+                MaybeUndefined::Value(url) => Some(Some(url)),
+            },
             health: input.health,
             max_health: input.max_health,
         };
@@ -792,6 +800,136 @@ mod tests {
                 .select(tokens::is_primary)
                 .first(conn)?;
             assert!(token_b_is_primary, "token B must be the surviving primary");
+
+            Ok(())
+        });
+    }
+
+    /// The three states of `TokenUpdate::photo_url`, against a real
+    /// database, because they are a property of Diesel's `AsChangeset`
+    /// rather than of any code here: skip, write, and write NULL.
+    ///
+    /// The clearing case is the one that did not exist before — a plain
+    /// `Option<String>` cannot express it, so a GM could replace token art
+    /// but never remove it.
+    #[test]
+    fn token_photo_url_can_be_set_skipped_and_cleared() {
+        let Some(mut conn) = try_connect() else {
+            eprintln!("skipping token_photo_url_can_be_set_skipped_and_cleared: no DATABASE_URL/dev DB reachable");
+            return;
+        };
+
+        conn.test_transaction::<_, diesel::result::Error, _>(|conn| {
+            use crate::schema::{scenes, tokens, users, worlds};
+
+            let owner_id = uuid::Uuid::now_v7();
+            let world_id = uuid::Uuid::now_v7();
+            let scene_id = uuid::Uuid::now_v7();
+            let token_id = uuid::Uuid::now_v7();
+            let now = chrono::Utc::now().naive_utc();
+
+            diesel::insert_into(users::table)
+                .values((
+                    users::id.eq(owner_id),
+                    users::username.eq(format!("token-photo-owner-{owner_id}")),
+                    users::password_hash.eq("test-hash"),
+                    users::email.eq(format!("token-photo-{owner_id}@example.test")),
+                    users::created_at.eq(now),
+                    users::updated_at.eq(now),
+                ))
+                .execute(conn)?;
+
+            diesel::insert_into(worlds::table)
+                .values((
+                    worlds::id.eq(world_id),
+                    worlds::name.eq("Token Photo World"),
+                    worlds::created_by.eq(owner_id),
+                    worlds::updated_by.eq(owner_id),
+                    worlds::created_at.eq(now),
+                    worlds::updated_at.eq(now),
+                ))
+                .execute(conn)?;
+
+            diesel::insert_into(scenes::table)
+                .values((
+                    scenes::scene_id.eq(scene_id),
+                    scenes::world_id.eq(world_id),
+                    scenes::name.eq("Token Photo Scene"),
+                    scenes::type_.eq("battlemap"),
+                    scenes::grid_size.eq(32),
+                    scenes::grid_type.eq("square"),
+                    scenes::width.eq(1000),
+                    scenes::height.eq(1000),
+                    scenes::owner_id.eq(owner_id),
+                    scenes::created_at.eq(now),
+                    scenes::updated_at.eq(now),
+                ))
+                .execute(conn)?;
+
+            diesel::insert_into(tokens::table)
+                .values((
+                    tokens::token_id.eq(token_id),
+                    tokens::scene_id.eq(scene_id),
+                    tokens::x.eq(0.0),
+                    tokens::y.eq(0.0),
+                    tokens::rotation.eq(0.0),
+                    tokens::scale.eq(1.0),
+                    tokens::created_at.eq(now),
+                    tokens::updated_at.eq(now),
+                ))
+                .execute(conn)?;
+
+            let photo_of = |conn: &mut PgConnection| -> Result<Option<String>, diesel::result::Error> {
+                tokens::table
+                    .filter(tokens::token_id.eq(token_id))
+                    .select(tokens::photo_url)
+                    .first(conn)
+            };
+
+            // Always carries an `x`, both because that is the shape of a
+            // real update (the client sends position with every change)
+            // and because Diesel rejects a wholly empty changeset at
+            // runtime with `EmptyChangeset`.
+            let update = |conn: &mut PgConnection, x: f64, photo_url| {
+                diesel::update(tokens::table.filter(tokens::token_id.eq(token_id)))
+                    .set(crate::models::TokenUpdate {
+                        actor_id: None,
+                        x: Some(x),
+                        y: None,
+                        rotation: None,
+                        scale: None,
+                        metadata: None,
+                        owner_user_id: None,
+                        is_primary: None,
+                        photo_url,
+                        health: None,
+                        max_health: None,
+                    })
+                    .execute(conn)
+            };
+
+            // Write.
+            update(conn, 1.0, Some(Some("/api/canvas-assets/abc.webp".to_string())))?;
+            assert_eq!(
+                photo_of(conn)?,
+                Some("/api/canvas-assets/abc.webp".to_string())
+            );
+
+            // Skip: a plain move must not disturb the art.
+            update(conn, 2.0, None)?;
+            assert_eq!(
+                photo_of(conn)?,
+                Some("/api/canvas-assets/abc.webp".to_string()),
+                "an omitted photo_url must leave the column untouched"
+            );
+
+            // Clear.
+            update(conn, 3.0, Some(None))?;
+            assert_eq!(
+                photo_of(conn)?,
+                None,
+                "an explicit null photo_url must clear the column"
+            );
 
             Ok(())
         });

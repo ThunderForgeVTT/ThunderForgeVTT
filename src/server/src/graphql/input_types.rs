@@ -1,4 +1,4 @@
-use async_graphql::{Enum, InputObject, Json, SimpleObject};
+use async_graphql::{Enum, InputObject, Json, MaybeUndefined, SimpleObject};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
@@ -378,7 +378,12 @@ pub struct GraphQLUpdateTokenInput {
     pub metadata: Option<Json<serde_json::Value>>,
     pub owner_user_id: Option<Uuid>,
     pub is_primary: Option<bool>,
-    pub photo_url: Option<String>,
+    /// `MaybeUndefined` rather than `Option`, because omitting the field
+    /// and sending an explicit `null` have to mean different things here:
+    /// "leave the art alone" and "remove the art". A plain `Option`
+    /// collapses both to `None`, which made a GM's only way to undo token
+    /// art be replacing it with different art.
+    pub photo_url: MaybeUndefined<String>,
     pub health: Option<i32>,
     pub max_health: Option<i32>,
 }

@@ -1,6 +1,11 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button/Button";
 import { Panel } from "@/components/ui/panel/Panel";
+import {
+  fetchCanvasImageAssetsForScene,
+  uploadCanvasImage,
+  type CanvasImageAsset,
+} from "@/api/assets";
 import type { WorldStore } from "@/engine/world/store";
 import type { WorldToken } from "@/engine/world/types";
 
@@ -8,6 +13,24 @@ export interface TokenToolProps {
   worldStore: WorldStore;
   tokens: Record<string, WorldToken>;
   selectedTokenId: string | null;
+  /** Needed to upload new token art; art is stored per world/scene. */
+  worldId: string;
+  sceneId: string;
+}
+
+/**
+ * The URL form the engine can actually load.
+ *
+ * Same-origin and extension-bearing, both deliberately: the engine hands
+ * this straight to Bevy's `AssetServer`, which picks an image loader by
+ * file extension and never requests an extensionless path, and which has
+ * no way to satisfy a cross-origin fetch that CORS declines. This is why
+ * art is chosen from uploaded assets rather than typed in as an arbitrary
+ * URL — a free-text field would happily accept addresses that leave the
+ * token invisible on the canvas with nothing to explain why.
+ */
+function assetUrl(asset: CanvasImageAsset): string {
+  return `/api/canvas-assets/${asset.id}.webp`;
 }
 
 const MIN_TOKEN_SCALE = 1;
@@ -41,11 +64,22 @@ const ROTATE_STEP_DEGREES = 30;
  * for the scene owner, mirroring WallTool.tsx's own documented contract —
  * this component does not re-check GM status itself.
  */
-export function TokenTool({ worldStore, tokens, selectedTokenId }: TokenToolProps) {
+export function TokenTool({
+  worldStore,
+  tokens,
+  selectedTokenId,
+  worldId,
+  sceneId,
+}: TokenToolProps) {
   const selectedToken = selectedTokenId ? tokens[selectedTokenId] : null;
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [artStatus, setArtStatus] = useState<"idle" | "uploading" | "error">("idle");
+  const [artError, setArtError] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
+  const [assets, setAssets] = useState<CanvasImageAsset[]>([]);
 
   const applyTokenChange = useCallback(
-    (changes: Partial<Pick<WorldToken, "scale" | "rotation">>) => {
+    (changes: Partial<Pick<WorldToken, "scale" | "rotation" | "photoUrl">>) => {
       if (!selectedToken) {
         return;
       }
@@ -64,6 +98,50 @@ export function TokenTool({ worldStore, tokens, selectedTokenId }: TokenToolProp
     [selectedToken, worldStore],
   );
 
+  const setArt = useCallback(
+    // `null` removes the art, and has to stay distinguishable from
+    // "unchanged" all the way to the server — see `UpdateTokenInput`.
+    (photoUrl: string | null) => applyTokenChange({ photoUrl }),
+    [applyTokenChange],
+  );
+
+  const upload = useCallback(
+    (file: File) => {
+      setArtStatus("uploading");
+      setArtError(null);
+      uploadCanvasImage(worldId, sceneId, "PASTED", file)
+        .then((asset) => {
+          setArtStatus("idle");
+          setAssets((current) => [asset, ...current]);
+          setArt(assetUrl(asset));
+        })
+        .catch((error: unknown) => {
+          setArtStatus("error");
+          setArtError(error instanceof Error ? error.message : "Failed to upload art");
+        });
+    },
+    [worldId, sceneId, setArt],
+  );
+
+  useEffect(() => {
+    if (!picking) {
+      return;
+    }
+    let cancelled = false;
+    fetchCanvasImageAssetsForScene(sceneId)
+      .then((found) => {
+        if (!cancelled) setAssets(found);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setArtStatus("error");
+        setArtError(error instanceof Error ? error.message : "Failed to load art");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [picking, sceneId]);
+
   if (!selectedToken) {
     return null;
   }
@@ -72,6 +150,7 @@ export function TokenTool({ worldStore, tokens, selectedTokenId }: TokenToolProp
   const currentRotationDegrees = Math.round(
     (((selectedToken.rotation ?? 0) * 180) / Math.PI) % 360,
   );
+  const currentArt = selectedToken.photoUrl ?? null;
 
   const resize = (delta: number) => {
     const nextScale = Math.min(
@@ -150,6 +229,119 @@ export function TokenTool({ worldStore, tokens, selectedTokenId }: TokenToolProp
         <span className="text-xs text-muted-foreground">
           Keyboard: , rotate left, . rotate right
         </span>
+      </div>
+
+      <div className="grid gap-1.5" data-testid="token-tool-art">
+        <span className="text-sm">Art</span>
+
+        <div className="flex items-center gap-2">
+          <div className="bg-muted grid size-12 shrink-0 place-items-center overflow-hidden rounded border">
+            {currentArt ? (
+              <img
+                src={currentArt}
+                alt="Selected token art"
+                className="size-full object-contain"
+                data-testid="token-tool-art-preview"
+              />
+            ) : (
+              <span className="text-muted-foreground text-[0.6rem]">None</span>
+            )}
+          </div>
+          <span className="text-xs text-muted-foreground">
+            {currentArt
+              ? "Fitted inside the token's grid footprint."
+              : "No art — draws as a plain colour token."}
+          </span>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            data-testid="token-tool-art-upload"
+            disabled={artStatus === "uploading"}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {artStatus === "uploading" ? "Uploading…" : "Upload art"}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            data-testid="token-tool-art-pick"
+            onClick={() => setPicking((open) => !open)}
+          >
+            {picking ? "Hide scene art" : "Scene art"}
+          </Button>
+          {currentArt ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              data-testid="token-tool-art-clear"
+              onClick={() => setArt(null)}
+            >
+              Remove art
+            </Button>
+          ) : null}
+        </div>
+
+        {/* Hidden, driven by the button above: a bare file input cannot be
+            styled to match the rest of this panel. */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          data-testid="token-tool-art-file"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            // Cleared so picking the same file twice in a row still fires
+            // a change event.
+            event.target.value = "";
+            if (file) {
+              upload(file);
+            }
+          }}
+        />
+
+        {picking ? (
+          assets.length > 0 ? (
+            <div
+              className="grid grid-cols-5 gap-1.5"
+              data-testid="token-tool-art-choices"
+            >
+              {assets.map((asset) => {
+                const url = assetUrl(asset);
+                return (
+                  <button
+                    key={asset.id}
+                    type="button"
+                    title={`${asset.widthPx}x${asset.heightPx}`}
+                    aria-pressed={currentArt === url}
+                    onClick={() => setArt(url)}
+                    className={`bg-muted overflow-hidden rounded border transition ${
+                      currentArt === url ? "border-primary" : "hover:border-primary/50"
+                    }`}
+                  >
+                    <img src={url} alt="" className="aspect-square size-full object-contain" />
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              No uploaded art on this scene yet.
+            </span>
+          )
+        ) : null}
+
+        {artStatus === "error" && artError ? (
+          <span className="text-destructive text-xs" role="alert">
+            {artError}
+          </span>
+        ) : null}
       </div>
     </Panel>
   );

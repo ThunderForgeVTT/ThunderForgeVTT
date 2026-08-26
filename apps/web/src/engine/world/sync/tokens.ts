@@ -44,7 +44,7 @@
  */
 
 import { createToken, deleteToken, getTokens, moveOwnToken, updateToken } from "@/api/tokens";
-import type { TokenRecord } from "@/types/token";
+import type { TokenRecord, UpdateTokenInput } from "@/types/token";
 import type { WorldStore } from "../store";
 import type { WorldToken } from "../types";
 
@@ -234,7 +234,7 @@ export function startTokenMutationBridge(
             // through this same generic `upsert_token` engine event —
             // forwarded only when present so a plain move doesn't churn
             // scale/rotation on every drag.
-            const input: { x: number; y: number; rotation?: number; scale?: number } = {
+            const input: UpdateTokenInput = {
               x: token.x,
               y: token.y,
             };
@@ -243,6 +243,14 @@ export function startTokenMutationBridge(
             }
             if (token.scale !== undefined) {
               input.scale = token.scale;
+            }
+            // Token art (TokenTool's art picker). Forwarded only when the
+            // command actually carries it, for the same reason as
+            // rotation/scale above — a drag must not rewrite it. `null` is
+            // meaningful here and must survive: it is how the GM removes
+            // art, as distinct from `undefined`, which leaves it alone.
+            if (token.photoUrl !== undefined) {
+              input.photoUrl = token.photoUrl;
             }
             void updateToken(knownTokenId, input).catch((error) => {
               console.error("Failed to update token:", error);

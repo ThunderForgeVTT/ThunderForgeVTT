@@ -28,6 +28,32 @@ import { test, expect, type Page, type Browser } from "@playwright/test";
  * isn't claimed here).
  */
 
+/**
+ * A 1x1 PNG, as bytes. Small on purpose: this test is about the art
+ * round-tripping through upload → storage → `photoUrl` → the panel, not
+ * about image content, and the server transcodes whatever it is given to
+ * WebP anyway.
+ */
+const ONE_PIXEL_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+/**
+ * Opens the GM tool rail's Tokens tool, where `TokenTool` now lives.
+ *
+ * It used to be an always-mounted floating panel, so selecting a token was
+ * enough to reveal it. The rail renders one tool at a time, so the tab has
+ * to be open before `token-tool` exists in the DOM at all.
+ */
+async function openTokenTool(page: Page): Promise<void> {
+  const tokenTool = page.getByTestId("token-tool");
+  if (await tokenTool.isVisible().catch(() => false)) {
+    return;
+  }
+  await page.getByTestId("gm-tool-tokens").click();
+}
+
 function uniqueSuffix(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -316,6 +342,15 @@ async function secondSessionSameLogin(
  * create dialog has no x/y input, per TokenPanel.tsx's `handleCreateToken`)
  * and leaves the panel closed afterward so the canvas is unobstructed. */
 async function createTokenViaPanel(page: Page): Promise<void> {
+  // The dock panel `createScene` opened stays open, and it covers the
+  // bottom-right corner where the "Tokens" button and TokenPanel live —
+  // the click still lands (it is forced) but the panel opens underneath
+  // the dock and never becomes interactable. Collapse the dock first.
+  const collapse = page.getByTestId("world-dock-collapse");
+  if (await collapse.isVisible().catch(() => false)) {
+    await collapse.click();
+  }
+
   await page.getByTestId("token-panel-toggle-button").click({ force: true });
   await page.getByTestId("token-create-trigger").click({ force: true });
   await page.getByTestId("token-create-submit").click({ force: true });
@@ -874,6 +909,7 @@ test.describe("Token resize/rotate (US1, spec 006 T001-T003)", () => {
     // Selecting the token on the canvas must surface the panel — this is
     // the discoverability gap T020 closes: previously only `]`/`[`/`,`/`.`
     // worked, with nothing on screen telling a GM they existed.
+    await openTokenTool(page);
     await expect(page.getByTestId("token-tool")).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId("token-tool-scale")).toContainText("1x");
     await expect(page.getByTestId("token-tool-rotation")).toContainText("0°");
@@ -896,6 +932,8 @@ test.describe("Token resize/rotate (US1, spec 006 T001-T003)", () => {
     await page.waitForTimeout(80);
     await page.mouse.up();
     await page.waitForTimeout(500);
+    // The rail resets to no open tool on reload.
+    await openTokenTool(page);
     await expect(page.getByTestId("token-tool-scale")).toContainText("2x");
     await expect(page.getByTestId("token-tool-rotation")).toContainText("30°");
 
@@ -905,6 +943,78 @@ test.describe("Token resize/rotate (US1, spec 006 T001-T003)", () => {
     await page.waitForTimeout(80);
     await page.mouse.up();
     await expect(page.getByTestId("token-tool")).toHaveCount(0);
+  });
+
+  test("GM sets token art from TokenTool, it persists across reload, and can be removed again", async ({
+    page,
+  }) => {
+    await registerAndCreateWorld(page, `E2E Token Art ${uniqueSuffix()}`);
+    await createScene(page, "Token Art Scene");
+    await waitForEngineReady(page);
+
+    await createTokenViaPanel(page);
+    await page.reload();
+    await waitForEngineReady(page);
+    await page.waitForTimeout(1_500);
+
+    const box = await canvasBox(page);
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    const selectToken = async () => {
+      await page.mouse.move(cx, cy);
+      await page.mouse.down();
+      await page.waitForTimeout(80);
+      await page.mouse.up();
+      await page.waitForTimeout(500);
+    };
+
+    await selectToken();
+    await openTokenTool(page);
+    await expect(page.getByTestId("token-tool-art")).toBeVisible({ timeout: 5_000 });
+
+    // A token with no art has no preview and nothing to remove.
+    await expect(page.getByTestId("token-tool-art-preview")).toHaveCount(0);
+    await expect(page.getByTestId("token-tool-art-clear")).toHaveCount(0);
+
+    // Upload drives the same `uploadCanvasImage` path AssetPasteTool uses,
+    // so the art ends up a same-origin `/api/canvas-assets/<id>.webp` URL —
+    // the only form the engine's asset loader can actually fetch.
+    await page.getByTestId("token-tool-art-file").setInputFiles({
+      name: "token-art.png",
+      mimeType: "image/png",
+      buffer: ONE_PIXEL_PNG,
+    });
+
+    const preview = page.getByTestId("token-tool-art-preview");
+    await expect(preview).toBeVisible({ timeout: 20_000 });
+    await expect(preview).toHaveAttribute("src", /\/api\/canvas-assets\/[0-9a-f-]+\.webp$/);
+    const uploadedSrc = await preview.getAttribute("src");
+
+    // Persisted, not just React state: the art has to survive the GraphQL
+    // round trip, which is what `UpdateTokenInput.photoUrl` was added for.
+    await page.reload();
+    await waitForEngineReady(page);
+    await selectToken();
+    await openTokenTool(page);
+    await expect(page.getByTestId("token-tool-art-preview")).toHaveAttribute(
+      "src",
+      uploadedSrc!,
+      { timeout: 10_000 },
+    );
+
+    // Removing art sends an explicit null, which is a different request
+    // from omitting the field — a plain `Option` on the server collapsed
+    // both to "unchanged" and made this impossible.
+    await page.getByTestId("token-tool-art-clear").click();
+    await page.waitForTimeout(1_000);
+    await expect(page.getByTestId("token-tool-art-preview")).toHaveCount(0);
+
+    await page.reload();
+    await waitForEngineReady(page);
+    await selectToken();
+    await openTokenTool(page);
+    await expect(page.getByTestId("token-tool-art")).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId("token-tool-art-preview")).toHaveCount(0);
   });
 });
 

@@ -46,7 +46,12 @@ export interface UpdateTokenInput {
   metadata?: Record<string, unknown>;
   ownerUserId?: string;
   isPrimary?: boolean;
-  photoUrl?: string;
+  /**
+   * Omit to leave the token's art alone; send `null` to remove it. The
+   * server reads this as a `MaybeUndefined`, so the two are genuinely
+   * different requests rather than both meaning "unchanged".
+   */
+  photoUrl?: string | null;
   health?: number;
   maxHealth?: number;
 }

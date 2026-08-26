@@ -969,6 +969,8 @@ export default function WorldPage() {
                       worldStore={worldStore}
                       tokens={worldState.tokens}
                       selectedTokenId={worldState.selectedTokenId}
+                      worldId={id}
+                      sceneId={sceneId}
                     />
                   ),
                 },
