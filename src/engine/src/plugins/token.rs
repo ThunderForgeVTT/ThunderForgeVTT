@@ -7,7 +7,7 @@ use crate::systems::token::{
 };
 use crate::systems::token_grid::{size_tokens_to_grid, snap_tokens_to_grid};
 use crate::systems::token_move::{
-    draw_movement_plan, handle_token_movement_input, MovementPlan, SceneUnits,
+    MovementPlan, SceneUnits, draw_movement_plan, handle_token_movement_input,
 };
 
 /// Wires up token authoring (spec 006, closing out spec 004 US2's

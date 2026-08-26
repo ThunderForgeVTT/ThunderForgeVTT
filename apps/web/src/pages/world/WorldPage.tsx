@@ -38,6 +38,8 @@ import { TokenPanel } from "@/components/TokenPanel";
 import { DiceRollerPanel } from "@/components/world/DiceRollerPanel/DiceRollerPanel";
 import { startCanvasKeyboardRouting } from "@/engine/canvasKeyboard";
 import { installWorldProbe } from "@/engine/world/probe";
+import { createWorldFacets, type ControllableToken } from "@/engine/world/facets";
+import { TokenStackPicker } from "@/components/canvas-tools/TokenStackPicker";
 import { GmToolRail } from "@/components/world/GmToolRail/GmToolRail";
 import { WorldDock, type DockSection } from "@/components/world/PlayDock/WorldDock";
 import { ChatPanel } from "@/components/world/PlayDock/ChatPanel";
@@ -375,6 +377,47 @@ export default function WorldPage() {
   // Development-only introspection for the world store; see
   // `engine/world/probe.ts`. Compiled out of production builds.
   useEffect(() => installWorldProbe(worldStore), [worldStore]);
+
+  // Stacked-token gestures. A single click takes the whole stack (handled
+  // in the engine); a double-click asks which one, and that arrives here as
+  // a `disambiguate_tokens` command for this picker to answer.
+  const [stackPicker, setStackPicker] = useState<{
+    members: ControllableToken[];
+    at: { x: number; y: number };
+  } | null>(null);
+
+  const facets = useMemo(
+    () =>
+      createWorldFacets(worldStore, {
+        worldId: id,
+        sceneId,
+        principal: {
+          userId: user?.id ?? null,
+          authority: isSceneOwner ? "gm" : user ? "player" : "observer",
+        },
+      }),
+    [worldStore, id, sceneId, isSceneOwner, user],
+  );
+
+  // Double-click over the canvas asks *which* of the stacked tokens. The
+  // click that precedes it has already selected the stack, so this only has
+  // to offer a choice between what is selected. Detected here rather than in
+  // the engine: two clicks that fast routinely land in one Bevy frame, where
+  // the second press is lost outright, while the DOM's `dblclick` is exact.
+  useEffect(() => {
+    const onDoubleClick = (event: MouseEvent) => {
+      if (!(event.target instanceof HTMLCanvasElement)) return;
+      const stack = facets.selection.disambiguate();
+      if (!stack) return;
+      setStackPicker({ members: stack.members, at: { x: event.clientX, y: event.clientY } });
+    };
+
+    window.addEventListener("dblclick", onDoubleClick, { capture: true });
+    return () => {
+      window.removeEventListener("dblclick", onDoubleClick, { capture: true });
+      facets.stop();
+    };
+  }, [facets]);
 
   useEffect(
     () => worldStore.subscribe((event) => setWorldState(event.state)),
@@ -919,6 +962,17 @@ export default function WorldPage() {
   return (
     <>
       <SEO {...seo} />
+      {stackPicker ? (
+        <TokenStackPicker
+          members={stackPicker.members}
+          at={stackPicker.at}
+          onPick={(tokenId) => {
+            facets.selection.selectOne(tokenId);
+            setStackPicker(null);
+          }}
+          onDismiss={() => setStackPicker(null)}
+        />
+      ) : null}
       <div style={{ display: playView === "playing" ? "block" : "none" }}>
       <WorldLayout
         worldId={id}

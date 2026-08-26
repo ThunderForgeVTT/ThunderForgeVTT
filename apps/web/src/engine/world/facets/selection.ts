@@ -1,29 +1,36 @@
 /**
  * The selection facet, including stacked tokens.
  *
- * Tokens stack. Two characters share a doorway, a familiar sits on its
- * owner, a swarm occupies one square — and every token in a freshly created
- * scene spawns on the same spot, which is how this came up: a click selects
- * whichever the hit-test happens to find on top, and the others are
- * unreachable without dragging the pile apart one at a time.
+ * Tokens stack: two characters in a doorway, a familiar on its owner, a
+ * swarm in one square — and every token in a freshly created scene spawns
+ * on the same spot. The engine used to take the first hit and stop, so
+ * everything underneath was unreachable without dragging the pile apart one
+ * token at a time.
  *
- * Treating that as a hazard produces fiddly UI. Treating it as a fact
- * produces two gestures:
+ * Two gestures, both driven by the engine:
  *
- * - **Click** selects the whole stack. Moving the selection moves every
- *   token in it, which is what someone dragging a pile of tokens off a
- *   doorway actually means.
- * - **Double-click** disambiguates: the caller renders a small picker over
- *   `members` and calls `selectOne` with what the user chose.
+ * - **Click** selects the whole stack and picks it up. Dragging moves every
+ *   member, each keeping its own offset, which is what "move these out of
+ *   the doorway" means.
+ * - **Double-click** asks *which one*. The click that preceded it already
+ *   selected the stack, so this needs no new engine round trip: `disambiguate`
+ *   just hands back what is selected for a picker to render, and the picker
+ *   calls `selectOne`. Nothing is mutated by asking, so dismissing leaves the
+ *   board exactly as it was.
  *
- * Both read the same `resolveStack`, so the picker can never list a token
- * the click would not have caught.
+ * Double-click is detected in the DOM, not the engine. Two clicks that fast
+ * routinely land in the same frame, where Bevy's `just_pressed` sees one
+ * press and the second is simply lost — measured, not theorised. The
+ * browser's own `dblclick` has no such problem.
  *
- * The world store holds a single `selectedTokenId` today. This facet keeps
- * the full selection itself and mirrors the primary member into the store,
- * so existing single-selection UI (`TokenTool`, the engine's own highlight)
- * keeps working untouched while callers that understand stacks get the
- * whole set.
+ * **The hit test lives in one place, and it is not here.** An earlier draft
+ * of this file resolved stacks from token positions in the store, which
+ * would have been a second implementation racing the engine's: the engine
+ * owns the camera and the true transforms, and store positions lag during a
+ * drag. It now lives in `thunderforge_canvas_core::token_stack`, tested
+ * there, and both gestures report through the engine — so the picker can
+ * never list a token the click would have missed, by construction rather
+ * than by keeping two copies in step.
  */
 
 import type { WorldStore } from "../store";
@@ -37,54 +44,23 @@ export interface WorldPoint {
   y: number;
 }
 
-/** Tokens found at a point, topmost first. */
+/** Tokens the engine resolved at a point, topmost first. */
 export interface TokenStack {
   at: WorldPoint;
   members: ControllableToken[];
 }
 
-/**
- * How close a token's centre must be to count as "at" the point, in world
- * units, when the caller does not say.
- *
- * A hit radius rather than the token's own bounds: art is fitted inside the
- * footprint and may be much narrower than its cell (a starship is), so
- * bounds-testing the sprite would make a token harder to click the less
- * square its art happens to be — a rule no player could predict.
- */
-export const DEFAULT_HIT_RADIUS = 32;
-
-/**
- * Tokens whose centre lies within `radius` of `point`, topmost first.
- *
- * Pure, so the ordering the picker shows and the ordering a click resolves
- * are provably the same list. Ties on `z` fall back to id so the order is
- * stable between calls — a picker whose entries reshuffle as you reach for
- * one is worse than no picker.
- */
-export function resolveStack(
-  tokens: WorldToken[],
-  point: WorldPoint,
-  radius: number = DEFAULT_HIT_RADIUS,
-): WorldToken[] {
-  return tokens
-    .filter((token) => Math.hypot(token.x - point.x, token.y - point.y) <= radius)
-    .sort((a, b) => (b.z ?? 0) - (a.z ?? 0) || a.id.localeCompare(b.id));
-}
-
 export interface SelectionFacet {
-  /** Currently selected token ids, topmost first. */
+  /** Selected token ids, topmost first. Empty when nothing is selected. */
   selectedIds(): string[];
-  /** What a click at `point` would catch, without selecting it. */
-  stackAt(point: WorldPoint, radius?: number): TokenStack;
-  /** Single click: select every token at the point. */
-  selectStack(point: WorldPoint, radius?: number): TokenStack;
+  /** The selection, decorated with what this principal may do to each. */
+  selection(): ControllableToken[];
   /**
-   * Double click: the same stack, for the caller to render a picker over.
-   * Selection is left untouched until `selectOne` is called, so dismissing
-   * the picker leaves the board exactly as it was.
+   * The stack to offer a picker over, or `null` when there is nothing to
+   * choose between — one token, or none. Reads the current selection, which
+   * the click preceding the double-click already established.
    */
-  disambiguate(point: WorldPoint, radius?: number): TokenStack;
+  disambiguate(): TokenStack | null;
   /** Narrow the selection to one member, e.g. from the picker. */
   selectOne(tokenId: string): void;
   clear(): void;
@@ -94,7 +70,7 @@ export interface SelectionFacet {
    * Each token is adjudicated separately, because they are separately
    * owned: a player dragging a stack containing someone else's token moves
    * their own and is refused the rest, rather than the whole gesture
-   * failing. Results come back in selection order so a caller can report
+   * failing. Results come back in selection order, so a caller can say
    * precisely what did not move.
    */
   moveBy(delta: WorldPoint): Promise<IntentResult<MoveIntent>[]>;
@@ -105,47 +81,46 @@ export function createSelectionFacet(
   context: FacetContext,
   control: TokenControlFacet,
 ): SelectionFacet {
-  let selected: string[] = [];
-
   const decorate = (token: WorldToken): ControllableToken =>
     resolveTokenPermissions(token, context.principal);
 
-  const stackAt = (point: WorldPoint, radius?: number): TokenStack => ({
-    at: point,
-    members: resolveStack(Object.values(store.getState().tokens), point, radius).map(decorate),
-  });
-
-  /** Mirrors the primary member into the store's single-selection slot. */
-  const publishPrimary = () => {
-    store.dispatch({ type: "select_token", tokenId: selected[0] ?? null }, "ui");
+  const selection = (): ControllableToken[] => {
+    const { tokens, selectedTokenIds } = store.getState();
+    return (
+      selectedTokenIds
+        .map((id) => tokens[id])
+        // An id the store has never seen is dropped rather than rendered as
+        // a blank row: the engine spawns demo tokens that were never synced,
+        // and offering one in a picker would let someone pick a token
+        // nothing can act on.
+        .filter((token): token is WorldToken => token !== undefined)
+        .map(decorate)
+    );
   };
 
   return {
-    selectedIds: () => [...selected],
-    stackAt,
-    disambiguate: stackAt,
+    selectedIds: () => [...store.getState().selectedTokenIds],
+    selection,
 
-    selectStack(point, radius) {
-      const stack = stackAt(point, radius);
-      selected = stack.members.map((entry) => entry.token.id);
-      publishPrimary();
-      return stack;
+    disambiguate() {
+      const members = selection();
+      // One token is not a choice, and a one-row picker over it is noise.
+      if (members.length < 2) return null;
+      return { at: { x: members[0].token.x, y: members[0].token.y }, members };
     },
 
     selectOne(tokenId) {
-      selected = [tokenId];
-      publishPrimary();
+      store.dispatch({ type: "select_token", tokenId }, "ui");
     },
 
     clear() {
-      selected = [];
-      publishPrimary();
+      store.dispatch({ type: "select_token", tokenId: null }, "ui");
     },
 
     async moveBy(delta) {
       const state = store.getState();
       const results: IntentResult<MoveIntent>[] = [];
-      for (const tokenId of selected) {
+      for (const tokenId of state.selectedTokenIds) {
         const token = state.tokens[tokenId];
         if (!token) {
           results.push({ status: "refused", reason: "unknown-subject" });

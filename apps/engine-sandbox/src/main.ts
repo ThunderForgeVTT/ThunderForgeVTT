@@ -120,6 +120,9 @@ function readGpuPixels(): Promise<{
   });
 }
 
+/** Every engine event this page has seen, oldest first. */
+const engineEvents: Record<string, unknown>[] = [];
+
 async function boot(): Promise<void> {
   log("loading wasm…");
   await init();
@@ -127,6 +130,15 @@ async function boot(): Promise<void> {
   set_event_callback((payload: string) => {
     // The engine emits the same events it would send the app's world store.
     console.debug("[sandbox] engine event", payload);
+    // Retained so a harness can assert on what the engine actually emitted
+    // rather than inferring it from pixels — selection and stack
+    // disambiguation have no visual signature a screenshot can read.
+    try {
+      engineEvents.push(JSON.parse(payload));
+      if (engineEvents.length > 500) engineEvents.shift();
+    } catch {
+      /* a malformed payload is the engine's problem, not the log's */
+    }
   });
 
   // `?attach=body` reproduces what `apps/web` does today — it passes
@@ -355,6 +367,28 @@ async function boot(): Promise<void> {
     frameTrace: () => JSON.parse(frame_trace()),
     clearFrameTrace: () => clear_frame_trace(),
     mapNames: maps.map((m) => m.name),
+    engineEvents: () => [...engineEvents],
+    clearEngineEvents: () => {
+      engineEvents.length = 0;
+    },
+    /** Places `count` tokens on the same spot, which is the case stacking
+     *  exists for. */
+    stackTokens: (count: number, x = 0, y = 0, prefix = "stack") => {
+      for (let index = 0; index < count; index += 1) {
+        send({
+          type: "upsert_token",
+          token: {
+            // Prefixed, so placing a second group does not silently *move*
+            // the first one by reusing its ids.
+            id: `${prefix}-${index}`,
+            x,
+            y,
+            z: 0,
+            label: `${prefix} ${index}`,
+          },
+        });
+      }
+    },
     // CC-BY-SA 3.0 FreeOrion art (see examples/space/README.md). Exercises
     // two things the dd2vtt corpus cannot: a background with an alpha
     // channel rather than an opaque photo, and token art whose aspect ratio

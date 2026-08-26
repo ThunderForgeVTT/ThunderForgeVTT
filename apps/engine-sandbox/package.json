@@ -12,7 +12,8 @@
     "stress": "pnpm run maps && node scripts/stress.mjs",
     "keyboard": "pnpm run maps && node scripts/keyboard-check.mjs",
     "stream": "pnpm run maps && node scripts/stream-check.mjs",
-    "space": "pnpm run maps && node scripts/space-check.mjs"
+    "space": "pnpm run maps && node scripts/space-check.mjs",
+    "stacking": "pnpm run maps && node scripts/stacking-check.mjs"
   },
   "dependencies": {
     "@thunderforge/engine": "workspace:^"

@@ -68,6 +68,12 @@ export type WorldState = {
   worldId: string;
   tokens: Record<string, WorldToken>;
   selectedTokenId: string | null;
+  /**
+   * The full selection, topmost first, when a click resolved to a stack.
+   * `selectedTokenId` is always its first element, so single-selection
+   * consumers can keep reading that and ignore this entirely.
+   */
+  selectedTokenIds: string[];
   walls: Record<string, WorldWall>;
   selectedWallId: string | null;
   lights: Record<string, WorldLight>;
@@ -114,6 +120,16 @@ export type SetSceneGridCommand = {
   originX?: number;
   originY?: number;
   visible?: boolean;
+};
+
+// Emitted by the engine alongside `select_token` when a click resolves to
+// one or more tokens. `select_token` still carries the primary, so existing
+// single-selection consumers are untouched; this carries the whole stack,
+// topmost first, for callers that understand stacking.
+export type SelectTokensCommand = {
+  type: "select_tokens";
+  /** Topmost first. Empty means the click landed on empty canvas. */
+  tokenIds: string[];
 };
 
 export type UpsertTokenCommand = {
@@ -349,6 +365,7 @@ export type WorldCommand =
   | UpsertTokenCommand
   | RemoveTokenCommand
   | SelectTokenCommand
+  | SelectTokensCommand
   | UpsertWallCommand
   | RemoveWallCommand
   | SelectWallCommand

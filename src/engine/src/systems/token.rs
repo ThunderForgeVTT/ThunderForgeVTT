@@ -16,8 +16,12 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use serde_json::json;
 
-use crate::resources::{CanvasLayer, DraggingToken, IsGameMaster, SelectedToken};
+use crate::resources::{
+    CanvasLayer, DraggingToken, IsGameMaster, SceneGrid, SelectedToken, TokenGridBehaviour,
+};
 use crate::{ActiveWorld, TOKEN_SIZE, TokenIdentity, emit_event};
+use thunderforge_canvas_core::grid::Footprint;
+use thunderforge_canvas_core::token_stack::{StackCandidate, tokens_at};
 
 /// Whole grid-cell increments a token's `scale` may take (spec 004 US2's
 /// resize clarification: 1x1, 2x2, 3x3... never a fractional cell).
@@ -74,17 +78,21 @@ fn cursor_world_position(
     let window = windows.iter().next()?;
     let (camera, camera_transform) = camera_query.iter().next()?;
     let cursor_px = window.cursor_position()?;
-    camera.viewport_to_world_2d(camera_transform, cursor_px).ok()
+    camera
+        .viewport_to_world_2d(camera_transform, cursor_px)
+        .ok()
 }
 
-/// Hit-test: Check if point is within rectangle bounds
-/// Used for token selection based on mouse click
-fn is_point_in_rect(point: Vec2, rect_center: Vec2, rect_size: Vec2) -> bool {
-    let half_size = rect_size / 2.0;
-    let min = rect_center - half_size;
-    let max = rect_center + half_size;
-
-    point.x >= min.x && point.x <= max.x && point.y >= min.y && point.y <= max.y
+/// Notifies the frontend of the full selection, topmost first.
+///
+/// Emitted alongside the single-token `select_token` below rather than
+/// replacing it: every existing consumer reads the primary, and breaking
+/// them to add stacks would be a much larger change than this needs to be.
+fn emit_stack_selection(token_ids: &[String]) {
+    emit_event(json!({
+        "type": "select_tokens",
+        "tokenIds": token_ids,
+    }));
 }
 
 /// Notifies the frontend of a token selection change, mirroring
@@ -114,8 +122,7 @@ fn resize_handle_world_pos(transform: &Transform) -> Vec2 {
 fn rotate_handle_world_pos(transform: &Transform) -> Vec2 {
     let rotation_radians = transform.rotation.to_euler(EulerRot::ZYX).0;
     let local_offset = Vec2::new(0.0, ROTATE_HANDLE_OFFSET * transform.scale.y);
-    transform.translation.truncate()
-        + Vec2::from_angle(rotation_radians).rotate(local_offset)
+    transform.translation.truncate() + Vec2::from_angle(rotation_radians).rotate(local_offset)
 }
 
 /// Half-diagonal (px) of an unrotated, unscaled token — the resize handle's
@@ -143,11 +150,15 @@ pub(crate) fn handle_token_drag(
     windows: Query<&Window, With<PrimaryWindow>>,
     camera_query: Query<(&Camera, &GlobalTransform)>,
     mouse_button: Res<ButtonInput<MouseButton>>,
-    mut token_query: Query<(&mut Transform, &TokenIdentity)>,
+    mut token_query: Query<(&mut Transform, &TokenIdentity, Option<&TokenGridBehaviour>)>,
     mut selected_token: ResMut<SelectedToken>,
     mut dragging: ResMut<DraggingToken>,
     active_world: Res<ActiveWorld>,
     drag_state: Res<TokenDragState>,
+    // Optional for the same reason every plugin-owned resource in the
+    // command loop is: without `GridPlugin` there is no scene grid, and the
+    // hit area falls back to the default token size rather than panicking.
+    grid: Option<Res<SceneGrid>>,
 ) {
     if drag_state.mode != TokenDragMode::Idle {
         return;
@@ -158,81 +169,123 @@ pub(crate) fn handle_token_drag(
     };
 
     if mouse_button.just_pressed(MouseButton::Left) {
-        let mut hit: Option<(String, Vec2)> = None;
+        // The hit area is the token's grid footprint, matching how
+        // `size_tokens_to_grid` sizes it. It used to be the fixed
+        // `TOKEN_SIZE` constant, which is wrong in both directions on any
+        // scene whose grid is not that size — on a 5px-per-cell scene it
+        // made every token an oversized click target that overlapped its
+        // neighbours.
+        let candidates: Vec<StackCandidate> = token_query
+            .iter()
+            .map(|(transform, identity, behaviour)| {
+                let footprint = behaviour.map_or_else(Footprint::default, |b| b.footprint);
+                let side = grid
+                    .as_ref()
+                    .map(|grid| footprint.world_size(grid.size))
+                    .unwrap_or(TOKEN_SIZE.y);
+                StackCandidate {
+                    id: identity.0.clone(),
+                    center: transform.translation.truncate(),
+                    footprint_side: side,
+                    z: transform.translation.z,
+                }
+            })
+            .collect();
 
-        for (transform, identity) in token_query.iter() {
-            let token_pos = transform.translation.truncate();
-            if is_point_in_rect(cursor_world, token_pos, TOKEN_SIZE) {
-                hit = Some((identity.0.clone(), token_pos - cursor_world));
-                break; // First hit wins (topmost token)
-            }
+        let stack = tokens_at(&candidates, cursor_world);
+
+        if stack.is_empty() {
+            selected_token.deselect();
+            emit_token_selection(None);
+            emit_stack_selection(&[]);
+            dragging.0.clear();
+            return;
         }
 
-        match hit {
-            Some((token_id, offset)) => {
-                selected_token.select(token_id.clone());
-                emit_token_selection(Some(&token_id));
-                dragging.0 = Some((token_id, offset));
-            }
-            None => {
-                selected_token.deselect();
-                emit_token_selection(None);
-                dragging.0 = None;
-            }
-        }
+        // Double-click — "which one of these?" — is detected in the
+        // frontend, not here. Two clicks that fast frequently land in the
+        // same frame, where Bevy's `just_pressed` sees one press and the
+        // second is simply lost; the DOM's own `dblclick` has no such
+        // problem. The engine's job is the hit test, which the frontend
+        // cannot do: it owns the camera and the true transforms.
+
+        // Single click takes the whole stack. Dragging one token out of a
+        // pile is the rarer intent — that is what the picker is for — while
+        // "move these out of the doorway" is the common one.
+        selected_token.select_stack(stack.clone());
+        emit_token_selection(stack.first().map(String::as_str));
+        emit_stack_selection(&stack);
+
+        dragging.0 = token_query
+            .iter()
+            .filter(|(_, identity, _)| stack.contains(&identity.0))
+            .map(|(transform, identity, _)| {
+                (
+                    identity.0.clone(),
+                    transform.translation.truncate() - cursor_world,
+                )
+            })
+            .collect();
         return;
     }
 
     if mouse_button.pressed(MouseButton::Left) {
-        let Some((token_id, offset)) = dragging.0.clone() else {
+        if dragging.0.is_empty() {
             return;
-        };
-        let new_pos = cursor_world + offset;
-        for (mut transform, identity) in token_query.iter_mut() {
-            if identity.0 == token_id {
+        }
+        // Each member keeps its own offset, so a stack that was not
+        // perfectly co-located stays in the arrangement it was picked up in.
+        for (mut transform, identity, _) in token_query.iter_mut() {
+            if let Some((_, offset)) = dragging.0.iter().find(|(id, _)| *id == identity.0) {
+                let new_pos = cursor_world + *offset;
                 transform.translation.x = new_pos.x;
                 transform.translation.y = new_pos.y;
-                break;
             }
         }
         return;
     }
 
     if mouse_button.just_released(MouseButton::Left) {
-        let Some((token_id, _offset)) = dragging.0.take() else {
+        let dragged = std::mem::take(&mut dragging.0);
+        if dragged.is_empty() {
             return;
-        };
-        for (transform, identity) in token_query.iter() {
-            if identity.0 == token_id {
-                // Include scale/rotation, not just position: this event
-                // fires on *every* select-click release, not only a real
-                // drag (dragging.0 is set on press, released here even
-                // for a plain click-to-select with no movement). Omitting
-                // them made the world-store reducer's full-replace
-                // `upsert_token` case silently wipe a token's
-                // already-persisted scale/rotation from the *client-side*
-                // store back to `undefined` on every reselect — the
-                // server value was untouched (this event's mutation
-                // bridge input only forwards fields that are present),
-                // but `TokenTool.tsx`'s displayed size/facing reverted to
-                // default the moment a GM clicked the token again after a
-                // reload, discovered live while building T020's e2e
-                // coverage (spec 004 US2).
-                let rotation_radians = transform.rotation.to_euler(EulerRot::ZYX).0;
-                emit_event(json!({
-                    "type": "upsert_token",
-                    "token": {
-                        "id": token_id,
-                        "x": transform.translation.x,
-                        "y": transform.translation.y,
-                        "z": transform.translation.z,
-                        "scale": transform.scale.x,
-                        "rotation": rotation_radians,
-                    },
-                    "worldId": active_world.0,
-                }));
-                break;
+        }
+
+        for (transform, identity, _) in token_query.iter() {
+            if !dragged.iter().any(|(id, _)| *id == identity.0) {
+                continue;
             }
+            // Include scale/rotation, not just position: this event
+            // fires on *every* select-click release, not only a real
+            // drag (dragging is set on press, released here even
+            // for a plain click-to-select with no movement). Omitting
+            // them made the world-store reducer's full-replace
+            // `upsert_token` case silently wipe a token's
+            // already-persisted scale/rotation from the *client-side*
+            // store back to `undefined` on every reselect — the
+            // server value was untouched (this event's mutation
+            // bridge input only forwards fields that are present),
+            // but `TokenTool.tsx`'s displayed size/facing reverted to
+            // default the moment a GM clicked the token again after a
+            // reload, discovered live while building T020's e2e
+            // coverage (spec 004 US2).
+            //
+            // One event per dragged token: the mutation bridge is
+            // keyed by token id, and a stack move is genuinely N
+            // separate persisted changes.
+            let rotation_radians = transform.rotation.to_euler(EulerRot::ZYX).0;
+            emit_event(json!({
+                "type": "upsert_token",
+                "token": {
+                    "id": identity.0,
+                    "x": transform.translation.x,
+                    "y": transform.translation.y,
+                    "z": transform.translation.z,
+                    "scale": transform.scale.x,
+                    "rotation": rotation_radians,
+                },
+                "worldId": active_world.0,
+            }));
         }
     }
 }
@@ -464,7 +517,8 @@ pub(crate) fn handle_token_resize_rotate_keyboard(
         }
 
         if resize_delta != 0.0 {
-            let new_scale = (transform.scale.x + resize_delta).clamp(MIN_TOKEN_SCALE, MAX_TOKEN_SCALE);
+            let new_scale =
+                (transform.scale.x + resize_delta).clamp(MIN_TOKEN_SCALE, MAX_TOKEN_SCALE);
             transform.scale = Vec3::splat(new_scale);
         }
 
@@ -538,139 +592,6 @@ pub(crate) fn init_token_systems_resources(app: &mut App) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_point_in_rect_center() {
-        assert!(is_point_in_rect(
-            Vec2::new(10.0, 10.0),
-            Vec2::new(10.0, 10.0),
-            Vec2::new(20.0, 20.0),
-        ));
-    }
-
-    #[test]
-    fn test_point_in_rect_left_edge() {
-        assert!(is_point_in_rect(
-            Vec2::new(0.0, 10.0),
-            Vec2::new(10.0, 10.0),
-            Vec2::new(20.0, 20.0),
-        ));
-    }
-
-    #[test]
-    fn test_point_in_rect_right_edge() {
-        assert!(is_point_in_rect(
-            Vec2::new(20.0, 10.0),
-            Vec2::new(10.0, 10.0),
-            Vec2::new(20.0, 20.0),
-        ));
-    }
-
-    #[test]
-    fn test_point_out_of_rect() {
-        assert!(!is_point_in_rect(
-            Vec2::new(50.0, 50.0),
-            Vec2::new(10.0, 10.0),
-            Vec2::new(20.0, 20.0),
-        ));
-    }
-
-    #[test]
-    fn test_point_just_outside_rect() {
-        assert!(!is_point_in_rect(
-            Vec2::new(20.1, 10.0),
-            Vec2::new(10.0, 10.0),
-            Vec2::new(20.0, 20.0),
-        ));
-    }
-
-    #[test]
-    fn test_point_in_rect_corners() {
-        let rect_center = Vec2::new(50.0, 50.0);
-        let rect_size = Vec2::new(40.0, 40.0);
-
-        assert!(is_point_in_rect(Vec2::new(30.0, 70.0), rect_center, rect_size));
-        assert!(is_point_in_rect(Vec2::new(70.0, 70.0), rect_center, rect_size));
-        assert!(is_point_in_rect(Vec2::new(30.0, 30.0), rect_center, rect_size));
-        assert!(is_point_in_rect(Vec2::new(70.0, 30.0), rect_center, rect_size));
-    }
-
-    #[test]
-    fn test_point_in_rect_just_outside_corners() {
-        let rect_center = Vec2::new(50.0, 50.0);
-        let rect_size = Vec2::new(40.0, 40.0);
-
-        assert!(!is_point_in_rect(Vec2::new(29.9, 70.0), rect_center, rect_size));
-        assert!(!is_point_in_rect(Vec2::new(70.1, 70.0), rect_center, rect_size));
-        assert!(!is_point_in_rect(Vec2::new(30.0, 29.9), rect_center, rect_size));
-        assert!(!is_point_in_rect(Vec2::new(70.0, 70.1), rect_center, rect_size));
-    }
-
-    #[test]
-    fn test_point_in_rect_small_rect() {
-        let rect_center = Vec2::new(100.0, 100.0);
-        let rect_size = Vec2::new(1.0, 1.0);
-
-        assert!(is_point_in_rect(Vec2::new(100.0, 100.0), rect_center, rect_size));
-        assert!(!is_point_in_rect(Vec2::new(100.6, 100.0), rect_center, rect_size));
-        assert!(!is_point_in_rect(Vec2::new(100.0, 100.6), rect_center, rect_size));
-    }
-
-    #[test]
-    fn test_point_in_rect_large_rect() {
-        let rect_center = Vec2::new(500.0, 500.0);
-        let rect_size = Vec2::new(1000.0, 1000.0);
-
-        assert!(is_point_in_rect(Vec2::new(1.0, 1.0), rect_center, rect_size));
-        assert!(is_point_in_rect(Vec2::new(999.0, 999.0), rect_center, rect_size));
-    }
-
-    #[test]
-    fn test_point_in_rect_zero_size() {
-        let rect_center = Vec2::new(50.0, 50.0);
-        let rect_size = Vec2::ZERO;
-
-        assert!(is_point_in_rect(Vec2::new(50.0, 50.0), rect_center, rect_size));
-        assert!(!is_point_in_rect(Vec2::new(50.001, 50.0), rect_center, rect_size));
-    }
-
-    #[test]
-    fn test_point_in_rect_negative_coordinates() {
-        let rect_center = Vec2::new(-50.0, -50.0);
-        let rect_size = Vec2::new(40.0, 40.0);
-
-        assert!(is_point_in_rect(Vec2::new(-50.0, -50.0), rect_center, rect_size));
-        assert!(is_point_in_rect(Vec2::new(-70.0, -70.0), rect_center, rect_size));
-        assert!(is_point_in_rect(Vec2::new(-30.0, -30.0), rect_center, rect_size));
-        assert!(!is_point_in_rect(Vec2::new(0.0, 0.0), rect_center, rect_size));
-    }
-
-    #[test]
-    fn test_point_in_rect_asymmetric_rect() {
-        let rect_center = Vec2::new(100.0, 100.0);
-        let rect_size = Vec2::new(40.0, 20.0);
-
-        assert!(is_point_in_rect(Vec2::new(100.0, 100.0), rect_center, rect_size));
-        assert!(is_point_in_rect(Vec2::new(110.0, 105.0), rect_center, rect_size));
-        assert!(is_point_in_rect(Vec2::new(90.0, 95.0), rect_center, rect_size));
-
-        assert!(!is_point_in_rect(Vec2::new(121.0, 100.0), rect_center, rect_size));
-        assert!(!is_point_in_rect(Vec2::new(79.0, 100.0), rect_center, rect_size));
-
-        assert!(!is_point_in_rect(Vec2::new(100.0, 111.0), rect_center, rect_size));
-        assert!(!is_point_in_rect(Vec2::new(100.0, 89.0), rect_center, rect_size));
-    }
-
-    #[test]
-    fn test_point_in_rect_floating_point_precision() {
-        let rect_center = Vec2::new(100.0, 100.0);
-        let rect_size = Vec2::new(10.0, 10.0);
-
-        assert!(is_point_in_rect(Vec2::new(104.999, 100.0), rect_center, rect_size));
-        assert!(!is_point_in_rect(Vec2::new(105.001, 100.0), rect_center, rect_size));
-        assert!(is_point_in_rect(Vec2::new(100.0, 104.999), rect_center, rect_size));
-        assert!(!is_point_in_rect(Vec2::new(100.0, 105.001), rect_center, rect_size));
-    }
 
     #[test]
     fn resize_handle_world_pos_at_identity_transform() {

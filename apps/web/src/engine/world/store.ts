@@ -90,6 +90,7 @@ function reduceState(state: WorldState, command: WorldCommand): WorldState {
         tokens: nextTokens,
         selectedTokenId:
           state.selectedTokenId === command.tokenId ? null : state.selectedTokenId,
+        selectedTokenIds: state.selectedTokenIds.filter((id) => id !== command.tokenId),
       };
     }
 
@@ -97,6 +98,16 @@ function reduceState(state: WorldState, command: WorldCommand): WorldState {
       return {
         ...state,
         selectedTokenId: command.tokenId,
+        // Narrowing to one token — from a picker, or any single-selection
+        // caller — collapses the stack too, or the two would disagree.
+        selectedTokenIds: command.tokenId === null ? [] : [command.tokenId],
+      };
+
+    case "select_tokens":
+      return {
+        ...state,
+        selectedTokenId: command.tokenIds[0] ?? null,
+        selectedTokenIds: command.tokenIds,
       };
 
     case "upsert_wall":
@@ -196,6 +207,7 @@ export function createWorldStore(options: CreateWorldStoreOptions): WorldStore {
     worldId: options.worldId,
     tokens: normalizeTokens(options.initialTokens ?? []),
     selectedTokenId: null,
+    selectedTokenIds: [],
     walls: normalizeWalls(options.initialWalls ?? []),
     selectedWallId: null,
     lights: normalizeLights(options.initialLights ?? []),

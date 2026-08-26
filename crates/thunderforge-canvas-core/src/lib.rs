@@ -23,5 +23,6 @@ pub mod movement;
 pub mod shape;
 pub mod texture_budget;
 pub mod token_art;
+pub mod token_stack;
 pub mod vision;
 pub mod wall;

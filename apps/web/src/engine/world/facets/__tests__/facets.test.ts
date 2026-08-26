@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import { resolveTokenPermissions } from "../tokenControl";
-import { DEFAULT_HIT_RADIUS, resolveStack } from "../selection";
 import { didApply } from "../types";
 import type { WorldToken } from "../../types";
 import type { FacetPrincipal } from "../types";
@@ -75,54 +74,6 @@ describe("resolveTokenPermissions", () => {
       { userId: null, authority: "player" },
     );
     expect(permissions.canMove).toBe(false);
-  });
-});
-
-describe("resolveStack", () => {
-  it("finds every token at the point, not just the top one", () => {
-    // The whole reason this exists: tokens genuinely stack.
-    const stacked = [token({ id: "a" }), token({ id: "b" }), token({ id: "c" })];
-    expect(resolveStack(stacked, { x: 0, y: 0 })).toHaveLength(3);
-  });
-
-  it("orders topmost first", () => {
-    const stacked = [
-      token({ id: "low", z: 0 }),
-      token({ id: "high", z: 10 }),
-      token({ id: "mid", z: 5 }),
-    ];
-    expect(resolveStack(stacked, { x: 0, y: 0 }).map((t) => t.id)).toEqual([
-      "high",
-      "mid",
-      "low",
-    ]);
-  });
-
-  it("breaks ties stably so a picker's entries do not reshuffle", () => {
-    const stacked = [token({ id: "b" }), token({ id: "a" })];
-    const once = resolveStack(stacked, { x: 0, y: 0 }).map((t) => t.id);
-    const twice = resolveStack([...stacked].reverse(), { x: 0, y: 0 }).map((t) => t.id);
-    expect(once).toEqual(["a", "b"]);
-    expect(twice).toEqual(once);
-  });
-
-  it("excludes tokens outside the hit radius", () => {
-    const spread = [token({ id: "near", x: 4 }), token({ id: "far", x: 400 })];
-    expect(resolveStack(spread, { x: 0, y: 0 }).map((t) => t.id)).toEqual(["near"]);
-  });
-
-  it("includes a token exactly on the radius", () => {
-    const edge = [token({ id: "edge", x: DEFAULT_HIT_RADIUS })];
-    expect(resolveStack(edge, { x: 0, y: 0 })).toHaveLength(1);
-  });
-
-  it("measures distance in both axes, not just x", () => {
-    const diagonal = [token({ id: "diag", x: DEFAULT_HIT_RADIUS, y: DEFAULT_HIT_RADIUS })];
-    expect(resolveStack(diagonal, { x: 0, y: 0 })).toHaveLength(0);
-  });
-
-  it("returns nothing for empty canvas, which is a deselect and not an error", () => {
-    expect(resolveStack([token({ x: 500 })], { x: 0, y: 0 })).toEqual([]);
   });
 });
 
