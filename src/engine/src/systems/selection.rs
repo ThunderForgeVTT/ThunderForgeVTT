@@ -1,6 +1,6 @@
+use crate::resources::{SceneData, SelectedToken};
+use crate::{ActiveWorld, TokenIdentity, emit_event};
 use bevy::prelude::*;
-use crate::resources::{SelectedToken, SceneData};
-use crate::{TokenIdentity, ActiveWorld, emit_event};
 use serde_json::json;
 
 /// Update token visual feedback based on selection state
@@ -97,10 +97,15 @@ mod tests {
 
         let token = app
             .world_mut()
-            .spawn((Transform::from_xyz(0.0, 0.0, 0.0), TokenIdentity("token-1".to_string())))
+            .spawn((
+                Transform::from_xyz(0.0, 0.0, 0.0),
+                TokenIdentity("token-1".to_string()),
+            ))
             .id();
 
-        app.world_mut().resource_mut::<SelectedToken>().select("token-1".to_string());
+        app.world_mut()
+            .resource_mut::<SelectedToken>()
+            .select("token-1".to_string());
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
             .press(KeyCode::ArrowRight);

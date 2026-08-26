@@ -8,8 +8,8 @@
 //! 5. WebSocket receives worldEventCreated
 //! 6. Client applies server event or rolls back
 
-use bevy::prelude::*;
 use crate::components::*;
+use bevy::prelude::*;
 
 /// Circular flow stage
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -201,10 +201,7 @@ pub fn trace_mutation_sent(
 }
 
 /// System to trace server events
-pub fn trace_server_event(
-    _tracer: ResMut<CircularFlowTracer>,
-    _time: Res<Time>,
-) {
+pub fn trace_server_event(_tracer: ResMut<CircularFlowTracer>, _time: Res<Time>) {
     // Phase 4.3: Actual event reading deferred to Phase 4.4
     // Placeholder for now
 }
@@ -255,11 +252,7 @@ pub fn trace_rollback(
 }
 
 /// System to print periodic summaries
-pub fn print_flow_summary(
-    tracer: Res<CircularFlowTracer>,
-    mut timer: Local<f32>,
-    time: Res<Time>,
-) {
+pub fn print_flow_summary(tracer: Res<CircularFlowTracer>, mut timer: Local<f32>, time: Res<Time>) {
     *timer += time.delta_secs();
 
     if *timer > 10.0 {

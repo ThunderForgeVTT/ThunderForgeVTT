@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use thunderforge_canvas_core::camera::{fit_scale, zoom_steps, zoom_toward, ZoomLimits};
+use thunderforge_canvas_core::camera::{ZoomLimits, fit_scale, zoom_steps, zoom_toward};
 
 /// Camera manager for pan/zoom control
 #[derive(Resource)]
@@ -187,12 +187,18 @@ mod tests {
         for _ in 0..200 {
             cam.zoom_by(1.0);
         }
-        assert_eq!(cam.scale, cam.zoom_min, "zooming in clamps at the min scale");
+        assert_eq!(
+            cam.scale, cam.zoom_min,
+            "zooming in clamps at the min scale"
+        );
 
         for _ in 0..200 {
             cam.zoom_by(-1.0);
         }
-        assert_eq!(cam.scale, cam.zoom_max, "zooming out clamps at the max scale");
+        assert_eq!(
+            cam.scale, cam.zoom_max,
+            "zooming out clamps at the max scale"
+        );
     }
 
     #[test]
@@ -336,7 +342,7 @@ mod tests {
     #[test]
     fn test_zoom_below_minimum() {
         let mut cam = CameraManager::default();
-        cam.zoom(0.1);  // Try to zoom below min
+        cam.zoom(0.1); // Try to zoom below min
 
         assert!(cam.scale >= cam.zoom_min);
     }
@@ -344,7 +350,7 @@ mod tests {
     #[test]
     fn test_zoom_above_maximum() {
         let mut cam = CameraManager::default();
-        cam.zoom(10.0);  // Try to zoom above max
+        cam.zoom(10.0); // Try to zoom above max
 
         assert!(cam.scale <= cam.zoom_max);
     }

@@ -18,10 +18,10 @@
 
 #[cfg(test)]
 mod e2e_canvas_tests {
-    use bevy::prelude::*;
-    use crate::resources::scene_data::{SceneData, GridType};
     use crate::resources::camera::CameraManager;
-    use crate::resources::selection::{SelectedToken, DraggingToken};
+    use crate::resources::scene_data::{GridType, SceneData};
+    use crate::resources::selection::{DraggingToken, SelectedToken};
+    use bevy::prelude::*;
 
     #[test]
     fn test_e2e_launch_world_see_grid() {
@@ -204,7 +204,9 @@ mod e2e_canvas_tests {
 
         let basic = crate::systems::builtin::BasicSystem;
         registry.register(std::sync::Arc::new(basic));
-        registry.activate("basic").expect("basic system should register under id \"basic\"");
+        registry
+            .activate("basic")
+            .expect("basic system should register under id \"basic\"");
 
         let active = registry.get_active();
         assert!(active.is_some());
@@ -266,10 +268,10 @@ mod e2e_canvas_tests {
 
 #[cfg(test)]
 mod integration_system_tests {
-    use bevy::prelude::*;
-    use crate::resources::scene_data::{SceneData, GridType};
     use crate::resources::camera::CameraManager;
+    use crate::resources::scene_data::{GridType, SceneData};
     use crate::resources::selection::SelectedToken;
+    use bevy::prelude::*;
 
     #[test]
     fn test_all_systems_compile_together() {
@@ -351,9 +353,9 @@ mod plugin_independence_tests {
     //! driven authoring flow works (that's out of scope for a headless test,
     //! same carve-out as `handle_token_drag`).
 
+    use crate::plugins::{CanvasLayerPlugin, LightingPlugin, ShapePlugin, WallPlugin};
+    use crate::resources::{LightSet, ShapeSet, WallSet};
     use bevy::prelude::*;
-    use crate::plugins::{CanvasLayerPlugin, WallPlugin, LightingPlugin, ShapePlugin};
-    use crate::resources::{WallSet, LightSet, ShapeSet};
 
     fn headless_app_with_inputs() -> App {
         let mut app = App::new();
@@ -423,6 +425,9 @@ mod manual_browser_test_scenarios {
 
     #[test]
     fn test_manual_scenarios_documented() {
-        assert!(true, "See manual_browser_test_scenarios for the E2E checklist");
+        assert!(
+            true,
+            "See manual_browser_test_scenarios for the E2E checklist"
+        );
     }
 }

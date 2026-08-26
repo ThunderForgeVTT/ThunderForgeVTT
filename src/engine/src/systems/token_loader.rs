@@ -1,6 +1,6 @@
-use bevy::prelude::*;
 use crate::components::Token;
 use crate::resources::SceneData;
+use bevy::prelude::*;
 
 #[derive(Resource)]
 pub struct TokenCache(pub Vec<Token>);

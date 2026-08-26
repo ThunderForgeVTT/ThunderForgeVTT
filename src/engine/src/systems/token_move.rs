@@ -22,7 +22,7 @@ use bevy::prelude::*;
 
 use crate::movement::PlayerControlled;
 use crate::resources::{SceneGrid, TokenGridBehaviour};
-use crate::{emit_event, ActiveWorld, TokenIdentity};
+use crate::{ActiveWorld, TokenIdentity, emit_event};
 use serde_json::json;
 use thunderforge_canvas_core::grid::GridKind;
 use thunderforge_canvas_core::measure::GridUnits;
@@ -205,9 +205,7 @@ pub(crate) fn draw_movement_plan(
                 ..default()
             },
             TextColor(PLAN_COLOR),
-            Transform::from_translation(
-                (*end + Vec2::new(0.0, grid.size * 0.62)).extend(90.0),
-            ),
+            Transform::from_translation((*end + Vec2::new(0.0, grid.size * 0.62)).extend(90.0)),
             PlanLabel,
         ));
     }

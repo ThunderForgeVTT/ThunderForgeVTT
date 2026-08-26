@@ -1,31 +1,27 @@
 //! Bevy ECS systems for game logic and synchronization.
-//! 
+//!
 //! F2: System Registration
 //! - core: GameSystem trait and SystemRegistry for extensible game system loading
 //! - builtin: Built-in game systems (BasicSystem, future: DnD5e, Pathfinder, etc)
 
-pub mod core;
+pub mod background;
 pub mod builtin;
-pub mod sync;
+pub mod core;
+pub mod lighting;
 pub mod optimistic;
-pub mod token_loader;
+pub mod selection;
+pub mod shape;
+pub mod sync;
 pub mod token;
 pub mod token_grid;
+pub mod token_loader;
 pub mod token_move;
-pub mod selection;
 pub mod wall;
-pub mod lighting;
-pub mod shape;
-pub mod background;
 
-pub use core::{GameSystem, SkillDefinition, DerivedStats, SystemRegistry};
 pub use builtin::BasicSystem;
-pub use sync::{process_server_responses, handle_mutation_errors};
-pub use optimistic::{
-    process_mutation_results,
-    mark_mutation_pending,
-    PendingMutation,
-};
+pub use core::{DerivedStats, GameSystem, SkillDefinition, SystemRegistry};
+pub use optimistic::{PendingMutation, mark_mutation_pending, process_mutation_results};
+pub use sync::{handle_mutation_errors, process_server_responses};
 pub use token_loader::{TokenCache, load_test_tokens};
 
 // Stub for Phase 4.7 compatibility

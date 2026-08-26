@@ -1,5 +1,5 @@
-use bevy::prelude::*;
 use crate::resources::SceneData;
+use bevy::prelude::*;
 
 /// Phase 4.7.A2: Coordinate transformation system
 ///
@@ -212,7 +212,7 @@ mod tests {
         // Negative grid coordinates (infinite canvas, left/up from origin)
         let pixel = grid_to_pixel(-5.0, -5.0, &scene, Vec2::ZERO, 1.0);
         assert_eq!(pixel.x, -160.0);
-        assert_eq!(pixel.y, 480.0);  // Y inverted: -5 * 32 + (20*32)
+        assert_eq!(pixel.y, 480.0); // Y inverted: -5 * 32 + (20*32)
     }
 
     #[test]
@@ -312,7 +312,13 @@ mod tests {
 
         // Grid position should be consistent regardless of camera
         let original_grid = (5.0, 3.0);
-        let pixel = grid_to_pixel(original_grid.0, original_grid.1, &scene, camera_pan, camera_zoom);
+        let pixel = grid_to_pixel(
+            original_grid.0,
+            original_grid.1,
+            &scene,
+            camera_pan,
+            camera_zoom,
+        );
         let converted_grid = pixel_to_grid(pixel.x, pixel.y, &scene, camera_pan, camera_zoom);
 
         assert!((converted_grid.0 - original_grid.0).abs() < 0.01);

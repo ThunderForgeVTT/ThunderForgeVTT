@@ -9,7 +9,7 @@
 use bevy::prelude::*;
 use std::ops::{Deref, DerefMut};
 
-pub use thunderforge_canvas_core::wall::{is_visible, DoorState, Wall, WallEdit};
+pub use thunderforge_canvas_core::wall::{DoorState, Wall, WallEdit, is_visible};
 
 /// Whether the local session is acting as GM (wall edit handles and tool
 /// input are GM-only, per data-model.md's Canvas Layer section —

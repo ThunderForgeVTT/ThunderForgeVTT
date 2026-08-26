@@ -2,8 +2,8 @@ use bevy::prelude::*;
 
 use crate::resources::{IsGameMaster, SelectedWall, WallSet};
 use crate::systems::wall::{
-    handle_wall_input, handle_wall_keyboard_toggles, handle_wall_undo,
-    init_wall_systems_resources, sync_wall_visuals,
+    handle_wall_input, handle_wall_keyboard_toggles, handle_wall_undo, init_wall_systems_resources,
+    sync_wall_visuals,
 };
 
 /// Wires up wall authoring (T011-T014): the `WallSet` resource, GM-only

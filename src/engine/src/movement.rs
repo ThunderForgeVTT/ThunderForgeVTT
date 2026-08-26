@@ -1,11 +1,11 @@
 //! Simplified Movement System
 
-use bevy::prelude::*;
 use crate::components::*;
-use crate::network::mutations::{execute_move_token_mutation, MutationTracker};
+use crate::network::mutations::{MutationTracker, execute_move_token_mutation};
 use crate::resources::SceneGrid;
-use crate::systems::optimistic::mark_mutation_pending;
 use crate::sync_test::{CircularFlowTracer, FlowStage};
+use crate::systems::optimistic::mark_mutation_pending;
+use bevy::prelude::*;
 
 /// Token is player-controlled and can be moved interactively
 #[derive(Component)]
@@ -23,7 +23,7 @@ pub fn handle_keyboard_movement(
     mut query: Query<(Entity, &mut GridPosition, &TokenId, &PlayerControlled)>,
 ) {
     let mut direction = Vec2::ZERO;
-    
+
     if keyboard_input.pressed(KeyCode::KeyW) || keyboard_input.pressed(KeyCode::ArrowUp) {
         direction.y += 1.0;
     }
@@ -36,18 +36,18 @@ pub fn handle_keyboard_movement(
     if keyboard_input.pressed(KeyCode::KeyD) || keyboard_input.pressed(KeyCode::ArrowRight) {
         direction.x += 1.0;
     }
-    
+
     if direction == Vec2::ZERO {
         return;
     }
-    
+
     // One cell per press, using the scene's real cell size rather than the
     // 32.0 this used to assume — on an imported 128px map that moved a token
     // a quarter of a cell at a time, and `apply_grid_snapping` then pulled it
     // back, so it looked like the keys did nothing.
     let step_size = grid.as_ref().map_or(32.0, |g| g.size);
     let delta = direction.normalize() * step_size;
-    
+
     for (entity, mut grid_pos, token_id, _) in query.iter_mut() {
         let old_x = grid_pos.x;
         let old_y = grid_pos.y;
@@ -56,8 +56,11 @@ pub fn handle_keyboard_movement(
         // 1. Update GridPosition optimistically
         grid_pos.x += delta.x;
         grid_pos.y += delta.y;
-        
-        eprintln!("🎮 Moved token {} to ({:.1}, {:.1})", token_id.0, grid_pos.x, grid_pos.y);
+
+        eprintln!(
+            "🎮 Moved token {} to ({:.1}, {:.1})",
+            token_id.0, grid_pos.x, grid_pos.y
+        );
         tracer.trace(
             FlowStage::LocalInput,
             token_id.0.clone(),

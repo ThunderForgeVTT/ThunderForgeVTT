@@ -2,8 +2,8 @@
 
 use bevy::prelude::*;
 
-use crate::resources::{GridSnapEnabled, SceneGrid, TokenGridBehaviour};
 use crate::TokenIdentity;
+use crate::resources::{GridSnapEnabled, SceneGrid, TokenGridBehaviour};
 use thunderforge_canvas_core::grid::{Footprint, GridKind};
 use thunderforge_canvas_core::token_art::fit_within_footprint;
 

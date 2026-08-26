@@ -4,8 +4,8 @@
 //! This reduces network payload by never sending computed values over the wire.
 //! All computations happen locally using the system hooks API.
 
-use bevy::prelude::*;
 use crate::components::*;
+use bevy::prelude::*;
 
 /// System to calculate derived stats whenever base token data changes
 /// Uses Changed<Token> to detect updates from server
@@ -31,12 +31,9 @@ pub fn calculate_ability_stats(
 
 /// Compute all derived statistics from base token data
 /// This is the core computation logic
-pub fn compute_derived_stats(
-    token: &Token,
-    _hooks: Option<&SystemHooksRegistry>,
-) -> DerivedStats {
+pub fn compute_derived_stats(token: &Token, _hooks: Option<&SystemHooksRegistry>) -> DerivedStats {
     let mut stats = DerivedStats::default();
-    
+
     // Health percentage and status
     if let (Some(health), Some(max_health)) = (token.health, token.max_health) {
         if max_health > 0 {
@@ -45,10 +42,10 @@ pub fn compute_derived_stats(
         stats.is_dead = health <= 0;
         stats.is_full_health = health >= max_health;
     }
-    
+
     // Compute ability-based stats
     compute_ability_derived_stats(&token.abilities, &mut stats, _hooks);
-    
+
     stats
 }
 
@@ -61,19 +58,19 @@ pub fn compute_ability_derived_stats(
 ) {
     // Compute ability modifiers (D&D-style: (ability - 10) / 2)
     let ability_mods = compute_ability_modifiers(abilities);
-    
+
     // Base AC: 10 + DEX modifier
     stats.armor_class = ability_mods.dex.map(|dex_mod| 10 + dex_mod);
-    
+
     // Initiative: DEX modifier
     stats.initiative = ability_mods.dex;
-    
+
     // Default movement speed (30 ft = 5 tiles per round in D&D)
     stats.movement_speed = Some(30);
-    
+
     // Proficiency bonus (default +2, scales with level in real systems)
     stats.proficiency_bonus = Some(2);
-    
+
     // Future: Hook system would customize these
     // if let Some(hooks) = hooks {
     //     if hooks.has_hook("d20-5e", "computeArmorClass") {
@@ -117,16 +114,12 @@ pub fn compute_health_percentage(health: Option<i32>, max_health: Option<i32>) -
 /// Default: 10 + DEX modifier
 /// Can be enhanced with armor, magic items, etc. via hooks
 pub fn compute_armor_class(abilities: &TokenAbilities) -> Option<i32> {
-    abilities
-        .dexterity
-        .map(|dex| 10 + (dex - 10) / 2)
+    abilities.dexterity.map(|dex| 10 + (dex - 10) / 2)
 }
 
 /// Compute initiative modifier (D&D style)
 pub fn compute_initiative(abilities: &TokenAbilities) -> Option<i32> {
-    abilities
-        .dexterity
-        .map(|dex| (dex - 10) / 2)
+    abilities.dexterity.map(|dex| (dex - 10) / 2)
 }
 
 /// Compute movement speed
@@ -186,13 +179,13 @@ pub fn apply_d20_rules(token: &Token, stats: &mut DerivedStats) {
         stats.armor_class = Some(10 + dex_mod);
         stats.initiative = Some(dex_mod);
     }
-    
+
     // Health percentage
     if let (Some(health), Some(max_health)) = (token.health, token.max_health) {
         stats.health_percentage = Some((health as f32 / max_health as f32) * 100.0);
         stats.is_dead = health <= 0;
     }
-    
+
     // Default D&D speed
     stats.movement_speed = Some(30);
     stats.proficiency_bonus = Some(2);
@@ -210,7 +203,7 @@ mod tests {
             constitution: Some(12),
             ..Default::default()
         };
-        
+
         let mods = compute_ability_modifiers(&abilities);
         assert_eq!(mods.str, Some(2));
         assert_eq!(mods.dex, Some(0));
@@ -223,7 +216,7 @@ mod tests {
             dexterity: Some(14),
             ..Default::default()
         };
-        
+
         let ac = compute_armor_class(&abilities);
         assert_eq!(ac, Some(12)); // 10 + 2 (DEX mod)
     }
@@ -234,7 +227,7 @@ mod tests {
             dexterity: Some(16),
             ..Default::default()
         };
-        
+
         let initiative = compute_initiative(&abilities);
         assert_eq!(initiative, Some(3)); // (16 - 10) / 2 = 3
     }
@@ -243,7 +236,7 @@ mod tests {
     fn test_health_percentage() {
         let pct = compute_health_percentage(Some(50), Some(100));
         assert_eq!(pct, Some(50.0));
-        
+
         let pct = compute_health_percentage(Some(75), Some(100));
         assert_eq!(pct, Some(75.0));
     }
@@ -282,7 +275,7 @@ mod tests {
         };
 
         let stats = compute_derived_stats(&token, None);
-        
+
         assert_eq!(stats.health_percentage, Some(100.0));
         assert!(!stats.is_dead);
         assert!(stats.is_full_health);

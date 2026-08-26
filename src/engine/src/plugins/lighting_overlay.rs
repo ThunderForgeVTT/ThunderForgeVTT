@@ -13,8 +13,8 @@
 
 use bevy::prelude::*;
 
-use crate::resources::{LightSet, LightingOverlay, TokenVision};
 use crate::TokenIdentity;
+use crate::resources::{LightSet, LightingOverlay, TokenVision};
 use thunderforge_canvas_core::vision::Rgb;
 
 /// Segments per circle. Enough to read as round at play zoom without
@@ -37,11 +37,7 @@ fn to_color(rgb: Rgb, alpha: f32) -> Color {
     Color::srgba(rgb.r, rgb.g, rgb.b, alpha)
 }
 
-fn draw_light_radii(
-    overlay: Res<LightingOverlay>,
-    light_set: Res<LightSet>,
-    mut gizmos: Gizmos,
-) {
+fn draw_light_radii(overlay: Res<LightingOverlay>, light_set: Res<LightSet>, mut gizmos: Gizmos) {
     if !overlay.0 {
         return;
     }
@@ -106,7 +102,11 @@ fn draw_vision_cones(
         // matters here, not the exact extent.
         let reach = vision
             .max_range
-            .or(if vision.darkvision > 0.0 { Some(vision.darkvision) } else { None })
+            .or(if vision.darkvision > 0.0 {
+                Some(vision.darkvision)
+            } else {
+                None
+            })
             .unwrap_or(300.0);
 
         let half = vision.fov / 2.0;

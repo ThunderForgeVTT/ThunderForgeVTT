@@ -15,11 +15,11 @@ use crate::resources::{
     CanvasLayer, IsGameMaster, LightEdit, LightSet, LightSource, SceneAmbient, SelectedLight,
     TokenVision, WallSet,
 };
-use thunderforge_canvas_core::vision::{
-    illumination_at, visibility_of, AmbientLight, Illumination, ResolvedLight, Rgb,
-    Visibility as Perceived, VisionProfile,
-};
 use crate::{ActiveWorld, PlayerToken, TokenIdentity, emit_event};
+use thunderforge_canvas_core::vision::{
+    AmbientLight, Illumination, ResolvedLight, Rgb, Visibility as Perceived, VisionProfile,
+    illumination_at, visibility_of,
+};
 
 /// Default radius (px) for a newly click-placed light (T037).
 const DEFAULT_LIGHT_RADIUS: f32 = 100.0;
@@ -544,10 +544,7 @@ pub(crate) fn sync_light_visuals(
 /// total). Mapping it this way keeps every existing light's outer footprint
 /// exactly where it is today while giving it a bright centre, so no scene
 /// changes shape when this lands.
-fn resolve_light(
-    light: &LightSource,
-    positions: &HashMap<String, Vec2>,
-) -> ResolvedLight {
+fn resolve_light(light: &LightSource, positions: &HashMap<String, Vec2>) -> ResolvedLight {
     ResolvedLight {
         position: effective_light_position(light, positions),
         bright_radius: light.radius * 0.5,
@@ -596,7 +593,12 @@ pub(crate) fn apply_light_illumination(
     token_positions: Query<(&Transform, &TokenIdentity)>,
     observer_query: Query<(&Transform, Option<&TokenVision>), With<PlayerToken>>,
     mut tokens: Query<
-        (&Transform, Option<&TokenVision>, &mut Sprite, &mut Visibility),
+        (
+            &Transform,
+            Option<&TokenVision>,
+            &mut Sprite,
+            &mut Visibility,
+        ),
         With<TokenIdentity>,
     >,
 ) {

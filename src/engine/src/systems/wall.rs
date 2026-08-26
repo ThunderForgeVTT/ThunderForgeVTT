@@ -655,7 +655,6 @@ pub(crate) fn sync_wall_visuals(
 /// The occlusion geometry itself did not go anywhere — it is
 /// `thunderforge_canvas_core::wall::is_visible`, which that function calls.
 
-
 pub(crate) fn init_wall_systems_resources(app: &mut App) {
     app.init_resource::<WallDragState>()
         .init_resource::<WallChainState>()

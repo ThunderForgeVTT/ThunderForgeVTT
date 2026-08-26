@@ -34,9 +34,9 @@ use bevy::render::render_resource::{AsBindGroup, ShaderType};
 use bevy::shader::ShaderRef;
 use bevy::sprite_render::{AlphaMode2d, Material2d, Material2dPlugin};
 
-use crate::resources::{CanvasLayer, LightSet, SceneAmbient, WallSet};
 use crate::TokenIdentity;
-use thunderforge_canvas_core::vision::{shadow_quad, Illumination, Rgb};
+use crate::resources::{CanvasLayer, LightSet, SceneAmbient, WallSet};
+use thunderforge_canvas_core::vision::{Illumination, Rgb, shadow_quad};
 
 /// Must match `MAX_LIGHTS` in `darkness.wgsl`.
 ///
@@ -260,7 +260,10 @@ fn sync_darkness_quad(
     mut materials: ResMut<Assets<DarknessMaterial>>,
     tokens: Query<&Transform, With<TokenIdentity>>,
     cameras: Query<(&Projection, &GlobalTransform), With<Camera2d>>,
-    existing: Query<(Entity, &MeshMaterial2d<DarknessMaterial>, &mut Transform), (With<DarknessQuad>, Without<TokenIdentity>)>,
+    existing: Query<
+        (Entity, &MeshMaterial2d<DarknessMaterial>, &mut Transform),
+        (With<DarknessQuad>, Without<TokenIdentity>),
+    >,
 ) {
     let ambient = ambient.map_or_else(
         || thunderforge_canvas_core::vision::AmbientLight::daylight(),
@@ -279,7 +282,11 @@ fn sync_darkness_quad(
 
     let mut uniform = DarknessUniform {
         ambient: {
-            let tint = ambient.color.unwrap_or(Rgb { r: 0.02, g: 0.03, b: 0.08 });
+            let tint = ambient.color.unwrap_or(Rgb {
+                r: 0.02,
+                g: 0.03,
+                b: 0.08,
+            });
             Vec4::new(tint.r, tint.g, tint.b, strength)
         },
         ..Default::default()
@@ -370,7 +377,11 @@ fn sync_shadow_quads(
     // here was visibly wrong: the darkness quad carries a cool ambient tint,
     // so an untinted shadow read as a blacker-than-night cut-out rather than
     // as ordinary shade.
-    let tint = ambient.color.unwrap_or(Rgb { r: 0.02, g: 0.03, b: 0.08 });
+    let tint = ambient.color.unwrap_or(Rgb {
+        r: 0.02,
+        g: 0.03,
+        b: 0.08,
+    });
     let shadow_color = Color::srgba(tint.r, tint.g, tint.b, strength);
 
     let material = shadow_assets

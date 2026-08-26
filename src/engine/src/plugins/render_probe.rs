@@ -43,8 +43,8 @@ use bevy::prelude::*;
 use bevy::render::extract_resource::{ExtractResource, ExtractResourcePlugin};
 use bevy::render::render_phase::ViewSortedRenderPhases;
 use bevy::render::view::{ExtractedView, RenderVisibleEntities};
-use bevy::sprite_render::ExtractedSprites;
 use bevy::render::{Render, RenderApp, RenderSystems};
+use bevy::sprite_render::ExtractedSprites;
 
 /// Whether the probe is currently drawing and tracing. Toggled by the
 /// `set_render_probe` external command (see `lib.rs`).
@@ -73,15 +73,15 @@ impl Plugin for RenderProbePlugin {
             // budget or 95%. Everything looks identical right up until it
             // falls off a cliff.
             .add_plugins(FrameTimeDiagnosticsPlugin::default())
-            .add_systems(Update, (draw_render_probe, trace_main_world, publish_engine_stats));
+            .add_systems(
+                Update,
+                (draw_render_probe, trace_main_world, publish_engine_stats),
+            );
 
         // The render world is where "was anything actually queued to draw"
         // can be answered. Nothing in the main world can see it.
         if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
-            render_app.add_systems(
-                Render,
-                trace_render_phases.after(RenderSystems::PhaseSort),
-            );
+            render_app.add_systems(Render, trace_render_phases.after(RenderSystems::PhaseSort));
         }
     }
 }

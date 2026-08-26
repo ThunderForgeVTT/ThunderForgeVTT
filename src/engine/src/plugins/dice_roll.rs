@@ -90,7 +90,10 @@ fn spawn_pending_roll(
                 // of an already-known value).
                 parent.spawn((
                     Text2d::new(die.final_value.to_string()),
-                    TextFont { font_size: 20.0, ..default() },
+                    TextFont {
+                        font_size: 20.0,
+                        ..default()
+                    },
                     TextColor(Color::BLACK),
                     Transform::from_xyz(0.0, 0.0, 1.0),
                 ));

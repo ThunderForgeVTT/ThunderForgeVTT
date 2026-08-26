@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 
-use bevy::prelude::*;
 use bevy::asset::{AssetPlugin, UnapprovedPathMode};
+use bevy::prelude::*;
 use bevy::window::{Window, WindowPlugin, WindowResolution};
 use js_sys::Function;
 use serde::Deserialize;
@@ -30,22 +30,21 @@ mod integration_tests;
 use derived_data::*;
 use movement::PlayerControlled;
 use plugins::{
-    BackgroundPlugin, CameraPlugin, CanvasLayerPlugin, DiceRollPlugin, GridPlugin, LightingPlugin,
-    DarknessPlugin, LightingOverlayPlugin, RenderProbeEnabled, RenderProbePlugin, ScenePlugin,
-    SelectionPlugin, ShapePlugin,
-    SystemRegistrationPlugin, TokenPlugin, WallPlugin,
+    BackgroundPlugin, CameraPlugin, CanvasLayerPlugin, DarknessPlugin, DiceRollPlugin, GridPlugin,
+    LightingOverlayPlugin, LightingPlugin, RenderProbeEnabled, RenderProbePlugin, ScenePlugin,
+    SelectionPlugin, ShapePlugin, SystemRegistrationPlugin, TokenPlugin, WallPlugin,
 };
 use resources::{
-    CameraManager, DoorState, GridSnapEnabled, GridVisible, IsGameMaster, LightSet, LightSource as EngineLight, PlacedCanvasImage,
-    LightingOverlay, PlacedCanvasImages, SceneAmbient, SceneBackground, SceneGrid, TokenVision,
-    Shape as EngineShape, ShapeKind, ShapeSet, TokenGridBehaviour,
-    Wall as EngineWall, WallSet,
+    CameraManager, DoorState, GridSnapEnabled, GridVisible, IsGameMaster, LightSet,
+    LightSource as EngineLight, LightingOverlay, PlacedCanvasImage, PlacedCanvasImages,
+    SceneAmbient, SceneBackground, SceneGrid, Shape as EngineShape, ShapeKind, ShapeSet,
+    TokenGridBehaviour, TokenVision, Wall as EngineWall, WallSet,
 };
+use sync_test::*;
+use systems::*;
 use thunderforge_canvas_core::grid::Footprint;
 use thunderforge_canvas_core::measure::GridUnits;
 use thunderforge_canvas_core::vision::{Illumination, Rgb, VisionProfile};
-use sync_test::*;
-use systems::*;
 
 static ENGINE_STARTED: AtomicBool = AtomicBool::new(false);
 static EVENT_CALLBACK: OnceLock<Mutex<Option<Function>>> = OnceLock::new();
@@ -476,11 +475,17 @@ fn parse_command(input: &str) -> Option<ExternalCommand> {
             },
             origin_x: value.get("originX").and_then(Value::as_f64).unwrap_or(0.0) as f32,
             origin_y: value.get("originY").and_then(Value::as_f64).unwrap_or(0.0) as f32,
-            visible: value.get("visible").and_then(Value::as_bool).unwrap_or(true),
+            visible: value
+                .get("visible")
+                .and_then(Value::as_bool)
+                .unwrap_or(true),
         }),
         "set_token_grid" => Some(ExternalCommand::SetTokenGrid {
             token_id: value.get("tokenId")?.as_str()?.to_owned(),
-            footprint: value.get("footprint").and_then(Value::as_f64).unwrap_or(1.0) as f32,
+            footprint: value
+                .get("footprint")
+                .and_then(Value::as_f64)
+                .unwrap_or(1.0) as f32,
             snap: value.get("snap").and_then(Value::as_bool).unwrap_or(true),
         }),
         "set_grid_units" => Some(ExternalCommand::SetGridUnits {
@@ -511,7 +516,10 @@ fn parse_command(input: &str) -> Option<ExternalCommand> {
                 .get("darkvision")
                 .and_then(Value::as_f64)
                 .unwrap_or(0.0) as f32,
-            facing: value.get("facing").and_then(Value::as_f64).map(|f| f as f32),
+            facing: value
+                .get("facing")
+                .and_then(Value::as_f64)
+                .map(|f| f as f32),
             fov: value
                 .get("fov")
                 .and_then(Value::as_f64)
@@ -619,20 +627,24 @@ pub fn start(canvas_selector: &str) {
         // filesystem paths at all, and the bytes behind them are already
         // authenticated and world-authorized server-side by
         // `canvas_assets_serve`.
-        .add_plugins(DefaultPlugins.set(AssetPlugin {
-            unapproved_path_mode: UnapprovedPathMode::Allow,
-            ..default()
-        }).set(WindowPlugin {
-            primary_window: Some(Window {
-                canvas: Some(canvas_selector.to_owned()),
-                fit_canvas_to_parent: true,
-                focused: true,
-                resolution: WindowResolution::new(ARENA_WIDTH as u32, ARENA_HEIGHT as u32),
-                title: "ThunderForge Engine".into(),
-                ..default()
-            }),
-            ..default()
-        }))
+        .add_plugins(
+            DefaultPlugins
+                .set(AssetPlugin {
+                    unapproved_path_mode: UnapprovedPathMode::Allow,
+                    ..default()
+                })
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        canvas: Some(canvas_selector.to_owned()),
+                        fit_canvas_to_parent: true,
+                        focused: true,
+                        resolution: WindowResolution::new(ARENA_WIDTH as u32, ARENA_HEIGHT as u32),
+                        title: "ThunderForge Engine".into(),
+                        ..default()
+                    }),
+                    ..default()
+                }),
+        )
         // Phase 4.7.F2: System Registration & Plugin Setup
         .add_plugins(SystemRegistrationPlugin)
         // Phase 4.7: Canvas Rendering Infrastructure
@@ -926,7 +938,8 @@ fn apply_external_commands(
             }
             ExternalCommand::UpsertToken { token } => {
                 if let Some(existing_entity) = token_entities.0.get(&token.id).copied() {
-                    if let Ok((_, mut transform, _, mut sprite)) = token_query.get_mut(existing_entity)
+                    if let Ok((_, mut transform, _, mut sprite)) =
+                        token_query.get_mut(existing_entity)
                     {
                         transform.translation.x = token.x;
                         transform.translation.y = token.y;
@@ -1103,11 +1116,9 @@ fn apply_external_commands(
                 if let Some(scene_grid) = scene.grid.as_deref_mut() {
                     *scene_grid = match map_size {
                         Some(map_size) => SceneGrid::anchored_to_map(&grid_type, size, map_size),
-                        None => SceneGrid::from_server(
-                            &grid_type,
-                            size,
-                            Vec2::new(origin_x, origin_y),
-                        ),
+                        None => {
+                            SceneGrid::from_server(&grid_type, size, Vec2::new(origin_x, origin_y))
+                        }
                     };
                     info!(
                         target: "grid",
@@ -1239,7 +1250,10 @@ fn apply_external_commands(
             ExternalCommand::SetRenderProbe { enabled } => {
                 if let Some(render_probe) = render_probe.as_deref_mut() {
                     render_probe.0 = enabled;
-                    info!("render probe {}", if enabled { "enabled" } else { "disabled" });
+                    info!(
+                        "render probe {}",
+                        if enabled { "enabled" } else { "disabled" }
+                    );
                 }
             }
             ExternalCommand::UpsertCanvasImageAsset {
@@ -1276,7 +1290,9 @@ fn apply_external_commands(
                 if let Some(pending_dice_roll) = pending_dice_roll.as_deref_mut() {
                     pending_dice_roll.0 = Some(
                         dice.into_iter()
-                            .map(|d| plugins::dice_roll::DiceRollDie { final_value: d.final_value })
+                            .map(|d| plugins::dice_roll::DiceRollDie {
+                                final_value: d.final_value,
+                            })
                             .collect(),
                     );
                 }
