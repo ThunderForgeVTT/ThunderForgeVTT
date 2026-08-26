@@ -178,6 +178,25 @@ async function firstPersistedToken(
   return { id: token.id, x: token.x, y: token.y };
 }
 
+/**
+ * The token the engine currently reports as selected.
+ *
+ * `firstPersistedToken` is not enough on its own once a scene has a stack:
+ * `TokenPanel` creates at (0, 0) and grid snapping lands every new token
+ * on exactly (-192.5, -62.5), which is also where the engine's own demo
+ * token sits. Probe order does not say which of that pile a click or drag
+ * will actually reach — only the selection does.
+ */
+async function selectedToken(
+  page: Page,
+): Promise<{ id: string; x: number; y: number }> {
+  const { tokens, selectedTokenId } = await probeState(page);
+  const token = tokens.find((candidate) => candidate.id === selectedTokenId);
+  if (!token)
+    throw new Error(`selected token ${selectedTokenId} not in the world store`);
+  return { id: token.id, x: token.x, y: token.y };
+}
+
 async function openTokenTool(page: Page): Promise<void> {
   const tokenTool = page.getByTestId("token-tool");
   if (await tokenTool.isVisible().catch(() => false)) {
@@ -423,8 +442,16 @@ async function dragCanvas(
   const cy = box.y + box.height / 2;
   await page.mouse.move(cx + from.dx, cy + from.dy);
   await page.mouse.down();
+  // The engine must get at least one frame with the cursor still at the
+  // grab point. It computes the drag offset on `just_pressed` as
+  // `tokenPos - cursorWorld`; if the press and the moves coalesce into one
+  // frame, it first sees the cursor already at the destination, takes
+  // `offset = tokenPos - destination`, and then every later frame places
+  // the token at `destination + offset` — exactly where it started. The
+  // drag silently does nothing, with no error anywhere to say so.
+  await page.waitForTimeout(250);
   await page.mouse.move(cx + to.dx, cy + to.dy, { steps: 5 });
-  await page.waitForTimeout(80);
+  await page.waitForTimeout(250);
   await page.mouse.up();
 }
 
@@ -706,7 +733,19 @@ test.describe("Canvas-native token drag (US1, T008/T009)", () => {
     // snapping moves the token before it settles, so the drag has to start
     // from where it actually is (see `firstPersistedToken`) and the
     // assertion below is start-plus-delta.
-    const before = await firstPersistedToken(page);
+    // Every token in this scene is stacked on exactly one point: the panel
+    // creates at (0, 0), grid snapping puts that at (-192.5, -62.5), and
+    // the engine's demo token is already there. Dragging that pile blind
+    // moves nothing — `selectPersistedToken` clears the demo token off the
+    // top and leaves a real one held, which is the only way to know which
+    // token the drag below is actually about to move.
+    const box = await canvasBox(page);
+    await selectPersistedToken(
+      page,
+      box.x + box.width / 2,
+      box.y + box.height / 2,
+    );
+    const before = await selectedToken(page);
     const from = worldToScreenOffset(before);
     await dragCanvas(page, from, { dx: from.dx + 120, dy: from.dy - 80 });
 
@@ -719,7 +758,9 @@ test.describe("Canvas-native token drag (US1, T008/T009)", () => {
     await waitForEngineReady(page);
 
     await page.getByTestId("token-panel-toggle-button").click({ force: true });
-    const tokenItem = page.locator('[data-testid^="token-list-item-"]').first();
+    // By id, not `.first()`: the scene holds several tokens and list order
+    // is not a statement about which one this test dragged.
+    const tokenItem = page.getByTestId(`token-list-item-${before.id}`);
     await expect(tokenItem).toBeVisible({ timeout: 10_000 });
     // `force: true`: the token list item's bounding box appears to churn
     // frame-to-frame while the WorldLayout party-roster sidebar is also
@@ -730,9 +771,7 @@ test.describe("Canvas-native token drag (US1, T008/T009)", () => {
     // rather than fight it.
     await tokenItem.click({ force: true });
 
-    const positionText = page
-      .locator('[data-testid^="token-position-"]')
-      .first();
+    const positionText = page.getByTestId(`token-position-${before.id}`);
     await expect(positionText).toBeVisible({ timeout: 10_000 });
     const text = await positionText.textContent();
     const match = /Position: \(([-\d.]+), ([-\d.]+)\)/.exec(text ?? "");
@@ -778,26 +817,37 @@ test.describe("Canvas-native token drag (US1, T008/T009)", () => {
     // `drop_token_valid_coordinates_check` migration so tokens can use the
     // same center-origin coordinate system walls/shapes/lights already do;
     // this offset is kept as regression coverage for that fix.
-    const before = await firstPersistedToken(page);
+    // Same stack as the sibling test: clear the demo token off the top so
+    // the drag below has a known token in hand.
+    const box = await canvasBox(page);
+    await selectPersistedToken(
+      page,
+      box.x + box.width / 2,
+      box.y + box.height / 2,
+    );
+    const before = await selectedToken(page);
     const from = worldToScreenOffset(before);
     await dragCanvas(page, from, { dx: from.dx + 60, dy: from.dy + 40 });
     await page.waitForTimeout(1_000);
     // Where it came to rest, snapping included — both sessions must agree
     // on this exact value, which is the point of the test.
-    const after = await firstPersistedToken(page);
+    const after = await selectedToken(page);
+    // Assert the drag moved it before asserting the two sessions agree:
+    // without this the test passes when the drag does nothing at all,
+    // because `after` is then just `before` and both sessions dutifully
+    // report the same unmoved token. Tolerance is a whole grid cell (the
+    // drop snaps); y moves by the negative of screen dy.
+    expect(after.x).toBeCloseTo(before.x + 60, -1);
+    expect(after.y).toBeCloseTo(before.y - 40, -1);
 
     // Confirm the drag actually persisted on the GM's own page before
     // involving a second session at all — isolates "did the drag work"
     // from "did the second session read stale/fresh data".
     await page.getByTestId("token-panel-toggle-button").click({ force: true });
-    const gmTokenItem = page
-      .locator('[data-testid^="token-list-item-"]')
-      .first();
+    const gmTokenItem = page.getByTestId(`token-list-item-${before.id}`);
     await expect(gmTokenItem).toBeVisible({ timeout: 10_000 });
     await gmTokenItem.click({ force: true });
-    const gmPositionText = page
-      .locator('[data-testid^="token-position-"]')
-      .first();
+    const gmPositionText = page.getByTestId(`token-position-${before.id}`);
     await expect(gmPositionText).toBeVisible({ timeout: 10_000 });
     const gmText = await gmPositionText.textContent();
     const gmMatch = /Position: \(([-\d.]+), ([-\d.]+)\)/.exec(gmText ?? "");
@@ -814,9 +864,7 @@ test.describe("Canvas-native token drag (US1, T008/T009)", () => {
       await secondPage
         .getByTestId("token-panel-toggle-button")
         .click({ force: true });
-      const tokenItem = secondPage
-        .locator('[data-testid^="token-list-item-"]')
-        .first();
+      const tokenItem = secondPage.getByTestId(`token-list-item-${before.id}`);
       await expect(tokenItem).toBeVisible({ timeout: 10_000 });
       // `force: true`: the token list item's bounding box appears to churn
       // frame-to-frame while the WorldLayout party-roster sidebar is also
@@ -827,9 +875,9 @@ test.describe("Canvas-native token drag (US1, T008/T009)", () => {
       // rather than fight it.
       await tokenItem.click({ force: true });
 
-      const positionText = secondPage
-        .locator('[data-testid^="token-position-"]')
-        .first();
+      const positionText = secondPage.getByTestId(
+        `token-position-${before.id}`,
+      );
       await expect(positionText).toBeVisible({ timeout: 10_000 });
       const text = await positionText.textContent();
       const match = /Position: \(([-\d.]+), ([-\d.]+)\)/.exec(text ?? "");
