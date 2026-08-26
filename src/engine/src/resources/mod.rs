@@ -1,4 +1,5 @@
 pub mod scene_data;
+pub mod background_cache;
 pub mod camera;
 pub mod selection;
 pub mod canvas_layer;
@@ -11,6 +12,7 @@ pub mod token_grid;
 pub mod vision;
 
 pub use scene_data::{GridType, SceneData};
+pub use background_cache::BackgroundTextureCache;
 pub use camera::CameraManager;
 pub use selection::{SelectedToken, DraggingToken};
 pub use canvas_layer::{CanvasLayer, CanvasLayers};

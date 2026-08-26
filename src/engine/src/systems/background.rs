@@ -5,7 +5,8 @@
 use bevy::prelude::*;
 use std::collections::HashMap;
 
-use crate::resources::{CanvasLayer, PlacedCanvasImages, SceneBackground};
+use crate::plugins::mark_frame;
+use crate::resources::{BackgroundTextureCache, CanvasLayer, PlacedCanvasImages, SceneBackground};
 
 /// Marker on the sprite entity spawned for the active scene's background
 /// image. There is at most one at a time (despawn-and-respawn on change,
@@ -24,6 +25,10 @@ pub(crate) fn sync_scene_background(
     background: Res<SceneBackground>,
     asset_server: Res<AssetServer>,
     existing: Query<Entity, With<BackgroundSprite>>,
+    // Optional, like every other plugin-owned resource this loop touches:
+    // without `BackgroundPlugin`'s cache the background still renders, it
+    // just pays the upload again on every visit.
+    mut texture_cache: Option<ResMut<BackgroundTextureCache>>,
 ) {
     if !background.is_changed() {
         return;
@@ -44,6 +49,16 @@ pub(crate) fn sync_scene_background(
 
     let image: Handle<Image> = asset_server.load(&path);
 
+    // Hold a strong handle past the sprite's lifetime. Despawning the old
+    // background above dropped the only handle to its image, which freed
+    // the texture and made returning to that scene re-upload it in full —
+    // seconds of frozen frame for a map the GPU had already seen. See
+    // `resources/background_cache.rs`.
+    if let Some(cache) = texture_cache.as_deref_mut() {
+        let pixels = (background.width.max(0.0) as u64) * (background.height.max(0.0) as u64);
+        cache.touch(&path, image.clone(), pixels);
+    }
+
     commands.spawn((
         Sprite {
             image,
@@ -53,6 +68,20 @@ pub(crate) fn sync_scene_background(
         Transform::from_xyz(0.0, 0.0, CanvasLayer::Background.z()),
         BackgroundSprite,
     ));
+
+    // Start of the interval anyone measuring a map switch cares about. The
+    // matching `background_loaded` mark is left by
+    // `trace_background_asset_load` once the bytes are decoded.
+    mark_frame(format!("background_spawn {path}"));
+
+    if let Some(cache) = texture_cache.as_deref() {
+        debug!(
+            target: "background",
+            "background cache: {} resident ({:.1}MP)",
+            cache.resident_paths().len(),
+            cache.resident_pixels() as f64 / 1.0e6,
+        );
+    }
 
     // Traced unconditionally rather than behind the render probe: a scene
     // background changing is a rare, deliberate event, and knowing when the
@@ -65,6 +94,33 @@ pub(crate) fn sync_scene_background(
         background.height,
         CanvasLayer::Background.z(),
     );
+}
+
+/// Marks the frame on which the background image finished loading.
+///
+/// This is the frame to look at when asking whether a map switch hitches.
+/// `AssetServer::load` returns immediately with an unloaded handle; the
+/// fetch is asynchronous, but the **decode** is not offloaded on wasm —
+/// Bevy is single-threaded there regardless of features (real threads need
+/// `SharedArrayBuffer` and cross-origin isolation), so decoding a map runs
+/// on the same thread as the frame loop. The GPU upload then happens in the
+/// render world the first time the image is prepared, i.e. on this frame or
+/// the one after it.
+pub(crate) fn trace_background_asset_load(
+    mut events: MessageReader<AssetEvent<Image>>,
+    background_sprites: Query<&Sprite, With<BackgroundSprite>>,
+) {
+    for event in events.read() {
+        let AssetEvent::LoadedWithDependencies { id } = event else {
+            continue;
+        };
+        if background_sprites
+            .iter()
+            .any(|sprite| sprite.image.id() == *id)
+        {
+            mark_frame("background_loaded");
+        }
+    }
 }
 
 /// Marker + id on a placed (pasted) canvas image's sprite entity (spec

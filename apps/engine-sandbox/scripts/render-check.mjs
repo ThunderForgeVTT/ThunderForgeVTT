@@ -18,6 +18,7 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
+import { launchGpuBrowser } from "./browser.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -97,7 +98,11 @@ const near = (a, b, tolerance = 6) => a.every((v, i) => Math.abs(v - b[i]) <= to
 
 await waitForServer();
 
-const browser = await chromium.launch();
+// Plain `chromium.launch()` gets no GPU and the engine falls back to
+// software rasterization at ~4fps. That does not change this check's
+// pass/fail (a blank canvas is blank either way), but it does mean the
+// check was not exercising the path the app ships on.
+const { browser } = await launchGpuBrowser(chromium);
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
 await page.goto(BASE);
 await page.waitForFunction(() => document.querySelectorAll("canvas").length > 0, { timeout: 60_000 });

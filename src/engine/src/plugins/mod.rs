@@ -13,6 +13,7 @@ pub mod dice_roll;
 pub mod darkness;
 pub mod lighting_overlay;
 pub mod render_probe;
+pub mod frame_trace;
 
 pub use scene::ScenePlugin;
 pub use grid::GridPlugin;
@@ -29,3 +30,4 @@ pub use dice_roll::DiceRollPlugin;
 pub use darkness::DarknessPlugin;
 pub use lighting_overlay::LightingOverlayPlugin;
 pub use render_probe::{EngineStats, RenderProbeEnabled, RenderProbePlugin};
+pub use frame_trace::{FrameTracePlugin, clear_frame_trace, frame_trace_json, mark_frame};

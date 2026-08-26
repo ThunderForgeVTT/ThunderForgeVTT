@@ -15,10 +15,12 @@
 //! shell, this crate is the tested core underneath it.
 
 pub mod camera;
+pub mod frame_trace;
 pub mod grid;
 pub mod lighting;
 pub mod measure;
 pub mod movement;
 pub mod shape;
+pub mod texture_budget;
 pub mod vision;
 pub mod wall;

@@ -1,7 +1,9 @@
 use bevy::prelude::*;
 
-use crate::resources::{PlacedCanvasImages, SceneBackground};
-use crate::systems::background::{sync_placed_canvas_images, sync_scene_background};
+use crate::resources::{BackgroundTextureCache, PlacedCanvasImages, SceneBackground};
+use crate::systems::background::{
+    sync_placed_canvas_images, sync_scene_background, trace_background_asset_load,
+};
 
 /// Wires up the scene-background render: the `SceneBackground` resource
 /// and the sprite-sync system that keeps `CanvasLayer::Background` showing
@@ -20,7 +22,15 @@ pub struct BackgroundPlugin;
 impl Plugin for BackgroundPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<SceneBackground>()
+            // Keeps recently-shown map textures resident; see
+            // `resources/background_cache.rs` for the measurements that
+            // motivated it.
+            .init_resource::<BackgroundTextureCache>()
             .add_systems(Update, sync_scene_background)
+            // Timing instrumentation for map switches; see
+            // `plugins/frame_trace.rs`. Reads asset events only, writes
+            // nothing the rest of the engine can observe.
+            .add_systems(Update, trace_background_asset_load)
             // Spec 002 (US3): placed (pasted) canvas images — a
             // resource/system pair added to this existing plugin rather
             // than a new plugin type, per Constitution Principle II's

@@ -23,6 +23,7 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
+import { launchGpuBrowser } from "./browser.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -90,7 +91,9 @@ await waitForServer();
 // Headed, so the GPU is real. Headless Chromium falls back to SwiftShader
 // (CPU rendering), which produces numbers that say nothing about how the
 // engine performs for an actual player.
-const browser = await chromium.launch({ headless: false });
+// Headless with the GPU flags rather than headed: same hardware path,
+// no dependency on a display being attached. See `browser.mjs`.
+const { browser } = await launchGpuBrowser(chromium);
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
 
 const failures = [];

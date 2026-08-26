@@ -15,6 +15,7 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
+import { launchGpuBrowser } from "./browser.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = "/home/mbruno/development/thunderforge/ThunderForgeVTT/apps/engine-sandbox";
@@ -107,7 +108,7 @@ const ROUTING = `
 `;
 
 await waitForServer();
-const browser = await chromium.launch();
+const { browser } = await launchGpuBrowser(chromium);
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
 await page.goto(BASE);
 await page.waitForFunction(() => document.querySelectorAll("canvas").length > 0, { timeout: 60_000 });

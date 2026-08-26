@@ -24,7 +24,9 @@ import { FrameSampler, type FrameStats } from "./frameStats";
 import { RAMP_AXES, reset as resetStress, SCENARIOS } from "./stress";
 import init, {
   apply_world_command,
+  clear_frame_trace,
   engine_stats,
+  frame_trace,
   set_event_callback,
   start,
 } from "@thunderforge/engine";
@@ -348,6 +350,11 @@ async function boot(): Promise<void> {
       magnitude: s.magnitude,
     })),
     setZoom: (zoom: number) => send({ type: "set_camera", zoom }),
+    // Raw per-frame timings, for measuring what an average hides — a map
+    // switch's decode/upload hitch. See `plugins/frame_trace.rs`.
+    frameTrace: () => JSON.parse(frame_trace()),
+    clearFrameTrace: () => clear_frame_trace(),
+    mapNames: maps.map((m) => m.name),
     loadMap: (name: string) => {
       const map = maps.find((m) => m.name === name);
       if (!map) throw new Error(`no map ${name}`);

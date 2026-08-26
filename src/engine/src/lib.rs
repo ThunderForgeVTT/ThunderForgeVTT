@@ -359,6 +359,23 @@ pub fn engine_stats() -> String {
     serde_json::to_string(&snapshot).unwrap_or_else(|_| "{}".to_string())
 }
 
+/// Every retained frame's real duration, as JSON, oldest first.
+///
+/// Unlike `engine_stats`, which reports a smoothed average, this is the raw
+/// per-frame series — the only form in which a one-frame stall survives.
+/// See `plugins/frame_trace.rs`.
+#[wasm_bindgen]
+pub fn frame_trace() -> String {
+    plugins::frame_trace_json()
+}
+
+/// Empties the frame trace. Call right before the thing being measured, so
+/// the retained window contains it and nothing else.
+#[wasm_bindgen]
+pub fn clear_frame_trace() {
+    plugins::clear_frame_trace();
+}
+
 fn event_callback_slot() -> &'static Mutex<Option<Function>> {
     EVENT_CALLBACK.get_or_init(|| Mutex::new(None))
 }
@@ -636,6 +653,8 @@ pub fn start(canvas_selector: &str) {
         // already handed to us — independent of every canvas plugin
         // above (Constitution Principle II).
         .add_plugins(DiceRollPlugin)
+        // Raw per-frame timing ring, always on (one push per frame).
+        .add_plugins(plugins::FrameTracePlugin)
         // Renderer self-test, off unless `set_render_probe` turns it on.
         .add_plugins(RenderProbePlugin)
         // Lighting/vision debug overlay (light radii, vision cones).

@@ -10,7 +10,8 @@
     "build": "pnpm run maps && vite build",
     "check": "pnpm run maps && node scripts/render-check.mjs",
     "stress": "pnpm run maps && node scripts/stress.mjs",
-    "keyboard": "pnpm run maps && node scripts/keyboard-check.mjs"
+    "keyboard": "pnpm run maps && node scripts/keyboard-check.mjs",
+    "stream": "pnpm run maps && node scripts/stream-check.mjs"
   },
   "dependencies": {
     "@thunderforge/engine": "workspace:^"

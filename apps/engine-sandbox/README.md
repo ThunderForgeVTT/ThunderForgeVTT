@@ -31,7 +31,18 @@ neither, the fault is in the engine.
 pnpm -F @thunderforge/engine-sandbox dev     # http://localhost:5180
 pnpm -F @thunderforge/engine-sandbox check   # headless pass/fail over every map
 pnpm -F @thunderforge/engine-sandbox keyboard  # keys still work with the canvas unfocused
+pnpm -F @thunderforge/engine-sandbox stream   # does switching maps hitch?
 ```
+
+`stream` reads the engine's per-frame trace across a map switch. It reports
+the first visit to each map (the texture upload, still expensive) and guards
+the revisit case, which the background texture cache makes free.
+
+Every harness launches through `scripts/browser.mjs`. That is not incidental:
+a plain `chromium.launch()` gets no GPU, Chromium falls back to software
+rasterization, and the engine runs at ~4fps with two sprites on screen — so
+any timing taken that way measures SwiftShader, not the engine. `stream`
+refuses to report numbers from a software-rendered browser at all.
 
 `keyboard` guards a specific regression: winit binds its key listeners to the
 canvas element, so keyboard input dies the moment any UI control takes focus.
