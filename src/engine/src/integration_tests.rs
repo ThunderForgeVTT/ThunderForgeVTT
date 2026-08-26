@@ -145,10 +145,12 @@ mod e2e_canvas_tests {
         camera.pan(Vec2::new(0.0, 32.0));
         assert_eq!(camera.translation, Vec2::new(32.0, 32.0));
 
-        camera.zoom_in();
-        assert!((camera.scale - 1.1).abs() < 0.001);
+        // Positive steps zoom in, which *shrinks* the scale (world units per
+        // screen unit) — see `CameraManager::zoom_by`.
+        camera.zoom_by(1.0);
+        assert!(camera.scale < 1.0);
 
-        camera.zoom_out();
+        camera.zoom_by(-1.0);
         assert!((camera.scale - 1.0).abs() < 0.001);
 
         camera.reset();
@@ -315,8 +317,10 @@ mod integration_system_tests {
         let initial_pan = Vec2::new(100.0, 50.0);
         camera.translation = initial_pan;
 
-        camera.zoom_in();
-        assert_eq!(camera.translation, initial_pan); // Pan should not change during zoom
+        // A plain zoom leaves the camera where it is; only `zoom_toward`
+        // (cursor-anchored) moves it.
+        camera.zoom_by(1.0);
+        assert_eq!(camera.translation, initial_pan);
     }
 }
 

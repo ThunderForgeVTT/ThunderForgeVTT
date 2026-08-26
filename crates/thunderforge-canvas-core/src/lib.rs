@@ -14,6 +14,11 @@
 //! reimplementing the logic — the engine crate is the ECS/rendering
 //! shell, this crate is the tested core underneath it.
 
+pub mod camera;
+pub mod grid;
 pub mod lighting;
+pub mod measure;
+pub mod movement;
 pub mod shape;
+pub mod vision;
 pub mod wall;

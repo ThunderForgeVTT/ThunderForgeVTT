@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::resources::{IsGameMaster, SelectedWall, WallSet};
 use crate::systems::wall::{
-    apply_vision_occlusion, handle_wall_input, handle_wall_keyboard_toggles, handle_wall_undo,
+    handle_wall_input, handle_wall_keyboard_toggles, handle_wall_undo,
     init_wall_systems_resources, sync_wall_visuals,
 };
 
@@ -36,7 +36,6 @@ impl Plugin for WallPlugin {
                 handle_wall_keyboard_toggles,
                 handle_wall_undo,
                 sync_wall_visuals,
-                apply_vision_occlusion,
             )
                 .chain(),
         );

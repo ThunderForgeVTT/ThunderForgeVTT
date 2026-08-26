@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>ThunderForge Engine Sandbox</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; height: 100vh; display: grid; grid-template-columns: 20rem 1fr;
+        font: 14px/1.5 ui-sans-serif, system-ui, sans-serif; background: #111; color: #eee;
+      }
+      aside { padding: 1rem; overflow-y: auto; border-right: 1px solid #333; background: #181818; }
+      h1 { font-size: 1rem; margin: 0 0 .25rem; }
+      p.sub { margin: 0 0 1rem; color: #999; font-size: .8rem; }
+      h2 { font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: #888; margin: 1.25rem 0 .5rem; }
+      button { display: block; width: 100%; text-align: left; margin-bottom: .25rem; padding: .4rem .6rem;
+               background: #262626; color: #eee; border: 1px solid #383838; border-radius: .375rem; cursor: pointer; }
+      button:hover { background: #333; }
+      button.primary { background: #3b4d8f; border-color: #4a5fa8; }
+      #stage { position: relative; overflow: hidden; }
+      /* A REAL <canvas> is handed to Bevy here (see main.ts). winit's
+         `with_canvas` only accepts an actual HtmlCanvasElement — pass it a
+         selector matching a <div> and the cast silently yields None, so
+         winit creates its own canvas and appends it to <body> instead.
+         That is what `apps/web` does today, and reproducing both shapes is
+         the point of this harness. */
+      #engine-canvas { display: block; width: 100%; height: 100%; }
+      #readout { position: fixed; right: 1rem; bottom: 1rem; z-index: 10; max-width: 34rem;
+                 background: rgba(0,0,0,.85); border: 1px solid #333; border-radius: .5rem; padding: .6rem .8rem;
+                 font-family: ui-monospace, monospace; font-size: .72rem; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <aside>
+      <h1>Engine Sandbox</h1>
+      <p class="sub">The Bevy engine only. No server, no auth, no GraphQL — maps are plain static files.</p>
+
+      <h2>Renderer sanity</h2>
+      <p class="sub" id="attach-mode"></p>
+      <button id="gizmos" class="primary">Toggle render probe (gizmos)</button>
+      <button id="probe">Read GPU pixels</button>
+      <button id="clear-bg">Clear background</button>
+
+      <h2>Grid</h2>
+      <div id="grid-controls"></div>
+      <label class="sub" style="display:flex;gap:.4rem;align-items:center;margin:.4rem 0">
+        <input type="checkbox" id="grid-visible" checked /> show grid
+      </label>
+      <label class="sub" style="display:block">
+        size <span id="grid-size-value">128</span>px
+        <input type="range" id="grid-size" min="16" max="256" step="1" value="128" style="width:100%" />
+      </label>
+
+      <h2>Stress</h2>
+      <p class="sub">Each runs a load scenario and samples frame time. Hover for details.</p>
+      <div id="stress-controls"></div>
+
+      <h2>Camera</h2>
+      <p class="sub">Mouse wheel over the canvas zooms at the cursor. Arrow keys pan, +/- zoom, Home resets.</p>
+      <div id="camera-controls"></div>
+      <label class="sub" style="display:block">
+        zoom <span id="zoom-value">1.00</span>x
+        <input type="range" id="zoom" min="0.1" max="8" step="0.05" value="1" style="width:100%" />
+      </label>
+
+      <h2>Tokens</h2>
+      <p class="sub">Sizes follow the usual ladder: Tiny 0.5, Medium 1, Large 2, Huge 3, Gargantuan 4.</p>
+      <div id="token-sizes"></div>
+      <label class="sub" style="display:flex;gap:.4rem;align-items:center;margin:.4rem 0">
+        <input type="checkbox" id="grid-snap" checked /> snap tokens to grid
+      </label>
+
+      <p class="sub" style="margin-top:.6rem">
+        <strong>WASD / arrows</strong> move the owned token · <strong>Shift</strong> plans a route ·
+        <strong>Space</strong> commits · <strong>Esc</strong> cancels
+      </p>
+      <div id="unit-presets"></div>
+
+      <h2>Lighting</h2>
+      <label class="sub" style="display:flex;gap:.4rem;align-items:center;margin:.4rem 0">
+        <input type="checkbox" id="lighting-overlay" /> show light radii &amp; cones
+      </label>
+      <div id="ambient-controls"></div>
+      <button id="add-torch">Add torch at centre</button>
+      <button id="mimic-demo">Mimic-in-the-dark demo</button>
+      <label class="sub" style="display:flex;gap:.4rem;align-items:center;margin:.4rem 0">
+        <input type="checkbox" id="darkvision" /> player has darkvision (600)
+      </label>
+      <button id="add-wall">Add wall (shadow caster)</button>
+
+      <h2>Maps</h2>
+      <div id="maps"></div>
+
+      <h2>Notes</h2>
+      <p class="sub" id="notes">Boot the engine, load a map, then read the pixels. If the framebuffer is a single flat colour, the renderer drew nothing.</p>
+    </aside>
+    <main id="stage"><canvas id="engine-canvas"></canvas></main>
+    <div id="readout">booting…</div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

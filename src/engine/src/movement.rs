@@ -3,7 +3,7 @@
 use bevy::prelude::*;
 use crate::components::*;
 use crate::network::mutations::{execute_move_token_mutation, MutationTracker};
-use crate::resources::{GridType, SceneData};
+use crate::resources::SceneGrid;
 use crate::systems::optimistic::mark_mutation_pending;
 use crate::sync_test::{CircularFlowTracer, FlowStage};
 
@@ -19,6 +19,7 @@ pub fn handle_keyboard_movement(
     mut commands: Commands,
     mut tracer: ResMut<CircularFlowTracer>,
     tracker: Res<MutationTracker>,
+    grid: Option<Res<SceneGrid>>,
     mut query: Query<(Entity, &mut GridPosition, &TokenId, &PlayerControlled)>,
 ) {
     let mut direction = Vec2::ZERO;
@@ -40,7 +41,11 @@ pub fn handle_keyboard_movement(
         return;
     }
     
-    let step_size = 32.0; // Move in 32-unit steps (typical grid cell)
+    // One cell per press, using the scene's real cell size rather than the
+    // 32.0 this used to assume — on an imported 128px map that moved a token
+    // a quarter of a cell at a time, and `apply_grid_snapping` then pulled it
+    // back, so it looked like the keys did nothing.
+    let step_size = grid.as_ref().map_or(32.0, |g| g.size);
     let delta = direction.normalize() * step_size;
     
     for (entity, mut grid_pos, token_id, _) in query.iter_mut() {
@@ -115,34 +120,35 @@ pub fn sync_transform_to_grid(
     }
 }
 
-/// Apply grid snapping to token positions
-/// This rounds positions to the nearest grid cell.
+/// Snaps token positions to the active grid.
 ///
-/// Gridless scenes (`GridType::Gridless`, e.g. Genie's Wish-Warped Zone)
-/// have no fixed cell size to snap to, so this system is a no-op for them
-/// — tokens keep whatever free-form position they were moved to. When
-/// `SceneData` hasn't been inserted yet (see `plugins::grid`'s identical
-/// `Option<Res<SceneData>>` degradation), snapping is skipped entirely
-/// rather than assuming a topology.
+/// Bug fix: this used a hardcoded `grid_size = 32.0` and consulted
+/// `SceneData` only to ask whether the scene was gridless. So on a dd2vtt
+/// import — which records the file's own `pixels_per_grid`, typically 128 —
+/// tokens snapped to a 32-unit lattice that matched neither the visible grid
+/// nor the map art beneath it. It now snaps through `SceneGrid`, the same
+/// resource `plugins::grid` draws from, so what you see and what you snap to
+/// are the same lattice by construction.
+///
+/// Gridless scenes are handled inside `GridSpec::snap`, which returns the
+/// position untouched rather than inventing a lattice.
 pub fn apply_grid_snapping(
-    scene: Option<Res<SceneData>>,
+    grid: Option<Res<SceneGrid>>,
     mut query: Query<(&mut GridPosition, &RollbackCache), Changed<GridPosition>>,
 ) {
-    let Some(scene) = scene else {
+    let Some(grid) = grid else {
         return;
     };
 
-    if scene.grid_type == GridType::Gridless {
-        return;
-    }
-
-    let grid_size = 32.0; // Default grid size in pixels
-
     for (mut grid_pos, cache) in query.iter_mut() {
-        if !cache.is_pending {
-            // Snap to grid (only if not waiting for server)
-            grid_pos.x = (grid_pos.x / grid_size).round() * grid_size;
-            grid_pos.y = (grid_pos.y / grid_size).round() * grid_size;
+        // A token awaiting server confirmation keeps its optimistic position:
+        // snapping it now would fight the authoritative value on arrival.
+        if cache.is_pending {
+            continue;
         }
+
+        let snapped = grid.snap(Vec2::new(grid_pos.x, grid_pos.y));
+        grid_pos.x = snapped.x;
+        grid_pos.y = snapped.y;
     }
 }

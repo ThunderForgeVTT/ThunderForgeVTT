@@ -16,9 +16,38 @@ thunderforge_canvas_core = { path = "../../crates/thunderforge-canvas-core" }
 thunderforge_dice = { path = "../../crates/thunderforge-dice" }
 bevy = { version = "0.18.1", default-features = false, features = [
   "bevy_asset",
+  # Without this, `LogPlugin` is absent and every Bevy-side `error!`/`warn!`
+  # goes nowhere. That silence made real rendering bugs undiagnosable from
+  # the browser: a forbidden asset path and a duplicate-camera warning were
+  # both being logged every frame and reaching no one, while the canvas just
+  # stayed empty. On wasm this routes tracing output to the browser console.
+  # Keep it enabled — the cost is a little console noise, the alternative is
+  # a renderer that fails silently.
+  "bevy_log",
   "bevy_core_pipeline",
+  # Gizmos draw through the polyline pipeline rather than the sprite
+  # pipeline, which makes them a diagnostic that sprites cannot provide:
+  # they answer "is the 2D render graph running at all" independently of
+  # whether `bevy_sprite` is producing draw calls. See `RenderProbePlugin`.
+  "bevy_gizmos",
   "bevy_render",
   "bevy_sprite",
+  # THE RENDER HALVES. In Bevy 0.18 each of these subsystems is split in two:
+  # `bevy_sprite`/`bevy_ui`/`bevy_gizmos` provide the components and the
+  # main-world logic, while `*_render` provides the crate that actually draws
+  # them (extraction, queueing, pipelines). Enabling only the first half of
+  # each pair compiles and runs perfectly happily — components exist,
+  # visibility is computed, assets load, the camera renders and clears the
+  # target — and then nothing is ever queued to draw, so the canvas shows
+  # nothing but the clear colour, with no error anywhere.
+  #
+  # Diagnosed by tracing the render world directly (`RenderProbePlugin`):
+  # `RenderVisibleEntities<Sprite> = 3` and `Transparent2d items = 0` at the
+  # same instant, i.e. the view could see the sprites and no system existed to
+  # queue them.
+  "bevy_sprite_render",
+  "bevy_ui_render",
+  "bevy_gizmos_render",
   "bevy_text",
   "bevy_ui",
   "bevy_window",

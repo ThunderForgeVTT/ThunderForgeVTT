@@ -1,0 +1,4 @@
+# Extracted from examples/maps/*.dd2vtt by scripts/extract-maps.mjs.
+# Not committed: the source maps are dev/test-only and explicitly flagged as
+# not redistributable in examples/maps/README.md.
+public/

@@ -12,9 +12,14 @@ use bevy::window::PrimaryWindow;
 use serde_json::{Value, json};
 
 use crate::resources::{
-    CanvasLayer, IsGameMaster, LightEdit, LightSet, LightSource, SelectedLight, WallSet, is_visible,
+    CanvasLayer, IsGameMaster, LightEdit, LightSet, LightSource, SceneAmbient, SelectedLight,
+    TokenVision, WallSet,
 };
-use crate::{ActiveWorld, TokenIdentity, emit_event};
+use thunderforge_canvas_core::vision::{
+    illumination_at, visibility_of, AmbientLight, Illumination, ResolvedLight, Rgb,
+    Visibility as Perceived, VisionProfile,
+};
+use crate::{ActiveWorld, PlayerToken, TokenIdentity, emit_event};
 
 /// Default radius (px) for a newly click-placed light (T037).
 const DEFAULT_LIGHT_RADIUS: f32 = 100.0;
@@ -39,6 +44,12 @@ const MIN_LIGHT_RADIUS: f32 = 1.0;
 const DEFAULT_LIGHT_COLOR: Color = Color::srgb(1.0, 0.85, 0.55);
 const SELECTED_LIGHT_COLOR: Color = Color::srgb(0.95, 0.85, 0.25);
 const NON_SHADOW_CASTING_TINT: Color = Color::srgb(0.6, 0.85, 1.0);
+/// Side length of a light's on-canvas marker, in world units.
+///
+/// Independent of the light's radius on purpose — see the note where it is
+/// used. Sized to stay grabbable at play zoom without covering map detail.
+const LIGHT_MARKER_SIZE: f32 = 18.0;
+
 const HANDLE_COLOR: Color = Color::srgb(0.95, 0.95, 0.95);
 const HANDLE_SIZE: Vec2 = Vec2::new(6.0, 6.0);
 
@@ -46,6 +57,13 @@ const HANDLE_SIZE: Vec2 = Vec2::new(6.0, 6.0);
 /// `apply_light_illumination`'s first-pass toggle (see that system's doc
 /// comment for the fuller rationale/limitation note).
 const UNLIT_VISIBILITY: Visibility = Visibility::Hidden;
+
+/// Alpha applied to a token perceived only dimly.
+///
+/// Dim light is the whole reason this is a three-state model rather than a
+/// toggle: a figure at the edge of torchlight should be a suggestion, not a
+/// pop-in. Low enough to read as indistinct, high enough to still find.
+const DIM_ALPHA: f32 = 0.45;
 
 /// Marker on the sprite entity rendered for a given `LightSet` light id.
 #[derive(Component)]
@@ -474,8 +492,16 @@ pub(crate) fn sync_light_visuals(
         let selected = selected_light.is_selected(&light.id);
         let color = light_color(light, selected);
         let position = effective_light_position(light, &positions);
-        let diameter = (light.radius * 2.0).max(2.0);
-        let size = Vec2::splat(diameter);
+        // A fixed-size marker at the light's position, NOT a quad the size of
+        // its radius. It used to be `radius * 2` across, which drew an opaque
+        // square over everything the light was supposed to illuminate — a
+        // 320-unit torch became a 640-unit block hiding the map beneath it.
+        // That went unnoticed for as long as no sprite rendered at all.
+        //
+        // A light's *extent* is communicated by the overlay rings in
+        // `plugins::lighting_overlay`, which is the right way to show a radius:
+        // an outline, not a fill. This sprite is only the grab handle.
+        let size = Vec2::splat(LIGHT_MARKER_SIZE);
         let translation_z = if selected { z + 1.0 } else { z };
         let transform = Transform::from_translation(position.extend(translation_z));
 
@@ -510,36 +536,73 @@ pub(crate) fn sync_light_visuals(
     }
 }
 
-/// T038: occlusion-aware illumination, applied as a first-pass visual proof
-/// (per-token `Visibility` toggle) rather than a full lit/unlit fog-of-war
-/// mesh/shader — there is still no fog-of-war rendering plugin in this
-/// codebase, matching the exact simplification `apply_vision_occlusion`
-/// (systems/wall.rs) already uses for vision occlusion. A follow-up task
-/// should replace both toggle-based first passes with an actual
-/// fog-of-war/lighting compositing renderer once that plugin exists; until
-/// then, this system and `apply_vision_occlusion` both write `Visibility`
-/// on overlapping token sets from different criteria (light coverage here,
-/// player line-of-sight there) and the later system in the schedule wins
-/// for a given frame — an accepted limitation of the first-pass approach,
-/// not a bug.
+/// Converts a stored light into the form the vision core consumes.
 ///
-/// For each token, a light illuminates it when the token is within the
-/// light's radius of its *effective* position (its stored position, or the
-/// attached token's live position — see `effective_light_position`) and
-/// either the light doesn't cast shadows (FR-027: always lit within
-/// radius) or `thunderforge_canvas_core::wall::is_visible` (the same
-/// door-state-aware shadow-casting check vision occlusion uses) says the
-/// light isn't blocked by a vision-blocking wall. A scene with no lights
-/// placed at all is left fully visible (FR-013: a scene using none of these
-/// capabilities must still render/function correctly) rather than being
-/// darkened by default.
+/// The stored model has a single `radius`; the illumination model has a bright
+/// core and a dim ring. The stored radius is taken as the **outer, dim** edge
+/// and bright as half of it — the 1:2 ratio a torch has (20ft bright / 40ft
+/// total). Mapping it this way keeps every existing light's outer footprint
+/// exactly where it is today while giving it a bright centre, so no scene
+/// changes shape when this lands.
+fn resolve_light(
+    light: &LightSource,
+    positions: &HashMap<String, Vec2>,
+) -> ResolvedLight {
+    ResolvedLight {
+        position: effective_light_position(light, positions),
+        bright_radius: light.radius * 0.5,
+        dim_radius: light.radius,
+        color: light
+            .color
+            .as_deref()
+            .and_then(Rgb::parse_hex)
+            .unwrap_or(Rgb::WHITE),
+        intensity: light.intensity,
+        casts_shadows: light.casts_shadows,
+    }
+}
+
+/// Resolves token visibility: occlusion, facing and illumination, in one pass.
+///
+/// This replaces two systems that both wrote `Visibility` from different
+/// criteria — this one (light coverage) and `wall::apply_vision_occlusion`
+/// (player line-of-sight) — where whichever ran later in the schedule won for
+/// a given frame. Their own doc comments described that as an accepted
+/// limitation of a first pass. It is resolved now: vision is computed once,
+/// here, by `vision::visibility_of`, which combines all three questions in the
+/// order that lets each short-circuit.
+///
+/// Three behavioural changes fall out of using the real model:
+///
+/// - **Dim light exists.** Previously a token was fully visible or fully gone,
+///   so a figure at the edge of torchlight popped in and out. Dim now renders
+///   at reduced alpha.
+/// - **Darkness is modelled, not just light**, which is what gives darkvision
+///   something to work against.
+/// - **Facing is honoured**, so a vision cone actually restricts what its
+///   owner sees.
+///
+/// The observer is the local `PlayerToken`. With no player token — the GM's
+/// view — there is no single point of view to occlude from, so occlusion and
+/// facing are skipped and tokens are shown according to illumination alone.
+/// That is deliberate: a GM sees the board, not one character's slice of it.
+///
+/// A scene with no lights and a bright ambient returns early untouched
+/// (FR-013: a scene using none of these capabilities still renders normally).
 pub(crate) fn apply_light_illumination(
     light_set: Res<LightSet>,
     wall_set: Res<WallSet>,
+    ambient: Option<Res<SceneAmbient>>,
     token_positions: Query<(&Transform, &TokenIdentity)>,
-    mut token_visibility: Query<(&Transform, &TokenIdentity, &mut Visibility)>,
+    observer_query: Query<(&Transform, Option<&TokenVision>), With<PlayerToken>>,
+    mut tokens: Query<
+        (&Transform, Option<&TokenVision>, &mut Sprite, &mut Visibility),
+        With<TokenIdentity>,
+    >,
 ) {
-    if light_set.lights().is_empty() {
+    let ambient = ambient.map_or_else(AmbientLight::daylight, |a| a.0);
+
+    if light_set.lights().is_empty() && ambient.level == Illumination::Bright {
         return;
     }
 
@@ -548,25 +611,70 @@ pub(crate) fn apply_light_illumination(
         positions.insert(identity.0.clone(), transform.translation.truncate());
     }
 
-    for (transform, _identity, mut visibility) in token_visibility.iter_mut() {
+    let lights: Vec<ResolvedLight> = light_set
+        .lights()
+        .iter()
+        .map(|light| resolve_light(light, &positions))
+        .collect();
+
+    let observer = observer_query.single().ok().map(|(transform, vision)| {
+        (
+            transform.translation.truncate(),
+            vision.map_or_else(VisionProfile::default, |v| v.0),
+        )
+    });
+
+    for (transform, token_vision, mut sprite, mut visibility) in tokens.iter_mut() {
         let target = transform.translation.truncate();
 
-        let lit = light_set.lights().iter().any(|light| {
-            let light_position = effective_light_position(light, &positions);
-            if target.distance(light_position) > light.radius {
-                return false;
+        let perceived = match observer {
+            Some((observer_pos, observer_vision)) => {
+                // A token never hides from itself. Without this the observer
+                // vanishes whenever it stands in its own darkness.
+                if observer_pos.distance(target) <= f32::EPSILON {
+                    Perceived::Clear
+                } else {
+                    visibility_of(
+                        observer_pos,
+                        &observer_vision,
+                        target,
+                        &lights,
+                        &wall_set,
+                        ambient,
+                    )
+                }
             }
-            if !light.casts_shadows {
-                return true;
+            None => {
+                // GM view: illumination only. Darkvision on the token itself
+                // still lets it be picked out of the dark.
+                let (level, _color) = illumination_at(target, &lights, &wall_set, ambient);
+                match level {
+                    Illumination::Bright => Perceived::Clear,
+                    Illumination::Dim => Perceived::Dim,
+                    Illumination::Dark => {
+                        if token_vision.map_or(0.0, |v| v.darkvision) > 0.0 {
+                            Perceived::Dim
+                        } else {
+                            Perceived::Hidden
+                        }
+                    }
+                }
             }
-            is_visible(light_position, target, &wall_set)
-        });
-
-        *visibility = if lit {
-            Visibility::Inherited
-        } else {
-            UNLIT_VISIBILITY
         };
+
+        match perceived {
+            Perceived::Clear => {
+                *visibility = Visibility::Inherited;
+                sprite.color = sprite.color.with_alpha(1.0);
+            }
+            Perceived::Dim => {
+                *visibility = Visibility::Inherited;
+                sprite.color = sprite.color.with_alpha(DIM_ALPHA);
+            }
+            Perceived::Hidden => {
+                *visibility = UNLIT_VISIBILITY;
+            }
+        }
     }
 }
 

@@ -95,6 +95,27 @@ export type SetSceneBackgroundCommand = {
   worldId?: string;
 };
 
+// The scene's grid — the lattice the engine snaps tokens to, measures
+// movement in, and draws the overlay from. Sent alongside
+// `set_scene_background` on every scene change, because the two must agree:
+// an imported map's `pixels_per_grid` is what makes the drawn grid line up
+// with the art beneath it. Engine-signaling only, like the background above.
+export type SetSceneGridCommand = {
+  type: "set_scene_grid";
+  /** The scene's raw `gridType` ("square" | "hex" | "gridless"). */
+  gridType: string;
+  /** The scene's `gridSize` — centre-to-centre cell spacing in world units. */
+  size: number;
+  /** The map's extent. Given both, the engine anchors the grid to the map's
+   * corner so it lands on the grid painted on the art. */
+  mapWidth?: number;
+  mapHeight?: number;
+  /** Defaults to the world origin, where the background sprite is centred. */
+  originX?: number;
+  originY?: number;
+  visible?: boolean;
+};
+
 export type UpsertTokenCommand = {
   type: "upsert_token";
   token: WorldToken;
@@ -324,6 +345,7 @@ export type RemoveCanvasImageAssetCommand = {
 export type WorldCommand =
   | SetWorldCommand
   | SetSceneBackgroundCommand
+  | SetSceneGridCommand
   | UpsertTokenCommand
   | RemoveTokenCommand
   | SelectTokenCommand

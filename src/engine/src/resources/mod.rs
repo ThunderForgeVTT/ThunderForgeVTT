@@ -6,6 +6,9 @@ pub mod wall;
 pub mod lighting;
 pub mod shape;
 pub mod background;
+pub mod grid;
+pub mod token_grid;
+pub mod vision;
 
 pub use scene_data::{GridType, SceneData};
 pub use camera::CameraManager;
@@ -15,3 +18,6 @@ pub use wall::{DoorState, IsGameMaster, SelectedWall, Wall, WallEdit, WallSet, i
 pub use lighting::{LightEdit, LightSet, LightSource, SelectedLight};
 pub use shape::{ActiveShapeTool, SelectedShape, Shape, ShapeEdit, ShapeKind, ShapeSet};
 pub use background::{PlacedCanvasImage, PlacedCanvasImages, SceneBackground};
+pub use grid::{GridVisible, SceneGrid};
+pub use token_grid::{GridSnapEnabled, TokenGridBehaviour};
+pub use vision::{LightingOverlay, SceneAmbient, TokenVision};

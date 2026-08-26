@@ -35,12 +35,42 @@ pub fn router() -> Router<AppState> {
     Router::new().route("/canvas-assets/{asset_id}", get(serve_canvas_asset))
 }
 
+/// Splits an optional image extension off the `{asset_id}` path segment.
+///
+/// The segment is accepted bare (`<uuid>`) or with an image extension
+/// (`<uuid>.webp`). Every object this route serves is WebP regardless of
+/// what was uploaded (`transcode_to_webp`), which is why the response's
+/// Content-Type is unconditionally `image/webp` below — the extension only
+/// makes the URL self-describing to the engine's asset pipeline.
+///
+/// Anything else — notably `<uuid>.meta` — is rejected with `None` so the
+/// caller 404s. That case is load-bearing, not defensive: Bevy's
+/// `AssetServer` runs with `AssetMetaCheck::Always`, so every
+/// `asset_server.load("…/<uuid>.webp")` first requests
+/// `…/<uuid>.webp.meta`. Serving image bytes for that request would hand
+/// Bevy a "meta file" it then fails to parse as RON, failing the load;
+/// a 404 is what makes it fall back to the default meta and proceed.
+fn parse_asset_id(segment: &str) -> Option<Uuid> {
+    const IMAGE_EXTENSIONS: [&str; 2] = ["webp", "png"];
+
+    let id = match segment.split_once('.') {
+        None => segment,
+        Some((id, ext)) if IMAGE_EXTENSIONS.contains(&ext) => id,
+        Some(_) => return None,
+    };
+    Uuid::parse_str(id).ok()
+}
+
 async fn serve_canvas_asset(
     State(state): State<AppState>,
     Extension(auth_user): Extension<AuthenticatedUser>,
-    Path(asset_id): Path<Uuid>,
+    Path(asset_segment): Path<String>,
 ) -> Response {
     let user_id = auth_user.user_id;
+
+    let Some(asset_id) = parse_asset_id(&asset_segment) else {
+        return (StatusCode::NOT_FOUND, "asset not found").into_response();
+    };
 
     let mut conn = match state.db_pool.get() {
         Ok(conn) => conn,
@@ -140,7 +170,7 @@ mod tests {
         let response = serve_canvas_asset(
             State(state),
             Extension(fake_auth_user(owner_id)),
-            Path(asset.asset_id),
+            Path(asset.asset_id.to_string()),
         )
         .await;
 
@@ -178,11 +208,27 @@ mod tests {
         let response = serve_canvas_asset(
             State(state),
             Extension(fake_auth_user(outsider_id)),
-            Path(asset.asset_id),
+            Path(asset.asset_id.to_string()),
         )
         .await;
 
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    /// The `{asset_id}` segment parses bare and with an image extension,
+    /// but a `.meta` probe (which Bevy issues before every image load) is
+    /// rejected so the route 404s and Bevy falls back to its default meta.
+    #[test]
+    fn parse_asset_id_accepts_image_extensions_and_rejects_meta() {
+        let id = Uuid::now_v7();
+
+        assert_eq!(parse_asset_id(&id.to_string()), Some(id));
+        assert_eq!(parse_asset_id(&format!("{id}.webp")), Some(id));
+        assert_eq!(parse_asset_id(&format!("{id}.png")), Some(id));
+
+        assert_eq!(parse_asset_id(&format!("{id}.webp.meta")), None);
+        assert_eq!(parse_asset_id(&format!("{id}.meta")), None);
+        assert_eq!(parse_asset_id("not-a-uuid.webp"), None);
     }
 
     /// A nonexistent asset id returns 404, not a 500 or an authorization
@@ -197,7 +243,7 @@ mod tests {
         let response = serve_canvas_asset(
             State(state),
             Extension(fake_auth_user(user_id)),
-            Path(Uuid::now_v7()),
+            Path(Uuid::now_v7().to_string()),
         )
         .await;
 

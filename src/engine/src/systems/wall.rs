@@ -10,9 +10,9 @@ use bevy::window::PrimaryWindow;
 use serde_json::json;
 
 use crate::resources::{
-    CanvasLayer, DoorState, IsGameMaster, SelectedWall, Wall, WallEdit, WallSet, is_visible,
+    CanvasLayer, DoorState, IsGameMaster, SelectedWall, Wall, WallEdit, WallSet,
 };
-use crate::{ActiveWorld, PlayerToken, TokenIdentity, emit_event};
+use crate::{ActiveWorld, emit_event};
 
 /// Rendered height (px) of a wall's thin sprite (T012: "a small fixed
 /// height like 4.0 px").
@@ -643,46 +643,18 @@ pub(crate) fn sync_wall_visuals(
         }
     }
 }
-
-/// T013: 2D shadow-casting vision occlusion, applied as a first-pass
-/// visual proof (per-token hide/show relative to the locally-controlled
-/// `PlayerToken`) rather than a full fog-of-war shadow mesh — there is no
-/// fog-rendering plugin in this codebase yet (ADR-032 only sketched one).
-/// The real, unit-tested geometry lives in `resources::wall::is_visible`;
-/// this system just calls it and toggles `Visibility`. A follow-up task
-/// should replace the toggle with an actual fog-of-war mesh/stencil once
-/// that rendering plugin exists.
+/// Superseded by `systems::lighting::apply_light_illumination`.
 ///
-/// Recomputes when `WallSet` changed or any token's `Transform` changed
-/// (research.md §3: "on change", not every frame).
-pub(crate) fn apply_vision_occlusion(
-    wall_set: Res<WallSet>,
-    player_query: Query<&Transform, With<PlayerToken>>,
-    mut other_tokens: Query<
-        (&Transform, &mut Visibility),
-        (With<TokenIdentity>, Without<PlayerToken>),
-    >,
-    transform_changed: Query<(), (Changed<Transform>, With<TokenIdentity>)>,
-) {
-    if !wall_set.is_changed() && transform_changed.is_empty() {
-        return;
-    }
+/// This applied player line-of-sight by writing `Visibility` on every other
+/// token. It has been removed rather than kept alongside, because it and the
+/// lighting system wrote the same component from different criteria and
+/// whichever ran later in the schedule won for that frame. Occlusion, facing
+/// and illumination are now resolved together, once, through
+/// `thunderforge_canvas_core::vision::visibility_of`.
+///
+/// The occlusion geometry itself did not go anywhere — it is
+/// `thunderforge_canvas_core::wall::is_visible`, which that function calls.
 
-    let Ok(player_transform) = player_query.single() else {
-        return;
-    };
-    let observer = player_transform.translation.truncate();
-
-    for (transform, mut visibility) in other_tokens.iter_mut() {
-        let target = transform.translation.truncate();
-        let visible = is_visible(observer, target, &wall_set);
-        *visibility = if visible {
-            Visibility::Inherited
-        } else {
-            Visibility::Hidden
-        };
-    }
-}
 
 pub(crate) fn init_wall_systems_resources(app: &mut App) {
     app.init_resource::<WallDragState>()

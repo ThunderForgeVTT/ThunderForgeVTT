@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 use bevy::prelude::*;
+use bevy::asset::{AssetPlugin, UnapprovedPathMode};
 use bevy::window::{Window, WindowPlugin, WindowResolution};
 use js_sys::Function;
 use serde::Deserialize;
@@ -27,25 +28,35 @@ pub mod transforms;
 mod integration_tests;
 
 use derived_data::*;
-use movement::{
-    PlayerControlled, apply_grid_snapping, handle_keyboard_movement, sync_grid_to_transform,
-    sync_transform_to_grid,
-};
+use movement::PlayerControlled;
 use plugins::{
     BackgroundPlugin, CameraPlugin, CanvasLayerPlugin, DiceRollPlugin, GridPlugin, LightingPlugin,
-    ScenePlugin, SelectionPlugin, ShapePlugin, SystemRegistrationPlugin, TokenPlugin, WallPlugin,
+    DarknessPlugin, LightingOverlayPlugin, RenderProbeEnabled, RenderProbePlugin, ScenePlugin,
+    SelectionPlugin, ShapePlugin,
+    SystemRegistrationPlugin, TokenPlugin, WallPlugin,
 };
 use resources::{
-    DoorState, IsGameMaster, LightSet, LightSource as EngineLight, PlacedCanvasImage,
-    PlacedCanvasImages, SceneBackground, Shape as EngineShape, ShapeKind, ShapeSet,
+    CameraManager, DoorState, GridSnapEnabled, GridVisible, IsGameMaster, LightSet, LightSource as EngineLight, PlacedCanvasImage,
+    LightingOverlay, PlacedCanvasImages, SceneAmbient, SceneBackground, SceneGrid, TokenVision,
+    Shape as EngineShape, ShapeKind, ShapeSet, TokenGridBehaviour,
     Wall as EngineWall, WallSet,
 };
+use thunderforge_canvas_core::grid::Footprint;
+use thunderforge_canvas_core::measure::GridUnits;
+use thunderforge_canvas_core::vision::{Illumination, Rgb, VisionProfile};
 use sync_test::*;
 use systems::*;
 
 static ENGINE_STARTED: AtomicBool = AtomicBool::new(false);
 static EVENT_CALLBACK: OnceLock<Mutex<Option<Function>>> = OnceLock::new();
 static EXTERNAL_COMMANDS: OnceLock<Mutex<Vec<ExternalCommand>>> = OnceLock::new();
+/// Latest engine performance counters, mirrored out of the ECS.
+///
+/// A mirror rather than a direct query because `App::run()` takes ownership of
+/// its `World` and never returns on wasm — there is no handle left to read
+/// from. A system inside the schedule writes here each frame, and
+/// `engine_stats()` below reads it.
+static ENGINE_STATS: OnceLock<Mutex<EngineStatsSnapshot>> = OnceLock::new();
 
 const ARENA_WIDTH: f32 = 1280.0;
 const ARENA_HEIGHT: f32 = 720.0;
@@ -53,7 +64,7 @@ const PLAYER_SPEED: f32 = 320.0;
 pub(crate) const TOKEN_SIZE: Vec2 = Vec2::new(96.0, 96.0);
 
 #[derive(Component)]
-struct PlayerToken;
+pub(crate) struct PlayerToken;
 
 #[derive(Component)]
 pub(crate) struct TokenIdentity(pub(crate) String);
@@ -217,6 +228,91 @@ enum ExternalCommand {
     RemoveCanvasImageAsset {
         asset_id: String,
     },
+    /// Sets the active scene's grid — the lattice everything snaps, measures
+    /// and draws against (`resources/grid.rs`). `grid_type` is the server's
+    /// raw `scenes.grid_type` string; `size` is its `grid_size`, which for an
+    /// imported map is the dd2vtt's own `pixels_per_grid`.
+    SetSceneGrid {
+        grid_type: String,
+        size: f32,
+        /// The map's pixel dimensions. When given, the lattice is anchored to
+        /// the map's corner so it lands on the grid already painted on the
+        /// art — which an origin-anchored lattice only does when the map has
+        /// an even number of cells on both axes. Prefer this to `origin_*`.
+        map_size: Option<Vec2>,
+        origin_x: f32,
+        origin_y: f32,
+        visible: bool,
+    },
+    /// Sets a token's grid behaviour: how many cells across it is, and whether
+    /// it snaps. Tokens are one cell and snapping unless told otherwise.
+    ///
+    /// `footprint` is in cells and is clamped at half a cell — a Tiny creature.
+    /// Below that a token is smaller than the square it stands on and has no
+    /// position to snap to.
+    SetTokenGrid {
+        token_id: String,
+        footprint: f32,
+        snap: bool,
+    },
+    /// Sets how the scene talks about distance: how much one cell is worth,
+    /// and what that unit is called. 5/"ft" for D&D 5e, 1.5/"m" for a metric
+    /// system, 1/"Unit" for an abstract one.
+    SetGridUnits {
+        per_cell: f32,
+        label: String,
+    },
+    /// Scene-wide snapping switch. Turning it off suspends snapping for every
+    /// token without editing any of them; turning it back on restores each
+    /// token's own setting.
+    SetGridSnap {
+        enabled: bool,
+    },
+    /// Moves and zooms the camera. Any field may be omitted to leave it
+    /// alone. `zoom` is world units per screen unit — larger is zoomed *out*.
+    SetCamera {
+        x: Option<f32>,
+        y: Option<f32>,
+        zoom: Option<f32>,
+    },
+    /// Frames a rectangle of world space, centring it and choosing the zoom
+    /// that fits it. This is "zoom to fit the map".
+    FitCameraTo {
+        center_x: f32,
+        center_y: f32,
+        width: f32,
+        height: f32,
+    },
+    /// Configures a token's eyes: darkvision range, facing, cone width and
+    /// sight limit. Without this a token has unaided, omnidirectional sight —
+    /// which means it cannot see anything standing in darkness.
+    SetTokenVision {
+        token_id: String,
+        darkvision: f32,
+        /// Facing in radians. `None` sees in all directions.
+        facing: Option<f32>,
+        /// Cone width in radians. Ignored when `facing` is `None`.
+        fov: f32,
+        max_range: Option<f32>,
+    },
+    /// Sets the scene's baseline illumination — daylight outdoors, dark in an
+    /// unlit dungeon. This is the floor every light builds on, and what
+    /// darkvision is measured against.
+    SetAmbientLight {
+        level: String,
+        color: Option<String>,
+    },
+    /// Draws the lighting/vision debug overlay: light radii and vision cones.
+    SetLightingOverlay {
+        enabled: bool,
+    },
+    /// Turns the renderer self-test on or off (`plugins/render_probe.rs`).
+    /// Draws through the gizmo pipeline rather than the sprite pipeline, so
+    /// it can tell "the 2D render graph is dead" apart from "sprites
+    /// specifically are not drawing".
+    SetRenderProbe {
+        enabled: bool,
+    },
     /// Spec 014 (US4): the per-die final values from a `rollDice`
     /// response, already authoritative — this command only ever tells
     /// `DiceRollPlugin` what to animate toward, never asks it to decide
@@ -230,6 +326,37 @@ enum ExternalCommand {
 struct DiceRollDiePayload {
     #[serde(rename = "finalValue")]
     final_value: i64,
+}
+
+/// Plain-data mirror of `plugins::render_probe::EngineStats`.
+#[derive(Debug, Clone, Copy, Default, serde::Serialize)]
+pub(crate) struct EngineStatsSnapshot {
+    pub frame_time_ms: f64,
+    pub fps: f64,
+    pub sprites: usize,
+    pub tokens: usize,
+    pub lights: usize,
+    pub walls: usize,
+    pub shadow_quads: usize,
+}
+
+pub(crate) fn engine_stats_slot() -> &'static Mutex<EngineStatsSnapshot> {
+    ENGINE_STATS.get_or_init(|| Mutex::new(EngineStatsSnapshot::default()))
+}
+
+/// The engine's own performance counters, as JSON.
+///
+/// Reports the engine's update-loop cost, which is what a benchmark needs:
+/// a browser pins `requestAnimationFrame` to the display refresh, so a
+/// JS-side timer cannot tell a lightly-loaded engine from a nearly saturated
+/// one. This can.
+#[wasm_bindgen]
+pub fn engine_stats() -> String {
+    let snapshot = engine_stats_slot()
+        .lock()
+        .map(|stats| *stats)
+        .unwrap_or_default();
+    serde_json::to_string(&snapshot).unwrap_or_else(|_| "{}".to_string())
 }
 
 fn event_callback_slot() -> &'static Mutex<Option<Function>> {
@@ -303,6 +430,84 @@ fn parse_command(input: &str) -> Option<ExternalCommand> {
                 height,
             })
         }
+        "set_scene_grid" => Some(ExternalCommand::SetSceneGrid {
+            grid_type: value
+                .get("gridType")
+                .and_then(Value::as_str)
+                .unwrap_or("square")
+                .to_owned(),
+            size: value.get("size")?.as_f64()? as f32,
+            map_size: match (
+                value.get("mapWidth").and_then(Value::as_f64),
+                value.get("mapHeight").and_then(Value::as_f64),
+            ) {
+                (Some(w), Some(h)) if w > 0.0 && h > 0.0 => Some(Vec2::new(w as f32, h as f32)),
+                _ => None,
+            },
+            origin_x: value.get("originX").and_then(Value::as_f64).unwrap_or(0.0) as f32,
+            origin_y: value.get("originY").and_then(Value::as_f64).unwrap_or(0.0) as f32,
+            visible: value.get("visible").and_then(Value::as_bool).unwrap_or(true),
+        }),
+        "set_token_grid" => Some(ExternalCommand::SetTokenGrid {
+            token_id: value.get("tokenId")?.as_str()?.to_owned(),
+            footprint: value.get("footprint").and_then(Value::as_f64).unwrap_or(1.0) as f32,
+            snap: value.get("snap").and_then(Value::as_bool).unwrap_or(true),
+        }),
+        "set_grid_units" => Some(ExternalCommand::SetGridUnits {
+            per_cell: value.get("perCell").and_then(Value::as_f64).unwrap_or(5.0) as f32,
+            label: value
+                .get("label")
+                .and_then(Value::as_str)
+                .unwrap_or("ft")
+                .to_owned(),
+        }),
+        "set_grid_snap" => Some(ExternalCommand::SetGridSnap {
+            enabled: value.get("enabled")?.as_bool()?,
+        }),
+        "set_camera" => Some(ExternalCommand::SetCamera {
+            x: value.get("x").and_then(Value::as_f64).map(|v| v as f32),
+            y: value.get("y").and_then(Value::as_f64).map(|v| v as f32),
+            zoom: value.get("zoom").and_then(Value::as_f64).map(|v| v as f32),
+        }),
+        "fit_camera_to" => Some(ExternalCommand::FitCameraTo {
+            center_x: value.get("centerX").and_then(Value::as_f64).unwrap_or(0.0) as f32,
+            center_y: value.get("centerY").and_then(Value::as_f64).unwrap_or(0.0) as f32,
+            width: value.get("width")?.as_f64()? as f32,
+            height: value.get("height")?.as_f64()? as f32,
+        }),
+        "set_token_vision" => Some(ExternalCommand::SetTokenVision {
+            token_id: value.get("tokenId")?.as_str()?.to_owned(),
+            darkvision: value
+                .get("darkvision")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.0) as f32,
+            facing: value.get("facing").and_then(Value::as_f64).map(|f| f as f32),
+            fov: value
+                .get("fov")
+                .and_then(Value::as_f64)
+                .unwrap_or(std::f64::consts::TAU) as f32,
+            max_range: value
+                .get("maxRange")
+                .and_then(Value::as_f64)
+                .map(|f| f as f32),
+        }),
+        "set_ambient_light" => Some(ExternalCommand::SetAmbientLight {
+            level: value
+                .get("level")
+                .and_then(Value::as_str)
+                .unwrap_or("bright")
+                .to_owned(),
+            color: value
+                .get("color")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+        }),
+        "set_lighting_overlay" => Some(ExternalCommand::SetLightingOverlay {
+            enabled: value.get("enabled")?.as_bool()?,
+        }),
+        "set_render_probe" => Some(ExternalCommand::SetRenderProbe {
+            enabled: value.get("enabled")?.as_bool()?,
+        }),
         "set_is_game_master" => Some(ExternalCommand::SetIsGameMaster {
             is_game_master: value.get("isGameMaster")?.as_bool()?,
         }),
@@ -366,7 +571,28 @@ pub fn start(canvas_selector: &str) {
         .insert_resource(tracker)
         .insert_resource(CircularFlowTracer::new())
         .insert_resource(SystemHooksRegistry { hooks: None })
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
+        // Every asset this engine loads is a same-origin, server-authorized
+        // URL under `/api/canvas-assets/...` (scene backgrounds and pasted
+        // canvas images — see `systems/background.rs`, the only two
+        // `asset_server.load` call sites). Those paths are rooted ("/…"),
+        // which Bevy 0.18's `AssetPath::is_unapproved` treats as an escape
+        // from the asset root, and the default `UnapprovedPathMode::Forbid`
+        // then drops the load *before* any request is made — returning a
+        // default handle after an `error!` that used to go nowhere, because
+        // this crate did not enable `bevy_log` (it now does; see
+        // Cargo.toml). Verified live: with `Forbid`, an imported dd2vtt
+        // map's `set_scene_background` command arrived correctly and the
+        // image was never requested at all, with nothing logged anywhere.
+        // With `Allow`, the image is fetched and decoded, and the
+        // background sprite reports `image_loaded == true`.
+        // `Allow` is the right call for this app: the paths are not
+        // filesystem paths at all, and the bytes behind them are already
+        // authenticated and world-authorized server-side by
+        // `canvas_assets_serve`.
+        .add_plugins(DefaultPlugins.set(AssetPlugin {
+            unapproved_path_mode: UnapprovedPathMode::Allow,
+            ..default()
+        }).set(WindowPlugin {
             primary_window: Some(Window {
                 canvas: Some(canvas_selector.to_owned()),
                 fit_canvas_to_parent: true,
@@ -410,20 +636,34 @@ pub fn start(canvas_selector: &str) {
         // already handed to us — independent of every canvas plugin
         // above (Constitution Principle II).
         .add_plugins(DiceRollPlugin)
+        // Renderer self-test, off unless `set_render_probe` turns it on.
+        .add_plugins(RenderProbePlugin)
+        // Lighting/vision debug overlay (light radii, vision cones).
+        .add_plugins(LightingOverlayPlugin)
+        // The lighting layer itself: darkness over the map, light pools cut
+        // out of it, wall shadows painted back in.
+        .add_plugins(DarknessPlugin)
         .add_systems(Startup, setup_scene)
         .add_systems(
             Update,
             (apply_external_commands, move_player, emit_player_state),
         )
-        .add_systems(
-            Update,
-            (
-                handle_keyboard_movement,
-                sync_grid_to_transform,
-                sync_transform_to_grid,
-                apply_grid_snapping,
-            ),
-        )
+        // The `GridPosition`-based movement path is NOT registered.
+        //
+        // `handle_keyboard_movement`, `sync_grid_to_transform`,
+        // `sync_transform_to_grid` and `apply_grid_snapping` all query
+        // `GridPosition`, and nothing in this engine has ever spawned an entity
+        // carrying one outside a unit test — so none of them has ever matched a
+        // live entity. They are the remains of an earlier sync design.
+        //
+        // Keeping `handle_keyboard_movement` scheduled would now be actively
+        // harmful rather than merely inert: it binds the same WASD/arrow keys
+        // as `systems::token_move`, so the moment anything did spawn a
+        // `GridPosition` every keypress would move a token twice.
+        //
+        // The live equivalents work on `Transform`:
+        //   movement -> `systems::token_move::handle_token_movement_input`
+        //   snapping -> `systems::token_grid::snap_tokens_to_grid`
         .add_systems(Update, (calculate_derived_stats, calculate_ability_stats))
         .add_systems(
             Update,
@@ -460,8 +700,22 @@ pub fn start(canvas_selector: &str) {
 }
 
 fn setup_scene(mut commands: Commands, mut token_entities: ResMut<TokenEntities>) {
-    commands.spawn(Camera2d);
-
+    // NO camera is spawned here. `CameraPlugin` (plugins/camera.rs) owns the
+    // one and only camera — it is the one `CameraManager` drives for pan and
+    // zoom. This function used to spawn a second `Camera2d` as well, leaving
+    // two active cameras with the same order (0) on the same render target.
+    // Bevy warned about that every frame ("Camera order ambiguities
+    // detected ..."), and the consequence is not cosmetic: each camera
+    // clears the target on its own pass, so with an undefined order between
+    // them one pass can wipe the other's output.
+    //
+    // The warning was invisible until `bevy_log` was added to this crate's
+    // features; see the note there. Removing the duplicate silences it and
+    // leaves exactly one active camera.
+    //
+    // This was a real bug but not the cause of the "canvas renders nothing
+    // but the clear colour" symptom — that was the missing `*_render`
+    // features in Cargo.toml. Both are fixed; they were independent.
     let player_entity = commands
         .spawn((
             Sprite::from_color(Color::srgb(0.851, 0.278, 0.306), TOKEN_SIZE),
@@ -562,6 +816,25 @@ fn emit_player_state(
     }));
 }
 
+/// Scene-level resources the command loop writes to.
+///
+/// Grouped into one `SystemParam` because Bevy caps a system at 16 parameters
+/// and this loop had reached it. Every field is `Option` for the same reason
+/// the loose parameters were: each belongs to a plugin that may not be
+/// registered, and a command for an absent plugin is dropped rather than
+/// panicking (Constitution Principle II).
+#[derive(bevy::ecs::system::SystemParam)]
+struct SceneParams<'w, 's> {
+    grid: Option<ResMut<'w, SceneGrid>>,
+    grid_visible: Option<ResMut<'w, GridVisible>>,
+    ambient: Option<ResMut<'w, SceneAmbient>>,
+    lighting_overlay: Option<ResMut<'w, LightingOverlay>>,
+    camera: Option<ResMut<'w, CameraManager>>,
+    grid_snap: Option<ResMut<'w, GridSnapEnabled>>,
+    units: Option<ResMut<'w, crate::systems::token_move::SceneUnits>>,
+    camera_viewport: Query<'w, 's, &'static Camera, With<Camera2d>>,
+}
+
 fn apply_external_commands(
     mut commands: Commands,
     mut active_world: ResMut<ActiveWorld>,
@@ -588,6 +861,10 @@ fn apply_external_commands(
     // registered (both `init_resource` it idempotently) — same
     // graceful-degradation rationale as `wall_set` above.
     is_game_master: Option<ResMut<IsGameMaster>>,
+    // `RenderProbeEnabled` only exists once `RenderProbePlugin` is
+    // registered, same graceful-degradation rationale as `wall_set` above.
+    mut render_probe: Option<ResMut<RenderProbeEnabled>>,
+    mut scene: SceneParams,
     // `PendingDiceRoll` only exists once `DiceRollPlugin` is registered,
     // same graceful-degradation rationale as `wall_set` above.
     pending_dice_roll: Option<ResMut<plugins::dice_roll::PendingDiceRoll>>,
@@ -749,6 +1026,156 @@ fn apply_external_commands(
             } => {
                 if let Some(is_game_master) = is_game_master.as_deref_mut() {
                     is_game_master.0 = value;
+                }
+            }
+            ExternalCommand::SetSceneGrid {
+                grid_type,
+                size,
+                map_size,
+                origin_x,
+                origin_y,
+                visible,
+            } => {
+                if let Some(scene_grid) = scene.grid.as_deref_mut() {
+                    *scene_grid = match map_size {
+                        Some(map_size) => SceneGrid::anchored_to_map(&grid_type, size, map_size),
+                        None => SceneGrid::from_server(
+                            &grid_type,
+                            size,
+                            Vec2::new(origin_x, origin_y),
+                        ),
+                    };
+                    info!(
+                        target: "grid",
+                        "grid: {:?} size={} origin={:?} visible={visible}",
+                        scene_grid.kind,
+                        scene_grid.size,
+                        scene_grid.origin,
+                    );
+                }
+                if let Some(grid_visible) = scene.grid_visible.as_deref_mut() {
+                    grid_visible.0 = visible;
+                }
+            }
+            ExternalCommand::SetTokenGrid {
+                token_id,
+                footprint,
+                snap,
+            } => {
+                if let Some(&entity) = token_entities.0.get(&token_id) {
+                    let behaviour = TokenGridBehaviour {
+                        footprint: Footprint::new(footprint),
+                        snap,
+                    };
+                    commands.entity(entity).insert(behaviour);
+                    info!(
+                        target: "grid",
+                        "token {token_id}: {} cells, snap={snap}",
+                        behaviour.footprint.cells(),
+                    );
+                } else {
+                    warn!(target: "grid", "set_token_grid: no token {token_id}");
+                }
+            }
+            ExternalCommand::SetGridUnits { per_cell, label } => {
+                if let Some(units) = scene.units.as_deref_mut() {
+                    units.0 = GridUnits::new(per_cell, label);
+                    info!(target: "grid", "units: 1 cell = {}", units.format(1.0));
+                }
+            }
+            ExternalCommand::SetGridSnap { enabled } => {
+                if let Some(snap) = scene.grid_snap.as_deref_mut() {
+                    snap.0 = enabled;
+                    info!(target: "grid", "grid snapping {}", if enabled { "on" } else { "off" });
+                }
+            }
+            ExternalCommand::SetCamera { x, y, zoom } => {
+                if let Some(camera_mgr) = scene.camera.as_deref_mut() {
+                    if let Some(x) = x {
+                        camera_mgr.translation.x = x;
+                    }
+                    if let Some(y) = y {
+                        camera_mgr.translation.y = y;
+                    }
+                    if let Some(zoom) = zoom {
+                        camera_mgr.set_zoom(zoom);
+                    }
+                }
+            }
+            ExternalCommand::FitCameraTo {
+                center_x,
+                center_y,
+                width,
+                height,
+            } => {
+                if let Some(camera_mgr) = scene.camera.as_deref_mut() {
+                    // The viewport in *world units at 1:1* is just its pixel
+                    // size, since one world unit is one pixel at scale 1.
+                    let viewport = scene
+                        .camera_viewport
+                        .single()
+                        .ok()
+                        .and_then(|camera| camera.logical_viewport_size())
+                        .unwrap_or(Vec2::new(1280.0, 720.0));
+                    camera_mgr.fit_to(
+                        Vec2::new(center_x, center_y),
+                        Vec2::new(width, height),
+                        viewport,
+                    );
+                    info!(
+                        target: "camera",
+                        "fit {width}x{height} into {viewport:?} -> zoom {}",
+                        camera_mgr.scale,
+                    );
+                }
+            }
+            ExternalCommand::SetTokenVision {
+                token_id,
+                darkvision,
+                facing,
+                fov,
+                max_range,
+            } => {
+                if let Some(&entity) = token_entities.0.get(&token_id) {
+                    commands.entity(entity).insert(TokenVision(VisionProfile {
+                        darkvision,
+                        facing,
+                        fov,
+                        max_range,
+                    }));
+                    info!(
+                        target: "lighting",
+                        "vision: {token_id} darkvision={darkvision} facing={facing:?} fov={fov}",
+                    );
+                } else {
+                    // Worth saying rather than dropping: a mistyped id would
+                    // otherwise look like the vision setting simply had no
+                    // effect.
+                    warn!(target: "lighting", "set_token_vision: no token {token_id}");
+                }
+            }
+            ExternalCommand::SetAmbientLight { level, color } => {
+                if let Some(ambient) = scene.ambient.as_deref_mut() {
+                    ambient.level = match level.trim().to_ascii_lowercase().as_str() {
+                        "dark" | "dark_ness" | "darkness" | "unlit" => Illumination::Dark,
+                        "dim" => Illumination::Dim,
+                        // Unknown values read as bright rather than plunging a
+                        // scene into darkness on a typo.
+                        _ => Illumination::Bright,
+                    };
+                    ambient.color = color.as_deref().and_then(Rgb::parse_hex);
+                    info!(target: "lighting", "ambient: {:?}", ambient.level);
+                }
+            }
+            ExternalCommand::SetLightingOverlay { enabled } => {
+                if let Some(overlay) = scene.lighting_overlay.as_deref_mut() {
+                    overlay.0 = enabled;
+                }
+            }
+            ExternalCommand::SetRenderProbe { enabled } => {
+                if let Some(render_probe) = render_probe.as_deref_mut() {
+                    render_probe.0 = enabled;
+                    info!("render probe {}", if enabled { "enabled" } else { "disabled" });
                 }
             }
             ExternalCommand::UpsertCanvasImageAsset {

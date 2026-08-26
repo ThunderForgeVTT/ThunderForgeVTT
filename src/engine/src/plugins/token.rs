@@ -1,9 +1,13 @@
 use bevy::prelude::*;
 
-use crate::resources::{DraggingToken, IsGameMaster, SelectedToken};
+use crate::resources::{DraggingToken, GridSnapEnabled, IsGameMaster, SelectedToken};
 use crate::systems::token::{
     handle_token_drag, handle_token_resize_drag, handle_token_resize_rotate_keyboard,
     handle_token_rotate_drag, init_token_systems_resources, sync_token_visuals,
+};
+use crate::systems::token_grid::{size_tokens_to_grid, snap_tokens_to_grid};
+use crate::systems::token_move::{
+    draw_movement_plan, handle_token_movement_input, MovementPlan, SceneUnits,
 };
 
 /// Wires up token authoring (spec 006, closing out spec 004 US2's
@@ -22,7 +26,12 @@ impl Plugin for TokenPlugin {
             .init_resource::<DraggingToken>()
             // Idempotent, same graceful-multi-init convention as
             // `SelectionPlugin`/`WallPlugin`/`ShapePlugin`.
-            .init_resource::<IsGameMaster>();
+            .init_resource::<IsGameMaster>()
+            // Grid-locked by default; `set_grid_snap` turns it off.
+            .init_resource::<GridSnapEnabled>()
+            // Movement planning, and the units its cost is quoted in.
+            .init_resource::<MovementPlan>()
+            .init_resource::<SceneUnits>();
 
         init_token_systems_resources(app);
 
@@ -35,7 +44,16 @@ impl Plugin for TokenPlugin {
                 handle_token_rotate_drag,
                 handle_token_drag,
                 handle_token_resize_rotate_keyboard,
+                // Before sizing/snapping, so a move resolves to its final cell
+                // in the same frame the key was pressed.
+                handle_token_movement_input,
+                // Sizing before snapping: snapping depends on the footprint,
+                // and both run after the input systems above so a drag is
+                // resolved to its final cell within the same frame it ends.
+                size_tokens_to_grid,
+                snap_tokens_to_grid,
                 sync_token_visuals,
+                draw_movement_plan,
             )
                 .chain(),
         );

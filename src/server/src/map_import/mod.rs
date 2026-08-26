@@ -248,11 +248,24 @@ pub async fn import_uvtt_impl(
                 ))
                 .execute(conn)?;
 
+            // `width`/`height` are set from the imported art's real pixel
+            // dimensions, not left at whatever the scene was created with.
+            // The engine sizes the background sprite with
+            // `custom_size: Vec2::new(scene.width, scene.height)`
+            // (`systems/background.rs`), so a freshly-created scene's
+            // default 100x100 rendered a 6144x3456 map as a 100-unit
+            // sliver — a second, independent reason an imported dd2vtt
+            // appeared not to render at all. Pixels are the right unit
+            // here: `grid_size` above is already the file's own
+            // `pixels_per_grid`, so image-pixel width/height makes the
+            // grid line up 1:1 with the art.
             diesel::update(scenes::table.filter(scenes::scene_id.eq(scene_id)))
                 .set((
                     scenes::background_asset_id.eq(saved_background.asset_id),
                     scenes::grid_size.eq(new_grid_size),
                     scenes::grid_type.eq("square"),
+                    scenes::width.eq(saved_background.width_px),
+                    scenes::height.eq(saved_background.height_px),
                 ))
                 .execute(conn)?;
 

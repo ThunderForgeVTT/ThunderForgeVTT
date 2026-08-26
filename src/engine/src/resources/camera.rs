@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use thunderforge_canvas_core::camera::{fit_scale, zoom_steps, zoom_toward, ZoomLimits};
 
 /// Camera manager for pan/zoom control
 #[derive(Resource)]
@@ -6,23 +7,40 @@ pub struct CameraManager {
     /// Camera translation (pan offset in pixels)
     pub translation: Vec2,
 
-    /// Camera zoom scale (0.25 to 1.0, where 1.0 = normal, 0.25 = 4x zoom in)
+    /// World units per screen unit. 1.0 is 1:1; **larger is zoomed out**.
     pub scale: f32,
 
-    /// Min zoom (4x zoom in)
+    /// Most zoomed in (smallest scale).
     pub zoom_min: f32,
 
-    /// Max zoom (1x normal)
+    /// Most zoomed out (largest scale).
     pub zoom_max: f32,
+
+    /// Where zoom is heading. `scale` eases toward this each frame.
+    ///
+    /// Zoom used to jump straight to its new value, which reads as a series of
+    /// discrete snaps rather than a camera moving — especially on a trackpad,
+    /// where a single gesture delivers dozens of small deltas and each one
+    /// teleported the view. Separating "where the user asked to be" from
+    /// "where the camera is" is what makes it glide.
+    pub target_scale: f32,
+    /// Likewise for panning, so a cursor-anchored zoom eases rather than
+    /// snapping the world sideways.
+    pub target_translation: Vec2,
 }
 
 impl Default for CameraManager {
     fn default() -> Self {
         Self {
             translation: Vec2::ZERO,
+            target_translation: Vec2::ZERO,
             scale: 1.0,
-            zoom_min: 0.25,
-            zoom_max: 1.0,
+            target_scale: 1.0,
+            // Was 0.25..=1.0, which capped zoom-*out* at 1:1 — a 6144px
+            // imported map could never be framed in a 1600px viewport, which
+            // needs roughly 4x. See `ZoomLimits::default`.
+            zoom_min: 0.1,
+            zoom_max: 12.0,
         }
     }
 }
@@ -32,31 +50,92 @@ impl CameraManager {
         Self::default()
     }
 
-    /// Pan the camera by a delta
+    /// Pan the camera by a delta, in world units.
     pub fn pan(&mut self, delta: Vec2) {
-        self.translation += delta;
+        self.target_translation += delta;
     }
 
-    /// Apply a zoom factor (multiplier)
-    pub fn zoom(&mut self, factor: f32) {
-        let new_scale = (self.scale * factor).clamp(self.zoom_min, self.zoom_max);
-        self.scale = new_scale;
+    fn limits(&self) -> ZoomLimits {
+        ZoomLimits {
+            min: self.zoom_min,
+            max: self.zoom_max,
+        }
     }
 
-    /// Zoom in by 10%
-    pub fn zoom_in(&mut self) {
-        self.zoom(1.1);
+    /// Zoom by `steps`, positive being **in**.
+    pub fn zoom_by(&mut self, steps: f32) {
+        self.target_scale = zoom_steps(self.target_scale, steps, self.limits());
     }
 
-    /// Zoom out by 10%
-    pub fn zoom_out(&mut self) {
-        self.zoom(0.909);
+    /// Zoom by `steps` while keeping `anchor_world` pinned on screen — what
+    /// the mouse wheel uses, so the point under the cursor stays there.
+    pub fn zoom_toward(&mut self, anchor_world: Vec2, steps: f32) {
+        // Anchored against the *target*, not the current position. Anchoring
+        // against a mid-glide value would make each wheel notch during a
+        // gesture correct for a camera that is still moving, and the view
+        // would drift away from the cursor over a fast scroll.
+        let (translation, scale) = zoom_toward(
+            self.target_translation,
+            self.target_scale,
+            anchor_world,
+            steps,
+            self.limits(),
+        );
+        self.target_translation = translation;
+        self.target_scale = scale;
     }
 
-    /// Reset camera to initial state (pan=0, zoom=1.0x)
+    /// Set an absolute zoom, clamped to the configured range.
+    pub fn set_zoom(&mut self, scale: f32) {
+        self.target_scale = self.limits().clamp(scale);
+    }
+
+    /// Frame `content_size` (world units) inside `viewport` (world units at
+    /// 1:1), centred on `center`.
+    pub fn fit_to(&mut self, center: Vec2, content_size: Vec2, viewport: Vec2) {
+        self.target_scale = fit_scale(content_size, viewport, self.limits());
+        self.target_translation = center;
+    }
+
+    /// Reset camera to initial state (pan=0, zoom=1:1).
     pub fn reset(&mut self) {
-        self.translation = Vec2::ZERO;
-        self.scale = 1.0;
+        self.target_translation = Vec2::ZERO;
+        self.target_scale = 1.0;
+    }
+
+    /// Jumps the camera to its target with no glide.
+    ///
+    /// For the cases where easing would be wrong: the first frame of a scene,
+    /// or a test that needs a deterministic camera without pumping frames.
+    pub fn snap_to_target(&mut self) {
+        self.translation = self.target_translation;
+        self.scale = self.target_scale;
+    }
+
+    /// Eases the camera toward its target. Call once per frame with the
+    /// frame's delta time.
+    ///
+    /// Exponential smoothing rather than a fixed step per frame, so the glide
+    /// takes the same wall-clock time at any frame rate — a fixed step would
+    /// make the camera twice as fast on a 120Hz display.
+    pub fn advance(&mut self, delta_seconds: f32) {
+        // 1 - e^(-k*dt): frame-rate independent, and `k` sets how quickly the
+        // remaining distance is eaten. ~18 lands a zoom in roughly 150ms,
+        // which reads as immediate but not instantaneous.
+        const RESPONSIVENESS: f32 = 18.0;
+        let t = 1.0 - (-RESPONSIVENESS * delta_seconds.max(0.0)).exp();
+
+        self.scale += (self.target_scale - self.scale) * t;
+        self.translation += (self.target_translation - self.translation) * t;
+
+        // Settle exactly, so the camera stops rather than asymptotically
+        // approaching forever and marking itself changed every frame.
+        if (self.target_scale - self.scale).abs() < 0.0001 {
+            self.scale = self.target_scale;
+        }
+        if self.target_translation.distance_squared(self.translation) < 0.0001 {
+            self.translation = self.target_translation;
+        }
     }
 }
 
@@ -81,35 +160,39 @@ mod tests {
         assert_eq!(cam.translation, Vec2::new(30.0, 40.0));
     }
 
+    // These previously asserted the inverted behaviour: `zoom_in()` multiplied
+    // the scale by 1.1 and the test's own message said so ("Zoom in should
+    // multiply by 1.1"). Since `scale` is world-units-per-screen-unit, growing
+    // it fits *more* world on screen — that is zooming out. The test pinned
+    // the bug rather than catching it.
+
     #[test]
-    fn test_zoom_in() {
+    fn zooming_in_shrinks_the_scale() {
         let mut cam = CameraManager::default();
-        cam.zoom_in();
-        assert!((cam.scale - 1.1).abs() < 0.001, "Zoom in should multiply by 1.1");
+        cam.zoom_by(1.0);
+        assert!(cam.scale < 1.0, "zooming in should shrink the scale");
     }
 
     #[test]
-    fn test_zoom_out() {
+    fn zooming_out_grows_the_scale() {
         let mut cam = CameraManager::default();
-        cam.zoom_out();
-        assert!((cam.scale - 0.909).abs() < 0.001, "Zoom out should multiply by ~0.909");
+        cam.zoom_by(-1.0);
+        assert!(cam.scale > 1.0, "zooming out should grow the scale");
     }
 
     #[test]
     fn test_zoom_clamped() {
         let mut cam = CameraManager::default();
 
-        // Zoom in to max
-        for _ in 0..100 {
-            cam.zoom_in();
+        for _ in 0..200 {
+            cam.zoom_by(1.0);
         }
-        assert_eq!(cam.scale, cam.zoom_max, "Should clamp to max");
+        assert_eq!(cam.scale, cam.zoom_min, "zooming in clamps at the min scale");
 
-        // Zoom out to min
-        for _ in 0..100 {
-            cam.zoom_out();
+        for _ in 0..200 {
+            cam.zoom_by(-1.0);
         }
-        assert_eq!(cam.scale, cam.zoom_min, "Should clamp to min");
+        assert_eq!(cam.scale, cam.zoom_max, "zooming out clamps at the max scale");
     }
 
     #[test]

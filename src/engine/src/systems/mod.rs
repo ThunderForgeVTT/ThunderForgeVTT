@@ -10,6 +10,8 @@ pub mod sync;
 pub mod optimistic;
 pub mod token_loader;
 pub mod token;
+pub mod token_grid;
+pub mod token_move;
 pub mod selection;
 pub mod wall;
 pub mod lighting;

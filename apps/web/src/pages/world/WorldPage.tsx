@@ -306,6 +306,14 @@ export default function WorldPage() {
     }
   }, []);
 
+  /** Hides the body-level Bevy canvas without tearing the engine down. */
+  const hideEngineCanvas = useCallback(() => {
+    const canvas = document.querySelector<HTMLCanvasElement>("canvas");
+    if (canvas) {
+      canvas.style.display = "none";
+    }
+  }, []);
+
   useEffect(() => {
     const existing = document.querySelector<HTMLCanvasElement>("canvas");
     if (existing) {
@@ -323,8 +331,24 @@ export default function WorldPage() {
     });
     observer.observe(document.body, { childList: true });
 
-    return () => observer.disconnect();
-  }, [applyCanvasVisibility]);
+    return () => {
+      observer.disconnect();
+      // Bug fix: leaving Play (e.g. "Back to setup") unmounts this page,
+      // but the canvas is a child of <body> with `position: fixed; inset: 0`
+      // — it is not inside this component's tree, so React unmounting does
+      // nothing to it and it stayed pinned over the whole viewport,
+      // covering the staging page underneath. `playView` never leaves
+      // "playing" (see its declaration), so the visibility effect below
+      // could never hide it either: nothing in the component's own state
+      // changes on navigation away. Hiding it here, in the one callback
+      // that reliably runs on unmount, is what actually tears the canvas
+      // down visually. The engine itself deliberately stays alive and
+      // booted — spec 009's research.md §1 found invalidating its canvas
+      // handle load-bearing not to do — so this hides, never destroys, and
+      // the mount path above re-shows it on the way back in.
+      hideEngineCanvas();
+    };
+  }, [applyCanvasVisibility, hideEngineCanvas]);
 
   useEffect(() => {
     const canvas = document.querySelector<HTMLCanvasElement>("canvas");
@@ -406,6 +430,29 @@ export default function WorldPage() {
         width: selectedScene.width,
         height: selectedScene.height,
         worldId: id,
+      },
+      "ui",
+    );
+
+    // Sent with the background, never separately: the grid the engine draws
+    // and snaps to has to be the one this scene's art was authored against.
+    // Before this the engine had no way to learn a scene's grid at all — it
+    // drew a hardcoded lattice and snapped to a different hardcoded one, so
+    // an imported dd2vtt's `pixels_per_grid` (commonly 128) was ignored on
+    // both counts.
+    worldStore.dispatch(
+      {
+        type: "set_scene_grid",
+        gridType: selectedScene.gridType,
+        size: selectedScene.gridSize,
+        // The scene's extent, so the engine anchors the lattice to the map's
+        // corner rather than the world origin. The background sprite is
+        // centred on the origin, so an origin-anchored grid only lines up with
+        // the art when the map is an even number of cells across — a coin
+        // flip, and wrong for half this project's own example maps.
+        mapWidth: selectedScene.width,
+        mapHeight: selectedScene.height,
+        visible: true,
       },
       "ui",
     );
@@ -770,7 +817,9 @@ export default function WorldPage() {
         {
           type: "upsert_canvas_image_asset",
           assetId: asset.id,
-          path: `/api/canvas-assets/${asset.id}`,
+          // `.webp`, not a bare id: the engine resolves an image
+          // loader by extension (see canvas_assets_serve::parse_asset_id).
+          path: `/api/canvas-assets/${asset.id}.webp`,
           x: 0,
           y: 0,
           width: asset.widthPx,

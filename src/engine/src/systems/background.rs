@@ -29,11 +29,16 @@ pub(crate) fn sync_scene_background(
         return;
     }
 
+    let despawned = existing.iter().count();
     for entity in existing.iter() {
         commands.entity(entity).despawn();
     }
 
     let Some(path) = background.path.clone() else {
+        info!(
+            target: "render_probe",
+            "background: cleared (despawned {despawned} sprite(s))",
+        );
         return;
     };
 
@@ -48,6 +53,18 @@ pub(crate) fn sync_scene_background(
         Transform::from_xyz(0.0, 0.0, CanvasLayer::Background.z()),
         BackgroundSprite,
     ));
+
+    // Traced unconditionally rather than behind the render probe: a scene
+    // background changing is a rare, deliberate event, and knowing when the
+    // sprite was replaced — and at what size — is the first thing anyone
+    // asks when a map does not appear.
+    info!(
+        target: "background",
+        "background: spawned sprite for {path} at {}x{} (z={}), replacing {despawned}",
+        background.width,
+        background.height,
+        CanvasLayer::Background.z(),
+    );
 }
 
 /// Marker + id on a placed (pasted) canvas image's sprite entity (spec

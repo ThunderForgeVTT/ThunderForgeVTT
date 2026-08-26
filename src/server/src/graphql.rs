@@ -337,9 +337,15 @@ impl From<crate::models::Scene> for GraphQLScene {
             // path fell through to the SPA's `index.html`, not a 404 —
             // the image request "succeeded" with an HTML body instead of
             // image bytes).
+            // The `.webp` suffix is required, not cosmetic: this URL is
+            // handed to the engine's `AssetServer`, which resolves an
+            // image loader by file extension and gives up (without ever
+            // requesting the bytes) on an extensionless path. Every stored
+            // object is WebP — see `canvas_assets_serve::parse_asset_id`,
+            // which strips the extension back off.
             background_url: scene
                 .background_asset_id
-                .map(|id| format!("/api/canvas-assets/{id}"))
+                .map(|id| format!("/api/canvas-assets/{id}.webp"))
                 .or_else(|| scene.background_image_path.clone()),
             background_image_path: scene.background_image_path,
             background_asset_id: scene.background_asset_id,

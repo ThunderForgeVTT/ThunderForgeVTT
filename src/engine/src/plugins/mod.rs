@@ -10,6 +10,9 @@ pub mod lighting;
 pub mod shape;
 pub mod background;
 pub mod dice_roll;
+pub mod darkness;
+pub mod lighting_overlay;
+pub mod render_probe;
 
 pub use scene::ScenePlugin;
 pub use grid::GridPlugin;
@@ -23,3 +26,6 @@ pub use lighting::LightingPlugin;
 pub use shape::ShapePlugin;
 pub use background::BackgroundPlugin;
 pub use dice_roll::DiceRollPlugin;
+pub use darkness::DarknessPlugin;
+pub use lighting_overlay::LightingOverlayPlugin;
+pub use render_probe::{EngineStats, RenderProbeEnabled, RenderProbePlugin};
