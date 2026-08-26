@@ -27,10 +27,10 @@ description: "Task list for 028-client-world-cache"
 
 - [x] T001 Author `docs/adrs/20260826-052-client-cache-offline-and-peer-adjudication.md` recording the amendment to ADR-046's server-authoritative model (offline authoring + peer distribution), the DMCA determination from plan.md, and the peer-transfer default decision — **BLOCKING, no implementation may begin until accepted (Constitution Principle IV)**
 - [x] T002 Add index row for ADR-052 to `docs/adrs/README.md`
-- [ ] T003 Create crate `crates/thunderforge-cache-core/` with `Cargo.toml` (no `web-sys`, no Diesel, no network deps — enforce the purity boundary from contracts/cache-core-api.md), `[lints] workspace = true`, and `license.workspace = true`
+- [X] T003 Create crate `crates/thunderforge-cache-core/` with `Cargo.toml` (no `web-sys`, no Diesel, no network deps — enforce the purity boundary from contracts/cache-core-api.md), `[lints] workspace = true`, and `license.workspace = true`
 - [ ] T004 Create crate `crates/thunderforge-cache-browser/` with `Cargo.toml` targeting wasm32, depending on `thunderforge-cache-core`
-- [ ] T005 Register both crates in the workspace `members` list in `Cargo.toml`
-- [ ] T006 [P] Add `sha2` to `crates/thunderforge-cache-core/Cargo.toml` and `web-sys` features (OPFS, WebCrypto, IndexedDB, RTCDataChannel) to `crates/thunderforge-cache-browser/Cargo.toml`
+- [X] T005 Register both crates in the workspace `members` list in `Cargo.toml`
+- [X] T006 [P] Add `sha2` to `crates/thunderforge-cache-core/Cargo.toml` and `web-sys` features (OPFS, WebCrypto, IndexedDB, RTCDataChannel) to `crates/thunderforge-cache-browser/Cargo.toml`
 
 **Checkpoint**: ADR accepted, crates exist and compile empty
 
@@ -44,14 +44,14 @@ description: "Task list for 028-client-world-cache"
 
 ### Shared policy crate — pure, native-testable
 
-- [ ] T007 [P] Implement `Fingerprint` (SHA-256, hex round-trip, strict parsing) in `crates/thunderforge-cache-core/src/fingerprint.rs`
-- [ ] T008 [P] Implement `verify(bytes, expected)` as the single sanctioned trust choke point in `crates/thunderforge-cache-core/src/fingerprint.rs`
-- [ ] T009 [P] Implement `ItemId` enum (`SceneState`, `CanvasAsset`) with stable string encoding in `crates/thunderforge-cache-core/src/lib.rs`
-- [ ] T010 Implement `Manifest` over `BTreeMap` with deterministic wire ordering in `crates/thunderforge-cache-core/src/manifest.rs`
-- [ ] T011 Implement `CanonicalSceneState` with sorted entities, fixed float precision, per-viewer fields excluded, and an explicit version participating in the hash, in `crates/thunderforge-cache-core/src/manifest.rs`
-- [ ] T012 [P] Unit tests: fingerprint stability across row orderings and float round-trips in `crates/thunderforge-cache-core/tests/fingerprint.rs`
-- [ ] T013 [P] Property test: `verify(b, of_bytes(b))` always succeeds; any single-bit mutation fails, in `crates/thunderforge-cache-core/tests/fingerprint.rs`
-- [ ] T014 [P] Unit test: canonical-version bump invalidates every scene fingerprint in `crates/thunderforge-cache-core/tests/canonical.rs`
+- [X] T007 [P] Implement `Fingerprint` (SHA-256, hex round-trip, strict parsing) in `crates/thunderforge-cache-core/src/fingerprint.rs`
+- [X] T008 [P] Implement `verify(bytes, expected)` as the single sanctioned trust choke point in `crates/thunderforge-cache-core/src/fingerprint.rs`
+- [X] T009 [P] Implement `ItemId` enum (`SceneState`, `CanvasAsset`) with stable string encoding in `crates/thunderforge-cache-core/src/lib.rs`
+- [X] T010 Implement `Manifest` over `BTreeMap` with deterministic wire ordering in `crates/thunderforge-cache-core/src/manifest.rs`
+- [X] T011 Implement `CanonicalSceneState` with sorted entities, fixed float precision, per-viewer fields excluded, and an explicit version participating in the hash, in `crates/thunderforge-cache-core/src/manifest.rs`
+- [X] T012 [P] Unit tests: fingerprint stability across row orderings and float round-trips in `crates/thunderforge-cache-core/tests/fingerprint.rs`
+- [X] T013 [P] Property test: `verify(b, of_bytes(b))` always succeeds; any single-bit mutation fails, in `crates/thunderforge-cache-core/tests/fingerprint.rs`
+- [X] T014 [P] Unit test: canonical-version bump invalidates every scene fingerprint in `crates/thunderforge-cache-core/tests/canonical.rs`
 
 ### Server fingerprints
 
@@ -71,8 +71,8 @@ description: "Task list for 028-client-world-cache"
 
 **Independent test**: Open a world, close it, reopen — second open transfers ≤5% of the first's bytes and reaches interactive ≥3× faster, showing state identical to the server's
 
-- [ ] T020 [P] [US1] Implement `compute_plan(held, authorized_current)` — matched omitted, `None` fingerprint fetched, unknown evicted — in `crates/thunderforge-cache-core/src/delta.rs`
-- [ ] T021 [P] [US1] Unit tests for all six `compute_plan` branches from contracts/graphql-delta-sync.md in `crates/thunderforge-cache-core/tests/delta.rs`
+- [X] T020 [P] [US1] Implement `compute_plan(held, authorized_current)` — matched omitted, `None` fingerprint fetched, unknown evicted — in `crates/thunderforge-cache-core/src/delta.rs`
+- [X] T021 [P] [US1] Unit tests for all six `compute_plan` branches from contracts/graphql-delta-sync.md in `crates/thunderforge-cache-core/tests/delta.rs`
 - [ ] T022 [US1] Implement `worldSyncPlan` query per contracts/graphql-delta-sync.md in `src/server/src/graphql/queries/world_sync_plan.rs`, computing the plan **from** authorized items rather than filtering afterwards
 - [ ] T023 [US1] Register `worldSyncPlan` on the Query root in `src/server/src/graphql.rs`
 - [ ] T024 [P] [US1] Implement encrypted OPFS blob read/write keyed by fingerprint in `crates/thunderforge-cache-browser/src/opfs.rs`
@@ -155,9 +155,9 @@ description: "Task list for 028-client-world-cache"
 
 **Independent test**: Exceed the budget across several worlds; LRU worlds are released, the open world is not, nothing breaks
 
-- [ ] T058 [P] [US4] Implement `limit_bytes(quota) = min(quota/2, 20GiB)` in `crates/thunderforge-cache-core/src/budget.rs`
-- [ ] T059 [P] [US4] Implement `plan_eviction` — whole worlds before items, LRU first, never the open world, deterministic tie-breaking — in `crates/thunderforge-cache-core/src/budget.rs`
-- [ ] T060 [P] [US4] Unit test: `plan_eviction` never selects the open world even when that leaves the budget unsatisfied, in `crates/thunderforge-cache-core/tests/budget.rs`
+- [X] T058 [P] [US4] Implement `limit_bytes(quota) = min(quota/2, 20GiB)` in `crates/thunderforge-cache-core/src/budget.rs`
+- [X] T059 [P] [US4] Implement `plan_eviction` — whole worlds before items, LRU first, never the open world, deterministic tie-breaking — in `crates/thunderforge-cache-core/src/budget.rs`
+- [X] T060 [P] [US4] Unit test: `plan_eviction` never selects the open world even when that leaves the budget unsatisfied, in `crates/thunderforge-cache-core/tests/budget.rs`
 - [ ] T061 [US4] Read `navigator.storage.estimate()` and recompute the budget on each world open, shrinking the store when quota drops, in `crates/thunderforge-cache-browser/src/index.rs`
 - [ ] T062 [US4] Degrade a failed local write to a server fetch, never to a failed load (FR-024), in `crates/thunderforge-cache-browser/src/opfs.rs`
 - [ ] T063 [P] [US4] E2E: budget respected across machines whose reported quota differs by an order of magnitude (SC-006) in `apps/web/e2e/world-cache-budget.spec.ts`
@@ -187,10 +187,10 @@ description: "Task list for 028-client-world-cache"
 
 ### Shared conflict policy
 
-- [ ] T068 [P] [US7] Implement `resolve(a, b)` — GM beats Player, same role decided by reconnect order, total, never reads a client timestamp — in `crates/thunderforge-cache-core/src/conflict.rs`
-- [ ] T069 [P] [US7] Unit test: `resolve` is total and antisymmetric across every role/order combination, in `crates/thunderforge-cache-core/tests/conflict.rs`
-- [ ] T070 [P] [US7] Implement `enqueue`/`replay_order`/`apply_outcomes` returning unresolved changes, in `crates/thunderforge-cache-core/src/queue.rs`
-- [ ] T071 [P] [US7] Unit test: `apply_outcomes` surfaces every change lacking an outcome (FR-041), in `crates/thunderforge-cache-core/tests/queue.rs`
+- [X] T068 [P] [US7] Implement `resolve(a, b)` — GM beats Player, same role decided by reconnect order, total, never reads a client timestamp — in `crates/thunderforge-cache-core/src/conflict.rs`
+- [X] T069 [P] [US7] Unit test: `resolve` is total and antisymmetric across every role/order combination, in `crates/thunderforge-cache-core/tests/conflict.rs`
+- [X] T070 [P] [US7] Implement `enqueue`/`replay_order`/`apply_outcomes` returning unresolved changes, in `crates/thunderforge-cache-core/src/queue.rs`
+- [X] T071 [P] [US7] Unit test: `apply_outcomes` surfaces every change lacking an outcome (FR-041), in `crates/thunderforge-cache-core/tests/queue.rs`
 
 ### Client outbox
 

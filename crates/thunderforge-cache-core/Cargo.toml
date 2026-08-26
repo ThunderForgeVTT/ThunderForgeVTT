@@ -1,0 +1,27 @@
+[lints]
+workspace = true
+
+[package]
+name = "thunderforge_cache_core"
+version = "0.1.0"
+edition = "2024"
+repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
+license.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+# Deliberately no `web-sys`/`wasm-bindgen`/`diesel`/network dependency
+# (spec 028 contracts/cache-core-api.md, ADR-052). This crate holds the
+# rules the server and the browser must agree on, and it holds them
+# *without* I/O so they run under plain `cargo test` on either side. The
+# moment something here needs a filesystem, a socket, or a database, it
+# belongs in `thunderforge-cache-browser` or the server crate instead —
+# that boundary is this crate's entire value (same reasoning as ADR-038's
+# canvas-core split).
+[dependencies]
+serde = { version = "1.0.228", features = ["derive"] }
+sha2 = "0.10"
+uuid = { version = "1.23.1", features = ["serde"] }
+
+[dev-dependencies]
