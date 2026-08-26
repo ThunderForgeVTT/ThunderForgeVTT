@@ -59,6 +59,7 @@ This directory contains architecture decisions for ThunderForgeVTT, captured usi
 | [20260825-049](./20260825-049-share_link_dmca_repository_determination.md) | Accepted | Share Links Are Not a Centralized Public Repository (DMCA Guardrail Determination) |
 | [20260826-050](./20260826-050-permission_declaration_and_world_access_links.md) | Accepted | One Permission Declaration, and World Invites as Revocable Access Links |
 | [20260826-051](./20260826-051-no_ai_game_master.md) | Accepted | **ThunderForgeVTT Will Never Build an AI Game Master** |
+| [20260826-052](./20260826-052-client-cache-offline-and-peer-adjudication.md) | Accepted | The Client May Hold, Continue, and Distribute — Server as Record, GM as Arbiter |
 
 > **Note (2026-08-19):** ADRs 020–024 originally collided with an unrelated "pack system" batch that reused the same day-020 through day-024 numbers. The world-domain ADRs (020–024 above) were committed first and are documented here; the colliding pack-system ADRs were renumbered to 026–030. See `docs/SYSTEM_HOOKS_API_GUIDE.md` and ADR-036's "Related Decisions" for the corrected references.
 

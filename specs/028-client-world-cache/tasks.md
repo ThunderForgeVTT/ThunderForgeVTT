@@ -25,8 +25,8 @@ description: "Task list for 028-client-world-cache"
 
 **Purpose**: Unblock the Constitution gate and stand up the crates
 
-- [ ] T001 Author `docs/adrs/20260826-052-client-cache-offline-and-peer-distribution.md` recording the amendment to ADR-046's server-authoritative model (offline authoring + peer distribution), the DMCA determination from plan.md, and the peer-transfer default decision — **BLOCKING, no implementation may begin until accepted (Constitution Principle IV)**
-- [ ] T002 Add index row for ADR-052 to `docs/adrs/README.md`
+- [x] T001 Author `docs/adrs/20260826-052-client-cache-offline-and-peer-adjudication.md` recording the amendment to ADR-046's server-authoritative model (offline authoring + peer distribution), the DMCA determination from plan.md, and the peer-transfer default decision — **BLOCKING, no implementation may begin until accepted (Constitution Principle IV)**
+- [x] T002 Add index row for ADR-052 to `docs/adrs/README.md`
 - [ ] T003 Create crate `crates/thunderforge-cache-core/` with `Cargo.toml` (no `web-sys`, no Diesel, no network deps — enforce the purity boundary from contracts/cache-core-api.md), `[lints] workspace = true`, and `license.workspace = true`
 - [ ] T004 Create crate `crates/thunderforge-cache-browser/` with `Cargo.toml` targeting wasm32, depending on `thunderforge-cache-core`
 - [ ] T005 Register both crates in the workspace `members` list in `Cargo.toml`
