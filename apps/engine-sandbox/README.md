@@ -30,7 +30,16 @@ neither, the fault is in the engine.
 ```bash
 pnpm -F @thunderforge/engine-sandbox dev     # http://localhost:5180
 pnpm -F @thunderforge/engine-sandbox check   # headless pass/fail over every map
+pnpm -F @thunderforge/engine-sandbox keyboard  # keys still work with the canvas unfocused
 ```
+
+`keyboard` guards a specific regression: winit binds its key listeners to the
+canvas element, so keyboard input dies the moment any UI control takes focus.
+It asserts the bug is reproducible without routing, that routing fixes it,
+that releasing a key stops movement, and that typing in a text field moves
+nothing. The routing snippet it injects mirrors
+`apps/web/src/engine/canvasKeyboard.ts` — the sandbox deliberately has no
+dependency on the web app, so the two must be kept in step by hand.
 
 `dev` extracts the maps first. Rebuild the engine separately when you change
 Rust:

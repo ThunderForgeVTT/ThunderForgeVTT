@@ -36,6 +36,7 @@ import { AssetPasteTool } from "@/components/canvas-tools/AssetPasteTool";
 import { TokenTool } from "@/components/canvas-tools/TokenTool";
 import { TokenPanel } from "@/components/TokenPanel";
 import { DiceRollerPanel } from "@/components/world/DiceRollerPanel/DiceRollerPanel";
+import { startCanvasKeyboardRouting } from "@/engine/canvasKeyboard";
 import { GmToolRail } from "@/components/world/GmToolRail/GmToolRail";
 import { WorldDock, type DockSection } from "@/components/world/PlayDock/WorldDock";
 import { ChatPanel } from "@/components/world/PlayDock/ChatPanel";
@@ -362,6 +363,13 @@ export default function WorldPage() {
       applyCanvasVisibility(canvas);
     }
   }, [playView, engineReady, applyCanvasVisibility]);
+
+  // Keyboard input is routed to the canvas from the window rather than
+  // relying on the canvas holding focus — clicking any control in the dock
+  // or the tool rail used to stop keyboard movement dead until the map was
+  // clicked again. See `engine/canvasKeyboard.ts` for why winit makes this
+  // necessary.
+  useEffect(() => startCanvasKeyboardRouting(), []);
 
   useEffect(
     () => worldStore.subscribe((event) => setWorldState(event.state)),
