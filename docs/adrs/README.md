@@ -49,6 +49,16 @@ This directory contains architecture decisions for ThunderForgeVTT, captured usi
 | [20260820-039](./20260820-039-rustfs_scoped_asset_storage.md)                   | Accepted | RustFS Scoped Asset Storage                                                                    |
 | [20260821-040](./20260821-040-unify_token_backing_store.md)                     | Accepted | Unify Token Backing Store onto the Scene-Scoped `tokens` Table                                  |
 | [20260821-041](./20260821-041-env_var_oauth_provider_configuration.md)          | Accepted | Environment-Variable OAuth Provider Configuration, Layered on the Existing Admin-Panel Model    |
+| [20260821-042](./20260821-042-oauth_auto_provisioning_on_first_login.md) | Accepted | OAuth Auto-Provisioning on First Login |
+| [20260823-043](./20260823-043-content_moderation_and_dmca_safe_harbor.md) | Accepted | Content Moderation and DMCA Safe-Harbor Enforcement Boundary |
+| [20260823-044](./20260823-044-dice_rolling_engine_shared_crate_and_trust_boundary.md) | Accepted | Dice Rolling Engine — Shared Crate and Server-Authoritative Trust Boundary |
+| [20260823-045](./20260823-045-genie_session_state_two_party_consent.md) | Accepted | Genie Session State — Two-Party-Consent Authorization for Session Resource Trades |
+| [20260824-046](./20260824-046-server_authoritative_active_scene.md) | Accepted | Server-Authoritative Active Scene, Broadcast Over the Existing World-Events Transport |
+| [20260825-047](./20260825-047-crucible_session_adjudication_crate.md) | Accepted | Crucible — A Pluggable, Dual-Mode Session-Adjudication Crate |
+| [20260825-048](./20260825-048-graphql_subscription_client_transport.md) | Accepted | `graphql-ws` as the Client-Side Live-Sync Transport (Recorded Post-Hoc) |
+| [20260825-049](./20260825-049-share_link_dmca_repository_determination.md) | Accepted | Share Links Are Not a Centralized Public Repository (DMCA Guardrail Determination) |
+| [20260826-050](./20260826-050-permission_declaration_and_world_access_links.md) | Accepted | One Permission Declaration, and World Invites as Revocable Access Links |
+| [20260826-051](./20260826-051-no_ai_game_master.md) | Accepted | **ThunderForgeVTT Will Never Build an AI Game Master** |
 
 > **Note (2026-08-19):** ADRs 020–024 originally collided with an unrelated "pack system" batch that reused the same day-020 through day-024 numbers. The world-domain ADRs (020–024 above) were committed first and are documented here; the colliding pack-system ADRs were renumbered to 026–030. See `docs/SYSTEM_HOOKS_API_GUIDE.md` and ADR-036's "Related Decisions" for the corrected references.
 
