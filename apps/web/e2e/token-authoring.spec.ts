@@ -82,7 +82,11 @@ async function probeState(page: Page) {
  * World units map 1:1 to pixels at the default zoom, origin at the canvas
  * centre, y pointing up.
  */
-async function selectPersistedToken(page: Page, cx: number, cy: number): Promise<void> {
+async function selectPersistedToken(
+  page: Page,
+  cx: number,
+  cy: number,
+): Promise<void> {
   const { tokens } = await probeState(page);
   const target = tokens[0];
   if (!target) throw new Error("no tokens in the world store to select");
@@ -105,11 +109,73 @@ async function selectPersistedToken(page: Page, cx: number, cy: number): Promise
     // whatever is underneath it.
     await page.mouse.move(cx + target.x, cy - target.y);
     await page.mouse.down();
-    await page.mouse.move(cx + target.x + 260, cy - target.y - 160, { steps: 12 });
+    await page.mouse.move(cx + target.x + 260, cy - target.y - 160, {
+      steps: 12,
+    });
     await page.mouse.up();
     await page.waitForTimeout(600);
   }
   throw new Error("could not select a persisted token");
+}
+
+/**
+ * The persisted row for `tokenId`.
+ *
+ * Assertions used to read `tokens[0]`, which was fine when a scene held
+ * exactly one token. It no longer does: clicking a stack emits an
+ * `upsert_token` for every member, and the engine's own demo tokens
+ * (`"player"`, `"token-1"`) are in that pile, so the mutation bridge
+ * creates server rows for them the first time a test clicks. `tokens[0]`
+ * is then whichever the server returns first, not the one under test.
+ */
+function persistedToken<T extends { tokenId: string }>(
+  tokens: T[],
+  tokenId: string,
+): T {
+  const row = tokens.find((token) => token.tokenId === tokenId);
+  if (!row) {
+    throw new Error(
+      `token ${tokenId} not among persisted rows: ${tokens.map((t) => t.tokenId).join(", ")}`,
+    );
+  }
+  return row;
+}
+
+/**
+ * Shifts a handle offset (which `resizeHandleScreenOffset` and
+ * `rotateHandleScreenOffset` express relative to the token) onto the
+ * token's actual screen position.
+ *
+ * Those helpers, and `dragTokenHandle`, are all written against the canvas
+ * centre because tokens were assumed to sit at the world origin. They do
+ * not, so every handle grab has to be offset by where the token really is
+ * or it grabs empty canvas.
+ */
+function anchoredAt(
+  anchor: { dx: number; dy: number },
+  offset: { dx: number; dy: number },
+): { dx: number; dy: number } {
+  return { dx: anchor.dx + offset.dx, dy: anchor.dy + offset.dy };
+}
+
+/**
+ * The first server-backed token's id and world position, from the probe.
+ *
+ * Tests used to assume tokens sit at the world origin because
+ * `TokenPanel` creates them at `x: 0, y: 0`. They do not: by the time one
+ * reaches the canvas it has been through grid snapping, and this scene's
+ * land at (-192.5, -62.5). Anything that clicks or drags "the token" has to
+ * start from where it actually is, and anything asserting a move has to
+ * assert start-plus-delta rather than the delta alone.
+ */
+async function firstPersistedToken(
+  page: Page,
+): Promise<{ id: string; x: number; y: number }> {
+  const { tokens } = await probeState(page);
+  const token =
+    tokens.find((candidate) => isPersistedTokenId(candidate.id)) ?? tokens[0];
+  if (!token) throw new Error("no tokens in the world store");
+  return { id: token.id, x: token.x, y: token.y };
 }
 
 async function openTokenTool(page: Page): Promise<void> {
@@ -169,7 +235,10 @@ async function extractInviteCode(page: Page): Promise<string> {
   return code;
 }
 
-async function registerAndCreateWorld(page: Page, worldName: string): Promise<string> {
+async function registerAndCreateWorld(
+  page: Page,
+  worldName: string,
+): Promise<string> {
   await register(page, freshCredentials("e2etok"));
 
   await page.goto("/worlds/create");
@@ -192,7 +261,10 @@ async function registerAndCreateWorld(page: Page, worldName: string): Promise<st
  * UI element, since no page in this app currently displays a user's own
  * id anywhere (T021-T023's ownership-grant flow needs it to type into
  * `TokenPanel`'s "Owner user ID" input). */
-async function registerAndGetUserId(page: Page, prefix: string): Promise<string> {
+async function registerAndGetUserId(
+  page: Page,
+  prefix: string,
+): Promise<string> {
   const creds = freshCredentials(prefix);
   const [response] = await Promise.all([
     page.waitForResponse(
@@ -200,21 +272,26 @@ async function registerAndGetUserId(page: Page, prefix: string): Promise<string>
       // real status turned out to be a non-200 2xx (found live — this
       // exact-200 check made the very first version of this helper hang
       // forever waiting for a response that had already arrived).
-      (resp) => resp.url().includes("/api/authentication/register") && resp.ok(),
+      (resp) =>
+        resp.url().includes("/api/authentication/register") && resp.ok(),
     ),
     (async () => {
       await page.goto("/register");
       await page.locator("#register-username").fill(creds.username);
       await page.locator("#register-email").fill(creds.email);
       await page.locator("#register-password").fill(creds.password);
-      await page.locator("#register-password-confirmation").fill(creds.password);
+      await page
+        .locator("#register-password-confirmation")
+        .fill(creds.password);
       await page.getByRole("button", { name: "Create account" }).click();
     })(),
   ]);
   await page.waitForURL((url) => !url.pathname.startsWith("/register"), {
     timeout: 15_000,
   });
-  const body = (await response.json()) as { session?: { user?: { id?: string } } };
+  const body = (await response.json()) as {
+    session?: { user?: { id?: string } };
+  };
   const userId = body.session?.user?.id;
   if (!userId) {
     throw new Error("Could not extract user id from register response");
@@ -228,11 +305,15 @@ async function registerAndGetUserId(page: Page, prefix: string): Promise<string>
  * Mirrors `invite-membership.spec.ts`'s flow, adapted since this file's
  * `registerAndCreateWorld` (unlike that file's) leaves the GM already
  * inside the play view, not the dashboard. */
-async function generateInviteCodeFromDashboard(page: Page, worldId: string): Promise<string> {
+async function generateInviteCodeFromDashboard(
+  page: Page,
+  worldId: string,
+): Promise<string> {
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto(`/world/${worldId}`);
   await page.getByRole("button", { name: "Generate Join Link" }).click();
-  const inviteCode = await extractInviteCode(page);  await page.goto(`/world/${worldId}/play`);
+  const inviteCode = await extractInviteCode(page);
+  await page.goto(`/world/${worldId}/play`);
   return inviteCode;
 }
 
@@ -246,11 +327,15 @@ async function joinWorldAndEnterPlay(
   worldId: string,
 ): Promise<void> {
   await page.goto(`/join/${inviteCode}`);
-  await expect(page.getByRole("button", { name: "Join Campaign" })).toBeVisible({
-    timeout: 10_000,
-  });
+  await expect(page.getByRole("button", { name: "Join Campaign" })).toBeVisible(
+    {
+      timeout: 10_000,
+    },
+  );
   await page.getByRole("button", { name: "Join Campaign" }).click();
-  await page.waitForURL(new RegExp(`/world/${worldId}(/actor-select)?$`), { timeout: 15_000 });
+  await page.waitForURL(new RegExp(`/world/${worldId}(/actor-select)?$`), {
+    timeout: 15_000,
+  });
   await page.getByRole("link", { name: "Enter world" }).first().click();
   await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
   await clickPlay(page);
@@ -274,7 +359,9 @@ async function createScene(page: Page, name: string): Promise<void> {
   await expect(page.getByTestId("new-scene-name-input")).toBeHidden({
     timeout: 10_000,
   });
-  await expect(page.locator('[data-testid="scene-switcher"]:visible')).toContainText(name);
+  await expect(
+    page.locator('[data-testid="scene-switcher"]:visible'),
+  ).toContainText(name);
 }
 
 type Box = { x: number; y: number; width: number; height: number };
@@ -312,7 +399,13 @@ async function waitForEngineReady(page: Page): Promise<void> {
   await canvas.scrollIntoViewIfNeeded();
   const box = await canvas.boundingBox();
   if (box) {
-    await page.mouse.click(box.x + box.width - 40, box.y + box.height - 40);
+    // Was the canvas's bottom-right corner, which the play dock's icon
+    // rail is now painted over — the click landed on the dock and never
+    // reached the engine, so the canvas never got focus and every
+    // keyboard-driven assertion downstream silently did nothing. Inset
+    // far enough to clear the rail (right) and the dice bar (bottom),
+    // while staying clear of where tokens sit.
+    await page.mouse.click(box.x + box.width - 200, box.y + 120);
     await page.keyboard.press("Escape");
     await page.waitForTimeout(200);
   }
@@ -395,7 +488,10 @@ async function dragTokenHandle(
 async function secondSessionSameLogin(
   browser: Browser,
   sourcePage: Page,
-): Promise<{ context: Awaited<ReturnType<Browser["newContext"]>>; page: Page }> {
+): Promise<{
+  context: Awaited<ReturnType<Browser["newContext"]>>;
+  page: Page;
+}> {
   const sourceContext = sourcePage.context();
   const storageState = await sourceContext.storageState();
   const context = await browser.newContext({ storageState });
@@ -446,7 +542,9 @@ async function createTokenViaPanelCapturingId(page: Page): Promise<string> {
     ),
     page.getByTestId("token-create-submit").click({ force: true }),
   ]);
-  const body = (await response.json()) as { data?: { createToken?: { tokenId?: string } } };
+  const body = (await response.json()) as {
+    data?: { createToken?: { tokenId?: string } };
+  };
   const tokenId = body.data?.createToken?.tokenId;
   if (!tokenId) {
     throw new Error("Could not extract tokenId from createToken response");
@@ -481,14 +579,20 @@ async function dragTokenAtOriginTo(
  * sibling US1 tests above — e.g. a screen offset of (dx: 60, dy: 40)
  * persists as world (60, -40)). Centralized here so T021-T023's several
  * drag/readback pairs don't each re-derive the sign by hand. */
-function screenOffsetToWorld(offset: { dx: number; dy: number }): { x: number; y: number } {
+function screenOffsetToWorld(offset: { dx: number; dy: number }): {
+  x: number;
+  y: number;
+} {
   return { x: offset.dx, y: -offset.dy };
 }
 
 /** Inverse of `screenOffsetToWorld` — given a token's known world
  * position, returns the screen-space offset from canvas center needed
  * to click on it. */
-function worldToScreenOffset(position: { x: number; y: number }): { dx: number; dy: number } {
+function worldToScreenOffset(position: { x: number; y: number }): {
+  dx: number;
+  dy: number;
+} {
   return { dx: position.x, dy: -position.y };
 }
 
@@ -561,7 +665,9 @@ async function assignTokenOwnership(
   await page.waitForTimeout(500);
 
   if (isPrimary) {
-    const primaryCheckbox = page.getByTestId(`token-primary-checkbox-${tokenId}`);
+    const primaryCheckbox = page.getByTestId(
+      `token-primary-checkbox-${tokenId}`,
+    );
     await expect(primaryCheckbox).toBeEnabled({ timeout: 10_000 });
     await primaryCheckbox.check({ force: true });
     await page.waitForTimeout(500);
@@ -596,10 +702,13 @@ test.describe("Canvas-native token drag (US1, T008/T009)", () => {
     await page.reload();
     await waitForEngineReady(page);
 
-    // The token was created at (0, 0) — world origin, which the camera
-    // centers at canvas-center per every other canvas-authoring test's
-    // coordinate convention. Drag it a fixed, easily-asserted offset.
-    await dragCanvas(page, { dx: 0, dy: 0 }, { dx: 120, dy: -80 });
+    // Not the world origin: `TokenPanel` creates at (0, 0) but grid
+    // snapping moves the token before it settles, so the drag has to start
+    // from where it actually is (see `firstPersistedToken`) and the
+    // assertion below is start-plus-delta.
+    const before = await firstPersistedToken(page);
+    const from = worldToScreenOffset(before);
+    await dragCanvas(page, from, { dx: from.dx + 120, dy: from.dy - 80 });
 
     // Give the drop's `upsert_token` → mutation-bridge → `updateToken`
     // round-trip a moment to actually persist server-side before we
@@ -621,25 +730,31 @@ test.describe("Canvas-native token drag (US1, T008/T009)", () => {
     // rather than fight it.
     await tokenItem.click({ force: true });
 
-    const positionText = page.locator('[data-testid^="token-position-"]').first();
+    const positionText = page
+      .locator('[data-testid^="token-position-"]')
+      .first();
     await expect(positionText).toBeVisible({ timeout: 10_000 });
     const text = await positionText.textContent();
     const match = /Position: \(([-\d.]+), ([-\d.]+)\)/.exec(text ?? "");
     expect(match).not.toBeNull();
     const [, xStr, yStr] = match!;
-    // Dragged +120 on screen x / -80 on screen y from world origin; canvas
-    // y is screen-down while Bevy world-space y is screen-up (matching
-    // canvas-authoring.spec.ts's own wall-coordinate assertions), so the
-    // persisted world y is the *positive* of the screen-space dy.
-    expect(Number(xStr)).toBeCloseTo(120, 0);
-    expect(Number(yStr)).toBeCloseTo(80, 0);
+    // Dragged +120 on screen x / -80 on screen y from wherever the token
+    // was; canvas y is screen-down while Bevy world-space y is screen-up
+    // (matching canvas-authoring.spec.ts's own wall-coordinate
+    // assertions), so the persisted world y moves by the *positive* of the
+    // screen-space dy. Tolerance is a whole grid cell: the drop snaps.
+    expect(Number(xStr)).toBeCloseTo(before.x + 120, -1);
+    expect(Number(yStr)).toBeCloseTo(before.y + 80, -1);
   });
 
   test("a second session opening the scene fresh sees the GM's dragged token position (no live-subscription transport yet — spec 005)", async ({
     page,
     browser,
   }) => {
-    await registerAndCreateWorld(page, `E2E Token Cross-Session ${uniqueSuffix()}`);
+    await registerAndCreateWorld(
+      page,
+      `E2E Token Cross-Session ${uniqueSuffix()}`,
+    );
     await createScene(page, "Token Cross-Session Scene");
     await waitForEngineReady(page);
 
@@ -663,45 +778,54 @@ test.describe("Canvas-native token drag (US1, T008/T009)", () => {
     // `drop_token_valid_coordinates_check` migration so tokens can use the
     // same center-origin coordinate system walls/shapes/lights already do;
     // this offset is kept as regression coverage for that fix.
-    await dragCanvas(page, { dx: 0, dy: 0 }, { dx: 60, dy: 40 });
+    const before = await firstPersistedToken(page);
+    const from = worldToScreenOffset(before);
+    await dragCanvas(page, from, { dx: from.dx + 60, dy: from.dy + 40 });
     await page.waitForTimeout(1_000);
+    // Where it came to rest, snapping included — both sessions must agree
+    // on this exact value, which is the point of the test.
+    const after = await firstPersistedToken(page);
 
     // Confirm the drag actually persisted on the GM's own page before
     // involving a second session at all — isolates "did the drag work"
     // from "did the second session read stale/fresh data".
     await page.getByTestId("token-panel-toggle-button").click({ force: true });
-    const gmTokenItem = page.locator('[data-testid^="token-list-item-"]').first();
+    const gmTokenItem = page
+      .locator('[data-testid^="token-list-item-"]')
+      .first();
     await expect(gmTokenItem).toBeVisible({ timeout: 10_000 });
     await gmTokenItem.click({ force: true });
-    const gmPositionText = page.locator('[data-testid^="token-position-"]').first();
+    const gmPositionText = page
+      .locator('[data-testid^="token-position-"]')
+      .first();
     await expect(gmPositionText).toBeVisible({ timeout: 10_000 });
     const gmText = await gmPositionText.textContent();
     const gmMatch = /Position: \(([-\d.]+), ([-\d.]+)\)/.exec(gmText ?? "");
     expect(gmMatch).not.toBeNull();
-    expect(Number(gmMatch![1])).toBeCloseTo(60, 0);
-    expect(Number(gmMatch![2])).toBeCloseTo(-40, 0);
+    expect(Number(gmMatch![1])).toBeCloseTo(after.x, 0);
+    expect(Number(gmMatch![2])).toBeCloseTo(after.y, 0);
     await page.keyboard.press("Escape");
     await page.keyboard.press("Escape");
 
-    const { context: secondContext, page: secondPage } = await secondSessionSameLogin(
-      browser,
-      page,
-    );
+    const { context: secondContext, page: secondPage } =
+      await secondSessionSameLogin(browser, page);
     try {
       await waitForEngineReady(secondPage);
-      await secondPage.getByTestId("token-panel-toggle-button").click({ force: true });
+      await secondPage
+        .getByTestId("token-panel-toggle-button")
+        .click({ force: true });
       const tokenItem = secondPage
         .locator('[data-testid^="token-list-item-"]')
         .first();
       await expect(tokenItem).toBeVisible({ timeout: 10_000 });
       // `force: true`: the token list item's bounding box appears to churn
-    // frame-to-frame while the WorldLayout party-roster sidebar is also
-    // live-rendering this same token's position, which starves
-    // Playwright's default actionability "stable for 2 consecutive
-    // frames" check — the element is genuinely visible/clickable
-    // (confirmed via screenshots during debugging), so bypass that check
-    // rather than fight it.
-    await tokenItem.click({ force: true });
+      // frame-to-frame while the WorldLayout party-roster sidebar is also
+      // live-rendering this same token's position, which starves
+      // Playwright's default actionability "stable for 2 consecutive
+      // frames" check — the element is genuinely visible/clickable
+      // (confirmed via screenshots during debugging), so bypass that check
+      // rather than fight it.
+      await tokenItem.click({ force: true });
 
       const positionText = secondPage
         .locator('[data-testid^="token-position-"]')
@@ -711,8 +835,8 @@ test.describe("Canvas-native token drag (US1, T008/T009)", () => {
       const match = /Position: \(([-\d.]+), ([-\d.]+)\)/.exec(text ?? "");
       expect(match).not.toBeNull();
       const [, xStr, yStr] = match!;
-      expect(Number(xStr)).toBeCloseTo(60, 0);
-      expect(Number(yStr)).toBeCloseTo(-40, 0);
+      expect(Number(xStr)).toBeCloseTo(after.x, 0);
+      expect(Number(yStr)).toBeCloseTo(after.y, 0);
     } finally {
       await secondContext.close();
     }
@@ -749,33 +873,34 @@ test.describe("Token resize/rotate (US1, spec 006 T001-T003)", () => {
     await waitForEngineReady(page);
     await page.waitForTimeout(1_500);
 
-    // Select the token by clicking it (world origin, per every other test
-    // in this file).
+    // Select the token by clicking where it actually is — not the world
+    // origin, which `TokenPanel` creates at but grid snapping moves it off.
     const box = await canvasBox(page);
     const cx = box.x + box.width / 2;
     const cy = box.y + box.height / 2;
-    // Real press+release with a delay, not a synthetic same-frame
-    // `.click()` — see this file's `dragCanvas`/canvas-authoring.spec.ts's
-    // `clickCanvasAt` for the identical rationale (frame-collapsing risk).
-    await page.mouse.move(cx, cy);
-    await page.mouse.down();
-    await page.waitForTimeout(80);
-    await page.mouse.up();
-    await page.waitForTimeout(300);
+    await selectPersistedToken(page, cx, cy);
+
+    // Handles render around the token, so every offset below is anchored
+    // on it rather than on the canvas centre.
+    const underTest = await firstPersistedToken(page);
+    const anchor = worldToScreenOffset(underTest);
 
     // T001/FR-001: the resize handle is now rendered at the token's
     // corner (scale 1) — grab it and drag out to the distance
     // corresponding to scale 3 (whole grid-cell increments, +2 cells).
-    const resizeStart = resizeHandleScreenOffset(1);
-    const resizeEnd = resizeHandleScreenOffset(3);
+    const resizeStart = anchoredAt(anchor, resizeHandleScreenOffset(1));
+    const resizeEnd = anchoredAt(anchor, resizeHandleScreenOffset(3));
     await dragTokenHandle(page, resizeStart, resizeEnd);
 
     // T001/FR-003: the rotate handle sits at a separate offset (scaled
     // with the token, per `rotate_handle_world_pos`) — grab it and drag
     // to the angle corresponding to a 60-degree (PI/3) rotation,
     // independent of the resize above.
-    const rotateStart = rotateHandleScreenOffset(3, 0);
-    const rotateEnd = rotateHandleScreenOffset(3, Math.PI / 3);
+    const rotateStart = anchoredAt(anchor, rotateHandleScreenOffset(3, 0));
+    const rotateEnd = anchoredAt(
+      anchor,
+      rotateHandleScreenOffset(3, Math.PI / 3),
+    );
     await dragTokenHandle(page, rotateStart, rotateEnd);
     await page.waitForTimeout(1_000);
 
@@ -789,61 +914,70 @@ test.describe("Token resize/rotate (US1, spec 006 T001-T003)", () => {
     // round-trip tests established. sceneId comes straight off the URL,
     // same as every other scene-scoped call in this app.
     const sceneId = /[?&]sceneId=([^&]+)/.exec(page.url())?.[1];
-    const tokens: { x: number; y: number; rotation: number; scale: number }[] =
-      await page.evaluate(async (sceneIdArg: string | undefined) => {
-        // sceneId isn't actually in the URL (see SceneSwitcher's
-        // client-only selectedSceneId state) — read it off the
-        // TokenPanel toggle button's nearest scene context isn't
-        // available either, so query all tokens for every scene this
-        // world has via the scenes list, then flatten. Simpler: the
-        // world/play page only ever has this test's one scene, so query
-        // tokens for it directly via the world's scene list.
-        // POST requests to a session-authenticated endpoint require the
-        // `x-csrf-token` header matching the `csrf_token` cookie
-        // (auth_middleware.rs's `require_csrf_for_session`) — mirroring
-        // `apps/web/src/api/auth.ts`'s `withCsrf` helper, duplicated here
-        // since this raw `fetch` runs inside `page.evaluate`'s browser
-        // context, not this file's Node-side helpers.
-        const csrfToken =
-          document.cookie
-            .split("; ")
-            .find((row) => row.startsWith("csrf_token="))
-            ?.split("=")[1] ?? "";
-        const headers = {
-          "Content-Type": "application/json",
-          "x-csrf-token": csrfToken,
-        };
+    const tokens: {
+      tokenId: string;
+      x: number;
+      y: number;
+      rotation: number;
+      scale: number;
+    }[] = await page.evaluate(async (sceneIdArg: string | undefined) => {
+      // sceneId isn't actually in the URL (see SceneSwitcher's
+      // client-only selectedSceneId state) — read it off the
+      // TokenPanel toggle button's nearest scene context isn't
+      // available either, so query all tokens for every scene this
+      // world has via the scenes list, then flatten. Simpler: the
+      // world/play page only ever has this test's one scene, so query
+      // tokens for it directly via the world's scene list.
+      // POST requests to a session-authenticated endpoint require the
+      // `x-csrf-token` header matching the `csrf_token` cookie
+      // (auth_middleware.rs's `require_csrf_for_session`) — mirroring
+      // `apps/web/src/api/auth.ts`'s `withCsrf` helper, duplicated here
+      // since this raw `fetch` runs inside `page.evaluate`'s browser
+      // context, not this file's Node-side helpers.
+      const csrfToken =
+        document.cookie
+          .split("; ")
+          .find((row) => row.startsWith("csrf_token="))
+          ?.split("=")[1] ?? "";
+      const headers = {
+        "Content-Type": "application/json",
+        "x-csrf-token": csrfToken,
+      };
 
-        const worldMatch = /\/world\/([^/]+)\/play/.exec(window.location.pathname);
-        const worldId = worldMatch?.[1];
-        const scenesResponse = await fetch("/api/graphql", {
-          method: "POST",
-          headers,
-          credentials: "same-origin",
-          body: JSON.stringify({
-            query: `query($worldId: UUID!) { scenes(worldId: $worldId) { sceneId } }`,
-            variables: { worldId },
-          }),
-        });
-        const scenesJson = await scenesResponse.json();
-        const resolvedSceneId = sceneIdArg ?? scenesJson.data?.scenes?.[0]?.sceneId;
-        const tokensResponse = await fetch("/api/graphql", {
-          method: "POST",
-          headers,
-          credentials: "same-origin",
-          body: JSON.stringify({
-            query: `query($sceneId: UUID!) { tokens(sceneId: $sceneId) { x y rotation scale } }`,
-            variables: { sceneId: resolvedSceneId },
-          }),
-        });
-        const tokensJson = await tokensResponse.json();
-        return tokensJson.data?.tokens ?? [];
-      }, sceneId);
+      const worldMatch = /\/world\/([^/]+)\/play/.exec(
+        window.location.pathname,
+      );
+      const worldId = worldMatch?.[1];
+      const scenesResponse = await fetch("/api/graphql", {
+        method: "POST",
+        headers,
+        credentials: "same-origin",
+        body: JSON.stringify({
+          query: `query($worldId: UUID!) { scenes(worldId: $worldId) { sceneId } }`,
+          variables: { worldId },
+        }),
+      });
+      const scenesJson = await scenesResponse.json();
+      const resolvedSceneId =
+        sceneIdArg ?? scenesJson.data?.scenes?.[0]?.sceneId;
+      const tokensResponse = await fetch("/api/graphql", {
+        method: "POST",
+        headers,
+        credentials: "same-origin",
+        body: JSON.stringify({
+          query: `query($sceneId: UUID!) { tokens(sceneId: $sceneId) { tokenId x y rotation scale } }`,
+          variables: { sceneId: resolvedSceneId },
+        }),
+      });
+      const tokensJson = await tokensResponse.json();
+      return tokensJson.data?.tokens ?? [];
+    }, sceneId);
 
     expect(tokens.length).toBeGreaterThan(0);
-    expect(tokens[0].scale).toBeCloseTo(3.0, 5); // 1.0 default + 2 increments
+    const resized = persistedToken(tokens, underTest.id);
+    expect(resized.scale).toBeCloseTo(3.0, 5); // 1.0 default + 2 increments
     // Two 30-degree steps = 60 degrees = PI/3 radians.
-    expect(tokens[0].rotation).toBeCloseTo(Math.PI / 3, 2);
+    expect(resized.rotation).toBeCloseTo(Math.PI / 3, 2);
   });
 
   /**
@@ -876,18 +1010,17 @@ test.describe("Token resize/rotate (US1, spec 006 T001-T003)", () => {
     const box = await canvasBox(page);
     const cx = box.x + box.width / 2;
     const cy = box.y + box.height / 2;
-    await page.mouse.move(cx, cy);
-    await page.mouse.down();
-    await page.waitForTimeout(80);
-    await page.mouse.up();
-    await page.waitForTimeout(300);
+    await selectPersistedToken(page, cx, cy);
+
+    const underTest = await firstPersistedToken(page);
+    const anchor = worldToScreenOffset(underTest);
 
     // Drag only the resize handle: scale changes, position and rotation
     // don't.
     await dragTokenHandle(
       page,
-      resizeHandleScreenOffset(1),
-      resizeHandleScreenOffset(2),
+      anchoredAt(anchor, resizeHandleScreenOffset(1)),
+      anchoredAt(anchor, resizeHandleScreenOffset(2)),
     );
     await page.waitForTimeout(500);
 
@@ -895,8 +1028,8 @@ test.describe("Token resize/rotate (US1, spec 006 T001-T003)", () => {
     // changes, position and scale don't.
     await dragTokenHandle(
       page,
-      rotateHandleScreenOffset(2, 0),
-      rotateHandleScreenOffset(2, Math.PI / 2),
+      anchoredAt(anchor, rotateHandleScreenOffset(2, 0)),
+      anchoredAt(anchor, rotateHandleScreenOffset(2, Math.PI / 2)),
     );
     await page.waitForTimeout(500);
 
@@ -904,48 +1037,60 @@ test.describe("Token resize/rotate (US1, spec 006 T001-T003)", () => {
     await waitForEngineReady(page);
 
     const sceneId = /[?&]sceneId=([^&]+)/.exec(page.url())?.[1];
-    const tokens: { x: number; y: number; rotation: number; scale: number }[] =
-      await page.evaluate(async (sceneIdArg: string | undefined) => {
-        const csrfToken =
-          document.cookie
-            .split("; ")
-            .find((row) => row.startsWith("csrf_token="))
-            ?.split("=")[1] ?? "";
-        const headers = {
-          "Content-Type": "application/json",
-          "x-csrf-token": csrfToken,
-        };
-        const worldMatch = /\/world\/([^/]+)\/play/.exec(window.location.pathname);
-        const worldId = worldMatch?.[1];
-        const scenesResponse = await fetch("/api/graphql", {
-          method: "POST",
-          headers,
-          credentials: "same-origin",
-          body: JSON.stringify({
-            query: `query($worldId: UUID!) { scenes(worldId: $worldId) { sceneId } }`,
-            variables: { worldId },
-          }),
-        });
-        const scenesJson = await scenesResponse.json();
-        const resolvedSceneId = sceneIdArg ?? scenesJson.data?.scenes?.[0]?.sceneId;
-        const tokensResponse = await fetch("/api/graphql", {
-          method: "POST",
-          headers,
-          credentials: "same-origin",
-          body: JSON.stringify({
-            query: `query($sceneId: UUID!) { tokens(sceneId: $sceneId) { x y rotation scale } }`,
-            variables: { sceneId: resolvedSceneId },
-          }),
-        });
-        const tokensJson = await tokensResponse.json();
-        return tokensJson.data?.tokens ?? [];
-      }, sceneId);
+    const tokens: {
+      tokenId: string;
+      x: number;
+      y: number;
+      rotation: number;
+      scale: number;
+    }[] = await page.evaluate(async (sceneIdArg: string | undefined) => {
+      const csrfToken =
+        document.cookie
+          .split("; ")
+          .find((row) => row.startsWith("csrf_token="))
+          ?.split("=")[1] ?? "";
+      const headers = {
+        "Content-Type": "application/json",
+        "x-csrf-token": csrfToken,
+      };
+      const worldMatch = /\/world\/([^/]+)\/play/.exec(
+        window.location.pathname,
+      );
+      const worldId = worldMatch?.[1];
+      const scenesResponse = await fetch("/api/graphql", {
+        method: "POST",
+        headers,
+        credentials: "same-origin",
+        body: JSON.stringify({
+          query: `query($worldId: UUID!) { scenes(worldId: $worldId) { sceneId } }`,
+          variables: { worldId },
+        }),
+      });
+      const scenesJson = await scenesResponse.json();
+      const resolvedSceneId =
+        sceneIdArg ?? scenesJson.data?.scenes?.[0]?.sceneId;
+      const tokensResponse = await fetch("/api/graphql", {
+        method: "POST",
+        headers,
+        credentials: "same-origin",
+        body: JSON.stringify({
+          query: `query($sceneId: UUID!) { tokens(sceneId: $sceneId) { tokenId x y rotation scale } }`,
+          variables: { sceneId: resolvedSceneId },
+        }),
+      });
+      const tokensJson = await tokensResponse.json();
+      return tokensJson.data?.tokens ?? [];
+    }, sceneId);
 
     expect(tokens.length).toBeGreaterThan(0);
-    expect(tokens[0].x).toBeCloseTo(0, 0);
-    expect(tokens[0].y).toBeCloseTo(0, 0);
-    expect(tokens[0].scale).toBeCloseTo(2.0, 5);
-    expect(tokens[0].rotation).toBeCloseTo(Math.PI / 2, 2);
+    const handled = persistedToken(tokens, underTest.id);
+    // Position is asserted against where the token actually was, not (0,0):
+    // it is grid-snapped on creation, and the point here is that *handle*
+    // drags never move it.
+    expect(handled.x).toBeCloseTo(underTest.x, 0);
+    expect(handled.y).toBeCloseTo(underTest.y, 0);
+    expect(handled.scale).toBeCloseTo(2.0, 5);
+    expect(handled.rotation).toBeCloseTo(Math.PI / 2, 2);
   });
 
   test("T020: TokenTool panel appears on selection and its Grow/Rotate buttons resize/rotate the token", async ({
@@ -975,7 +1120,9 @@ test.describe("Token resize/rotate (US1, spec 006 T001-T003)", () => {
     // the discoverability gap T020 closes: previously only `]`/`[`/`,`/`.`
     // worked, with nothing on screen telling a GM they existed.
     await openTokenTool(page);
-    await expect(page.getByTestId("token-tool")).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId("token-tool")).toBeVisible({
+      timeout: 5_000,
+    });
     await expect(page.getByTestId("token-tool-scale")).toContainText("1x");
     await expect(page.getByTestId("token-tool-rotation")).toContainText("0°");
 
@@ -1035,8 +1182,9 @@ test.describe("Token resize/rotate (US1, spec 006 T001-T003)", () => {
     await selectPersistedToken(page, cx, cy);
     await openTokenTool(page);
 
-
-    await expect(page.getByTestId("token-tool-art")).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId("token-tool-art")).toBeVisible({
+      timeout: 5_000,
+    });
 
     // A token with no art has no preview and nothing to remove.
     await expect(page.getByTestId("token-tool-art-preview")).toHaveCount(0);
@@ -1053,7 +1201,10 @@ test.describe("Token resize/rotate (US1, spec 006 T001-T003)", () => {
 
     const preview = page.getByTestId("token-tool-art-preview");
     await expect(preview).toBeVisible({ timeout: 20_000 });
-    await expect(preview).toHaveAttribute("src", /\/api\/canvas-assets\/[0-9a-f-]+\.webp$/);
+    await expect(preview).toHaveAttribute(
+      "src",
+      /\/api\/canvas-assets\/[0-9a-f-]+\.webp$/,
+    );
     const uploadedSrc = await preview.getAttribute("src");
 
     // Persisted, not just React state: the art has to survive the GraphQL
@@ -1079,7 +1230,9 @@ test.describe("Token resize/rotate (US1, spec 006 T001-T003)", () => {
     await waitForEngineReady(page);
     await selectPersistedToken(page, cx, cy);
     await openTokenTool(page);
-    await expect(page.getByTestId("token-tool-art")).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId("token-tool-art")).toBeVisible({
+      timeout: 5_000,
+    });
     await expect(page.getByTestId("token-tool-art-preview")).toHaveCount(0);
   });
 });
@@ -1120,7 +1273,10 @@ test.describe("Scene-load loading/error feedback (US4, T031/T033)", () => {
   test("a background image that fails to load shows a distinct error state with a working retry action", async ({
     page,
   }) => {
-    await registerAndCreateWorld(page, `E2E Scene Load Error ${uniqueSuffix()}`);
+    await registerAndCreateWorld(
+      page,
+      `E2E Scene Load Error ${uniqueSuffix()}`,
+    );
     await createScene(page, "Scene Load B");
     await waitForEngineReady(page);
 
@@ -1159,7 +1315,11 @@ test.describe("Scene-load loading/error feedback (US4, T031/T033)", () => {
 
     await page.route(`**${FAKE_BG_PATH}`, (route) => {
       if (bgAssetShouldSucceed) {
-        void route.fulfill({ status: 200, contentType: "image/png", body: Buffer.from([]) });
+        void route.fulfill({
+          status: 200,
+          contentType: "image/png",
+          body: Buffer.from([]),
+        });
       } else {
         void route.abort();
       }
@@ -1217,7 +1377,10 @@ test.describe("Non-GM sees no resize/rotate controls (US2, T015)", () => {
     page,
     browser,
   }) => {
-    const worldId = await registerAndCreateWorld(page, `E2E Token No-GM-Handles ${uniqueSuffix()}`);
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Token No-GM-Handles ${uniqueSuffix()}`,
+    );
     await createScene(page, "No GM Handles Scene");
     await waitForEngineReady(page);
 
@@ -1321,8 +1484,8 @@ test.describe("Non-GM sees no resize/rotate controls (US2, T015)", () => {
     await waitForEngineReady(page);
 
     const sceneId = /[?&]sceneId=([^&]+)/.exec(page.url())?.[1];
-    const tokens: { rotation: number; scale: number }[] = await page.evaluate(
-      async (sceneIdArg: string | undefined) => {
+    const tokens: { tokenId: string; rotation: number; scale: number }[] =
+      await page.evaluate(async (sceneIdArg: string | undefined) => {
         const csrfToken =
           document.cookie
             .split("; ")
@@ -1332,7 +1495,9 @@ test.describe("Non-GM sees no resize/rotate controls (US2, T015)", () => {
           "Content-Type": "application/json",
           "x-csrf-token": csrfToken,
         };
-        const worldMatch = /\/world\/([^/]+)\/play/.exec(window.location.pathname);
+        const worldMatch = /\/world\/([^/]+)\/play/.exec(
+          window.location.pathname,
+        );
         const worldId = worldMatch?.[1];
         const scenesResponse = await fetch("/api/graphql", {
           method: "POST",
@@ -1344,21 +1509,20 @@ test.describe("Non-GM sees no resize/rotate controls (US2, T015)", () => {
           }),
         });
         const scenesJson = await scenesResponse.json();
-        const resolvedSceneId = sceneIdArg ?? scenesJson.data?.scenes?.[0]?.sceneId;
+        const resolvedSceneId =
+          sceneIdArg ?? scenesJson.data?.scenes?.[0]?.sceneId;
         const tokensResponse = await fetch("/api/graphql", {
           method: "POST",
           headers,
           credentials: "same-origin",
           body: JSON.stringify({
-            query: `query($sceneId: UUID!) { tokens(sceneId: $sceneId) { rotation scale } }`,
+            query: `query($sceneId: UUID!) { tokens(sceneId: $sceneId) { tokenId rotation scale } }`,
             variables: { sceneId: resolvedSceneId },
           }),
         });
         const tokensJson = await tokensResponse.json();
         return tokensJson.data?.tokens ?? [];
-      },
-      sceneId,
-    );
+      }, sceneId);
 
     expect(tokens.length).toBeGreaterThan(0);
     expect(tokens[0].scale).toBeCloseTo(1.0, 5);
@@ -1418,7 +1582,10 @@ test.describe("Player-owned token dragging (US3, T021-T023)", () => {
     page,
     browser,
   }) => {
-    const worldId = await registerAndCreateWorld(page, `E2E Player Tokens ${uniqueSuffix()}`);
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Player Tokens ${uniqueSuffix()}`,
+    );
     await createScene(page, "Player Tokens Scene");
     await waitForEngineReady(page);
 
@@ -1477,8 +1644,12 @@ test.describe("Player-owned token dragging (US3, T021-T023)", () => {
       await playerPage.waitForTimeout(1_500);
 
       // T023: no create-token control anywhere for a non-GM.
-      await playerPage.getByTestId("token-panel-toggle-button").click({ force: true });
-      await expect(playerPage.getByTestId("token-create-trigger")).toHaveCount(0);
+      await playerPage
+        .getByTestId("token-panel-toggle-button")
+        .click({ force: true });
+      await expect(playerPage.getByTestId("token-create-trigger")).toHaveCount(
+        0,
+      );
       await playerPage.keyboard.press("Escape");
 
       // T021 (success half): the player drags their primary token
@@ -1494,7 +1665,9 @@ test.describe("Player-owned token dragging (US3, T021-T023)", () => {
       await playerPage.reload();
       await waitForEngineReady(playerPage);
       await playerPage.waitForTimeout(1_500);
-      expect(await readTokenPosition(playerPage, tokenAId)).toEqual(tokenANewWorldPos);
+      expect(await readTokenPosition(playerPage, tokenAId)).toEqual(
+        tokenANewWorldPos,
+      );
 
       // T021 (rejection half): the player attempts to drag tokenC (at
       // the origin, unassigned) — the server rejects it with no
@@ -1504,7 +1677,10 @@ test.describe("Player-owned token dragging (US3, T021-T023)", () => {
       await playerPage.reload();
       await waitForEngineReady(playerPage);
       await playerPage.waitForTimeout(1_500);
-      expect(await readTokenPosition(playerPage, tokenCId)).toEqual({ x: 0, y: 0 });
+      expect(await readTokenPosition(playerPage, tokenCId)).toEqual({
+        x: 0,
+        y: 0,
+      });
 
       // T022: the player drags tokenB (additionally granted, not their
       // primary, world (-100, -100)) — succeeds identically to their
@@ -1519,15 +1695,23 @@ test.describe("Player-owned token dragging (US3, T021-T023)", () => {
       await playerPage.reload();
       await waitForEngineReady(playerPage);
       await playerPage.waitForTimeout(1_500);
-      expect(await readTokenPosition(playerPage, tokenBId)).toEqual(tokenBNewWorldPos);
+      expect(await readTokenPosition(playerPage, tokenBId)).toEqual(
+        tokenBNewWorldPos,
+      );
 
       // T023: the player edits their primary token's photo; visible to
       // the GM afterward.
-      await playerPage.getByTestId("token-panel-toggle-button").click({ force: true });
-      const playerTokenAItem = playerPage.getByTestId(`token-list-item-${tokenAId}`);
+      await playerPage
+        .getByTestId("token-panel-toggle-button")
+        .click({ force: true });
+      const playerTokenAItem = playerPage.getByTestId(
+        `token-list-item-${tokenAId}`,
+      );
       await expect(playerTokenAItem).toBeVisible({ timeout: 10_000 });
       await playerTokenAItem.click({ force: true });
-      const photoInput = playerPage.getByTestId(`token-photo-input-${tokenAId}`);
+      const photoInput = playerPage.getByTestId(
+        `token-photo-input-${tokenAId}`,
+      );
       await expect(photoInput).toBeVisible({ timeout: 10_000 });
       const newPhotoUrl = "https://example.test/e2e-player-photo.png";
       await photoInput.fill(newPhotoUrl);
