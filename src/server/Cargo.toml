@@ -71,6 +71,9 @@ tempfile = "3.27.0"
 aws-sdk-s3 = "1.143.0"
 aws-sdk-sts = "1.112.0"
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp", "gif", "bmp"] }
+# Lossy WebP encoding. `image`'s WebP encoder is lossless-only, which measured
+# 2-5x larger than necessary on photographic art — see `storage::transcode`.
+webp = "0.3.1"
 comrak = "0.39.1"
 ammonia = "4.1.1"
 slug = "0.1.6"

@@ -1,0 +1,32 @@
+[lints]
+workspace = true
+
+[package]
+name = "thunderforge_mapforge"
+version = "0.1.0"
+edition = "2024"
+repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
+license.workspace = true
+
+# A library plus a thin binary, mirroring `thunderforge-crucible`'s split:
+# all routing lives in the lib so tests can drive the router in-process, and
+# the binary only reads a port and serves.
+[lib]
+crate-type = ["rlib"]
+
+[[bin]]
+name = "mapforge-server"
+path = "src/bin/mapforge-server.rs"
+
+[dependencies]
+axum = "0.8.9"
+tokio = { version = "1.52.1", features = ["full"] }
+tower-http = { version = "0.6", features = ["cors"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+base64 = "0.22"
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }
+# Lossy WebP. `image`'s own WebP encoder is lossless-only, which measured 2-3x
+# *larger* than the source for photographic map art — see `server::encode_webp`.
+webp = "0.3.1"
+thiserror = "2.0.18"

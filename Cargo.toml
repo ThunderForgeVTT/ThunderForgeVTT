@@ -8,6 +8,7 @@ members = [
     "crates/thunderforge-canvas-core",
     "crates/thunderforge-crucible",
     "crates/thunderforge-dice",
+    "crates/thunderforge-mapforge",
     "packs/systems/dnd5e/server",
     "packs/systems/dnd5e/engine",
     "packs/systems/genie/server",

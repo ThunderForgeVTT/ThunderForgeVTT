@@ -23,6 +23,7 @@ import type {
   LoginPayload,
   RegisterPayload,
 } from "@/types/auth";
+import { clearAssetCache } from "@/serviceWorker";
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -128,6 +129,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const logout = useCallback(async () => {
     await logoutRequest();
     setSession(null);
+    // Cached scene art is per browser profile, not per account. Two people
+    // sharing a machine would otherwise share it, and the second would read
+    // bytes the server never authorised for them.
+    clearAssetCache();
   }, []);
 
   const value = useMemo<AuthContextValue>(

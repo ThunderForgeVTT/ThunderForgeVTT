@@ -9,7 +9,7 @@
 //! uploads (FR-009). Uses the `image` crate's own resize, already a
 //! dependency for the transcode path above; no new dependency needed.
 
-use image::{DynamicImage, ExtendedColorType, ImageEncoder};
+use image::DynamicImage;
 
 /// Single source of truth for the upload size ceiling, reused (not
 /// duplicated) from the original `map_import.rs` constant so map-import
@@ -51,14 +51,14 @@ pub fn transcode_to_webp(bytes: &[u8]) -> Result<TranscodedImage, TranscodeError
     let img =
         image::load_from_memory_with_format(bytes, format).map_err(|e| TranscodeError::Decode(e.to_string()))?;
 
+    // Capped so the result can actually be uploaded as a GPU texture on the
+    // machines players use — see `MAX_CANVAS_TEXTURE_DIMENSION`.
+    let img = resize_to_max_dimension(&img, MAX_CANVAS_TEXTURE_DIMENSION);
+
     let width = img.width();
     let height = img.height();
-    let color_type: ExtendedColorType = img.color().into();
 
-    let mut webp_bytes: Vec<u8> = Vec::new();
-    image::codecs::webp::WebPEncoder::new_lossless(&mut webp_bytes)
-        .write_image(img.as_bytes(), width, height, color_type)
-        .map_err(|e| TranscodeError::Encode(e.to_string()))?;
+    let webp_bytes = encode_webp(&img)?;
 
     Ok(TranscodedImage {
         webp_bytes,
@@ -96,13 +96,61 @@ pub struct LoreImageRenditions {
     pub original_format: String,
 }
 
+/// WebP quality for photographic canvas art (backgrounds, pasted images).
+///
+/// 82 is the usual sweet spot for photographic content: visually
+/// indistinguishable at viewing distance, a fraction of the bytes. Map art is
+/// what lossy encoding is good at — texture and gradient, no text or sharp UI
+/// edges to ring.
+pub const CANVAS_WEBP_QUALITY: f32 = 82.0;
+
+/// WebP quality for lore imagery.
+///
+/// Higher than canvas art on purpose. A lore image is whatever a user
+/// uploaded — a handout, a diagram, a screenshot with text — and lossy
+/// artefacts around text are far more visible than in a painted map. 92 keeps
+/// most of the saving while staying clear of that.
+pub const LORE_WEBP_QUALITY: f32 = 92.0;
+
+/// Encodes to WebP.
+///
+/// **Lossy**, via libwebp. This replaced `image`'s lossless-only WebP encoder
+/// after measuring what lossless was costing on real map art. Against
+/// `grassy-path-ambush` (6144x3456, 3.83MB as shipped), through the
+/// `thunderforge_mapforge` harness:
+///
+/// | rendition             | lossless | lossy q82 |
+/// |-----------------------|----------|-----------|
+/// | capped 4096           |  7.90 MB |   1.45 MB |
+/// | capped 2048           |  2.41 MB |   0.44 MB |
+///
+/// Lossless was producing renditions *larger than the source image* — a
+/// capped-and-transcoded 4096 background cost 7.9MB where the original was
+/// 3.8MB. Lossy at 4096 is 1.45MB: smaller than the original, and within
+/// every GPU's texture limit.
+///
+/// Alpha is preserved only when the source actually has it. Encoding an
+/// opaque image as RGBA spends bytes carrying a channel that is uniformly
+/// 255 — which is most map art.
+fn encode_webp_at(img: &DynamicImage, quality: f32) -> Result<Vec<u8>, TranscodeError> {
+    let encoded = if img.color().has_alpha() {
+        let rgba = img.to_rgba8();
+        webp::Encoder::from_rgba(rgba.as_raw(), rgba.width(), rgba.height()).encode(quality)
+    } else {
+        let rgb = img.to_rgb8();
+        webp::Encoder::from_rgb(rgb.as_raw(), rgb.width(), rgb.height()).encode(quality)
+    };
+
+    if encoded.is_empty() {
+        // libwebp signals failure by producing nothing.
+        return Err(TranscodeError::Encode("webp encoder produced no output".into()));
+    }
+    Ok(encoded.to_vec())
+}
+
+/// Canvas-quality WebP. See `encode_webp_at`.
 fn encode_webp(img: &DynamicImage) -> Result<Vec<u8>, TranscodeError> {
-    let color_type: ExtendedColorType = img.color().into();
-    let mut bytes = Vec::new();
-    image::codecs::webp::WebPEncoder::new_lossless(&mut bytes)
-        .write_image(img.as_bytes(), img.width(), img.height(), color_type)
-        .map_err(|e| TranscodeError::Encode(e.to_string()))?;
-    Ok(bytes)
+    encode_webp_at(img, CANVAS_WEBP_QUALITY)
 }
 
 /// Scales `img` down to fit within `max_dimension` on its longest edge,
@@ -124,6 +172,26 @@ fn resize_to_max_dimension(img: &DynamicImage, max_dimension: u32) -> DynamicIma
 /// `LORE_IMAGE_THUMBNAIL_DIMENSION` above already handles the same
 /// "small preview regardless of wildly varying source size" problem.
 pub const SCENE_PREVIEW_MAX_DIMENSION: u32 = 256;
+
+/// Largest dimension, in pixels, of any image stored for display on the
+/// canvas.
+///
+/// This is a hardware ceiling, not a preference. A canvas image becomes a GPU
+/// texture, and WebGL2 only *guarantees* `MAX_TEXTURE_SIZE` of 2048 — 4096 is
+/// the common real value on integrated and mobile GPUs, while a discrete card
+/// reports 16384 or more. An image wider than the device's limit fails to
+/// upload and the map silently does not render.
+///
+/// That failure mode is dangerous precisely because it is invisible during
+/// development: measured on this project's own dev machine (RTX 3090) the
+/// limit is 32768, so every one of the example maps works there — while five
+/// of the seven exceed 4096 and would have failed on a player's laptop.
+///
+/// 4096 is the compromise: it clears the common ceiling, and the detail lost
+/// only shows at maximum zoom-in. It also bounds VRAM at ~67MB per background
+/// rather than the 81MB a 6144x3456 map costs. Serving larger art means
+/// tiling, not raising this number.
+pub const MAX_CANVAS_TEXTURE_DIMENSION: u32 = 4096;
 
 /// Decodes an already-known-good image (`bytes`, e.g. a scene's own
 /// background image already accepted by `transcode_to_webp` or the dd2vtt
@@ -164,10 +232,10 @@ pub fn transcode_to_lore_renditions(bytes: &[u8]) -> Result<LoreImageRenditions,
         image::load_from_memory_with_format(bytes, format).map_err(|e| TranscodeError::Decode(e.to_string()))?;
 
     let full = resize_to_max_dimension(&img, LORE_IMAGE_MAX_DIMENSION);
-    let full_webp_bytes = encode_webp(&full)?;
+    let full_webp_bytes = encode_webp_at(&full, LORE_WEBP_QUALITY)?;
 
     let thumbnail = resize_to_max_dimension(&img, LORE_IMAGE_THUMBNAIL_DIMENSION);
-    let thumbnail_webp_bytes = encode_webp(&thumbnail)?;
+    let thumbnail_webp_bytes = encode_webp_at(&thumbnail, LORE_WEBP_QUALITY)?;
 
     Ok(LoreImageRenditions {
         full_width: full.width(),
@@ -178,6 +246,134 @@ pub fn transcode_to_lore_renditions(bytes: &[u8]) -> Result<LoreImageRenditions,
         thumbnail_webp_bytes,
         original_format: format!("{format:?}").to_lowercase(),
     })
+}
+
+#[cfg(test)]
+mod texture_cap_tests {
+    use super::*;
+    // Only the tests build source images now that encoding goes through
+    // libwebp rather than `image`'s encoder traits.
+    use image::{ExtendedColorType, ImageEncoder};
+
+    /// Builds a solid-colour PNG of the given size.
+    fn png_of(width: u32, height: u32) -> Vec<u8> {
+        let img = DynamicImage::new_rgba8(width, height);
+        let mut bytes: Vec<u8> = Vec::new();
+        image::codecs::png::PngEncoder::new(&mut bytes)
+            .write_image(
+                img.as_bytes(),
+                width,
+                height,
+                ExtendedColorType::Rgba8,
+            )
+            .expect("encoding a blank png should succeed");
+        bytes
+    }
+
+    /// The regression this guards: five of this project's seven example maps
+    /// exceed 4096px, which is a common WebGL2 `MAX_TEXTURE_SIZE`. Stored at
+    /// full size they upload fine on a discrete GPU and fail silently on an
+    /// integrated one.
+    #[test]
+    fn an_oversized_background_is_capped_to_a_uploadable_texture() {
+        // The shape of grassy-path-ambush and two other example maps.
+        let source = png_of(6144, 3456);
+        let transcoded = transcode_to_webp(&source).expect("should transcode");
+
+        assert!(
+            transcoded.width <= MAX_CANVAS_TEXTURE_DIMENSION
+                && transcoded.height <= MAX_CANVAS_TEXTURE_DIMENSION,
+            "stored {}x{} exceeds the {MAX_CANVAS_TEXTURE_DIMENSION}px ceiling",
+            transcoded.width,
+            transcoded.height,
+        );
+
+        // Aspect ratio must survive, or the grid stops matching the art.
+        let source_aspect = 6144.0 / 3456.0;
+        let stored_aspect = transcoded.width as f64 / transcoded.height as f64;
+        assert!(
+            (source_aspect - stored_aspect).abs() < 0.01,
+            "aspect changed: {source_aspect} -> {stored_aspect}",
+        );
+    }
+
+    /// Reports what the real import path produces for every example map.
+    ///
+    /// Not an assertion of specific sizes — those depend on the encoder and
+    /// would be brittle. It exists to make the cost of a delivery change
+    /// visible: run it before and after touching the encoder or the ceiling
+    /// and the table moves.
+    #[test]
+    #[ignore = "reporting benchmark; run with --ignored --nocapture"]
+    fn report_import_rendition_sizes() {
+        use base64::Engine as _;
+
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../examples/maps");
+        let mut entries: Vec<_> = std::fs::read_dir(&dir)
+            .expect("examples/maps should exist")
+            .filter_map(Result::ok)
+            .map(|e| e.path())
+            .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("dd2vtt"))
+            .collect();
+        entries.sort();
+
+        println!();
+        println!(
+            "{:<46}{:>12}{:>12}{:>10}{:>14}",
+            "map", "source", "stored", "ratio", "stored px"
+        );
+        println!("{}", "-".repeat(94));
+
+        let (mut total_source, mut total_stored) = (0usize, 0usize);
+
+        for path in entries {
+            let name = path.file_stem().unwrap().to_string_lossy().to_string();
+            let raw = std::fs::read_to_string(&path).expect("readable fixture");
+            let parsed: serde_json::Value = serde_json::from_str(&raw).expect("valid json");
+            let encoded = parsed["image"].as_str().expect("image field");
+            let source = base64::engine::general_purpose::STANDARD
+                .decode(encoded)
+                .expect("valid base64");
+
+            let transcoded = transcode_to_webp(&source).expect("should transcode");
+
+            total_source += source.len();
+            total_stored += transcoded.webp_bytes.len();
+
+            println!(
+                "{:<46}{:>9.2} MB{:>9.2} MB{:>9.2}x{:>14}",
+                name,
+                source.len() as f64 / 1024.0 / 1024.0,
+                transcoded.webp_bytes.len() as f64 / 1024.0 / 1024.0,
+                transcoded.webp_bytes.len() as f64 / source.len() as f64,
+                format!("{}x{}", transcoded.width, transcoded.height),
+            );
+        }
+
+        println!("{}", "-".repeat(94));
+        println!(
+            "{:<46}{:>9.2} MB{:>9.2} MB{:>9.2}x",
+            "TOTAL",
+            total_source as f64 / 1024.0 / 1024.0,
+            total_stored as f64 / 1024.0 / 1024.0,
+            total_stored as f64 / total_source as f64,
+        );
+    }
+
+    #[test]
+    fn an_image_already_within_the_ceiling_is_untouched() {
+        // Resizing what already fits would throw away detail for nothing.
+        let transcoded = transcode_to_webp(&png_of(1280, 1280)).expect("should transcode");
+        assert_eq!((transcoded.width, transcoded.height), (1280, 1280));
+    }
+
+    #[test]
+    fn a_very_tall_narrow_image_is_capped_on_its_long_axis() {
+        let transcoded = transcode_to_webp(&png_of(512, 8192)).expect("should transcode");
+        assert_eq!(transcoded.height, MAX_CANVAS_TEXTURE_DIMENSION);
+        assert!(transcoded.width <= MAX_CANVAS_TEXTURE_DIMENSION);
+    }
 }
 
 #[cfg(test)]
