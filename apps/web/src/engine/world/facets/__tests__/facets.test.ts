@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveTokenPermissions } from "../tokenControl";
+import { createTokenControlFacet, resolveTokenPermissions } from "../tokenControl";
+import { createLocalAdjudicator } from "../adjudicator";
+import { createWorldStore } from "../../store";
 import { didApply } from "../types";
 import type { WorldToken } from "../../types";
 import type { FacetPrincipal } from "../types";
@@ -86,5 +88,118 @@ describe("didApply", () => {
     expect(didApply({ status: "adjusted", value: 2, requested: 1 })).toBe(true);
     expect(didApply({ status: "rejected", reason: "no" })).toBe(false);
     expect(didApply({ status: "refused", reason: "not-yours" })).toBe(false);
+  });
+});
+
+describe("createTokenControlFacet", () => {
+  const scene = (token: Partial<WorldToken>) =>
+    createWorldStore({
+      worldId: "w1",
+      initialTokens: [{ id: "t1", x: 0, y: 0, z: 0, ...token }],
+    });
+
+  const facetFor = (store: ReturnType<typeof createWorldStore>, principal: FacetPrincipal) =>
+    createTokenControlFacet(store, {
+      worldId: "w1",
+      sceneId: "s1",
+      principal,
+      adjudicator: createLocalAdjudicator(),
+    });
+
+  it("applies a manipulate the principal is permitted", async () => {
+    const store = scene({ ownerUserId: "u-gm" });
+    const result = await facetFor(store, gm).manipulate({ tokenId: "t1", scale: 3 });
+
+    expect(result.status).toBe("accepted");
+    expect(store.getState().tokens.t1.scale).toBe(3);
+  });
+
+  it("refuses size and facing for a player, and changes nothing", async () => {
+    // The guarantee the TokenTool migration rests on: the panel disables
+    // these from the same permission the facet refuses them by, so an
+    // enabled control and a refused intent cannot disagree.
+    const store = scene({ ownerUserId: "u-p", scale: 1 });
+    const result = await facetFor(store, player).manipulate({ tokenId: "t1", scale: 4 });
+
+    expect(result).toEqual({ status: "refused", reason: "gm-only" });
+    expect(store.getState().tokens.t1.scale).toBe(1);
+  });
+
+  it("refuses art on a token the player does not own", async () => {
+    const store = scene({ ownerUserId: "someone-else", isPrimary: true });
+    const result = await facetFor(store, player).manipulate({
+      tokenId: "t1",
+      photoUrl: "/api/canvas-assets/x.webp",
+    });
+
+    expect(result.status).toBe("refused");
+    expect(store.getState().tokens.t1.photoUrl).toBeUndefined();
+  });
+
+  it("lets a player set art on their own primary token", async () => {
+    const store = scene({ ownerUserId: "u-p", isPrimary: true });
+    const result = await facetFor(store, player).manipulate({
+      tokenId: "t1",
+      photoUrl: "/api/canvas-assets/x.webp",
+    });
+
+    expect(result.status).toBe("accepted");
+    expect(store.getState().tokens.t1.photoUrl).toBe("/api/canvas-assets/x.webp");
+  });
+
+  it("carries a null photoUrl through, because clearing art is not the same as leaving it", async () => {
+    const store = scene({ ownerUserId: "u-gm", photoUrl: "/api/canvas-assets/x.webp" });
+    const result = await facetFor(store, gm).manipulate({ tokenId: "t1", photoUrl: null });
+
+    expect(result.status).toBe("accepted");
+    expect(store.getState().tokens.t1.photoUrl).toBeNull();
+  });
+
+  it("refuses an unknown token rather than dispatching a phantom", async () => {
+    const store = scene({});
+    const result = await facetFor(store, gm).manipulate({ tokenId: "ghost", scale: 2 });
+
+    expect(result).toEqual({ status: "refused", reason: "unknown-subject" });
+  });
+
+  it("applies the authoritative position on a move, not the requested one", async () => {
+    // With an adjudicator that corrects the move, the board must show
+    // where the token actually ended up.
+    const store = scene({ ownerUserId: "u-p" });
+    const facet = createTokenControlFacet(store, {
+      worldId: "w1",
+      sceneId: "s1",
+      principal: player,
+      adjudicator: {
+        async resolve(proposal) {
+          const requested = proposal.payload as { tokenId: string; x: number; y: number };
+          return {
+            status: "adjusted",
+            value: { ...requested, x: 10 } as typeof proposal.payload,
+            requested: proposal.payload,
+          };
+        },
+      },
+    });
+
+    const result = await facet.move({ tokenId: "t1", x: 999, y: 5 });
+
+    expect(result.status).toBe("adjusted");
+    expect(store.getState().tokens.t1.x).toBe(10);
+    expect(store.getState().tokens.t1.y).toBe(5);
+  });
+
+  it("lists only the tokens this principal may move", async () => {
+    const store = createWorldStore({
+      worldId: "w1",
+      initialTokens: [
+        { id: "mine", x: 0, y: 0, z: 0, ownerUserId: "u-p" },
+        { id: "theirs", x: 0, y: 0, z: 0, ownerUserId: "u-other" },
+      ],
+    });
+    const facet = facetFor(store, player);
+
+    expect(facet.tokens()).toHaveLength(2);
+    expect(facet.controllable().map((entry) => entry.token.id)).toEqual(["mine"]);
   });
 });

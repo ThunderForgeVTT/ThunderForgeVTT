@@ -1025,8 +1025,7 @@ export default function WorldPage() {
                   icon: "actors",
                   content: (
                     <TokenTool
-                      worldStore={worldStore}
-                      tokens={worldState.tokens}
+                      control={facets.tokens}
                       selectedTokenId={worldState.selectedTokenId}
                       worldId={id}
                       sceneId={sceneId}

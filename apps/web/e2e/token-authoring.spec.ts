@@ -53,6 +53,65 @@ const ONE_PIXEL_PNG = Buffer.from(
  * enough to reveal it. The rail renders one tool at a time, so the tab has
  * to be open before `token-tool` exists in the DOM at all.
  */
+/** True for a server-backed token id (a UUID), as opposed to the engine's
+ *  own demo tokens, which have no row to persist changes to. */
+const isPersistedTokenId = (id: string | null) =>
+  id !== null && /^[0-9a-f-]{36}$/.test(id);
+
+/** The world store's own view of itself; see `engine/world/probe.ts`. */
+async function probeState(page: Page) {
+  return page.evaluate(() => {
+    const state = window.__worldProbe?.state();
+    if (!state) throw new Error("world probe unavailable (dev build only)");
+    return state;
+  });
+}
+
+/**
+ * Selects a *persisted* token by clicking where it actually is.
+ *
+ * Two things make the obvious "click the canvas centre" wrong. Tokens do
+ * not spawn at the world origin, so a centre click lands on empty canvas
+ * and the engine emits a deselect — which from the DOM is indistinguishable
+ * from a broken panel. And every token in a fresh scene spawns on the same
+ * spot, one of them being the engine's demo token (`"player"`), which has
+ * no server row: changes to it cannot survive a reload. So click where the
+ * probe says the tokens are, and drag off the pile until a UUID-identified
+ * one is selected.
+ *
+ * World units map 1:1 to pixels at the default zoom, origin at the canvas
+ * centre, y pointing up.
+ */
+async function selectPersistedToken(page: Page, cx: number, cy: number): Promise<void> {
+  const { tokens } = await probeState(page);
+  const target = tokens[0];
+  if (!target) throw new Error("no tokens in the world store to select");
+
+  const clickAt = async (x: number, y: number) => {
+    await page.mouse.move(cx + x, cy - y);
+    await page.mouse.down();
+    await page.waitForTimeout(80);
+    await page.mouse.up();
+    await page.waitForTimeout(500);
+  };
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    await clickAt(target.x, target.y);
+    const { selectedTokenId } = await probeState(page);
+    if (isPersistedTokenId(selectedTokenId)) return;
+    if (selectedTokenId === null) continue;
+
+    // Selected the demo token: drag it clear so the next click reaches
+    // whatever is underneath it.
+    await page.mouse.move(cx + target.x, cy - target.y);
+    await page.mouse.down();
+    await page.mouse.move(cx + target.x + 260, cy - target.y - 160, { steps: 12 });
+    await page.mouse.up();
+    await page.waitForTimeout(600);
+  }
+  throw new Error("could not select a persisted token");
+}
+
 async function openTokenTool(page: Page): Promise<void> {
   const tokenTool = page.getByTestId("token-tool");
   if (await tokenTool.isVisible().catch(() => false)) {
@@ -907,11 +966,10 @@ test.describe("Token resize/rotate (US1, spec 006 T001-T003)", () => {
     const box = await canvasBox(page);
     const cx = box.x + box.width / 2;
     const cy = box.y + box.height / 2;
-    await page.mouse.move(cx, cy);
-    await page.mouse.down();
-    await page.waitForTimeout(80);
-    await page.mouse.up();
-    await page.waitForTimeout(300);
+    // Not a centre click: tokens do not spawn at the world origin, and the
+    // engine's own demo token cannot persist a change. See
+    // `selectPersistedToken`.
+    await selectPersistedToken(page, cx, cy);
 
     // Selecting the token on the canvas must surface the panel — this is
     // the discoverability gap T020 closes: previously only `]`/`[`/`,`/`.`
@@ -934,18 +992,19 @@ test.describe("Token resize/rotate (US1, spec 006 T001-T003)", () => {
     // keyboard-shortcut test above verifies.
     await page.reload();
     await waitForEngineReady(page);
-    await page.mouse.move(cx, cy);
-    await page.mouse.down();
-    await page.waitForTimeout(80);
-    await page.mouse.up();
-    await page.waitForTimeout(500);
+    await selectPersistedToken(page, cx, cy);
     // The rail resets to no open tool on reload.
     await openTokenTool(page);
     await expect(page.getByTestId("token-tool-scale")).toContainText("2x");
     await expect(page.getByTestId("token-tool-rotation")).toContainText("30°");
 
     // Deselecting (click empty canvas) must hide the panel again.
-    await page.mouse.move(box.x + 10, box.y + 10);
+    //
+    // Not the canvas's top-left corner: the GM tool rail is painted over
+    // that edge, so a click there hits the rail and never reaches the
+    // engine — the panel then stays open and looks like a deselect bug.
+    // Somewhere clear of both the rail and the tokens instead.
+    await page.mouse.move(cx + 400, cy + 300);
     await page.mouse.down();
     await page.waitForTimeout(80);
     await page.mouse.up();
@@ -973,56 +1032,7 @@ test.describe("Token resize/rotate (US1, spec 006 T001-T003)", () => {
     // and the engine emits a *deselect*, which looks exactly like "the
     // panel is broken" from the DOM. World units map 1:1 to pixels at the
     // default zoom, with the origin at the canvas centre and y pointing up.
-    const probeState = () =>
-      page.evaluate(() => {
-        const state = window.__worldProbe?.state();
-        if (!state) throw new Error("world probe unavailable (dev build only)");
-        return state;
-      });
-
-    const clickWorld = async (x: number, y: number) => {
-      await page.mouse.move(cx + x, cy - y);
-      await page.mouse.down();
-      await page.waitForTimeout(80);
-      await page.mouse.up();
-      await page.waitForTimeout(500);
-    };
-
-    /**
-     * Selects a *persisted* token — one with a server-side row.
-     *
-     * Every token in a fresh scene spawns at the same spot, and the engine's
-     * own demo token (id `"player"`, no server row) is one of them, so a
-     * plain click selects whichever the hit-test finds on top. Art set on
-     * the demo token cannot survive a reload: the mutation bridge has no
-     * `tokenId` to update. So drag whatever comes up off the pile until a
-     * UUID-identified token is the one selected.
-     */
-    const isPersisted = (id: string | null) => id !== null && /^[0-9a-f-]{36}$/.test(id);
-
-    const selectToken = async () => {
-      const { tokens } = await probeState();
-      const target = tokens[0];
-      if (!target) throw new Error("no tokens in the world store to select");
-
-      for (let attempt = 0; attempt < 4; attempt += 1) {
-        await clickWorld(target.x, target.y);
-        const { selectedTokenId } = await probeState();
-        if (isPersisted(selectedTokenId)) return;
-        if (selectedTokenId === null) continue;
-
-        // Selected the demo token: drag it clear so the next click reaches
-        // whatever is underneath it.
-        await page.mouse.move(cx + target.x, cy - target.y);
-        await page.mouse.down();
-        await page.mouse.move(cx + target.x + 260, cy - target.y - 160, { steps: 12 });
-        await page.mouse.up();
-        await page.waitForTimeout(600);
-      }
-      throw new Error("could not select a persisted token");
-    };
-
-    await selectToken();
+    await selectPersistedToken(page, cx, cy);
     await openTokenTool(page);
 
 
@@ -1050,7 +1060,7 @@ test.describe("Token resize/rotate (US1, spec 006 T001-T003)", () => {
     // round trip, which is what `UpdateTokenInput.photoUrl` was added for.
     await page.reload();
     await waitForEngineReady(page);
-    await selectToken();
+    await selectPersistedToken(page, cx, cy);
     await openTokenTool(page);
     await expect(page.getByTestId("token-tool-art-preview")).toHaveAttribute(
       "src",
@@ -1067,7 +1077,7 @@ test.describe("Token resize/rotate (US1, spec 006 T001-T003)", () => {
 
     await page.reload();
     await waitForEngineReady(page);
-    await selectToken();
+    await selectPersistedToken(page, cx, cy);
     await openTokenTool(page);
     await expect(page.getByTestId("token-tool-art")).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId("token-tool-art-preview")).toHaveCount(0);
