@@ -158,6 +158,13 @@ pub use mutations_roll::RollMutation;
 pub mod mutations_genie_session;
 pub use mutations_genie_session::GenieSessionMutation;
 
+// Play-view Chat + Combat. Both are built on the existing `world_events`
+// bus rather than a separate transport — see each module's doc comment.
+pub mod mutations_chat;
+pub use mutations_chat::{ChatMutation, ChatQuery};
+pub mod mutations_combat;
+pub use mutations_combat::{CombatMutation, CombatQuery};
+
 // Spec 017: actor "available for claiming" flag, atomic claiming,
 // player-created characters, and GM un-claim.
 pub mod mutations_actor_claims;
@@ -2463,6 +2470,8 @@ pub struct QueryRoot(
     RollQuery,
     ActorClaimQuery,
     GenieSessionQuery,
+    ChatQuery,
+    CombatQuery,
 );
 
 #[derive(MergedObject, Default)]
@@ -2498,6 +2507,8 @@ pub struct MutationRoot(
     RollMutation,
     GenieSessionMutation,
     ActorClaimMutation,
+    ChatMutation,
+    CombatMutation,
 );
 
 pub type AppSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;

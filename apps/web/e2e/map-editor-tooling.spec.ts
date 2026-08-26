@@ -140,10 +140,10 @@ async function createScene(page: Page, name: string): Promise<void> {
   // route (not mounted alongside `/play`), so there is exactly one
   // "new-scene-button" in the DOM here — no `:visible` disambiguation
   // against a second, hidden-but-mounted staging copy is needed anymore;
-  // just ensure the sidebar is actually open before clicking.
+  // just ensure the Settings dock section is actually open before clicking.
   const newSceneButton = page.getByTestId("new-scene-button");
   if (!(await newSceneButton.isVisible().catch(() => false))) {
-    await page.getByTestId("sidebar-toggle-button").click();
+    await page.getByTestId("world-dock-tab-settings").click();
     await expect(newSceneButton).toBeVisible({ timeout: 10_000 });
   }
   await newSceneButton.click();

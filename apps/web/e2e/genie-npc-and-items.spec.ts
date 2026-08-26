@@ -171,7 +171,7 @@ async function waitForEngineReady(page: Page): Promise<void> {
 async function ensureSidebarOpen(page: Page): Promise<void> {
   const toggle = page.getByTestId("token-panel-toggle-button");
   if (!(await toggle.isVisible().catch(() => false))) {
-    await page.getByTestId("sidebar-toggle-button").click({ force: true });
+    await page.getByTestId("world-dock-tab-settings").click({ force: true });
     await expect(toggle).toBeVisible({ timeout: 10_000 });
   }
 }

@@ -124,8 +124,8 @@ export async function graphql<T>(
   );
 }
 
-/** The full-screen /play sidebar (scene switcher included) is collapsed
- * by default — open it if it isn't already visible. */
+/** The Play dock's Settings section (scene switcher, map import, "back to
+ * setup") is collapsed by default — open it if it isn't already. */
 export async function ensureSidebarOpen(page: Page): Promise<void> {
   const switcher = page.getByTestId("scene-switcher");
   if (await switcher.isVisible().catch(() => false)) {
@@ -133,7 +133,7 @@ export async function ensureSidebarOpen(page: Page): Promise<void> {
   }
   await page.keyboard.press("Escape");
   await page.waitForTimeout(200);
-  await page.getByTestId("sidebar-toggle-button").dispatchEvent("click");
+  await page.getByTestId("world-dock-tab-settings").dispatchEvent("click");
   await expect(switcher).toBeVisible({ timeout: 10_000 });
 }
 

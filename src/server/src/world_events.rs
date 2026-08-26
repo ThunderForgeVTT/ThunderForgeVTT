@@ -42,6 +42,17 @@ pub const EVENT_CODE_GENIE_SESSION_STATE: i32 = 15;
 /// Consumed by every world member's already-open `worldEventsCreated`
 /// subscription while in Play to live-switch which scene is loaded.
 pub const EVENT_CODE_SCENE_LAUNCHED: i32 = 16;
+/// Play-view Chat: a message was posted to this world. Payload:
+/// `{ "messageId": "..." }` — the nudge only; the client refetches the
+/// backscroll rather than trusting a body delivered over the bus, so a
+/// GM-only message never reaches a non-GM client even as an event payload.
+pub const EVENT_CODE_CHAT_MESSAGE: i32 = 17;
+/// Play-view Combat: the shared initiative tracker changed (started,
+/// combatant added/updated/removed, turn advanced, ended). Payload:
+/// `{ "combatId": "..." }`. Same refetch-on-nudge shape as chat above —
+/// turn order is small and always read whole, so there is nothing to gain
+/// from diffing it over the wire.
+pub const EVENT_CODE_COMBAT_CHANGED: i32 = 18;
 
 /// Record a world event to the audit trail and trigger NOTIFY for real-time sync.
 pub fn record_world_event(

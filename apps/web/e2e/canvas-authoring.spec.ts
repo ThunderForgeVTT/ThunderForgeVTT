@@ -63,10 +63,10 @@ async function createScene(page: Page, name: string): Promise<void> {
   // route (not mounted alongside `/play`), so there is exactly one
   // "new-scene-button" in the DOM here — no `:visible` disambiguation
   // against a second, hidden-but-mounted staging copy is needed anymore;
-  // just ensure the sidebar is actually open before clicking.
+  // just ensure the Settings dock section is actually open before clicking.
   const newSceneButton = page.getByTestId("new-scene-button");
   if (!(await newSceneButton.isVisible().catch(() => false))) {
-    await page.getByTestId("sidebar-toggle-button").click();
+    await page.getByTestId("world-dock-tab-settings").click();
     await expect(newSceneButton).toBeVisible({ timeout: 10_000 });
   }
   await newSceneButton.click();
@@ -240,10 +240,10 @@ test.describe("Native canvas authoring: map import and scene switching", () => {
   }) => {
     await registerAndCreateWorld(page, `E2E World ${uniqueSuffix()}`);
 
-    // Spec 009: "New scene" now lives in the full-screen sidebar, closed by
+    // "New scene" lives in the Play dock's Settings section, collapsed by
     // default — open it before the rest of this test relies on it being
     // reachable via `createScene`/`switchToScene`.
-    await page.getByTestId("sidebar-toggle-button").click();
+    await page.getByTestId("world-dock-tab-settings").click();
     await expect(page.locator('[data-testid="new-scene-button"]:visible')).toBeVisible();
 
     // --- Scene One: import the rich demo map ---

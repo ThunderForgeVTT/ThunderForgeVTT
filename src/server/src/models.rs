@@ -8,6 +8,7 @@ use crate::schema::{
     world_abilities, world_ability_effects, world_ability_permissions, world_ability_shares,
     world_actor_abilities,
     world_actor_permissions, world_actor_shares, world_actor_system_data, world_actors,
+    world_chat_messages, world_combatants, world_combats,
     world_events, world_genie_puzzle_clock_rewards, world_genie_puzzle_clocks,
     world_genie_resource_holdings, world_genie_shop_listings,
     world_genie_sessions, world_genie_trade_proposals, world_invites, world_item_effects,
@@ -1474,6 +1475,94 @@ pub struct NewRollRecord {
 // data-model.md "Session Wish Pool + Doom Clock", "world_genie_puzzle_clocks",
 // "world_genie_resource_holdings".
 // ============================================================================
+
+// ============================================================================
+// Play-view Chat + Combat (world_chat_messages, world_combats,
+// world_combatants). Both ride the existing `world_events` bus rather than
+// introducing a transport of their own — see `world_events.rs`'s
+// EVENT_CODE_CHAT_MESSAGE / EVENT_CODE_COMBAT_CHANGED.
+// ============================================================================
+
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_chat_messages)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct ChatMessage {
+    pub id: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub scene_id: Option<uuid::Uuid>,
+    pub author_user_id: uuid::Uuid,
+    pub author_label: String,
+    pub body: String,
+    pub gm_only: bool,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_chat_messages)]
+pub struct NewChatMessage {
+    pub id: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub scene_id: Option<uuid::Uuid>,
+    pub author_user_id: uuid::Uuid,
+    pub author_label: String,
+    pub body: String,
+    pub gm_only: bool,
+}
+
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_combats)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct Combat {
+    pub id: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub scene_id: Option<uuid::Uuid>,
+    pub round: i32,
+    pub active_combatant_id: Option<uuid::Uuid>,
+    pub ended_at: Option<chrono::NaiveDateTime>,
+    pub created_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_combats)]
+pub struct NewCombat {
+    pub id: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub scene_id: Option<uuid::Uuid>,
+    pub created_by: uuid::Uuid,
+}
+
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_combatants)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct Combatant {
+    pub id: uuid::Uuid,
+    pub combat_id: uuid::Uuid,
+    pub actor_id: Option<uuid::Uuid>,
+    pub token_id: Option<uuid::Uuid>,
+    pub label: String,
+    pub initiative: i32,
+    pub tiebreak: i32,
+    pub is_npc: bool,
+    pub active: bool,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_combatants)]
+pub struct NewCombatant {
+    pub id: uuid::Uuid,
+    pub combat_id: uuid::Uuid,
+    pub actor_id: Option<uuid::Uuid>,
+    pub token_id: Option<uuid::Uuid>,
+    pub label: String,
+    pub initiative: i32,
+    pub tiebreak: i32,
+    pub is_npc: bool,
+}
 
 #[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
 #[diesel(table_name = world_genie_sessions)]

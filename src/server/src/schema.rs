@@ -516,6 +516,50 @@ diesel::table! {
 }
 
 diesel::table! {
+    world_chat_messages (id) {
+        id -> Uuid,
+        world_id -> Uuid,
+        scene_id -> Nullable<Uuid>,
+        author_user_id -> Uuid,
+        author_label -> Text,
+        body -> Text,
+        gm_only -> Bool,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    world_combatants (id) {
+        id -> Uuid,
+        combat_id -> Uuid,
+        actor_id -> Nullable<Uuid>,
+        token_id -> Nullable<Uuid>,
+        label -> Text,
+        initiative -> Int4,
+        tiebreak -> Int4,
+        is_npc -> Bool,
+        active -> Bool,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    world_combats (id) {
+        id -> Uuid,
+        world_id -> Uuid,
+        scene_id -> Nullable<Uuid>,
+        round -> Int4,
+        active_combatant_id -> Nullable<Uuid>,
+        ended_at -> Nullable<Timestamp>,
+        created_by -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     world_events (id) {
         id -> Int8,
         world_id -> Uuid,
@@ -856,6 +900,13 @@ diesel::joinable!(world_actor_shares -> world_actors (actor_id));
 diesel::joinable!(world_actor_system_data -> world_actors (actor_id));
 diesel::joinable!(world_actors -> scenes (scene_id));
 diesel::joinable!(world_actors -> worlds (world_id));
+diesel::joinable!(world_chat_messages -> scenes (scene_id));
+diesel::joinable!(world_chat_messages -> users (author_user_id));
+diesel::joinable!(world_chat_messages -> worlds (world_id));
+diesel::joinable!(world_combatants -> world_actors (actor_id));
+diesel::joinable!(world_combats -> scenes (scene_id));
+diesel::joinable!(world_combats -> users (created_by));
+diesel::joinable!(world_combats -> worlds (world_id));
 diesel::joinable!(world_events -> worlds (world_id));
 diesel::joinable!(world_genie_puzzle_clock_rewards -> users (created_by));
 diesel::joinable!(world_genie_puzzle_clock_rewards -> world_genie_puzzle_clocks (clock_id));
@@ -928,6 +979,9 @@ diesel::allow_tables_to_appear_in_same_query!(
     world_actor_shares,
     world_actor_system_data,
     world_actors,
+    world_chat_messages,
+    world_combatants,
+    world_combats,
     world_events,
     world_genie_puzzle_clock_rewards,
     world_genie_puzzle_clocks,

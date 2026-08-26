@@ -159,23 +159,31 @@ test.describe("US1: back-to-staging navigates to the dedicated staging route", (
   });
 });
 
-test.describe("US2: sidebar exposes scenes/NPC/trackers without losing canvas space", () => {
-  test("sidebar opens with real data and collapses back to a full-viewport canvas", async ({
+test.describe("US2: the play dock exposes scenes/actors/settings without losing canvas space", () => {
+  test("a dock section opens with real data and collapses back to a full-viewport canvas", async ({
     page,
   }) => {
-    await registerAndCreateWorld(page, `E2E Sidebar ${uniqueSuffix()}`);
+    await registerAndCreateWorld(page, `E2E Dock ${uniqueSuffix()}`);
     await page.getByTestId("play-button").click();
     await waitForEngineReady(page);
 
-    await expect(page.getByTestId("world-sidebar")).toHaveCount(0);
-    await page.getByTestId("sidebar-toggle-button").click();
-    const sidebar = page.getByTestId("world-sidebar");
-    await expect(sidebar).toBeVisible();
-    await expect(sidebar.getByTestId("scene-switcher")).toBeVisible();
-    await expect(sidebar.getByText("No NPCs yet.")).toBeVisible({ timeout: 10_000 });
+    // The icon rail is always present; no section panel is open yet.
+    await expect(page.getByTestId("world-dock")).toBeVisible();
+    await expect(page.getByTestId("world-dock-panel-settings")).toHaveCount(0);
 
-    await page.getByTestId("sidebar-toggle-button").click();
-    await expect(page.getByTestId("world-sidebar")).toHaveCount(0);
+    await page.getByTestId("world-dock-tab-settings").click();
+    const settings = page.getByTestId("world-dock-panel-settings");
+    await expect(settings).toBeVisible();
+    await expect(settings.getByTestId("scene-switcher")).toBeVisible();
+
+    // Actors moved to their own section, foldered into PCs and NPCs.
+    await page.getByTestId("world-dock-tab-actors").click();
+    const actors = page.getByTestId("world-dock-panel-actors");
+    await expect(actors).toBeVisible();
+    await expect(actors.getByText("No NPCs yet.")).toBeVisible({ timeout: 10_000 });
+
+    await page.getByTestId("world-dock-tab-actors").click();
+    await expect(page.getByTestId("world-dock-panel-actors")).toHaveCount(0);
   });
 });
 

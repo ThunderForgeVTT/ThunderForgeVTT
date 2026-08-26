@@ -88,7 +88,7 @@ async function graphql<T>(page: Page, query: string, variables: Record<string, u
   );
 }
 
-/** The full-screen /play sidebar (scene switcher included) is collapsed
+/** The Play dock's Settings section (scene switcher included) is collapsed
  * by default — open it if it isn't already visible. */
 async function ensureSidebarOpen(page: Page): Promise<void> {
   const switcher = page.getByTestId("scene-switcher");
@@ -100,16 +100,14 @@ async function ensureSidebarOpen(page: Page): Promise<void> {
   // toggle button underneath a stray force-click.
   await page.keyboard.press("Escape");
   await page.waitForTimeout(200);
-  // Real layering bug found while building this test: the play canvas's
-  // `absolute inset-0` wrapper (WorldLayout.tsx) hosts the whole overlay
-  // UI including the dice-roller panel's text input, and that input's
-  // hit-testing box ends up covering the "Tools" sidebar-toggle button's
-  // on-screen position — a plain click, and even a `force: true` click
-  // (which still routes through real browser hit-testing, only skipping
-  // Playwright's own actionability pre-checks), lands on the dice input
-  // instead of the button. Dispatching a synthetic DOM "click" event
-  // sidesteps browser hit-testing entirely and reaches the real handler.
-  await page.getByTestId("sidebar-toggle-button").dispatchEvent("click");
+  // Dispatched rather than clicked. This dates from a real layering bug:
+  // the old bottom-left "Tools" toggle sat under the dice-roller panel's
+  // text input, and even a `force: true` click (which still routes through
+  // browser hit-testing) landed on the input instead. The dock's icon rail
+  // no longer overlaps the dice roller, but a synthetic event is still the
+  // most robust way to reach the handler from this helper regardless of
+  // what else the canvas has floating over it.
+  await page.getByTestId("world-dock-tab-settings").dispatchEvent("click");
   await expect(switcher).toBeVisible({ timeout: 10_000 });
 }
 

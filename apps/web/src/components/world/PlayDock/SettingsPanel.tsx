@@ -1,0 +1,111 @@
+import { MapImportTool } from "@/components/canvas-tools/MapImportTool";
+import { SceneSwitcher } from "@/components/world/SceneSwitcher";
+import { Button } from "@/components/ui/button/Button";
+import type { SceneRecord } from "@/types/scene";
+
+export interface SettingsPanelProps {
+  worldId: string;
+  sceneId: string | null;
+  scenes: SceneRecord[];
+  isGm: boolean;
+  onSceneChange: (sceneId: string) => void;
+  onSceneCreated: (scene: SceneRecord) => void;
+  onMapImportComplete: () => void;
+  onBackToStaging: () => void;
+}
+
+/**
+ * Settings: scene selection, map import, scene properties, and the way
+ * back to setup.
+ *
+ * Map import lives here rather than on the canvas toolbar because it is a
+ * setup action, not a drawing tool — it was previously the first button in
+ * the GM's left-hand tool stack, above "Draw wall", which put a
+ * once-per-scene file upload in the same visual weight as the tools used
+ * every few seconds.
+ */
+export function SettingsPanel({
+  worldId,
+  sceneId,
+  scenes,
+  isGm,
+  onSceneChange,
+  onSceneCreated,
+  onMapImportComplete,
+  onBackToStaging,
+}: SettingsPanelProps) {
+  const currentScene = scenes.find((scene) => scene.sceneId === sceneId) ?? null;
+
+  return (
+    <div className="grid gap-5" data-testid="settings-panel">
+      <section className="grid gap-2">
+        <h3 className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+          Scenes
+        </h3>
+        <SceneSwitcher
+          worldId={worldId}
+          scenes={scenes}
+          sceneId={sceneId}
+          onSceneChange={onSceneChange}
+          onSceneCreated={onSceneCreated}
+          canCreateScene={isGm}
+        />
+      </section>
+
+      {isGm && sceneId ? (
+        <section className="grid gap-2 border-t border-border pt-4">
+          <h3 className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+            Import map
+          </h3>
+          <MapImportTool
+            // Remount on scene switch so a previous scene's import summary
+            // doesn't linger — same reason WorldPage keyed it before.
+            key={sceneId}
+            sceneId={sceneId}
+            onImportComplete={onMapImportComplete}
+          />
+        </section>
+      ) : null}
+
+      {currentScene ? (
+        <section className="grid gap-2 border-t border-border pt-4">
+          <h3 className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+            Scene
+          </h3>
+          <dl className="grid gap-1.5 text-sm">
+            <div className="flex justify-between gap-2">
+              <dt className="text-muted-foreground">Name</dt>
+              <dd className="truncate">{currentScene.name}</dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt className="text-muted-foreground">Grid</dt>
+              <dd>
+                {currentScene.gridType} · {currentScene.gridSize}px
+              </dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt className="text-muted-foreground">Size</dt>
+              <dd className="tabular-nums">
+                {currentScene.width}×{currentScene.height}
+              </dd>
+            </div>
+          </dl>
+        </section>
+      ) : null}
+
+      <section className="border-t border-border pt-4">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          icon="arrow-left"
+          fullWidth
+          data-testid="back-to-staging-button"
+          onClick={onBackToStaging}
+        >
+          Back to setup
+        </Button>
+      </section>
+    </div>
+  );
+}

@@ -32,11 +32,17 @@ import { useWorldRole } from "@/hooks/useWorldRole";
 import { WallTool } from "@/components/canvas-tools/WallTool";
 import { LightingTool } from "@/components/canvas-tools/LightingTool";
 import { ShapeTool } from "@/components/canvas-tools/ShapeTool";
-import { MapImportTool } from "@/components/canvas-tools/MapImportTool";
 import { AssetPasteTool } from "@/components/canvas-tools/AssetPasteTool";
 import { TokenTool } from "@/components/canvas-tools/TokenTool";
 import { TokenPanel } from "@/components/TokenPanel";
 import { DiceRollerPanel } from "@/components/world/DiceRollerPanel/DiceRollerPanel";
+import { GmToolRail } from "@/components/world/GmToolRail/GmToolRail";
+import { WorldDock, type DockSection } from "@/components/world/PlayDock/WorldDock";
+import { ChatPanel } from "@/components/world/PlayDock/ChatPanel";
+import { ActorsPanel } from "@/components/world/PlayDock/ActorsPanel";
+import { CombatPanel } from "@/components/world/PlayDock/CombatPanel";
+import { ClocksPanel } from "@/components/world/PlayDock/ClocksPanel";
+import { SettingsPanel } from "@/components/world/PlayDock/SettingsPanel";
 import type { CanvasImageAsset } from "@/api/assets";
 import type { WorldRecord } from "@/types/world";
 import type { SceneRecord } from "@/types/scene";
@@ -840,21 +846,129 @@ export default function WorldPage() {
     [id],
   );
 
+  const dockSections: DockSection[] = [
+    {
+      id: "chat",
+      label: "Chat",
+      icon: "quill",
+      content: (
+        <ChatPanel
+          worldId={id}
+          sceneId={sceneId}
+          currentUserId={user?.id ?? null}
+          isGm={isSceneOwner}
+        />
+      ),
+    },
+    {
+      id: "actors",
+      label: "Actors",
+      icon: "actors",
+      content: <ActorsPanel worldId={id} />,
+    },
+    {
+      id: "combat",
+      label: "Combat",
+      icon: "shield",
+      content: <CombatPanel worldId={id} sceneId={sceneId} isGm={isSceneOwner} />,
+    },
+    {
+      id: "clocks",
+      label: "Clocks & Timers",
+      icon: "moon",
+      content: (
+        <ClocksPanel
+          worldId={id}
+          isGm={isSceneOwner}
+          gameSystemId={world?.gameSystemId ?? null}
+        />
+      ),
+    },
+    {
+      id: "settings",
+      label: "Settings",
+      icon: "settings",
+      content: (
+        <SettingsPanel
+          worldId={id}
+          sceneId={sceneId}
+          scenes={scenes}
+          isGm={isSceneOwner}
+          onSceneChange={setSelectedSceneId}
+          onSceneCreated={(scene) => setScenes((current) => [...current, scene])}
+          onMapImportComplete={handleMapImportComplete}
+          onBackToStaging={() => navigate(`/world/${id}/staging`)}
+        />
+      ),
+    },
+  ];
+
   return (
     <>
       <SEO {...seo} />
       <div style={{ display: playView === "playing" ? "block" : "none" }}>
       <WorldLayout
-        onBackToStaging={() => navigate(`/world/${id}/staging`)}
         worldId={id}
-        tokens={Object.values(worldState.tokens)}
-        scenes={scenes}
-        sceneId={sceneId}
-        onSceneChange={setSelectedSceneId}
-        onSceneCreated={(scene) =>
-          setScenes((current) => [...current, scene])
+        toolRail={
+          isSceneOwner && sceneId ? (
+            <GmToolRail
+              tools={[
+                {
+                  id: "walls",
+                  label: "Walls",
+                  icon: "shield",
+                  content: (
+                    <WallTool
+                      worldStore={worldStore}
+                      walls={worldState.walls}
+                      selectedWallId={worldState.selectedWallId}
+                    />
+                  ),
+                },
+                {
+                  id: "lights",
+                  label: "Lights",
+                  icon: "torch",
+                  content: (
+                    <LightingTool
+                      worldStore={worldStore}
+                      lights={worldState.lights}
+                      selectedLightId={worldState.selectedLightId}
+                      tokens={worldState.tokens}
+                    />
+                  ),
+                },
+                {
+                  id: "shapes",
+                  label: "Shapes",
+                  icon: "tokens",
+                  content: (
+                    <ShapeTool
+                      worldStore={worldStore}
+                      shapes={worldState.shapes}
+                      selectedShapeId={worldState.selectedShapeId}
+                      sceneId={sceneId}
+                      canvasContainerRef={containerRef}
+                    />
+                  ),
+                },
+                {
+                  id: "tokens",
+                  label: "Tokens",
+                  icon: "actors",
+                  content: (
+                    <TokenTool
+                      worldStore={worldStore}
+                      tokens={worldState.tokens}
+                      selectedTokenId={worldState.selectedTokenId}
+                    />
+                  ),
+                },
+              ]}
+            />
+          ) : null
         }
-        isGm={isSceneOwner}
+        dock={<WorldDock sections={dockSections} />}
         canvas={
           <div
             ref={containerRef}
@@ -970,7 +1084,8 @@ export default function WorldPage() {
                 style={{
                   position: "absolute",
                   top: "1rem",
-                  right: "1rem",
+                  // Clear of the dock's icon rail (3rem) on the right.
+                  right: "4rem",
                   zIndex: 1000,
                   padding: "0.4rem 0.75rem",
                   borderRadius: "0.375rem",
@@ -982,63 +1097,6 @@ export default function WorldPage() {
                 {liveSyncState.status === "connecting"
                   ? "Connecting…"
                   : `Reconnecting… (attempt ${liveSyncState.attempt})`}
-              </div>
-            ) : null}
-            {isSceneOwner && sceneId ? (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "1rem",
-                  left: "1rem",
-                  zIndex: 900,
-                  width: "16rem",
-                }}
-              >
-                <MapImportTool
-                  // Remount on scene switch: MapImportTool tracks its last
-                  // import result as local state, which otherwise persists
-                  // stale across scenes (e.g. still showing "Scene One"'s
-                  // import summary after switching to a scene with no
-                  // imports of its own yet).
-                  key={sceneId}
-                  sceneId={sceneId}
-                  onImportComplete={handleMapImportComplete}
-                />
-                <WallTool
-                  worldStore={worldStore}
-                  walls={worldState.walls}
-                  selectedWallId={worldState.selectedWallId}
-                />
-                <LightingTool
-                  worldStore={worldStore}
-                  lights={worldState.lights}
-                  selectedLightId={worldState.selectedLightId}
-                  tokens={worldState.tokens}
-                />
-                <TokenTool
-                  worldStore={worldStore}
-                  tokens={worldState.tokens}
-                  selectedTokenId={worldState.selectedTokenId}
-                />
-              </div>
-            ) : null}
-            {isSceneOwner && sceneId ? (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "1rem",
-                  right: "1rem",
-                  zIndex: 900,
-                  width: "16rem",
-                }}
-              >
-                <ShapeTool
-                  worldStore={worldStore}
-                  shapes={worldState.shapes}
-                  selectedShapeId={worldState.selectedShapeId}
-                  sceneId={sceneId}
-                  canvasContainerRef={containerRef}
-                />
               </div>
             ) : null}
             {isSceneOwner && sceneId ? (
@@ -1054,7 +1112,8 @@ export default function WorldPage() {
                 style={{
                   position: "absolute",
                   bottom: "1rem",
-                  right: "1rem",
+                  // Clear of the dock's icon rail on the right.
+                  right: "4rem",
                   zIndex: 900,
                 }}
               >
@@ -1079,15 +1138,9 @@ export default function WorldPage() {
             <div
               style={{
                 position: "absolute",
-                // 4.5rem, not 1rem: WorldLayout.tsx's "Back to setup"/"Tools"
-                // buttons dock at bottom-4/left-4 (z-40) — sitting this panel
-                // at bottom-1rem/z-900 the same corner visually covered and
-                // pointer-event-intercepted them (found via e2e flake: clicks
-                // on those buttons kept hitting this panel's dice-formula
-                // input instead). Clearing the button row's height keeps
-                // both reachable.
-                bottom: "4.5rem",
-                left: "1rem",
+                bottom: "1rem",
+                // Clear of the GM tool rail (3rem) on the left.
+                left: "4rem",
                 zIndex: 900,
               }}
             >
