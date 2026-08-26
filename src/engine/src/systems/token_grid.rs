@@ -5,6 +5,7 @@ use bevy::prelude::*;
 use crate::resources::{GridSnapEnabled, SceneGrid, TokenGridBehaviour};
 use crate::TokenIdentity;
 use thunderforge_canvas_core::grid::{Footprint, GridKind};
+use thunderforge_canvas_core::token_art::fit_within_footprint;
 
 /// Sizes every token's sprite to its footprint.
 ///
@@ -13,14 +14,33 @@ use thunderforge_canvas_core::grid::{Footprint, GridKind};
 /// and every token resizes with it. Storing a pixel size instead is what makes
 /// tokens the wrong size after an import, which is the bug this avoids by
 /// construction.
+///
+/// A token with art keeps that art's aspect ratio inside the footprint
+/// instead of being stretched to fill it (see
+/// `thunderforge_canvas_core::token_art`). A flat colour swatch has no
+/// aspect to preserve and fills the square exactly, as it always has.
+///
+/// Runs every frame rather than on change, because an image's dimensions
+/// are not known when the token spawns: `Assets<Image>` reports nothing
+/// until the load completes, so the correct size can only be applied once
+/// it arrives. The write below is guarded, so the extra frames cost a
+/// comparison and nothing else.
 pub(crate) fn size_tokens_to_grid(
     grid: Res<SceneGrid>,
+    images: Res<Assets<Image>>,
     mut tokens: Query<(&mut Sprite, Option<&TokenGridBehaviour>), With<TokenIdentity>>,
 ) {
     for (mut sprite, behaviour) in tokens.iter_mut() {
         let footprint = behaviour.map_or_else(Footprint::default, |b| b.footprint);
         let side = footprint.world_size(grid.size);
-        let size = Vec2::splat(side);
+
+        let size = match images.get(&sprite.image) {
+            Some(image) => fit_within_footprint(side, image.size_f32()),
+            // No art, or art still loading. `fit_within_footprint` would
+            // return the same square for zero dimensions; this skips the
+            // lookup for the colour-swatch case entirely.
+            None => Vec2::splat(side),
+        };
 
         // Only write when it actually changed: `Sprite` is change-detected, and
         // touching it every frame would re-extract every token to the render

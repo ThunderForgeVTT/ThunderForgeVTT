@@ -115,6 +115,19 @@ struct WorldTokenPayload {
     rotation: Option<f32>,
     #[serde(default)]
     scale: Option<f32>,
+    /// Token art. Carried end-to-end by the server (`tokens.photo_url`)
+    /// and the web client (`WorldToken.photoUrl`) since spec 004, and
+    /// ignored here until now — every token rendered as the same flat blue
+    /// swatch no matter what art was set on it.
+    ///
+    /// `None` keeps that swatch, so every existing payload — the WASD demo
+    /// token, a plain drag — behaves exactly as before.
+    ///
+    /// The art is fitted inside the token's grid footprint rather than
+    /// stretched to it (`systems/token_grid::size_tokens_to_grid`), because
+    /// almost no real token art is square.
+    #[serde(default, rename = "photoUrl")]
+    photo_url: Option<String>,
 }
 
 /// Confirmed/authoritative wall state from the server (T008), matching
@@ -858,7 +871,7 @@ fn apply_external_commands(
     mut commands: Commands,
     mut active_world: ResMut<ActiveWorld>,
     mut token_entities: ResMut<TokenEntities>,
-    mut token_query: Query<(Entity, &mut Transform, &TokenIdentity)>,
+    mut token_query: Query<(Entity, &mut Transform, &TokenIdentity, &mut Sprite)>,
     // `WallSet` only exists once `WallPlugin` is registered (Constitution
     // Principle II: plugins are independently addable) — `Option` so this
     // core command loop degrades gracefully (wall commands are simply
@@ -887,6 +900,10 @@ fn apply_external_commands(
     // `PendingDiceRoll` only exists once `DiceRollPlugin` is registered,
     // same graceful-degradation rationale as `wall_set` above.
     pending_dice_roll: Option<ResMut<plugins::dice_roll::PendingDiceRoll>>,
+    // For token art (`upsert_token`'s optional `image`). Not `Option`: the
+    // asset server is part of `DefaultPlugins`, not a plugin this crate can
+    // choose to leave out.
+    asset_server: Res<AssetServer>,
 ) {
     let drained = if let Ok(mut queue) = external_command_queue().lock() {
         queue.drain(..).collect::<Vec<_>>()
@@ -909,7 +926,8 @@ fn apply_external_commands(
             }
             ExternalCommand::UpsertToken { token } => {
                 if let Some(existing_entity) = token_entities.0.get(&token.id).copied() {
-                    if let Ok((_, mut transform, _)) = token_query.get_mut(existing_entity) {
+                    if let Ok((_, mut transform, _, mut sprite)) = token_query.get_mut(existing_entity)
+                    {
                         transform.translation.x = token.x;
                         transform.translation.y = token.y;
                         transform.translation.z = token.z;
@@ -925,6 +943,23 @@ fn apply_external_commands(
                         if let Some(rotation) = token.rotation {
                             transform.rotation = Quat::from_rotation_z(rotation);
                         }
+
+                        // Same partial-update rule for the art: `None`
+                        // leaves whatever the token already shows. Guarded
+                        // on the handle rather than assigned outright,
+                        // because `Sprite` is change-detected and assigning
+                        // an identical handle would re-extract the token to
+                        // the render world for nothing. Clearing the size
+                        // hands it back to `size_tokens_to_grid`, which
+                        // re-fits it once the new art's dimensions are
+                        // known — the old art's aspect must not stick.
+                        if let Some(path) = token.photo_url.clone() {
+                            let handle = asset_server.load(path);
+                            if sprite.image != handle {
+                                sprite.image = handle;
+                                sprite.custom_size = None;
+                            }
+                        }
                     }
                     continue;
                 }
@@ -937,12 +972,22 @@ fn apply_external_commands(
                     transform.rotation = Quat::from_rotation_z(rotation);
                 }
 
+                let sprite = match token.photo_url.clone() {
+                    Some(path) => Sprite {
+                        // Owned: `AssetServer::load` borrows for `'static`,
+                        // and `token` is dropped at the end of this arm.
+                        image: asset_server.load(path),
+                        // Left for `size_tokens_to_grid` to set once the
+                        // image's real dimensions are known. Guessing here
+                        // would just be overwritten a frame later.
+                        custom_size: None,
+                        ..default()
+                    },
+                    None => Sprite::from_color(Color::srgb(0.282, 0.565, 0.996), TOKEN_SIZE),
+                };
+
                 let entity = commands
-                    .spawn((
-                        Sprite::from_color(Color::srgb(0.282, 0.565, 0.996), TOKEN_SIZE),
-                        transform,
-                        TokenIdentity(token.id.clone()),
-                    ))
+                    .spawn((sprite, transform, TokenIdentity(token.id.clone())))
                     .id();
 
                 token_entities.0.insert(token.id, entity);

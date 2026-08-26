@@ -32,7 +32,16 @@ pnpm -F @thunderforge/engine-sandbox dev     # http://localhost:5180
 pnpm -F @thunderforge/engine-sandbox check   # headless pass/fail over every map
 pnpm -F @thunderforge/engine-sandbox keyboard  # keys still work with the canvas unfocused
 pnpm -F @thunderforge/engine-sandbox stream   # does switching maps hitch?
+pnpm -F @thunderforge/engine-sandbox space    # does token art render?
 ```
+
+`space` drives `__stress.loadSpaceDemo()`, which loads a nebula background
+and six tokens carrying `photoUrl` art — three wide ship renders and three
+round star sprites — from `examples/space/`. That art is **CC-BY-SA 3.0**
+from the FreeOrion project and the attribution in `examples/space/README.md`
+has to travel with it. The demo deliberately leaves the sandbox's own
+colour-swatch tokens on screen, because a token with no `photoUrl` must keep
+rendering exactly as it always did, and the check asserts both.
 
 `stream` reads the engine's per-frame trace across a map switch. It reports
 the first visit to each map (the texture upload, still expensive) and guards

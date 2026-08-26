@@ -5,13 +5,14 @@
   "type": "module",
   "description": "Standalone harness for the Bevy engine \u2014 no server, no auth, no GraphQL.",
   "scripts": {
-    "maps": "node scripts/extract-maps.mjs",
+    "maps": "node scripts/extract-maps.mjs && node scripts/stage-space-art.mjs",
     "dev": "pnpm run maps && vite",
     "build": "pnpm run maps && vite build",
     "check": "pnpm run maps && node scripts/render-check.mjs",
     "stress": "pnpm run maps && node scripts/stress.mjs",
     "keyboard": "pnpm run maps && node scripts/keyboard-check.mjs",
-    "stream": "pnpm run maps && node scripts/stream-check.mjs"
+    "stream": "pnpm run maps && node scripts/stream-check.mjs",
+    "space": "pnpm run maps && node scripts/space-check.mjs"
   },
   "dependencies": {
     "@thunderforge/engine": "workspace:^"

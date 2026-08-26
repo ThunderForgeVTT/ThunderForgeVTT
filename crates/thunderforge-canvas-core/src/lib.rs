@@ -22,5 +22,6 @@ pub mod measure;
 pub mod movement;
 pub mod shape;
 pub mod texture_budget;
+pub mod token_art;
 pub mod vision;
 pub mod wall;

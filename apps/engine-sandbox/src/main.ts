@@ -355,6 +355,46 @@ async function boot(): Promise<void> {
     frameTrace: () => JSON.parse(frame_trace()),
     clearFrameTrace: () => clear_frame_trace(),
     mapNames: maps.map((m) => m.name),
+    // CC-BY-SA 3.0 FreeOrion art (see examples/space/README.md). Exercises
+    // two things the dd2vtt corpus cannot: a background with an alpha
+    // channel rather than an opaque photo, and token art whose aspect ratio
+    // is nowhere near square.
+    loadSpaceDemo: () => {
+      send({
+        type: "set_scene_background",
+        backgroundImagePath: "space/backgrounds/nebula17.png",
+        width: 1024,
+        height: 1024,
+        worldId: "sandbox",
+      });
+      gridSize = 128;
+      pushGrid();
+
+      const art = [
+        "space/tokens/ships/basic-medium-hull.png",
+        "space/tokens/ships/organic_hull.png",
+        "space/tokens/ships/titanic_hull.png",
+        "space/tokens/stars/blackhole1.png",
+        "space/tokens/stars/halo_red01.png",
+        "space/tokens/stars/nova-boom3.png",
+      ];
+
+      art.forEach((photoUrl, index) => {
+        send({
+          type: "upsert_token",
+          token: {
+            id: `space-token-${index}`,
+            // Two rows of three, clear of the origin where the sandbox's
+            // own red/blue demo tokens sit.
+            x: (index % 3) * 256 - 256,
+            y: index < 3 ? 288 : -288,
+            z: 0,
+            label: photoUrl.split("/").pop(),
+            photoUrl,
+          },
+        });
+      });
+    },
     loadMap: (name: string) => {
       const map = maps.find((m) => m.name === name);
       if (!map) throw new Error(`no map ${name}`);
