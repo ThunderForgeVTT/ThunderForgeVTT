@@ -122,13 +122,13 @@ description: "Task list for 028-client-world-cache"
 
 **Note**: Fully independent of every other story — no dependency on Phase 2. Can be built at any time, including first.
 
-- [ ] T045 [P] [US6] Replace `instantiateStreaming` with an explicit streaming fetch exposing `Content-Length` and received bytes in `apps/web/src/engine/bevy/index.ts`
-- [ ] T046 [US6] Create the loader component with real download progress and a distinct indeterminate "starting" phase in `apps/web/src/components/engine/EngineLoader.tsx`
-- [ ] T047 [US6] Engage the indeterminate path when no total is knowable (chunked transfer), never a fabricated percentage, in `apps/web/src/components/engine/EngineLoader.tsx`
-- [ ] T048 [US6] Surface download/startup failure with a plain explanation and a working retry in `apps/web/src/components/engine/EngineLoader.tsx`
-- [ ] T049 [US6] Suppress or fast-resolve the loader when the browser already holds the bundle (FR-033) in `apps/web/src/engine/bevy/index.ts`
-- [ ] T050 [P] [US6] E2E: loading state within 1s, progress never regresses or stalls >5s, never reaches max before interactive (SC-009, SC-010) in `apps/web/e2e/engine-loading.spec.ts`
-- [ ] T051 [P] [US6] E2E: simulated download and startup failures each produce explanation plus working retry (SC-011) in `apps/web/e2e/engine-loading.spec.ts`
+- [X] T045 [P] [US6] Replace `instantiateStreaming` with an explicit streaming fetch exposing `Content-Length` and received bytes in `apps/web/src/engine/bevy/index.ts`
+- [X] T046 [US6] Create the loader component with real download progress and a distinct indeterminate "starting" phase in `apps/web/src/components/engine/EngineLoader.tsx`
+- [X] T047 [US6] Engage the indeterminate path when no total is knowable (chunked transfer), never a fabricated percentage, in `apps/web/src/components/engine/EngineLoader.tsx`
+- [X] T048 [US6] Surface download/startup failure with a plain explanation and a working retry in `apps/web/src/components/engine/EngineLoader.tsx`
+- [X] T049 [US6] Suppress or fast-resolve the loader when the browser already holds the bundle (FR-033) in `apps/web/src/engine/bevy/index.ts`
+- [X] T050 [P] [US6] E2E: loading state within 1s, progress never regresses or stalls >5s, never reaches max before interactive (SC-009, SC-010) in `apps/web/e2e/engine-loading.spec.ts`
+- [X] T051 [P] [US6] E2E: simulated download and startup failures each produce explanation plus working retry (SC-011) in `apps/web/e2e/engine-loading.spec.ts`
 
 **Checkpoint**: First load is honest at any bundle size
 

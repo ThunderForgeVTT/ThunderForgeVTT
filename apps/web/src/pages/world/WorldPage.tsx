@@ -25,6 +25,7 @@ import {
   type LiveSyncState,
 } from "@/engine/world/sync";
 import { useCanvasEngine } from "@/engine/bevy/useCanvasEngine";
+import { EngineLoader } from "@/components/engine/EngineLoader";
 import { getWorld } from "@/api/world";
 import { getScenes } from "@/api/scenes";
 import { useAuth } from "@/hooks/useAuth";
@@ -38,10 +39,16 @@ import { TokenPanel } from "@/components/TokenPanel";
 import { DiceRollerPanel } from "@/components/world/DiceRollerPanel/DiceRollerPanel";
 import { startCanvasKeyboardRouting } from "@/engine/canvasKeyboard";
 import { installWorldProbe } from "@/engine/world/probe";
-import { createWorldFacets, type ControllableToken } from "@/engine/world/facets";
+import {
+  createWorldFacets,
+  type ControllableToken,
+} from "@/engine/world/facets";
 import { TokenStackPicker } from "@/components/canvas-tools/TokenStackPicker";
 import { GmToolRail } from "@/components/world/GmToolRail/GmToolRail";
-import { WorldDock, type DockSection } from "@/components/world/PlayDock/WorldDock";
+import {
+  WorldDock,
+  type DockSection,
+} from "@/components/world/PlayDock/WorldDock";
 import { ChatPanel } from "@/components/world/PlayDock/ChatPanel";
 import { ActorsPanel } from "@/components/world/PlayDock/ActorsPanel";
 import { CombatPanel } from "@/components/world/PlayDock/CombatPanel";
@@ -142,13 +149,20 @@ export default function WorldPage() {
     sceneLoadGenerationRef.current = sceneLoadGeneration;
   }, [sceneLoadGeneration]);
 
-  type SceneLoadResource = "background" | "walls" | "tokens" | "lights" | "shapes";
+  type SceneLoadResource =
+    | "background"
+    | "walls"
+    | "tokens"
+    | "lights"
+    | "shapes";
   type SceneLoadState =
     | { status: "loading" }
     | { status: "ready" }
     | { status: "error"; failedResource: SceneLoadResource };
 
-  const [sceneLoadState, setSceneLoadState] = useState<SceneLoadState>({ status: "loading" });
+  const [sceneLoadState, setSceneLoadState] = useState<SceneLoadState>({
+    status: "loading",
+  });
   const pendingSceneResourcesRef = useRef<Set<SceneLoadResource>>(new Set());
 
   // Reset to "loading" whenever the active scene or the retry generation
@@ -194,7 +208,10 @@ export default function WorldPage() {
       // disruptive, so don't let a later walls/lights/shapes/tokens
       // failure downgrade an already-reported background failure.
       setSceneLoadState((current) => {
-        if (current.status === "error" && current.failedResource === "background") {
+        if (
+          current.status === "error" &&
+          current.failedResource === "background"
+        ) {
           return current;
         }
         return { status: "error", failedResource: resource };
@@ -206,7 +223,8 @@ export default function WorldPage() {
   const retrySceneLoad = useCallback(() => {
     setSceneLoadGeneration((generation) => generation + 1);
   }, []);
-  const selectedScene = scenes.find((scene) => scene.sceneId === sceneId) ?? null;
+  const selectedScene =
+    scenes.find((scene) => scene.sceneId === sceneId) ?? null;
 
   useEffect(() => {
     if (!id) {
@@ -226,7 +244,9 @@ export default function WorldPage() {
           // arbitrarily. The functional update only fires if nothing has
           // set `selectedSceneId` yet (e.g. a live launch event, handled
           // elsewhere), so this never clobbers a switch already in flight.
-          setSelectedSceneId((current) => current ?? response?.activeSceneId ?? null);
+          setSelectedSceneId(
+            (current) => current ?? response?.activeSceneId ?? null,
+          );
         }
       })
       .catch(() => {
@@ -278,7 +298,13 @@ export default function WorldPage() {
   }, []);
 
   // 🎮 Phase 4.7.F1: Use canvas engine hook for responsive sizing
-  const { containerRef, engineReady, loadStage, error: engineError } = useCanvasEngine({
+  const {
+    containerRef,
+    engineReady,
+    loadProgress,
+    error: engineError,
+    retry: retryEngine,
+  } = useCanvasEngine({
     worldId: id,
     canvasSelector: `#${canvasContainerId}`,
     onError: handleEngineError,
@@ -409,7 +435,10 @@ export default function WorldPage() {
       if (!(event.target instanceof HTMLCanvasElement)) return;
       const stack = facets.selection.disambiguate();
       if (!stack) return;
-      setStackPicker({ members: stack.members, at: { x: event.clientX, y: event.clientY } });
+      setStackPicker({
+        members: stack.members,
+        at: { x: event.clientX, y: event.clientY },
+      });
     };
 
     window.addEventListener("dblclick", onDoubleClick, { capture: true });
@@ -625,7 +654,11 @@ export default function WorldPage() {
         markSceneResourceFailed("tokens", tokensGeneration);
       });
 
-    const stopBridge = startTokenMutationBridge(worldStore, sceneId, isSceneOwner);
+    const stopBridge = startTokenMutationBridge(
+      worldStore,
+      sceneId,
+      isSceneOwner,
+    );
 
     return () => {
       stopBridge();
@@ -798,7 +831,9 @@ export default function WorldPage() {
   // real gap this project's earlier audit found (subscriptionClient.ts
   // had automatic WebSocket retry via graphql-ws, but nothing reacted to
   // a reconnect to recover events missed during the outage).
-  const [liveSyncState, setLiveSyncState] = useState<LiveSyncState>(() => getLiveSyncState());
+  const [liveSyncState, setLiveSyncState] = useState<LiveSyncState>(() =>
+    getLiveSyncState(),
+  );
   const sceneIdRef = useRef(sceneId);
   useEffect(() => {
     sceneIdRef.current = sceneId;
@@ -817,17 +852,35 @@ export default function WorldPage() {
         const currentSceneId = sceneIdRef.current;
         if (wasLiveRef.current && currentSceneId) {
           void loadWallsIntoStore(worldStore, currentSceneId).catch((error) => {
-            console.error("Failed to re-fetch scene walls after reconnect:", error);
+            console.error(
+              "Failed to re-fetch scene walls after reconnect:",
+              error,
+            );
           });
-          void loadLightsIntoStore(worldStore, currentSceneId).catch((error) => {
-            console.error("Failed to re-fetch scene lights after reconnect:", error);
-          });
-          void loadShapesIntoStore(worldStore, currentSceneId).catch((error) => {
-            console.error("Failed to re-fetch scene shapes after reconnect:", error);
-          });
-          void loadTokensIntoStore(worldStore, currentSceneId).catch((error) => {
-            console.error("Failed to re-fetch scene tokens after reconnect:", error);
-          });
+          void loadLightsIntoStore(worldStore, currentSceneId).catch(
+            (error) => {
+              console.error(
+                "Failed to re-fetch scene lights after reconnect:",
+                error,
+              );
+            },
+          );
+          void loadShapesIntoStore(worldStore, currentSceneId).catch(
+            (error) => {
+              console.error(
+                "Failed to re-fetch scene shapes after reconnect:",
+                error,
+              );
+            },
+          );
+          void loadTokensIntoStore(worldStore, currentSceneId).catch(
+            (error) => {
+              console.error(
+                "Failed to re-fetch scene tokens after reconnect:",
+                error,
+              );
+            },
+          );
         }
         wasLiveRef.current = true;
       }
@@ -926,7 +979,9 @@ export default function WorldPage() {
       id: "combat",
       label: "Combat",
       icon: "shield",
-      content: <CombatPanel worldId={id} sceneId={sceneId} isGm={isSceneOwner} />,
+      content: (
+        <CombatPanel worldId={id} sceneId={sceneId} isGm={isSceneOwner} />
+      ),
     },
     {
       id: "clocks",
@@ -951,7 +1006,9 @@ export default function WorldPage() {
           scenes={scenes}
           isGm={isSceneOwner}
           onSceneChange={setSelectedSceneId}
-          onSceneCreated={(scene) => setScenes((current) => [...current, scene])}
+          onSceneCreated={(scene) =>
+            setScenes((current) => [...current, scene])
+          }
           onMapImportComplete={handleMapImportComplete}
           onBackToStaging={() => navigate(`/world/${id}/staging`)}
         />
@@ -974,249 +1031,251 @@ export default function WorldPage() {
         />
       ) : null}
       <div style={{ display: playView === "playing" ? "block" : "none" }}>
-      <WorldLayout
-        worldId={id}
-        toolRail={
-          isSceneOwner && sceneId ? (
-            <GmToolRail
-              tools={[
-                {
-                  id: "walls",
-                  label: "Walls",
-                  icon: "shield",
-                  content: (
-                    <WallTool
-                      worldStore={worldStore}
-                      walls={worldState.walls}
-                      selectedWallId={worldState.selectedWallId}
-                    />
-                  ),
-                },
-                {
-                  id: "lights",
-                  label: "Lights",
-                  icon: "torch",
-                  content: (
-                    <LightingTool
-                      worldStore={worldStore}
-                      lights={worldState.lights}
-                      selectedLightId={worldState.selectedLightId}
-                      tokens={worldState.tokens}
-                    />
-                  ),
-                },
-                {
-                  id: "shapes",
-                  label: "Shapes",
-                  icon: "tokens",
-                  content: (
-                    <ShapeTool
-                      worldStore={worldStore}
-                      shapes={worldState.shapes}
-                      selectedShapeId={worldState.selectedShapeId}
-                      sceneId={sceneId}
-                      canvasContainerRef={containerRef}
-                    />
-                  ),
-                },
-                {
-                  id: "tokens",
-                  label: "Tokens",
-                  icon: "actors",
-                  content: (
-                    <TokenTool
-                      control={facets.tokens}
-                      selectedTokenId={worldState.selectedTokenId}
-                      worldId={id}
-                      sceneId={sceneId}
-                    />
-                  ),
-                },
-              ]}
-            />
-          ) : null
-        }
-        dock={<WorldDock sections={dockSections} />}
-        canvas={
-          <div
-            ref={containerRef}
-            id={canvasContainerId}
-            style={{
-              display: "block",
-              width: "100%",
-              height: "100%",
-              position: "relative",
-              background: "#2a2a2a",
-              overflow: "hidden",
-            }}
-          >
-            {/* Bevy mounts canvas here */}
-            {/* Spec 008 (US1, FR-002/SC-002): the flat #2a2a2a background
-             * above used to show nothing at all here while the ~190MB
-             * WASM engine loaded — this closes that gap with continuous
-             * status text, styled identically to the scene-load-indicator
-             * block below it. */}
-            {!engineReady && !engineError ? (
-              <div
-                data-testid="engine-load-indicator"
-                style={{
-                  position: "absolute",
-                  top: "50%",
-                  left: "50%",
-                  transform: "translate(-50%, -50%)",
-                  color: "white",
-                  textAlign: "center",
-                  zIndex: 1000,
-                }}
-              >
-                <p>
-                  {loadStage === "downloading"
-                    ? "Downloading engine…"
-                    : "Starting engine…"}
-                </p>
-              </div>
-            ) : null}
-            {engineError && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "50%",
-                  left: "50%",
-                  transform: "translate(-50%, -50%)",
-                  color: "red",
-                  textAlign: "center",
-                  zIndex: 1000,
-                }}
-              >
-                <p>Failed to load game engine</p>
-                <p style={{ fontSize: "0.9em" }}>{engineError.message}</p>
-              </div>
-            )}
-            {sceneId && sceneLoadState.status === "loading" ? (
-              <div
-                data-testid="scene-load-indicator"
-                style={{
-                  position: "absolute",
-                  top: "50%",
-                  left: "50%",
-                  transform: "translate(-50%, -50%)",
-                  color: "white",
-                  textAlign: "center",
-                  zIndex: 1000,
-                }}
-              >
-                <p>Loading scene…</p>
-              </div>
-            ) : null}
-            {sceneId && sceneLoadState.status === "error" ? (
-              <div
-                data-testid="scene-load-error"
-                style={{
-                  position: "absolute",
-                  top: "50%",
-                  left: "50%",
-                  transform: "translate(-50%, -50%)",
-                  color: "white",
-                  textAlign: "center",
-                  zIndex: 1000,
-                }}
-              >
-                <p>
-                  Failed to load{" "}
-                  {sceneLoadState.failedResource === "background"
-                    ? "the scene's background image"
-                    : `the scene's ${sceneLoadState.failedResource}`}
-                  .
-                </p>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  data-testid="scene-load-retry"
-                  onClick={retrySceneLoad}
-                >
-                  Retry
-                </Button>
-              </div>
-            ) : null}
-            {liveSyncState.status !== "live" ? (
-              // Spec 005 (FR-009/FR-009a): a persistent, non-blocking
-              // indicator — unlike sceneLoadState's centered overlay above,
-              // this must never block interaction with an already-loaded
-              // scene, and must never present a dead-end/terminal state:
-              // it just keeps showing "Reconnecting…" for as long as
-              // liveSyncState says so, since the underlying transport
-              // retries indefinitely.
-              <div
-                data-testid="live-sync-reconnecting-indicator"
-                style={{
-                  position: "absolute",
-                  top: "1rem",
-                  // Clear of the dock's icon rail (3rem) on the right.
-                  right: "4rem",
-                  zIndex: 1000,
-                  padding: "0.4rem 0.75rem",
-                  borderRadius: "0.375rem",
-                  background: "rgba(0, 0, 0, 0.75)",
-                  color: "white",
-                  fontSize: "0.8rem",
-                }}
-              >
-                {liveSyncState.status === "connecting"
-                  ? "Connecting…"
-                  : `Reconnecting… (attempt ${liveSyncState.attempt})`}
-              </div>
-            ) : null}
-            {isSceneOwner && sceneId ? (
-              <AssetPasteTool
-                worldId={id}
-                sceneId={sceneId}
-                active={true}
-                onPasted={handleAssetPasted}
+        <WorldLayout
+          worldId={id}
+          toolRail={
+            isSceneOwner && sceneId ? (
+              <GmToolRail
+                tools={[
+                  {
+                    id: "walls",
+                    label: "Walls",
+                    icon: "shield",
+                    content: (
+                      <WallTool
+                        worldStore={worldStore}
+                        walls={worldState.walls}
+                        selectedWallId={worldState.selectedWallId}
+                      />
+                    ),
+                  },
+                  {
+                    id: "lights",
+                    label: "Lights",
+                    icon: "torch",
+                    content: (
+                      <LightingTool
+                        worldStore={worldStore}
+                        lights={worldState.lights}
+                        selectedLightId={worldState.selectedLightId}
+                        tokens={worldState.tokens}
+                      />
+                    ),
+                  },
+                  {
+                    id: "shapes",
+                    label: "Shapes",
+                    icon: "tokens",
+                    content: (
+                      <ShapeTool
+                        worldStore={worldStore}
+                        shapes={worldState.shapes}
+                        selectedShapeId={worldState.selectedShapeId}
+                        sceneId={sceneId}
+                        canvasContainerRef={containerRef}
+                      />
+                    ),
+                  },
+                  {
+                    id: "tokens",
+                    label: "Tokens",
+                    icon: "actors",
+                    content: (
+                      <TokenTool
+                        control={facets.tokens}
+                        selectedTokenId={worldState.selectedTokenId}
+                        worldId={id}
+                        sceneId={sceneId}
+                      />
+                    ),
+                  },
+                ]}
               />
-            ) : null}
-            {sceneId ? (
+            ) : null
+          }
+          dock={<WorldDock sections={dockSections} />}
+          canvas={
+            <div
+              ref={containerRef}
+              id={canvasContainerId}
+              style={{
+                display: "block",
+                width: "100%",
+                height: "100%",
+                position: "relative",
+                background: "#2a2a2a",
+                overflow: "hidden",
+              }}
+            >
+              {/* Bevy mounts canvas here */}
+              {/* Spec 008 (US1, FR-002/SC-002): the flat #2a2a2a background
+               * above used to show nothing at all here while the ~190MB
+               * WASM engine loaded — this closes that gap with continuous
+               * status text, styled identically to the scene-load-indicator
+               * block below it. */}
+              {/* Spec 028 US6: the same indicator, now carrying real byte
+                progress and a distinct "starting" phase. */}
+              {!engineReady && !engineError ? (
+                <div
+                  data-testid="engine-load-indicator"
+                  style={{
+                    position: "absolute",
+                    top: "50%",
+                    left: "50%",
+                    transform: "translate(-50%, -50%)",
+                    zIndex: 1000,
+                  }}
+                >
+                  <EngineLoader progress={loadProgress} error={null} />
+                </div>
+              ) : null}
+              {/* Deliberately outside `engine-load-indicator`: spec 008
+                established that testid as meaning loading-in-progress, and a
+                failure is not progress. Nesting the error inside it would
+                make "still working" and "gave up" indistinguishable to
+                anything selecting on it. */}
+              {engineError && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "50%",
+                    left: "50%",
+                    transform: "translate(-50%, -50%)",
+                    zIndex: 1000,
+                  }}
+                >
+                  <EngineLoader
+                    progress={null}
+                    error={engineError}
+                    onRetry={retryEngine}
+                  />
+                </div>
+              )}
+              {sceneId && sceneLoadState.status === "loading" ? (
+                <div
+                  data-testid="scene-load-indicator"
+                  style={{
+                    position: "absolute",
+                    top: "50%",
+                    left: "50%",
+                    transform: "translate(-50%, -50%)",
+                    color: "white",
+                    textAlign: "center",
+                    zIndex: 1000,
+                  }}
+                >
+                  <p>Loading scene…</p>
+                </div>
+              ) : null}
+              {sceneId && sceneLoadState.status === "error" ? (
+                <div
+                  data-testid="scene-load-error"
+                  style={{
+                    position: "absolute",
+                    top: "50%",
+                    left: "50%",
+                    transform: "translate(-50%, -50%)",
+                    color: "white",
+                    textAlign: "center",
+                    zIndex: 1000,
+                  }}
+                >
+                  <p>
+                    Failed to load{" "}
+                    {sceneLoadState.failedResource === "background"
+                      ? "the scene's background image"
+                      : `the scene's ${sceneLoadState.failedResource}`}
+                    .
+                  </p>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    data-testid="scene-load-retry"
+                    onClick={retrySceneLoad}
+                  >
+                    Retry
+                  </Button>
+                </div>
+              ) : null}
+              {liveSyncState.status !== "live" ? (
+                // Spec 005 (FR-009/FR-009a): a persistent, non-blocking
+                // indicator — unlike sceneLoadState's centered overlay above,
+                // this must never block interaction with an already-loaded
+                // scene, and must never present a dead-end/terminal state:
+                // it just keeps showing "Reconnecting…" for as long as
+                // liveSyncState says so, since the underlying transport
+                // retries indefinitely.
+                <div
+                  data-testid="live-sync-reconnecting-indicator"
+                  style={{
+                    position: "absolute",
+                    top: "1rem",
+                    // Clear of the dock's icon rail (3rem) on the right.
+                    right: "4rem",
+                    zIndex: 1000,
+                    padding: "0.4rem 0.75rem",
+                    borderRadius: "0.375rem",
+                    background: "rgba(0, 0, 0, 0.75)",
+                    color: "white",
+                    fontSize: "0.8rem",
+                  }}
+                >
+                  {liveSyncState.status === "connecting"
+                    ? "Connecting…"
+                    : `Reconnecting… (attempt ${liveSyncState.attempt})`}
+                </div>
+              ) : null}
+              {isSceneOwner && sceneId ? (
+                <AssetPasteTool
+                  worldId={id}
+                  sceneId={sceneId}
+                  active={true}
+                  onPasted={handleAssetPasted}
+                />
+              ) : null}
+              {sceneId ? (
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: "1rem",
+                    // Clear of the dock's icon rail on the right.
+                    right: "4rem",
+                    zIndex: 900,
+                  }}
+                >
+                  <button
+                    type="button"
+                    data-testid="token-panel-toggle-button"
+                    onClick={() => setTokenPanelOpen(true)}
+                    className="token-panel-toggle-button"
+                  >
+                    Tokens
+                  </button>
+                  <TokenPanel
+                    sceneId={sceneId}
+                    currentUserId={user?.id ?? null}
+                    isSceneOwner={isSceneOwner}
+                    isOpen={tokenPanelOpen}
+                    onOpenChange={setTokenPanelOpen}
+                    worldId={id}
+                  />
+                </div>
+              ) : null}
               <div
                 style={{
                   position: "absolute",
                   bottom: "1rem",
-                  // Clear of the dock's icon rail on the right.
-                  right: "4rem",
+                  // Clear of the GM tool rail (3rem) on the left.
+                  left: "4rem",
                   zIndex: 900,
                 }}
               >
-                <button
-                  type="button"
-                  data-testid="token-panel-toggle-button"
-                  onClick={() => setTokenPanelOpen(true)}
-                  className="token-panel-toggle-button"
-                >
-                  Tokens
-                </button>
-                <TokenPanel
-                  sceneId={sceneId}
-                  currentUserId={user?.id ?? null}
-                  isSceneOwner={isSceneOwner}
-                  isOpen={tokenPanelOpen}
-                  onOpenChange={setTokenPanelOpen}
-                  worldId={id}
-                />
+                <DiceRollerPanel worldId={id} engineReady={engineReady} />
               </div>
-            ) : null}
-            <div
-              style={{
-                position: "absolute",
-                bottom: "1rem",
-                // Clear of the GM tool rail (3rem) on the left.
-                left: "4rem",
-                zIndex: 900,
-              }}
-            >
-              <DiceRollerPanel worldId={id} engineReady={engineReady} />
             </div>
-          </div>
-        }
-      />
+          }
+        />
       </div>
     </>
   );

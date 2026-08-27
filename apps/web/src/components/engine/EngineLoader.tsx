@@ -46,10 +46,12 @@ export function EngineLoader({
         )}
       >
         <AlertTriangle className="size-8 text-destructive" aria-hidden="true" />
-        <p className="text-sm font-medium">The game engine could not load.</p>
+        <p className="text-sm font-medium">Failed to load game engine</p>
         {/* The message, not just a generic failure: a 404 and a network
             outage need different actions from the person reading this. */}
-        <p className="max-w-md text-xs text-muted-foreground">{error.message}</p>
+        <p className="max-w-md text-xs text-muted-foreground">
+          {error.message}
+        </p>
         {onRetry && (
           <Button
             variant="secondary"
@@ -71,7 +73,9 @@ export function EngineLoader({
   // Capped at 99 while downloading: reaching 100 before the canvas is
   // interactive is what makes a loader feel stuck (SC-010).
   const percent =
-    determinate && total ? Math.min(99, Math.floor((loaded / total) * 100)) : null;
+    determinate && total
+      ? Math.min(99, Math.floor((loaded / total) * 100))
+      : null;
 
   return (
     <div
