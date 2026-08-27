@@ -683,27 +683,26 @@ test.describe("Client world cache — losing access (US2, T042-T044)", () => {
   /**
    * The other half of SC-004, and the half that does not hold yet.
    *
-   * `test.fail()` is a claim about the product, not a way to quiet a test: the
-   * assertion below is the requirement as written (FR-015 — revoked content
-   * "MUST be discarded from the local store"), and it is expected to fail
-   * because nothing implements it for *whole-world* revocation. Eviction is
-   * driven entirely by the `evict` list in a successful sync plan
-   * (`apply_plan`, T035); a revoked member's plan request is refused outright,
-   * `run_sync` takes its transport-error branch, publishes what it already
-   * holds and returns `degraded` — so the blobs stay on disk and stay
-   * readable by that user's still-live session key. There is no
-   * "the server refused, therefore drop this world" path in
-   * `src/engine/src/plugins/cached_assets.rs`.
+   * This was marked `test.fail()` when written, because nothing implemented
+   * FR-015 for *whole-world* revocation: eviction was driven entirely by the
+   * `evict` list of a successful plan, and a revoked member's plan request is
+   * refused outright, so `run_sync` took its transport-error branch,
+   * republished what it already held, and returned `degraded` — leaving the
+   * blobs on disk and readable under that user's still-live session key.
    *
-   * When that path lands, this test starts passing and Playwright reports it
-   * as a failure ("expected to fail"), which is exactly the moment someone
-   * should come back here and delete this marker.
+   * T045a added the missing path and this now passes. The marker is gone.
+   *
+   * The distinction that makes that path safe, and the thing to preserve if
+   * this test ever needs changing: an *authorization refusal* discards, a
+   * *transient failure* does not. The client keys off the server's
+   * `extensions.code == "FORBIDDEN"`, not a message substring and not "any
+   * error" — because discarding a user's cache every time their connection
+   * blips would cost more than the bug this fixes.
    */
   test("a revoked member's cached copy is discarded, not merely unusable (T042, SC-004)", async ({
     browser,
     page,
   }) => {
-    test.fail();
     const { player, worldId, sync } = await cacheAWorldThenRevokeMembership(
       browser,
       page,

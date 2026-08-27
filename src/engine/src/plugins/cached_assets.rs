@@ -1083,6 +1083,49 @@ mod wasm {
 
         let outcome = match outcome {
             Ok(outcome) => outcome,
+            // FR-014/FR-015. The server answered, and the answer was "you may
+            // not have this world". There is no plan and therefore no `evict`
+            // list, so the per-item path that normally enforces revocation
+            // has nothing to work with — yet this is the *strongest* form of
+            // revocation there is. Whole-world refusal gets its own discard.
+            //
+            // Only this variant. `Transport` (nothing answered), `Server`
+            // (answered, but not about entitlement) and `Malformed` all fall
+            // through to the branch below and keep the cache, because "my
+            // wifi dropped" must never cost a user their stored world. See
+            // `sync::is_authorization_refusal` for how the two are told
+            // apart.
+            Err(thunderforge_cache_browser::sync::SyncError::Forbidden(reason)) => {
+                let discarded = sync::discard_world(&handles.store, &index, world_uuid).await;
+                return_index(&handles, index);
+
+                // Whatever the discard managed, the read path stops pointing
+                // at this world *now*: an empty promise set means no load can
+                // consult the cache, so any bytes a failed discard left
+                // behind are unreachable rather than merely stale. Pushed
+                // unconditionally rather than derived from the index, so an
+                // index we could not read cannot leave a promise standing.
+                if let Ok(mut queue) = control_queue().lock() {
+                    queue.push(Control::ReplaceFingerprints(Vec::new()));
+                }
+
+                warn!(
+                    target: "cached_assets",
+                    "world cache discarded: access to {world_id} was refused: {reason}",
+                );
+                // Reported, never raised: a discard that could not finish is
+                // for the sign-out reclamation (FR-016b) and the FR-019
+                // repair pass to mop up, and this call must not throw.
+                return serde_json::json!({
+                    "status": "revoked",
+                    "worldId": world_id,
+                    "held": held,
+                    "discarded": discarded.rows,
+                    "indexCleared": discarded.index_cleared,
+                    "blobsCleared": discarded.blobs_cleared,
+                    "complete": discarded.complete(),
+                });
+            }
             Err(err) => {
                 // The server is unreachable or disagreed with us. What we
                 // hold is still what we last verified, so publish it: an

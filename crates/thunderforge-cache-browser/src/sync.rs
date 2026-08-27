@@ -64,16 +64,85 @@ pub struct SyncOutcome {
 pub enum SyncError {
     /// The request never reached the server, or the reply never arrived.
     Transport(String),
+    /// The server answered, and refused this caller access to the world
+    /// (FR-014/FR-015). Categorically different from every other variant:
+    /// this is the only one that means "you have lost access", and so the
+    /// only one that justifies discarding a world's cached content.
+    ///
+    /// See [`is_authorization_refusal`] for exactly what earns this variant
+    /// — deliberately a machine-readable `extensions.code`, never the
+    /// human-readable message.
+    Forbidden(String),
     /// The server answered with GraphQL errors.
     Server(String),
     /// The reply did not match the contract.
     Malformed(String),
 }
 
+/// The `extensions.code` `worldSyncPlan` attaches when it refuses a caller.
+///
+/// Set by `to_graphql_error` in `src/server/src/graphql/queries/world_sync_plan.rs`
+/// and asserted by that module's own tests, so it is part of the contract
+/// rather than an accident of formatting.
+const FORBIDDEN_CODE: &str = "FORBIDDEN";
+
+/// The root field this client asks for. Used only to confirm a refusal is
+/// about the world we asked about.
+const SYNC_PLAN_FIELD: &str = "worldSyncPlan";
+
+/// Whether a GraphQL `errors` array says *this caller may not have this
+/// world*, as opposed to anything else that can go wrong.
+///
+/// # Why the code, and not the message
+///
+/// The message is deliberately ambiguous — `NOT_A_MEMBER` is worded
+/// identically whether the world exists or not, precisely so a non-member
+/// learns nothing (FR-014, FR-047). Wording chosen for non-disclosure is
+/// wording nobody promised to keep stable, and matching a substring of it
+/// would mean a copy-edit on the server silently turns revocation back into
+/// the bug this function exists to fix. `extensions.code` is the field the
+/// server sets on purpose, for machines.
+///
+/// # Why the failure direction is "keep the cache"
+///
+/// Anything unrecognised — a bare error, a different code, a reply that
+/// never arrived — is *not* a refusal. Discarding on a transient failure
+/// would throw away a user's whole cache every time their wifi dropped,
+/// which is strictly worse than holding bytes a moment too long: the server
+/// and the byte route have already stopped serving them (FR-014), so the
+/// held copy is unusable in the meantime, and the next successful sync
+/// discards it. So this answers "yes" only on positive evidence.
+///
+/// The `path` check is belt-and-braces. This client sends exactly one root
+/// field for exactly one world, so a `FORBIDDEN` in the reply cannot be
+/// about anything else; requiring the path to name that field when a path is
+/// present makes that reasoning explicit rather than assumed.
+pub fn is_authorization_refusal(errors: &[serde_json::Value]) -> bool {
+    errors.iter().any(|err| {
+        let code_matches = err
+            .pointer("/extensions/code")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|code| code == FORBIDDEN_CODE);
+        if !code_matches {
+            return false;
+        }
+        match err.get("path").and_then(|p| p.as_array()) {
+            Some(path) => path
+                .first()
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|field| field == SYNC_PLAN_FIELD),
+            // No path at all: a request-level error on a request that only
+            // ever asks about one world.
+            None => true,
+        }
+    })
+}
+
 impl std::fmt::Display for SyncError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Transport(m) => write!(f, "sync transport failed: {m}"),
+            Self::Forbidden(m) => write!(f, "server refused access to this world: {m}"),
             Self::Server(m) => write!(f, "server rejected sync: {m}"),
             Self::Malformed(m) => write!(f, "malformed sync plan: {m}"),
         }
@@ -96,7 +165,11 @@ pub fn parse_sync_plan(body: &str) -> Result<SyncOutcome, SyncError> {
     if let Some(errors) = root.get("errors").and_then(|e| e.as_array())
         && !errors.is_empty()
     {
-        return Err(SyncError::Server(errors[0].to_string()));
+        return Err(if is_authorization_refusal(errors) {
+            SyncError::Forbidden(errors[0].to_string())
+        } else {
+            SyncError::Server(errors[0].to_string())
+        });
     }
 
     let plan_json = root
@@ -179,7 +252,8 @@ pub fn sync_request_body(manifest: &Manifest) -> String {
 
 #[cfg(target_arch = "wasm32")]
 pub use wasm::{
-    ApplyOutcome, apply_plan, canvas_fingerprints, manifest_for_open_world, record_fetched,
+    ApplyOutcome, DiscardOutcome, apply_plan, canvas_fingerprints, discard_world,
+    manifest_for_open_world, record_fetched,
 };
 
 /// The browser half of a sync: reading the manifest out of the index, and
@@ -305,6 +379,80 @@ mod wasm {
         outcome
     }
 
+    /// What discarding a refused world managed to do.
+    #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+    pub struct DiscardOutcome {
+        /// Index rows this world had when the discard began — the number
+        /// dropped, when `failed` is zero.
+        pub rows: usize,
+        /// Whether the index rows are gone.
+        pub index_cleared: bool,
+        /// Whether the world's blob directory is gone.
+        pub blobs_cleared: bool,
+    }
+
+    impl DiscardOutcome {
+        /// Both halves succeeded, so nothing for this world remains.
+        #[must_use]
+        pub fn complete(&self) -> bool {
+            self.index_cleared && self.blobs_cleared
+        }
+    }
+
+    /// Discard everything held for one world, because the server refused it.
+    ///
+    /// The counterpart to [`apply_plan`] for the case the plan never
+    /// arrives. A per-item `evict` list can only discard items the server
+    /// was willing to talk about; when the answer is "you may not have this
+    /// world at all" there is no list, and FR-015 still requires the bytes
+    /// to go. Whole-world revocation is therefore its own path rather than a
+    /// plan with everything in it.
+    ///
+    /// **Scoped to `world_id` and nothing else.** Both calls below are
+    /// per-world — `IndexStore::remove_world` filters rows by `world_id` and
+    /// `OpfsStore::remove_world` removes that one directory — so a refusal
+    /// for one world can never take another world's content with it, which
+    /// matters because a user may be a member of many and lose one.
+    ///
+    /// **Never returns an error.** A discard that cannot complete is
+    /// reported in the outcome and left to the sign-out reclamation and the
+    /// FR-019 repair pass; raising here would turn a cleanup failure into a
+    /// failure to open a world, and the caller
+    /// (`sync_world_cache`) is contractually incapable of throwing.
+    ///
+    /// Ordering mirrors `apply_plan`: index rows first, because that is what
+    /// makes the content unreachable, then the bytes.
+    pub async fn discard_world(
+        store: &OpfsStore,
+        index: &IndexStore,
+        world_id: Uuid,
+    ) -> DiscardOutcome {
+        // FR-021c: the same per-world lock `apply_plan` and `record_fetched`
+        // take, so another tab's in-flight fetch cannot interleave a fresh
+        // blob and index row into the middle of this pass and leave content
+        // behind for a world we have just been refused.
+        //
+        // As in `apply_plan`, failing to get the lock is not a reason to
+        // skip: content the server says we may no longer have outweighs a
+        // race that was always survivable (FR-021d).
+        let _lock = locks::acquire_exclusive(
+            &locks::world_sync_lock(world_id),
+            locks::WORLD_LOCK_TIMEOUT_MS,
+        )
+        .await;
+
+        let rows = index.for_world(world_id).await.map_or(0, |rows| rows.len());
+
+        DiscardOutcome {
+            rows,
+            index_cleared: index.remove_world(world_id).await.is_ok(),
+            // Attempted whether or not the index rows went: bytes on disk
+            // are the thing FR-015 is about, and an index we could not write
+            // is no reason to leave them.
+            blobs_cleared: store.remove_world(world_id).await.is_ok(),
+        }
+    }
+
     /// Whether any surviving row in this world still points at a blob.
     ///
     /// Errs on the side of keeping the file: an index we cannot read is a
@@ -381,5 +529,105 @@ mod wasm {
                 ItemId::SceneState(_) => None,
             })
             .collect()
+    }
+}
+
+/// Native tests for the one decision in this module that has a permissions
+/// consequence: telling "you have lost access to this world" apart from
+/// "something went wrong".
+///
+/// These live here rather than in `tests/sync.rs` because they are about an
+/// internal classification rule, and because getting the direction wrong in
+/// either sense is a bug worth pinning down next to the code that decides
+/// it: a missed refusal leaves cached content a revoked member still holds
+/// (the FR-015 bug), and a false positive throws away a working cache every
+/// time a server hiccups.
+#[cfg(test)]
+mod tests {
+    use super::{SyncError, is_authorization_refusal, parse_sync_plan};
+
+    fn errors(json: &str) -> Vec<serde_json::Value> {
+        serde_json::from_str(json).expect("test fixture should be a json array")
+    }
+
+    /// Exactly what `world_sync_plan.rs`'s `to_graphql_error` produces for a
+    /// non-member, as its own tests assert: the ambiguous message plus a
+    /// `FORBIDDEN` code.
+    const NON_MEMBER: &str = r#"{
+      "errors": [{
+        "message": "user is not a member of this world",
+        "path": ["worldSyncPlan"],
+        "extensions": { "code": "FORBIDDEN" }
+      }],
+      "data": null
+    }"#;
+
+    #[test]
+    fn a_forbidden_code_is_an_authorization_refusal() {
+        match parse_sync_plan(NON_MEMBER) {
+            Err(SyncError::Forbidden(msg)) => assert!(msg.contains("not a member")),
+            other => panic!("expected a refusal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn an_uncoded_server_error_is_not_a_refusal() {
+        // The same *message*, without the code. This is the case that must
+        // not discard: matching on wording would make a server-side copy
+        // edit — or any resolver that happens to mention membership —
+        // destroy a user's cache.
+        let body = r#"{"errors":[{"message":"user is not a member of this world"}]}"#;
+        assert!(matches!(parse_sync_plan(body), Err(SyncError::Server(_))));
+    }
+
+    #[test]
+    fn other_codes_are_not_refusals() {
+        for code in ["INTERNAL_SERVER_ERROR", "BAD_USER_INPUT", "forbidden"] {
+            let body =
+                format!(r#"{{"errors":[{{"message":"nope","extensions":{{"code":"{code}"}}}}]}}"#);
+            assert!(
+                matches!(parse_sync_plan(&body), Err(SyncError::Server(_))),
+                "code {code} must not be read as a refusal",
+            );
+        }
+    }
+
+    #[test]
+    fn a_refusal_must_be_about_the_field_we_asked_for() {
+        // Defence in depth: this client only ever asks about one world, but
+        // a FORBIDDEN attributed to some other field is not evidence about
+        // that world's membership.
+        let elsewhere = errors(
+            r#"[{"message":"nope","path":["someOtherField"],"extensions":{"code":"FORBIDDEN"}}]"#,
+        );
+        assert!(!is_authorization_refusal(&elsewhere));
+
+        let pathless = errors(r#"[{"message":"nope","extensions":{"code":"FORBIDDEN"}}]"#);
+        assert!(is_authorization_refusal(&pathless));
+    }
+
+    #[test]
+    fn a_refusal_anywhere_in_the_list_counts() {
+        let mixed = errors(
+            r#"[{"message":"slow"},
+                {"message":"nope","path":["worldSyncPlan"],"extensions":{"code":"FORBIDDEN"}}]"#,
+        );
+        assert!(is_authorization_refusal(&mixed));
+    }
+
+    #[test]
+    fn nothing_transient_is_ever_a_refusal() {
+        // The whole safety argument in one assertion. A transport failure
+        // never reaches `parse_sync_plan` at all — it is constructed by the
+        // caller — and no reply that fails to parse can produce `Forbidden`
+        // either, so an offline client, a 500, or a truncated body all keep
+        // their cache.
+        assert!(!is_authorization_refusal(&[]));
+        for body in ["", "not json", "{}", r#"{"data":null}"#, r#"{"errors":[]}"#] {
+            assert!(
+                !matches!(parse_sync_plan(body), Err(SyncError::Forbidden(_))),
+                "{body:?} must not be read as a refusal",
+            );
+        }
     }
 }
