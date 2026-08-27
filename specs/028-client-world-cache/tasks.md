@@ -107,9 +107,9 @@ description: "Task list for 028-client-world-cache"
 - [X] T039 [US2] Treat key loss as a cold cache — re-fetch, no error surfaced (FR-016c) — in `crates/thunderforge-cache-browser/src/crypto.rs`
 - [X] T040 [P] [US2] Server test: non-member `worldSyncPlan` fails identically to any other non-member access, revealing nothing (contracts/graphql-delta-sync.md) in `src/server/src/graphql/queries/world_sync_plan.rs`
 - [X] T041 [P] [US2] Server test: a client claiming an item it may not see never receives it in `fetch`, and its `evict` entry is indistinguishable from a deleted item's, in `src/server/src/graphql/queries/world_sync_plan.rs`
-- [ ] T042 [US2] E2E: revoked membership denies access and discards local data (SC-004) in `apps/web/e2e/world-cache-permissions.spec.ts`
-- [ ] T043 [US2] E2E: downgraded actor permission evicts only the forbidden part while permitted content still loads from cache (US2 scenario 2) in `apps/web/e2e/world-cache-permissions.spec.ts`
-- [ ] T044 [US2] E2E: after sign-out, stored bytes are unreadable — asserted **against OPFS directly, before background cleanup runs**, not through the app (SC-004a) in `apps/web/e2e/world-cache-permissions.spec.ts`
+- [X] T042 [US2] E2E: revoked membership denies access and discards local data (SC-004) in `apps/web/e2e/world-cache-permissions.spec.ts`
+- [X] T043 [US2] E2E: downgraded actor permission evicts only the forbidden part while permitted content still loads from cache (US2 scenario 2) in `apps/web/e2e/world-cache-permissions.spec.ts`
+- [X] T044 [US2] E2E: after sign-out, stored bytes are unreadable — asserted **against OPFS directly, before background cleanup runs**, not through the app (SC-004a) in `apps/web/e2e/world-cache-permissions.spec.ts`
 
 **Checkpoint**: US1 + US2 are the minimum releasable pair
 
@@ -144,6 +144,15 @@ description: "Task list for 028-client-world-cache"
 - [ ] T052 [US3] Validate each blob against its own fingerprint-derived filename on read; discard and re-fetch on mismatch, in `crates/thunderforge-cache-browser/src/opfs.rs`
 - [ ] T053 [US3] Reconcile index-vs-OPFS divergence in both directions (index claims a missing blob; orphan blob with no entry) in `crates/thunderforge-cache-browser/src/index.rs`
 - [ ] T054 [US3] Fall back to full fetch when the store cannot be opened at all, with no user-visible error, in `crates/thunderforge-cache-browser/src/lib.rs`
+- [ ] T045a [US2] Discard a world's cached content when the server refuses its sync plan. FR-015 does not currently hold for whole-world revocation: eviction is driven only by the `evict` list of a *successful* plan, and a revoked member's request is refused, so `run_sync` takes its transport-error branch, republishes what it holds, and returns degraded — leaving the blobs on disk. Found by T042, which is marked `test.fail()` until this lands, in `src/engine/src/plugins/cached_assets.rs`
+- [ ] T045b [US2] `public/sw.js` is a second local store that outlives revocation: it caches `/api/canvas-assets/*` cache-first per browser profile and is cleared only on logout, so a revoked member's browser keeps readable plaintext art. Its own docs argue cache-first is safe because assets are content-addressed — true of staleness, silent on revocation. Decide whether the worker participates in eviction or stops caching world assets, in `apps/web/public/sw.js`
+- [ ] T045c [US2] `GET /api/canvas-assets/{id}` authorizes on world membership only, not on `scenes.hidden`, so a member who knows an asset id can fetch art from a scene they cannot see. Separate from the cache but on the same disclosure axis, in `src/server/src/canvas_assets_serve.rs`
+- [ ] T055a [US3] Serialise session-key creation across tabs with the Web Locks API so two tabs starting together cannot each generate one (FR-021a) in `crates/thunderforge-cache-browser/src/crypto.rs`
+- [ ] T055b [US3] Broadcast sign-out to every tab so an in-memory key is dropped without waiting for a reload (FR-021b) in `apps/web/src/services/worldCache.ts` and `src/engine/src/plugins/cached_assets.rs`
+- [ ] T055c [US3] Serialise per-world sync/eviction across tabs so one tab cannot evict what another just fetched (FR-021c) in `crates/thunderforge-cache-browser/src/sync.rs`
+- [ ] T055d [US3] Degrade cleanly where Web Locks or BroadcastChannel are unavailable — an extra fetch or an ineffective cache, never a failed load and never readable content after sign-out (FR-021d) in `crates/thunderforge-cache-browser/src/`
+- [ ] T055e [P] [US3] E2E: two tabs open the same world concurrently; no corruption, and the cache still works in both (FR-021) in `apps/web/e2e/world-cache-multitab.spec.ts`
+- [ ] T055f [P] [US3] E2E: signing out in one tab makes cached content unreadable in another *without reloading it* (FR-021b) in `apps/web/e2e/world-cache-multitab.spec.ts`
 - [ ] T055 [US3] Guard concurrent multi-tab writes so a partially-written blob is never readable as complete (FR-021) in `crates/thunderforge-cache-browser/src/opfs.rs`
 - [ ] T056 [P] [US3] E2E: corrupted blob and orphaned index entry both self-repair silently (SC-005) in `apps/web/e2e/world-cache-repair.spec.ts`
 - [ ] T057 [P] [US3] E2E: two tabs writing the same world concurrently corrupt nothing in `apps/web/e2e/world-cache-repair.spec.ts`

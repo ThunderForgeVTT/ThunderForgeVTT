@@ -497,6 +497,22 @@ fetch and without a loading state.
   error; the user experiences only a slower load.
 - **FR-021**: Concurrent access from more than one tab MUST NOT corrupt the
   local store nor allow a partially-written item to be read as complete.
+- **FR-021a**: Two tabs starting at the same time MUST NOT each generate a
+  session key. Whichever key loses would render everything written under it
+  unreadable — which degrades safely to a cache miss (FR-016c) rather than
+  corrupting anything, but a cache that silently never works is still broken.
+  Key creation MUST be serialised across tabs.
+- **FR-021b**: Signing out in one tab MUST render cached content unreadable
+  in every other tab of the same browser profile, promptly and without
+  requiring those tabs to reload. A key discarded from storage while another
+  tab holds it in memory is not discarded.
+- **FR-021c**: A tab MUST NOT evict content another tab is actively fetching
+  or has just stored. Eviction and fetch for the same world MUST be
+  serialised across tabs.
+- **FR-021d**: Multi-tab coordination MUST degrade. Where the browser
+  provides no cross-tab primitive, behaviour MUST fall back to today's — a
+  possible extra fetch or an ineffective cache, never a failed load and never
+  readable content after sign-out.
 
 #### Space management
 
