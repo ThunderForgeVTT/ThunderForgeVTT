@@ -31,6 +31,7 @@
 
 use serde::{Deserialize, Serialize};
 use thunderforge_cache_core::{Fingerprint, ItemId};
+use thunderforge_opfs::store::BlobShape;
 use uuid::Uuid;
 
 /// Monotonic counter standing in for "when", for LRU ordering only.
@@ -178,6 +179,36 @@ pub fn orphaned_blobs(
         })
         .copied()
         .collect()
+}
+
+/// Split unreferenced blobs into the ones a repair may delete and the ones it
+/// must leave alone.
+///
+/// The second half is the whole point, and it is the T055 rule arriving from
+/// the other direction. A blob with no index row is *also* exactly what an
+/// in-flight write looks like from outside — `record_fetched` writes the
+/// bytes first and the row second — so "unreferenced" on its own is not
+/// evidence that anything may be deleted. An unfinished file is never
+/// reclaimed, whoever asks.
+///
+/// Leaving one costs nothing worth counting: an unfinished file is empty, so
+/// deleting it would free no space, and it self-heals — the next write of
+/// that content targets the same name.
+///
+/// Returns `(reclaimable, kept)`.
+pub fn partition_orphans(
+    orphans: &[(Fingerprint, BlobShape)],
+) -> (Vec<Fingerprint>, Vec<Fingerprint>) {
+    let mut reclaimable = Vec::new();
+    let mut kept = Vec::new();
+    for (fingerprint, shape) in orphans {
+        if shape.is_reclaimable() {
+            reclaimable.push(*fingerprint);
+        } else {
+            kept.push(*fingerprint);
+        }
+    }
+    (reclaimable, kept)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -412,6 +443,28 @@ mod tests {
         let rows = vec![(a, entry(1, 1, 1, 1)), (b, entry(2, 1, 1, 1))];
         assert_eq!(missing_blobs(&rows, &[fp(1)]), vec![b]);
         assert_eq!(missing_blobs(&rows, &[fp(1), fp(2)]), Vec::<ItemId>::new());
+    }
+
+    #[test]
+    fn a_repair_never_reclaims_a_file_nobody_finished_writing() {
+        // The T055 rule, arriving from the repair side. An unreferenced blob
+        // is indistinguishable from a write whose index row has not landed
+        // yet, so the shape is what decides — not the missing row.
+        let (reclaimable, kept) =
+            partition_orphans(&[(fp(1), BlobShape::Complete), (fp(2), BlobShape::Incomplete)]);
+        assert_eq!(reclaimable, vec![fp(1)], "a finished orphan is dead weight");
+        assert_eq!(
+            kept,
+            vec![fp(2)],
+            "an unfinished orphan may be another tab's write in progress"
+        );
+    }
+
+    #[test]
+    fn a_repair_with_nothing_to_do_deletes_nothing() {
+        let (reclaimable, kept) = partition_orphans(&[]);
+        assert!(reclaimable.is_empty());
+        assert!(kept.is_empty());
     }
 
     #[test]

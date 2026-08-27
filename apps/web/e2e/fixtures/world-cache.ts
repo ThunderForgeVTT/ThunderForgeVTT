@@ -36,6 +36,11 @@ export interface SyncSummary {
   evicted?: number;
   blobsRemoved?: number;
   evictFailures?: number;
+  /** FR-019 repair, reported alongside the plan it rides with. */
+  rowsRepaired?: number;
+  blobsReclaimed?: number;
+  unfinishedKept?: number;
+  repairFailures?: number;
   prefetching?: number;
   reason?: string;
 }

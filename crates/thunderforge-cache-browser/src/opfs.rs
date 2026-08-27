@@ -49,8 +49,8 @@ mod wasm {
     use thunderforge_opfs::store::{BlobShape, BlobStore};
     use uuid::Uuid;
 
+    use crate::Result;
     use crate::crypto::SessionKey;
-    use crate::{CacheError, Result};
 
     /// The encrypted blob store rooted at this user's OPFS scope.
     pub struct OpfsStore {

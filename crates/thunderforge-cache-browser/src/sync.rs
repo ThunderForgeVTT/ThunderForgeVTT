@@ -252,8 +252,8 @@ pub fn sync_request_body(manifest: &Manifest) -> String {
 
 #[cfg(target_arch = "wasm32")]
 pub use wasm::{
-    ApplyOutcome, DiscardOutcome, apply_plan, canvas_fingerprints, discard_world,
-    manifest_for_open_world, record_fetched,
+    ApplyOutcome, DiscardOutcome, RepairOutcome, apply_plan, canvas_fingerprints, discard_world,
+    manifest_for_open_world, record_fetched, repair_world,
 };
 
 /// The browser half of a sync: reading the manifest out of the index, and
@@ -451,6 +451,129 @@ mod wasm {
             // is no reason to leave them.
             blobs_cleared: store.remove_world(world_id).await.is_ok(),
         }
+    }
+
+    /// What a repair pass found and put right.
+    #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+    pub struct RepairOutcome {
+        /// Index rows dropped because the blob they name is not on disk.
+        pub rows_dropped: usize,
+        /// Complete blob files deleted because no row referred to them.
+        pub blobs_reclaimed: usize,
+        /// Unreferenced files left alone because they are not finished, and
+        /// so may be another tab's write in progress.
+        pub unfinished_kept: usize,
+        /// Steps that hit a platform error. Reported rather than swallowed —
+        /// a repair that silently failed would leave the store diverging and
+        /// look like it had converged.
+        pub failed: usize,
+    }
+
+    /// Reconcile the index against what is actually on disk (FR-019).
+    ///
+    /// The two stores drift for ordinary reasons and always will: a blob is
+    /// written before its index row (`record_fetched`), a row is removed
+    /// before its blob (`apply_plan`), and a tab can be closed between any
+    /// two awaits. `index.rs` states the rule for resolving it — **where
+    /// they differ, OPFS wins** — and the pure halves of the diff
+    /// (`missing_blobs`, `orphaned_blobs`) have been sitting there tested and
+    /// uncalled. This is the caller.
+    ///
+    /// Both directions are repaired, and they are not symmetrical:
+    ///
+    /// - A row naming a blob that is gone is a **lie**. It makes the client
+    ///   tell the server "I hold this" in its manifest, and the server then
+    ///   says nothing about it, because silence means unchanged. The item is
+    ///   then never fetched and never displayed from cache. Dropping the row
+    ///   turns it back into `Absent`, which is refetchable.
+    /// - A blob no row names is **unreachable bytes**. Nothing can read it,
+    ///   and it counts against the space budget forever.
+    ///
+    /// # Why an unfinished file is never reclaimed here
+    ///
+    /// A blob that exists without an index row is exactly what an in-flight
+    /// write looks like from the outside — `record_fetched` writes the bytes
+    /// first and the row second. Deleting on that evidence alone would
+    /// reintroduce, from the repair side, the bug T055 fixed on the read
+    /// side.
+    ///
+    /// Two things keep it safe. The world lock, which every writer also
+    /// takes, so a *locked* write cannot be interleaved with this pass. And
+    /// the shape check: a file that is not finished is never deleted, whether
+    /// or not the lock was granted. That costs nothing to leave — an
+    /// unfinished file is zero bytes, so reclaiming it would free nothing —
+    /// and it self-heals, because the next write of that content targets the
+    /// same name.
+    ///
+    /// The residual is a *complete* orphan belonging to a writer that was
+    /// refused the lock (it is best-effort, 250ms) and has not yet written
+    /// its row. Deleting it costs that tab one re-fetch and nothing else,
+    /// which is the same trade `apply_plan` already documents.
+    ///
+    /// Never fails as a whole: every step is independently recoverable, and
+    /// a repair that could not run leaves the store exactly as divergent as
+    /// it found it, which is where it started.
+    pub async fn repair_world(
+        store: &OpfsStore,
+        index: &IndexStore,
+        world_id: Uuid,
+    ) -> RepairOutcome {
+        let _lock = locks::acquire_exclusive(
+            &locks::world_sync_lock(world_id),
+            locks::WORLD_LOCK_TIMEOUT_MS,
+        )
+        .await;
+
+        let mut outcome = RepairOutcome::default();
+
+        let Ok(entries) = index.for_world(world_id).await else {
+            // An index we cannot read is not evidence that anything on disk
+            // is unreferenced. Deleting on the strength of it would be
+            // deleting the whole world.
+            outcome.failed += 1;
+            return outcome;
+        };
+        let Ok(on_disk) = store.list_fingerprints(world_id).await else {
+            outcome.failed += 1;
+            return outcome;
+        };
+
+        // `on_disk` is every file present, finished or not, and this half
+        // deliberately does not ask which. A row pointing at an *unfinished*
+        // file is technically a lie too — the item cannot be read — but
+        // reaching that verdict would cost a `getFile()` per blob per open,
+        // on every world, to catch a state that essentially does not occur:
+        // rewriting an existing blob does not truncate it (the writable
+        // buffers into a swap file), so a row and an empty file together
+        // require a truncation nothing here performs. The orphan half below
+        // pays for shapes because orphans are few.
+        for id in crate::index::missing_blobs(&entries, &on_disk) {
+            match index.remove(id).await {
+                Ok(()) => outcome.rows_dropped += 1,
+                Err(_) => outcome.failed += 1,
+            }
+        }
+
+        // Shapes first, then one pure decision over them — the same split
+        // the rest of this crate uses, and what lets the rule that actually
+        // matters here be tested without a browser.
+        let mut shaped = Vec::new();
+        for fingerprint in crate::index::orphaned_blobs(&entries, &on_disk) {
+            match store.blob_shape(world_id, &fingerprint).await {
+                Ok(shape) => shaped.push((fingerprint, shape)),
+                Err(_) => outcome.failed += 1,
+            }
+        }
+        let (reclaimable, kept) = crate::index::partition_orphans(&shaped);
+        outcome.unfinished_kept = kept.len();
+        for fingerprint in reclaimable {
+            match store.remove_blob(world_id, &fingerprint).await {
+                Ok(()) => outcome.blobs_reclaimed += 1,
+                Err(_) => outcome.failed += 1,
+            }
+        }
+
+        outcome
     }
 
     /// Whether any surviving row in this world still points at a blob.

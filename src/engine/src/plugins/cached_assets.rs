@@ -1141,6 +1141,32 @@ mod wasm {
         };
 
         let applied = sync::apply_plan(&handles.store, &index, world_uuid, &outcome.plan).await;
+
+        // FR-019, after the plan rather than before it. The index and the
+        // disk drift for ordinary reasons — a blob is written before its row,
+        // a row removed before its blob, a tab closed between two awaits —
+        // and `apply_plan` has just performed the largest batch of both
+        // operations this world will see. Reconciling here therefore repairs
+        // this pass's own interruptions as well as any left by a previous
+        // session, and it does so while the caller is already waiting on a
+        // sync, so it costs no additional user-visible moment.
+        //
+        // It is one directory listing and one index range read per open. An
+        // orphan is rare; the cost when there is nothing to do is the two
+        // reads and no writes at all.
+        let repaired = sync::repair_world(&handles.store, &index, world_uuid).await;
+        if repaired.rows_dropped > 0 || repaired.blobs_reclaimed > 0 || repaired.failed > 0 {
+            info!(
+                target: "cached_assets",
+                "repaired world cache: {} row(s) dropped, {} blob(s) reclaimed, \
+                 {} unfinished kept, {} failure(s)",
+                repaired.rows_dropped,
+                repaired.blobs_reclaimed,
+                repaired.unfinished_kept,
+                repaired.failed,
+            );
+        }
+
         publish_fingerprints(&index, world_uuid, &outcome.plan).await;
         return_index(&handles, index);
 
@@ -1171,6 +1197,10 @@ mod wasm {
             "evicted": applied.evicted,
             "blobsRemoved": applied.blobs_removed,
             "evictFailures": applied.failed,
+            "rowsRepaired": repaired.rows_dropped,
+            "blobsReclaimed": repaired.blobs_reclaimed,
+            "unfinishedKept": repaired.unfinished_kept,
+            "repairFailures": repaired.failed,
             "prefetching": prefetching,
             "canonicalVersion": outcome.canonical_version,
         })
