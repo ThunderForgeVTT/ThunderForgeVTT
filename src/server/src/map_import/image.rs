@@ -44,6 +44,17 @@ pub struct SavedBackgroundImage {
     pub width_px: i32,
     pub height_px: i32,
     pub byte_size: i64,
+    /// Spec 028 FR-005: the hash of the bytes a client will actually receive.
+    ///
+    /// Absent here, this row reaches `world_sync_plan` with a NULL
+    /// `content_hash`, which `compute_plan` turns into the placeholder
+    /// `Fingerprint::of_bytes(&[])` — a fingerprint the fetched bytes can
+    /// never match. The client then fetches the background on every open and
+    /// refuses to store it every time, because `fetch_and_deliver` will not
+    /// file bytes under a fingerprint it cannot reproduce. The effect is a
+    /// background image that is permanently uncacheable, which is the largest
+    /// asset in a world and the one the cache exists for.
+    pub content_hash: String,
 }
 
 /// Spec 022 (FR-012): a scene's reduced-size preview/thumbnail image,
@@ -113,6 +124,18 @@ pub async fn save_background_image(
     let asset_id = Uuid::now_v7();
     let key = crate::storage::rustfs::object_key(owner_user_id, world_id, Some(scene_id), asset_id);
     let byte_size = transcoded.webp_bytes.len() as i64;
+
+    // Spec 028 FR-005, the same rule and the same reasoning as
+    // `upload_canvas_image_impl`: fingerprint the bytes about to be STORED,
+    // not the ones that arrived. The client never receives the uploaded
+    // image — it receives this WebP — so hashing the input would produce a
+    // value no client could verify against what it holds. Computed here
+    // while the bytes are already in memory, because hashing on read would
+    // mean pulling every object back out of RustFS on every sync, which is
+    // the load this feature exists to remove.
+    let content_hash =
+        thunderforge_cache_core::Fingerprint::of_bytes(&transcoded.webp_bytes).to_hex();
+
     let cfg = crate::storage::rustfs::RustFsConfig::from_env();
     crate::storage::rustfs::write_object(&cfg, &key, transcoded.webp_bytes, "image/webp")
         .await
@@ -125,5 +148,88 @@ pub async fn save_background_image(
         width_px: transcoded.width as i32,
         height_px: transcoded.height as i32,
         byte_size,
+        content_hash,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Spec 028 FR-005 / T019, for the *other* writer of `content_hash`.
+    ///
+    /// `upload_canvas_image_impl` has had this covered since T019. Map import
+    /// did not, and it did not set the column at all — so every scene
+    /// background imported from a UVTT file reached `world_sync_plan` with a
+    /// NULL hash. `compute_plan`'s "no server fingerprint yet" branch turns
+    /// that into `Fingerprint::of_bytes(&[])`, a promise the real bytes can
+    /// never satisfy, and the client's `fetch_and_deliver` then refuses to
+    /// store what it fetched because it cannot reproduce the fingerprint.
+    /// The background — the largest asset in a world, and the one the cache
+    /// exists for — was therefore re-downloaded on every single open while
+    /// the cache reported itself healthy.
+    ///
+    /// The bug was invisible from either side alone: the server was honestly
+    /// reporting "I have no fingerprint for this", and the client was
+    /// honestly refusing to file bytes it could not verify. Only the pair is
+    /// wrong. Hence a test on the value itself rather than on either
+    /// behaviour.
+    #[tokio::test]
+    async fn background_records_hash_of_stored_bytes_not_decoded_bytes() {
+        let owner_id = Uuid::now_v7();
+        let world_id = Uuid::now_v7();
+        let scene_id = Uuid::now_v7();
+
+        let source = crate::test_support::tiny_png_bytes();
+        let encoded = BASE64_STANDARD.encode(&source);
+
+        let saved = save_background_image(owner_id, world_id, scene_id, &encoded)
+            .await
+            .expect("saving a valid png background should succeed");
+
+        assert_eq!(saved.content_hash.len(), 64, "lowercase hex SHA-256");
+        assert!(
+            saved
+                .content_hash
+                .bytes()
+                .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c)),
+            "content_hash must be lowercase hex"
+        );
+
+        // The empty-input digest is what a NULL column became downstream, so
+        // it is worth naming: seeing it here would mean the column is being
+        // filled with the very placeholder this fix exists to remove.
+        assert_ne!(
+            saved.content_hash,
+            thunderforge_cache_core::Fingerprint::of_bytes(&[]).to_hex(),
+            "an empty-bytes fingerprint is the unset placeholder, not a hash"
+        );
+
+        // Not the decoded upload's hash — the WebP transcode makes these
+        // differ, and hashing the input is the mistake this test forbids.
+        assert_ne!(
+            saved.content_hash,
+            thunderforge_cache_core::Fingerprint::of_bytes(&source).to_hex(),
+            "hashing the decoded upload would produce a value no client could verify"
+        );
+
+        // The stored object's hash: what a client computes over what it
+        // actually receives, and therefore the only value that can ever hit.
+        let stored = crate::storage::rustfs::read_object(
+            &crate::storage::rustfs::RustFsConfig::from_env(),
+            &saved.storage_path,
+        )
+        .await
+        .expect("stored object should be readable");
+        assert_eq!(
+            saved.content_hash,
+            thunderforge_cache_core::Fingerprint::of_bytes(&stored).to_hex(),
+            "content_hash must match the bytes the client will actually receive"
+        );
+        assert_eq!(
+            saved.byte_size,
+            stored.len() as i64,
+            "byte_size and content_hash must describe the same bytes"
+        );
+    }
 }

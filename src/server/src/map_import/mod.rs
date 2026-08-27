@@ -239,6 +239,10 @@ pub async fn import_uvtt_impl(
                     canvas_image_assets::width_px.eq(saved_background.width_px),
                     canvas_image_assets::height_px.eq(saved_background.height_px),
                     canvas_image_assets::byte_size.eq(saved_background.byte_size),
+                    // Without this the row is NULL here and the background is
+                    // permanently uncacheable; see `SavedBackgroundImage`.
+                    canvas_image_assets::content_hash
+                        .eq(Some(saved_background.content_hash.clone())),
                     canvas_image_assets::kind
                         .eq(crate::db_types::CanvasImageAssetKindEnum::Background),
                     canvas_image_assets::created_by.eq(user_id),
