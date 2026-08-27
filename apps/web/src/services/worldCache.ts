@@ -57,6 +57,69 @@
 const DB_NAME = "thunderforge-cache";
 const STORE_KEYS = "keys";
 
+/**
+ * The cross-tab sign-out signal (FR-021b).
+ *
+ * Deleting the stored key above is enough for a tab that has yet to read it.
+ * It is not enough for a tab with the engine mounted: that tab is holding a
+ * live `CryptoKey` in wasm memory and will keep decrypting cached blobs until
+ * something makes it stop. Nothing in IndexedDB can make it stop, because it
+ * never looks there again. **A key discarded from storage while another tab
+ * holds it is not discarded**, so the discard is announced as well as done.
+ *
+ * Two carriers, mirroring `crates/thunderforge-cache-browser/src/signal.rs`,
+ * which is what receives them:
+ *
+ * - `BroadcastChannel` is the right primitive and reaches workers, but is not
+ *   everywhere.
+ * - A `localStorage` write fires a `storage` event in every *other* window of
+ *   the profile, which browsers have done for well over a decade. It does not
+ *   reach workers and does not fire in this window, so it supplements rather
+ *   than replaces the channel — but it means the degraded path for FR-021b is
+ *   a second mechanism rather than none (FR-021d).
+ *
+ * Both carry the same payload, and the receiver is idempotent, so a tab
+ * getting both is not a problem worth suppressing.
+ */
+const SIGNAL_CHANNEL = "thunderforge-cache";
+const SIGNAL_STORAGE_KEY = "thunderforge-cache:signal";
+const SIGNAL_SIGNED_OUT = "signed-out";
+
+/**
+ * Tell every other tab of this profile that the session ended.
+ *
+ * Best effort and synchronous: sign-out must not wait on this, and must not
+ * be failed by it. A browser with neither carrier leaves other tabs on
+ * today's behaviour, which is what FR-021d asks for.
+ *
+ * The nonce exists solely so consecutive `localStorage` writes differ — a
+ * `storage` event fires on change, so a second sign-out writing the identical
+ * value would notify nobody.
+ */
+function broadcastSignOut(): void {
+  const payload = JSON.stringify({
+    kind: SIGNAL_SIGNED_OUT,
+    nonce: String(Date.now()),
+  });
+
+  try {
+    if (typeof BroadcastChannel === "function") {
+      const channel = new BroadcastChannel(SIGNAL_CHANNEL);
+      channel.postMessage(payload);
+      channel.close();
+    }
+  } catch {
+    // No channel, or posting failed. The storage carrier below is still
+    // worth trying, and neither is worth failing a sign-out over.
+  }
+
+  try {
+    localStorage.setItem(SIGNAL_STORAGE_KEY, payload);
+  } catch {
+    // Absent, or site data is blocked. Nothing to do.
+  }
+}
+
 /** The engine's wasm module, as far as this file needs to know it. */
 type EngineCacheModule = {
   forget_world_cache?: (userId: string) => Promise<string>;
@@ -176,6 +239,13 @@ export async function discardWorldCache(
   userId: string | null | undefined,
 ): Promise<void> {
   await discardSessionKeys();
+
+  // After the stored key is gone, so a tab that reacts by re-reading the
+  // store finds nothing rather than the record we are about to delete.
+  // Before the engine call, because the engine call is best-effort and may
+  // not resolve at all, whereas the other tabs' in-memory keys are the point
+  // of FR-021b.
+  broadcastSignOut();
 
   if (!userId) {
     // No id, no scope, so there is nothing the engine could reclaim. The key

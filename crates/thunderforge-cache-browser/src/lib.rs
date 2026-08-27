@@ -40,7 +40,9 @@
 
 pub mod crypto;
 pub mod index;
+pub mod locks;
 pub mod opfs;
+pub mod signal;
 pub mod sync;
 
 #[cfg(target_arch = "wasm32")]
@@ -50,9 +52,10 @@ use std::fmt;
 
 use thunderforge_cache_core::IntegrityError;
 
-pub use crypto::{Envelope, EnvelopeError};
+pub use crypto::{Envelope, EnvelopeError, KeyCreation, KeyEvent, KeyStep};
 pub use index::{IndexEntry, ReadSeq};
 pub use opfs::{BlobPath, PathError, UserScope};
+pub use signal::CacheSignal;
 
 /// Why a cache operation failed outright.
 ///

@@ -190,3 +190,183 @@ describe("discardWorldCache", () => {
     ).resolves.toBeUndefined();
   });
 });
+
+/**
+ * Capture what a sign-out puts on each cross-tab carrier (FR-021b).
+ */
+function fakeCarriers() {
+  const posted: string[] = [];
+  const closed: number[] = [];
+  const stored = new Map<string, string>();
+  const channelNames: string[] = [];
+
+  class FakeBroadcastChannel {
+    constructor(readonly name: string) {
+      channelNames.push(name);
+    }
+    postMessage(data: string) {
+      posted.push(data);
+    }
+    close() {
+      closed.push(posted.length);
+    }
+  }
+
+  return {
+    posted,
+    closed,
+    stored,
+    channelNames,
+    install(options: { channel?: boolean; storage?: boolean } = {}) {
+      const { channel = true, storage = true } = options;
+      if (channel) {
+        vi.stubGlobal("BroadcastChannel", FakeBroadcastChannel);
+      } else {
+        vi.stubGlobal("BroadcastChannel", undefined);
+      }
+      if (storage) {
+        vi.stubGlobal("localStorage", {
+          setItem: (key: string, value: string) => {
+            stored.set(key, value);
+          },
+        });
+      } else {
+        vi.stubGlobal("localStorage", {
+          setItem: () => {
+            throw new DOMException("site data blocked", "SecurityError");
+          },
+        });
+      }
+    },
+  };
+}
+
+/**
+ * Sign-out has to reach tabs that are not the one signing out (FR-021b).
+ *
+ * The tab holding the engine has a live `CryptoKey` in wasm memory. Deleting
+ * the IndexedDB record does nothing to it — it never reads that record again —
+ * so unless the discard is *announced*, that tab goes on serving cached
+ * content from a key that no longer exists anywhere else. These assert the
+ * announcement is made, and that the payload is the one the Rust listener in
+ * `crates/thunderforge-cache-browser/src/signal.rs` actually parses. That
+ * shape is asserted on both sides on purpose: it is a string contract across a
+ * language boundary, and drift in it fails silently.
+ */
+describe("cross-tab sign-out", () => {
+  const userId = "6f1b2a3c-0000-4000-8000-000000000000";
+
+  it("announces the sign-out on both carriers", async () => {
+    const carriers = fakeCarriers();
+    carriers.install();
+    const fake = fakeIndexedDb();
+    fake.seed(["index", "keys", "outbox", "meta"]);
+    install(fake);
+
+    await discardWorldCache(userId);
+
+    expect(carriers.posted).toHaveLength(1);
+    expect(JSON.parse(carriers.posted[0]!)).toMatchObject({
+      kind: "signed-out",
+    });
+    expect(carriers.stored.get("thunderforge-cache:signal")).toBe(
+      carriers.posted[0],
+    );
+    // The channel name is half of a cross-language contract; the Rust
+    // listener subscribes to this exact string.
+    expect(carriers.channelNames).toEqual(["thunderforge-cache"]);
+    // A channel left open in a page that is navigating away is a leak with
+    // no upside; the message is already queued for delivery.
+    expect(carriers.closed).toEqual([1]);
+  });
+
+  it("carries a nonce, so a second sign-out is seen as a change", async () => {
+    // `storage` events fire on change. Two identical writes would notify
+    // nobody, which would make the fallback carrier work exactly once per
+    // profile — the sort of bug that only shows up on the second sign-out.
+    const carriers = fakeCarriers();
+    carriers.install();
+    const fake = fakeIndexedDb();
+    fake.seed(["index", "keys", "outbox", "meta"]);
+    install(fake);
+
+    const now = vi.spyOn(Date, "now");
+    try {
+      now.mockReturnValue(1_000);
+      await discardWorldCache(userId);
+      const first = carriers.stored.get("thunderforge-cache:signal");
+      now.mockReturnValue(2_000);
+      await discardWorldCache(userId);
+      const second = carriers.stored.get("thunderforge-cache:signal");
+
+      expect(first).toBeDefined();
+      expect(second).not.toBe(first);
+      expect(JSON.parse(second!)).toMatchObject({ kind: "signed-out" });
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it("still uses storage where BroadcastChannel does not exist", async () => {
+    // FR-021d: degrade to the other carrier rather than to nothing.
+    const carriers = fakeCarriers();
+    carriers.install({ channel: false });
+    const fake = fakeIndexedDb();
+    fake.seed(["index", "keys", "outbox", "meta"]);
+    install(fake);
+
+    await expect(discardWorldCache(userId)).resolves.toBeUndefined();
+
+    expect(carriers.posted).toHaveLength(0);
+    expect(carriers.stored.get("thunderforge-cache:signal")).toBeDefined();
+  });
+
+  it("still uses the channel where storage throws", async () => {
+    const carriers = fakeCarriers();
+    carriers.install({ storage: false });
+    const fake = fakeIndexedDb();
+    fake.seed(["index", "keys", "outbox", "meta"]);
+    install(fake);
+
+    await expect(discardWorldCache(userId)).resolves.toBeUndefined();
+
+    expect(carriers.posted).toHaveLength(1);
+  });
+
+  it("announces even when the key could not be discarded", async () => {
+    // The other tab dropping its in-memory key is the *only* protection left
+    // when the stored delete failed, so this is exactly the case that must
+    // not be skipped. Sign-out is never blocked by the cache, and the
+    // announcement is never blocked by the discard.
+    const carriers = fakeCarriers();
+    carriers.install();
+    vi.stubGlobal("indexedDB", {
+      open() {
+        const request: Record<string, unknown> = {
+          result: null,
+          error: new Error("nope"),
+        };
+        queueMicrotask(() => {
+          (request.onerror as (() => void) | undefined)?.();
+        });
+        return request;
+      },
+    });
+
+    await expect(discardWorldCache(userId)).resolves.toBeUndefined();
+
+    expect(carriers.posted).toHaveLength(1);
+  });
+
+  it("announces even with no user id", async () => {
+    const carriers = fakeCarriers();
+    carriers.install();
+    const fake = fakeIndexedDb();
+    fake.seed(["index", "keys", "outbox", "meta"]);
+    install(fake);
+
+    await expect(discardWorldCache(null)).resolves.toBeUndefined();
+
+    expect(carriers.posted).toHaveLength(1);
+  });
+});

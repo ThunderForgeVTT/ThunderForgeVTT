@@ -562,8 +562,8 @@ mod wasm {
     use futures_util::future::Shared;
     use thunderforge_cache_browser::index::IndexStore;
     use thunderforge_cache_browser::opfs::{OpfsStore, UserScope};
-    use thunderforge_cache_browser::sync;
-    use thunderforge_cache_browser::{IndexEntry, crypto};
+    use thunderforge_cache_browser::{CacheSignal, IndexEntry, crypto};
+    use thunderforge_cache_browser::{locks, signal, sync};
     use thunderforge_cache_core::delta::SyncPlan;
     use thunderforge_cache_core::{Fingerprint, ItemId, fingerprint};
     use uuid::Uuid;
@@ -607,6 +607,9 @@ mod wasm {
     /// error state so much as "this browser does not have the feature". The
     /// user gets today's load times and no diagnostic beyond one log line.
     pub(super) fn open_backing_store(scope: String) {
+        // Before anything is opened, so that a tab which is *about* to hold a
+        // key is already listening for the news that it should not.
+        listen_for_sign_out();
         spawn_local(async move {
             let Ok(scope) = UserScope::new(scope) else {
                 warn!(target: "cached_assets", "cache disabled: bad user scope");
@@ -696,6 +699,49 @@ mod wasm {
         Some(handles)
     }
 
+    /// Subscribe to the cross-tab sign-out signal (FR-021b).
+    ///
+    /// # Why storage deletion is not enough
+    ///
+    /// `discardWorldCache` deletes the stored `CryptoKey` record, and for a
+    /// tab that has yet to read that record, that is the end of it. This tab
+    /// is not that tab. It is holding a live `CryptoKey` in `Handles` — the
+    /// key survives page loads by design (SC-002) — and it will go on
+    /// decrypting cached blobs until something makes it stop. Nothing in the
+    /// storage layer can make it stop, because it never looks at storage
+    /// again. Hence a signal.
+    ///
+    /// Registered once per page and never unregistered; see
+    /// [`signal::listen`].
+    fn listen_for_sign_out() {
+        signal::listen(|signal| match signal {
+            CacheSignal::SignedOut => {
+                info!(target: "cached_assets", "another tab signed out; dropping the cache key");
+                forget_in_memory();
+            }
+        });
+    }
+
+    /// Drop everything this tab holds that could still read the cache.
+    ///
+    /// The whole of what a *receiving* tab has to do, and deliberately no
+    /// more: the tab that initiated the sign-out has already deleted the
+    /// stored key and started the reclamation, and repeating either here
+    /// would be a second delete of an already-deleted record and a second
+    /// pass over a directory being removed. What only this tab can do is let
+    /// go of the `CryptoKey` in its own memory and stop pointing the read
+    /// path at content it is no longer entitled to.
+    ///
+    /// Idempotent, because both signal carriers may deliver — and because
+    /// forgetting twice is forgetting.
+    fn forget_in_memory() {
+        HANDLES.with(|slot| slot.borrow_mut().take());
+        OPENING.with(|slot| slot.borrow_mut().take());
+        if let Ok(mut queue) = control_queue().lock() {
+            queue.push(Control::Forget);
+        }
+    }
+
     /// Resolve one asset: local first, network second, store on the way back.
     pub(super) fn spawn_resolve(request: ResolveRequest) {
         spawn_local(async move { resolve(request).await });
@@ -757,6 +803,18 @@ mod wasm {
         }
 
         if let Some(handles) = handles {
+            // FR-021c: the same per-world lock `sync::apply_plan` takes, so
+            // this write does not land in the middle of another tab's
+            // eviction pass. Short-waited and ignored if refused — the bytes
+            // are already in hand and the user is waiting for them, so the
+            // worst outcome of going ahead unlocked is the race this path
+            // has always had.
+            let _lock = locks::acquire_exclusive(
+                &locks::world_sync_lock(request.world_id),
+                locks::WRITE_LOCK_TIMEOUT_MS,
+            )
+            .await;
+
             // `write_blob` re-verifies before anything is encrypted, so a
             // bug between here and there cannot file bad bytes under a good
             // name. Failure to store is a slower next visit, nothing more.
@@ -919,11 +977,7 @@ mod wasm {
         // IndexedDB record is gone. Dropping it here is as much a part of
         // FR-016a as the delete below, and doing it first means even the
         // bad-uuid path leaves no usable key behind in this tab.
-        HANDLES.with(|slot| slot.borrow_mut().take());
-        OPENING.with(|slot| slot.borrow_mut().take());
-        if let Ok(mut queue) = control_queue().lock() {
-            queue.push(super::Control::Forget);
-        }
+        forget_in_memory();
 
         let Ok(user_uuid) = Uuid::parse_str(&user_id) else {
             // Nothing scope-specific can be done, but the handles are already

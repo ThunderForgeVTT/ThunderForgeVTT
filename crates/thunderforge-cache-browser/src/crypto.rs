@@ -103,6 +103,111 @@ impl Envelope {
     }
 }
 
+/// The order in which a session key is obtained, as a state machine
+/// (FR-021a).
+///
+/// # Why this is a type rather than four lines of `async`
+///
+/// The whole of FR-021a is one ordering claim: **the second look in the
+/// store happens with the cross-tab lock held**. Written inline, that claim
+/// lives only in the shape of an `async fn` that cannot run outside a
+/// browser, and the way this feature has failed before is code that compiled
+/// and was never executed. Here the ordering is a value, so `cargo test`
+/// runs it — including a two-tab interleaving — and the wasm half below is
+/// reduced to performing whatever step it is handed.
+///
+/// The re-check is not an optimisation. Without it the lock accomplishes
+/// nothing at all: both tabs would still generate, merely one after the
+/// other, and the loser's writes would still be unreadable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyStep {
+    /// Read whatever is stored, with no lock held. The overwhelmingly common
+    /// case is a hit here, which is why it is not done under the lock: a
+    /// warm start must not queue behind anything.
+    Lookup,
+    /// Take the cross-tab key-creation lock for this scope.
+    AcquireLock,
+    /// Read the stored key **again**. The point of the lock.
+    Recheck,
+    /// Generate a key and persist it. Only ever reached from [`Self::Recheck`].
+    Generate,
+    /// A key was found; use it.
+    UseFound,
+}
+
+/// What the driver learned by performing a [`KeyStep`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyEvent {
+    /// A usable key was in the store.
+    Found,
+    /// Nothing usable was in the store.
+    Missing,
+    /// The lock is now held.
+    LockGranted,
+    /// The lock could not be taken — no Web Locks, or the wait ran out.
+    ///
+    /// Proceeds down exactly the same path as a grant, which is FR-021d:
+    /// without coordination the behaviour is today's, a possible duplicate
+    /// key and therefore a cold cache, never a failed load.
+    LockDenied,
+}
+
+/// A key acquisition in progress. See [`KeyStep`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KeyCreation {
+    step: KeyStep,
+    locked: bool,
+}
+
+impl Default for KeyCreation {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl KeyCreation {
+    /// Begin, at [`KeyStep::Lookup`].
+    pub fn new() -> Self {
+        Self {
+            step: KeyStep::Lookup,
+            locked: false,
+        }
+    }
+
+    /// The step the driver should perform now.
+    pub fn step(&self) -> KeyStep {
+        self.step
+    }
+
+    /// Whether the cross-tab lock is held at this point.
+    ///
+    /// Exposed so the ordering claim can be asserted rather than believed.
+    pub fn locked(&self) -> bool {
+        self.locked
+    }
+
+    /// Record the result of the current step and return the next one.
+    ///
+    /// An event that does not belong to the current step leaves the machine
+    /// where it was — there is no state in which a stray answer should be
+    /// able to skip the re-check.
+    pub fn advance(&mut self, event: KeyEvent) -> KeyStep {
+        self.step = match (self.step, event) {
+            (KeyStep::Lookup, KeyEvent::Found) => KeyStep::UseFound,
+            (KeyStep::Lookup, KeyEvent::Missing) => KeyStep::AcquireLock,
+            (KeyStep::AcquireLock, KeyEvent::LockGranted) => {
+                self.locked = true;
+                KeyStep::Recheck
+            }
+            (KeyStep::AcquireLock, KeyEvent::LockDenied) => KeyStep::Recheck,
+            (KeyStep::Recheck, KeyEvent::Found) => KeyStep::UseFound,
+            (KeyStep::Recheck, KeyEvent::Missing) => KeyStep::Generate,
+            (step, _) => step,
+        };
+        self.step
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
 pub use wasm::{SessionKey, forget, load_or_create};
 
@@ -113,8 +218,9 @@ mod wasm {
     use wasm_bindgen_futures::JsFuture;
     use web_sys::{AesGcmParams, AesKeyGenParams, Crypto, CryptoKey, SubtleCrypto};
 
-    use super::{ALGORITHM, Envelope, KEY_BITS, NONCE_LEN};
+    use super::{ALGORITHM, Envelope, KEY_BITS, KeyCreation, KeyEvent, KeyStep, NONCE_LEN};
     use crate::idb::Db;
+    use crate::locks;
     use crate::opfs::UserScope;
     use crate::{CacheError, Result, STORE_KEYS, global_property, js_err};
 
@@ -186,6 +292,26 @@ mod wasm {
     /// Fetch this scope's session key, generating and persisting one if there
     /// is none.
     ///
+    /// # Two tabs starting together (FR-021a)
+    ///
+    /// This is the one operation in the cache where losing a race is
+    /// expensive. Two tabs cold-starting both find no key, both generate one,
+    /// and the last write wins — after which everything the loser wrote is
+    /// ciphertext under a key nobody has. It degrades safely (FR-016c makes
+    /// that a cache miss, not a failure) but a cache that silently never
+    /// works in the situation users are actually in is still broken.
+    ///
+    /// So generation is serialised across tabs with a Web Lock, and — the
+    /// part that matters — **the store is read again with the lock held**.
+    /// The lock without the re-check would only make the two tabs generate in
+    /// turn. The ordering is enforced by [`KeyCreation`], which is a pure
+    /// state machine so that `cargo test` can run it; the loop below only
+    /// performs whatever step it is told to.
+    ///
+    /// A lock that cannot be taken is not an error. `LockDenied` follows the
+    /// same path as a grant, leaving today's behaviour: possibly a second key
+    /// and therefore a cold cache, never a failed load (FR-021d).
+    ///
     /// A key recovered from IndexedDB that reports `extractable: true` is
     /// discarded and replaced rather than used. Nothing in this crate can
     /// produce such a key, so its presence means something else wrote to our
@@ -194,21 +320,75 @@ mod wasm {
     /// cache, which is exactly the cost FR-016c already makes free.
     pub async fn load_or_create(scope: &UserScope) -> Result<SessionKey> {
         let db = Db::open().await?;
+        let mut creation = KeyCreation::new();
+        // Held from the moment it is granted until this function returns,
+        // which is what keeps the re-check and the generation inside the
+        // same critical section.
+        let mut lock = None;
+        let mut found = None;
 
-        if let Some(value) = db.get(STORE_KEYS, scope.as_str()).await?
-            && let Ok(key) = value.dyn_into::<CryptoKey>()
-        {
-            let key = SessionKey { key };
-            if key.is_extractable() {
-                db.delete(STORE_KEYS, scope.as_str()).await?;
-            } else {
-                return Ok(key);
+        loop {
+            match creation.step() {
+                KeyStep::Lookup | KeyStep::Recheck => {
+                    found = stored_key(&db, scope).await?;
+                    creation.advance(if found.is_some() {
+                        KeyEvent::Found
+                    } else {
+                        KeyEvent::Missing
+                    });
+                }
+                KeyStep::AcquireLock => {
+                    // At most once: the machine never revisits this step,
+                    // and asking twice would queue us behind ourselves.
+                    if lock.is_none() {
+                        lock = locks::acquire_exclusive(
+                            &locks::key_creation_lock(scope.as_str()),
+                            locks::KEY_LOCK_TIMEOUT_MS,
+                        )
+                        .await;
+                    }
+                    creation.advance(if lock.is_some() {
+                        KeyEvent::LockGranted
+                    } else {
+                        KeyEvent::LockDenied
+                    });
+                }
+                KeyStep::UseFound => {
+                    // The machine only reaches this from an event this loop
+                    // raised on a `Some`, so the `None` arm is unreachable
+                    // rather than a condition to handle.
+                    return found.ok_or_else(|| {
+                        CacheError::Corrupt("session key vanished between steps".into())
+                    });
+                }
+                KeyStep::Generate => {
+                    let key = generate().await?;
+                    db.put(STORE_KEYS, scope.as_str(), &key.key).await?;
+                    // `lock` drops here, releasing it for whichever tab is
+                    // queued behind us — which will then find this key.
+                    return Ok(key);
+                }
             }
         }
+    }
 
-        let key = generate().await?;
-        db.put(STORE_KEYS, scope.as_str(), &key.key).await?;
-        Ok(key)
+    /// The stored key for `scope`, if there is a usable one.
+    ///
+    /// Absence and unusability are the same answer, because the caller does
+    /// the same thing with both.
+    async fn stored_key(db: &Db, scope: &UserScope) -> Result<Option<SessionKey>> {
+        let Some(value) = db.get(STORE_KEYS, scope.as_str()).await? else {
+            return Ok(None);
+        };
+        let Ok(key) = value.dyn_into::<CryptoKey>() else {
+            return Ok(None);
+        };
+        let key = SessionKey { key };
+        if key.is_extractable() {
+            db.delete(STORE_KEYS, scope.as_str()).await?;
+            return Ok(None);
+        }
+        Ok(Some(key))
     }
 
     /// Discard this scope's key. Sign-out (FR-016a).
@@ -291,6 +471,285 @@ mod tests {
                 "expected {len} bytes to be refused"
             );
         }
+    }
+
+    /// Drive a [`KeyCreation`] against a fake store and a fake cross-tab
+    /// lock, recording every step. This is what makes FR-021a testable
+    /// without a browser: the ordering is the thing being asserted, and the
+    /// ordering lives in the machine, not in the I/O.
+    #[derive(Default)]
+    struct Profile {
+        /// The one stored key, shared by every "tab". A `u32` stands in for
+        /// the `CryptoKey`; what matters is only whether both tabs end up
+        /// with the same one.
+        stored: Option<u32>,
+        /// Which tab, if any, holds the key-creation lock.
+        lock_held_by: Option<usize>,
+        /// Incremented on every generation. FR-021a is the claim that this
+        /// reaches 1, not 2.
+        generated: u32,
+    }
+
+    /// One tab's progress, and the trace it left.
+    struct Tab {
+        id: usize,
+        machine: KeyCreation,
+        /// `(step performed, was the lock held while performing it)`.
+        trace: Vec<(KeyStep, bool)>,
+        key: Option<u32>,
+    }
+
+    impl Tab {
+        fn new(id: usize) -> Self {
+            Self {
+                id,
+                machine: KeyCreation::new(),
+                trace: Vec::new(),
+                key: None,
+            }
+        }
+
+        fn done(&self) -> bool {
+            self.key.is_some()
+        }
+
+        /// Perform one step. Returns `false` if the tab is blocked on the
+        /// lock and made no progress — which is precisely what serialisation
+        /// looks like from inside a tab.
+        fn tick(&mut self, profile: &mut Profile, locks_available: bool) -> bool {
+            let step = self.machine.step();
+            match step {
+                KeyStep::Lookup | KeyStep::Recheck => {
+                    self.trace.push((step, self.machine.locked()));
+                    let found = profile.stored;
+                    self.machine.advance(if found.is_some() {
+                        KeyEvent::Found
+                    } else {
+                        KeyEvent::Missing
+                    });
+                }
+                KeyStep::AcquireLock => {
+                    if !locks_available {
+                        self.trace.push((step, false));
+                        self.machine.advance(KeyEvent::LockDenied);
+                        return true;
+                    }
+                    match profile.lock_held_by {
+                        // Somebody else has it. Wait — no progress this tick.
+                        Some(holder) if holder != self.id => return false,
+                        _ => {
+                            profile.lock_held_by = Some(self.id);
+                            self.trace.push((step, false));
+                            self.machine.advance(KeyEvent::LockGranted);
+                        }
+                    }
+                }
+                KeyStep::Generate => {
+                    self.trace.push((step, self.machine.locked()));
+                    profile.generated += 1;
+                    let key = profile.generated;
+                    profile.stored = Some(key);
+                    self.key = Some(key);
+                    self.release(profile);
+                }
+                KeyStep::UseFound => {
+                    self.trace.push((step, self.machine.locked()));
+                    self.key = profile.stored;
+                    self.release(profile);
+                }
+            }
+            true
+        }
+
+        fn release(&self, profile: &mut Profile) {
+            if profile.lock_held_by == Some(self.id) {
+                profile.lock_held_by = None;
+            }
+        }
+
+        fn steps(&self) -> Vec<KeyStep> {
+            self.trace.iter().map(|(step, _)| *step).collect()
+        }
+
+        fn locked_during(&self, step: KeyStep) -> bool {
+            self.trace
+                .iter()
+                .find(|(performed, _)| *performed == step)
+                .map(|(_, locked)| *locked)
+                .unwrap_or(false)
+        }
+    }
+
+    fn run_alone(profile: &mut Profile, locks_available: bool) -> Tab {
+        let mut tab = Tab::new(0);
+        for _ in 0..16 {
+            if tab.done() {
+                break;
+            }
+            tab.tick(profile, locks_available);
+        }
+        assert!(tab.done(), "a lone tab must always terminate");
+        tab
+    }
+
+    #[test]
+    fn a_warm_start_takes_no_lock_at_all() {
+        // The common case. Queueing every reload behind a lock would make
+        // the coordination cost more than the race it prevents.
+        let mut profile = Profile {
+            stored: Some(9),
+            ..Profile::default()
+        };
+        let tab = run_alone(&mut profile, true);
+        assert_eq!(tab.steps(), vec![KeyStep::Lookup, KeyStep::UseFound]);
+        assert_eq!(tab.key, Some(9));
+        assert_eq!(profile.generated, 0);
+    }
+
+    #[test]
+    fn the_recheck_happens_with_the_lock_held() {
+        // FR-021a in one assertion. A re-check performed *before* the lock,
+        // or a generation performed outside it, would leave the race exactly
+        // where it was.
+        let mut profile = Profile::default();
+        let tab = run_alone(&mut profile, true);
+        assert_eq!(
+            tab.steps(),
+            vec![
+                KeyStep::Lookup,
+                KeyStep::AcquireLock,
+                KeyStep::Recheck,
+                KeyStep::Generate,
+            ]
+        );
+        assert!(
+            tab.locked_during(KeyStep::Recheck),
+            "the re-check must be inside the critical section, or it proves nothing"
+        );
+        assert!(tab.locked_during(KeyStep::Generate));
+        assert!(!tab.locked_during(KeyStep::Lookup));
+    }
+
+    #[test]
+    fn generation_is_only_ever_reached_through_the_recheck() {
+        // Exhaustive over the machine: from every state, feed every event,
+        // and confirm nothing lands on `Generate` except a `Recheck` that
+        // found nothing.
+        let states = [
+            KeyStep::Lookup,
+            KeyStep::AcquireLock,
+            KeyStep::Recheck,
+            KeyStep::Generate,
+            KeyStep::UseFound,
+        ];
+        let events = [
+            KeyEvent::Found,
+            KeyEvent::Missing,
+            KeyEvent::LockGranted,
+            KeyEvent::LockDenied,
+        ];
+        for from in states {
+            for event in events {
+                let mut machine = KeyCreation::new();
+                // Walk the machine into `from`.
+                match from {
+                    KeyStep::Lookup => {}
+                    KeyStep::AcquireLock => {
+                        machine.advance(KeyEvent::Missing);
+                    }
+                    KeyStep::Recheck => {
+                        machine.advance(KeyEvent::Missing);
+                        machine.advance(KeyEvent::LockGranted);
+                    }
+                    KeyStep::Generate => {
+                        machine.advance(KeyEvent::Missing);
+                        machine.advance(KeyEvent::LockGranted);
+                        machine.advance(KeyEvent::Missing);
+                    }
+                    KeyStep::UseFound => {
+                        machine.advance(KeyEvent::Found);
+                    }
+                }
+                assert_eq!(machine.step(), from);
+                let next = machine.advance(event);
+                if next == KeyStep::Generate && from != KeyStep::Generate {
+                    assert_eq!(
+                        (from, event),
+                        (KeyStep::Recheck, KeyEvent::Missing),
+                        "generation must not be reachable from {from:?} on {event:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn two_tabs_cold_starting_together_produce_one_key() {
+        // The failure this whole mechanism exists for. Both tabs look, both
+        // find nothing, and only then does either take the lock — so the
+        // loser's re-check is what saves it.
+        let mut profile = Profile::default();
+        let mut a = Tab::new(0);
+        let mut b = Tab::new(1);
+
+        // Both look first, before either can lock. This is the interleaving
+        // that breaks an unlocked implementation.
+        assert!(a.tick(&mut profile, true));
+        assert!(b.tick(&mut profile, true));
+        assert_eq!(a.machine.step(), KeyStep::AcquireLock);
+        assert_eq!(b.machine.step(), KeyStep::AcquireLock);
+
+        // A takes the lock; B cannot, and makes no progress until A is done.
+        assert!(a.tick(&mut profile, true));
+        assert!(
+            !b.tick(&mut profile, true),
+            "the second tab must block rather than proceed to generate"
+        );
+
+        // Round-robin to completion.
+        for _ in 0..16 {
+            if a.done() && b.done() {
+                break;
+            }
+            if !a.done() {
+                a.tick(&mut profile, true);
+            }
+            if !b.done() {
+                b.tick(&mut profile, true);
+            }
+        }
+
+        assert!(a.done() && b.done(), "neither tab may be left waiting");
+        assert_eq!(
+            profile.generated, 1,
+            "exactly one key may be generated across the profile"
+        );
+        assert_eq!(a.key, b.key, "both tabs must end up on the same key");
+        assert_eq!(
+            b.steps().last(),
+            Some(&KeyStep::UseFound),
+            "the losing tab must adopt the winner's key, not mint its own"
+        );
+        assert!(!b.steps().contains(&KeyStep::Generate));
+    }
+
+    #[test]
+    fn without_web_locks_both_tabs_still_finish_with_a_key() {
+        // FR-021d. Degraded means a duplicate key and therefore a cold cache
+        // for one tab — which FR-016c already makes free — and emphatically
+        // not a hang or a failure.
+        let mut profile = Profile::default();
+        let a = run_alone(&mut profile, false);
+        let b = run_alone(&mut profile, false);
+        assert!(a.key.is_some() && b.key.is_some());
+        assert!(
+            !a.locked_during(KeyStep::Recheck),
+            "no lock was available, so none may be claimed"
+        );
+        // The second tab still finds the first's key, because the re-check
+        // runs whether or not the lock was granted.
+        assert_eq!(profile.generated, 1);
+        assert_eq!(b.steps().last(), Some(&KeyStep::UseFound));
     }
 
     #[test]

@@ -201,6 +201,7 @@ mod wasm {
     use crate::Result;
     use crate::crypto::SessionKey;
     use crate::index::{IndexEntry, IndexStore};
+    use crate::locks;
     use crate::opfs::OpfsStore;
 
     /// The manifest to send for the world being opened.
@@ -249,6 +250,26 @@ mod wasm {
         world_id: Uuid,
         plan: &SyncPlan,
     ) -> ApplyOutcome {
+        // FR-021c. Held for the whole pass, and released when this returns.
+        //
+        // Without it, a second tab that has just fetched and stored an item
+        // can have its blob deleted out from under it here: this tab decided
+        // what to evict from a manifest taken before that fetch existed. The
+        // damage is repairable (FR-018/FR-019 notice the missing blob and
+        // refetch) but it is a wasted round trip in exactly the situation the
+        // cache is supposed to make fast.
+        //
+        // Not getting the lock is not a reason to skip the eviction. An
+        // eviction that never runs leaves content the server said we should
+        // no longer hold, and FR-015 cares about that far more than about a
+        // duplicated fetch. So this degrades to today's behaviour — the race
+        // is back, and it was always survivable (FR-021d).
+        let _lock = locks::acquire_exclusive(
+            &locks::world_sync_lock(world_id),
+            locks::WORLD_LOCK_TIMEOUT_MS,
+        )
+        .await;
+
         let mut outcome = ApplyOutcome::default();
 
         for id in &plan.evict {
@@ -318,6 +339,17 @@ mod wasm {
         fingerprint: &Fingerprint,
         bytes: &[u8],
     ) -> Result<()> {
+        // The other half of FR-021c: the same lock [`apply_plan`] takes, so
+        // a blob and its index row land together rather than straddling
+        // another tab's eviction pass. Short-waited on purpose — there is an
+        // asset waiting behind this, and a write that goes ahead unlocked is
+        // no worse than every write was before this lock existed.
+        let _lock = locks::acquire_exclusive(
+            &locks::world_sync_lock(world_id),
+            locks::WRITE_LOCK_TIMEOUT_MS,
+        )
+        .await;
+
         store.write_blob(world_id, fingerprint, bytes, key).await?;
         let seq = index.tick();
         index

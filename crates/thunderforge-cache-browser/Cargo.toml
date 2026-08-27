@@ -70,3 +70,15 @@ web-sys = { version = "0.3.97", features = [
 ] }
 
 [dev-dependencies]
+
+# Executing the wasm-only half, rather than merely compiling it.
+#
+# Everything pure in this crate is unit-tested natively, which leaves the
+# browser glue — the part that has historically shipped compiled and never
+# run. `wasm-bindgen-test` closes that gap where the API in question can be
+# stood up outside a browser: `tests/locks.rs` drives the real
+# `acquire_exclusive` against a hand-built `navigator.locks` under `wasm-pack
+# test --node`. OPFS, IndexedDB and WebCrypto cannot be faked so cheaply and
+# stay covered by the e2e suite.
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3"
