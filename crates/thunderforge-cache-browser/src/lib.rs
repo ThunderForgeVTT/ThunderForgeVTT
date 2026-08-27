@@ -41,6 +41,7 @@
 pub mod crypto;
 pub mod index;
 pub mod opfs;
+pub mod sync;
 
 #[cfg(target_arch = "wasm32")]
 mod idb;

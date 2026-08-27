@@ -25,6 +25,18 @@ server computes fingerprints and the fetch/evict plan; the client verifies
 fingerprints and decides evictions. Same rules. Written twice they drift,
 and drift here means a client that believes it is current when it is not.
 
+**Resolved 2026-08-26 — sync is engine-driven.** The manifest lives in the
+Rust browser crate alongside the index that produces it, so the request is
+built and the plan applied on that side of the WASM boundary. TypeScript
+triggers a sync and observes the result; it never decides anything.
+
+The alternative — orchestrating from TS with `manifest()`/`apply_plan()`
+exposed through `wasm_bindgen`, matching how `apply_world_command` already
+works — was rejected because TS would then hold, however briefly, a second
+account of what is cached. Constitution Principle I exists to prevent exactly
+that, and cache policy having one owner is the whole reason `cache-core` is
+shared rather than reimplemented.
+
 **Alternatives considered**:
 
 - **Service Worker intercepting `/canvas-assets/*`** — attractive because it
