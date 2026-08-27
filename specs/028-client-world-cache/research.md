@@ -46,9 +46,33 @@ shared rather than reimplemented.
   on every worker restart; and SW lifecycle bugs are notoriously hard to
   reproduce in Playwright. Worth revisiting if OPFS proves slow.
 - **Custom Bevy `AssetReader`** — idiomatic for Bevy and keeps everything in
-  the engine. Kept as the *mechanism* inside `cached_assets.rs`, but not as
-  the owner of the store: the offline queue and the delta protocol are not
-  asset concerns and should not live behind an asset abstraction.
+  the engine. Not used in T027's first implementation, which fetches bytes
+  itself and delivers via `reserve_handle` + `insert`.
+
+  **Revisited 2026-08-26, and two of the three reasons for rejecting it do
+  not hold.** Recorded here because the door is open, not closed:
+
+  - *"Must be registered before `AssetPlugin`"* — true (`register_asset_source`
+    errors once an `AssetServer` exists), but solved by adding the plugin
+    before `DefaultPlugins` rather than after. Still one line in `lib.rs`, so
+    Principle II removability survives.
+  - *"`AssetReader` requires `Send + Sync`, and OPFS/WebCrypto handles are
+    `JsValue`"* — **this was wrong**. The bound is on the *struct*, not on
+    what it touches, and the returned future is `ConditionalSendFuture`,
+    which on wasm is a blanket impl with no `Send` bound at all. Bevy's own
+    `HttpWasmAssetReader` stores nothing but a `PathBuf` and creates its JS
+    objects inside the future; a cache reader would open OPFS lazily the same
+    way and store no handle.
+  - *"`read(path)` cannot carry the server-promised fingerprint"* — this one
+    stands, but is no worse than the current design, which already keeps a
+    path→fingerprint map for exactly this reason.
+
+  **Worth doing eventually**: `AssetServer` would then own handle lifecycle,
+  deduplication of concurrent loads for the same path, and hot-reload, all of
+  which `cached_assets.rs` currently reimplements in part via its `issued`
+  map. Deliberately not done yet — the current path compiles and degrades
+  correctly but has never executed end to end, and rewriting an unproven
+  implementation is the wrong order.
 - **All TypeScript** — rejected on the AssetServer finding above and on
   Principle I: cache policy in React is the second-source-of-truth mistake.
 

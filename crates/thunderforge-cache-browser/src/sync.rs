@@ -176,3 +176,178 @@ pub fn sync_request_body(manifest: &Manifest) -> String {
     })
     .to_string()
 }
+
+#[cfg(target_arch = "wasm32")]
+pub use wasm::{
+    ApplyOutcome, apply_plan, canvas_fingerprints, manifest_for_open_world, record_fetched,
+};
+
+/// The browser half of a sync: reading the manifest out of the index, and
+/// putting the server's answer into effect.
+///
+/// This is where "policy has one owner" is actually enforced. Everything
+/// above is pure and decides *what* the client holds and *what* the server
+/// said; everything here performs it against OPFS and IndexedDB. Neither
+/// half is reachable from TypeScript, which is the point of R1 — TS may ask
+/// for a sync and read the summary, and that is the whole of its
+/// involvement.
+#[cfg(target_arch = "wasm32")]
+mod wasm {
+    use thunderforge_cache_core::delta::SyncPlan;
+    use thunderforge_cache_core::manifest::Manifest;
+    use thunderforge_cache_core::{Fingerprint, ItemId};
+    use uuid::Uuid;
+
+    use crate::Result;
+    use crate::crypto::SessionKey;
+    use crate::index::{IndexEntry, IndexStore};
+    use crate::opfs::OpfsStore;
+
+    /// The manifest to send for the world being opened.
+    ///
+    /// An index we cannot read yields an *empty* manifest rather than an
+    /// error, and an empty manifest is the cold-start case the contract
+    /// already specifies: the server returns a full plan. So a broken index
+    /// costs bandwidth, never correctness — it can never make the client
+    /// believe it holds something it does not.
+    pub async fn manifest_for_open_world(index: &IndexStore, world_id: Uuid) -> Manifest {
+        let entries = index.for_world(world_id).await.unwrap_or_default();
+        super::manifest_for_world(world_id, &entries)
+    }
+
+    /// What applying a plan actually managed to do.
+    #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+    pub struct ApplyOutcome {
+        /// Items whose index row was dropped.
+        pub evicted: usize,
+        /// Blob files deleted. Lower than `evicted` when two items shared
+        /// one blob, or when a row referred to a blob already gone.
+        pub blobs_removed: usize,
+        /// Evictions that hit a platform error. Reported rather than
+        /// swallowed, because a failed eviction is the one failure in this
+        /// path with a permissions consequence (FR-015).
+        pub failed: usize,
+    }
+
+    /// Put the server's plan into effect: discard what it evicted.
+    ///
+    /// Only the eviction half is performed here. `fetch` is deliberately not
+    /// acted on at this layer — obtaining bytes needs an HTTP client and a
+    /// URL scheme, neither of which belongs to a storage crate — so the
+    /// caller fetches and calls [`record_fetched`] per item.
+    ///
+    /// **Blobs are deleted only when nothing else refers to them.** Content
+    /// is addressed by fingerprint, so two items in a world can legitimately
+    /// share one file (`opfs.rs`, "identical content is stored once");
+    /// deleting on the strength of one row would silently take the other
+    /// item's bytes with it. The index row goes first regardless, because
+    /// that is what makes the item unreachable — which is the property
+    /// revocation actually needs.
+    pub async fn apply_plan(
+        store: &OpfsStore,
+        index: &IndexStore,
+        world_id: Uuid,
+        plan: &SyncPlan,
+    ) -> ApplyOutcome {
+        let mut outcome = ApplyOutcome::default();
+
+        for id in &plan.evict {
+            let fingerprint = match index.get(*id).await {
+                Ok(Some(entry)) => Some(entry.fingerprint),
+                // Nothing indexed under this id: already absent, which is
+                // the postcondition. Not a failure.
+                Ok(None) => None,
+                Err(_) => {
+                    outcome.failed += 1;
+                    continue;
+                }
+            };
+
+            if index.remove(*id).await.is_err() {
+                outcome.failed += 1;
+                continue;
+            }
+            outcome.evicted += 1;
+
+            let Some(fingerprint) = fingerprint else {
+                continue;
+            };
+            if still_referenced(index, world_id, &fingerprint).await {
+                continue;
+            }
+            match store.remove_blob(world_id, &fingerprint).await {
+                Ok(()) => outcome.blobs_removed += 1,
+                Err(_) => outcome.failed += 1,
+            }
+        }
+
+        outcome
+    }
+
+    /// Whether any surviving row in this world still points at a blob.
+    ///
+    /// Errs on the side of keeping the file: an index we cannot read is a
+    /// reason to leave bytes alone, not to delete another item's content.
+    /// The bytes are encrypted and unreferenced-but-present is a state the
+    /// FR-019 repair pass already collects.
+    async fn still_referenced(
+        index: &IndexStore,
+        world_id: Uuid,
+        fingerprint: &Fingerprint,
+    ) -> bool {
+        match index.for_world(world_id).await {
+            Ok(rows) => rows
+                .iter()
+                .any(|(_, entry)| entry.fingerprint == *fingerprint),
+            Err(_) => true,
+        }
+    }
+
+    /// Store bytes obtained for a planned fetch, and index them.
+    ///
+    /// `write_blob` verifies against `fingerprint` before anything is
+    /// encrypted, so this cannot file bytes that are not what the server
+    /// promised — the check is not repeated here precisely so there is only
+    /// one of it.
+    pub async fn record_fetched(
+        store: &OpfsStore,
+        index: &mut IndexStore,
+        key: &SessionKey,
+        world_id: Uuid,
+        id: ItemId,
+        fingerprint: &Fingerprint,
+        bytes: &[u8],
+    ) -> Result<()> {
+        store.write_blob(world_id, fingerprint, bytes, key).await?;
+        let seq = index.tick();
+        index
+            .put(
+                id,
+                &IndexEntry::new(*fingerprint, bytes.len() as u64, world_id, seq),
+            )
+            .await
+    }
+
+    /// The canvas assets this client currently believes it holds for a
+    /// world, as `(asset id, fingerprint)`.
+    ///
+    /// The engine's read path needs a server-promised fingerprint per asset
+    /// before it will consult the cache at all, and after a sync the index
+    /// *is* that promise: rows the server did not contradict are current by
+    /// the contract's rule that silence means unchanged.
+    pub async fn canvas_fingerprints(
+        index: &IndexStore,
+        world_id: Uuid,
+    ) -> Vec<(Uuid, Fingerprint)> {
+        index
+            .for_world(world_id)
+            .await
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|(id, entry)| match id {
+                ItemId::CanvasAsset(asset_id) => Some((asset_id, entry.fingerprint)),
+                ItemId::SceneState(_) => None,
+            })
+            .collect()
+    }
+}

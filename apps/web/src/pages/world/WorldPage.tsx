@@ -467,6 +467,36 @@ export default function WorldPage() {
     );
   }, [worldStore]);
 
+  // Spec 028 (US1): bring the local world cache into agreement with the
+  // server for the world being opened, before its assets are asked for.
+  //
+  // Runs on identity, not on `engineReady`: the sync is a network round trip
+  // plus OPFS/IndexedDB work that has nothing to do with the render loop, and
+  // the sooner it finishes the more of this visit's asset loads can be served
+  // from disk. Anything it publishes late simply misses those loads, which
+  // fall back to the network — the same outcome as no cache at all.
+  //
+  // Not awaited by anything and not gated on. `syncWorldCache` never throws
+  // and never rejects: a browser without OPFS, a missing session key, an
+  // unreachable server or a malformed plan all resolve to a "degraded"
+  // summary and leave the page on exactly today's behaviour. A cache problem
+  // must not be able to stop a world from opening.
+  useEffect(() => {
+    const userId = user?.id;
+    if (!id || !userId) {
+      return;
+    }
+
+    void import("@/engine/bevy").then(({ syncWorldCache }) =>
+      syncWorldCache(id, userId).then((summary) => {
+        // The only observation this side makes of the cache, and it is
+        // diagnostic: what was held, fetched and evicted, never *which*
+        // items. See `WorldCacheSyncSummary`.
+        console.debug("[world-cache] sync", summary);
+      }),
+    );
+  }, [id, user?.id]);
+
   // FR-010: tell the engine whether this session may author walls/shapes.
   // Without this, WallPlugin/ShapePlugin's IsGameMaster resource stays at
   // its `false` default forever and no click/keyboard authoring input is

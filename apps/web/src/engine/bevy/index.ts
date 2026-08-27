@@ -7,6 +7,12 @@ type BevyWasmModule = {
   start: (canvasSelector: string) => void;
   apply_world_command?: (json: string) => void;
   set_event_callback?: (callback: (json: string) => void) => void;
+  /**
+   * Spec 028 (US1, T027/T028). Optional because an engine bundle built
+   * before this existed must still mount — a missing cache is the
+   * degradation this whole path is designed around, not an error.
+   */
+  sync_world_cache?: (worldId: string, userId: string) => Promise<string>;
 };
 
 let loadPromise: Promise<BevyWasmModule> | null = null;
@@ -268,6 +274,67 @@ export async function triggerDiceRollAnimation(
   module.apply_world_command(
     JSON.stringify({ type: "trigger_dice_roll", dice }),
   );
+}
+
+/**
+ * What one world-open sync did, as reported by the engine.
+ *
+ * Read-only telemetry. Note what is *not* here: no list of cached items, no
+ * fingerprints, nothing that would let this side form a second opinion about
+ * what the cache holds. Per research.md R1 and Constitution Principle I,
+ * cache policy has exactly one owner and it is the Rust side — TypeScript
+ * asks for a sync and reads the outcome, and that is the whole of its
+ * involvement.
+ */
+export interface WorldCacheSyncSummary {
+  /** `"synced"` when the plan was applied; `"degraded"` otherwise. */
+  status: "synced" | "degraded";
+  /** Why it degraded. Absent on success. */
+  reason?: string;
+  /** Items the client already held and told the server about. */
+  held?: number;
+  /** Items the server asked for. */
+  fetch?: number;
+  /** Index rows discarded, and blob files that went with them. */
+  evicted?: number;
+  blobsRemoved?: number;
+  evictFailures?: number;
+  /** Assets being pulled ahead of demand, in the background. */
+  prefetching?: number;
+  canonicalVersion?: number;
+}
+
+/**
+ * Spec 028 (US1): bring this browser's cache into agreement with the server
+ * for the world being opened.
+ *
+ * One call does everything — derives the OPFS scope from the authenticated
+ * user id, sends the manifest, applies the returned plan, and points the
+ * engine's asset read path at the result. That is deliberate: the manifest
+ * and the fetch/evict decisions live in `thunderforge-cache-browser`, where
+ * the index that produces them lives, and never cross this boundary.
+ *
+ * **Cannot fail.** Resolves to `null` when the engine has no cache entry
+ * point at all, and to a `"degraded"` summary for every runtime failure —
+ * no OPFS, no session key, an unreachable server, a malformed plan. In every
+ * one of those cases the app behaves exactly as it did before this feature
+ * existed: assets load from the network. A cache problem must never stop a
+ * world from opening, so this swallows rather than rethrows.
+ */
+export async function syncWorldCache(
+  worldId: string,
+  userId: string,
+): Promise<WorldCacheSyncSummary | null> {
+  try {
+    const module = await getWasmModule();
+    if (!module.sync_world_cache) {
+      return null;
+    }
+    const summary = await module.sync_world_cache(worldId, userId);
+    return JSON.parse(summary) as WorldCacheSyncSummary;
+  } catch {
+    return null;
+  }
 }
 
 export function getEngineState(): Readonly<EngineState> {

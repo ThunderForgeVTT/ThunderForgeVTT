@@ -306,6 +306,16 @@ enum Control {
     Configure { scope: String, world_id: Uuid },
     /// The server's current fingerprints for a set of canvas assets.
     Fingerprints(Vec<(Uuid, Fingerprint)>),
+    /// The complete, authoritative set of fingerprints for the open world,
+    /// replacing whatever was known before.
+    ///
+    /// Distinct from [`Control::Fingerprints`] because a sync answers a
+    /// question the additive form cannot: *what is no longer ours*. An asset
+    /// the server evicted has had its bytes deleted, so leaving its promise
+    /// in place would send the next load to the network and store the result
+    /// again — quietly undoing the eviction. Replacing the whole map is what
+    /// makes revocation stick (FR-015).
+    ReplaceFingerprints(Vec<(Uuid, Fingerprint)>),
     /// The backing store finished opening: usable, or not on this browser.
     ///
     /// Decided off the main thread and applied here, because the resource is
@@ -379,43 +389,62 @@ fn drain_control_queue(mut cache: ResMut<CanvasAssetCache>) {
         return;
     };
     for control in queue.drain(..) {
-        match control {
-            Control::Configure { scope, world_id } => {
-                if cache.world_id != Some(world_id) {
-                    // Issued ids are only meaningful within the world they
-                    // were resolved under; carrying them across a world
-                    // change would hand out another world's texture.
-                    cache.issued.clear();
-                    cache.world_id = Some(world_id);
-                }
-                // A new scope means a different user, so nothing already
-                // resolved may be reused and the store must be reopened —
-                // even from `Unavailable`, which was a verdict about a
-                // scope, not about the browser.
-                if cache.scope.as_deref() != Some(scope.as_str()) {
-                    cache.scope = Some(scope.clone());
-                    cache.issued.clear();
-                    cache.fingerprints.clear();
-                    cache.readiness = Readiness::Opening;
-                    open_backing_store(scope);
-                }
+        apply_control(&mut cache, control);
+    }
+}
+
+/// One instruction, applied to the resource.
+///
+/// Split out of the drain so the state machine is exercisable without a
+/// `World` — the conditions that matter here are "does an evicted asset stop
+/// being cacheable" and "does a different user reset everything", and those
+/// deserve tests rather than a browser.
+fn apply_control(cache: &mut CanvasAssetCache, control: Control) {
+    match control {
+        Control::Configure { scope, world_id } => {
+            if cache.world_id != Some(world_id) {
+                // Issued ids are only meaningful within the world they
+                // were resolved under; carrying them across a world
+                // change would hand out another world's texture.
+                cache.issued.clear();
+                cache.world_id = Some(world_id);
             }
-            Control::Fingerprints(entries) => {
-                for (asset_id, fingerprint) in entries {
-                    // A superseded fingerprint invalidates the handle issued
-                    // under the old one; `issued` is keyed by both, so the
-                    // stale row is simply never consulted again. Removing it
-                    // eagerly is not worth a scan.
-                    cache.fingerprints.insert(asset_id, fingerprint);
-                }
+            // A new scope means a different user, so nothing already
+            // resolved may be reused and the store must be reopened —
+            // even from `Unavailable`, which was a verdict about a
+            // scope, not about the browser.
+            if cache.scope.as_deref() != Some(scope.as_str()) {
+                cache.scope = Some(scope.clone());
+                cache.issued.clear();
+                cache.fingerprints.clear();
+                cache.readiness = Readiness::Opening;
+                open_backing_store(scope);
             }
-            Control::Readiness(ready) => {
-                cache.readiness = if ready {
-                    Readiness::Ready
-                } else {
-                    Readiness::Unavailable
-                };
+        }
+        Control::Fingerprints(entries) => {
+            for (asset_id, fingerprint) in entries {
+                // A superseded fingerprint invalidates the handle issued
+                // under the old one; `issued` is keyed by both, so the
+                // stale row is simply never consulted again. Removing it
+                // eagerly is not worth a scan.
+                cache.fingerprints.insert(asset_id, fingerprint);
             }
+        }
+        Control::ReplaceFingerprints(entries) => {
+            cache.fingerprints.clear();
+            // Handles issued under a promise that no longer exists must
+            // not be reused: the blob behind one may have just been
+            // deleted, and the id would then be honoured forever off the
+            // strength of a texture still resident in `Assets<Image>`.
+            cache.issued.clear();
+            cache.fingerprints.extend(entries);
+        }
+        Control::Readiness(ready) => {
+            cache.readiness = if ready {
+                Readiness::Ready
+            } else {
+                Readiness::Unavailable
+            };
         }
     }
 }
@@ -498,13 +527,19 @@ use wasm::{open_backing_store, spawn_resolve};
 #[cfg(target_arch = "wasm32")]
 mod wasm {
     use std::cell::RefCell;
+    use std::future::Future;
+    use std::pin::Pin;
     use std::rc::Rc;
 
     use bevy::prelude::*;
+    use futures_util::FutureExt;
+    use futures_util::future::Shared;
     use thunderforge_cache_browser::index::IndexStore;
     use thunderforge_cache_browser::opfs::{OpfsStore, UserScope};
+    use thunderforge_cache_browser::sync;
     use thunderforge_cache_browser::{IndexEntry, crypto};
-    use thunderforge_cache_core::{ItemId, fingerprint};
+    use thunderforge_cache_core::delta::SyncPlan;
+    use thunderforge_cache_core::{Fingerprint, ItemId, fingerprint};
     use uuid::Uuid;
     use wasm_bindgen_futures::spawn_local;
 
@@ -530,8 +565,14 @@ mod wasm {
         index: RefCell<Option<IndexStore>>,
     }
 
+    /// An open in progress, kept so concurrent askers share one.
+    type LocalOpen = Pin<Box<dyn Future<Output = Option<Rc<Handles>>>>>;
+    type PendingOpen = Shared<LocalOpen>;
+
     thread_local! {
         static HANDLES: RefCell<Option<Rc<Handles>>> = const { RefCell::new(None) };
+        static OPENING: RefCell<Option<(UserScope, PendingOpen)>> =
+            const { RefCell::new(None) };
     }
 
     /// Open OPFS and the session key, then mark the cache usable.
@@ -541,50 +582,92 @@ mod wasm {
     /// user gets today's load times and no diagnostic beyond one log line.
     pub(super) fn open_backing_store(scope: String) {
         spawn_local(async move {
-            let scope = match UserScope::new(scope) {
-                Ok(scope) => scope,
-                Err(err) => {
-                    warn!(target: "cached_assets", "cache disabled: bad user scope: {err}");
-                    mark_unavailable();
-                    return;
-                }
+            let Ok(scope) = UserScope::new(scope) else {
+                warn!(target: "cached_assets", "cache disabled: bad user scope");
+                mark_unavailable();
+                return;
             };
-            let key = match crypto::load_or_create(&scope).await {
-                Ok(key) => key,
-                Err(err) => {
-                    warn!(target: "cached_assets", "cache disabled: no session key: {err}");
-                    mark_unavailable();
-                    return;
-                }
-            };
-            let store = match OpfsStore::open(scope).await {
-                Ok(store) => store,
-                Err(err) => {
-                    warn!(target: "cached_assets", "cache disabled: no OPFS: {err}");
-                    mark_unavailable();
-                    return;
-                }
-            };
-            let index = match IndexStore::open().await {
-                Ok(index) => Some(index),
-                // A missing index does not stop reads or writes; it only
-                // means the first write opens its own. Worth a line, not a
-                // shutdown.
-                Err(err) => {
-                    warn!(target: "cached_assets", "cache index unavailable: {err}");
-                    None
-                }
-            };
-            HANDLES.with(|slot| {
-                *slot.borrow_mut() = Some(Rc::new(Handles {
-                    store,
-                    key,
-                    index: RefCell::new(index),
-                }));
-            });
-            mark_ready();
-            info!(target: "cached_assets", "canvas asset cache ready");
+            ensure_handles(scope).await;
         });
+    }
+
+    /// The handles for `scope`, opening them if this is the first ask.
+    ///
+    /// Two callers can want them at once — a `Configure` drained on the main
+    /// thread and a sync triggered from JS in the same tick — and opening
+    /// twice is not merely wasteful: `crypto::load_or_create` would race
+    /// itself, generate two keys, and leave everything written under the
+    /// loser unreadable. So the in-flight open is shared, and the second
+    /// caller awaits the first's result rather than starting its own.
+    async fn ensure_handles(scope: UserScope) -> Option<Rc<Handles>> {
+        if let Some(existing) = HANDLES.with(|slot| slot.borrow().clone())
+            && existing.store.scope() == &scope
+        {
+            return Some(existing);
+        }
+
+        let pending = OPENING.with(|slot| {
+            let mut slot = slot.borrow_mut();
+            // A pending open for a *different* scope is not ours to wait on;
+            // the user changed, and their directory is a different one.
+            if let Some((pending_scope, future)) = slot.as_ref()
+                && *pending_scope == scope
+            {
+                return future.clone();
+            }
+            let future: PendingOpen = (Box::pin(open_handles(scope.clone())) as LocalOpen).shared();
+            *slot = Some((scope.clone(), future.clone()));
+            future
+        });
+
+        let handles = pending.await;
+        OPENING.with(|slot| {
+            let mut slot = slot.borrow_mut();
+            if slot.as_ref().is_some_and(|(pending, _)| *pending == scope) {
+                *slot = None;
+            }
+        });
+        handles
+    }
+
+    async fn open_handles(scope: UserScope) -> Option<Rc<Handles>> {
+        let key = match crypto::load_or_create(&scope).await {
+            Ok(key) => key,
+            Err(err) => {
+                warn!(target: "cached_assets", "cache disabled: no session key: {err}");
+                mark_unavailable();
+                return None;
+            }
+        };
+        let store = match OpfsStore::open(scope).await {
+            Ok(store) => store,
+            Err(err) => {
+                warn!(target: "cached_assets", "cache disabled: no OPFS: {err}");
+                mark_unavailable();
+                return None;
+            }
+        };
+        let index = match IndexStore::open().await {
+            Ok(index) => Some(index),
+            // A missing index does not stop reads or writes; it only
+            // means the first write opens its own. Worth a line, not a
+            // shutdown.
+            Err(err) => {
+                warn!(target: "cached_assets", "cache index unavailable: {err}");
+                None
+            }
+        };
+        let handles = Rc::new(Handles {
+            store,
+            key,
+            index: RefCell::new(index),
+        });
+        HANDLES.with(|slot| {
+            *slot.borrow_mut() = Some(handles.clone());
+        });
+        mark_ready();
+        info!(target: "cached_assets", "canvas asset cache ready");
+        Some(handles)
     }
 
     /// Resolve one asset: local first, network second, store on the way back.
@@ -730,6 +813,264 @@ mod wasm {
         *handles.index.borrow_mut() = Some(index);
     }
 
+    /// Where `worldSyncPlan` is served. Same-origin and rooted, so the
+    /// session cookie rides along exactly as it does for the asset route —
+    /// the engine never holds a token of its own.
+    const GRAPHQL_ENDPOINT: &str = "/api/graphql";
+
+    /// The authenticated byte route, matching the paths TypeScript already
+    /// hands the engine for canvas images (`WorldPage.tsx`). Extensions are
+    /// optional on that route but kept, because Bevy chooses its decoder
+    /// from them.
+    const ASSET_URL_PREFIX: &str = "/api/canvas-assets";
+
+    /// How much a single world open may pull ahead of demand.
+    ///
+    /// A cold world's plan lists every asset in it, and fetching all of them
+    /// eagerly is how the *next* visit becomes free (US1 scenario 3). But an
+    /// unbounded prefetch would let a large world spend more of this visit's
+    /// bandwidth than the visit itself needs, competing with the scene the
+    /// user is waiting on. Past the ceiling the remaining items are simply
+    /// left to the demand path, which caches them as they are used — slower
+    /// to warm, never wrong.
+    const PREFETCH_BUDGET_BYTES: u64 = 64 * 1024 * 1024;
+
+    /// Bring the local cache into agreement with the server for one world,
+    /// then point the read path at the result.
+    ///
+    /// This is the one entry point the web client calls on world open, and
+    /// the only one that needs to exist: identity, manifest, request, plan
+    /// application and the resulting promises are all decided here (R1).
+    /// TypeScript passes two ids and reads a summary; it never learns what
+    /// is cached, and never decides what to fetch or discard.
+    ///
+    /// `user_id` is the authenticated user's uuid — the *scope is derived
+    /// from it here*, via `UserScope::for_user`, so no caller can file one
+    /// user's bytes under another's directory by passing the wrong string.
+    ///
+    /// **Never rejects and never throws.** Every failure — a bad id, no
+    /// OPFS, no key, no network, a malformed plan — resolves to a summary
+    /// with `status: "degraded"` and leaves the client on exactly today's
+    /// behaviour: plain network loads. A cache problem must not be able to
+    /// stop a world from opening.
+    #[wasm_bindgen::prelude::wasm_bindgen]
+    pub async fn sync_world_cache(world_id: String, user_id: String) -> String {
+        run_sync(world_id, user_id).await.to_string()
+    }
+
+    fn degraded(reason: &str) -> serde_json::Value {
+        debug!(target: "cached_assets", "world cache sync degraded: {reason}");
+        serde_json::json!({ "status": "degraded", "reason": reason })
+    }
+
+    async fn run_sync(world_id: String, user_id: String) -> serde_json::Value {
+        let Ok(world_uuid) = Uuid::parse_str(&world_id) else {
+            return degraded("world id is not a uuid");
+        };
+        let Ok(user_uuid) = Uuid::parse_str(&user_id) else {
+            return degraded("user id is not a uuid");
+        };
+        let scope = UserScope::for_user(user_uuid);
+
+        // Identity first, before anything can fail. Even a sync that
+        // degrades leaves the read path pointed at the right directory, so
+        // an offline reopen can still serve what is already on disk.
+        super::configure_canvas_asset_cache(scope.as_str(), &world_id);
+
+        let Some(handles) = ensure_handles(scope).await else {
+            return degraded("cache unavailable on this browser");
+        };
+        let Some(index) = borrow_index(&handles).await else {
+            return degraded("cache index unavailable");
+        };
+
+        let manifest = sync::manifest_for_open_world(&index, world_uuid).await;
+        let held = manifest.len();
+        let body = sync::sync_request_body(&manifest);
+
+        let outcome = match post_sync(&body).await {
+            Ok(text) => sync::parse_sync_plan(&text),
+            Err(err) => Err(thunderforge_cache_browser::sync::SyncError::Transport(err)),
+        };
+
+        let outcome = match outcome {
+            Ok(outcome) => outcome,
+            Err(err) => {
+                // The server is unreachable or disagreed with us. What we
+                // hold is still what we last verified, so publish it: an
+                // offline reopen reads from disk rather than failing to
+                // read at all.
+                publish_fingerprints(&index, world_uuid, &SyncPlan::default()).await;
+                return_index(&handles, index);
+                warn!(target: "cached_assets", "world cache sync failed: {err}");
+                let mut summary = degraded(&err.to_string());
+                summary["held"] = serde_json::json!(held);
+                return summary;
+            }
+        };
+
+        let applied = sync::apply_plan(&handles.store, &index, world_uuid, &outcome.plan).await;
+        publish_fingerprints(&index, world_uuid, &outcome.plan).await;
+        return_index(&handles, index);
+
+        let planned: Vec<(Uuid, Fingerprint, u64)> = outcome
+            .plan
+            .fetch
+            .iter()
+            .filter_map(|item| match item.id {
+                ItemId::CanvasAsset(asset_id) => Some((asset_id, item.fingerprint, item.byte_size)),
+                // Scene state has no byte route of its own; it arrives
+                // through the existing GraphQL scene load. Nothing to
+                // prefetch, and inventing a URL for it would be worse.
+                ItemId::SceneState(_) => None,
+            })
+            .collect();
+        let prefetching = planned.len();
+
+        // Deliberately not awaited: warming the cache is the next visit's
+        // benefit, and making this visit wait for it would trade the thing
+        // the user is watching for a thing they are not.
+        spawn_local(prefetch(handles, world_uuid, planned));
+
+        serde_json::json!({
+            "status": "synced",
+            "worldId": world_id,
+            "held": held,
+            "fetch": outcome.plan.fetch.len(),
+            "evicted": applied.evicted,
+            "blobsRemoved": applied.blobs_removed,
+            "evictFailures": applied.failed,
+            "prefetching": prefetching,
+            "canonicalVersion": outcome.canonical_version,
+        })
+    }
+
+    /// The double-submit CSRF token the server requires on every
+    /// state-changing method for a session (`auth_middleware.rs`,
+    /// `require_csrf_for_session`).
+    ///
+    /// GraphQL is served over POST, so a query is a "state-changing method"
+    /// as far as that middleware is concerned and a manifest sent without
+    /// this header comes back 403 — which is how this was found. The cookie
+    /// is deliberately not `HttpOnly` precisely so the client can echo it,
+    /// which is the whole of the double-submit pattern; nothing secret is
+    /// being read out of the page here.
+    const CSRF_COOKIE: &str = "csrf_token";
+    const CSRF_HEADER: &str = "x-csrf-token";
+
+    /// Read one cookie by name, via `document.cookie`.
+    ///
+    /// Reached through `js_sys::Reflect` rather than `web_sys::window()`
+    /// because this crate does not depend on `web-sys` directly, and because
+    /// the engine is not entitled to assume it is running on a `Window` —
+    /// `document` being absent (a worker) is simply "no token", handled by
+    /// the `Option` like any other miss.
+    fn cookie_value(name: &str) -> Option<String> {
+        let document = js_sys::Reflect::get(
+            &js_sys::global(),
+            &wasm_bindgen::JsValue::from_str("document"),
+        )
+        .ok()?;
+        let cookies =
+            js_sys::Reflect::get(&document, &wasm_bindgen::JsValue::from_str("cookie")).ok()?;
+        let cookies = cookies.as_string()?;
+        cookies.split(';').find_map(|pair| {
+            let (key, value) = pair.split_once('=')?;
+            (key.trim() == name).then(|| value.trim().to_owned())
+        })
+    }
+
+    /// POST the manifest. Same-origin, so credentials ride along by default.
+    async fn post_sync(body: &str) -> Result<String, String> {
+        let mut builder = gloo_net::http::Request::post(GRAPHQL_ENDPOINT)
+            .header("Content-Type", "application/json");
+        if let Some(token) = cookie_value(CSRF_COOKIE) {
+            builder = builder.header(CSRF_HEADER, &token);
+        }
+        let request = builder
+            .body(body.to_owned())
+            .map_err(|err| err.to_string())?;
+        let response = request.send().await.map_err(|err| err.to_string())?;
+        if !response.ok() {
+            return Err(format!("HTTP {}", response.status()));
+        }
+        response.text().await.map_err(|err| err.to_string())
+    }
+
+    /// Hand the read path the complete set of promises for this world.
+    ///
+    /// Held rows first (the contract's silence means they are current),
+    /// then the plan's fetches on top (a superseded asset's new fingerprint
+    /// must win over the one we hold). Replaced wholesale rather than
+    /// merged, so an evicted asset loses its promise and cannot be quietly
+    /// re-cached by the next load.
+    async fn publish_fingerprints(index: &IndexStore, world_id: Uuid, plan: &SyncPlan) {
+        let mut entries = sync::canvas_fingerprints(index, world_id).await;
+        for item in &plan.fetch {
+            if let ItemId::CanvasAsset(asset_id) = item.id {
+                entries.retain(|(id, _)| *id != asset_id);
+                entries.push((asset_id, item.fingerprint));
+            }
+        }
+        if let Ok(mut queue) = control_queue().lock() {
+            queue.push(Control::ReplaceFingerprints(entries));
+        }
+    }
+
+    /// Fetch planned canvas assets ahead of demand, up to the budget.
+    ///
+    /// Sequential on purpose: a burst of parallel requests for a whole
+    /// world would contend with the scene load this is supposed to be
+    /// invisible to. Nothing here verifies by hand — `record_fetched` writes
+    /// through `OpfsStore::write_blob`, which is where the fingerprint check
+    /// happens, so bytes that are not what the server promised are never
+    /// stored and never counted.
+    async fn prefetch(handles: Rc<Handles>, world_id: Uuid, items: Vec<(Uuid, Fingerprint, u64)>) {
+        let mut spent: u64 = 0;
+        for (asset_id, fingerprint, byte_size) in items {
+            if spent.saturating_add(byte_size) > PREFETCH_BUDGET_BYTES {
+                debug!(target: "cached_assets", "prefetch budget reached; leaving the rest to demand");
+                return;
+            }
+            // Already on disk under this exact fingerprint — deduplicated
+            // content another item already brought in.
+            if handles
+                .store
+                .has_blob(world_id, &fingerprint)
+                .await
+                .unwrap_or(false)
+            {
+                continue;
+            }
+
+            let url = format!("{ASSET_URL_PREFIX}/{asset_id}.webp");
+            let Some(bytes) = fetch(&url).await else {
+                continue;
+            };
+            let Some(mut index) = borrow_index(&handles).await else {
+                return;
+            };
+            let stored = sync::record_fetched(
+                &handles.store,
+                &mut index,
+                &handles.key,
+                world_id,
+                ItemId::CanvasAsset(asset_id),
+                &fingerprint,
+                &bytes,
+            )
+            .await;
+            return_index(&handles, index);
+
+            match stored {
+                Ok(()) => spent = spent.saturating_add(bytes.len() as u64),
+                Err(err) => {
+                    warn!(target: "cached_assets", "could not prefetch {url}: {err}");
+                }
+            }
+        }
+    }
+
     fn mark_ready() {
         push_readiness(true);
     }
@@ -793,6 +1134,119 @@ mod tests {
             )
             .is_none()
         );
+    }
+
+    fn asset_url(id: Uuid) -> String {
+        format!("/api/canvas-assets/{id}.webp")
+    }
+
+    /// A ready cache with a promise does intercept — the positive control
+    /// for the three fall-through tests around it, so "returns `None`"
+    /// cannot be passing for the wrong reason.
+    #[test]
+    fn a_promised_asset_is_intercepted() {
+        let asset = Uuid::from_u128(3);
+        let mut cache = CanvasAssetCache {
+            readiness: Readiness::Ready,
+            world_id: Some(Uuid::nil()),
+            ..default()
+        };
+        apply_control(
+            &mut cache,
+            Control::Fingerprints(vec![(asset, Fingerprint::of_bytes(b"art"))]),
+        );
+        let mut images = Assets::<Image>::default();
+        assert!(try_cached(&mut cache, &asset_url(asset), &mut images).is_some());
+    }
+
+    /// The eviction case, which is what a sync's `evict` list turns into
+    /// locally. Once the authoritative set no longer names an asset, the
+    /// read path must stop touching it entirely — otherwise the next load
+    /// re-fetches and re-stores it, quietly undoing the eviction (FR-015).
+    #[test]
+    fn a_replaced_fingerprint_set_stops_an_evicted_asset_being_cached() {
+        let kept = Uuid::from_u128(1);
+        let evicted = Uuid::from_u128(2);
+        let mut cache = CanvasAssetCache {
+            readiness: Readiness::Ready,
+            world_id: Some(Uuid::nil()),
+            ..default()
+        };
+        apply_control(
+            &mut cache,
+            Control::Fingerprints(vec![
+                (kept, Fingerprint::of_bytes(b"kept")),
+                (evicted, Fingerprint::of_bytes(b"gone")),
+            ]),
+        );
+        let mut images = Assets::<Image>::default();
+        assert!(try_cached(&mut cache, &asset_url(evicted), &mut images).is_some());
+
+        // A sync answers with `kept` only.
+        apply_control(
+            &mut cache,
+            Control::ReplaceFingerprints(vec![(kept, Fingerprint::of_bytes(b"kept"))]),
+        );
+        assert!(try_cached(&mut cache, &asset_url(evicted), &mut images).is_none());
+        assert!(try_cached(&mut cache, &asset_url(kept), &mut images).is_some());
+    }
+
+    /// A failed sync must leave the read path exactly where an unconfigured
+    /// one is: not intercepting. Configuring costs nothing on its own —
+    /// readiness only arrives when the backing store actually opens — so a
+    /// sync that dies before that point degrades to plain network loads.
+    #[test]
+    fn configuring_without_a_backing_store_does_not_intercept() {
+        let asset = Uuid::from_u128(4);
+        let mut cache = CanvasAssetCache::default();
+        apply_control(
+            &mut cache,
+            Control::Configure {
+                scope: "0123456789abcdef".to_owned(),
+                world_id: Uuid::nil(),
+            },
+        );
+        apply_control(
+            &mut cache,
+            Control::Fingerprints(vec![(asset, Fingerprint::of_bytes(b"art"))]),
+        );
+        let mut images = Assets::<Image>::default();
+        assert!(!cache.is_ready());
+        assert!(try_cached(&mut cache, &asset_url(asset), &mut images).is_none());
+
+        // And a browser that cannot support the cache stays that way even
+        // with everything else in place.
+        apply_control(&mut cache, Control::Readiness(false));
+        assert!(!cache.is_ready());
+        assert!(try_cached(&mut cache, &asset_url(asset), &mut images).is_none());
+    }
+
+    /// A different user must not inherit the previous one's promises: the
+    /// scope is a directory, and a promise is the only thing that makes the
+    /// read path look in it.
+    #[test]
+    fn a_change_of_user_discards_every_promise() {
+        let asset = Uuid::from_u128(5);
+        let mut cache = CanvasAssetCache {
+            readiness: Readiness::Ready,
+            scope: Some("aaaa".to_owned()),
+            world_id: Some(Uuid::nil()),
+            ..default()
+        };
+        apply_control(
+            &mut cache,
+            Control::Fingerprints(vec![(asset, Fingerprint::of_bytes(b"art"))]),
+        );
+        apply_control(
+            &mut cache,
+            Control::Configure {
+                scope: "bbbb".to_owned(),
+                world_id: Uuid::nil(),
+            },
+        );
+        let mut images = Assets::<Image>::default();
+        assert!(cache.fingerprints.is_empty());
+        assert!(try_cached(&mut cache, &asset_url(asset), &mut images).is_none());
     }
 
     /// Ready, but with no promise for this asset: still a plain fetch.
