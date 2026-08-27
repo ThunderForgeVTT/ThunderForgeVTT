@@ -47,11 +47,11 @@ pub fn tokens_at(candidates: &[StackCandidate], point: Vec2) -> Vec<String> {
         })
         .collect();
 
-    hits.sort_by(|a, b| {
-        b.z.total_cmp(&a.z).then_with(|| a.id.cmp(&b.id))
-    });
+    hits.sort_by(|a, b| b.z.total_cmp(&a.z).then_with(|| a.id.cmp(&b.id)));
 
-    hits.into_iter().map(|candidate| candidate.id.clone()).collect()
+    hits.into_iter()
+        .map(|candidate| candidate.id.clone())
+        .collect()
 }
 
 #[cfg(test)]
@@ -93,7 +93,10 @@ mod tests {
         let forward = vec![candidate("b", 0.0, 0.0, 1.0), candidate("a", 0.0, 0.0, 1.0)];
         let reversed: Vec<StackCandidate> = forward.iter().rev().cloned().collect();
         assert_eq!(tokens_at(&forward, Vec2::ZERO), vec!["a", "b"]);
-        assert_eq!(tokens_at(&reversed, Vec2::ZERO), tokens_at(&forward, Vec2::ZERO));
+        assert_eq!(
+            tokens_at(&reversed, Vec2::ZERO),
+            tokens_at(&forward, Vec2::ZERO)
+        );
     }
 
     #[test]

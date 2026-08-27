@@ -16,10 +16,12 @@ use chrono::Utc;
 use diesel::prelude::*;
 use diesel::result::Error as DieselError;
 
-use async_graphql::MaybeUndefined;
-use crate::graphql::{app_state, authenticated_user, GraphQLCreateTokenInput, GraphQLToken, GraphQLUpdateTokenInput};
+use crate::graphql::{
+    GraphQLCreateTokenInput, GraphQLToken, GraphQLUpdateTokenInput, app_state, authenticated_user,
+};
 use crate::scene_fingerprint::refresh_scene_fingerprint;
-use crate::world_events::{record_world_event, world_id_for_scene, EVENT_CODE_TOKEN_CHANGED};
+use crate::world_events::{EVENT_CODE_TOKEN_CHANGED, record_world_event, world_id_for_scene};
+use async_graphql::MaybeUndefined;
 
 #[derive(Default)]
 pub struct TokenMutation;
@@ -265,7 +267,9 @@ impl TokenMutation {
             )
             .execute(&mut conn)?;
 
-            if deleted_count > 0 && let Some(scene_id) = scene_id {
+            if deleted_count > 0
+                && let Some(scene_id) = scene_id
+            {
                 refresh_scene_fingerprint(&mut conn, scene_id, user_id);
             }
 
@@ -348,7 +352,9 @@ impl TokenMutation {
         };
 
         if !is_direct_owner && !is_actor_owner {
-            return Err(Error::new("Move token failed (not found or not controlled by you)"));
+            return Err(Error::new(
+                "Move token failed (not found or not controlled by you)",
+            ));
         }
 
         let mut conn = state
@@ -469,7 +475,9 @@ mod tests {
     #[test]
     fn token_mutations_are_scoped_to_scene_owner() {
         let Some(mut conn) = try_connect() else {
-            eprintln!("skipping token_mutations_are_scoped_to_scene_owner: no DATABASE_URL/dev DB reachable");
+            eprintln!(
+                "skipping token_mutations_are_scoped_to_scene_owner: no DATABASE_URL/dev DB reachable"
+            );
             return;
         };
 
@@ -483,7 +491,10 @@ mod tests {
             let token_id = uuid::Uuid::now_v7();
             let now = chrono::Utc::now().naive_utc();
 
-            for (id, username) in [(owner_id, "token-test-owner"), (intruder_id, "token-test-intruder")] {
+            for (id, username) in [
+                (owner_id, "token-test-owner"),
+                (intruder_id, "token-test-intruder"),
+            ] {
                 diesel::insert_into(users::table)
                     .values((
                         users::id.eq(id),
@@ -596,7 +607,9 @@ mod tests {
     #[test]
     fn move_own_token_filter_rejects_non_owner() {
         let Some(mut conn) = try_connect() else {
-            eprintln!("skipping move_own_token_filter_rejects_non_owner: no DATABASE_URL/dev DB reachable");
+            eprintln!(
+                "skipping move_own_token_filter_rejects_non_owner: no DATABASE_URL/dev DB reachable"
+            );
             return;
         };
 
@@ -686,7 +699,11 @@ mod tests {
                 .filter(tokens::token_id.eq(token_id))
                 .select((tokens::x, tokens::y))
                 .first(conn)?;
-            assert_eq!((x, y), (5.0, 5.0), "position must be unchanged after a rejected move");
+            assert_eq!(
+                (x, y),
+                (5.0, 5.0),
+                "position must be unchanged after a rejected move"
+            );
 
             // The real controller's filter must match exactly one row.
             let controller_move_count = diesel::update(
@@ -696,7 +713,10 @@ mod tests {
             )
             .set((tokens::x.eq(10.0), tokens::y.eq(10.0)))
             .execute(conn)?;
-            assert_eq!(controller_move_count, 1, "the token's controller must be able to move it");
+            assert_eq!(
+                controller_move_count, 1,
+                "the token's controller must be able to move it"
+            );
 
             Ok(())
         });
@@ -708,7 +728,9 @@ mod tests {
     #[test]
     fn setting_second_primary_replaces_the_first() {
         let Some(mut conn) = try_connect() else {
-            eprintln!("skipping setting_second_primary_replaces_the_first: no DATABASE_URL/dev DB reachable");
+            eprintln!(
+                "skipping setting_second_primary_replaces_the_first: no DATABASE_URL/dev DB reachable"
+            );
             return;
         };
 
@@ -810,7 +832,10 @@ mod tests {
                 .filter(tokens::is_primary.eq(true))
                 .count()
                 .get_result(conn)?;
-            assert_eq!(primary_count, 1, "exactly one primary token must remain for this owner");
+            assert_eq!(
+                primary_count, 1,
+                "exactly one primary token must remain for this owner"
+            );
 
             let token_b_is_primary: bool = tokens::table
                 .filter(tokens::token_id.eq(token_b_id))
@@ -832,7 +857,9 @@ mod tests {
     #[test]
     fn token_photo_url_can_be_set_skipped_and_cleared() {
         let Some(mut conn) = try_connect() else {
-            eprintln!("skipping token_photo_url_can_be_set_skipped_and_cleared: no DATABASE_URL/dev DB reachable");
+            eprintln!(
+                "skipping token_photo_url_can_be_set_skipped_and_cleared: no DATABASE_URL/dev DB reachable"
+            );
             return;
         };
 
@@ -896,12 +923,13 @@ mod tests {
                 ))
                 .execute(conn)?;
 
-            let photo_of = |conn: &mut PgConnection| -> Result<Option<String>, diesel::result::Error> {
-                tokens::table
-                    .filter(tokens::token_id.eq(token_id))
-                    .select(tokens::photo_url)
-                    .first(conn)
-            };
+            let photo_of =
+                |conn: &mut PgConnection| -> Result<Option<String>, diesel::result::Error> {
+                    tokens::table
+                        .filter(tokens::token_id.eq(token_id))
+                        .select(tokens::photo_url)
+                        .first(conn)
+                };
 
             // Always carries an `x`, both because that is the shape of a
             // real update (the client sends position with every change)
@@ -926,7 +954,11 @@ mod tests {
             };
 
             // Write.
-            update(conn, 1.0, Some(Some("/api/canvas-assets/abc.webp".to_string())))?;
+            update(
+                conn,
+                1.0,
+                Some(Some("/api/canvas-assets/abc.webp".to_string())),
+            )?;
             assert_eq!(
                 photo_of(conn)?,
                 Some("/api/canvas-assets/abc.webp".to_string())

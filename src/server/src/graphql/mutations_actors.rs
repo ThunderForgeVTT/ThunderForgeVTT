@@ -51,10 +51,13 @@ pub async fn create_actor_impl(
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
-    let actor_type = input
-        .actor_type
-        .clone()
-        .unwrap_or_else(|| if input.is_npc { "npc".to_string() } else { "character".to_string() });
+    let actor_type = input.actor_type.clone().unwrap_or_else(|| {
+        if input.is_npc {
+            "npc".to_string()
+        } else {
+            "character".to_string()
+        }
+    });
     let label = input.label.clone();
     let is_npc = input.is_npc;
     // The `actor_system_type_consistency` DB check requires a non-null
@@ -62,7 +65,12 @@ pub async fn create_actor_impl(
     // hazard/prop/light_source require it to be null) — default to a
     // generic placeholder when the caller doesn't supply one, since this
     // feature doesn't ask the DM to pick a game system up front.
-    let game_system_id = Some(input.game_system_id.clone().unwrap_or_else(|| "generic".to_string()));
+    let game_system_id = Some(
+        input
+            .game_system_id
+            .clone()
+            .unwrap_or_else(|| "generic".to_string()),
+    );
     let description = input.description.clone();
 
     tokio::task::spawn_blocking(move || {
@@ -245,7 +253,10 @@ mod tests {
         )
         .await;
 
-        assert!(result.is_err(), "a Player-role caller must not be able to create actors");
+        assert!(
+            result.is_err(),
+            "a Player-role caller must not be able to create actors"
+        );
     }
 
     /// FR-010/FR-011: Editor and Owner can update; Viewer (default) cannot.
@@ -292,7 +303,10 @@ mod tests {
             },
         )
         .await;
-        assert!(viewer_result.is_err(), "a default-Viewer caller must not be able to update the actor");
+        assert!(
+            viewer_result.is_err(),
+            "a default-Viewer caller must not be able to update the actor"
+        );
 
         let owner_result = update_actor_impl(
             &state,

@@ -50,7 +50,10 @@ pub async fn roll_dice_impl<R: rand::Rng>(
     input: RollDiceInput,
     rng: &mut R,
 ) -> GraphQLResult<GraphQLRollResolution> {
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
 
     let world_id = input.world_id;
     tokio::task::spawn_blocking(move || require_world_member(&mut conn, user_id, world_id))
@@ -58,23 +61,29 @@ pub async fn roll_dice_impl<R: rand::Rng>(
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
         .map_err(|_| Error::new("You must be a member of this world to roll dice"))?;
 
-    let formula = DiceFormula::parse(&input.formula).map_err(|e| Error::new(formula_error_message(&e)))?;
+    let formula =
+        DiceFormula::parse(&input.formula).map_err(|e| Error::new(formula_error_message(&e)))?;
 
     let mut bindings = HashMap::new();
     for binding in input.bindings.into_iter().flatten() {
         bindings.insert(binding.name, binding.value);
     }
 
-    let resolution =
-        thunderforge_dice::resolve(&formula, &bindings, rng).map_err(|e| Error::new(formula_error_message(&e)))?;
+    let resolution = thunderforge_dice::resolve(&formula, &bindings, rng)
+        .map_err(|e| Error::new(formula_error_message(&e)))?;
 
     let (result_kind, result_value) = match resolution.kind {
         ResolutionKind::Total(v) => ("total", v),
         ResolutionKind::SuccessCount(n) => ("success_count", n as f64),
     };
 
-    let detail = serde_json::to_value(&resolution).map_err(|_| Error::new("Failed to serialize roll detail"))?;
-    let bindings_json = if bindings.is_empty() { None } else { serde_json::to_value(&bindings).ok() };
+    let detail = serde_json::to_value(&resolution)
+        .map_err(|_| Error::new("Failed to serialize roll detail"))?;
+    let bindings_json = if bindings.is_empty() {
+        None
+    } else {
+        serde_json::to_value(&bindings).ok()
+    };
 
     let new_record = NewRollRecord {
         world_id: input.world_id,
@@ -86,9 +95,14 @@ pub async fn roll_dice_impl<R: rand::Rng>(
         result_value,
     };
 
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
     tokio::task::spawn_blocking(move || {
-        diesel::insert_into(world_roll_records::table).values(&new_record).execute(&mut conn)
+        diesel::insert_into(world_roll_records::table)
+            .values(&new_record)
+            .execute(&mut conn)
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -102,7 +116,11 @@ pub struct RollMutation;
 
 #[async_graphql::Object]
 impl RollMutation {
-    async fn roll_dice(&self, ctx: &Context<'_>, input: RollDiceInput) -> GraphQLResult<GraphQLRollResolution> {
+    async fn roll_dice(
+        &self,
+        ctx: &Context<'_>,
+        input: RollDiceInput,
+    ) -> GraphQLResult<GraphQLRollResolution> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         // `StdRng`, freshly seeded from the OS-entropy-backed thread RNG
@@ -164,7 +182,11 @@ mod tests {
         let result = roll_dice_impl(
             &state,
             outsider_id,
-            RollDiceInput { world_id, formula: "1d20".to_string(), bindings: None },
+            RollDiceInput {
+                world_id,
+                formula: "1d20".to_string(),
+                bindings: None,
+            },
             &mut rng,
         )
         .await;
@@ -177,7 +199,10 @@ mod tests {
             .count()
             .get_result(&mut conn)
             .unwrap();
-        assert_eq!(count, 0, "no roll should have been recorded for a rejected caller");
+        assert_eq!(
+            count, 0,
+            "no roll should have been recorded for a rejected caller"
+        );
     }
 
     #[tokio::test]
@@ -192,7 +217,11 @@ mod tests {
         let resolution = roll_dice_impl(
             &state,
             owner_id,
-            RollDiceInput { world_id, formula: "1d20".to_string(), bindings: None },
+            RollDiceInput {
+                world_id,
+                formula: "1d20".to_string(),
+                bindings: None,
+            },
             &mut rng,
         )
         .await
@@ -221,7 +250,11 @@ mod tests {
         let result = roll_dice_impl(
             &state,
             owner_id,
-            RollDiceInput { world_id, formula: "1d20 +".to_string(), bindings: None },
+            RollDiceInput {
+                world_id,
+                formula: "1d20 +".to_string(),
+                bindings: None,
+            },
             &mut rng,
         )
         .await;
@@ -250,7 +283,11 @@ mod tests {
         roll_dice_impl(
             &state,
             owner_id,
-            RollDiceInput { world_id, formula: "1d20".to_string(), bindings: None },
+            RollDiceInput {
+                world_id,
+                formula: "1d20".to_string(),
+                bindings: None,
+            },
             &mut rng_a,
         )
         .await
@@ -260,7 +297,11 @@ mod tests {
         roll_dice_impl(
             &state,
             other_id,
-            RollDiceInput { world_id, formula: "1d20".to_string(), bindings: None },
+            RollDiceInput {
+                world_id,
+                formula: "1d20".to_string(),
+                bindings: None,
+            },
             &mut rng_b,
         )
         .await
@@ -294,7 +335,10 @@ mod tests {
             RollDiceInput {
                 world_id,
                 formula: "1d20 + STAT".to_string(),
-                bindings: Some(vec![PlaceholderBindingInput { name: "STAT".to_string(), value: 3.0 }]),
+                bindings: Some(vec![PlaceholderBindingInput {
+                    name: "STAT".to_string(),
+                    value: 3.0,
+                }]),
             },
             &mut rng,
         )
@@ -308,7 +352,10 @@ mod tests {
             RollDiceInput {
                 world_id,
                 formula: "1d20 + STAT".to_string(),
-                bindings: Some(vec![PlaceholderBindingInput { name: "STAT".to_string(), value: 8.0 }]),
+                bindings: Some(vec![PlaceholderBindingInput {
+                    name: "STAT".to_string(),
+                    value: 8.0,
+                }]),
             },
             &mut rng,
         )
@@ -321,12 +368,20 @@ mod tests {
         let err = roll_dice_impl(
             &state,
             owner_id,
-            RollDiceInput { world_id, formula: "1d20 + STAT".to_string(), bindings: None },
+            RollDiceInput {
+                world_id,
+                formula: "1d20 + STAT".to_string(),
+                bindings: None,
+            },
             &mut rng,
         )
         .await
         .unwrap_err();
-        assert!(err.message.contains("STAT"), "error should name the missing placeholder: {}", err.message);
+        assert!(
+            err.message.contains("STAT"),
+            "error should name the missing placeholder: {}",
+            err.message
+        );
     }
 
     /// US3 (T022, SC-005): a spec 013 Item Effect-style formula (attack
@@ -345,7 +400,11 @@ mod tests {
         let damage = roll_dice_impl(
             &state,
             owner_id,
-            RollDiceInput { world_id, formula: "2d8".to_string(), bindings: None },
+            RollDiceInput {
+                world_id,
+                formula: "2d8".to_string(),
+                bindings: None,
+            },
             &mut rng,
         )
         .await
@@ -361,8 +420,14 @@ mod tests {
                 world_id,
                 formula: "1d20 + STAT + MODIFIERS".to_string(),
                 bindings: Some(vec![
-                    PlaceholderBindingInput { name: "STAT".to_string(), value: 3.0 },
-                    PlaceholderBindingInput { name: "MODIFIERS".to_string(), value: 2.0 },
+                    PlaceholderBindingInput {
+                        name: "STAT".to_string(),
+                        value: 3.0,
+                    },
+                    PlaceholderBindingInput {
+                        name: "MODIFIERS".to_string(),
+                        value: 2.0,
+                    },
                 ]),
             },
             &mut rng,

@@ -7,7 +7,12 @@
 //! there is exactly one source of truth for this contract regardless of how
 //! it's deployed.
 
-use axum::{Json, Router, http::StatusCode, response::IntoResponse, routing::{get, post}};
+use axum::{
+    Json, Router,
+    http::StatusCode,
+    response::IntoResponse,
+    routing::{get, post},
+};
 
 use crate::local::LocalAdjudicator;
 use crate::{AdjudicationRequest, SessionAdjudicator, SessionAdjudicatorError};

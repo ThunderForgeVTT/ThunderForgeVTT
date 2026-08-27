@@ -21,8 +21,8 @@
 
 use async_graphql::{Context, Error, InputObject, Result as GraphQLResult};
 use chrono::Utc;
-use diesel::prelude::*;
 use diesel::PgConnection;
+use diesel::prelude::*;
 use uuid::Uuid;
 
 use crate::auth::world_membership::{is_dm_of_world, require_world_member};
@@ -30,7 +30,7 @@ use crate::graphql::{app_state, authenticated_user};
 use crate::models::{Combat, Combatant, NewCombat, NewCombatant};
 use crate::schema::{world_combatants, world_combats};
 use crate::state::AppState;
-use crate::world_events::{record_world_event, EVENT_CODE_COMBAT_CHANGED};
+use crate::world_events::{EVENT_CODE_COMBAT_CHANGED, record_world_event};
 
 #[derive(async_graphql::SimpleObject, Debug, Clone)]
 pub struct GraphQLCombatant {
@@ -680,7 +680,11 @@ impl CombatMutation {
         remove_combatant_impl(state, user.user_id, user.is_admin, combatant_id).await
     }
 
-    async fn advance_turn(&self, ctx: &Context<'_>, combat_id: Uuid) -> GraphQLResult<GraphQLCombat> {
+    async fn advance_turn(
+        &self,
+        ctx: &Context<'_>,
+        combat_id: Uuid,
+    ) -> GraphQLResult<GraphQLCombat> {
         let state = app_state(ctx)?;
         let user = authenticated_user(ctx)?;
         advance_turn_impl(state, user.user_id, user.is_admin, combat_id).await

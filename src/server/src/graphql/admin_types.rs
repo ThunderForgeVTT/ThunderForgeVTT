@@ -2,7 +2,10 @@ use async_graphql::{Enum, InputObject, SimpleObject};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use crate::admin::{AdminStatsSnapshot, AdminWelcomeSummarySnapshot, DiskUsageSummary, OAuthProviderUpdate, SystemManifestDocument, editable_manifest_keys};
+use crate::admin::{
+    AdminStatsSnapshot, AdminWelcomeSummarySnapshot, DiskUsageSummary, OAuthProviderUpdate,
+    SystemManifestDocument, editable_manifest_keys,
+};
 use crate::models::{AdminBootstrapSetup, AuthSecuritySetting, OAuthProvider};
 
 /// Disk usage breakdown for admin statistics

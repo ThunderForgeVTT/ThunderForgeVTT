@@ -6,12 +6,18 @@ use std::sync::Arc;
 pub struct YzeSystem;
 
 impl YzeSystem {
-    pub fn new() -> Self { Self }
-    pub fn register() -> Arc<dyn GameSystemTrait> { Arc::new(Self) }
+    pub fn new() -> Self {
+        Self
+    }
+    pub fn register() -> Arc<dyn GameSystemTrait> {
+        Arc::new(Self)
+    }
 }
 
 impl Default for YzeSystem {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 pub trait GameSystemTrait: Send + Sync {
@@ -20,8 +26,12 @@ pub trait GameSystemTrait: Send + Sync {
 }
 
 impl GameSystemTrait for YzeSystem {
-    fn name(&self) -> String { "Year Zero Engine".to_string() }
-    fn version(&self) -> String { "0.1.0".to_string() }
+    fn name(&self) -> String {
+        "Year Zero Engine".to_string()
+    }
+    fn version(&self) -> String {
+        "0.1.0".to_string()
+    }
 }
 
 pub struct YzePlugin;

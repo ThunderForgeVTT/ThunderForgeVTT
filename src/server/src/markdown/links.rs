@@ -248,9 +248,17 @@ pub fn substitute_placeholders_into_html(html: &str, links: &[PreparedLink]) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{insert_test_scene, insert_test_user, insert_test_world, test_app_state};
+    use crate::test_support::{
+        insert_test_scene, insert_test_user, insert_test_world, test_app_state,
+    };
 
-    fn insert_lore_entry(conn: &mut PgConnection, world_id: Uuid, created_by: Uuid, title: &str, slug: &str) -> Uuid {
+    fn insert_lore_entry(
+        conn: &mut PgConnection,
+        world_id: Uuid,
+        created_by: Uuid,
+        title: &str,
+        slug: &str,
+    ) -> Uuid {
         let id = Uuid::now_v7();
         let now = chrono::Utc::now().naive_utc();
         diesel::insert_into(world_lore_entries::table)
@@ -269,7 +277,13 @@ mod tests {
         id
     }
 
-    fn insert_actor(conn: &mut PgConnection, world_id: Uuid, scene_id: Uuid, created_by: Uuid, label: &str) -> Uuid {
+    fn insert_actor(
+        conn: &mut PgConnection,
+        world_id: Uuid,
+        scene_id: Uuid,
+        created_by: Uuid,
+        label: &str,
+    ) -> Uuid {
         let id = Uuid::now_v7();
         let now = chrono::Utc::now().naive_utc();
         diesel::insert_into(world_actors::table)
@@ -330,8 +344,9 @@ mod tests {
         let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
         let actor_id = insert_actor(&mut conn, world_id, scene_id, owner_id, "Bo Jangles");
 
-        let (_rewritten, links) = extract_and_resolve(&mut conn, world_id, "Meet [[Bo Jangles]].", true)
-            .expect("resolution should succeed");
+        let (_rewritten, links) =
+            extract_and_resolve(&mut conn, world_id, "Meet [[Bo Jangles]].", true)
+                .expect("resolution should succeed");
 
         assert_eq!(links.len(), 1);
         assert_eq!(links[0].target_kind, "actor");
@@ -347,8 +362,9 @@ mod tests {
         let owner_id = insert_test_user(&mut conn);
         let world_id = insert_test_world(&mut conn, owner_id);
 
-        let (rewritten, links) = extract_and_resolve(&mut conn, world_id, "[[Nonexistent Title]]", true)
-            .expect("resolution should succeed even with no match");
+        let (rewritten, links) =
+            extract_and_resolve(&mut conn, world_id, "[[Nonexistent Title]]", true)
+                .expect("resolution should succeed even with no match");
 
         assert_eq!(links.len(), 1);
         assert_eq!(links[0].target_kind, "unresolved");
@@ -388,7 +404,8 @@ mod tests {
         insert_lore_entry(&mut conn, world_id, owner_id, "Entry B", "entry-b");
 
         let (_rewritten, links) =
-            extract_and_resolve(&mut conn, world_id, "[[Entry B|the ruins]]", true).expect("should resolve");
+            extract_and_resolve(&mut conn, world_id, "[[Entry B|the ruins]]", true)
+                .expect("should resolve");
 
         assert_eq!(links[0].raw_title, "Entry B");
         assert_eq!(links[0].display, "the ruins");
@@ -431,11 +448,13 @@ mod tests {
 
         assert_eq!(links[0].target_kind, "ability");
         assert_eq!(links[0].target_ability_id, Some(ability_id));
-        assert!(links[0]
-            .href
-            .as_deref()
-            .unwrap()
-            .contains(&format!("/ability/{ability_id}/view")));
+        assert!(
+            links[0]
+                .href
+                .as_deref()
+                .unwrap()
+                .contains(&format!("/ability/{ability_id}/view"))
+        );
     }
 
     /// Abilities append LAST in the cascade, so an item of the same name still
@@ -460,8 +479,8 @@ mod tests {
             .expect("insert item");
         insert_ability(&mut conn, world_id, owner_id, "Overlap", false);
 
-        let (_rewritten, links) = extract_and_resolve(&mut conn, world_id, "[[Overlap]]", true)
-            .expect("should resolve");
+        let (_rewritten, links) =
+            extract_and_resolve(&mut conn, world_id, "[[Overlap]]", true).expect("should resolve");
 
         assert_eq!(links[0].target_kind, "item");
         assert_eq!(links[0].target_item_id, Some(item_id));
@@ -484,8 +503,8 @@ mod tests {
         assert_ne!(first, second);
 
         for _ in 0..5 {
-            let (_r, links) = extract_and_resolve(&mut conn, world_id, "[[Twin]]", true)
-                .expect("should resolve");
+            let (_r, links) =
+                extract_and_resolve(&mut conn, world_id, "[[Twin]]", true).expect("should resolve");
             assert_eq!(
                 links[0].target_ability_id,
                 Some(first),
@@ -534,7 +553,11 @@ mod tests {
         let visible = insert_ability(&mut conn, world_id, owner_id, "Echo", false);
 
         let (_r, dm_links) = extract_and_resolve(&mut conn, world_id, "[[Echo]]", true).unwrap();
-        assert_eq!(dm_links[0].target_ability_id, Some(hidden), "DM gets the oldest overall");
+        assert_eq!(
+            dm_links[0].target_ability_id,
+            Some(hidden),
+            "DM gets the oldest overall"
+        );
 
         let (_r, player_links) =
             extract_and_resolve(&mut conn, world_id, "[[Echo]]", false).unwrap();

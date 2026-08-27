@@ -111,12 +111,11 @@ pub async fn effective_status(
 
     let entity_type_owned = entity_type.to_string();
 
-    let latest = tokio::task::spawn_blocking(move || {
-        latest_event(&mut conn, &entity_type_owned, entity_id)
-    })
-    .await
-    .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to load moderation status"))?;
+    let latest =
+        tokio::task::spawn_blocking(move || latest_event(&mut conn, &entity_type_owned, entity_id))
+            .await
+            .map_err(|_| Error::new("Failed to spawn blocking task"))?
+            .map_err(|_| Error::new("Failed to load moderation status"))?;
 
     let Some(event) = latest else {
         return Ok(None);
@@ -194,16 +193,19 @@ pub async fn active_case_id(
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
     let entity_type_owned = entity_type.to_string();
-    let latest = tokio::task::spawn_blocking(move || latest_event(&mut conn, &entity_type_owned, entity_id))
-        .await
-        .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|_| Error::new("Failed to load moderation status"))?;
+    let latest =
+        tokio::task::spawn_blocking(move || latest_event(&mut conn, &entity_type_owned, entity_id))
+            .await
+            .map_err(|_| Error::new("Failed to spawn blocking task"))?
+            .map_err(|_| Error::new("Failed to load moderation status"))?;
 
     let Some(event) = latest else {
         return Ok(None);
     };
 
-    if is_disabled_status(&event.action_type) || event.action_type == action_type::COUNTER_NOTICE_FORWARDED {
+    if is_disabled_status(&event.action_type)
+        || event.action_type == action_type::COUNTER_NOTICE_FORWARDED
+    {
         Ok(Some(event.case_id))
     } else {
         Ok(None)
@@ -345,7 +347,10 @@ mod tests {
         let status = effective_status(&state, "world_item", entity_id)
             .await
             .expect("query should not error");
-        assert!(status.is_none(), "past-due forwarded case should auto-restore");
+        assert!(
+            status.is_none(),
+            "past-due forwarded case should auto-restore"
+        );
 
         // The restoration should now be a real, durable event.
         let mut conn = state.db_pool.get().unwrap();

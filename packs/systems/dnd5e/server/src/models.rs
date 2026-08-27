@@ -187,11 +187,11 @@ pub struct SavingThrowProficiencies {
 /// Currency purse (copper pieces are base unit)
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 pub struct CurrencyPurse {
-    pub platinum: i32,   // 100 pp = 1 gp
-    pub gold: i32,       // 10 gp = 1 pp
-    pub electrum: i32,   // 5 ep = 1 gp
-    pub silver: i32,     // 10 sp = 1 gp
-    pub copper: i32,     // 100 cp = 1 gp
+    pub platinum: i32, // 100 pp = 1 gp
+    pub gold: i32,     // 10 gp = 1 pp
+    pub electrum: i32, // 5 ep = 1 gp
+    pub silver: i32,   // 10 sp = 1 gp
+    pub copper: i32,   // 100 cp = 1 gp
 }
 
 /// D&D 5e Item Data - Base item information

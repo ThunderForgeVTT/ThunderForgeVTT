@@ -66,7 +66,10 @@ mod tests {
 
     #[test]
     fn slugify_title_ascii_folds_and_kebab_cases() {
-        assert_eq!(slugify_title("Ancient Ruins of Veldrath"), "ancient-ruins-of-veldrath");
+        assert_eq!(
+            slugify_title("Ancient Ruins of Veldrath"),
+            "ancient-ruins-of-veldrath"
+        );
         assert_eq!(slugify_title("Château Noir"), "chateau-noir");
     }
 
@@ -131,10 +134,12 @@ mod tests {
         let world_id = insert_test_world(&mut conn, owner_id);
         let entry_id = insert_entry_with_slug(&mut conn, world_id, owner_id, "ancient-ruins");
 
-        let slug =
-            unique_slug_for_world(&mut conn, world_id, "Ancient Ruins", Some(entry_id))
-                .expect("slug generation should succeed");
-        assert_eq!(slug, "ancient-ruins", "an entry's own slug must not collide with itself");
+        let slug = unique_slug_for_world(&mut conn, world_id, "Ancient Ruins", Some(entry_id))
+            .expect("slug generation should succeed");
+        assert_eq!(
+            slug, "ancient-ruins",
+            "an entry's own slug must not collide with itself"
+        );
     }
 
     /// Slugs are scoped per-world — the same title in two different
@@ -150,6 +155,9 @@ mod tests {
 
         let slug = unique_slug_for_world(&mut conn, world_b, "Ancient Ruins", None)
             .expect("slug generation should succeed");
-        assert_eq!(slug, "ancient-ruins", "a different world's same title must not collide");
+        assert_eq!(
+            slug, "ancient-ruins",
+            "a different world's same title must not collide"
+        );
     }
 }

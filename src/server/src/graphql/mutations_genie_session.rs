@@ -40,25 +40,25 @@
 
 use async_graphql::{Context, Error, InputObject, Result as GraphQLResult};
 use chrono::Utc;
-use diesel::prelude::*;
 use diesel::PgConnection;
+use diesel::prelude::*;
 use uuid::Uuid;
 
 use crate::auth::world_membership::is_dm_of_world;
 use crate::auth::world_membership::require_world_member;
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{
-    GenieResourceHolding, GeniePuzzleClock, GeniePuzzleClockReward, GenieShopListing,
-    GenieSession, GenieTradeProposal, NewGeniePuzzleClock, NewGeniePuzzleClockReward,
-    NewGenieSession, NewGenieShopListing, NewGenieTradeProposal,
+    GeniePuzzleClock, GeniePuzzleClockReward, GenieResourceHolding, GenieSession, GenieShopListing,
+    GenieTradeProposal, NewGeniePuzzleClock, NewGeniePuzzleClockReward, NewGenieSession,
+    NewGenieShopListing, NewGenieTradeProposal,
 };
 use crate::schema::{
     world_actor_inventory, world_actors, world_genie_puzzle_clock_rewards,
-    world_genie_puzzle_clocks, world_genie_resource_holdings, world_genie_shop_listings,
-    world_genie_sessions, world_genie_trade_proposals, world_items, worlds,
+    world_genie_puzzle_clocks, world_genie_resource_holdings, world_genie_sessions,
+    world_genie_shop_listings, world_genie_trade_proposals, world_items, worlds,
 };
 use crate::state::AppState;
-use crate::world_events::{record_world_event, EVENT_CODE_GENIE_SESSION_STATE};
+use crate::world_events::{EVENT_CODE_GENIE_SESSION_STATE, record_world_event};
 
 // ============================================================================
 // GraphQL-facing types
@@ -115,7 +115,10 @@ pub struct GraphQLGenieSession {
     pub puzzle_clocks: Vec<GraphQLGeniePuzzleClock>,
 }
 
-fn build_graphql_session(session: GenieSession, clocks: Vec<GeniePuzzleClock>) -> GraphQLGenieSession {
+fn build_graphql_session(
+    session: GenieSession,
+    clocks: Vec<GeniePuzzleClock>,
+) -> GraphQLGenieSession {
     GraphQLGenieSession {
         id: session.id,
         world_id: session.world_id,
@@ -123,7 +126,10 @@ fn build_graphql_session(session: GenieSession, clocks: Vec<GeniePuzzleClock>) -
         doom_clock_current: session.doom_clock_current,
         doom_clock_max: session.doom_clock_max,
         status: GenieSessionStatus::from_db_str(&session.status),
-        puzzle_clocks: clocks.into_iter().map(GraphQLGeniePuzzleClock::from).collect(),
+        puzzle_clocks: clocks
+            .into_iter()
+            .map(GraphQLGeniePuzzleClock::from)
+            .collect(),
     }
 }
 
@@ -136,7 +142,11 @@ pub struct GraphQLGenieResourceHolding {
 
 impl From<GenieResourceHolding> for GraphQLGenieResourceHolding {
     fn from(row: GenieResourceHolding) -> Self {
-        GraphQLGenieResourceHolding { actor_id: row.actor_id, resource_type: row.resource_type, quantity: row.quantity }
+        GraphQLGenieResourceHolding {
+            actor_id: row.actor_id,
+            resource_type: row.resource_type,
+            quantity: row.quantity,
+        }
     }
 }
 
@@ -256,7 +266,10 @@ fn load_session_row(conn: &mut PgConnection, session_id: Uuid) -> Result<GenieSe
         .map_err(|_| "Genie session not found".to_string())
 }
 
-fn load_puzzle_clock_row(conn: &mut PgConnection, clock_id: Uuid) -> Result<GeniePuzzleClock, String> {
+fn load_puzzle_clock_row(
+    conn: &mut PgConnection,
+    clock_id: Uuid,
+) -> Result<GeniePuzzleClock, String> {
     world_genie_puzzle_clocks::table
         .filter(world_genie_puzzle_clocks::id.eq(clock_id))
         .select(GeniePuzzleClock::as_select())
@@ -264,7 +277,10 @@ fn load_puzzle_clock_row(conn: &mut PgConnection, clock_id: Uuid) -> Result<Geni
         .map_err(|_| "Puzzle Clock not found".to_string())
 }
 
-fn load_puzzle_clocks_for_session(conn: &mut PgConnection, session_id: Uuid) -> Result<Vec<GeniePuzzleClock>, String> {
+fn load_puzzle_clocks_for_session(
+    conn: &mut PgConnection,
+    session_id: Uuid,
+) -> Result<Vec<GeniePuzzleClock>, String> {
     world_genie_puzzle_clocks::table
         .filter(world_genie_puzzle_clocks::session_id.eq(session_id))
         .order(world_genie_puzzle_clocks::created_at.asc())
@@ -340,7 +356,10 @@ async fn require_member_of_session_world(
     user_id: Uuid,
     session_id: Uuid,
 ) -> GraphQLResult<Uuid> {
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
     tokio::task::spawn_blocking(move || -> Result<Uuid, String> {
         let session = load_session_row(&mut conn, session_id)?;
         require_world_member(&mut conn, user_id, session.world_id)
@@ -402,10 +421,18 @@ impl From<TxError> for String {
 /// tied to their own character — found live while wiring
 /// `genieTradeProposals` and confirmed via a real two-account e2e run
 /// (`genie-resource-trade.spec.ts`).
-async fn caller_controls_actor(state: &AppState, user_id: Uuid, is_admin: bool, actor_id: Uuid) -> GraphQLResult<bool> {
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
-    let (world_id, owned_by, claimed_by_user_id) = tokio::task::spawn_blocking(
-        move || -> Result<(Uuid, Uuid, Option<Uuid>), String> {
+async fn caller_controls_actor(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    actor_id: Uuid,
+) -> GraphQLResult<bool> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    let (world_id, owned_by, claimed_by_user_id) =
+        tokio::task::spawn_blocking(move || -> Result<(Uuid, Uuid, Option<Uuid>), String> {
             use crate::schema::{world_actor_claims, world_actors, world_members};
 
             let (world_id, owned_by) = world_actors::table
@@ -415,7 +442,10 @@ async fn caller_controls_actor(state: &AppState, user_id: Uuid, is_admin: bool, 
                 .map_err(|_| "Actor not found".to_string())?;
 
             let claimed_by_user_id = world_actor_claims::table
-                .inner_join(world_members::table.on(world_members::id.eq(world_actor_claims::world_member_id)))
+                .inner_join(
+                    world_members::table
+                        .on(world_members::id.eq(world_actor_claims::world_member_id)),
+                )
                 .filter(world_actor_claims::actor_id.eq(actor_id))
                 .select(world_members::user_id)
                 .first::<Uuid>(&mut conn)
@@ -423,11 +453,10 @@ async fn caller_controls_actor(state: &AppState, user_id: Uuid, is_admin: bool, 
                 .map_err(|e| format!("Failed to load actor claim: {e}"))?;
 
             Ok((world_id, owned_by, claimed_by_user_id))
-        },
-    )
-    .await
-    .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(Error::new)?;
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(Error::new)?;
 
     if owned_by == user_id || claimed_by_user_id == Some(user_id) {
         return Ok(true);
@@ -435,7 +464,12 @@ async fn caller_controls_actor(state: &AppState, user_id: Uuid, is_admin: bool, 
     is_dm_of_world(state, user_id, is_admin, world_id).await
 }
 
-pub(crate) async fn require_caller_controls_actor(state: &AppState, user_id: Uuid, is_admin: bool, actor_id: Uuid) -> GraphQLResult<()> {
+pub(crate) async fn require_caller_controls_actor(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    actor_id: Uuid,
+) -> GraphQLResult<()> {
     if !caller_controls_actor(state, user_id, is_admin, actor_id).await? {
         return Err(Error::new("You do not control this actor"));
     }
@@ -466,7 +500,10 @@ pub async fn start_genie_session_impl(
         return Err(Error::new("doomClockMax must be greater than zero"));
     }
 
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
     let world_id = input.world_id;
     let doom_clock_max = input.doom_clock_max;
 
@@ -505,8 +542,11 @@ pub async fn start_genie_session_impl(
             Vec::new()
         };
 
-        let new_session =
-            NewGenieSession { world_id, doom_clock_max, created_by: user_id };
+        let new_session = NewGenieSession {
+            world_id,
+            doom_clock_max,
+            created_by: user_id,
+        };
         let session = diesel::insert_into(world_genie_sessions::table)
             .values(&new_session)
             .returning(GenieSession::as_returning())
@@ -514,8 +554,14 @@ pub async fn start_genie_session_impl(
             .map_err(|e| format!("Failed to start session: {e}"))?;
 
         for holding in &prior_holdings {
-            set_holding_quantity(&mut conn, session.id, holding.actor_id, &holding.resource_type, holding.quantity)
-                .map_err(|e| format!("Failed to carry over holding: {e}"))?;
+            set_holding_quantity(
+                &mut conn,
+                session.id,
+                holding.actor_id,
+                &holding.resource_type,
+                holding.quantity,
+            )
+            .map_err(|e| format!("Failed to carry over holding: {e}"))?;
         }
 
         let _ = record_world_event(
@@ -561,7 +607,10 @@ pub async fn grant_session_resource_impl(
         return Err(Error::new("amount must be greater than zero"));
     }
 
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
     let session = tokio::task::spawn_blocking(move || load_session_row(&mut conn, session_id))
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -571,17 +620,24 @@ pub async fn grant_session_resource_impl(
         return Err(Error::new("Only the GM may grant Session Resources"));
     }
     if session.status != "active" {
-        return Err(Error::new("Start a session first — there is no active Genie session for this world"));
+        return Err(Error::new(
+            "Start a session first — there is no active Genie session for this world",
+        ));
     }
 
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
     let world_id = session.world_id;
 
     let holding = tokio::task::spawn_blocking(move || -> Result<GenieResourceHolding, String> {
         conn.transaction(|conn| -> Result<GenieResourceHolding, TxError> {
-            let current = load_holding_quantity(conn, session_id, actor_id, &resource_type).map_err(TxError::Msg)?;
+            let current = load_holding_quantity(conn, session_id, actor_id, &resource_type)
+                .map_err(TxError::Msg)?;
             let updated =
-                set_holding_quantity(conn, session_id, actor_id, &resource_type, current + amount).map_err(TxError::Msg)?;
+                set_holding_quantity(conn, session_id, actor_id, &resource_type, current + amount)
+                    .map_err(TxError::Msg)?;
 
             let _ = record_world_event(
                 conn,
@@ -620,7 +676,10 @@ pub async fn spend_wish_impl(
     session_id: Uuid,
     narrative_effect: String,
 ) -> GraphQLResult<GraphQLGenieSession> {
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
     let session = tokio::task::spawn_blocking(move || load_session_row(&mut conn, session_id))
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -636,35 +695,45 @@ pub async fn spend_wish_impl(
         return Err(Error::new("narrativeEffect must not be empty (FR-014)"));
     }
 
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
     let world_id = session.world_id;
     let new_wishes = session.wishes_remaining - 1;
 
-    let (updated, clocks) = tokio::task::spawn_blocking(move || -> Result<(GenieSession, Vec<GeniePuzzleClock>), String> {
-        let now = Utc::now().naive_utc();
-        let updated = diesel::update(world_genie_sessions::table.filter(world_genie_sessions::id.eq(session_id)))
-            .set((world_genie_sessions::wishes_remaining.eq(new_wishes), world_genie_sessions::updated_at.eq(now)))
+    let (updated, clocks) = tokio::task::spawn_blocking(
+        move || -> Result<(GenieSession, Vec<GeniePuzzleClock>), String> {
+            let now = Utc::now().naive_utc();
+            let updated = diesel::update(
+                world_genie_sessions::table.filter(world_genie_sessions::id.eq(session_id)),
+            )
+            .set((
+                world_genie_sessions::wishes_remaining.eq(new_wishes),
+                world_genie_sessions::updated_at.eq(now),
+            ))
             .returning(GenieSession::as_returning())
             .get_result::<GenieSession>(&mut conn)
             .map_err(|e| format!("Failed to spend wish: {e}"))?;
 
-        let _ = record_world_event(
-            &mut conn,
-            world_id,
-            EVENT_CODE_GENIE_SESSION_STATE,
-            Some(serde_json::json!({
-                "kind": "wish_pool",
-                "session_id": session_id,
-                "action": "wish_spent",
-                "wishes_remaining": updated.wishes_remaining,
-                "narrative_effect": narrative_effect,
-            })),
-            user_id,
-        );
+            let _ = record_world_event(
+                &mut conn,
+                world_id,
+                EVENT_CODE_GENIE_SESSION_STATE,
+                Some(serde_json::json!({
+                    "kind": "wish_pool",
+                    "session_id": session_id,
+                    "action": "wish_spent",
+                    "wishes_remaining": updated.wishes_remaining,
+                    "narrative_effect": narrative_effect,
+                })),
+                user_id,
+            );
 
-        let clocks = load_puzzle_clocks_for_session(&mut conn, session_id)?;
-        Ok((updated, clocks))
-    })
+            let clocks = load_puzzle_clocks_for_session(&mut conn, session_id)?;
+            Ok((updated, clocks))
+        },
+    )
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(Error::new)?;
@@ -683,7 +752,10 @@ pub async fn advance_doom_clock_impl(
     session_id: Uuid,
     delta: i32,
 ) -> GraphQLResult<GraphQLGenieSession> {
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
     let session = tokio::task::spawn_blocking(move || load_session_row(&mut conn, session_id))
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -696,7 +768,10 @@ pub async fn advance_doom_clock_impl(
         return Err(Error::new("This Genie session has already concluded"));
     }
 
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
     let world_id = session.world_id;
     let new_current = (session.doom_clock_current + delta).clamp(0, session.doom_clock_max);
     // FR-016: filling the Doom Clock completely, while the session is
@@ -706,10 +781,13 @@ pub async fn advance_doom_clock_impl(
     // triggers the loss condition.
     let just_lost = new_current >= session.doom_clock_max;
 
-    let (updated, clocks) = tokio::task::spawn_blocking(move || -> Result<(GenieSession, Vec<GeniePuzzleClock>), String> {
-        let now = Utc::now().naive_utc();
-        let new_status = if just_lost { "lost" } else { "active" };
-        let updated = diesel::update(world_genie_sessions::table.filter(world_genie_sessions::id.eq(session_id)))
+    let (updated, clocks) = tokio::task::spawn_blocking(
+        move || -> Result<(GenieSession, Vec<GeniePuzzleClock>), String> {
+            let now = Utc::now().naive_utc();
+            let new_status = if just_lost { "lost" } else { "active" };
+            let updated = diesel::update(
+                world_genie_sessions::table.filter(world_genie_sessions::id.eq(session_id)),
+            )
             .set((
                 world_genie_sessions::doom_clock_current.eq(new_current),
                 world_genie_sessions::status.eq(new_status),
@@ -719,23 +797,24 @@ pub async fn advance_doom_clock_impl(
             .get_result::<GenieSession>(&mut conn)
             .map_err(|e| format!("Failed to advance Doom Clock: {e}"))?;
 
-        let _ = record_world_event(
-            &mut conn,
-            world_id,
-            EVENT_CODE_GENIE_SESSION_STATE,
-            Some(serde_json::json!({
-                "kind": "doom_clock",
-                "session_id": session_id,
-                "doom_clock_current": updated.doom_clock_current,
-                "doom_clock_max": updated.doom_clock_max,
-                "session_status": updated.status,
-            })),
-            user_id,
-        );
+            let _ = record_world_event(
+                &mut conn,
+                world_id,
+                EVENT_CODE_GENIE_SESSION_STATE,
+                Some(serde_json::json!({
+                    "kind": "doom_clock",
+                    "session_id": session_id,
+                    "doom_clock_current": updated.doom_clock_current,
+                    "doom_clock_max": updated.doom_clock_max,
+                    "session_status": updated.status,
+                })),
+                user_id,
+            );
 
-        let clocks = load_puzzle_clocks_for_session(&mut conn, session_id)?;
-        Ok((updated, clocks))
-    })
+            let clocks = load_puzzle_clocks_for_session(&mut conn, session_id)?;
+            Ok((updated, clocks))
+        },
+    )
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(Error::new)?;
@@ -762,7 +841,10 @@ pub async fn create_puzzle_clock_impl(
         return Err(Error::new("segmentsMax must be greater than zero"));
     }
 
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
     let session = tokio::task::spawn_blocking(move || load_session_row(&mut conn, session_id))
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -772,11 +854,18 @@ pub async fn create_puzzle_clock_impl(
         return Err(Error::new("Only the GM may create a Puzzle Clock"));
     }
 
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
     let world_id = session.world_id;
 
     let clock = tokio::task::spawn_blocking(move || -> Result<GeniePuzzleClock, String> {
-        let new_clock = NewGeniePuzzleClock { session_id, label, segments_max };
+        let new_clock = NewGeniePuzzleClock {
+            session_id,
+            label,
+            segments_max,
+        };
         let clock = diesel::insert_into(world_genie_puzzle_clocks::table)
             .values(&new_clock)
             .returning(GeniePuzzleClock::as_returning())
@@ -868,7 +957,9 @@ fn grant_puzzle_clock_rewards(
         };
 
         if !recipients.is_empty() {
-            if let (Some(resource_type), Some(amount)) = (&reward.reward_resource_type, reward.reward_resource_amount) {
+            if let (Some(resource_type), Some(amount)) =
+                (&reward.reward_resource_type, reward.reward_resource_amount)
+            {
                 // Split as evenly as possible; any remainder goes to the
                 // first recipients (by id order) so the full configured
                 // amount is always granted, never lost to rounding.
@@ -879,12 +970,21 @@ fn grant_puzzle_clock_rewards(
                     if share <= 0 {
                         continue;
                     }
-                    let current = load_holding_quantity(conn, session_id, *recipient_id, resource_type)
-                        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
-                    set_holding_quantity(conn, session_id, *recipient_id, resource_type, current + share)
-                        .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+                    let current =
+                        load_holding_quantity(conn, session_id, *recipient_id, resource_type)
+                            .map_err(|_| diesel::result::Error::RollbackTransaction)?;
+                    set_holding_quantity(
+                        conn,
+                        session_id,
+                        *recipient_id,
+                        resource_type,
+                        current + share,
+                    )
+                    .map_err(|_| diesel::result::Error::RollbackTransaction)?;
                 }
-            } else if let (Some(item_id), Some(quantity)) = (reward.reward_item_id, reward.reward_item_quantity) {
+            } else if let (Some(item_id), Some(quantity)) =
+                (reward.reward_item_id, reward.reward_item_quantity)
+            {
                 // Item rewards aren't divisible — every recipient gets
                 // the full configured quantity (a "whole_party" item
                 // reward means "everyone gets one," not "split one item
@@ -895,9 +995,12 @@ fn grant_puzzle_clock_rewards(
             }
         }
 
-        diesel::update(world_genie_puzzle_clock_rewards::table.filter(world_genie_puzzle_clock_rewards::id.eq(reward.id)))
-            .set(world_genie_puzzle_clock_rewards::granted_at.eq(now))
-            .execute(conn)?;
+        diesel::update(
+            world_genie_puzzle_clock_rewards::table
+                .filter(world_genie_puzzle_clock_rewards::id.eq(reward.id)),
+        )
+        .set(world_genie_puzzle_clock_rewards::granted_at.eq(now))
+        .execute(conn)?;
     }
 
     Ok(due_rewards.len() as i32)
@@ -926,7 +1029,10 @@ fn grant_item_to_actor_in_tx(
             world_actor_inventory::item_name_snapshot.eq(item_name.clone()),
             world_actor_inventory::quantity.eq(quantity),
         ))
-        .on_conflict((world_actor_inventory::actor_id, world_actor_inventory::item_id))
+        .on_conflict((
+            world_actor_inventory::actor_id,
+            world_actor_inventory::item_id,
+        ))
         .do_update()
         .set((
             world_actor_inventory::quantity.eq(world_actor_inventory::quantity + quantity),
@@ -945,12 +1051,17 @@ pub async fn advance_puzzle_clock_impl(
     delta: i32,
     actor_id: Option<Uuid>,
 ) -> GraphQLResult<GraphQLGeniePuzzleClock> {
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
-    let (clock, session) = tokio::task::spawn_blocking(move || -> Result<(GeniePuzzleClock, GenieSession), String> {
-        let clock = load_puzzle_clock_row(&mut conn, clock_id)?;
-        let session = load_session_row(&mut conn, clock.session_id)?;
-        Ok((clock, session))
-    })
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    let (clock, session) = tokio::task::spawn_blocking(
+        move || -> Result<(GeniePuzzleClock, GenieSession), String> {
+            let clock = load_puzzle_clock_row(&mut conn, clock_id)?;
+            let session = load_session_row(&mut conn, clock.session_id)?;
+            Ok((clock, session))
+        },
+    )
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(Error::new)?;
@@ -965,7 +1076,10 @@ pub async fn advance_puzzle_clock_impl(
         return Err(Error::new("This Puzzle Clock has already resolved"));
     }
 
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
     let world_id = session.world_id;
     let session_id = session.id;
     let new_segments = (clock.segments_current + delta).clamp(0, clock.segments_max);
@@ -977,14 +1091,16 @@ pub async fn advance_puzzle_clock_impl(
             let now = Utc::now().naive_utc();
             let resolved_at = if resolves_now { Some(now) } else { None };
 
-            let updated_clock = diesel::update(world_genie_puzzle_clocks::table.filter(world_genie_puzzle_clocks::id.eq(clock_id)))
-                .set((
-                    world_genie_puzzle_clocks::segments_current.eq(new_segments),
-                    world_genie_puzzle_clocks::resolved_at.eq(resolved_at),
-                    world_genie_puzzle_clocks::updated_at.eq(now),
-                ))
-                .returning(GeniePuzzleClock::as_returning())
-                .get_result::<GeniePuzzleClock>(conn)?;
+            let updated_clock = diesel::update(
+                world_genie_puzzle_clocks::table.filter(world_genie_puzzle_clocks::id.eq(clock_id)),
+            )
+            .set((
+                world_genie_puzzle_clocks::segments_current.eq(new_segments),
+                world_genie_puzzle_clocks::resolved_at.eq(resolved_at),
+                world_genie_puzzle_clocks::updated_at.eq(now),
+            ))
+            .returning(GeniePuzzleClock::as_returning())
+            .get_result::<GeniePuzzleClock>(conn)?;
 
             // FR-016 win check: only relevant when this advance just
             // resolved the clock — an unresolved clock can't complete
@@ -996,17 +1112,29 @@ pub async fn advance_puzzle_clock_impl(
                     .select(GeniePuzzleClock::as_select())
                     .load::<GeniePuzzleClock>(conn)?;
                 if all_puzzle_clocks_resolved(&all_clocks) {
-                    diesel::update(world_genie_sessions::table.filter(world_genie_sessions::id.eq(session_id)))
-                        .set((world_genie_sessions::status.eq("won"), world_genie_sessions::updated_at.eq(now)))
-                        .execute(conn)?;
+                    diesel::update(
+                        world_genie_sessions::table.filter(world_genie_sessions::id.eq(session_id)),
+                    )
+                    .set((
+                        world_genie_sessions::status.eq("won"),
+                        world_genie_sessions::updated_at.eq(now),
+                    ))
+                    .execute(conn)?;
                     session_status_for_event = "won".to_string();
                 }
             }
 
             // FR-006/FR-006a: grant any reward rows newly crossed by this
             // advance, exactly once each, in this same transaction.
-            let rewards_granted =
-                grant_puzzle_clock_rewards(conn, clock_id, world_id, session_id, old_segments, new_segments, actor_id)?;
+            let rewards_granted = grant_puzzle_clock_rewards(
+                conn,
+                clock_id,
+                world_id,
+                session_id,
+                old_segments,
+                new_segments,
+                actor_id,
+            )?;
 
             let _ = record_world_event(
                 conn,
@@ -1079,12 +1207,17 @@ pub async fn configure_puzzle_clock_reward_impl(
         ));
     }
 
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
-    let (clock, session) = tokio::task::spawn_blocking(move || -> Result<(GeniePuzzleClock, GenieSession), String> {
-        let clock = load_puzzle_clock_row(&mut conn, clock_id)?;
-        let session = load_session_row(&mut conn, clock.session_id)?;
-        Ok((clock, session))
-    })
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    let (clock, session) = tokio::task::spawn_blocking(
+        move || -> Result<(GeniePuzzleClock, GenieSession), String> {
+            let clock = load_puzzle_clock_row(&mut conn, clock_id)?;
+            let session = load_session_row(&mut conn, clock.session_id)?;
+            Ok((clock, session))
+        },
+    )
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(Error::new)?;
@@ -1094,7 +1227,10 @@ pub async fn configure_puzzle_clock_reward_impl(
     }
     let _ = clock;
 
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
     let reward = tokio::task::spawn_blocking(move || -> Result<GeniePuzzleClockReward, String> {
         let new_reward = NewGeniePuzzleClockReward {
             clock_id,
@@ -1149,10 +1285,15 @@ pub async fn propose_resource_trade_impl(
     let controls_from = caller_controls_actor(state, user_id, is_admin, from_actor_id).await?;
     let controls_to = caller_controls_actor(state, user_id, is_admin, to_actor_id).await?;
     if !controls_from && !controls_to {
-        return Err(Error::new("You must control one of the two parties to propose this trade"));
+        return Err(Error::new(
+            "You must control one of the two parties to propose this trade",
+        ));
     }
 
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
     let world_id = require_member_of_session_world(state, user_id, session_id).await?;
 
     let proposal = tokio::task::spawn_blocking(move || -> Result<GenieTradeProposal, String> {
@@ -1202,7 +1343,10 @@ pub async fn accept_resource_trade_impl(
     is_admin: bool,
     proposal_id: Uuid,
 ) -> GraphQLResult<Vec<GraphQLGenieResourceHolding>> {
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
     let proposal = tokio::task::spawn_blocking(move || -> Result<GenieTradeProposal, String> {
         world_genie_trade_proposals::table
             .filter(world_genie_trade_proposals::id.eq(proposal_id))
@@ -1227,110 +1371,140 @@ pub async fn accept_resource_trade_impl(
     // accepter to control one of the two named actors (and not be the
     // proposer, checked above) enforces "the OTHER party" from
     // contracts/genie-session-loop.md.
-    let controls_from = caller_controls_actor(state, user_id, is_admin, proposal.from_actor_id).await?;
+    let controls_from =
+        caller_controls_actor(state, user_id, is_admin, proposal.from_actor_id).await?;
     let controls_to = caller_controls_actor(state, user_id, is_admin, proposal.to_actor_id).await?;
     if !controls_from && !controls_to {
         return Err(Error::new("You are not a party to this trade"));
     }
 
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
 
-    let holdings = tokio::task::spawn_blocking(move || -> Result<Vec<GenieResourceHolding>, String> {
-        conn.transaction(|conn| -> Result<Vec<GenieResourceHolding>, TxError> {
-            let from_current =
-                load_holding_quantity(conn, proposal.session_id, proposal.from_actor_id, &proposal.from_resource_type)
-                    .map_err(TxError::Msg)?;
-            if from_current < proposal.from_quantity {
-                return Err(TxError::Msg(
-                    "The proposing party no longer holds enough to complete this trade".to_string(),
-                ));
-            }
-            let to_current =
-                load_holding_quantity(conn, proposal.session_id, proposal.to_actor_id, &proposal.to_resource_type)
-                    .map_err(TxError::Msg)?;
-            if to_current < proposal.to_quantity {
-                return Err(TxError::Msg(
-                    "The counterpart no longer holds enough to complete this trade".to_string(),
-                ));
-            }
-
-            let from_after = set_holding_quantity(
-                conn,
-                proposal.session_id,
-                proposal.from_actor_id,
-                &proposal.from_resource_type,
-                from_current - proposal.from_quantity,
-            )
-            .map_err(TxError::Msg)?;
-            let from_gains_base = load_holding_quantity(conn, proposal.session_id, proposal.from_actor_id, &proposal.to_resource_type)
+    let holdings =
+        tokio::task::spawn_blocking(move || -> Result<Vec<GenieResourceHolding>, String> {
+            conn.transaction(|conn| -> Result<Vec<GenieResourceHolding>, TxError> {
+                let from_current = load_holding_quantity(
+                    conn,
+                    proposal.session_id,
+                    proposal.from_actor_id,
+                    &proposal.from_resource_type,
+                )
                 .map_err(TxError::Msg)?;
-            let from_gains = set_holding_quantity(
-                conn,
-                proposal.session_id,
-                proposal.from_actor_id,
-                &proposal.to_resource_type,
-                from_gains_base + proposal.to_quantity,
-            )
-            .map_err(TxError::Msg)?;
-
-            let to_after = set_holding_quantity(
-                conn,
-                proposal.session_id,
-                proposal.to_actor_id,
-                &proposal.to_resource_type,
-                to_current - proposal.to_quantity,
-            )
-            .map_err(TxError::Msg)?;
-            let to_gains_base = load_holding_quantity(conn, proposal.session_id, proposal.to_actor_id, &proposal.from_resource_type)
+                if from_current < proposal.from_quantity {
+                    return Err(TxError::Msg(
+                        "The proposing party no longer holds enough to complete this trade"
+                            .to_string(),
+                    ));
+                }
+                let to_current = load_holding_quantity(
+                    conn,
+                    proposal.session_id,
+                    proposal.to_actor_id,
+                    &proposal.to_resource_type,
+                )
                 .map_err(TxError::Msg)?;
-            let to_gains = set_holding_quantity(
-                conn,
-                proposal.session_id,
-                proposal.to_actor_id,
-                &proposal.from_resource_type,
-                to_gains_base + proposal.from_quantity,
-            )
-            .map_err(TxError::Msg)?;
+                if to_current < proposal.to_quantity {
+                    return Err(TxError::Msg(
+                        "The counterpart no longer holds enough to complete this trade".to_string(),
+                    ));
+                }
 
-            diesel::update(world_genie_trade_proposals::table.filter(world_genie_trade_proposals::id.eq(proposal_id)))
+                let from_after = set_holding_quantity(
+                    conn,
+                    proposal.session_id,
+                    proposal.from_actor_id,
+                    &proposal.from_resource_type,
+                    from_current - proposal.from_quantity,
+                )
+                .map_err(TxError::Msg)?;
+                let from_gains_base = load_holding_quantity(
+                    conn,
+                    proposal.session_id,
+                    proposal.from_actor_id,
+                    &proposal.to_resource_type,
+                )
+                .map_err(TxError::Msg)?;
+                let from_gains = set_holding_quantity(
+                    conn,
+                    proposal.session_id,
+                    proposal.from_actor_id,
+                    &proposal.to_resource_type,
+                    from_gains_base + proposal.to_quantity,
+                )
+                .map_err(TxError::Msg)?;
+
+                let to_after = set_holding_quantity(
+                    conn,
+                    proposal.session_id,
+                    proposal.to_actor_id,
+                    &proposal.to_resource_type,
+                    to_current - proposal.to_quantity,
+                )
+                .map_err(TxError::Msg)?;
+                let to_gains_base = load_holding_quantity(
+                    conn,
+                    proposal.session_id,
+                    proposal.to_actor_id,
+                    &proposal.from_resource_type,
+                )
+                .map_err(TxError::Msg)?;
+                let to_gains = set_holding_quantity(
+                    conn,
+                    proposal.session_id,
+                    proposal.to_actor_id,
+                    &proposal.from_resource_type,
+                    to_gains_base + proposal.from_quantity,
+                )
+                .map_err(TxError::Msg)?;
+
+                diesel::update(
+                    world_genie_trade_proposals::table
+                        .filter(world_genie_trade_proposals::id.eq(proposal_id)),
+                )
                 .set((
                     world_genie_trade_proposals::status.eq("accepted"),
                     world_genie_trade_proposals::updated_at.eq(Utc::now().naive_utc()),
                 ))
                 .execute(conn)?;
 
-            let trade_world_id = world_genie_sessions::table
-                .filter(world_genie_sessions::id.eq(proposal.session_id))
-                .select(world_genie_sessions::world_id)
-                .first::<Uuid>(conn)?;
+                let trade_world_id = world_genie_sessions::table
+                    .filter(world_genie_sessions::id.eq(proposal.session_id))
+                    .select(world_genie_sessions::world_id)
+                    .first::<Uuid>(conn)?;
 
-            let _ = record_world_event(
-                conn,
-                trade_world_id,
-                EVENT_CODE_GENIE_SESSION_STATE,
-                Some(serde_json::json!({
-                    "kind": "resource_trade",
-                    "session_id": proposal.session_id,
-                    "action": "accepted",
-                    "proposal_id": proposal.id,
-                    "from_actor_id": proposal.from_actor_id,
-                    "to_actor_id": proposal.to_actor_id,
-                })),
-                user_id,
-            );
+                let _ = record_world_event(
+                    conn,
+                    trade_world_id,
+                    EVENT_CODE_GENIE_SESSION_STATE,
+                    Some(serde_json::json!({
+                        "kind": "resource_trade",
+                        "session_id": proposal.session_id,
+                        "action": "accepted",
+                        "proposal_id": proposal.id,
+                        "from_actor_id": proposal.from_actor_id,
+                        "to_actor_id": proposal.to_actor_id,
+                    })),
+                    user_id,
+                );
 
-            Ok(vec![from_after, from_gains, to_after, to_gains])
+                Ok(vec![from_after, from_gains, to_after, to_gains])
+            })
+            .map_err(String::from)
         })
-        .map_err(String::from)
-    })
-    .await
-    .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(Error::new)?;
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(Error::new)?;
 
     // Return just the final holdings for the two parties (one row per
     // resource type touched — a party's own resource_type row and the
     // counterpart's resource_type row it now also holds).
-    Ok(holdings.into_iter().map(GraphQLGenieResourceHolding::from).collect())
+    Ok(holdings
+        .into_iter()
+        .map(GraphQLGenieResourceHolding::from)
+        .collect())
 }
 
 /// Spec 019: the counterpart declines a still-pending proposal — no
@@ -1345,7 +1519,10 @@ pub async fn decline_resource_trade_impl(
     is_admin: bool,
     proposal_id: Uuid,
 ) -> GraphQLResult<GraphQLGenieTradeProposal> {
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
     let proposal = tokio::task::spawn_blocking(move || -> Result<GenieTradeProposal, String> {
         world_genie_trade_proposals::table
             .filter(world_genie_trade_proposals::id.eq(proposal_id))
@@ -1363,17 +1540,25 @@ pub async fn decline_resource_trade_impl(
     if proposal.created_by == user_id {
         return Err(Error::new("You cannot decline your own trade proposal"));
     }
-    let controls_from = caller_controls_actor(state, user_id, is_admin, proposal.from_actor_id).await?;
+    let controls_from =
+        caller_controls_actor(state, user_id, is_admin, proposal.from_actor_id).await?;
     let controls_to = caller_controls_actor(state, user_id, is_admin, proposal.to_actor_id).await?;
     if !controls_from && !controls_to {
         return Err(Error::new("You are not a party to this trade"));
     }
 
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
     let updated = tokio::task::spawn_blocking(move || -> Result<GenieTradeProposal, String> {
-        conn.transaction(|conn| -> Result<GenieTradeProposal, diesel::result::Error> {
-            let now = Utc::now().naive_utc();
-            let updated = diesel::update(world_genie_trade_proposals::table.filter(world_genie_trade_proposals::id.eq(proposal_id)))
+        conn.transaction(
+            |conn| -> Result<GenieTradeProposal, diesel::result::Error> {
+                let now = Utc::now().naive_utc();
+                let updated = diesel::update(
+                    world_genie_trade_proposals::table
+                        .filter(world_genie_trade_proposals::id.eq(proposal_id)),
+                )
                 .set((
                     world_genie_trade_proposals::status.eq("rejected"),
                     world_genie_trade_proposals::updated_at.eq(now),
@@ -1381,28 +1566,29 @@ pub async fn decline_resource_trade_impl(
                 .returning(GenieTradeProposal::as_returning())
                 .get_result::<GenieTradeProposal>(conn)?;
 
-            let trade_world_id = world_genie_sessions::table
-                .filter(world_genie_sessions::id.eq(updated.session_id))
-                .select(world_genie_sessions::world_id)
-                .first::<Uuid>(conn)?;
+                let trade_world_id = world_genie_sessions::table
+                    .filter(world_genie_sessions::id.eq(updated.session_id))
+                    .select(world_genie_sessions::world_id)
+                    .first::<Uuid>(conn)?;
 
-            let _ = record_world_event(
-                conn,
-                trade_world_id,
-                EVENT_CODE_GENIE_SESSION_STATE,
-                Some(serde_json::json!({
-                    "kind": "resource_trade",
-                    "session_id": updated.session_id,
-                    "action": "rejected",
-                    "proposal_id": updated.id,
-                    "from_actor_id": updated.from_actor_id,
-                    "to_actor_id": updated.to_actor_id,
-                })),
-                user_id,
-            );
+                let _ = record_world_event(
+                    conn,
+                    trade_world_id,
+                    EVENT_CODE_GENIE_SESSION_STATE,
+                    Some(serde_json::json!({
+                        "kind": "resource_trade",
+                        "session_id": updated.session_id,
+                        "action": "rejected",
+                        "proposal_id": updated.id,
+                        "from_actor_id": updated.from_actor_id,
+                        "to_actor_id": updated.to_actor_id,
+                    })),
+                    user_id,
+                );
 
-            Ok(updated)
-        })
+                Ok(updated)
+            },
+        )
         .map_err(|e| format!("Failed to decline trade: {e}"))
     })
     .await
@@ -1430,12 +1616,17 @@ pub async fn spend_resource_on_puzzle_clock_impl(
     }
     require_caller_controls_actor(state, user_id, is_admin, actor_id).await?;
 
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
-    let (clock, session) = tokio::task::spawn_blocking(move || -> Result<(GeniePuzzleClock, GenieSession), String> {
-        let clock = load_puzzle_clock_row(&mut conn, clock_id)?;
-        let session = load_session_row(&mut conn, clock.session_id)?;
-        Ok((clock, session))
-    })
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    let (clock, session) = tokio::task::spawn_blocking(
+        move || -> Result<(GeniePuzzleClock, GenieSession), String> {
+            let clock = load_puzzle_clock_row(&mut conn, clock_id)?;
+            let session = load_session_row(&mut conn, clock.session_id)?;
+            Ok((clock, session))
+        },
+    )
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(Error::new)?;
@@ -1447,7 +1638,10 @@ pub async fn spend_resource_on_puzzle_clock_impl(
         return Err(Error::new("This Puzzle Clock has already resolved"));
     }
 
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
     let world_id = session.world_id;
     let session_id = session.id;
 
@@ -1460,8 +1654,14 @@ pub async fn spend_resource_on_puzzle_clock_impl(
                     "You do not hold enough of this resource".to_string(),
                 ));
             }
-            set_holding_quantity(conn, session_id, actor_id, &resource_type, current_qty - quantity)
-                .map_err(TxError::Msg)?;
+            set_holding_quantity(
+                conn,
+                session_id,
+                actor_id,
+                &resource_type,
+                current_qty - quantity,
+            )
+            .map_err(TxError::Msg)?;
 
             let now = Utc::now().naive_utc();
             // One resource spent advances the clock by one segment
@@ -1472,14 +1672,16 @@ pub async fn spend_resource_on_puzzle_clock_impl(
             let resolves_now = new_segments >= clock.segments_max;
             let resolved_at = if resolves_now { Some(now) } else { None };
 
-            let updated_clock = diesel::update(world_genie_puzzle_clocks::table.filter(world_genie_puzzle_clocks::id.eq(clock_id)))
-                .set((
-                    world_genie_puzzle_clocks::segments_current.eq(new_segments),
-                    world_genie_puzzle_clocks::resolved_at.eq(resolved_at),
-                    world_genie_puzzle_clocks::updated_at.eq(now),
-                ))
-                .returning(GeniePuzzleClock::as_returning())
-                .get_result::<GeniePuzzleClock>(conn)?;
+            let updated_clock = diesel::update(
+                world_genie_puzzle_clocks::table.filter(world_genie_puzzle_clocks::id.eq(clock_id)),
+            )
+            .set((
+                world_genie_puzzle_clocks::segments_current.eq(new_segments),
+                world_genie_puzzle_clocks::resolved_at.eq(resolved_at),
+                world_genie_puzzle_clocks::updated_at.eq(now),
+            ))
+            .returning(GeniePuzzleClock::as_returning())
+            .get_result::<GeniePuzzleClock>(conn)?;
 
             let mut session_status_for_event = session.status.clone();
             if resolves_now {
@@ -1488,9 +1690,14 @@ pub async fn spend_resource_on_puzzle_clock_impl(
                     .select(GeniePuzzleClock::as_select())
                     .load::<GeniePuzzleClock>(conn)?;
                 if all_puzzle_clocks_resolved(&all_clocks) {
-                    diesel::update(world_genie_sessions::table.filter(world_genie_sessions::id.eq(session_id)))
-                        .set((world_genie_sessions::status.eq("won"), world_genie_sessions::updated_at.eq(now)))
-                        .execute(conn)?;
+                    diesel::update(
+                        world_genie_sessions::table.filter(world_genie_sessions::id.eq(session_id)),
+                    )
+                    .set((
+                        world_genie_sessions::status.eq("won"),
+                        world_genie_sessions::updated_at.eq(now),
+                    ))
+                    .execute(conn)?;
                     session_status_for_event = "won".to_string();
                 }
             }
@@ -1528,7 +1735,11 @@ pub async fn spend_resource_on_puzzle_clock_impl(
 // createShopListing / purchaseFromShop (spec 020, FR-004/FR-005/FR-005a)
 // ============================================================================
 
-fn load_stock_quantity(conn: &mut PgConnection, actor_id: Uuid, item_id: Uuid) -> Result<i32, diesel::result::Error> {
+fn load_stock_quantity(
+    conn: &mut PgConnection,
+    actor_id: Uuid,
+    item_id: Uuid,
+) -> Result<i32, diesel::result::Error> {
     world_actor_inventory::table
         .filter(world_actor_inventory::actor_id.eq(actor_id))
         .filter(world_actor_inventory::item_id.eq(item_id))
@@ -1538,7 +1749,10 @@ fn load_stock_quantity(conn: &mut PgConnection, actor_id: Uuid, item_id: Uuid) -
         .map(|v| v.unwrap_or(0))
 }
 
-fn build_graphql_shop_listing(row: GenieShopListing, stock_quantity: i32) -> GraphQLGenieShopListing {
+fn build_graphql_shop_listing(
+    row: GenieShopListing,
+    stock_quantity: i32,
+) -> GraphQLGenieShopListing {
     GraphQLGenieShopListing {
         id: row.id,
         actor_id: row.actor_id,
@@ -1568,19 +1782,28 @@ pub async fn create_shop_listing_impl(
     let is_resource_price = price_resource_type.is_some() && price_resource_amount.is_some();
     let is_item_price = price_item_id.is_some() && price_item_quantity.is_some();
     if is_resource_price == is_item_price {
-        return Err(Error::new("Exactly one of a resource price or an item price must be configured"));
+        return Err(Error::new(
+            "Exactly one of a resource price or an item price must be configured",
+        ));
     }
     match price_kind {
         GenieShopPriceKind::Resource if !is_resource_price => {
-            return Err(Error::new("priceKind is RESOURCE but no resource price was provided"));
+            return Err(Error::new(
+                "priceKind is RESOURCE but no resource price was provided",
+            ));
         }
         GenieShopPriceKind::Item if !is_item_price => {
-            return Err(Error::new("priceKind is ITEM but no item price was provided"));
+            return Err(Error::new(
+                "priceKind is ITEM but no item price was provided",
+            ));
         }
         _ => {}
     }
 
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
     let world_id = tokio::task::spawn_blocking(move || -> Result<Uuid, String> {
         world_actors::table
             .filter(world_actors::id.eq(actor_id))
@@ -1596,7 +1819,10 @@ pub async fn create_shop_listing_impl(
         return Err(Error::new("Only the GM may create a shop listing"));
     }
 
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
     let listing = tokio::task::spawn_blocking(move || -> Result<GenieShopListing, String> {
         let new_listing = NewGenieShopListing {
             actor_id,
@@ -1618,11 +1844,15 @@ pub async fn create_shop_listing_impl(
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(Error::new)?;
 
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
-    let stock_quantity = tokio::task::spawn_blocking(move || load_stock_quantity(&mut conn, actor_id, item_id))
-        .await
-        .map_err(|_| Error::new("Failed to spawn blocking task"))?
-        .map_err(|e| Error::new(format!("Failed to load stock: {e}")))?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    let stock_quantity =
+        tokio::task::spawn_blocking(move || load_stock_quantity(&mut conn, actor_id, item_id))
+            .await
+            .map_err(|_| Error::new("Failed to spawn blocking task"))?
+            .map_err(|e| Error::new(format!("Failed to load stock: {e}")))?;
 
     Ok(build_graphql_shop_listing(listing, stock_quantity))
 }
@@ -1643,7 +1873,10 @@ pub async fn purchase_from_shop_impl(
 ) -> GraphQLResult<GraphQLGenieShopListing> {
     require_caller_controls_actor(state, user_id, is_admin, buyer_actor_id).await?;
 
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
     let listing = tokio::task::spawn_blocking(move || -> Result<GenieShopListing, String> {
         world_genie_shop_listings::table
             .filter(world_genie_shop_listings::id.eq(listing_id))
@@ -1660,7 +1893,10 @@ pub async fn purchase_from_shop_impl(
     // keyed by session_id. An item-priced (barter) purchase touches only
     // world_actor_inventory and needs no session at all.
     let session_id = if listing.price_kind == "resource" {
-        let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
         let seller_actor_id = listing.actor_id;
         let world_id = tokio::task::spawn_blocking(move || -> Result<Uuid, String> {
             world_actors::table
@@ -1673,7 +1909,10 @@ pub async fn purchase_from_shop_impl(
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
         .map_err(Error::new)?;
 
-        let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
         let session = tokio::task::spawn_blocking(move || -> Result<GenieSession, String> {
             world_genie_sessions::table
                 .filter(world_genie_sessions::world_id.eq(world_id))
@@ -1690,10 +1929,16 @@ pub async fn purchase_from_shop_impl(
         None
     };
 
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
     let world_id_for_event = {
         let seller_actor_id = listing.actor_id;
-        let mut lookup_conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+        let mut lookup_conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
         tokio::task::spawn_blocking(move || -> Result<Uuid, String> {
             world_actors::table
                 .filter(world_actors::id.eq(seller_actor_id))
@@ -1706,88 +1951,114 @@ pub async fn purchase_from_shop_impl(
         .map_err(Error::new)?
     };
 
-    let updated_listing = tokio::task::spawn_blocking(move || -> Result<GenieShopListing, String> {
-        conn.transaction(|conn| -> Result<GenieShopListing, TxError> {
-            // FR-005a: atomic conditional stock decrement first — if this
-            // affects 0 rows, either the listing never had stock or a
-            // concurrent purchase just took the last unit; either way,
-            // fail cleanly with no other state touched.
-            let decremented = diesel::update(
-                world_actor_inventory::table
-                    .filter(world_actor_inventory::actor_id.eq(listing.actor_id))
-                    .filter(world_actor_inventory::item_id.eq(listing.item_id))
-                    .filter(world_actor_inventory::quantity.gt(0)),
-            )
-            .set((
-                world_actor_inventory::quantity.eq(world_actor_inventory::quantity - 1),
-                world_actor_inventory::updated_at.eq(Utc::now().naive_utc()),
-            ))
-            .execute(conn)?;
-
-            if decremented == 0 {
-                return Err(TxError::Msg("This item is out of stock".to_string()));
-            }
-
-            // Pay the price.
-            if listing.price_kind == "resource" {
-                let resource_type = listing.price_resource_type.clone().unwrap_or_default();
-                let amount = listing.price_resource_amount.unwrap_or(0);
-                let session_id = session_id.expect("resource-priced listing always resolves a session_id above");
-                let current =
-                    load_holding_quantity(conn, session_id, buyer_actor_id, &resource_type).map_err(TxError::Msg)?;
-                if current < amount {
-                    return Err(TxError::Msg("You do not have enough of this resource to afford this purchase".to_string()));
-                }
-                set_holding_quantity(conn, session_id, buyer_actor_id, &resource_type, current - amount)
-                    .map_err(TxError::Msg)?;
-            } else {
-                let required_item_id = listing.price_item_id.expect("item-priced listing always has price_item_id");
-                let required_qty = listing.price_item_quantity.unwrap_or(0);
-                let held_qty = load_stock_quantity(conn, buyer_actor_id, required_item_id)?;
-                if held_qty < required_qty {
-                    return Err(TxError::Msg("You do not hold the required item(s) to afford this purchase".to_string()));
-                }
-                // Remove the traded-in item from the buyer, add it to the
-                // seller's inventory (the NPC "collects" what it's paid).
-                diesel::update(
+    let updated_listing =
+        tokio::task::spawn_blocking(move || -> Result<GenieShopListing, String> {
+            conn.transaction(|conn| -> Result<GenieShopListing, TxError> {
+                // FR-005a: atomic conditional stock decrement first — if this
+                // affects 0 rows, either the listing never had stock or a
+                // concurrent purchase just took the last unit; either way,
+                // fail cleanly with no other state touched.
+                let decremented = diesel::update(
                     world_actor_inventory::table
-                        .filter(world_actor_inventory::actor_id.eq(buyer_actor_id))
-                        .filter(world_actor_inventory::item_id.eq(required_item_id)),
+                        .filter(world_actor_inventory::actor_id.eq(listing.actor_id))
+                        .filter(world_actor_inventory::item_id.eq(listing.item_id))
+                        .filter(world_actor_inventory::quantity.gt(0)),
                 )
                 .set((
-                    world_actor_inventory::quantity.eq(world_actor_inventory::quantity - required_qty),
+                    world_actor_inventory::quantity.eq(world_actor_inventory::quantity - 1),
                     world_actor_inventory::updated_at.eq(Utc::now().naive_utc()),
                 ))
                 .execute(conn)?;
-                grant_item_to_actor_in_tx(conn, listing.actor_id, required_item_id, required_qty)?;
-            }
 
-            // Transfer the listed item to the buyer.
-            grant_item_to_actor_in_tx(conn, buyer_actor_id, listing.item_id, 1)?;
+                if decremented == 0 {
+                    return Err(TxError::Msg("This item is out of stock".to_string()));
+                }
 
-            let _ = record_world_event(
-                conn,
-                world_id_for_event,
-                EVENT_CODE_GENIE_SESSION_STATE,
-                Some(serde_json::json!({
-                    "kind": "purchase",
-                    "listing_id": listing.id,
-                    "buyer_actor_id": buyer_actor_id,
-                    "seller_actor_id": listing.actor_id,
-                    "item_id": listing.item_id,
-                })),
-                user_id,
-            );
+                // Pay the price.
+                if listing.price_kind == "resource" {
+                    let resource_type = listing.price_resource_type.clone().unwrap_or_default();
+                    let amount = listing.price_resource_amount.unwrap_or(0);
+                    let session_id = session_id
+                        .expect("resource-priced listing always resolves a session_id above");
+                    let current =
+                        load_holding_quantity(conn, session_id, buyer_actor_id, &resource_type)
+                            .map_err(TxError::Msg)?;
+                    if current < amount {
+                        return Err(TxError::Msg(
+                            "You do not have enough of this resource to afford this purchase"
+                                .to_string(),
+                        ));
+                    }
+                    set_holding_quantity(
+                        conn,
+                        session_id,
+                        buyer_actor_id,
+                        &resource_type,
+                        current - amount,
+                    )
+                    .map_err(TxError::Msg)?;
+                } else {
+                    let required_item_id = listing
+                        .price_item_id
+                        .expect("item-priced listing always has price_item_id");
+                    let required_qty = listing.price_item_quantity.unwrap_or(0);
+                    let held_qty = load_stock_quantity(conn, buyer_actor_id, required_item_id)?;
+                    if held_qty < required_qty {
+                        return Err(TxError::Msg(
+                            "You do not hold the required item(s) to afford this purchase"
+                                .to_string(),
+                        ));
+                    }
+                    // Remove the traded-in item from the buyer, add it to the
+                    // seller's inventory (the NPC "collects" what it's paid).
+                    diesel::update(
+                        world_actor_inventory::table
+                            .filter(world_actor_inventory::actor_id.eq(buyer_actor_id))
+                            .filter(world_actor_inventory::item_id.eq(required_item_id)),
+                    )
+                    .set((
+                        world_actor_inventory::quantity
+                            .eq(world_actor_inventory::quantity - required_qty),
+                        world_actor_inventory::updated_at.eq(Utc::now().naive_utc()),
+                    ))
+                    .execute(conn)?;
+                    grant_item_to_actor_in_tx(
+                        conn,
+                        listing.actor_id,
+                        required_item_id,
+                        required_qty,
+                    )?;
+                }
 
-            Ok(listing.clone())
+                // Transfer the listed item to the buyer.
+                grant_item_to_actor_in_tx(conn, buyer_actor_id, listing.item_id, 1)?;
+
+                let _ = record_world_event(
+                    conn,
+                    world_id_for_event,
+                    EVENT_CODE_GENIE_SESSION_STATE,
+                    Some(serde_json::json!({
+                        "kind": "purchase",
+                        "listing_id": listing.id,
+                        "buyer_actor_id": buyer_actor_id,
+                        "seller_actor_id": listing.actor_id,
+                        "item_id": listing.item_id,
+                    })),
+                    user_id,
+                );
+
+                Ok(listing.clone())
+            })
+            .map_err(String::from)
         })
-        .map_err(String::from)
-    })
-    .await
-    .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(Error::new)?;
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(Error::new)?;
 
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
     let stock_quantity = tokio::task::spawn_blocking(move || {
         load_stock_quantity(&mut conn, updated_listing.actor_id, updated_listing.item_id)
     })
@@ -1825,13 +2096,32 @@ impl GenieSessionMutation {
     ) -> GraphQLResult<GraphQLGenieSession> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        spend_wish_impl(state, auth_user.user_id, auth_user.is_admin, session_id, narrative_effect).await
+        spend_wish_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            session_id,
+            narrative_effect,
+        )
+        .await
     }
 
-    async fn advance_doom_clock(&self, ctx: &Context<'_>, session_id: Uuid, delta: i32) -> GraphQLResult<GraphQLGenieSession> {
+    async fn advance_doom_clock(
+        &self,
+        ctx: &Context<'_>,
+        session_id: Uuid,
+        delta: i32,
+    ) -> GraphQLResult<GraphQLGenieSession> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        advance_doom_clock_impl(state, auth_user.user_id, auth_user.is_admin, session_id, delta).await
+        advance_doom_clock_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            session_id,
+            delta,
+        )
+        .await
     }
 
     async fn create_puzzle_clock(
@@ -1843,7 +2133,15 @@ impl GenieSessionMutation {
     ) -> GraphQLResult<GraphQLGeniePuzzleClock> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        create_puzzle_clock_impl(state, auth_user.user_id, auth_user.is_admin, session_id, label, segments_max).await
+        create_puzzle_clock_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            session_id,
+            label,
+            segments_max,
+        )
+        .await
     }
 
     async fn advance_puzzle_clock(
@@ -1855,7 +2153,15 @@ impl GenieSessionMutation {
     ) -> GraphQLResult<GraphQLGeniePuzzleClock> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        advance_puzzle_clock_impl(state, auth_user.user_id, auth_user.is_admin, clock_id, delta, actor_id).await
+        advance_puzzle_clock_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            clock_id,
+            delta,
+            actor_id,
+        )
+        .await
     }
 
     async fn grant_session_resource(
@@ -1868,7 +2174,16 @@ impl GenieSessionMutation {
     ) -> GraphQLResult<GraphQLGenieResourceHolding> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        grant_session_resource_impl(state, auth_user.user_id, auth_user.is_admin, session_id, actor_id, resource_type, amount).await
+        grant_session_resource_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            session_id,
+            actor_id,
+            resource_type,
+            amount,
+        )
+        .await
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1908,7 +2223,14 @@ impl GenieSessionMutation {
     ) -> GraphQLResult<GraphQLGenieShopListing> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        purchase_from_shop_impl(state, auth_user.user_id, auth_user.is_admin, listing_id, buyer_actor_id).await
+        purchase_from_shop_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            listing_id,
+            buyer_actor_id,
+        )
+        .await
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1969,13 +2291,21 @@ impl GenieSessionMutation {
         .await
     }
 
-    async fn accept_resource_trade(&self, ctx: &Context<'_>, proposal_id: Uuid) -> GraphQLResult<Vec<GraphQLGenieResourceHolding>> {
+    async fn accept_resource_trade(
+        &self,
+        ctx: &Context<'_>,
+        proposal_id: Uuid,
+    ) -> GraphQLResult<Vec<GraphQLGenieResourceHolding>> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         accept_resource_trade_impl(state, auth_user.user_id, auth_user.is_admin, proposal_id).await
     }
 
-    async fn decline_resource_trade(&self, ctx: &Context<'_>, proposal_id: Uuid) -> GraphQLResult<GraphQLGenieTradeProposal> {
+    async fn decline_resource_trade(
+        &self,
+        ctx: &Context<'_>,
+        proposal_id: Uuid,
+    ) -> GraphQLResult<GraphQLGenieTradeProposal> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         decline_resource_trade_impl(state, auth_user.user_id, auth_user.is_admin, proposal_id).await
@@ -1991,17 +2321,32 @@ impl GenieSessionMutation {
     ) -> GraphQLResult<GraphQLGeniePuzzleClock> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        spend_resource_on_puzzle_clock_impl(state, auth_user.user_id, auth_user.is_admin, clock_id, actor_id, resource_type, quantity)
-            .await
+        spend_resource_on_puzzle_clock_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            clock_id,
+            actor_id,
+            resource_type,
+            quantity,
+        )
+        .await
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{insert_test_user, insert_test_world, insert_test_world_member, test_app_state};
+    use crate::test_support::{
+        insert_test_user, insert_test_world, insert_test_world_member, test_app_state,
+    };
 
-    fn insert_test_actor(conn: &mut PgConnection, world_id: Uuid, scene_id: Uuid, owner_id: Uuid) -> Uuid {
+    fn insert_test_actor(
+        conn: &mut PgConnection,
+        world_id: Uuid,
+        scene_id: Uuid,
+        owner_id: Uuid,
+    ) -> Uuid {
         use crate::schema::world_actors;
         let now = Utc::now().naive_utc();
         let actor_id = Uuid::now_v7();
@@ -2057,7 +2402,10 @@ mod tests {
             state,
             owner_id,
             false,
-            StartGenieSessionInput { world_id, doom_clock_max: 4 },
+            StartGenieSessionInput {
+                world_id,
+                doom_clock_max: 4,
+            },
         )
         .await
         .expect("GM should be able to start a session");
@@ -2079,10 +2427,16 @@ mod tests {
             &state,
             player_id,
             false,
-            StartGenieSessionInput { world_id, doom_clock_max: 4 },
+            StartGenieSessionInput {
+                world_id,
+                doom_clock_max: 4,
+            },
         )
         .await;
-        assert!(denied.is_err(), "a non-GM caller must not be able to start a session");
+        assert!(
+            denied.is_err(),
+            "a non-GM caller must not be able to start a session"
+        );
     }
 
     #[tokio::test]
@@ -2092,7 +2446,10 @@ mod tests {
 
         let mut conn = state.db_pool.get().unwrap();
         let session = load_session_row(&mut conn, session_id).unwrap();
-        assert_eq!(session.wishes_remaining, 3, "FR-013: Session Wish Pool starts at 3");
+        assert_eq!(
+            session.wishes_remaining, 3,
+            "FR-013: Session Wish Pool starts at 3"
+        );
         assert_eq!(session.doom_clock_current, 0);
         assert_eq!(session.status, "active");
     }
@@ -2102,14 +2459,38 @@ mod tests {
         let state = test_app_state();
         let (_world_id, _owner_id, player_id, session_id) = setup_active_session(&state).await;
 
-        let result = spend_wish_impl(&state, player_id, false, session_id, "Undo the failed roll".to_string()).await;
-        assert!(result.is_err(), "a non-GM caller must not be able to spend a wish");
+        let result = spend_wish_impl(
+            &state,
+            player_id,
+            false,
+            session_id,
+            "Undo the failed roll".to_string(),
+        )
+        .await;
+        assert!(
+            result.is_err(),
+            "a non-GM caller must not be able to spend a wish"
+        );
 
         let result = advance_doom_clock_impl(&state, player_id, false, session_id, 1).await;
-        assert!(result.is_err(), "a non-GM caller must not be able to advance the Doom Clock");
+        assert!(
+            result.is_err(),
+            "a non-GM caller must not be able to advance the Doom Clock"
+        );
 
-        let result = create_puzzle_clock_impl(&state, player_id, false, session_id, "Escape the vault".to_string(), 4).await;
-        assert!(result.is_err(), "a non-GM caller must not be able to create a Puzzle Clock");
+        let result = create_puzzle_clock_impl(
+            &state,
+            player_id,
+            false,
+            session_id,
+            "Escape the vault".to_string(),
+            4,
+        )
+        .await;
+        assert!(
+            result.is_err(),
+            "a non-GM caller must not be able to create a Puzzle Clock"
+        );
     }
 
     #[tokio::test]
@@ -2118,12 +2499,25 @@ mod tests {
         let (_world_id, owner_id, _player_id, session_id) = setup_active_session(&state).await;
 
         for i in (0..3).rev() {
-            let session = spend_wish_impl(&state, owner_id, false, session_id, format!("Effect {i}")).await.unwrap();
+            let session =
+                spend_wish_impl(&state, owner_id, false, session_id, format!("Effect {i}"))
+                    .await
+                    .unwrap();
             assert_eq!(session.wishes_remaining, i);
         }
 
-        let result = spend_wish_impl(&state, owner_id, false, session_id, "One too many".to_string()).await;
-        assert!(result.is_err(), "spending a wish from an empty pool must be rejected");
+        let result = spend_wish_impl(
+            &state,
+            owner_id,
+            false,
+            session_id,
+            "One too many".to_string(),
+        )
+        .await;
+        assert!(
+            result.is_err(),
+            "spending a wish from an empty pool must be rejected"
+        );
     }
 
     #[tokio::test]
@@ -2131,7 +2525,9 @@ mod tests {
         let state = test_app_state();
         let (_world_id, owner_id, _player_id, session_id) = setup_active_session(&state).await;
 
-        let session = advance_doom_clock_impl(&state, owner_id, false, session_id, 4).await.unwrap();
+        let session = advance_doom_clock_impl(&state, owner_id, false, session_id, 4)
+            .await
+            .unwrap();
         assert_eq!(session.doom_clock_current, 4);
         assert!(matches!(session.status, GenieSessionStatus::Lost));
 
@@ -2148,17 +2544,29 @@ mod tests {
         let state = test_app_state();
         let (_world_id, owner_id, _player_id, session_id) = setup_active_session(&state).await;
 
-        let clock = create_puzzle_clock_impl(&state, owner_id, false, session_id, "Only clock".to_string(), 2)
-            .await
-            .unwrap();
+        let clock = create_puzzle_clock_impl(
+            &state,
+            owner_id,
+            false,
+            session_id,
+            "Only clock".to_string(),
+            2,
+        )
+        .await
+        .unwrap();
 
         // Resolve the only Puzzle Clock first — this must fire the win.
-        let resolved = advance_puzzle_clock_impl(&state, owner_id, false, clock.id, 2, None).await.unwrap();
+        let resolved = advance_puzzle_clock_impl(&state, owner_id, false, clock.id, 2, None)
+            .await
+            .unwrap();
         assert!(resolved.resolved_at.is_some());
 
         let mut conn = state.db_pool.get().unwrap();
         let session = load_session_row(&mut conn, session_id).unwrap();
-        assert_eq!(session.status, "won", "resolving the last Puzzle Clock must win the session");
+        assert_eq!(
+            session.status, "won",
+            "resolving the last Puzzle Clock must win the session"
+        );
         drop(conn);
 
         // The Doom Clock is now moot: advancing it must be rejected since
@@ -2167,7 +2575,10 @@ mod tests {
         assert!(result.is_err());
         let mut conn = state.db_pool.get().unwrap();
         let session = load_session_row(&mut conn, session_id).unwrap();
-        assert_eq!(session.status, "won", "a win must not be overwritten by a later loss check");
+        assert_eq!(
+            session.status, "won",
+            "a win must not be overwritten by a later loss check"
+        );
     }
 
     #[tokio::test]
@@ -2199,7 +2610,10 @@ mod tests {
         .expect("actor_a's controller should be able to propose");
 
         let self_accept = accept_resource_trade_impl(&state, owner_id, false, proposal.id).await;
-        assert!(self_accept.is_err(), "the proposer must not be able to accept their own proposal");
+        assert!(
+            self_accept.is_err(),
+            "the proposer must not be able to accept their own proposal"
+        );
     }
 
     #[tokio::test]
@@ -2214,23 +2628,43 @@ mod tests {
         drop(conn);
 
         let proposal = propose_resource_trade_impl(
-            &state, owner_id, false, session_id, actor_a, "insight".to_string(), 2, actor_b,
-            "favor".to_string(), 1,
+            &state,
+            owner_id,
+            false,
+            session_id,
+            actor_a,
+            "insight".to_string(),
+            2,
+            actor_b,
+            "favor".to_string(),
+            1,
         )
         .await
         .unwrap();
 
         let self_decline = decline_resource_trade_impl(&state, owner_id, false, proposal.id).await;
-        assert!(self_decline.is_err(), "the proposer must not be able to decline their own proposal");
+        assert!(
+            self_decline.is_err(),
+            "the proposer must not be able to decline their own proposal"
+        );
 
-        let declined = decline_resource_trade_impl(&state, player_id, false, proposal.id).await.unwrap();
+        let declined = decline_resource_trade_impl(&state, player_id, false, proposal.id)
+            .await
+            .unwrap();
         assert_eq!(declined.status, "rejected");
 
         let re_decline = decline_resource_trade_impl(&state, player_id, false, proposal.id).await;
-        assert!(re_decline.is_err(), "an already-declined proposal must not be declinable again");
+        assert!(
+            re_decline.is_err(),
+            "an already-declined proposal must not be declinable again"
+        );
 
-        let accept_after_decline = accept_resource_trade_impl(&state, player_id, false, proposal.id).await;
-        assert!(accept_after_decline.is_err(), "a declined proposal must not be acceptable");
+        let accept_after_decline =
+            accept_resource_trade_impl(&state, player_id, false, proposal.id).await;
+        assert!(
+            accept_after_decline.is_err(),
+            "a declined proposal must not be acceptable"
+        );
     }
 
     #[tokio::test]
@@ -2261,7 +2695,10 @@ mod tests {
         .unwrap();
 
         let underfunded = accept_resource_trade_impl(&state, player_id, false, proposal.id).await;
-        assert!(underfunded.is_err(), "an insufficient holding must be rejected");
+        assert!(
+            underfunded.is_err(),
+            "an insufficient holding must be rejected"
+        );
 
         // Fund actor_a and actor_b, then retry with a fresh proposal
         // (the first attempt's proposal stays 'pending' since it never
@@ -2271,18 +2708,24 @@ mod tests {
         set_holding_quantity(&mut conn, session_id, actor_b, "favor", 1).unwrap();
         drop(conn);
 
-        let holdings = accept_resource_trade_impl(&state, player_id, false, proposal.id).await.unwrap();
+        let holdings = accept_resource_trade_impl(&state, player_id, false, proposal.id)
+            .await
+            .unwrap();
         assert!(!holdings.is_empty());
 
         let mut conn = state.db_pool.get().unwrap();
         let a_favor = load_holding_quantity(&mut conn, session_id, actor_a, "favor").unwrap();
         let b_insight = load_holding_quantity(&mut conn, session_id, actor_b, "insight").unwrap();
         assert_eq!(a_favor, 1, "actor_a should now hold the favor it received");
-        assert_eq!(b_insight, 3, "actor_b should now hold the insight it received");
+        assert_eq!(
+            b_insight, 3,
+            "actor_b should now hold the insight it received"
+        );
     }
 
     #[tokio::test]
-    async fn spend_resource_on_puzzle_clock_rejects_insufficient_holding_and_advances_when_funded() {
+    async fn spend_resource_on_puzzle_clock_rejects_insufficient_holding_and_advances_when_funded()
+    {
         let state = test_app_state();
         let (world_id, owner_id, _player_id, session_id) = setup_active_session(&state).await;
 
@@ -2291,18 +2734,41 @@ mod tests {
         let actor_a = insert_test_actor(&mut conn, world_id, scene_id, owner_id);
         drop(conn);
 
-        let clock = create_puzzle_clock_impl(&state, owner_id, false, session_id, "Vault".to_string(), 3).await.unwrap();
+        let clock =
+            create_puzzle_clock_impl(&state, owner_id, false, session_id, "Vault".to_string(), 3)
+                .await
+                .unwrap();
 
-        let insufficient = spend_resource_on_puzzle_clock_impl(&state, owner_id, false, clock.id, actor_a, "essence".to_string(), 2).await;
-        assert!(insufficient.is_err(), "spending more than held must be rejected");
+        let insufficient = spend_resource_on_puzzle_clock_impl(
+            &state,
+            owner_id,
+            false,
+            clock.id,
+            actor_a,
+            "essence".to_string(),
+            2,
+        )
+        .await;
+        assert!(
+            insufficient.is_err(),
+            "spending more than held must be rejected"
+        );
 
         let mut conn = state.db_pool.get().unwrap();
         set_holding_quantity(&mut conn, session_id, actor_a, "essence", 2).unwrap();
         drop(conn);
 
-        let updated = spend_resource_on_puzzle_clock_impl(&state, owner_id, false, clock.id, actor_a, "essence".to_string(), 2)
-            .await
-            .unwrap();
+        let updated = spend_resource_on_puzzle_clock_impl(
+            &state,
+            owner_id,
+            false,
+            clock.id,
+            actor_a,
+            "essence".to_string(),
+            2,
+        )
+        .await
+        .unwrap();
         assert_eq!(updated.segments_current, 2);
 
         let mut conn = state.db_pool.get().unwrap();
@@ -2328,10 +2794,13 @@ mod tests {
         // Owned by the GM, not the player — only a claim will follow.
         let claimed_actor = insert_test_actor(&mut conn, world_id, scene_id, owner_id);
         let other_actor = insert_test_actor(&mut conn, world_id, scene_id, owner_id);
-        diesel::update(crate::schema::world_actors::table.filter(crate::schema::world_actors::id.eq(claimed_actor)))
-            .set(crate::schema::world_actors::available_for_claim.eq(true))
-            .execute(&mut conn)
-            .unwrap();
+        diesel::update(
+            crate::schema::world_actors::table
+                .filter(crate::schema::world_actors::id.eq(claimed_actor)),
+        )
+        .set(crate::schema::world_actors::available_for_claim.eq(true))
+        .execute(&mut conn)
+        .unwrap();
         drop(conn);
 
         claim_actor_impl(&state, player_id, world_id, claimed_actor)
@@ -2372,16 +2841,34 @@ mod tests {
         let actor = insert_test_actor(&mut conn, world_id, scene_id, player_id);
         drop(conn);
 
-        let holding =
-            grant_session_resource_impl(&state, owner_id, false, session_id, actor, "essence".to_string(), 3)
-                .await
-                .expect("GM should be able to grant a resource");
+        let holding = grant_session_resource_impl(
+            &state,
+            owner_id,
+            false,
+            session_id,
+            actor,
+            "essence".to_string(),
+            3,
+        )
+        .await
+        .expect("GM should be able to grant a resource");
         assert_eq!(holding.quantity, 3);
 
         // Non-GM caller rejected (Scenario 4).
-        let denied =
-            grant_session_resource_impl(&state, player_id, false, session_id, actor, "essence".to_string(), 1).await;
-        assert!(denied.is_err(), "a non-GM caller must not be able to grant a resource");
+        let denied = grant_session_resource_impl(
+            &state,
+            player_id,
+            false,
+            session_id,
+            actor,
+            "essence".to_string(),
+            1,
+        )
+        .await;
+        assert!(
+            denied.is_err(),
+            "a non-GM caller must not be able to grant a resource"
+        );
     }
 
     #[tokio::test]
@@ -2395,9 +2882,17 @@ mod tests {
         drop(conn);
 
         // No session started at all — grant must be rejected (Scenario 3).
-        let session = start_genie_session_impl(&state, owner_id, false, StartGenieSessionInput { world_id, doom_clock_max: 2 })
-            .await
-            .unwrap();
+        let session = start_genie_session_impl(
+            &state,
+            owner_id,
+            false,
+            StartGenieSessionInput {
+                world_id,
+                doom_clock_max: 2,
+            },
+        )
+        .await
+        .unwrap();
         // Force the session to a concluded state so "no active session" is exercised.
         let mut conn = state.db_pool.get().unwrap();
         diesel::update(world_genie_sessions::table.filter(world_genie_sessions::id.eq(session.id)))
@@ -2406,9 +2901,20 @@ mod tests {
             .unwrap();
         drop(conn);
 
-        let denied =
-            grant_session_resource_impl(&state, owner_id, false, session.id, actor, "essence".to_string(), 1).await;
-        assert!(denied.is_err(), "granting against a concluded session must be rejected");
+        let denied = grant_session_resource_impl(
+            &state,
+            owner_id,
+            false,
+            session.id,
+            actor,
+            "essence".to_string(),
+            1,
+        )
+        .await;
+        assert!(
+            denied.is_err(),
+            "granting against a concluded session must be rejected"
+        );
     }
 
     #[tokio::test]
@@ -2421,32 +2927,61 @@ mod tests {
         let actor = insert_test_actor(&mut conn, world_id, scene_id, owner_id);
         drop(conn);
 
-        let first_session =
-            start_genie_session_impl(&state, owner_id, false, StartGenieSessionInput { world_id, doom_clock_max: 2 })
-                .await
-                .unwrap();
-        grant_session_resource_impl(&state, owner_id, false, first_session.id, actor, "favor".to_string(), 5)
-            .await
-            .unwrap();
+        let first_session = start_genie_session_impl(
+            &state,
+            owner_id,
+            false,
+            StartGenieSessionInput {
+                world_id,
+                doom_clock_max: 2,
+            },
+        )
+        .await
+        .unwrap();
+        grant_session_resource_impl(
+            &state,
+            owner_id,
+            false,
+            first_session.id,
+            actor,
+            "favor".to_string(),
+            5,
+        )
+        .await
+        .unwrap();
         let mut conn = state.db_pool.get().unwrap();
-        diesel::update(world_genie_sessions::table.filter(world_genie_sessions::id.eq(first_session.id)))
-            .set(world_genie_sessions::status.eq("won"))
-            .execute(&mut conn)
-            .unwrap();
+        diesel::update(
+            world_genie_sessions::table.filter(world_genie_sessions::id.eq(first_session.id)),
+        )
+        .set(world_genie_sessions::status.eq("won"))
+        .execute(&mut conn)
+        .unwrap();
         drop(conn);
 
         // Carryover disabled (default): the new session starts empty.
-        let second_session =
-            start_genie_session_impl(&state, owner_id, false, StartGenieSessionInput { world_id, doom_clock_max: 2 })
-                .await
-                .unwrap();
+        let second_session = start_genie_session_impl(
+            &state,
+            owner_id,
+            false,
+            StartGenieSessionInput {
+                world_id,
+                doom_clock_max: 2,
+            },
+        )
+        .await
+        .unwrap();
         let mut conn = state.db_pool.get().unwrap();
         let qty = load_holding_quantity(&mut conn, second_session.id, actor, "favor").unwrap();
-        assert_eq!(qty, 0, "carryover disabled by default — new session should start at 0");
-        diesel::update(world_genie_sessions::table.filter(world_genie_sessions::id.eq(second_session.id)))
-            .set(world_genie_sessions::status.eq("won"))
-            .execute(&mut conn)
-            .unwrap();
+        assert_eq!(
+            qty, 0,
+            "carryover disabled by default — new session should start at 0"
+        );
+        diesel::update(
+            world_genie_sessions::table.filter(world_genie_sessions::id.eq(second_session.id)),
+        )
+        .set(world_genie_sessions::status.eq("won"))
+        .execute(&mut conn)
+        .unwrap();
         drop(conn);
 
         // Enable carryover, end the second session, start a third — holdings should carry.
@@ -2457,20 +2992,35 @@ mod tests {
             .unwrap();
         drop(conn);
 
-        let third_session =
-            start_genie_session_impl(&state, owner_id, false, StartGenieSessionInput { world_id, doom_clock_max: 2 })
-                .await
-                .unwrap();
+        let third_session = start_genie_session_impl(
+            &state,
+            owner_id,
+            false,
+            StartGenieSessionInput {
+                world_id,
+                doom_clock_max: 2,
+            },
+        )
+        .await
+        .unwrap();
         let mut conn = state.db_pool.get().unwrap();
         let qty = load_holding_quantity(&mut conn, third_session.id, actor, "favor").unwrap();
-        assert_eq!(qty, 0, "carryover should only copy the immediately prior session's holdings, which were 0");
+        assert_eq!(
+            qty, 0,
+            "carryover should only copy the immediately prior session's holdings, which were 0"
+        );
     }
 
     // ========================================================================
     // Spec 020: createShopListing / purchaseFromShop (FR-004/FR-005/FR-005a)
     // ========================================================================
 
-    fn insert_test_item(conn: &mut PgConnection, world_id: Uuid, owner_id: Uuid, name: &str) -> Uuid {
+    fn insert_test_item(
+        conn: &mut PgConnection,
+        world_id: Uuid,
+        owner_id: Uuid,
+        name: &str,
+    ) -> Uuid {
         use crate::schema::world_items;
         let now = Utc::now().naive_utc();
         let item_id = Uuid::now_v7();
@@ -2531,22 +3081,42 @@ mod tests {
 
         // Insufficient funds (Scenario 2).
         let denied = purchase_from_shop_impl(&state, player_id, false, listing.id, buyer).await;
-        assert!(denied.is_err(), "buyer with insufficient Insight must be rejected");
+        assert!(
+            denied.is_err(),
+            "buyer with insufficient Insight must be rejected"
+        );
 
         // Fund the buyer, then purchase succeeds (Scenario 1).
-        grant_session_resource_impl(&state, owner_id, false, session_id, buyer, "insight".to_string(), 2)
-            .await
-            .unwrap();
+        grant_session_resource_impl(
+            &state,
+            owner_id,
+            false,
+            session_id,
+            buyer,
+            "insight".to_string(),
+            2,
+        )
+        .await
+        .unwrap();
         let purchased = purchase_from_shop_impl(&state, player_id, false, listing.id, buyer)
             .await
             .expect("funded buyer should be able to purchase");
-        assert_eq!(purchased.stock_quantity, 0, "last unit purchased — stock decremented to 0");
+        assert_eq!(
+            purchased.stock_quantity, 0,
+            "last unit purchased — stock decremented to 0"
+        );
 
         let mut conn = state.db_pool.get().unwrap();
         let buyer_insight = load_holding_quantity(&mut conn, session_id, buyer, "insight").unwrap();
-        assert_eq!(buyer_insight, 0, "2 Insight deducted for a 2-Insight purchase");
+        assert_eq!(
+            buyer_insight, 0,
+            "2 Insight deducted for a 2-Insight purchase"
+        );
         let buyer_stock = load_stock_quantity(&mut conn, buyer, item).unwrap();
-        assert_eq!(buyer_stock, 1, "purchased item transferred into buyer's inventory");
+        assert_eq!(
+            buyer_stock, 1,
+            "purchased item transferred into buyer's inventory"
+        );
     }
 
     #[tokio::test]
@@ -2579,7 +3149,10 @@ mod tests {
 
         // Buyer doesn't hold the flask yet (Scenario 4).
         let denied = purchase_from_shop_impl(&state, player_id, false, listing.id, buyer).await;
-        assert!(denied.is_err(), "buyer without the required barter item must be rejected");
+        assert!(
+            denied.is_err(),
+            "buyer without the required barter item must be rejected"
+        );
 
         let mut conn = state.db_pool.get().unwrap();
         stock_item(&mut conn, buyer, flask, 1);
@@ -2590,9 +3163,21 @@ mod tests {
             .expect("buyer holding the barter item should be able to purchase");
 
         let mut conn = state.db_pool.get().unwrap();
-        assert_eq!(load_stock_quantity(&mut conn, buyer, flask).unwrap(), 0, "flask traded away");
-        assert_eq!(load_stock_quantity(&mut conn, buyer, lantern).unwrap(), 1, "lantern received");
-        assert_eq!(load_stock_quantity(&mut conn, npc, flask).unwrap(), 1, "NPC collected the traded-in flask");
+        assert_eq!(
+            load_stock_quantity(&mut conn, buyer, flask).unwrap(),
+            0,
+            "flask traded away"
+        );
+        assert_eq!(
+            load_stock_quantity(&mut conn, buyer, lantern).unwrap(),
+            1,
+            "lantern received"
+        );
+        assert_eq!(
+            load_stock_quantity(&mut conn, npc, flask).unwrap(),
+            1,
+            "NPC collected the traded-in flask"
+        );
     }
 
     #[tokio::test]
@@ -2628,12 +3213,28 @@ mod tests {
         .await
         .unwrap();
 
-        grant_session_resource_impl(&state, owner_id, false, session_id, buyer_a, "insight".to_string(), 1)
-            .await
-            .unwrap();
-        grant_session_resource_impl(&state, owner_id, false, session_id, buyer_b, "insight".to_string(), 1)
-            .await
-            .unwrap();
+        grant_session_resource_impl(
+            &state,
+            owner_id,
+            false,
+            session_id,
+            buyer_a,
+            "insight".to_string(),
+            1,
+        )
+        .await
+        .unwrap();
+        grant_session_resource_impl(
+            &state,
+            owner_id,
+            false,
+            session_id,
+            buyer_b,
+            "insight".to_string(),
+            1,
+        )
+        .await
+        .unwrap();
 
         let (result_a, result_b) = tokio::join!(
             purchase_from_shop_impl(&state, player_id, false, listing.id, buyer_a),
@@ -2641,17 +3242,30 @@ mod tests {
         );
 
         let successes = [&result_a, &result_b].iter().filter(|r| r.is_ok()).count();
-        assert_eq!(successes, 1, "exactly one of the two concurrent purchases should succeed");
+        assert_eq!(
+            successes, 1,
+            "exactly one of the two concurrent purchases should succeed"
+        );
 
         let mut conn = state.db_pool.get().unwrap();
-        assert_eq!(load_stock_quantity(&mut conn, npc, item).unwrap(), 0, "stock never goes negative or double-decrements");
+        assert_eq!(
+            load_stock_quantity(&mut conn, npc, item).unwrap(),
+            0,
+            "stock never goes negative or double-decrements"
+        );
 
         // The loser must have no partial state change.
         if result_a.is_err() {
-            assert_eq!(load_holding_quantity(&mut conn, session_id, buyer_a, "insight").unwrap(), 1);
+            assert_eq!(
+                load_holding_quantity(&mut conn, session_id, buyer_a, "insight").unwrap(),
+                1
+            );
             assert_eq!(load_stock_quantity(&mut conn, buyer_a, item).unwrap(), 0);
         } else {
-            assert_eq!(load_holding_quantity(&mut conn, session_id, buyer_b, "insight").unwrap(), 1);
+            assert_eq!(
+                load_holding_quantity(&mut conn, session_id, buyer_b, "insight").unwrap(),
+                1
+            );
             assert_eq!(load_stock_quantity(&mut conn, buyer_b, item).unwrap(), 0);
         }
     }
@@ -2670,9 +3284,16 @@ mod tests {
         let dagger = insert_test_item(&mut conn, world_id, owner_id, "Dagger");
         drop(conn);
 
-        let clock = create_puzzle_clock_impl(&state, owner_id, false, session_id, "Forge Daggers".to_string(), 3)
-            .await
-            .unwrap();
+        let clock = create_puzzle_clock_impl(
+            &state,
+            owner_id,
+            false,
+            session_id,
+            "Forge Daggers".to_string(),
+            3,
+        )
+        .await
+        .unwrap();
 
         for segment in 1..=3 {
             configure_puzzle_clock_reward_impl(
@@ -2692,12 +3313,17 @@ mod tests {
         }
 
         for _ in 0..3 {
-            advance_puzzle_clock_impl(&state, owner_id, false, clock.id, 1, Some(smith)).await.unwrap();
+            advance_puzzle_clock_impl(&state, owner_id, false, clock.id, 1, Some(smith))
+                .await
+                .unwrap();
         }
 
         let mut conn = state.db_pool.get().unwrap();
         let dagger_count = load_stock_quantity(&mut conn, smith, dagger).unwrap();
-        assert_eq!(dagger_count, 3, "one dagger granted per advance, not a lump sum");
+        assert_eq!(
+            dagger_count, 3,
+            "one dagger granted per advance, not a lump sum"
+        );
     }
 
     #[tokio::test]
@@ -2710,9 +3336,16 @@ mod tests {
         let pc_b = insert_test_actor(&mut conn, world_id, scene_id, player_id);
         drop(conn);
 
-        let clock = create_puzzle_clock_impl(&state, owner_id, false, session_id, "Recover the Sealed Lamp".to_string(), 4)
-            .await
-            .unwrap();
+        let clock = create_puzzle_clock_impl(
+            &state,
+            owner_id,
+            false,
+            session_id,
+            "Recover the Sealed Lamp".to_string(),
+            4,
+        )
+        .await
+        .unwrap();
         configure_puzzle_clock_reward_impl(
             &state,
             owner_id,
@@ -2728,25 +3361,46 @@ mod tests {
         .await
         .unwrap();
 
-        advance_puzzle_clock_impl(&state, owner_id, false, clock.id, 4, None).await.unwrap();
+        advance_puzzle_clock_impl(&state, owner_id, false, clock.id, 4, None)
+            .await
+            .unwrap();
 
         let mut conn = state.db_pool.get().unwrap();
         let a_favor = load_holding_quantity(&mut conn, session_id, pc_a, "favor").unwrap();
         let b_favor = load_holding_quantity(&mut conn, session_id, pc_b, "favor").unwrap();
-        assert_eq!(a_favor + b_favor, 2, "the full configured amount is split across the party, none lost");
-        assert!(a_favor >= 1 && b_favor >= 1, "both party members should receive a share of an even split");
+        assert_eq!(
+            a_favor + b_favor,
+            2,
+            "the full configured amount is split across the party, none lost"
+        );
+        assert!(
+            a_favor >= 1 && b_favor >= 1,
+            "both party members should receive a share of an even split"
+        );
     }
 
     #[tokio::test]
     async fn zero_configured_rewards_clock_behaves_unchanged() {
         let state = test_app_state();
         let (_world_id, owner_id, _player_id, session_id) = setup_active_session(&state).await;
-        let clock = create_puzzle_clock_impl(&state, owner_id, false, session_id, "Plain Clock".to_string(), 2)
+        let clock = create_puzzle_clock_impl(
+            &state,
+            owner_id,
+            false,
+            session_id,
+            "Plain Clock".to_string(),
+            2,
+        )
+        .await
+        .unwrap();
+
+        let resolved = advance_puzzle_clock_impl(&state, owner_id, false, clock.id, 2, None)
             .await
             .unwrap();
-
-        let resolved = advance_puzzle_clock_impl(&state, owner_id, false, clock.id, 2, None).await.unwrap();
-        assert!(resolved.resolved_at.is_some(), "a zero-reward clock still resolves normally");
+        assert!(
+            resolved.resolved_at.is_some(),
+            "a zero-reward clock still resolves normally"
+        );
     }
 
     #[tokio::test]
@@ -2762,9 +3416,16 @@ mod tests {
         let pc_b = insert_test_actor(&mut conn, world_id, scene_id, player_id);
         drop(conn);
 
-        let clock = create_puzzle_clock_impl(&state, owner_id, false, session_id, "Untended Forge".to_string(), 2)
-            .await
-            .unwrap();
+        let clock = create_puzzle_clock_impl(
+            &state,
+            owner_id,
+            false,
+            session_id,
+            "Untended Forge".to_string(),
+            2,
+        )
+        .await
+        .unwrap();
         configure_puzzle_clock_reward_impl(
             &state,
             owner_id,
@@ -2781,7 +3442,9 @@ mod tests {
         .unwrap();
 
         // No actorId supplied — plain GM "Advance" click.
-        advance_puzzle_clock_impl(&state, owner_id, false, clock.id, 1, None).await.unwrap();
+        advance_puzzle_clock_impl(&state, owner_id, false, clock.id, 1, None)
+            .await
+            .unwrap();
 
         let mut conn = state.db_pool.get().unwrap();
         let a_essence = load_holding_quantity(&mut conn, session_id, pc_a, "essence").unwrap();

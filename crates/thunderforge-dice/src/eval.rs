@@ -75,7 +75,10 @@ struct ExprValue {
 
 impl ExprValue {
     fn total(value: f64) -> Self {
-        ExprValue { value, success_count: None }
+        ExprValue {
+            value,
+            success_count: None,
+        }
     }
 }
 
@@ -98,7 +101,12 @@ pub fn resolve<R: Rng>(
     bindings: &PlaceholderBindings,
     rng: &mut R,
 ) -> Result<RollResolution, FormulaError> {
-    let mut ctx = EvalCtx { rng, bindings, dice: Vec::new(), total_dice_rolled: 0 };
+    let mut ctx = EvalCtx {
+        rng,
+        bindings,
+        dice: Vec::new(),
+        total_dice_rolled: 0,
+    };
     let result = eval_expr(&mut ctx, &formula.ast)?;
 
     if !result.value.is_finite() {
@@ -110,7 +118,11 @@ pub fn resolve<R: Rng>(
         None => ResolutionKind::Total(result.value),
     };
 
-    Ok(RollResolution { formula: formula.source.clone(), dice: ctx.dice, kind })
+    Ok(RollResolution {
+        formula: formula.source.clone(),
+        dice: ctx.dice,
+        kind,
+    })
 }
 
 fn eval_expr<R: Rng>(ctx: &mut EvalCtx<R>, expr: &Expr) -> Result<ExprValue, FormulaError> {
@@ -163,7 +175,10 @@ fn eval_expr<R: Rng>(ctx: &mut EvalCtx<R>, expr: &Expr) -> Result<ExprValue, For
                 },
                 _ => None,
             };
-            Ok(ExprValue { value, success_count })
+            Ok(ExprValue {
+                value,
+                success_count,
+            })
         }
         Expr::MathFn(kind, inner) => {
             let v = eval_expr(ctx, inner)?.value;
@@ -191,7 +206,10 @@ fn eval_int_expr<R: Rng>(ctx: &mut EvalCtx<R>, expr: &Expr) -> Result<i64, Formu
     Ok(v.round() as i64)
 }
 
-fn eval_dice_term<R: Rng>(ctx: &mut EvalCtx<R>, term: &DiceTerm) -> Result<ExprValue, FormulaError> {
+fn eval_dice_term<R: Rng>(
+    ctx: &mut EvalCtx<R>,
+    term: &DiceTerm,
+) -> Result<ExprValue, FormulaError> {
     let count = eval_int_expr(ctx, &term.count)?;
     if count < 0 {
         return Err(FormulaError::ParseError {
@@ -283,7 +301,12 @@ fn eval_dice_term<R: Rng>(ctx: &mut EvalCtx<R>, term: &DiceTerm) -> Result<ExprV
         }
 
         let final_value = *rolls.last().unwrap();
-        outcomes.push(DieOutcome { sides, rolls, kept: true, final_value });
+        outcomes.push(DieOutcome {
+            sides,
+            rolls,
+            kept: true,
+            final_value,
+        });
     }
 
     apply_keep_drop(&mut outcomes, &term.modifiers);
@@ -293,12 +316,19 @@ fn eval_dice_term<R: Rng>(ctx: &mut EvalCtx<R>, term: &DiceTerm) -> Result<ExprV
 
     let value = match success_count {
         Some(n) => n as f64,
-        None => outcomes.iter().filter(|d| d.kept).map(|d| d.final_value).sum::<i64>() as f64,
+        None => outcomes
+            .iter()
+            .filter(|d| d.kept)
+            .map(|d| d.final_value)
+            .sum::<i64>() as f64,
     };
 
     ctx.dice.extend(outcomes);
 
-    Ok(ExprValue { value, success_count })
+    Ok(ExprValue {
+        value,
+        success_count,
+    })
 }
 
 fn find_condition<F>(modifiers: &[Modifier], f: F) -> Option<Condition>
@@ -373,7 +403,11 @@ fn apply_clamp(outcomes: &mut [DieOutcome], modifiers: &[Modifier]) {
 /// per this crate's chosen semantics (research.md/parser.rs doc
 /// comments record these as this crate's own concrete notation choices,
 /// the spec itself only requires the underlying capability).
-fn compute_success_count(outcomes: &[DieOutcome], modifiers: &[Modifier], max_face: i64) -> Option<i64> {
+fn compute_success_count(
+    outcomes: &[DieOutcome],
+    modifiers: &[Modifier],
+    max_face: i64,
+) -> Option<i64> {
     let kept: Vec<&DieOutcome> = outcomes.iter().filter(|d| d.kept).collect();
 
     let successes = find_condition(modifiers, |m| match m {
@@ -402,7 +436,10 @@ fn compute_success_count(outcomes: &[DieOutcome], modifiers: &[Modifier], max_fa
 
     if even || odd {
         let want_even = even;
-        let count = kept.iter().filter(|d| (d.final_value % 2 == 0) == want_even).count() as i64;
+        let count = kept
+            .iter()
+            .filter(|d| (d.final_value % 2 == 0) == want_even)
+            .count() as i64;
         return Some(count);
     }
 
@@ -412,10 +449,16 @@ fn compute_success_count(outcomes: &[DieOutcome], modifiers: &[Modifier], max_fa
 
     let mut total = 0i64;
     if let Some(cond) = successes {
-        total += kept.iter().filter(|d| condition_matches(cond, d.final_value, max_face)).count() as i64;
+        total += kept
+            .iter()
+            .filter(|d| condition_matches(cond, d.final_value, max_face))
+            .count() as i64;
     }
     if let Some(cond) = failures {
-        total -= kept.iter().filter(|d| condition_matches(cond, d.final_value, max_face)).count() as i64;
+        total -= kept
+            .iter()
+            .filter(|d| condition_matches(cond, d.final_value, max_face))
+            .count() as i64;
     }
     if let Some(cond) = subtract_failure_value {
         total -= kept
@@ -474,7 +517,12 @@ fn eval_pool<R: Rng>(
         }
     }
 
-    let value = totals.iter().zip(kept.iter()).filter(|&(_, &k)| k).map(|(v, _)| *v).sum();
+    let value = totals
+        .iter()
+        .zip(kept.iter())
+        .filter(|&(_, &k)| k)
+        .map(|(v, _)| *v)
+        .sum();
     Ok(ExprValue::total(value))
 }
 
@@ -528,7 +576,10 @@ mod tests {
         // rolls (0-indexed face = value-1): 3,4,2,5 -> faces 4,5,3,6
         let result = resolve_str("4d6+2", vec![3, 4, 2, 5]).unwrap();
         assert_eq!(result.dice.len(), 4);
-        assert_eq!(result.kind, ResolutionKind::Total(4.0 + 5.0 + 3.0 + 6.0 + 2.0));
+        assert_eq!(
+            result.kind,
+            ResolutionKind::Total(4.0 + 5.0 + 3.0 + 6.0 + 2.0)
+        );
     }
 
     #[test]
@@ -548,7 +599,11 @@ mod tests {
         // first die: face 1 (value 1) triggers reroll (r1), reroll -> face 5 (value 5)
         // second die: face 4 (value 4), no reroll
         let result = resolve_str("2d6r1", vec![0, 4, 3]).unwrap();
-        let rerolled = result.dice.iter().find(|d| d.rolls.len() > 1).expect("one die should have rerolled");
+        let rerolled = result
+            .dice
+            .iter()
+            .find(|d| d.rolls.len() > 1)
+            .expect("one die should have rerolled");
         assert_eq!(rerolled.rolls[0], 1);
         assert_eq!(rerolled.final_value, 5);
     }
@@ -596,7 +651,10 @@ mod tests {
             assert!(die.final_value >= -1 && die.final_value <= 1);
             assert_eq!(die.sides, DieSides::Fate);
         }
-        assert_eq!(result.kind, ResolutionKind::Total(-1.0 + 0.0 + 1.0 + 0.0 + 3.0));
+        assert_eq!(
+            result.kind,
+            ResolutionKind::Total(-1.0 + 0.0 + 1.0 + 0.0 + 3.0)
+        );
     }
 
     #[test]
@@ -642,8 +700,12 @@ mod tests {
         let mut rng = ScriptedRng::new(vec![9]);
         let high = resolve(&formula, &bindings_high, &mut rng).unwrap();
 
-        let ResolutionKind::Total(low_v) = low.kind else { panic!("expected Total") };
-        let ResolutionKind::Total(high_v) = high.kind else { panic!("expected Total") };
+        let ResolutionKind::Total(low_v) = low.kind else {
+            panic!("expected Total")
+        };
+        let ResolutionKind::Total(high_v) = high.kind else {
+            panic!("expected Total")
+        };
         assert_eq!(high_v - low_v, 5.0);
     }
 
@@ -694,16 +756,30 @@ mod tests {
         // `DieOutcome`s are present overall.
         assert_eq!(result.dice.len(), 4);
 
-        let exploded = result.dice.iter().find(|d| d.rolls.len() > 1).expect("one die should have exploded");
-        assert_eq!(exploded.rolls, vec![6, 3], "full chain (original 6 plus every explosion) must be recorded");
+        let exploded = result
+            .dice
+            .iter()
+            .find(|d| d.rolls.len() > 1)
+            .expect("one die should have exploded");
+        assert_eq!(
+            exploded.rolls,
+            vec![6, 3],
+            "full chain (original 6 plus every explosion) must be recorded"
+        );
         assert_eq!(exploded.final_value, 3);
-        assert!(exploded.kept, "the exploded die's final value (3) is in the top 3 and should be kept");
+        assert!(
+            exploded.kept,
+            "the exploded die's final value (3) is in the top 3 and should be kept"
+        );
 
         let kept: Vec<_> = result.dice.iter().filter(|d| d.kept).collect();
         let dropped: Vec<_> = result.dice.iter().filter(|d| !d.kept).collect();
         assert_eq!(kept.len(), 3, "kh3 should keep exactly 3 of the 4 dice");
         assert_eq!(dropped.len(), 1, "kh3 should drop exactly 1 of the 4 dice");
-        assert_eq!(dropped[0].final_value, 1, "the lowest die (face 1) should be the one dropped");
+        assert_eq!(
+            dropped[0].final_value, 1,
+            "the lowest die (face 1) should be the one dropped"
+        );
 
         // Successes: kept final values are 4 (die2), 3 (exploded die1),
         // 2 (die3) -> only the 4 counts as a success at cs>=4.
@@ -734,7 +810,9 @@ mod tests {
         let mut rng = ScriptedRng::new(vec![14]);
         let result = resolve(&formula, &bindings, &mut rng).unwrap();
 
-        let ResolutionKind::Total(total) = result.kind else { panic!("expected Total") };
+        let ResolutionKind::Total(total) = result.kind else {
+            panic!("expected Total")
+        };
         assert_eq!(total, 22.0, "1d20(15) + modifier(7) = 22");
         assert_eq!(result.dice.len(), 1);
         assert_eq!(result.dice[0].final_value, 15);
@@ -763,7 +841,10 @@ mod tests {
         // Application-side comparison: a difficulty-4 task has target
         // number 12 (4 * 3); a roll of 17 meets/beats it and succeeds.
         let target_number = 4 * 3;
-        assert!(17 >= target_number, "roll of 17 should meet/beat target number 12");
+        assert!(
+            17 >= target_number,
+            "roll of 17 should meet/beat target number 12"
+        );
     }
 
     /// packs/systems/blades_in_the_dark: confirms `system.json`'s
@@ -784,7 +865,11 @@ mod tests {
         let mut rng = ScriptedRng::new(vec![1, 4, 2]);
         let result = resolve(&formula, &bindings, &mut rng).unwrap();
 
-        assert_eq!(result.dice.len(), 3, "a rating of 3 should roll a pool of 3d6");
+        assert_eq!(
+            result.dice.len(),
+            3,
+            "a rating of 3 should roll a pool of 3d6"
+        );
         let kept: Vec<_> = result.dice.iter().filter(|d| d.kept).collect();
         assert_eq!(kept.len(), 1, "kh1 should keep exactly one die");
         assert_eq!(kept[0].final_value, 5, "the highest of faces 2,5,3 is 5");

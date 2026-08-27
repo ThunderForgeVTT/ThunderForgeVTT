@@ -58,7 +58,8 @@ mod tests {
             let code = generate_link_code();
             assert_eq!(code.len(), CODE_LENGTH, "code length must be {CODE_LENGTH}");
             assert!(
-                code.chars().all(|c| c.is_ascii_hexdigit() && !c.is_lowercase()),
+                code.chars()
+                    .all(|c| c.is_ascii_hexdigit() && !c.is_lowercase()),
                 "code must be uppercase hex, got {code}"
             );
         }

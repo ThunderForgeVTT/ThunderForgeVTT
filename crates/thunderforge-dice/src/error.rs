@@ -39,7 +39,10 @@ impl fmt::Display for FormulaError {
                 write!(f, "formula would roll more dice than the allowed bound")
             }
             FormulaError::IterationCapExceeded => {
-                write!(f, "a die's reroll/explosion chain exceeded the allowed bound")
+                write!(
+                    f,
+                    "a die's reroll/explosion chain exceeded the allowed bound"
+                )
             }
         }
     }

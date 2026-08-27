@@ -105,7 +105,10 @@ pub async fn set_actor_permission_impl(
 
         diesel::insert_into(world_actor_permissions::table)
             .values(&new_row)
-            .on_conflict((world_actor_permissions::actor_id, world_actor_permissions::user_id))
+            .on_conflict((
+                world_actor_permissions::actor_id,
+                world_actor_permissions::user_id,
+            ))
             .do_update()
             .set((
                 world_actor_permissions::level.eq(level),
@@ -197,8 +200,14 @@ impl ActorPermissionMutation {
     ) -> GraphQLResult<bool> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        remove_actor_permission_impl(state, auth_user.user_id, auth_user.is_admin, actor_id, user_id)
-            .await
+        remove_actor_permission_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            actor_id,
+            user_id,
+        )
+        .await
     }
 }
 
@@ -206,7 +215,9 @@ impl ActorPermissionMutation {
 mod tests {
     use super::*;
     use crate::graphql::types::ActorPermissionLevel;
-    use crate::test_support::{insert_test_user, insert_test_world, insert_test_world_member, test_app_state};
+    use crate::test_support::{
+        insert_test_user, insert_test_world, insert_test_world_member, test_app_state,
+    };
 
     /// FR-014: only the DM may view or change the ownership block — a
     /// non-DM member (even one holding explicit Owner on the actor via a
@@ -251,7 +262,10 @@ mod tests {
             },
         )
         .await;
-        assert!(denied.is_err(), "a non-DM caller must not be able to set actor permissions");
+        assert!(
+            denied.is_err(),
+            "a non-DM caller must not be able to set actor permissions"
+        );
 
         // DM can grant, and the granted player still cannot then view/change the block.
         let granted = set_actor_permission_impl(
@@ -268,8 +282,7 @@ mod tests {
         .expect("DM should be able to grant Owner");
         assert_eq!(granted.level, ActorPermissionLevel::Owner.as_db_str());
 
-        let still_denied =
-            actor_permissions_impl(&state, player_id, false, actor.id).await;
+        let still_denied = actor_permissions_impl(&state, player_id, false, actor.id).await;
         assert!(
             still_denied.is_err(),
             "a player holding explicit Owner on the actor must still not see the ownership block \
@@ -335,6 +348,9 @@ mod tests {
         let remaining = actor_permissions_impl(&state, owner_id, false, actor.id)
             .await
             .expect("DM should still be able to view the (now empty) ownership block");
-        assert!(remaining.is_empty(), "removed grant must not remain as an explicit row");
+        assert!(
+            remaining.is_empty(),
+            "removed grant must not remain as an explicit row"
+        );
     }
 }

@@ -1,7 +1,5 @@
 //! Healthcheck query for system status monitoring.
 
-
-
 #[derive(Default)]
 pub struct HealthcheckQuery;
 

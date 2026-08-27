@@ -117,7 +117,12 @@ pub fn insert_test_scene(conn: &mut PgConnection, world_id: Uuid, owner_id: Uuid
 
 /// Inserts an accepted `world_members` row (role `"Player"` unless
 /// overridden), simulating a completed invite-accept flow.
-pub fn insert_test_world_member(conn: &mut PgConnection, world_id: Uuid, user_id: Uuid, role: &str) {
+pub fn insert_test_world_member(
+    conn: &mut PgConnection,
+    world_id: Uuid,
+    user_id: Uuid,
+    role: &str,
+) {
     use crate::schema::world_members;
     let now = chrono::Utc::now().naive_utc();
     diesel::insert_into(world_members::table)
@@ -151,7 +156,10 @@ pub fn tiny_png_bytes() -> Vec<u8> {
     let img = image::RgbImage::from_pixel(1, 1, image::Rgb([255, 0, 0]));
     let mut bytes = Vec::new();
     image::DynamicImage::ImageRgb8(img)
-        .write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png)
+        .write_to(
+            &mut std::io::Cursor::new(&mut bytes),
+            image::ImageFormat::Png,
+        )
         .unwrap();
     bytes
 }

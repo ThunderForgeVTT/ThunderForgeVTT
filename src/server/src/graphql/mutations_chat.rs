@@ -32,7 +32,7 @@ use crate::graphql::{app_state, authenticated_user};
 use crate::models::{ChatMessage, NewChatMessage};
 use crate::schema::{users, world_chat_messages};
 use crate::state::AppState;
-use crate::world_events::{record_world_event, EVENT_CODE_CHAT_MESSAGE};
+use crate::world_events::{EVENT_CODE_CHAT_MESSAGE, record_world_event};
 
 /// Upper bound on one message. Long enough for a paragraph of narration,
 /// short enough that the backscroll query stays cheap and a single client

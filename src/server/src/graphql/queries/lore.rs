@@ -11,7 +11,10 @@ use crate::auth::lore_permissions::require_lore_permission;
 use crate::graphql::types::{ActorPermissionLevel, GraphQLLoreEntry, GraphQLLoreRevision};
 use crate::graphql::{app_state, authenticated_user, require_visible_world};
 use crate::models::{LoreEntry, LoreRevision};
-use crate::schema::{world_abilities, world_actors, world_items, world_lore_entries, world_lore_links, world_lore_revisions};
+use crate::schema::{
+    world_abilities, world_actors, world_items, world_lore_entries, world_lore_links,
+    world_lore_revisions,
+};
 use crate::state::AppState;
 
 /// Shared by `GraphQLLoreEntry::rendered_html` and
@@ -43,11 +46,17 @@ pub async fn render_lore_content(
 
     let content = content.to_string();
     tokio::task::spawn_blocking(move || {
-        let (rewritten, links) =
-            crate::markdown::links::extract_and_resolve(&mut conn, world_id, &content, viewer_is_dm)
-                .map_err(|_| Error::new("Failed to resolve lore links"))?;
+        let (rewritten, links) = crate::markdown::links::extract_and_resolve(
+            &mut conn,
+            world_id,
+            &content,
+            viewer_is_dm,
+        )
+        .map_err(|_| Error::new("Failed to resolve lore links"))?;
         let html = crate::markdown::render_to_safe_html(&rewritten);
-        Ok::<_, Error>(crate::markdown::links::substitute_placeholders_into_html(&html, &links))
+        Ok::<_, Error>(crate::markdown::links::substitute_placeholders_into_html(
+            &html, &links,
+        ))
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -56,7 +65,10 @@ pub async fn render_lore_content(
 /// The world a lore entry belongs to — used by
 /// `GraphQLLoreRevision::rendered_html` to resolve links against the
 /// right world's entries/actors.
-pub async fn world_id_for_lore_entry(ctx: &Context<'_>, lore_entry_id: Uuid) -> GraphQLResult<Uuid> {
+pub async fn world_id_for_lore_entry(
+    ctx: &Context<'_>,
+    lore_entry_id: Uuid,
+) -> GraphQLResult<Uuid> {
     let state = app_state(ctx)?;
     let mut conn = state
         .db_pool
@@ -342,22 +354,30 @@ pub async fn lore_link_targets_impl(
             .filter(world_lore_entries::title.ilike(&pattern))
             .select((world_lore_entries::id, world_lore_entries::title))
             .load::<(Uuid, String)>(&mut conn)?;
-        results.extend(lore_matches.into_iter().map(|(id, title)| GraphQLLoreLinkTarget {
-            id,
-            title,
-            kind: GraphQLLoreLinkTargetKind::LoreEntry,
-        }));
+        results.extend(
+            lore_matches
+                .into_iter()
+                .map(|(id, title)| GraphQLLoreLinkTarget {
+                    id,
+                    title,
+                    kind: GraphQLLoreLinkTargetKind::LoreEntry,
+                }),
+        );
 
         let actor_matches = world_actors::table
             .filter(world_actors::world_id.eq(world_id))
             .filter(world_actors::label.ilike(&pattern))
             .select((world_actors::id, world_actors::label))
             .load::<(Uuid, String)>(&mut conn)?;
-        results.extend(actor_matches.into_iter().map(|(id, title)| GraphQLLoreLinkTarget {
-            id,
-            title,
-            kind: GraphQLLoreLinkTargetKind::Actor,
-        }));
+        results.extend(
+            actor_matches
+                .into_iter()
+                .map(|(id, title)| GraphQLLoreLinkTarget {
+                    id,
+                    title,
+                    kind: GraphQLLoreLinkTargetKind::Actor,
+                }),
+        );
 
         // Spec 013 (US3): items are a third valid link target, alongside
         // lore entries and actors. Item names may collide (FR-019 of spec
@@ -370,11 +390,15 @@ pub async fn lore_link_targets_impl(
             .filter(world_items::name.ilike(&pattern))
             .select((world_items::id, world_items::name))
             .load::<(Uuid, String)>(&mut conn)?;
-        results.extend(item_matches.into_iter().map(|(id, title)| GraphQLLoreLinkTarget {
-            id,
-            title,
-            kind: GraphQLLoreLinkTargetKind::Item,
-        }));
+        results.extend(
+            item_matches
+                .into_iter()
+                .map(|(id, title)| GraphQLLoreLinkTarget {
+                    id,
+                    title,
+                    kind: GraphQLLoreLinkTargetKind::Item,
+                }),
+        );
 
         // Spec 025 (FR-024b/FR-030b): a non-DM author must not discover
         // GM-only ability names through the `[[` popover.
@@ -388,11 +412,15 @@ pub async fn lore_link_targets_impl(
         let ability_matches = ability_query
             .select((world_abilities::id, world_abilities::name))
             .load::<(Uuid, String)>(&mut conn)?;
-        results.extend(ability_matches.into_iter().map(|(id, title)| GraphQLLoreLinkTarget {
-            id,
-            title,
-            kind: GraphQLLoreLinkTargetKind::Ability,
-        }));
+        results.extend(
+            ability_matches
+                .into_iter()
+                .map(|(id, title)| GraphQLLoreLinkTarget {
+                    id,
+                    title,
+                    kind: GraphQLLoreLinkTargetKind::Ability,
+                }),
+        );
 
         Ok::<_, diesel::result::Error>(results)
     })
@@ -432,7 +460,14 @@ pub async fn lore_entry_revisions_impl(
         .ok_or_else(|| Error::new("Lore entry not found"))?
     };
     require_visible_world(state, user_id, is_admin, world_id).await?;
-    require_lore_permission(state, user_id, is_admin, lore_entry_id, ActorPermissionLevel::Viewer).await?;
+    require_lore_permission(
+        state,
+        user_id,
+        is_admin,
+        lore_entry_id,
+        ActorPermissionLevel::Viewer,
+    )
+    .await?;
 
     let mut conn = state
         .db_pool
@@ -457,19 +492,36 @@ pub struct LoreQuery;
 #[async_graphql::Object]
 impl LoreQuery {
     /// Every lore entry in the world, visible to any member (FR-001).
-    async fn world_lore_entries(&self, ctx: &Context<'_>, world_id: Uuid) -> GraphQLResult<Vec<GraphQLLoreEntry>> {
+    async fn world_lore_entries(
+        &self,
+        ctx: &Context<'_>,
+        world_id: Uuid,
+    ) -> GraphQLResult<Vec<GraphQLLoreEntry>> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        let entries = world_lore_entries_impl(state, auth_user.user_id, auth_user.is_admin, world_id).await?;
+        let entries =
+            world_lore_entries_impl(state, auth_user.user_id, auth_user.is_admin, world_id).await?;
         Ok(entries.into_iter().map(GraphQLLoreEntry::from).collect())
     }
 
     /// The canonical detail-page lookup by `(worldId, slug)` — `null` for
     /// a stale/nonexistent slug (FR-014).
-    async fn lore_entry(&self, ctx: &Context<'_>, world_id: Uuid, slug: String) -> GraphQLResult<Option<GraphQLLoreEntry>> {
+    async fn lore_entry(
+        &self,
+        ctx: &Context<'_>,
+        world_id: Uuid,
+        slug: String,
+    ) -> GraphQLResult<Option<GraphQLLoreEntry>> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        let entry = lore_entry_impl(state, auth_user.user_id, auth_user.is_admin, world_id, &slug).await?;
+        let entry = lore_entry_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            world_id,
+            &slug,
+        )
+        .await?;
         Ok(entry.map(|(row, moderation_case_id)| GraphQLLoreEntry {
             moderated: moderation_case_id.is_some(),
             moderation_case_id,
@@ -487,25 +539,48 @@ impl LoreQuery {
     ) -> GraphQLResult<Vec<GraphQLLoreLinkTarget>> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        lore_link_targets_impl(state, auth_user.user_id, auth_user.is_admin, world_id, &prefix).await
+        lore_link_targets_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            world_id,
+            &prefix,
+        )
+        .await
     }
 
     /// Full revision history for a lore entry, newest first (FR-017).
-    async fn lore_entry_revisions(&self, ctx: &Context<'_>, lore_entry_id: Uuid) -> GraphQLResult<Vec<GraphQLLoreRevision>> {
+    async fn lore_entry_revisions(
+        &self,
+        ctx: &Context<'_>,
+        lore_entry_id: Uuid,
+    ) -> GraphQLResult<Vec<GraphQLLoreRevision>> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         let revisions =
-            lore_entry_revisions_impl(state, auth_user.user_id, auth_user.is_admin, lore_entry_id).await?;
-        Ok(revisions.into_iter().map(GraphQLLoreRevision::from).collect())
+            lore_entry_revisions_impl(state, auth_user.user_id, auth_user.is_admin, lore_entry_id)
+                .await?;
+        Ok(revisions
+            .into_iter()
+            .map(GraphQLLoreRevision::from)
+            .collect())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{insert_test_user, insert_test_world, insert_test_world_member, test_app_state};
+    use crate::test_support::{
+        insert_test_user, insert_test_world, insert_test_world_member, test_app_state,
+    };
 
-    fn insert_lore_entry(conn: &mut diesel::PgConnection, world_id: Uuid, created_by: Uuid, title: &str, slug: &str) -> Uuid {
+    fn insert_lore_entry(
+        conn: &mut diesel::PgConnection,
+        world_id: Uuid,
+        created_by: Uuid,
+        title: &str,
+        slug: &str,
+    ) -> Uuid {
         let id = Uuid::now_v7();
         let now = chrono::Utc::now().naive_utc();
         diesel::insert_into(world_lore_entries::table)
@@ -553,7 +628,10 @@ mod tests {
         drop(conn);
 
         let result = world_lore_entries_impl(&state, outsider_id, false, world_id).await;
-        assert!(result.is_err(), "a non-member must not see the world's lore entries");
+        assert!(
+            result.is_err(),
+            "a non-member must not see the world's lore entries"
+        );
     }
 
     /// FR-014: `lore_entry` returns `None` (not an error) for a
@@ -606,8 +684,16 @@ mod tests {
             .await
             .expect("search should succeed");
         assert_eq!(targets.len(), 2);
-        assert!(targets.iter().any(|t| t.kind == GraphQLLoreLinkTargetKind::LoreEntry));
-        assert!(targets.iter().any(|t| t.kind == GraphQLLoreLinkTargetKind::Actor));
+        assert!(
+            targets
+                .iter()
+                .any(|t| t.kind == GraphQLLoreLinkTargetKind::LoreEntry)
+        );
+        assert!(
+            targets
+                .iter()
+                .any(|t| t.kind == GraphQLLoreLinkTargetKind::Actor)
+        );
     }
 
     /// FR-017: revision history is Viewer-or-above gated and newest first.
@@ -630,7 +716,10 @@ mod tests {
         drop(conn);
 
         let allowed = lore_entry_revisions_impl(&state, player_id, false, entry_id).await;
-        assert!(allowed.is_ok(), "a default-Viewer world member should be able to view history");
+        assert!(
+            allowed.is_ok(),
+            "a default-Viewer world member should be able to view history"
+        );
     }
 
     /// FR-030: an ability appears as its own disambiguated autocomplete
@@ -666,10 +755,15 @@ mod tests {
             .unwrap();
         let dm_titles: Vec<&str> = dm_hits.iter().map(|t| t.title.as_str()).collect();
         assert!(dm_titles.contains(&"Zephyr Bolt"));
-        assert!(dm_titles.contains(&"Zephyr Secret"), "the DM sees their hidden ability");
-        assert!(dm_hits
-            .iter()
-            .any(|t| matches!(t.kind, GraphQLLoreLinkTargetKind::Ability)));
+        assert!(
+            dm_titles.contains(&"Zephyr Secret"),
+            "the DM sees their hidden ability"
+        );
+        assert!(
+            dm_hits
+                .iter()
+                .any(|t| matches!(t.kind, GraphQLLoreLinkTargetKind::Ability))
+        );
 
         let player_hits = lore_link_targets_impl(&state, player_id, false, world_id, "Zephyr")
             .await

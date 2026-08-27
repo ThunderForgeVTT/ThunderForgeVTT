@@ -175,7 +175,10 @@ impl AbilityPermissionQuery {
         let rows =
             ability_permissions_impl(state, auth_user.user_id, auth_user.is_admin, ability_id)
                 .await?;
-        Ok(rows.into_iter().map(GraphQLAbilityPermission::from).collect())
+        Ok(rows
+            .into_iter()
+            .map(GraphQLAbilityPermission::from)
+            .collect())
     }
 }
 
@@ -191,8 +194,8 @@ impl AbilityPermissionMutation {
     ) -> GraphQLResult<GraphQLAbilityPermission> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        let row =
-            set_ability_permission_impl(state, auth_user.user_id, auth_user.is_admin, input).await?;
+        let row = set_ability_permission_impl(state, auth_user.user_id, auth_user.is_admin, input)
+            .await?;
         Ok(GraphQLAbilityPermission::from(row))
     }
 
@@ -219,7 +222,7 @@ impl AbilityPermissionMutation {
 mod tests {
     use super::*;
     use crate::auth::ability_permissions::effective_ability_permission;
-    use crate::graphql::mutations_abilities::{create_ability_impl, CreateAbilityInput};
+    use crate::graphql::mutations_abilities::{CreateAbilityInput, create_ability_impl};
     use crate::graphql::types::AbilityClassification;
     use crate::test_support::*;
 

@@ -9,17 +9,19 @@
 //! transcode-then-write ordering (FR-016) directly unit-testable without
 //! constructing a full `async_graphql::Schema` execution.
 
-use async_graphql::{Context, Enum, Error, ErrorExtensions, Result as GraphQLResult, SimpleObject, Upload};
+use async_graphql::{
+    Context, Enum, Error, ErrorExtensions, Result as GraphQLResult, SimpleObject, Upload,
+};
 use chrono::Utc;
 use diesel::prelude::*;
 use uuid::Uuid;
 
-use crate::auth::world_membership::{require_world_member, WorldMembershipError};
+use crate::auth::world_membership::{WorldMembershipError, require_world_member};
 use crate::db_types::CanvasImageAssetKindEnum;
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{CanvasImageAsset, NewCanvasImageAsset};
 use crate::state::AppState;
-use crate::storage::rustfs::{object_key, write_object, RustFsConfig};
+use crate::storage::rustfs::{RustFsConfig, object_key, write_object};
 use crate::storage::transcode::transcode_to_webp;
 
 #[derive(Enum, Debug, Copy, Clone, Eq, PartialEq)]
@@ -261,9 +263,10 @@ impl AssetMutation {
         std::io::Read::read_to_end(&mut content, &mut bytes)
             .map_err(|e| Error::new(format!("failed to read upload: {e}")))?;
 
-        let asset = upload_canvas_image_impl(state, auth_user.user_id, world_id, scene_id, kind, bytes)
-            .await
-            .map_err(to_graphql_error)?;
+        let asset =
+            upload_canvas_image_impl(state, auth_user.user_id, world_id, scene_id, kind, bytes)
+                .await
+                .map_err(to_graphql_error)?;
         Ok(asset.into())
     }
 }
@@ -378,7 +381,10 @@ mod tests {
         // Well-formed. The CHECK constraint enforces this at the database,
         // but asserting here localises a failure to the code that wrote it.
         assert_eq!(hash.len(), 64, "lowercase hex SHA-256");
-        assert!(hash.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c)));
+        assert!(
+            hash.bytes()
+                .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
+        );
 
         // Not the upload's hash — the transcode makes these differ.
         let uploaded_hash = thunderforge_cache_core::Fingerprint::of_bytes(&uploaded).to_hex();
@@ -468,7 +474,10 @@ mod tests {
         )
         .await;
 
-        assert!(matches!(result, Err(UploadCanvasImageError::TooLarge { .. })));
+        assert!(matches!(
+            result,
+            Err(UploadCanvasImageError::TooLarge { .. })
+        ));
 
         let mut conn = state.db_pool.get().unwrap();
         use crate::schema::canvas_image_assets;
@@ -554,7 +563,10 @@ mod tests {
             tiny_png_bytes(),
         )
         .await;
-        assert!(result.is_ok(), "write should succeed once a member: {result:?}");
+        assert!(
+            result.is_ok(),
+            "write should succeed once a member: {result:?}"
+        );
 
         // Revoke membership: next write is rejected again.
         let mut conn = state.db_pool.get().unwrap();
@@ -590,6 +602,9 @@ mod tests {
         assert!(owner_read.is_ok());
 
         let outsider_read = canvas_image_assets_for_scene_impl(&state, outsider_id, scene_id).await;
-        assert!(matches!(outsider_read, Err(UploadCanvasImageError::Forbidden)));
+        assert!(matches!(
+            outsider_read,
+            Err(UploadCanvasImageError::Forbidden)
+        ));
     }
 }

@@ -10,7 +10,7 @@
 //! exposed to the client).
 
 use axum::extract::{Path, State};
-use axum::http::{header, StatusCode};
+use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Extension, Router};
@@ -21,12 +21,15 @@ use crate::auth::lore_permissions::require_lore_permission;
 use crate::auth_middleware::AuthenticatedUser;
 use crate::graphql::types::ActorPermissionLevel;
 use crate::state::AppState;
-use crate::storage::rustfs::{read_object, RustFsConfig};
+use crate::storage::rustfs::{RustFsConfig, read_object};
 
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/lore-assets/{asset_id}", get(serve_lore_asset))
-        .route("/lore-assets/{asset_id}/thumb", get(serve_lore_asset_thumbnail))
+        .route(
+            "/lore-assets/{asset_id}/thumb",
+            get(serve_lore_asset_thumbnail),
+        )
 }
 
 async fn load_asset_lore_entry_id(state: &AppState, asset_id: Uuid) -> Option<Uuid> {
@@ -44,21 +47,42 @@ async fn load_asset_lore_entry_id(state: &AppState, asset_id: Uuid) -> Option<Uu
     .ok()?
 }
 
-async fn authorize_and_read(state: &AppState, user_id: Uuid, is_admin: bool, asset_id: Uuid, key: String) -> Response {
+async fn authorize_and_read(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    asset_id: Uuid,
+    key: String,
+) -> Response {
     let Some(lore_entry_id) = load_asset_lore_entry_id(state, asset_id).await else {
         return (StatusCode::NOT_FOUND, "asset not found").into_response();
     };
 
-    if require_lore_permission(state, user_id, is_admin, lore_entry_id, ActorPermissionLevel::Viewer)
-        .await
-        .is_err()
+    if require_lore_permission(
+        state,
+        user_id,
+        is_admin,
+        lore_entry_id,
+        ActorPermissionLevel::Viewer,
+    )
+    .await
+    .is_err()
     {
-        return (StatusCode::FORBIDDEN, "not permitted to view this lore entry's images").into_response();
+        return (
+            StatusCode::FORBIDDEN,
+            "not permitted to view this lore entry's images",
+        )
+            .into_response();
     }
 
     let cfg = RustFsConfig::from_env();
     match read_object(&cfg, &key).await {
-        Ok(bytes) => (StatusCode::OK, [(header::CONTENT_TYPE, "image/webp")], bytes).into_response(),
+        Ok(bytes) => (
+            StatusCode::OK,
+            [(header::CONTENT_TYPE, "image/webp")],
+            bytes,
+        )
+            .into_response(),
         Err(_) => (StatusCode::NOT_FOUND, "asset object not found in storage").into_response(),
     }
 }
@@ -80,7 +104,14 @@ async fn serve_lore_asset(
     Extension(auth_user): Extension<AuthenticatedUser>,
     Path(asset_id): Path<Uuid>,
 ) -> Response {
-    authorize_and_read(&state, auth_user.user_id, auth_user.is_admin, asset_id, full_key(asset_id)).await
+    authorize_and_read(
+        &state,
+        auth_user.user_id,
+        auth_user.is_admin,
+        asset_id,
+        full_key(asset_id),
+    )
+    .await
 }
 
 async fn serve_lore_asset_thumbnail(
@@ -88,5 +119,12 @@ async fn serve_lore_asset_thumbnail(
     Extension(auth_user): Extension<AuthenticatedUser>,
     Path(asset_id): Path<Uuid>,
 ) -> Response {
-    authorize_and_read(&state, auth_user.user_id, auth_user.is_admin, asset_id, thumb_key(asset_id)).await
+    authorize_and_read(
+        &state,
+        auth_user.user_id,
+        auth_user.is_admin,
+        asset_id,
+        thumb_key(asset_id),
+    )
+    .await
 }

@@ -203,7 +203,10 @@ impl Parser {
     }
 
     fn err(&self, message: impl Into<String>) -> FormulaError {
-        FormulaError::ParseError { message: message.into(), position: self.peek_pos() }
+        FormulaError::ParseError {
+            message: message.into(),
+            position: self.peek_pos(),
+        }
     }
 
     // expr := term (('+' | '-') term)*
@@ -343,17 +346,25 @@ impl Parser {
                 self.expect(Token::RParen)?;
                 Sides::Numeric(Box::new(inner))
             }
-            _ => return Err(self.err("expected die size after 'd' (a number, 'F', 'c', or a parenthesized expression)")),
+            _ => return Err(self.err(
+                "expected die size after 'd' (a number, 'F', 'c', or a parenthesized expression)",
+            )),
         };
 
         let modifiers = self.parse_modifiers()?;
-        Ok(Expr::Dice(DiceTerm { count: Box::new(count), sides, modifiers }))
+        Ok(Expr::Dice(DiceTerm {
+            count: Box::new(count),
+            sides,
+            modifiers,
+        }))
     }
 
     fn parse_modifiers(&mut self) -> Result<Vec<Modifier>, FormulaError> {
         let mut modifiers = Vec::new();
         while let Token::Ident(name) = self.peek().clone() {
-            let Some(kw) = modifier_keyword(&name) else { break };
+            let Some(kw) = modifier_keyword(&name) else {
+                break;
+            };
             self.advance();
             let modifier = match kw {
                 KEEP_HIGH => Modifier::KeepHighest(self.parse_optional_count(1)?),
@@ -368,7 +379,9 @@ impl Parser {
                 MAX_MOD => Modifier::Max(self.parse_required_int()?),
                 COUNT_SUCCESS => Modifier::CountSuccesses(self.parse_condition_or_default()?),
                 COUNT_FAILURE => Modifier::CountFailures(self.parse_condition_or_default()?),
-                SUBTRACT_FAILURE => Modifier::SubtractFailureValue(self.parse_condition_or_default()?),
+                SUBTRACT_FAILURE => {
+                    Modifier::SubtractFailureValue(self.parse_condition_or_default()?)
+                }
                 EVEN_MOD => Modifier::Even,
                 ODD_MOD => Modifier::Odd,
                 MARGIN_SUCCESS => Modifier::MarginOfSuccess(self.parse_required_int()?),

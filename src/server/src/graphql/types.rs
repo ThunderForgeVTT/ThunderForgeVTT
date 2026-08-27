@@ -9,10 +9,10 @@
 //!
 //! These types are foundational and referenced by queries/mutations throughout.
 
-use async_graphql::SimpleObject;
-use chrono::NaiveDateTime;
 use crate::models::{GameSystem, User, World, WorldEvent, WorldToken};
 use async_graphql::Json;
+use async_graphql::SimpleObject;
+use chrono::NaiveDateTime;
 
 // ============================================================================
 // User Entity
@@ -637,7 +637,10 @@ impl GraphQLLoreEntry {
     /// Server-rendered, sanitized GFM HTML for `content`, with resolved
     /// in-text links substituted in as real anchors/broken-link spans
     /// (FR-004, FR-005, FR-007).
-    async fn rendered_html(&self, ctx: &async_graphql::Context<'_>) -> async_graphql::Result<String> {
+    async fn rendered_html(
+        &self,
+        ctx: &async_graphql::Context<'_>,
+    ) -> async_graphql::Result<String> {
         crate::graphql::queries::lore::render_lore_content(ctx, self.world_id, &self.content).await
     }
 
@@ -688,9 +691,14 @@ impl GraphQLLoreRevision {
     /// (contracts/lore-revisions.md) - resolves in-text links against
     /// the world's current entries/actors (a past revision's links are
     /// not themselves versioned; only its Markdown text is).
-    async fn rendered_html(&self, ctx: &async_graphql::Context<'_>) -> async_graphql::Result<String> {
-        let world_id = crate::graphql::queries::lore::world_id_for_lore_entry(ctx, self.lore_entry_id).await?;
-        crate::graphql::queries::lore::render_lore_content(ctx, world_id, &self.content_markdown).await
+    async fn rendered_html(
+        &self,
+        ctx: &async_graphql::Context<'_>,
+    ) -> async_graphql::Result<String> {
+        let world_id =
+            crate::graphql::queries::lore::world_id_for_lore_entry(ctx, self.lore_entry_id).await?;
+        crate::graphql::queries::lore::render_lore_content(ctx, world_id, &self.content_markdown)
+            .await
     }
 }
 
@@ -723,7 +731,8 @@ impl From<LorePermission> for GraphQLLorePermission {
         Self {
             lore_entry_id: row.lore_entry_id,
             user_id: row.world_member_user_id,
-            level: ActorPermissionLevel::from_db_str(&row.level).unwrap_or(ActorPermissionLevel::Viewer),
+            level: ActorPermissionLevel::from_db_str(&row.level)
+                .unwrap_or(ActorPermissionLevel::Viewer),
             updated_at: row.updated_at,
         }
     }
@@ -964,7 +973,11 @@ impl From<&RollResolution> for GraphQLRollResolution {
         };
         GraphQLRollResolution {
             formula: resolution.formula.clone(),
-            dice: resolution.dice.iter().map(GraphQLDieOutcome::from).collect(),
+            dice: resolution
+                .dice
+                .iter()
+                .map(GraphQLDieOutcome::from)
+                .collect(),
             result_kind,
             result_value,
         }
@@ -987,11 +1000,12 @@ impl From<RollRecord> for GraphQLRollRecord {
         // deserialization failure here would indicate a persisted-shape
         // bug, not caller input — falling back to an empty resolution
         // rather than panicking on a history read.
-        let resolution: RollResolution = serde_json::from_value(row.detail.clone()).unwrap_or(RollResolution {
-            formula: row.formula.clone(),
-            dice: Vec::new(),
-            kind: ResolutionKind::Total(row.result_value),
-        });
+        let resolution: RollResolution =
+            serde_json::from_value(row.detail.clone()).unwrap_or(RollResolution {
+                formula: row.formula.clone(),
+                dice: Vec::new(),
+                kind: ResolutionKind::Total(row.result_value),
+            });
         GraphQLRollRecord {
             id: row.id,
             world_id: row.world_id,

@@ -36,7 +36,7 @@
 
 use glam::Vec2;
 
-use crate::wall::{is_visible, WallSet};
+use crate::wall::{WallSet, is_visible};
 
 /// How well-lit a point is.
 ///
@@ -69,7 +69,11 @@ pub struct Rgb {
 }
 
 impl Rgb {
-    pub const WHITE: Rgb = Rgb { r: 1.0, g: 1.0, b: 1.0 };
+    pub const WHITE: Rgb = Rgb {
+        r: 1.0,
+        g: 1.0,
+        b: 1.0,
+    };
 
     /// Parses `#rrggbb` / `rrggbb` (and the 3-digit short form).
     ///
@@ -85,7 +89,11 @@ impl Rgb {
                 let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
                 let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
                 let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
-                Some(Rgb { r: expand(r), g: expand(g), b: expand(b) })
+                Some(Rgb {
+                    r: expand(r),
+                    g: expand(g),
+                    b: expand(b),
+                })
             }
             3 => {
                 let digit = |i: usize| -> Option<u8> {
@@ -146,7 +154,11 @@ impl ResolvedLight {
             position,
             bright_radius: bright,
             dim_radius: bright * 2.0,
-            color: Rgb { r: 1.0, g: 0.78, b: 0.5 },
+            color: Rgb {
+                r: 1.0,
+                g: 0.78,
+                b: 0.5,
+            },
             intensity: 1.0,
             casts_shadows: true,
         }
@@ -205,12 +217,19 @@ impl Default for VisionProfile {
 impl VisionProfile {
     /// Darkvision out to `range`, otherwise unaided.
     pub fn with_darkvision(range: f32) -> Self {
-        Self { darkvision: range, ..Self::default() }
+        Self {
+            darkvision: range,
+            ..Self::default()
+        }
     }
 
     /// A directional cone: `fov` radians wide, centred on `facing`.
     pub fn cone(facing: f32, fov: f32) -> Self {
-        Self { facing: Some(facing), fov, ..Self::default() }
+        Self {
+            facing: Some(facing),
+            fov,
+            ..Self::default()
+        }
     }
 
     /// Whether `target` falls inside the cone from `observer`.
@@ -258,11 +277,17 @@ pub struct AmbientLight {
 
 impl AmbientLight {
     pub fn daylight() -> Self {
-        Self { level: Illumination::Bright, color: None }
+        Self {
+            level: Illumination::Bright,
+            color: None,
+        }
     }
 
     pub fn unlit() -> Self {
-        Self { level: Illumination::Dark, color: None }
+        Self {
+            level: Illumination::Dark,
+            color: None,
+        }
     }
 }
 
@@ -377,7 +402,14 @@ mod tests {
     #[test]
     fn hex_colours_parse_in_both_lengths() {
         assert_eq!(Rgb::parse_hex("#ffffff"), Some(Rgb::WHITE));
-        assert_eq!(Rgb::parse_hex("000000"), Some(Rgb { r: 0.0, g: 0.0, b: 0.0 }));
+        assert_eq!(
+            Rgb::parse_hex("000000"),
+            Some(Rgb {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0
+            })
+        );
         // "f" expands to "ff", not "0f" — otherwise #fff would come out grey.
         assert_eq!(Rgb::parse_hex("#fff"), Some(Rgb::WHITE));
         let red = Rgb::parse_hex("#f00").unwrap();
@@ -420,8 +452,7 @@ mod tests {
         // from both — inside each dim ring, inside neither bright one.
         let a = ResolvedLight::torch(Vec2::new(-15.0, 0.0), 10.0);
         let b = ResolvedLight::torch(Vec2::new(15.0, 0.0), 10.0);
-        let (level, _) =
-            illumination_at(Vec2::ZERO, &[a, b], &no_walls(), AmbientLight::unlit());
+        let (level, _) = illumination_at(Vec2::ZERO, &[a, b], &no_walls(), AmbientLight::unlit());
         assert_eq!(level, Illumination::Dim);
     }
 
@@ -439,7 +470,11 @@ mod tests {
         // crosses x=0 at y=60, clear of the wall's -50..50 span, and the point
         // is 156 away — inside the torch's 200-unit dim radius.
         let lit = illumination_at(Vec2::new(50.0, 120.0), &[torch], &walls, ambient).0;
-        assert_ne!(lit, Illumination::Dark, "light should reach past the wall's end");
+        assert_ne!(
+            lit,
+            Illumination::Dark,
+            "light should reach past the wall's end"
+        );
     }
 
     #[test]
@@ -471,8 +506,7 @@ mod tests {
         glow.casts_shadows = false;
         let walls = wall_between(0.0, -50.0, 0.0, 50.0);
 
-        let level =
-            illumination_at(Vec2::new(50.0, 0.0), &[glow], &walls, AmbientLight::unlit()).0;
+        let level = illumination_at(Vec2::new(50.0, 0.0), &[glow], &walls, AmbientLight::unlit()).0;
         assert_eq!(level, Illumination::Bright);
     }
 
@@ -481,8 +515,7 @@ mod tests {
         let walls = wall_between(0.0, -50.0, 0.0, 50.0);
         // Ambient reaches everywhere, including behind walls — it is the
         // scene's baseline, not something emitted from a point.
-        let level =
-            illumination_at(Vec2::new(50.0, 0.0), &[], &walls, AmbientLight::daylight()).0;
+        let level = illumination_at(Vec2::new(50.0, 0.0), &[], &walls, AmbientLight::daylight()).0;
         assert_eq!(level, Illumination::Bright);
     }
 
@@ -490,29 +523,54 @@ mod tests {
     fn a_light_off_contributes_nothing() {
         let mut torch = ResolvedLight::torch(Vec2::ZERO, 50.0);
         torch.intensity = 0.0;
-        let level =
-            illumination_at(Vec2::new(5.0, 0.0), &[torch], &no_walls(), AmbientLight::unlit()).0;
+        let level = illumination_at(
+            Vec2::new(5.0, 0.0),
+            &[torch],
+            &no_walls(),
+            AmbientLight::unlit(),
+        )
+        .0;
         assert_eq!(level, Illumination::Dark);
     }
 
     #[test]
     fn the_nearest_of_two_equal_lights_sets_the_colour() {
         let mut near = ResolvedLight::torch(Vec2::new(5.0, 0.0), 100.0);
-        near.color = Rgb { r: 1.0, g: 0.0, b: 0.0 };
+        near.color = Rgb {
+            r: 1.0,
+            g: 0.0,
+            b: 0.0,
+        };
         let mut far = ResolvedLight::torch(Vec2::new(90.0, 0.0), 100.0);
-        far.color = Rgb { r: 0.0, g: 0.0, b: 1.0 };
+        far.color = Rgb {
+            r: 0.0,
+            g: 0.0,
+            b: 1.0,
+        };
 
         let (_, color) =
             illumination_at(Vec2::ZERO, &[far, near], &no_walls(), AmbientLight::unlit());
-        assert_eq!(color, Rgb { r: 1.0, g: 0.0, b: 0.0 });
+        assert_eq!(
+            color,
+            Rgb {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0
+            }
+        );
     }
 
     #[test]
     fn a_dim_radius_below_the_bright_radius_does_not_carve_a_dark_ring() {
         let mut light = ResolvedLight::torch(Vec2::ZERO, 50.0);
         light.dim_radius = 10.0; // nonsense: smaller than bright
-        let level =
-            illumination_at(Vec2::new(40.0, 0.0), &[light], &no_walls(), AmbientLight::unlit()).0;
+        let level = illumination_at(
+            Vec2::new(40.0, 0.0),
+            &[light],
+            &no_walls(),
+            AmbientLight::unlit(),
+        )
+        .0;
         assert_eq!(level, Illumination::Bright);
     }
 
@@ -581,12 +639,26 @@ mod tests {
 
         // Inside range: perceived, but never clearly.
         assert_eq!(
-            visibility_of(Vec2::ZERO, &vision, Vec2::new(30.0, 0.0), &[], &no_walls(), dark),
+            visibility_of(
+                Vec2::ZERO,
+                &vision,
+                Vec2::new(30.0, 0.0),
+                &[],
+                &no_walls(),
+                dark
+            ),
             Visibility::Dim,
         );
         // Beyond range: nothing.
         assert_eq!(
-            visibility_of(Vec2::ZERO, &vision, Vec2::new(90.0, 0.0), &[], &no_walls(), dark),
+            visibility_of(
+                Vec2::ZERO,
+                &vision,
+                Vec2::new(90.0, 0.0),
+                &[],
+                &no_walls(),
+                dark
+            ),
             Visibility::Hidden,
         );
     }
@@ -599,12 +671,26 @@ mod tests {
 
         // Right at the torch: bright.
         assert_eq!(
-            visibility_of(Vec2::ZERO, &vision, Vec2::new(35.0, 0.0), &[torch], &no_walls(), dark),
+            visibility_of(
+                Vec2::ZERO,
+                &vision,
+                Vec2::new(35.0, 0.0),
+                &[torch],
+                &no_walls(),
+                dark
+            ),
             Visibility::Clear,
         );
         // In its dim ring.
         assert_eq!(
-            visibility_of(Vec2::ZERO, &vision, Vec2::new(45.0, 0.0), &[torch], &no_walls(), dark),
+            visibility_of(
+                Vec2::ZERO,
+                &vision,
+                Vec2::new(45.0, 0.0),
+                &[torch],
+                &no_walls(),
+                dark
+            ),
             Visibility::Dim,
         );
     }
@@ -646,14 +732,31 @@ mod tests {
 
     #[test]
     fn max_range_caps_sight_even_in_daylight() {
-        let vision = VisionProfile { max_range: Some(50.0), ..VisionProfile::default() };
+        let vision = VisionProfile {
+            max_range: Some(50.0),
+            ..VisionProfile::default()
+        };
         let day = AmbientLight::daylight();
         assert_eq!(
-            visibility_of(Vec2::ZERO, &vision, Vec2::new(40.0, 0.0), &[], &no_walls(), day),
+            visibility_of(
+                Vec2::ZERO,
+                &vision,
+                Vec2::new(40.0, 0.0),
+                &[],
+                &no_walls(),
+                day
+            ),
             Visibility::Clear,
         );
         assert_eq!(
-            visibility_of(Vec2::ZERO, &vision, Vec2::new(60.0, 0.0), &[], &no_walls(), day),
+            visibility_of(
+                Vec2::ZERO,
+                &vision,
+                Vec2::new(60.0, 0.0),
+                &[],
+                &no_walls(),
+                day
+            ),
             Visibility::Hidden,
         );
     }
@@ -690,12 +793,7 @@ mod tests {
 /// Returns `None` when the wall cannot cast a shadow: a degenerate
 /// (zero-length) wall, or an endpoint sitting exactly on the light, where the
 /// direction to project is undefined.
-pub fn shadow_quad(
-    light: Vec2,
-    wall_start: Vec2,
-    wall_end: Vec2,
-    reach: f32,
-) -> Option<[Vec2; 4]> {
+pub fn shadow_quad(light: Vec2, wall_start: Vec2, wall_end: Vec2, reach: f32) -> Option<[Vec2; 4]> {
     if wall_start.distance_squared(wall_end) <= f32::EPSILON {
         return None;
     }
@@ -767,10 +865,20 @@ mod shadow_tests {
 
     #[test]
     fn reach_controls_how_far_the_shadow_runs() {
-        let short = shadow_quad(Vec2::ZERO, Vec2::new(10.0, -5.0), Vec2::new(10.0, 5.0), 50.0)
-            .unwrap();
-        let long = shadow_quad(Vec2::ZERO, Vec2::new(10.0, -5.0), Vec2::new(10.0, 5.0), 500.0)
-            .unwrap();
+        let short = shadow_quad(
+            Vec2::ZERO,
+            Vec2::new(10.0, -5.0),
+            Vec2::new(10.0, 5.0),
+            50.0,
+        )
+        .unwrap();
+        let long = shadow_quad(
+            Vec2::ZERO,
+            Vec2::new(10.0, -5.0),
+            Vec2::new(10.0, 5.0),
+            500.0,
+        )
+        .unwrap();
         assert!(long[2].length() > short[2].length());
     }
 

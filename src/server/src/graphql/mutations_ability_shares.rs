@@ -22,6 +22,7 @@ use uuid::Uuid;
 
 use crate::auth::ability_permissions::effective_ability_permission;
 use crate::auth::world_membership::is_dm_of_world;
+use crate::graphql::share_codes::generate_link_code;
 use crate::graphql::types::{
     AbilityClassification, ActorPermissionLevel, GraphQLAbility, GraphQLAbilityEffect,
     GraphQLAbilityShareLink, SharedAbilityPreview,
@@ -31,7 +32,6 @@ use crate::models::{
     AbilityEffect, AbilityShare, NewAbilityEffect, NewAbilityShare, NewWorldAbility, WorldAbility,
 };
 use crate::schema::{world_abilities, world_ability_effects, world_ability_shares};
-use crate::graphql::share_codes::generate_link_code;
 use crate::state::AppState;
 
 #[derive(InputObject, Debug, Clone)]
@@ -113,7 +113,10 @@ pub async fn shared_ability_impl(
         description: ability.description,
         classification: AbilityClassification::from_db_str(&ability.classification)
             .unwrap_or(AbilityClassification::Spell),
-        effects: effects.into_iter().map(GraphQLAbilityEffect::from).collect(),
+        effects: effects
+            .into_iter()
+            .map(GraphQLAbilityEffect::from)
+            .collect(),
     })
 }
 
@@ -397,16 +400,15 @@ impl AbilityShareMutation {
     ) -> GraphQLResult<GraphQLAbility> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        let (copy, effects) = copy_shared_ability_to_world_impl(
-            state,
-            auth_user.user_id,
-            auth_user.is_admin,
-            input,
-        )
-        .await?;
+        let (copy, effects) =
+            copy_shared_ability_to_world_impl(state, auth_user.user_id, auth_user.is_admin, input)
+                .await?;
         Ok(GraphQLAbility::from_row(
             copy,
-            effects.into_iter().map(GraphQLAbilityEffect::from).collect(),
+            effects
+                .into_iter()
+                .map(GraphQLAbilityEffect::from)
+                .collect(),
             // The copier is the destination DM, so Owner by definition.
             ActorPermissionLevel::Owner,
         ))
@@ -417,8 +419,8 @@ impl AbilityShareMutation {
 mod tests {
     use super::*;
     use crate::graphql::mutations_abilities::{
-        add_ability_effect_impl, create_ability_impl, set_ability_gm_only_impl,
-        AbilityEffectInput, CreateAbilityInput,
+        AbilityEffectInput, CreateAbilityInput, add_ability_effect_impl, create_ability_impl,
+        set_ability_gm_only_impl,
     };
     use crate::graphql::types::AbilityEffectType;
     use crate::test_support::*;
@@ -445,9 +447,10 @@ mod tests {
         insert_test_world_member(&mut conn, world_id, member_id, "Player");
         drop(conn);
 
-        let ability = create_ability_impl(&state, owner_id, false, ability_input(world_id, "Shared"))
-            .await
-            .unwrap();
+        let ability =
+            create_ability_impl(&state, owner_id, false, ability_input(world_id, "Shared"))
+                .await
+                .unwrap();
 
         create_ability_share_link_impl(&state, member_id, false, ability.id)
             .await
@@ -474,10 +477,14 @@ mod tests {
         let dest_world = insert_test_world(&mut conn, other_id);
         drop(conn);
 
-        let ability =
-            create_ability_impl(&state, owner_id, false, ability_input(source_world, "Fireball"))
-                .await
-                .unwrap();
+        let ability = create_ability_impl(
+            &state,
+            owner_id,
+            false,
+            ability_input(source_world, "Fireball"),
+        )
+        .await
+        .unwrap();
         add_ability_effect_impl(
             &state,
             owner_id,
@@ -520,7 +527,10 @@ mod tests {
         assert_eq!(copy.created_by, other_id);
         assert!(copy.gm_only, "gm_only is preserved on copy, not reset");
         assert_eq!(effects.len(), 1, "effects are cloned");
-        assert_eq!(effects[0].ability_id, copy.id, "and re-parented to the copy");
+        assert_eq!(
+            effects[0].ability_id, copy.id,
+            "and re-parented to the copy"
+        );
         assert_eq!(effects[0].formula, "3d6");
 
         // Independence: editing the source does not touch the copy.
@@ -534,7 +544,10 @@ mod tests {
             .select(world_abilities::name)
             .first(&mut conn)
             .unwrap();
-        assert_eq!(reloaded, "Fireball", "the copy is unaffected by source edits");
+        assert_eq!(
+            reloaded, "Fireball",
+            "the copy is unaffected by source edits"
+        );
     }
 
     /// FR-036: revoking makes the link resolve to a distinct unavailable state.
@@ -558,9 +571,11 @@ mod tests {
             .await
             .expect("an active link resolves");
 
-        assert!(revoke_ability_share_link_impl(&state, owner_id, false, link.id)
-            .await
-            .unwrap());
+        assert!(
+            revoke_ability_share_link_impl(&state, owner_id, false, link.id)
+                .await
+                .unwrap()
+        );
 
         let err = shared_ability_impl(&state, link.share_code)
             .await
@@ -579,10 +594,14 @@ mod tests {
         let world_id = insert_test_world(&mut conn, owner_id);
         drop(conn);
 
-        let ability =
-            create_ability_impl(&state, owner_id, false, ability_input(world_id, "Infringing"))
-                .await
-                .unwrap();
+        let ability = create_ability_impl(
+            &state,
+            owner_id,
+            false,
+            ability_input(world_id, "Infringing"),
+        )
+        .await
+        .unwrap();
         let link = create_ability_share_link_impl(&state, owner_id, false, ability.id)
             .await
             .unwrap();
@@ -625,9 +644,10 @@ mod tests {
         let world_id = insert_test_world(&mut conn, owner_id);
         drop(conn);
 
-        let ability = create_ability_impl(&state, owner_id, false, ability_input(world_id, "Quiet"))
-            .await
-            .unwrap();
+        let ability =
+            create_ability_impl(&state, owner_id, false, ability_input(world_id, "Quiet"))
+                .await
+                .unwrap();
         let link = create_ability_share_link_impl(&state, owner_id, false, ability.id)
             .await
             .unwrap();

@@ -11,12 +11,12 @@ use std::time::Duration;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::IntervalStream;
 
-use crate::auth::world_membership::require_world_member;
 use crate::admin::{
     load_admin_stats, recalculate_disk_usage as calculate_disk_usage,
     update_manifest_key as persist_manifest_key, update_oauth_provider as persist_oauth_provider,
     update_two_factor_policy as persist_two_factor_policy,
 };
+use crate::auth::world_membership::require_world_member;
 use crate::models::{
     NewGenieSession,
     World,
@@ -74,8 +74,8 @@ pub use queries::{
 };
 
 // Phase 4.10.B: Invite & Membership mutations for multiplayer campaigns
-pub mod share_codes;
 pub mod mutations_invites;
+pub mod share_codes;
 pub use mutations_invites::InviteMutation;
 
 // Phase 6: Wall mutations (vision-blocking scene geometry)
@@ -427,10 +427,7 @@ impl GraphQLWorldActor {
     /// Spec 017 (FR-012): who currently has this actor claimed, if anyone.
     /// `None` if unclaimed — independent of `available_for_claim`, since an
     /// actor can be un-flagged without losing its claim (data-model.md).
-    async fn claimed_by(
-        &self,
-        ctx: &Context<'_>,
-    ) -> GraphQLResult<Option<GraphQLWorldMember>> {
+    async fn claimed_by(&self, ctx: &Context<'_>) -> GraphQLResult<Option<GraphQLWorldMember>> {
         let state = app_state(ctx)?;
         crate::graphql::mutations_actor_claims::claimed_by_impl(state, self.id).await
     }
@@ -1479,7 +1476,14 @@ impl SceneMutation {
     ) -> GraphQLResult<GraphQLScene> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        update_scene_hidden_impl(state, auth_user.user_id, auth_user.is_admin, scene_id, hidden).await
+        update_scene_hidden_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            scene_id,
+            hidden,
+        )
+        .await
     }
 
     /// Spec 022 (FR-002a/FR-002b/FR-002c, ADR-046). See `launch_scene_impl`.
@@ -1491,7 +1495,14 @@ impl SceneMutation {
     ) -> GraphQLResult<GraphQLWorld> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        launch_scene_impl(state, auth_user.user_id, auth_user.is_admin, world_id, scene_id).await
+        launch_scene_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            world_id,
+            scene_id,
+        )
+        .await
     }
 
     async fn delete_scene(&self, ctx: &Context<'_>, scene_id: uuid::Uuid) -> GraphQLResult<bool> {
@@ -2014,7 +2025,13 @@ impl WorldMutation {
     ) -> GraphQLResult<GraphQLWorld> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        update_world_genie_resource_carryover_impl(state, auth_user.user_id, auth_user.is_admin, input).await
+        update_world_genie_resource_carryover_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            input,
+        )
+        .await
     }
 
     async fn update_world_default_scene_grid_type(
@@ -2024,7 +2041,13 @@ impl WorldMutation {
     ) -> GraphQLResult<GraphQLWorld> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        update_world_default_scene_grid_type_impl(state, auth_user.user_id, auth_user.is_admin, input).await
+        update_world_default_scene_grid_type_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            input,
+        )
+        .await
     }
 
     async fn rename_world(
@@ -2283,7 +2306,9 @@ impl SubscriptionRoot {
                     tokio::task::spawn_blocking(move || {
                         pool.get()
                             .ok()
-                            .and_then(|mut conn| require_world_member(&mut conn, user_id, world_uuid).ok())
+                            .and_then(|mut conn| {
+                                require_world_member(&mut conn, user_id, world_uuid).ok()
+                            })
                             .is_some()
                     })
                     .await
@@ -2339,8 +2364,7 @@ impl SubscriptionRoot {
                 as Pin<Box<dyn Stream<Item = Result<GraphQLWorldEvent, Error>> + Send>>
         } else {
             // Error case: single error item
-            let stream =
-                tokio_stream::iter(vec![Err(Error::new(error_msg))]).filter_map(Some);
+            let stream = tokio_stream::iter(vec![Err(Error::new(error_msg))]).filter_map(Some);
             Pin::new(Box::new(stream))
                 as Pin<Box<dyn Stream<Item = Result<GraphQLWorldEvent, Error>> + Send>>
         }
@@ -2396,8 +2420,7 @@ impl SubscriptionRoot {
                 as Pin<Box<dyn Stream<Item = Result<GraphQLPlayersOnlineList, Error>> + Send>>
         } else {
             // Error case: single error item
-            let stream =
-                tokio_stream::iter(vec![Err(Error::new(error_msg))]).filter_map(Some);
+            let stream = tokio_stream::iter(vec![Err(Error::new(error_msg))]).filter_map(Some);
             Pin::new(Box::new(stream))
                 as Pin<Box<dyn Stream<Item = Result<GraphQLPlayersOnlineList, Error>> + Send>>
         }
@@ -3001,7 +3024,9 @@ mod tests {
 
     #[tokio::test]
     async fn update_world_default_scene_grid_type_requires_dm_role_and_valid_value() {
-        use super::{UpdateWorldDefaultSceneGridTypeInput, update_world_default_scene_grid_type_impl};
+        use super::{
+            UpdateWorldDefaultSceneGridTypeInput, update_world_default_scene_grid_type_impl,
+        };
         use crate::test_support::*;
 
         let state = test_app_state();
@@ -3037,7 +3062,10 @@ mod tests {
             },
         )
         .await;
-        assert!(invalid_result.is_err(), "an invalid gridType must be rejected");
+        assert!(
+            invalid_result.is_err(),
+            "an invalid gridType must be rejected"
+        );
 
         let updated = update_world_default_scene_grid_type_impl(
             &state,

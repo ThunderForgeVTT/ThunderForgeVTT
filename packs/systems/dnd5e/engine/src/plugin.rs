@@ -54,7 +54,7 @@ pub trait GameSystemTrait: Send + Sync {
             9..=12 => 4,
             13..=16 => 5,
             17..=20 => 6,
-            _ => 2,  // Default for out-of-range
+            _ => 2, // Default for out-of-range
         }
     }
 

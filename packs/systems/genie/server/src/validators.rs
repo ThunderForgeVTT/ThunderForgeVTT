@@ -53,13 +53,13 @@ pub fn validate_resource_data(data: &serde_json::Value) -> Result<(), Validation
         message: "must be a JSON object".to_string(),
     })?;
 
-    let max_wish_points = obj
-        .get("max_wish_points")
-        .and_then(|v| v.as_i64())
-        .ok_or(ValidationError {
-            field: "resource_data.max_wish_points".to_string(),
-            message: "must be an integer".to_string(),
-        })?;
+    let max_wish_points =
+        obj.get("max_wish_points")
+            .and_then(|v| v.as_i64())
+            .ok_or(ValidationError {
+                field: "resource_data.max_wish_points".to_string(),
+                message: "must be an integer".to_string(),
+            })?;
 
     let max_health = obj
         .get("max_health")
@@ -138,7 +138,9 @@ pub fn validate_trait_data(data: &serde_json::Value) -> Result<(), ValidationErr
             if !valid_conditions.contains(&value) {
                 return Err(ValidationError {
                     field: "trait_data.active_conditions".to_string(),
-                    message: format!("unknown condition key {value:?}; must be one of {valid_conditions:?}"),
+                    message: format!(
+                        "unknown condition key {value:?}; must be one of {valid_conditions:?}"
+                    ),
                 });
             }
         }
@@ -159,14 +161,7 @@ pub fn validate_trait_data(data: &serde_json::Value) -> Result<(), ValidationErr
                 field: "trait_data.size_category".to_string(),
                 message: "must be a string or null".to_string(),
             })?;
-            let valid = [
-                "diminutive",
-                "small",
-                "medium",
-                "large",
-                "huge",
-                "colossal",
-            ];
+            let valid = ["diminutive", "small", "medium", "large", "huge", "colossal"];
             if !valid.contains(&value) {
                 return Err(ValidationError {
                     field: "trait_data.size_category".to_string(),

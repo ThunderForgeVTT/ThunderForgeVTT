@@ -6,9 +6,11 @@ use async_graphql::{Context, Error, InputObject, Result as GraphQLResult};
 use diesel::prelude::*;
 use uuid::Uuid;
 
-use crate::auth::world_membership::is_dm_of_world;
 use crate::auth::item_permissions::require_item_permission;
-use crate::graphql::types::{ActorPermissionLevel, GraphQLItem, GraphQLItemEffect, ItemEffectType, ItemEffectTrigger};
+use crate::auth::world_membership::is_dm_of_world;
+use crate::graphql::types::{
+    ActorPermissionLevel, GraphQLItem, GraphQLItemEffect, ItemEffectTrigger, ItemEffectType,
+};
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{ItemEffect, NewItemEffect, NewWorldItem, WorldItem};
 use crate::schema::{world_item_effects, world_items};
@@ -107,7 +109,14 @@ pub async fn update_item_impl(
     is_admin: bool,
     input: UpdateItemInput,
 ) -> GraphQLResult<WorldItem> {
-    require_item_permission(state, user_id, is_admin, input.item_id, ActorPermissionLevel::Editor).await?;
+    require_item_permission(
+        state,
+        user_id,
+        is_admin,
+        input.item_id,
+        ActorPermissionLevel::Editor,
+    )
+    .await?;
 
     let item_id = input.item_id;
     let mut conn = state
@@ -149,7 +158,14 @@ pub async fn delete_item_impl(
     is_admin: bool,
     item_id: Uuid,
 ) -> GraphQLResult<bool> {
-    require_item_permission(state, user_id, is_admin, item_id, ActorPermissionLevel::Owner).await?;
+    require_item_permission(
+        state,
+        user_id,
+        is_admin,
+        item_id,
+        ActorPermissionLevel::Owner,
+    )
+    .await?;
 
     let mut conn = state
         .db_pool
@@ -175,7 +191,14 @@ pub async fn add_item_effect_impl(
     item_id: Uuid,
     effect: ItemEffectInput,
 ) -> GraphQLResult<ItemEffect> {
-    require_item_permission(state, user_id, is_admin, item_id, ActorPermissionLevel::Editor).await?;
+    require_item_permission(
+        state,
+        user_id,
+        is_admin,
+        item_id,
+        ActorPermissionLevel::Editor,
+    )
+    .await?;
     validate_formula(&effect.formula)?;
     validate_target(&effect.target)?;
 
@@ -232,7 +255,14 @@ pub async fn update_item_effect_impl(
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(|_| Error::new("Item effect not found"))?;
 
-    require_item_permission(state, user_id, is_admin, parent_item_id, ActorPermissionLevel::Editor).await?;
+    require_item_permission(
+        state,
+        user_id,
+        is_admin,
+        parent_item_id,
+        ActorPermissionLevel::Editor,
+    )
+    .await?;
 
     let mut conn = state
         .db_pool
@@ -293,7 +323,14 @@ pub async fn remove_item_effect_impl(
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(|_| Error::new("Item effect not found"))?;
 
-    require_item_permission(state, user_id, is_admin, parent_item_id, ActorPermissionLevel::Editor).await?;
+    require_item_permission(
+        state,
+        user_id,
+        is_admin,
+        parent_item_id,
+        ActorPermissionLevel::Editor,
+    )
+    .await?;
 
     let mut conn = state
         .db_pool
@@ -301,7 +338,8 @@ pub async fn remove_item_effect_impl(
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
     tokio::task::spawn_blocking(move || {
-        diesel::delete(world_item_effects::table.filter(world_item_effects::id.eq(effect_id))).execute(&mut conn)
+        diesel::delete(world_item_effects::table.filter(world_item_effects::id.eq(effect_id)))
+            .execute(&mut conn)
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -329,10 +367,16 @@ async fn load_item_effects(state: &AppState, item_id: Uuid) -> GraphQLResult<Vec
     .map_err(|_| Error::new("Failed to load item effects"))
 }
 
-async fn to_graphql_item(state: &AppState, user_id: Uuid, is_admin: bool, row: WorldItem) -> GraphQLResult<GraphQLItem> {
+async fn to_graphql_item(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    row: WorldItem,
+) -> GraphQLResult<GraphQLItem> {
     let effects = load_item_effects(state, row.id).await?;
     let my_permission_level =
-        crate::auth::item_permissions::effective_item_permission(state, user_id, is_admin, row.id).await?;
+        crate::auth::item_permissions::effective_item_permission(state, user_id, is_admin, row.id)
+            .await?;
     Ok(GraphQLItem::from_row(row, effects, my_permission_level))
 }
 
@@ -341,14 +385,22 @@ pub struct ItemMutation;
 
 #[async_graphql::Object]
 impl ItemMutation {
-    async fn create_item(&self, ctx: &Context<'_>, input: CreateItemInput) -> GraphQLResult<GraphQLItem> {
+    async fn create_item(
+        &self,
+        ctx: &Context<'_>,
+        input: CreateItemInput,
+    ) -> GraphQLResult<GraphQLItem> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         let row = create_item_impl(state, auth_user.user_id, auth_user.is_admin, input).await?;
         to_graphql_item(state, auth_user.user_id, auth_user.is_admin, row).await
     }
 
-    async fn update_item(&self, ctx: &Context<'_>, input: UpdateItemInput) -> GraphQLResult<GraphQLItem> {
+    async fn update_item(
+        &self,
+        ctx: &Context<'_>,
+        input: UpdateItemInput,
+    ) -> GraphQLResult<GraphQLItem> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         let row = update_item_impl(state, auth_user.user_id, auth_user.is_admin, input).await?;
@@ -369,9 +421,15 @@ impl ItemMutation {
     ) -> GraphQLResult<GraphQLItemEffect> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        add_item_effect_impl(state, auth_user.user_id, auth_user.is_admin, item_id, effect)
-            .await
-            .map(GraphQLItemEffect::from)
+        add_item_effect_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            item_id,
+            effect,
+        )
+        .await
+        .map(GraphQLItemEffect::from)
     }
 
     async fn update_item_effect(
@@ -382,9 +440,15 @@ impl ItemMutation {
     ) -> GraphQLResult<GraphQLItemEffect> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        update_item_effect_impl(state, auth_user.user_id, auth_user.is_admin, effect_id, effect)
-            .await
-            .map(GraphQLItemEffect::from)
+        update_item_effect_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            effect_id,
+            effect,
+        )
+        .await
+        .map(GraphQLItemEffect::from)
     }
 
     async fn remove_item_effect(&self, ctx: &Context<'_>, effect_id: Uuid) -> GraphQLResult<bool> {
@@ -397,7 +461,9 @@ impl ItemMutation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{insert_test_user, insert_test_world, insert_test_world_member, test_app_state};
+    use crate::test_support::{
+        insert_test_user, insert_test_world, insert_test_world_member, test_app_state,
+    };
 
     /// FR-002: only the DM may create an item.
     #[tokio::test]
@@ -421,7 +487,10 @@ mod tests {
             },
         )
         .await;
-        assert!(denied.is_err(), "a non-DM caller must not be able to create an item");
+        assert!(
+            denied.is_err(),
+            "a non-DM caller must not be able to create an item"
+        );
 
         let created = create_item_impl(
             &state,
@@ -436,7 +505,10 @@ mod tests {
         .await
         .expect("DM should be able to create an item");
         assert_eq!(created.name, "Potion of Healing");
-        assert!(created.icon_asset_id.is_none(), "icon is optional (Clarifications)");
+        assert!(
+            created.icon_asset_id.is_none(),
+            "icon is optional (Clarifications)"
+        );
     }
 
     /// FR-019: two items may share the same name in the same world.
@@ -557,7 +629,9 @@ mod tests {
         .await
         .expect("damage effect should be added");
 
-        let effects = load_item_effects(&state, item.id).await.expect("should load effects");
+        let effects = load_item_effects(&state, item.id)
+            .await
+            .expect("should load effects");
         assert_eq!(effects.len(), 2);
     }
 

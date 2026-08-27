@@ -17,8 +17,8 @@ pub async fn me_impl(
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
     tokio::task::spawn_blocking(move || {
-        use crate::schema::users;
         use crate::models::User;
+        use crate::schema::users;
         use diesel::prelude::*;
         users::table
             .filter(users::id.eq(user_id))
@@ -61,15 +61,16 @@ pub async fn my_worlds_with_role_impl(
             .filter(world_members::user_id.eq(user_id))
             .select((world_members::world_id, world_members::role))
             .load::<(uuid::Uuid, String)>(&mut conn)?;
-        let member_world_ids: Vec<uuid::Uuid> =
-            member_rows.iter().map(|(id, _)| *id).collect();
+        let member_world_ids: Vec<uuid::Uuid> = member_rows.iter().map(|(id, _)| *id).collect();
         let member_worlds = worlds::table
             .filter(worlds::id.eq_any(member_world_ids))
             .select(World::as_select())
             .load::<World>(&mut conn)?;
 
-        let mut combined: Vec<(World, String)> =
-            owned.into_iter().map(|w| (w, "Owner".to_string())).collect();
+        let mut combined: Vec<(World, String)> = owned
+            .into_iter()
+            .map(|w| (w, "Owner".to_string()))
+            .collect();
         for world in member_worlds {
             if combined.iter().any(|(w, _)| w.id == world.id) {
                 continue;
@@ -247,7 +248,6 @@ impl UserQuery {
             .map(|item| item.map(GraphQLWorldEvent::from))
     }
 
-
     // async fn my_policies(&self, ctx: &Context<'_>) -> GraphQLResult<Vec<GraphQLPolicy>> {
     //     let state = app_state(ctx)?;
     //     let auth_user = authenticated_user(ctx)?;
@@ -268,7 +268,6 @@ impl UserQuery {
     //         .map(|item| item.map(GraphQLPolicy::from))
     // }
 
-
     async fn export_my_data(&self, ctx: &Context<'_>) -> GraphQLResult<GraphQLExportMyDataPayload> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
@@ -282,7 +281,9 @@ impl UserQuery {
 #[cfg(test)]
 mod tests {
     use super::{me_impl, my_dm_worlds_impl, my_worlds_with_role_impl};
-    use crate::test_support::{insert_test_user, insert_test_world, insert_test_world_member, test_app_state};
+    use crate::test_support::{
+        insert_test_user, insert_test_world, insert_test_world_member, test_app_state,
+    };
 
     #[tokio::test]
     async fn me_returns_the_matching_user_row() {
@@ -330,8 +331,14 @@ mod tests {
             .expect("query should not error");
 
         let ids: Vec<uuid::Uuid> = worlds.iter().map(|w| w.id).collect();
-        assert!(ids.contains(&owned_world_id), "owned worlds must be included");
-        assert!(ids.contains(&gm_world_id), "GM-role worlds must be included");
+        assert!(
+            ids.contains(&owned_world_id),
+            "owned worlds must be included"
+        );
+        assert!(
+            ids.contains(&gm_world_id),
+            "GM-role worlds must be included"
+        );
         assert!(
             !ids.contains(&player_world_id),
             "worlds where the user only holds Player role must NOT be included"

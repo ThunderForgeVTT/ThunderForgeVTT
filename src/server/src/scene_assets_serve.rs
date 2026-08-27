@@ -7,7 +7,7 @@
 //! query already returned this scene per FR-008/FR-009's hidden-filtering).
 
 use axum::extract::{Path, State};
-use axum::http::{header, StatusCode};
+use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Extension, Router};
@@ -17,7 +17,7 @@ use uuid::Uuid;
 use crate::auth::world_membership::require_world_member;
 use crate::auth_middleware::AuthenticatedUser;
 use crate::state::AppState;
-use crate::storage::rustfs::{read_object, RustFsConfig};
+use crate::storage::rustfs::{RustFsConfig, read_object};
 
 pub fn router() -> Router<AppState> {
     Router::new().route("/scene-assets/{asset_id}/thumb", get(serve_scene_preview))
@@ -62,9 +62,11 @@ async fn serve_scene_preview(
             return (StatusCode::INTERNAL_SERVER_ERROR, "database unavailable").into_response();
         };
         is_admin
-            || tokio::task::spawn_blocking(move || require_world_member(&mut conn, user_id, world_id).is_ok())
-                .await
-                .unwrap_or(false)
+            || tokio::task::spawn_blocking(move || {
+                require_world_member(&mut conn, user_id, world_id).is_ok()
+            })
+            .await
+            .unwrap_or(false)
     };
     if !membership_ok {
         return (StatusCode::FORBIDDEN, "not a member of this scene's world").into_response();
@@ -72,7 +74,12 @@ async fn serve_scene_preview(
 
     let cfg = RustFsConfig::from_env();
     match read_object(&cfg, &preview_key(asset_id)).await {
-        Ok(bytes) => (StatusCode::OK, [(header::CONTENT_TYPE, "image/webp")], bytes).into_response(),
+        Ok(bytes) => (
+            StatusCode::OK,
+            [(header::CONTENT_TYPE, "image/webp")],
+            bytes,
+        )
+            .into_response(),
         Err(_) => (StatusCode::NOT_FOUND, "asset object not found in storage").into_response(),
     }
 }

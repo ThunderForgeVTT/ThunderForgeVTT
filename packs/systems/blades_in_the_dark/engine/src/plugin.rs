@@ -6,12 +6,18 @@ use std::sync::Arc;
 pub struct BladesSystem;
 
 impl BladesSystem {
-    pub fn new() -> Self { Self }
-    pub fn register() -> Arc<dyn GameSystemTrait> { Arc::new(Self) }
+    pub fn new() -> Self {
+        Self
+    }
+    pub fn register() -> Arc<dyn GameSystemTrait> {
+        Arc::new(Self)
+    }
 }
 
 impl Default for BladesSystem {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 pub trait GameSystemTrait: Send + Sync {
@@ -20,8 +26,12 @@ pub trait GameSystemTrait: Send + Sync {
 }
 
 impl GameSystemTrait for BladesSystem {
-    fn name(&self) -> String { "Blades in the Dark".to_string() }
-    fn version(&self) -> String { "0.1.0".to_string() }
+    fn name(&self) -> String {
+        "Blades in the Dark".to_string()
+    }
+    fn version(&self) -> String {
+        "0.1.0".to_string()
+    }
 }
 
 pub struct BladesPlugin;

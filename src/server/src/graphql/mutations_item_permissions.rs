@@ -106,7 +106,10 @@ pub async fn set_item_permission_impl(
 
         diesel::insert_into(world_item_permissions::table)
             .values(&new_row)
-            .on_conflict((world_item_permissions::item_id, world_item_permissions::user_id))
+            .on_conflict((
+                world_item_permissions::item_id,
+                world_item_permissions::user_id,
+            ))
             .do_update()
             .set((
                 world_item_permissions::level.eq(level),
@@ -160,10 +163,15 @@ pub struct ItemPermissionQuery;
 impl ItemPermissionQuery {
     /// DM-only (FR-003). Returns only explicit rows — members with no row
     /// default to Viewer.
-    async fn item_permissions(&self, ctx: &Context<'_>, item_id: Uuid) -> GraphQLResult<Vec<GraphQLItemPermission>> {
+    async fn item_permissions(
+        &self,
+        ctx: &Context<'_>,
+        item_id: Uuid,
+    ) -> GraphQLResult<Vec<GraphQLItemPermission>> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        let rows = item_permissions_impl(state, auth_user.user_id, auth_user.is_admin, item_id).await?;
+        let rows =
+            item_permissions_impl(state, auth_user.user_id, auth_user.is_admin, item_id).await?;
         Ok(rows.into_iter().map(GraphQLItemPermission::from).collect())
     }
 }
@@ -185,18 +193,32 @@ impl ItemPermissionMutation {
             .map(GraphQLItemPermission::from)
     }
 
-    async fn remove_item_permission(&self, ctx: &Context<'_>, item_id: Uuid, user_id: Uuid) -> GraphQLResult<bool> {
+    async fn remove_item_permission(
+        &self,
+        ctx: &Context<'_>,
+        item_id: Uuid,
+        user_id: Uuid,
+    ) -> GraphQLResult<bool> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        remove_item_permission_impl(state, auth_user.user_id, auth_user.is_admin, item_id, user_id).await
+        remove_item_permission_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            item_id,
+            user_id,
+        )
+        .await
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graphql::mutations_items::{create_item_impl, CreateItemInput};
-    use crate::test_support::{insert_test_user, insert_test_world, insert_test_world_member, test_app_state};
+    use crate::graphql::mutations_items::{CreateItemInput, create_item_impl};
+    use crate::test_support::{
+        insert_test_user, insert_test_world, insert_test_world_member, test_app_state,
+    };
 
     /// FR-003: only the DM may view or change the ownership block.
     #[tokio::test]
@@ -233,7 +255,10 @@ mod tests {
             },
         )
         .await;
-        assert!(denied.is_err(), "a non-DM caller must not be able to set item permissions");
+        assert!(
+            denied.is_err(),
+            "a non-DM caller must not be able to set item permissions"
+        );
 
         let granted = set_item_permission_impl(
             &state,

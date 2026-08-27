@@ -34,7 +34,10 @@ fn to_graphql_case(events: Vec<ContentModerationAction>) -> Option<GraphQLModera
         entity_id: last.entity_id,
         world_id: last.world_id,
         current_status,
-        events: events.into_iter().map(GraphQLModerationAction::from).collect(),
+        events: events
+            .into_iter()
+            .map(GraphQLModerationAction::from)
+            .collect(),
     })
 }
 
@@ -47,7 +50,8 @@ pub async fn moderation_status_impl(
     entity_type: ModerationEntityType,
     entity_id: Uuid,
 ) -> GraphQLResult<Option<ModerationActionType>> {
-    let status = crate::moderation::effective_status(state, entity_type.as_db_str(), entity_id).await?;
+    let status =
+        crate::moderation::effective_status(state, entity_type.as_db_str(), entity_id).await?;
     Ok(status.and_then(|s| ModerationActionType::from_db_str(&s)))
 }
 
@@ -96,10 +100,7 @@ pub async fn moderation_history_for_account_impl(
         by_case.entry(row.case_id).or_default().push(row);
     }
 
-    Ok(by_case
-        .into_values()
-        .filter_map(to_graphql_case)
-        .collect())
+    Ok(by_case.into_values().filter_map(to_graphql_case).collect())
 }
 
 /// Testable core of `ModerationQuery::repeat_infringer_flags` (FR-009).
@@ -150,9 +151,7 @@ pub async fn repeat_infringer_flags_impl(state: &AppState) -> GraphQLResult<Vec<
             case.action_type.as_str(),
             v if v == action_type::CONTENT_DISABLED || v == action_type::CONTENT_REMAINS_DISABLED
         );
-        if upheld
-            && let Some(account_id) = case.account_id
-        {
+        if upheld && let Some(account_id) = case.account_id {
             *counts.entry(account_id).or_insert(0) += 1;
         }
     }
@@ -209,7 +208,9 @@ impl ModerationQuery {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graphql::mutations_moderation::{SubmitTakedownNoticeInput, submit_takedown_notice_impl};
+    use crate::graphql::mutations_moderation::{
+        SubmitTakedownNoticeInput, submit_takedown_notice_impl,
+    };
     use crate::test_support::{insert_test_user, insert_test_world, test_app_state};
 
     #[tokio::test]

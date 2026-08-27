@@ -6,12 +6,18 @@ use std::sync::Arc;
 pub struct Pathfinder2eSystem;
 
 impl Pathfinder2eSystem {
-    pub fn new() -> Self { Self }
-    pub fn register() -> Arc<dyn GameSystemTrait> { Arc::new(Self) }
+    pub fn new() -> Self {
+        Self
+    }
+    pub fn register() -> Arc<dyn GameSystemTrait> {
+        Arc::new(Self)
+    }
 }
 
 impl Default for Pathfinder2eSystem {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 pub trait GameSystemTrait: Send + Sync {
@@ -20,8 +26,12 @@ pub trait GameSystemTrait: Send + Sync {
 }
 
 impl GameSystemTrait for Pathfinder2eSystem {
-    fn name(&self) -> String { "Pathfinder Second Edition (Remaster)".to_string() }
-    fn version(&self) -> String { "0.1.0".to_string() }
+    fn name(&self) -> String {
+        "Pathfinder Second Edition (Remaster)".to_string()
+    }
+    fn version(&self) -> String {
+        "0.1.0".to_string()
+    }
 }
 
 pub struct Pathfinder2ePlugin;

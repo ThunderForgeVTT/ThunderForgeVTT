@@ -2,7 +2,7 @@
 
 pub mod plugin;
 
-pub use plugin::{GameSystemTrait};
+pub use plugin::GameSystemTrait;
 
 pub const VERSION: &str = "0.1.0";
 

@@ -473,7 +473,11 @@ mod tests {
         // Spec 023 (quickstart.md §1): with no explicit world_members row
         // of their own, the owner must still be synthesized into the
         // returned list rather than silently omitted.
-        assert_eq!(members.len(), 1, "the synthesized owner entry must be present");
+        assert_eq!(
+            members.len(),
+            1,
+            "the synthesized owner entry must be present"
+        );
         assert_eq!(members[0].user_id, owner_id);
         assert_eq!(members[0].role, "Owner");
     }

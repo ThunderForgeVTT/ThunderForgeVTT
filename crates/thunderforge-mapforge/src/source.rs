@@ -115,11 +115,7 @@ impl MapSource {
         // outside the corpus directory. This service has no auth, which makes
         // path containment the only thing standing between it and the rest of
         // the filesystem.
-        if name.is_empty()
-            || name.contains("..")
-            || name.contains('/')
-            || name.contains('\\')
-        {
+        if name.is_empty() || name.contains("..") || name.contains('/') || name.contains('\\') {
             return Err(SourceError::NotFound(name.to_owned()));
         }
 
@@ -139,8 +135,8 @@ impl MapSource {
     }
 
     fn decode(path: &Path, name: &str) -> Result<LoadedMap, SourceError> {
-        let raw = std::fs::read_to_string(path)
-            .map_err(|_| SourceError::NotFound(name.to_owned()))?;
+        let raw =
+            std::fs::read_to_string(path).map_err(|_| SourceError::NotFound(name.to_owned()))?;
         let parsed: serde_json::Value =
             serde_json::from_str(&raw).map_err(|e| SourceError::Read(e.to_string()))?;
 

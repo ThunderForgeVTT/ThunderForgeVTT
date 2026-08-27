@@ -27,7 +27,10 @@ pub struct DiceFormula {
 impl DiceFormula {
     pub fn parse(source: &str) -> Result<Self, FormulaError> {
         let ast = parser::parse(source)?;
-        Ok(DiceFormula { source: source.to_string(), ast })
+        Ok(DiceFormula {
+            source: source.to_string(),
+            ast,
+        })
     }
 
     pub fn source(&self) -> &str {

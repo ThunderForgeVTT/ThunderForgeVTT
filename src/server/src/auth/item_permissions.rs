@@ -5,8 +5,6 @@
 //! member defaults to `Viewer` unless an explicit `world_item_permissions`
 //! row says otherwise. See specs/013-items-inventory/research.md.
 
-
-
 // Spec 027 (US5): the `effective_item_permission` / `require_item_permission` pair that
 // lived here is now generated from the single declaration in
 // `auth::permissioned_entities`, under the same names and signatures — so no
@@ -16,4 +14,3 @@
 //
 // Re-exported here so existing import paths keep working.
 pub use crate::auth::permissioned_entities::{effective_item_permission, require_item_permission};
-

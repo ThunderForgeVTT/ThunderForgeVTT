@@ -7,10 +7,10 @@ use diesel::prelude::*;
 use diesel::result::Error as DieselError;
 
 use crate::graphql::{
-    app_state, authenticated_user, GraphQLCreateWallInput, GraphQLDoorState, GraphQLUpdateWallInput,
-    GraphQLWall,
+    GraphQLCreateWallInput, GraphQLDoorState, GraphQLUpdateWallInput, GraphQLWall, app_state,
+    authenticated_user,
 };
-use crate::world_events::{record_world_event, world_id_for_scene, EVENT_CODE_WALL_CHANGED};
+use crate::world_events::{EVENT_CODE_WALL_CHANGED, record_world_event, world_id_for_scene};
 
 #[derive(Default)]
 pub struct WallMutation;
@@ -136,15 +136,13 @@ impl WallMutation {
             use crate::schema::{scenes, walls};
 
             let wall = diesel::update(
-                walls::table
-                    .filter(walls::wall_id.eq(wall_id))
-                    .filter(
-                        walls::scene_id.eq_any(
-                            scenes::table
-                                .filter(scenes::owner_id.eq(user_id))
-                                .select(scenes::scene_id),
-                        ),
+                walls::table.filter(walls::wall_id.eq(wall_id)).filter(
+                    walls::scene_id.eq_any(
+                        scenes::table
+                            .filter(scenes::owner_id.eq(user_id))
+                            .select(scenes::scene_id),
                     ),
+                ),
             )
             .set(update_data)
             .returning(crate::models::Wall::as_returning())
@@ -201,15 +199,13 @@ impl WallMutation {
                 .optional()?;
 
             let deleted_count = diesel::delete(
-                walls::table
-                    .filter(walls::wall_id.eq(wall_id))
-                    .filter(
-                        walls::scene_id.eq_any(
-                            scenes::table
-                                .filter(scenes::owner_id.eq(user_id))
-                                .select(scenes::scene_id),
-                        ),
+                walls::table.filter(walls::wall_id.eq(wall_id)).filter(
+                    walls::scene_id.eq_any(
+                        scenes::table
+                            .filter(scenes::owner_id.eq(user_id))
+                            .select(scenes::scene_id),
                     ),
+                ),
             )
             .execute(&mut conn)?;
 
@@ -263,7 +259,9 @@ mod tests {
     #[test]
     fn wall_mutations_are_scoped_to_scene_owner() {
         let Some(mut conn) = try_connect() else {
-            eprintln!("skipping wall_mutations_are_scoped_to_scene_owner: no DATABASE_URL/dev DB reachable");
+            eprintln!(
+                "skipping wall_mutations_are_scoped_to_scene_owner: no DATABASE_URL/dev DB reachable"
+            );
             return;
         };
 
@@ -277,7 +275,10 @@ mod tests {
             let wall_id = uuid::Uuid::now_v7();
             let now = chrono::Utc::now().naive_utc();
 
-            for (id, username) in [(owner_id, "wall-test-owner"), (intruder_id, "wall-test-intruder")] {
+            for (id, username) in [
+                (owner_id, "wall-test-owner"),
+                (intruder_id, "wall-test-intruder"),
+            ] {
                 diesel::insert_into(users::table)
                     .values((
                         users::id.eq(id),

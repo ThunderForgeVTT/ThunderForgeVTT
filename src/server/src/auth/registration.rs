@@ -100,7 +100,11 @@ pub(super) fn unique_username_from_email_sync(
     email: &str,
 ) -> Result<String, diesel::result::Error> {
     let base = derive_bootstrap_username(None, email);
-    let base = if base.is_empty() { "user".to_string() } else { base };
+    let base = if base.is_empty() {
+        "user".to_string()
+    } else {
+        base
+    };
 
     let is_taken = |conn: &mut diesel::PgConnection, candidate: &str| {
         users::table

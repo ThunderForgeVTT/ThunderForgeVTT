@@ -870,11 +870,7 @@ mod manifest_legal_enforcement_tests {
             r#"{"id": "no-legal-pack", "title": "No Legal Pack", "version": "0.1.0"}"#,
         );
 
-        let result = get_system_manifest(
-            AxumPath("no-legal-pack".to_string()),
-            State(state),
-        )
-        .await;
+        let result = get_system_manifest(AxumPath("no-legal-pack".to_string()), State(state)).await;
 
         let (status, _) = result.expect_err("manifest missing legal must be rejected");
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
@@ -897,11 +893,8 @@ mod manifest_legal_enforcement_tests {
             }"#,
         );
 
-        let result = get_system_manifest(
-            AxumPath("compliant-pack".to_string()),
-            State(state),
-        )
-        .await;
+        let result =
+            get_system_manifest(AxumPath("compliant-pack".to_string()), State(state)).await;
 
         let Json(manifest) = result.expect("a compliant manifest must be served");
         assert_eq!(manifest["legal"]["licenseName"], "CC-BY-4.0");
@@ -953,10 +946,12 @@ mod manifest_legal_enforcement_tests {
             manifest["legal"]["licenseName"],
             "ThunderForgeVTT Original Content"
         );
-        assert!(manifest["legal"]["trademarkRestrictions"]
-            .as_array()
-            .unwrap()
-            .is_empty());
+        assert!(
+            manifest["legal"]["trademarkRestrictions"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
     }
 
     /// Spec 016 (Edge Cases, "no external license at all"): the real,
@@ -982,10 +977,12 @@ mod manifest_legal_enforcement_tests {
             manifest["legal"]["licenseName"],
             "ThunderForgeVTT Original Content"
         );
-        assert!(manifest["legal"]["trademarkRestrictions"]
-            .as_array()
-            .unwrap()
-            .is_empty());
+        assert!(
+            manifest["legal"]["trademarkRestrictions"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
     }
 
     /// Shared helper for the five research-digest-backed packs below —

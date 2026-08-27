@@ -20,11 +20,17 @@ impl std::error::Error for ValidationError {}
 const ABILITY_MODIFIER_MIN: i64 = -5;
 const ABILITY_MODIFIER_MAX: i64 = 10;
 
-fn require_ability_modifier(obj: &serde_json::Map<String, serde_json::Value>, field: &str) -> Result<(), ValidationError> {
-    let value = obj.get(field).and_then(|v| v.as_i64()).ok_or_else(|| ValidationError {
-        field: format!("ability_data.{field}"),
-        message: "must be an integer".to_string(),
-    })?;
+fn require_ability_modifier(
+    obj: &serde_json::Map<String, serde_json::Value>,
+    field: &str,
+) -> Result<(), ValidationError> {
+    let value = obj
+        .get(field)
+        .and_then(|v| v.as_i64())
+        .ok_or_else(|| ValidationError {
+            field: format!("ability_data.{field}"),
+            message: "must be an integer".to_string(),
+        })?;
     if !(ABILITY_MODIFIER_MIN..=ABILITY_MODIFIER_MAX).contains(&value) {
         return Err(ValidationError {
             field: format!("ability_data.{field}"),

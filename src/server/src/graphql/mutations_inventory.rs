@@ -39,10 +39,19 @@ pub async fn add_item_to_inventory_impl(
     input: AddItemToInventoryInput,
 ) -> GraphQLResult<ActorInventoryEntry> {
     if input.quantity < 1 {
-        return Err(Error::new("Quantity must be at least 1 when adding an item"));
+        return Err(Error::new(
+            "Quantity must be at least 1 when adding an item",
+        ));
     }
 
-    require_actor_permission(state, user_id, is_admin, input.actor_id, ActorPermissionLevel::Editor).await?;
+    require_actor_permission(
+        state,
+        user_id,
+        is_admin,
+        input.actor_id,
+        ActorPermissionLevel::Editor,
+    )
+    .await?;
 
     let mut conn = state
         .db_pool
@@ -67,7 +76,10 @@ pub async fn add_item_to_inventory_impl(
                 world_actor_inventory::item_name_snapshot.eq(item_name.clone()),
                 world_actor_inventory::quantity.eq(quantity),
             ))
-            .on_conflict((world_actor_inventory::actor_id, world_actor_inventory::item_id))
+            .on_conflict((
+                world_actor_inventory::actor_id,
+                world_actor_inventory::item_id,
+            ))
             .do_update()
             .set((
                 world_actor_inventory::quantity.eq(world_actor_inventory::quantity + quantity),
@@ -112,7 +124,14 @@ pub async fn adjust_inventory_quantity_impl(
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(|_| Error::new("Inventory entry not found"))?;
 
-    require_actor_permission(state, user_id, is_admin, actor_id, ActorPermissionLevel::Editor).await?;
+    require_actor_permission(
+        state,
+        user_id,
+        is_admin,
+        actor_id,
+        ActorPermissionLevel::Editor,
+    )
+    .await?;
 
     let mut conn = state
         .db_pool
@@ -123,7 +142,10 @@ pub async fn adjust_inventory_quantity_impl(
 
     if quantity == 0 {
         tokio::task::spawn_blocking(move || {
-            diesel::delete(world_actor_inventory::table.filter(world_actor_inventory::id.eq(entry_id))).execute(&mut conn)
+            diesel::delete(
+                world_actor_inventory::table.filter(world_actor_inventory::id.eq(entry_id)),
+            )
+            .execute(&mut conn)
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -171,7 +193,14 @@ pub async fn remove_inventory_entry_impl(
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(|_| Error::new("Inventory entry not found"))?;
 
-    require_actor_permission(state, user_id, is_admin, actor_id, ActorPermissionLevel::Editor).await?;
+    require_actor_permission(
+        state,
+        user_id,
+        is_admin,
+        actor_id,
+        ActorPermissionLevel::Editor,
+    )
+    .await?;
 
     let mut conn = state
         .db_pool
@@ -179,7 +208,10 @@ pub async fn remove_inventory_entry_impl(
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
     tokio::task::spawn_blocking(move || {
-        diesel::delete(world_actor_inventory::table.filter(world_actor_inventory::id.eq(inventory_entry_id))).execute(&mut conn)
+        diesel::delete(
+            world_actor_inventory::table.filter(world_actor_inventory::id.eq(inventory_entry_id)),
+        )
+        .execute(&mut conn)
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -212,23 +244,38 @@ impl InventoryMutation {
     ) -> GraphQLResult<Option<GraphQLInventoryEntry>> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        let result = adjust_inventory_quantity_impl(state, auth_user.user_id, auth_user.is_admin, input).await?;
+        let result =
+            adjust_inventory_quantity_impl(state, auth_user.user_id, auth_user.is_admin, input)
+                .await?;
         Ok(result.map(GraphQLInventoryEntry::from))
     }
 
-    async fn remove_inventory_entry(&self, ctx: &Context<'_>, inventory_entry_id: Uuid) -> GraphQLResult<bool> {
+    async fn remove_inventory_entry(
+        &self,
+        ctx: &Context<'_>,
+        inventory_entry_id: Uuid,
+    ) -> GraphQLResult<bool> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        remove_inventory_entry_impl(state, auth_user.user_id, auth_user.is_admin, inventory_entry_id).await
+        remove_inventory_entry_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            inventory_entry_id,
+        )
+        .await
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graphql::mutations_actors::{create_actor_impl, CreateActorInput};
-    use crate::graphql::mutations_items::{create_item_impl, CreateItemInput};
-    use crate::test_support::{insert_test_scene, insert_test_user, insert_test_world, insert_test_world_member, test_app_state};
+    use crate::graphql::mutations_actors::{CreateActorInput, create_actor_impl};
+    use crate::graphql::mutations_items::{CreateItemInput, create_item_impl};
+    use crate::test_support::{
+        insert_test_scene, insert_test_user, insert_test_world, insert_test_world_member,
+        test_app_state,
+    };
 
     /// SC-002: repeated adds of the same item merge into a single entry's
     /// quantity, never a duplicate row.
@@ -296,7 +343,10 @@ mod tests {
         .await
         .expect("second add should merge");
 
-        assert_eq!(entry.quantity, 5, "quantities must merge rather than duplicate rows");
+        assert_eq!(
+            entry.quantity, 5,
+            "quantities must merge rather than duplicate rows"
+        );
     }
 
     /// FR-011: reducing quantity to 0 removes the entry.
@@ -447,7 +497,9 @@ mod tests {
     /// confirmed by US1 (`x=6` exploding, not an illustrative `!6`).
     #[tokio::test]
     async fn genie_wish_granted_item_round_trips_through_inventory() {
-        use crate::graphql::mutations_items::{add_item_effect_impl, create_item_impl, CreateItemInput, ItemEffectInput};
+        use crate::graphql::mutations_items::{
+            CreateItemInput, ItemEffectInput, add_item_effect_impl, create_item_impl,
+        };
         use crate::graphql::types::{ItemEffectTrigger, ItemEffectType};
 
         let state = test_app_state();
@@ -464,9 +516,7 @@ mod tests {
             CreateItemInput {
                 world_id,
                 name: "Lamp of Minor Binding".to_string(),
-                description: Some(
-                    "A dented brass lamp still warm from its last wish.".to_string(),
-                ),
+                description: Some("A dented brass lamp still warm from its last wish.".to_string()),
             },
         )
         .await
@@ -537,9 +587,11 @@ mod tests {
         assert_eq!(entry.item_name_snapshot, "Lamp of Minor Binding");
         assert_eq!(entry.quantity, 1);
 
-        let inventory = crate::graphql::queries::inventory::actor_inventory_impl(&state, owner_id, false, actor.id)
-            .await
-            .expect("actorInventory should return the round-tripped entry");
+        let inventory = crate::graphql::queries::inventory::actor_inventory_impl(
+            &state, owner_id, false, actor.id,
+        )
+        .await
+        .expect("actorInventory should return the round-tripped entry");
         assert_eq!(inventory.len(), 1);
         assert_eq!(inventory[0].item_name_snapshot, "Lamp of Minor Binding");
         assert_eq!(inventory[0].item_id, Some(item.id));

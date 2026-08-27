@@ -10,7 +10,7 @@
 //! - `GET /maps/{name}/full.webp?max=N` — a whole-image rendition, capped
 
 use axum::extract::{Path, Query, State};
-use axum::http::{header, StatusCode};
+use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
@@ -211,7 +211,10 @@ async fn full(
 
     // Clamped, not merely defaulted: a caller asking for the full 6144px would
     // otherwise get something a majority of GPUs cannot upload.
-    let max = query.max.unwrap_or(MAX_FULL_DIMENSION).min(MAX_FULL_DIMENSION);
+    let max = query
+        .max
+        .unwrap_or(MAX_FULL_DIMENSION)
+        .min(MAX_FULL_DIMENSION);
 
     let image = if map.image.width() <= max && map.image.height() <= max {
         map.image.clone()

@@ -8,8 +8,6 @@
 //! member defaults to `Viewer` unless an explicit row says otherwise.
 //! See `specs/010-world-staging-actors/research.md` §3/§4.
 
-
-
 // Spec 027 (US5): the `effective_actor_permission` / `require_actor_permission` pair that
 // lived here is now generated from the single declaration in
 // `auth::permissioned_entities`, under the same names and signatures — so no
@@ -18,7 +16,9 @@
 // privilege leak that motivated consolidating them.
 //
 // Re-exported here so existing import paths keep working.
-pub use crate::auth::permissioned_entities::{effective_actor_permission, require_actor_permission};
+pub use crate::auth::permissioned_entities::{
+    effective_actor_permission, require_actor_permission,
+};
 
 #[cfg(test)]
 mod tests {
@@ -33,7 +33,12 @@ mod tests {
         test_app_state,
     };
 
-    fn insert_test_actor(conn: &mut diesel::PgConnection, world_id: Uuid, scene_id: Uuid, owner_id: Uuid) -> Uuid {
+    fn insert_test_actor(
+        conn: &mut diesel::PgConnection,
+        world_id: Uuid,
+        scene_id: Uuid,
+        owner_id: Uuid,
+    ) -> Uuid {
         let id = Uuid::now_v7();
         let now = chrono::Utc::now().naive_utc();
         diesel::insert_into(world_actors::table)
@@ -129,9 +134,15 @@ mod tests {
         drop(conn);
 
         for user_id in [player_a, player_b] {
-            require_actor_permission(&state, user_id, false, actor_id, ActorPermissionLevel::Owner)
-                .await
-                .expect("both simultaneous Owners should be accepted");
+            require_actor_permission(
+                &state,
+                user_id,
+                false,
+                actor_id,
+                ActorPermissionLevel::Owner,
+            )
+            .await
+            .expect("both simultaneous Owners should be accepted");
         }
     }
 }

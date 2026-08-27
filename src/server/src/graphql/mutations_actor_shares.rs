@@ -9,11 +9,11 @@ use uuid::Uuid;
 
 use crate::auth::actor_permissions::effective_actor_permission;
 use crate::auth::world_membership::is_dm_of_world;
+use crate::graphql::share_codes::generate_link_code;
 use crate::graphql::types::{ActorPermissionLevel, GraphQLActorShareLink, SharedActorPreview};
-use crate::graphql::{app_state, authenticated_user, GraphQLActorSystemData, GraphQLWorldActor};
+use crate::graphql::{GraphQLActorSystemData, GraphQLWorldActor, app_state, authenticated_user};
 use crate::models::{ActorShare, ActorSystemData, NewActorShare, NewWorldActor, WorldActor};
 use crate::schema::{scenes, world_actor_shares, world_actor_system_data, world_actors};
-use crate::graphql::share_codes::generate_link_code;
 use crate::state::AppState;
 
 #[derive(InputObject, Debug, Clone)]
@@ -116,7 +116,9 @@ pub async fn create_actor_share_link_impl(
 ) -> GraphQLResult<ActorShare> {
     let level = effective_actor_permission(state, user_id, is_admin, actor_id).await?;
     if level.rank() < ActorPermissionLevel::Owner.rank() {
-        return Err(Error::new("Only an Owner-level member may share this actor"));
+        return Err(Error::new(
+            "Only an Owner-level member may share this actor",
+        ));
     }
 
     let mut conn = state
@@ -365,8 +367,10 @@ impl ActorShareMutation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graphql::mutations_actors::{create_actor_impl, CreateActorInput};
-    use crate::test_support::{insert_test_scene, insert_test_user, insert_test_world, test_app_state};
+    use crate::graphql::mutations_actors::{CreateActorInput, create_actor_impl};
+    use crate::test_support::{
+        insert_test_scene, insert_test_user, insert_test_world, test_app_state,
+    };
 
     /// FR-023: only an Owner-level member (including the DM's implicit
     /// access) may generate a share link.
@@ -399,7 +403,10 @@ mod tests {
         // A user with no relationship to this world at all (not even a
         // membership row) has no permission on the actor — default Viewer.
         let denied = create_actor_share_link_impl(&state, outsider_id, false, actor.id).await;
-        assert!(denied.is_err(), "a non-Owner-level caller must not be able to share the actor");
+        assert!(
+            denied.is_err(),
+            "a non-Owner-level caller must not be able to share the actor"
+        );
 
         let link = create_actor_share_link_impl(&state, owner_id, false, actor.id)
             .await
@@ -449,7 +456,10 @@ mod tests {
             .expect("DM should be able to revoke");
 
         let after_revoke = shared_actor_impl(&state, link.share_code).await;
-        assert!(after_revoke.is_err(), "a revoked share code must no longer resolve");
+        assert!(
+            after_revoke.is_err(),
+            "a revoked share code must no longer resolve"
+        );
 
         let missing = shared_actor_impl(&state, "DOES-NOT-EXIST".to_string()).await;
         assert!(missing.is_err(), "an unknown share code must not resolve");
@@ -505,7 +515,10 @@ mod tests {
             },
         )
         .await;
-        assert!(denied.is_err(), "a caller without DM access on the destination must be rejected");
+        assert!(
+            denied.is_err(),
+            "a caller without DM access on the destination must be rejected"
+        );
 
         let copy = copy_shared_actor_to_world_impl(
             &state,
@@ -519,7 +532,10 @@ mod tests {
         .await
         .expect("destination DM should be able to copy the shared actor");
 
-        assert_ne!(copy.id, source_actor.id, "the copy must have a new identity");
+        assert_ne!(
+            copy.id, source_actor.id,
+            "the copy must have a new identity"
+        );
         assert_eq!(copy.world_id, dest_world_id);
         assert_eq!(copy.label, "Bo Jangles");
 

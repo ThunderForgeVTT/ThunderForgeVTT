@@ -391,7 +391,10 @@ mod tests {
             .await
             .expect("session should resolve");
 
-        assert!(!authenticated_user.is_admin, "fixture user must be non-admin");
+        assert!(
+            !authenticated_user.is_admin,
+            "fixture user must be non-admin"
+        );
     }
 
     // --- csrf_token equality ---

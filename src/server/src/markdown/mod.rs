@@ -70,10 +70,22 @@ fn main() {}\n\
 ";
         let html = render_to_safe_html(md);
         assert!(html.contains("<table>"), "table should render: {html}");
-        assert!(html.contains("type=\"checkbox\""), "task list checkbox should survive sanitization: {html}");
-        assert!(html.contains("checked"), "checked task item should survive sanitization: {html}");
-        assert!(html.contains("<del>strike</del>"), "strikethrough should render: {html}");
-        assert!(html.contains("language-rust"), "fenced code block language class should survive sanitization: {html}");
+        assert!(
+            html.contains("type=\"checkbox\""),
+            "task list checkbox should survive sanitization: {html}"
+        );
+        assert!(
+            html.contains("checked"),
+            "checked task item should survive sanitization: {html}"
+        );
+        assert!(
+            html.contains("<del>strike</del>"),
+            "strikethrough should render: {html}"
+        );
+        assert!(
+            html.contains("language-rust"),
+            "fenced code block language class should survive sanitization: {html}"
+        );
     }
 
     /// research.md §1: raw HTML/script in the source must never pass
@@ -87,8 +99,14 @@ fn main() {}\n\
         // (comrak's `unsafe_: false` drops/escapes raw HTML entirely, so
         // any leftover text is inert paragraph content, not an
         // executable element) — that's the actual security property.
-        assert!(!html.contains("<script"), "script tag must never survive as a real element: {html}");
-        assert!(!html.contains("</script>"), "script tag must never survive as a real element: {html}");
+        assert!(
+            !html.contains("<script"),
+            "script tag must never survive as a real element: {html}"
+        );
+        assert!(
+            !html.contains("</script>"),
+            "script tag must never survive as a real element: {html}"
+        );
     }
 
     /// A raw autolinked URL renders as a clickable link (FR-004
@@ -96,6 +114,9 @@ fn main() {}\n\
     #[test]
     fn autolinks_raw_urls() {
         let html = render_to_safe_html("See https://example.com for details.");
-        assert!(html.contains("<a href=\"https://example.com\""), "raw URL should autolink: {html}");
+        assert!(
+            html.contains("<a href=\"https://example.com\""),
+            "raw URL should autolink: {html}"
+        );
     }
 }

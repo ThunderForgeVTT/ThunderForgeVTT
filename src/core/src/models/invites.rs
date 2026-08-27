@@ -122,7 +122,8 @@ impl WorldInvite {
 
         // Check expiry
         if let Some(expires) = self.expires_at
-            && now > expires {
+            && now > expires
+        {
             return false;
         }
 

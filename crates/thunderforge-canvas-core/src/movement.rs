@@ -235,10 +235,7 @@ mod tests {
     #[test]
     fn opposite_steps_cancel_on_hex_too() {
         for kind in [GridKind::HexPointyTop, GridKind::HexFlatTop] {
-            for (there, back) in [
-                (Step::East, Step::West),
-                (Step::North, Step::South),
-            ] {
+            for (there, back) in [(Step::East, Step::West), (Step::North, Step::South)] {
                 let mut path = PlannedPath::new(Cell::new(0, 0));
                 path.push(there, kind);
                 path.push(back, kind);

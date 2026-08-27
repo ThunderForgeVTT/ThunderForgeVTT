@@ -266,14 +266,9 @@ impl AbilityQuery {
     ) -> GraphQLResult<Vec<GraphQLAbility>> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        let rows = suggest_ability_name_impl(
-            state,
-            auth_user.user_id,
-            auth_user.is_admin,
-            world_id,
-            name,
-        )
-        .await?;
+        let rows =
+            suggest_ability_name_impl(state, auth_user.user_id, auth_user.is_admin, world_id, name)
+                .await?;
         let mut result = Vec::with_capacity(rows.len());
         for row in rows {
             result
@@ -344,15 +339,10 @@ mod tests {
         make_ability(&mut conn, world_id, owner_id, "Fireball", false);
         drop(conn);
 
-        let hits = suggest_ability_name_impl(
-            &state,
-            owner_id,
-            false,
-            world_id,
-            "Firebal".to_string(),
-        )
-        .await
-        .expect("suggest should run");
+        let hits =
+            suggest_ability_name_impl(&state, owner_id, false, world_id, "Firebal".to_string())
+                .await
+                .expect("suggest should run");
         assert_eq!(hits.len(), 1, "a near-miss name should be suggested");
         assert_eq!(hits[0].name, "Fireball");
 
@@ -401,7 +391,10 @@ mod tests {
         )
         .await
         .unwrap();
-        assert!(searched.is_empty(), "search must not surface a hidden ability");
+        assert!(
+            searched.is_empty(),
+            "search must not surface a hidden ability"
+        );
 
         // 3. Name suggestions exclude it.
         let suggested = suggest_ability_name_impl(
@@ -479,7 +472,11 @@ mod tests {
             .expect_err("a non-member must be denied entirely");
 
         // The DM reaches both.
-        ability_impl(&state, owner_id, false, open_id).await.unwrap();
-        ability_impl(&state, owner_id, false, secret_id).await.unwrap();
+        ability_impl(&state, owner_id, false, open_id)
+            .await
+            .unwrap();
+        ability_impl(&state, owner_id, false, secret_id)
+            .await
+            .unwrap();
     }
 }

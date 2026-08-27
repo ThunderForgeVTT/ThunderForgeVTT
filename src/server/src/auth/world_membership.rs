@@ -139,12 +139,12 @@ pub async fn is_dm_of_world(
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
-    tokio::task::spawn_blocking(move || {
-        match require_world_member(&mut conn, user_id, world_id) {
+    tokio::task::spawn_blocking(
+        move || match require_world_member(&mut conn, user_id, world_id) {
             Ok(role) => Ok(role == "Owner" || role == "GM"),
             Err(_) => Ok(false),
-        }
-    })
+        },
+    )
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
 }

@@ -21,11 +21,11 @@
 //!   - Spell slot management and recovery
 //!   - Spellcasting ability and saving throw calculations
 
-pub mod plugin;
 pub mod dice;
+pub mod plugin;
 
-pub use plugin::{DnD5eSystem, DnD5ePlugin, GameSystemTrait};
-pub use dice::{D20Roll, RollAdvantage, roll_d20, roll_d20_seeded};
+pub use dice::{roll_d20, roll_d20_seeded, D20Roll, RollAdvantage};
+pub use plugin::{DnD5ePlugin, DnD5eSystem, GameSystemTrait};
 
 /// D&D 5e Engine Version
 pub const VERSION: &str = "0.1.0";

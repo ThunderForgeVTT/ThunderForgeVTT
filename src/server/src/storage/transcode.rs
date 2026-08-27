@@ -48,8 +48,8 @@ pub fn transcode_to_webp(bytes: &[u8]) -> Result<TranscodedImage, TranscodeError
     }
 
     let format = image::guess_format(bytes).map_err(|e| TranscodeError::Decode(e.to_string()))?;
-    let img =
-        image::load_from_memory_with_format(bytes, format).map_err(|e| TranscodeError::Decode(e.to_string()))?;
+    let img = image::load_from_memory_with_format(bytes, format)
+        .map_err(|e| TranscodeError::Decode(e.to_string()))?;
 
     // Capped so the result can actually be uploaded as a GPU texture on the
     // machines players use — see `MAX_CANVAS_TEXTURE_DIMENSION`.
@@ -143,7 +143,9 @@ fn encode_webp_at(img: &DynamicImage, quality: f32) -> Result<Vec<u8>, Transcode
 
     if encoded.is_empty() {
         // libwebp signals failure by producing nothing.
-        return Err(TranscodeError::Encode("webp encoder produced no output".into()));
+        return Err(TranscodeError::Encode(
+            "webp encoder produced no output".into(),
+        ));
     }
     Ok(encoded.to_vec())
 }
@@ -160,7 +162,11 @@ fn resize_to_max_dimension(img: &DynamicImage, max_dimension: u32) -> DynamicIma
     if img.width() <= max_dimension && img.height() <= max_dimension {
         img.clone()
     } else {
-        img.resize(max_dimension, max_dimension, image::imageops::FilterType::Lanczos3)
+        img.resize(
+            max_dimension,
+            max_dimension,
+            image::imageops::FilterType::Lanczos3,
+        )
     }
 }
 
@@ -202,8 +208,8 @@ pub const MAX_CANVAS_TEXTURE_DIMENSION: u32 = 4096;
 /// again.
 pub fn transcode_scene_preview(bytes: &[u8]) -> Result<TranscodedImage, TranscodeError> {
     let format = image::guess_format(bytes).map_err(|e| TranscodeError::Decode(e.to_string()))?;
-    let img =
-        image::load_from_memory_with_format(bytes, format).map_err(|e| TranscodeError::Decode(e.to_string()))?;
+    let img = image::load_from_memory_with_format(bytes, format)
+        .map_err(|e| TranscodeError::Decode(e.to_string()))?;
 
     let preview = resize_to_max_dimension(&img, SCENE_PREVIEW_MAX_DIMENSION);
     let webp_bytes = encode_webp(&preview)?;
@@ -228,8 +234,8 @@ pub fn transcode_to_lore_renditions(bytes: &[u8]) -> Result<LoreImageRenditions,
     }
 
     let format = image::guess_format(bytes).map_err(|e| TranscodeError::Decode(e.to_string()))?;
-    let img =
-        image::load_from_memory_with_format(bytes, format).map_err(|e| TranscodeError::Decode(e.to_string()))?;
+    let img = image::load_from_memory_with_format(bytes, format)
+        .map_err(|e| TranscodeError::Decode(e.to_string()))?;
 
     let full = resize_to_max_dimension(&img, LORE_IMAGE_MAX_DIMENSION);
     let full_webp_bytes = encode_webp_at(&full, LORE_WEBP_QUALITY)?;
@@ -260,12 +266,7 @@ mod texture_cap_tests {
         let img = DynamicImage::new_rgba8(width, height);
         let mut bytes: Vec<u8> = Vec::new();
         image::codecs::png::PngEncoder::new(&mut bytes)
-            .write_image(
-                img.as_bytes(),
-                width,
-                height,
-                ExtendedColorType::Rgba8,
-            )
+            .write_image(img.as_bytes(), width, height, ExtendedColorType::Rgba8)
             .expect("encoding a blank png should succeed");
         bytes
     }
@@ -308,8 +309,7 @@ mod texture_cap_tests {
     fn report_import_rendition_sizes() {
         use base64::Engine as _;
 
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../examples/maps");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/maps");
         let mut entries: Vec<_> = std::fs::read_dir(&dir)
             .expect("examples/maps should exist")
             .filter_map(Result::ok)
@@ -385,7 +385,10 @@ mod tests {
         let img = image::RgbImage::from_pixel(1, 1, image::Rgb([255, 0, 0]));
         let mut bytes = Vec::new();
         image::DynamicImage::ImageRgb8(img)
-            .write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png)
+            .write_to(
+                &mut std::io::Cursor::new(&mut bytes),
+                image::ImageFormat::Png,
+            )
             .unwrap();
         bytes
     }
@@ -411,11 +414,18 @@ mod tests {
 
     fn checkerboard_png(width: u32, height: u32) -> Vec<u8> {
         let img = image::RgbImage::from_fn(width, height, |x, y| {
-            if (x + y) % 2 == 0 { image::Rgb([255, 0, 0]) } else { image::Rgb([0, 0, 255]) }
+            if (x + y) % 2 == 0 {
+                image::Rgb([255, 0, 0])
+            } else {
+                image::Rgb([0, 0, 255])
+            }
         });
         let mut bytes = Vec::new();
         image::DynamicImage::ImageRgb8(img)
-            .write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png)
+            .write_to(
+                &mut std::io::Cursor::new(&mut bytes),
+                image::ImageFormat::Png,
+            )
             .unwrap();
         bytes
     }
@@ -445,7 +455,10 @@ mod tests {
         assert_eq!(renditions.full_width, LORE_IMAGE_MAX_DIMENSION);
         assert_eq!(renditions.full_height, LORE_IMAGE_MAX_DIMENSION / 4);
         assert_eq!(renditions.thumbnail_width, LORE_IMAGE_THUMBNAIL_DIMENSION);
-        assert_eq!(renditions.thumbnail_height, LORE_IMAGE_THUMBNAIL_DIMENSION / 4);
+        assert_eq!(
+            renditions.thumbnail_height,
+            LORE_IMAGE_THUMBNAIL_DIMENSION / 4
+        );
     }
 
     /// FR-010: oversized uploads are rejected before any decode work.

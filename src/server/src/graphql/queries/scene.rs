@@ -18,8 +18,8 @@ pub async fn scenes_impl(
     // Spec 022 (FR-008/FR-009): GM/Owner see every scene, hidden or not;
     // everyone else only sees non-hidden scenes — mirrors the
     // GM-vs-player branching already used for `shapes.visible_to_players`.
-    let is_dm = crate::auth::world_membership::is_dm_of_world(state, user_id, is_admin, world_id)
-        .await?;
+    let is_dm =
+        crate::auth::world_membership::is_dm_of_world(state, user_id, is_admin, world_id).await?;
 
     let mut conn = state
         .db_pool
@@ -62,8 +62,8 @@ pub async fn scene_impl(
     // Spec 022 (FR-008): a non-GM caller must not be able to fetch a
     // hidden scene's detail even by guessing/bookmarking its URL — mirrors
     // `scenes_impl`'s list-level filtering.
-    let is_dm = crate::auth::world_membership::is_dm_of_world(state, user_id, is_admin, world_id)
-        .await?;
+    let is_dm =
+        crate::auth::world_membership::is_dm_of_world(state, user_id, is_admin, world_id).await?;
 
     let mut conn = state
         .db_pool
@@ -72,7 +72,9 @@ pub async fn scene_impl(
 
     tokio::task::spawn_blocking(move || {
         use crate::schema::scenes;
-        let mut query = scenes::table.filter(scenes::scene_id.eq(scene_id)).into_boxed();
+        let mut query = scenes::table
+            .filter(scenes::scene_id.eq(scene_id))
+            .into_boxed();
         if !is_dm {
             query = query.filter(scenes::hidden.eq(false));
         }
@@ -147,8 +149,7 @@ impl SceneQuery {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
 
-        let scenes =
-            scenes_impl(state, auth_user.user_id, auth_user.is_admin, world_id).await?;
+        let scenes = scenes_impl(state, auth_user.user_id, auth_user.is_admin, world_id).await?;
 
         Ok(scenes.into_iter().map(GraphQLScene::from).collect())
     }
@@ -161,8 +162,7 @@ impl SceneQuery {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
 
-        let scene =
-            scene_impl(state, auth_user.user_id, auth_user.is_admin, scene_id).await?;
+        let scene = scene_impl(state, auth_user.user_id, auth_user.is_admin, scene_id).await?;
 
         Ok(scene.map(GraphQLScene::from))
     }
@@ -174,7 +174,7 @@ impl SceneQuery {
     ) -> GraphQLResult<Vec<GraphQLToken>> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        
+
         // 🔐 SECURITY: Get the world_id from the scene, then verify access
         let world_id = get_world_id_from_scene(state, scene_id).await?;
         require_visible_world(state, auth_user.user_id, auth_user.is_admin, world_id).await?;
@@ -205,7 +205,7 @@ impl SceneQuery {
     ) -> GraphQLResult<Option<GraphQLFogMask>> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        
+
         // 🔐 SECURITY: Get the world_id from the scene, then verify access
         let world_id = get_world_id_from_scene(state, scene_id).await?;
         if load_visible_world_by_id(state, auth_user.user_id, auth_user.is_admin, world_id)
@@ -312,8 +312,7 @@ impl SceneQuery {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
 
-        let shapes =
-            shapes_impl(state, auth_user.user_id, auth_user.is_admin, scene_id).await?;
+        let shapes = shapes_impl(state, auth_user.user_id, auth_user.is_admin, scene_id).await?;
 
         Ok(shapes.into_iter().map(GraphQLShape::from).collect())
     }
@@ -323,7 +322,9 @@ impl SceneQuery {
 mod tests {
     use super::{scene_impl, scenes_impl, shapes_impl};
     use crate::schema::shapes;
-    use crate::test_support::{insert_test_scene, insert_test_user, insert_test_world, test_app_state};
+    use crate::test_support::{
+        insert_test_scene, insert_test_user, insert_test_world, test_app_state,
+    };
     use diesel::prelude::*;
 
     fn insert_test_shape(
@@ -447,12 +448,20 @@ mod tests {
         let owner_scenes = scenes_impl(&state, owner_id, false, world_id)
             .await
             .expect("owner should be able to list scenes");
-        assert_eq!(owner_scenes.len(), 2, "GM/Owner must see hidden and visible scenes (FR-009)");
+        assert_eq!(
+            owner_scenes.len(),
+            2,
+            "GM/Owner must see hidden and visible scenes (FR-009)"
+        );
 
         let player_scenes = scenes_impl(&state, player_id, false, world_id)
             .await
             .expect("player should be able to list scenes");
-        assert_eq!(player_scenes.len(), 1, "a non-DM must only see non-hidden scenes (FR-008)");
+        assert_eq!(
+            player_scenes.len(),
+            1,
+            "a non-DM must only see non-hidden scenes (FR-008)"
+        );
         assert_eq!(player_scenes[0].scene_id, visible_scene_id);
     }
 
@@ -476,7 +485,10 @@ mod tests {
         let owner_result = scene_impl(&state, owner_id, false, hidden_scene_id)
             .await
             .expect("query should not error");
-        assert!(owner_result.is_some(), "GM/Owner must be able to fetch a hidden scene's detail");
+        assert!(
+            owner_result.is_some(),
+            "GM/Owner must be able to fetch a hidden scene's detail"
+        );
 
         let player_result = scene_impl(&state, player_id, false, hidden_scene_id)
             .await

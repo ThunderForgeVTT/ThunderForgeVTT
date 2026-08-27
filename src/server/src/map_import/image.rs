@@ -79,7 +79,10 @@ pub async fn save_scene_preview_image(
         .await
         .map_err(|e| MapImportError::Storage(e.to_string()))?;
 
-    Ok(SavedScenePreview { asset_id, byte_size })
+    Ok(SavedScenePreview {
+        asset_id,
+        byte_size,
+    })
 }
 
 /// Decode the UVTT file's base64 `image` field, sanity-check it looks

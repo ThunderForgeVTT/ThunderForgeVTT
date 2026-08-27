@@ -30,14 +30,18 @@ pub fn validate_ability_data(data: &serde_json::Value) -> Result<(), ValidationE
     })?;
 
     for stat in ["might", "speed", "intellect"] {
-        let value = obj.get(stat).and_then(|v| v.as_i64()).ok_or(ValidationError {
-            field: format!("ability_data.{stat}"),
-            message: "must be an integer".to_string(),
-        })?;
+        let value = obj
+            .get(stat)
+            .and_then(|v| v.as_i64())
+            .ok_or(ValidationError {
+                field: format!("ability_data.{stat}"),
+                message: "must be an integer".to_string(),
+            })?;
         if value < 0 {
             return Err(ValidationError {
                 field: format!("ability_data.{stat}"),
-                message: "must be a non-negative integer (stat Pools cannot go negative)".to_string(),
+                message: "must be a non-negative integer (stat Pools cannot go negative)"
+                    .to_string(),
             });
         }
     }

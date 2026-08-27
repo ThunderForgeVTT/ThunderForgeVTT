@@ -26,12 +26,20 @@ pub async fn world_roll_records_impl(
     limit: Option<i32>,
 ) -> GraphQLResult<Vec<GraphQLRollRecord>> {
     if !is_dm_of_world(state, user_id, is_admin, world_id).await? {
-        return Err(Error::new("Only the DM (Owner or GM) may view roll history"));
+        return Err(Error::new(
+            "Only the DM (Owner or GM) may view roll history",
+        ));
     }
 
-    let take = limit.map(|n| n as i64).unwrap_or(DEFAULT_ROLL_RECORD_LIMIT).clamp(1, 500);
+    let take = limit
+        .map(|n| n as i64)
+        .unwrap_or(DEFAULT_ROLL_RECORD_LIMIT)
+        .clamp(1, 500);
 
-    let mut conn = state.db_pool.get().map_err(|_| Error::new("Failed to get DB connection"))?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
     let records: Vec<RollRecord> = tokio::task::spawn_blocking(move || {
         world_roll_records::table
             .filter(world_roll_records::world_id.eq(world_id))
@@ -65,10 +73,21 @@ impl RollQuery {
     ) -> GraphQLResult<Vec<GraphQLRollRecord>> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        world_roll_records_impl(state, auth_user.user_id, auth_user.is_admin, world_id, limit).await
+        world_roll_records_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            world_id,
+            limit,
+        )
+        .await
     }
 
-    async fn validate_dice_formula(&self, _ctx: &Context<'_>, formula: String) -> GraphQLResult<bool> {
+    async fn validate_dice_formula(
+        &self,
+        _ctx: &Context<'_>,
+        formula: String,
+    ) -> GraphQLResult<bool> {
         Ok(validate_dice_formula_impl(&formula))
     }
 }
@@ -77,7 +96,9 @@ impl RollQuery {
 mod tests {
     use super::*;
     use crate::graphql::mutations_roll::{RollDiceInput, roll_dice_impl};
-    use crate::test_support::{insert_test_user, insert_test_world, insert_test_world_member, test_app_state};
+    use crate::test_support::{
+        insert_test_user, insert_test_world, insert_test_world_member, test_app_state,
+    };
 
     struct StepRng(u64);
     impl rand::TryRng for StepRng {
@@ -129,13 +150,19 @@ mod tests {
         roll_dice_impl(
             &state,
             owner_id,
-            RollDiceInput { world_id, formula: "1d20".to_string(), bindings: None },
+            RollDiceInput {
+                world_id,
+                formula: "1d20".to_string(),
+                bindings: None,
+            },
             &mut rng,
         )
         .await
         .unwrap();
 
-        let history = world_roll_records_impl(&state, owner_id, false, world_id, None).await.unwrap();
+        let history = world_roll_records_impl(&state, owner_id, false, world_id, None)
+            .await
+            .unwrap();
         assert_eq!(history.len(), 1);
         assert_eq!(history[0].resolution.dice.len(), 1);
     }

@@ -6,10 +6,12 @@ use diesel::prelude::*;
 use diesel::result::Error as DieselError;
 
 use crate::graphql::{
-    app_state, authenticated_user, GraphQLCreateLightSourceInput, GraphQLLightSource,
-    GraphQLUpdateLightSourceInput,
+    GraphQLCreateLightSourceInput, GraphQLLightSource, GraphQLUpdateLightSourceInput, app_state,
+    authenticated_user,
 };
-use crate::world_events::{record_world_event, world_id_for_scene, EVENT_CODE_LIGHT_SOURCE_CHANGED};
+use crate::world_events::{
+    EVENT_CODE_LIGHT_SOURCE_CHANGED, record_world_event, world_id_for_scene,
+};
 
 #[derive(Default)]
 pub struct LightSourceMutation;

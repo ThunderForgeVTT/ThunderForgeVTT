@@ -24,10 +24,13 @@ pub fn validate_ability_data(data: &serde_json::Value) -> Result<(), ValidationE
     })?;
 
     for attribute in ["insight", "prowess", "resolve"] {
-        let value = obj.get(attribute).and_then(|v| v.as_i64()).ok_or(ValidationError {
-            field: format!("ability_data.{}", attribute),
-            message: "must be an integer".to_string(),
-        })?;
+        let value = obj
+            .get(attribute)
+            .and_then(|v| v.as_i64())
+            .ok_or(ValidationError {
+                field: format!("ability_data.{}", attribute),
+                message: "must be an integer".to_string(),
+            })?;
 
         if !(0..=4).contains(&value) {
             return Err(ValidationError {

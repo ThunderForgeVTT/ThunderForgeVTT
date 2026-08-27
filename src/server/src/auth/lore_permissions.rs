@@ -6,8 +6,6 @@
 //! `world_lore_permissions` row says otherwise. See
 //! `specs/012-lore-wiki/data-model.md` and `contracts/lore-crud.md`.
 
-
-
 // Spec 027 (US5): the `effective_lore_permission` / `require_lore_permission` pair that
 // lived here is now generated from the single declaration in
 // `auth::permissioned_entities`, under the same names and signatures — so no
@@ -104,14 +102,30 @@ mod tests {
         insert_test_world_member(&mut conn, world_id, player_id, "Player");
         drop(conn);
 
-        let denied =
-            require_lore_permission(&state, player_id, false, entry_id, ActorPermissionLevel::Editor)
-                .await;
-        assert!(denied.is_err(), "default-Viewer caller must not meet Editor minimum");
+        let denied = require_lore_permission(
+            &state,
+            player_id,
+            false,
+            entry_id,
+            ActorPermissionLevel::Editor,
+        )
+        .await;
+        assert!(
+            denied.is_err(),
+            "default-Viewer caller must not meet Editor minimum"
+        );
 
-        let allowed =
-            require_lore_permission(&state, owner_id, false, entry_id, ActorPermissionLevel::Owner)
-                .await;
-        assert!(allowed.is_ok(), "the DM (implicit Owner) must meet Owner minimum");
+        let allowed = require_lore_permission(
+            &state,
+            owner_id,
+            false,
+            entry_id,
+            ActorPermissionLevel::Owner,
+        )
+        .await;
+        assert!(
+            allowed.is_ok(),
+            "the DM (implicit Owner) must meet Owner minimum"
+        );
     }
 }

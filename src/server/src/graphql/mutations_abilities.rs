@@ -243,12 +243,10 @@ pub async fn remove_ability_effect_impl(
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
     tokio::task::spawn_blocking(move || {
-        diesel::delete(
-            world_ability_effects::table.filter(world_ability_effects::id.eq(effect_id)),
-        )
-        .execute(&mut conn)
-        .map(|rows| rows > 0)
-        .map_err(|e| format!("Failed to remove ability effect: {e}"))
+        diesel::delete(world_ability_effects::table.filter(world_ability_effects::id.eq(effect_id)))
+            .execute(&mut conn)
+            .map(|rows| rows > 0)
+            .map_err(|e| format!("Failed to remove ability effect: {e}"))
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -474,8 +472,7 @@ impl AbilityMutation {
     ) -> GraphQLResult<GraphQLAbility> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        let row =
-            create_ability_impl(state, auth_user.user_id, auth_user.is_admin, input).await?;
+        let row = create_ability_impl(state, auth_user.user_id, auth_user.is_admin, input).await?;
         to_graphql_ability(state, auth_user.user_id, auth_user.is_admin, row).await
     }
 
@@ -486,16 +483,11 @@ impl AbilityMutation {
     ) -> GraphQLResult<GraphQLAbility> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        let row =
-            update_ability_impl(state, auth_user.user_id, auth_user.is_admin, input).await?;
+        let row = update_ability_impl(state, auth_user.user_id, auth_user.is_admin, input).await?;
         to_graphql_ability(state, auth_user.user_id, auth_user.is_admin, row).await
     }
 
-    async fn delete_ability(
-        &self,
-        ctx: &Context<'_>,
-        ability_id: Uuid,
-    ) -> GraphQLResult<bool> {
+    async fn delete_ability(&self, ctx: &Context<'_>, ability_id: Uuid) -> GraphQLResult<bool> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         delete_ability_impl(state, auth_user.user_id, auth_user.is_admin, ability_id).await
@@ -703,9 +695,10 @@ mod tests {
         insert_test_world_member(&mut conn, world_id, member_id, "Player");
         drop(conn);
 
-        let ability = create_ability_impl(&state, owner_id, false, create_input(world_id, "Secret"))
-            .await
-            .unwrap();
+        let ability =
+            create_ability_impl(&state, owner_id, false, create_input(world_id, "Secret"))
+                .await
+                .unwrap();
 
         // Grant the member Owner-level permission on the ability itself.
         let mut conn = state.db_pool.get().unwrap();
@@ -801,14 +794,23 @@ mod effect_tests {
 
         // Nothing was persisted by either rejection.
         assert!(
-            load_ability_effects(&state, ability.id).await.unwrap().is_empty(),
+            load_ability_effects(&state, ability.id)
+                .await
+                .unwrap()
+                .is_empty(),
             "a rejected effect must not be written"
         );
 
         // An empty target is rejected too.
-        add_ability_effect_impl(&state, owner_id, false, ability.id, effect_input("3d6", "  "))
-            .await
-            .expect_err("an empty target must be rejected");
+        add_ability_effect_impl(
+            &state,
+            owner_id,
+            false,
+            ability.id,
+            effect_input("3d6", "  "),
+        )
+        .await
+        .expect_err("an empty target must be rejected");
     }
 
     /// FR-017: effects are independent — editing or removing one leaves the
@@ -840,7 +842,13 @@ mod effect_tests {
             .await
             .unwrap();
 
-        assert_eq!(load_ability_effects(&state, ability.id).await.unwrap().len(), 2);
+        assert_eq!(
+            load_ability_effects(&state, ability.id)
+                .await
+                .unwrap()
+                .len(),
+            2
+        );
 
         // Editing the first must not disturb the second.
         let mut edited = effect_input("4d6", "Hit Points");
@@ -856,9 +864,11 @@ mod effect_tests {
         assert_eq!(untouched.target, "Attack Roll");
 
         // Removing one leaves the other.
-        assert!(remove_ability_effect_impl(&state, owner_id, false, first.id)
-            .await
-            .unwrap());
+        assert!(
+            remove_ability_effect_impl(&state, owner_id, false, first.id)
+                .await
+                .unwrap()
+        );
         let remaining = load_ability_effects(&state, ability.id).await.unwrap();
         assert_eq!(remaining.len(), 1);
         assert_eq!(remaining[0].id, second.id);
@@ -892,14 +902,20 @@ mod effect_tests {
         .await
         .expect("structurally valid notation must be accepted as-authored");
 
-        assert_eq!(created.formula, exotic, "the formula must be stored verbatim");
+        assert_eq!(
+            created.formula, exotic,
+            "the formula must be stored verbatim"
+        );
         assert_eq!(
             created.target, "Mana",
             "a target naming a resource this system lacks is still accepted"
         );
 
         let reloaded = load_ability_effects(&state, ability.id).await.unwrap();
-        assert_eq!(reloaded[0].formula, exotic, "and it must round-trip unchanged");
+        assert_eq!(
+            reloaded[0].formula, exotic,
+            "and it must round-trip unchanged"
+        );
         // FR-020: trigger_kind is scaffolded but nothing sets or evaluates it.
         assert_eq!(reloaded[0].trigger_kind, None);
     }
@@ -944,9 +960,10 @@ mod effect_tests {
         let world_id = insert_test_world(&mut conn, owner_id);
         drop(conn);
 
-        let ability = create_ability_impl(&state, owner_id, false, ability_input(world_id, "Linked"))
-            .await
-            .unwrap();
+        let ability =
+            create_ability_impl(&state, owner_id, false, ability_input(world_id, "Linked"))
+                .await
+                .unwrap();
 
         let mut conn = state.db_pool.get().unwrap();
         let entry_id = Uuid::now_v7();
@@ -975,7 +992,9 @@ mod effect_tests {
         drop(conn);
 
         assert!(
-            delete_ability_impl(&state, owner_id, false, ability.id).await.unwrap(),
+            delete_ability_impl(&state, owner_id, false, ability.id)
+                .await
+                .unwrap(),
             "deletion must not be blocked by an inbound lore link"
         );
 

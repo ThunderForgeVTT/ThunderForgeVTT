@@ -9,8 +9,8 @@
 
 use async_graphql::{Error, Result as GraphQLResult};
 use chrono::Utc;
-use diesel::prelude::*;
 use diesel::PgConnection;
+use diesel::prelude::*;
 use uuid::Uuid;
 
 use crate::schema::world_events;

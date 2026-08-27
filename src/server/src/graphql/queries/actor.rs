@@ -169,8 +169,7 @@ impl ActorQuery {
         let auth_user = authenticated_user(ctx)?;
 
         let row =
-            actor_system_data_impl(state, auth_user.user_id, auth_user.is_admin, actor_id)
-                .await?;
+            actor_system_data_impl(state, auth_user.user_id, auth_user.is_admin, actor_id).await?;
 
         Ok(row.map(GraphQLActorSystemData::from))
     }

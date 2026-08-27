@@ -230,17 +230,11 @@ impl GridSpec {
             }
             GridKind::HexPointyTop => {
                 let radius = self.hex_radius();
-                Vec2::new(
-                    radius * 3.0_f32.sqrt() * (q + r / 2.0),
-                    radius * 1.5 * r,
-                )
+                Vec2::new(radius * 3.0_f32.sqrt() * (q + r / 2.0), radius * 1.5 * r)
             }
             GridKind::HexFlatTop => {
                 let radius = self.hex_radius();
-                Vec2::new(
-                    radius * 1.5 * q,
-                    radius * 3.0_f32.sqrt() * (r + q / 2.0),
-                )
+                Vec2::new(radius * 1.5 * q, radius * 3.0_f32.sqrt() * (r + q / 2.0))
             }
         };
         local + self.origin
@@ -473,7 +467,9 @@ mod tests {
             assert_eq!(grid.cell_distance(center, neighbour), 1);
             // `size` is across-flats, so adjacent centres sit exactly that far
             // apart. This is what lets a UVTT `pixels_per_grid` be used as-is.
-            let spacing = grid.cell_center(center).distance(grid.cell_center(neighbour));
+            let spacing = grid
+                .cell_center(center)
+                .distance(grid.cell_center(neighbour));
             assert!(
                 (spacing - 128.0).abs() < 0.01,
                 "neighbour spacing was {spacing}, expected the grid size",
@@ -680,7 +676,11 @@ mod tests {
             let half = footprint.world_size(grid.size) / 2.0;
 
             let lower_left = centre - Vec2::splat(half) - grid.origin;
-            let step = if cells < 1.0 { grid.size / 2.0 } else { grid.size };
+            let step = if cells < 1.0 {
+                grid.size / 2.0
+            } else {
+                grid.size
+            };
             for axis in [lower_left.x, lower_left.y] {
                 let steps = axis / step;
                 assert!(
@@ -739,7 +739,11 @@ mod tests {
 
     #[test]
     fn cell_outlines_are_closed_rings() {
-        for kind in [GridKind::Square, GridKind::HexPointyTop, GridKind::HexFlatTop] {
+        for kind in [
+            GridKind::Square,
+            GridKind::HexPointyTop,
+            GridKind::HexFlatTop,
+        ] {
             let grid = GridSpec {
                 kind,
                 size: 90.0,
@@ -748,7 +752,11 @@ mod tests {
             let outline = grid.cell_outline(Cell::new(2, -1));
             let expected = if kind == GridKind::Square { 5 } else { 7 };
             assert_eq!(outline.len(), expected, "{kind:?}");
-            assert_eq!(outline.first(), outline.last(), "{kind:?} ring is not closed");
+            assert_eq!(
+                outline.first(),
+                outline.last(),
+                "{kind:?} ring is not closed"
+            );
         }
     }
 }

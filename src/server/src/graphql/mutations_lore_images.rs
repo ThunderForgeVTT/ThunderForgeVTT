@@ -18,8 +18,8 @@ use crate::lore_assets_serve::{full_key, thumb_key};
 use crate::models::{LoreImageAsset, NewLoreImageAsset};
 use crate::schema::world_lore_image_assets;
 use crate::state::AppState;
-use crate::storage::rustfs::{write_object, RustFsConfig};
-use crate::storage::transcode::{transcode_to_lore_renditions, TranscodeError};
+use crate::storage::rustfs::{RustFsConfig, write_object};
+use crate::storage::transcode::{TranscodeError, transcode_to_lore_renditions};
 
 #[derive(Debug, thiserror::Error)]
 pub enum UploadLoreImageError {
@@ -61,9 +61,15 @@ pub async fn upload_lore_image_impl(
     file_bytes: Vec<u8>,
 ) -> Result<LoreImageAsset, UploadLoreImageError> {
     // 1. Authorize BEFORE any transcode/storage/DB work.
-    require_lore_permission(state, user_id, is_admin, lore_entry_id, ActorPermissionLevel::Editor)
-        .await
-        .map_err(|_| UploadLoreImageError::Forbidden)?;
+    require_lore_permission(
+        state,
+        user_id,
+        is_admin,
+        lore_entry_id,
+        ActorPermissionLevel::Editor,
+    )
+    .await
+    .map_err(|_| UploadLoreImageError::Forbidden)?;
 
     // 2. Decode + produce both WebP renditions, enforcing
     //    MAX_LORE_IMAGE_UPLOAD_BYTES (FR-010).
@@ -75,12 +81,22 @@ pub async fn upload_lore_image_impl(
     // 3. Write both objects via the existing per-object-scoped credential path.
     let asset_id = Uuid::now_v7();
     let cfg = RustFsConfig::from_env();
-    write_object(&cfg, &full_key(asset_id), renditions.full_webp_bytes, "image/webp")
-        .await
-        .map_err(|e| UploadLoreImageError::Storage(e.to_string()))?;
-    write_object(&cfg, &thumb_key(asset_id), renditions.thumbnail_webp_bytes, "image/webp")
-        .await
-        .map_err(|e| UploadLoreImageError::Storage(e.to_string()))?;
+    write_object(
+        &cfg,
+        &full_key(asset_id),
+        renditions.full_webp_bytes,
+        "image/webp",
+    )
+    .await
+    .map_err(|e| UploadLoreImageError::Storage(e.to_string()))?;
+    write_object(
+        &cfg,
+        &thumb_key(asset_id),
+        renditions.thumbnail_webp_bytes,
+        "image/webp",
+    )
+    .await
+    .map_err(|e| UploadLoreImageError::Storage(e.to_string()))?;
 
     // 4. Persist the row — only reached after both writes succeed, so no
     //    partial asset is ever recorded.
@@ -124,7 +140,10 @@ impl LoreImageMutation {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         let upload_value = file.value(ctx).map_err(|e| Error::new(e.to_string()))?;
-        let content_type = upload_value.content_type.clone().unwrap_or_else(|| "application/octet-stream".to_string());
+        let content_type = upload_value
+            .content_type
+            .clone()
+            .unwrap_or_else(|| "application/octet-stream".to_string());
         let original_filename = Some(upload_value.filename.clone());
         let mut content = upload_value.into_read();
         let mut bytes = Vec::new();
@@ -149,8 +168,11 @@ impl LoreImageMutation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graphql::mutations_lore::{create_lore_entry_impl, CreateLoreEntryInput};
-    use crate::test_support::{insert_test_user, insert_test_world, insert_test_world_member, test_app_state, tiny_png_bytes};
+    use crate::graphql::mutations_lore::{CreateLoreEntryInput, create_lore_entry_impl};
+    use crate::test_support::{
+        insert_test_user, insert_test_world, insert_test_world_member, test_app_state,
+        tiny_png_bytes,
+    };
 
     /// FR-008/009: a happy-path upload produces a `LoreImageAsset` row.
     #[tokio::test]
@@ -165,7 +187,11 @@ mod tests {
             &state,
             owner_id,
             false,
-            CreateLoreEntryInput { world_id, title: "Entry".to_string(), content: None },
+            CreateLoreEntryInput {
+                world_id,
+                title: "Entry".to_string(),
+                content: None,
+            },
         )
         .await
         .unwrap();
@@ -210,7 +236,11 @@ mod tests {
             &state,
             owner_id,
             false,
-            CreateLoreEntryInput { world_id, title: "Entry".to_string(), content: None },
+            CreateLoreEntryInput {
+                world_id,
+                title: "Entry".to_string(),
+                content: None,
+            },
         )
         .await
         .unwrap();
@@ -233,7 +263,10 @@ mod tests {
             .count()
             .get_result(&mut conn)
             .unwrap();
-        assert_eq!(count, 0, "no partial asset row should be persisted for a rejected upload");
+        assert_eq!(
+            count, 0,
+            "no partial asset row should be persisted for a rejected upload"
+        );
     }
 
     /// FR-010: an oversized upload is rejected before any row is
@@ -250,13 +283,26 @@ mod tests {
             &state,
             owner_id,
             false,
-            CreateLoreEntryInput { world_id, title: "Entry".to_string(), content: None },
+            CreateLoreEntryInput {
+                world_id,
+                title: "Entry".to_string(),
+                content: None,
+            },
         )
         .await
         .unwrap();
 
         let oversized = vec![0u8; crate::storage::transcode::MAX_LORE_IMAGE_UPLOAD_BYTES + 1];
-        let result = upload_lore_image_impl(&state, owner_id, false, entry.id, None, "image/png".to_string(), oversized).await;
+        let result = upload_lore_image_impl(
+            &state,
+            owner_id,
+            false,
+            entry.id,
+            None,
+            "image/png".to_string(),
+            oversized,
+        )
+        .await;
         assert!(matches!(result, Err(UploadLoreImageError::TooLarge { .. })));
     }
 }

@@ -197,7 +197,11 @@ mod tests {
         // 3456 is not a multiple of 512 — the bottom row is 384px tall. A
         // viewer given a full 512 rect here would sample past the image.
         let pyramid = Pyramid::describe(6144, 3456, 512);
-        let bottom_left = TileId { level: 0, col: 0, row: 6 };
+        let bottom_left = TileId {
+            level: 0,
+            col: 0,
+            row: 6,
+        };
         let (x, y, width, height) = pyramid.tile_rect(bottom_left).unwrap();
 
         assert_eq!((x, y), (0, 3072));
@@ -208,8 +212,24 @@ mod tests {
     #[test]
     fn an_out_of_range_tile_has_no_rect() {
         let pyramid = Pyramid::describe(1024, 1024, 512);
-        assert!(pyramid.tile_rect(TileId { level: 0, col: 2, row: 0 }).is_none());
-        assert!(pyramid.tile_rect(TileId { level: 99, col: 0, row: 0 }).is_none());
+        assert!(
+            pyramid
+                .tile_rect(TileId {
+                    level: 0,
+                    col: 2,
+                    row: 0
+                })
+                .is_none()
+        );
+        assert!(
+            pyramid
+                .tile_rect(TileId {
+                    level: 99,
+                    col: 0,
+                    row: 0
+                })
+                .is_none()
+        );
     }
 
     #[test]

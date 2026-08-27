@@ -24,10 +24,13 @@ fn validate_ability_score(
     obj: &serde_json::Map<String, serde_json::Value>,
     field: &str,
 ) -> Result<(), ValidationError> {
-    let value = obj.get(field).and_then(|v| v.as_i64()).ok_or(ValidationError {
-        field: format!("ability_data.{field}"),
-        message: "must be an integer".to_string(),
-    })?;
+    let value = obj
+        .get(field)
+        .and_then(|v| v.as_i64())
+        .ok_or(ValidationError {
+            field: format!("ability_data.{field}"),
+            message: "must be an integer".to_string(),
+        })?;
     if !(ABILITY_MIN..=ABILITY_MAX).contains(&value) {
         return Err(ValidationError {
             field: format!("ability_data.{field}"),

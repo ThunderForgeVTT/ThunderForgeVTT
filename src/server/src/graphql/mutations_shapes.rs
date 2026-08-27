@@ -8,12 +8,12 @@ use chrono::Utc;
 use diesel::prelude::*;
 use diesel::result::Error as DieselError;
 
-use crate::graphql::{
-    app_state, authenticated_user, GraphQLCreateShapeInput, GraphQLShape, GraphQLUpdateShapeInput,
-};
 #[cfg(test)]
 use crate::graphql::GraphQLShapeKind;
-use crate::world_events::{record_world_event, world_id_for_scene, EVENT_CODE_SHAPE_CHANGED};
+use crate::graphql::{
+    GraphQLCreateShapeInput, GraphQLShape, GraphQLUpdateShapeInput, app_state, authenticated_user,
+};
+use crate::world_events::{EVENT_CODE_SHAPE_CHANGED, record_world_event, world_id_for_scene};
 
 #[derive(Default)]
 pub struct ShapeMutation;
@@ -128,15 +128,13 @@ impl ShapeMutation {
             use crate::schema::{scenes, shapes};
 
             let shape = diesel::update(
-                shapes::table
-                    .filter(shapes::shape_id.eq(shape_id))
-                    .filter(
-                        shapes::scene_id.eq_any(
-                            scenes::table
-                                .filter(scenes::owner_id.eq(user_id))
-                                .select(scenes::scene_id),
-                        ),
+                shapes::table.filter(shapes::shape_id.eq(shape_id)).filter(
+                    shapes::scene_id.eq_any(
+                        scenes::table
+                            .filter(scenes::owner_id.eq(user_id))
+                            .select(scenes::scene_id),
                     ),
+                ),
             )
             .set(update_data)
             .returning(crate::models::Shape::as_returning())
@@ -193,15 +191,13 @@ impl ShapeMutation {
                 .optional()?;
 
             let deleted_count = diesel::delete(
-                shapes::table
-                    .filter(shapes::shape_id.eq(shape_id))
-                    .filter(
-                        shapes::scene_id.eq_any(
-                            scenes::table
-                                .filter(scenes::owner_id.eq(user_id))
-                                .select(scenes::scene_id),
-                        ),
+                shapes::table.filter(shapes::shape_id.eq(shape_id)).filter(
+                    shapes::scene_id.eq_any(
+                        scenes::table
+                            .filter(scenes::owner_id.eq(user_id))
+                            .select(scenes::scene_id),
                     ),
+                ),
             )
             .execute(&mut conn)?;
 
@@ -255,7 +251,9 @@ mod tests {
     #[test]
     fn shape_mutations_are_scoped_to_scene_owner() {
         let Some(mut conn) = try_connect() else {
-            eprintln!("skipping shape_mutations_are_scoped_to_scene_owner: no DATABASE_URL/dev DB reachable");
+            eprintln!(
+                "skipping shape_mutations_are_scoped_to_scene_owner: no DATABASE_URL/dev DB reachable"
+            );
             return;
         };
 
@@ -269,7 +267,10 @@ mod tests {
             let shape_id = uuid::Uuid::now_v7();
             let now = chrono::Utc::now().naive_utc();
 
-            for (id, username) in [(owner_id, "shape-test-owner"), (intruder_id, "shape-test-intruder")] {
+            for (id, username) in [
+                (owner_id, "shape-test-owner"),
+                (intruder_id, "shape-test-intruder"),
+            ] {
                 diesel::insert_into(users::table)
                     .values((
                         users::id.eq(id),
@@ -404,7 +405,9 @@ mod tests {
     #[test]
     fn shapes_query_hides_gm_only_shapes_from_non_owners() {
         let Some(mut conn) = try_connect() else {
-            eprintln!("skipping shapes_query_hides_gm_only_shapes_from_non_owners: no DATABASE_URL/dev DB reachable");
+            eprintln!(
+                "skipping shapes_query_hides_gm_only_shapes_from_non_owners: no DATABASE_URL/dev DB reachable"
+            );
             return;
         };
 

@@ -176,8 +176,13 @@ impl LorePermissionQuery {
     ) -> GraphQLResult<Vec<GraphQLLorePermission>> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        let rows =
-            lore_entry_permissions_impl(state, auth_user.user_id, auth_user.is_admin, lore_entry_id).await?;
+        let rows = lore_entry_permissions_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            lore_entry_id,
+        )
+        .await?;
         Ok(rows.into_iter().map(GraphQLLorePermission::from).collect())
     }
 }
@@ -207,15 +212,24 @@ impl LorePermissionMutation {
     ) -> GraphQLResult<bool> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        remove_lore_permission_impl(state, auth_user.user_id, auth_user.is_admin, lore_entry_id, user_id).await
+        remove_lore_permission_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            lore_entry_id,
+            user_id,
+        )
+        .await
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graphql::mutations_lore::{create_lore_entry_impl, CreateLoreEntryInput};
-    use crate::test_support::{insert_test_user, insert_test_world, insert_test_world_member, test_app_state};
+    use crate::graphql::mutations_lore::{CreateLoreEntryInput, create_lore_entry_impl};
+    use crate::test_support::{
+        insert_test_user, insert_test_world, insert_test_world_member, test_app_state,
+    };
 
     /// FR-003: only the DM may view or change the ownership block; a
     /// non-DM member (even one holding explicit Owner via a prior grant)
@@ -234,7 +248,11 @@ mod tests {
             &state,
             owner_id,
             false,
-            CreateLoreEntryInput { world_id, title: "Test Entry".to_string(), content: None },
+            CreateLoreEntryInput {
+                world_id,
+                title: "Test Entry".to_string(),
+                content: None,
+            },
         )
         .await
         .expect("DM should create entry");
@@ -243,16 +261,27 @@ mod tests {
             &state,
             player_id,
             false,
-            SetLorePermissionInput { lore_entry_id: entry.id, user_id: player_id, level: ActorPermissionLevel::Owner },
+            SetLorePermissionInput {
+                lore_entry_id: entry.id,
+                user_id: player_id,
+                level: ActorPermissionLevel::Owner,
+            },
         )
         .await;
-        assert!(denied.is_err(), "a non-DM caller must not be able to set lore permissions");
+        assert!(
+            denied.is_err(),
+            "a non-DM caller must not be able to set lore permissions"
+        );
 
         let granted = set_lore_permission_impl(
             &state,
             owner_id,
             false,
-            SetLorePermissionInput { lore_entry_id: entry.id, user_id: player_id, level: ActorPermissionLevel::Owner },
+            SetLorePermissionInput {
+                lore_entry_id: entry.id,
+                user_id: player_id,
+                level: ActorPermissionLevel::Owner,
+            },
         )
         .await
         .expect("DM should be able to grant Owner");
@@ -294,7 +323,11 @@ mod tests {
             &state,
             owner_id,
             false,
-            CreateLoreEntryInput { world_id, title: "Test Entry".to_string(), content: None },
+            CreateLoreEntryInput {
+                world_id,
+                title: "Test Entry".to_string(),
+                content: None,
+            },
         )
         .await
         .expect("DM should create entry");
@@ -303,7 +336,11 @@ mod tests {
             &state,
             owner_id,
             false,
-            SetLorePermissionInput { lore_entry_id: entry.id, user_id: player_id, level: ActorPermissionLevel::Editor },
+            SetLorePermissionInput {
+                lore_entry_id: entry.id,
+                user_id: player_id,
+                level: ActorPermissionLevel::Editor,
+            },
         )
         .await
         .expect("DM should grant Editor to the departing player");
@@ -311,7 +348,11 @@ mod tests {
             &state,
             owner_id,
             false,
-            SetLorePermissionInput { lore_entry_id: entry.id, user_id: other_player_id, level: ActorPermissionLevel::Owner },
+            SetLorePermissionInput {
+                lore_entry_id: entry.id,
+                user_id: other_player_id,
+                level: ActorPermissionLevel::Owner,
+            },
         )
         .await
         .expect("DM should grant Owner to the staying player");
@@ -323,7 +364,9 @@ mod tests {
                 .filter(world_lore_permissions::world_member_user_id.eq(player_id))
                 .filter(
                     world_lore_permissions::lore_entry_id.eq_any(
-                        world_lore_entries::table.filter(world_lore_entries::world_id.eq(world_id)).select(world_lore_entries::id),
+                        world_lore_entries::table
+                            .filter(world_lore_entries::world_id.eq(world_id))
+                            .select(world_lore_entries::id),
                     ),
                 ),
         )
@@ -334,7 +377,14 @@ mod tests {
         let remaining = lore_entry_permissions_impl(&state, owner_id, false, entry.id)
             .await
             .expect("DM should still be able to view the ownership block");
-        assert_eq!(remaining.len(), 1, "only the departed player's entry should be removed");
-        assert_eq!(remaining[0].world_member_user_id, other_player_id, "the staying player's grant must survive");
+        assert_eq!(
+            remaining.len(),
+            1,
+            "only the departed player's entry should be removed"
+        );
+        assert_eq!(
+            remaining[0].world_member_user_id, other_player_id,
+            "the staying player's grant must survive"
+        );
     }
 }

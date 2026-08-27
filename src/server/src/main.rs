@@ -19,23 +19,23 @@ mod db_types;
 mod errors;
 mod graphql;
 mod lore_assets_serve; // Spec 012: authenticated proxy for lore image assets (mirrors canvas_assets_serve)
-mod scene_assets_serve; // Spec 022: authenticated proxy for scene preview images (mirrors lore_assets_serve)
 mod map_import;
 mod markdown; // Spec 012: lore wiki GFM rendering, [[link]] resolution, slug generation
 mod models;
 mod moderation; // Spec 015: DMCA notice-and-takedown content moderation
 mod network;
 mod pubsub;
+mod scene_assets_serve; // Spec 022: authenticated proxy for scene preview images (mirrors lore_assets_serve)
 mod scene_fingerprint; // Spec 028: derived scene content fingerprints
 mod schema; // Add this line
 mod serve;
 mod session; // Phase 4.9.B.2: Session lifecycle management
 mod state;
 mod storage; // Spec 002: RustFS canvas image asset storage
-#[cfg(test)]
-mod test_support; // Spec 002: shared fixtures for tests/tests requiring a live DB + RustFS
 mod system_hooks;
 mod systems;
+#[cfg(test)]
+mod test_support; // Spec 002: shared fixtures for tests/tests requiring a live DB + RustFS
 mod users;
 mod utils;
 mod world;
@@ -264,8 +264,8 @@ fn resolve_crucible_mode(
 /// `SessionAdjudicator` — or exits the process immediately with a clear
 /// error (SC-003), before the server begins accepting connections, per
 /// research.md §4's fail-fast-at-boot convention.
-fn build_adjudicator()
--> std::sync::Arc<dyn thunderforge_crucible::SessionAdjudicator + Send + Sync> {
+fn build_adjudicator() -> std::sync::Arc<dyn thunderforge_crucible::SessionAdjudicator + Send + Sync>
+{
     let mode = std::env::var("CRUCIBLE_MODE").ok();
     let endpoint = std::env::var("CRUCIBLE_ENDPOINT").ok();
 
@@ -371,7 +371,9 @@ async fn main() {
         presence_sender: presence_sender.clone(),
         key,
         db_pool: db_pool.clone(),
-        system_hooks: std::sync::Arc::new(tokio::sync::RwLock::new(system_hooks::SystemHookRegistry::new())),
+        system_hooks: std::sync::Arc::new(tokio::sync::RwLock::new(
+            system_hooks::SystemHookRegistry::new(),
+        )),
         adjudicator,
     };
 
@@ -394,7 +396,6 @@ async fn main() {
     // Spawn the session cleanup task (Phase 4.9.B.2)
     eprintln!("[Server] 🚀 Starting session cleanup task");
     session::spawn_session_cleanup_task(db_pool.clone());
-
 
     let schema = Schema::build(
         QueryRoot::default(),
@@ -420,7 +421,9 @@ async fn main() {
     {
         let rustfs_cfg = storage::rustfs::RustFsConfig::from_env();
         if let Err(e) = storage::rustfs::ensure_bucket(&rustfs_cfg).await {
-            eprintln!("[Server] ⚠️  RustFS bucket bootstrap failed (asset uploads will fail until this is resolved): {e}");
+            eprintln!(
+                "[Server] ⚠️  RustFS bucket bootstrap failed (asset uploads will fail until this is resolved): {e}"
+            );
         }
     }
 
@@ -471,7 +474,8 @@ async fn main() {
 
     // Spec 015 (FR-002): deliberately NOT wrapped in
     // `require_authenticated_user` — see `graphql_public_handler`'s docs.
-    let public_graphql_router = Router::new().route("/graphql/public", post(graphql_public_handler));
+    let public_graphql_router =
+        Router::new().route("/graphql/public", post(graphql_public_handler));
 
     let api_router = Router::new()
         .route("/healthz", get(liveness_handler))

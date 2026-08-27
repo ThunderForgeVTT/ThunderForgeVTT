@@ -238,7 +238,10 @@ pub async fn attach_ability_to_actor_impl(
 
     // A freshly attached entry is never a tombstone, so redaction cannot
     // apply — pass `true` rather than re-deriving DM status.
-    Ok(to_graphql((entry, Some(classification), Some(gm_only)), true))
+    Ok(to_graphql(
+        (entry, Some(classification), Some(gm_only)),
+        true,
+    ))
 }
 
 /// Testable core of `detach_ability_from_actor` (FR-023).
@@ -282,12 +285,10 @@ pub async fn detach_ability_from_actor_impl(
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
     tokio::task::spawn_blocking(move || {
-        diesel::delete(
-            world_actor_abilities::table.filter(world_actor_abilities::id.eq(entry_id)),
-        )
-        .execute(&mut conn)
-        .map(|rows| rows > 0)
-        .map_err(|e| format!("Failed to detach ability: {e}"))
+        diesel::delete(world_actor_abilities::table.filter(world_actor_abilities::id.eq(entry_id)))
+            .execute(&mut conn)
+            .map(|rows| rows > 0)
+            .map_err(|e| format!("Failed to detach ability: {e}"))
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -332,15 +333,16 @@ impl ActorAbilityMutation {
     ) -> GraphQLResult<bool> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        detach_ability_from_actor_impl(state, auth_user.user_id, auth_user.is_admin, entry_id)
-            .await
+        detach_ability_from_actor_impl(state, auth_user.user_id, auth_user.is_admin, entry_id).await
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graphql::mutations_abilities::{create_ability_impl, delete_ability_impl, CreateAbilityInput};
+    use crate::graphql::mutations_abilities::{
+        CreateAbilityInput, create_ability_impl, delete_ability_impl,
+    };
     use crate::graphql::types::AbilityClassification;
     use crate::schema::{world_ability_permissions, world_actor_permissions};
     use crate::test_support::*;
@@ -413,9 +415,10 @@ mod tests {
         let actor_id = make_actor(&mut conn, world_id, scene_id, owner_id);
         drop(conn);
 
-        let ability = create_ability_impl(&state, owner_id, false, ability_input(world_id, "Fireball"))
-            .await
-            .unwrap();
+        let ability =
+            create_ability_impl(&state, owner_id, false, ability_input(world_id, "Fireball"))
+                .await
+                .unwrap();
 
         let mut conn = state.db_pool.get().unwrap();
         // editor: Editor on the ACTOR, nothing on the ability (=> Viewer).
@@ -436,7 +439,10 @@ mod tests {
             &state,
             editor_id,
             false,
-            AttachAbilityToActorInput { actor_id, ability_id: ability.id },
+            AttachAbilityToActorInput {
+                actor_id,
+                ability_id: ability.id,
+            },
         )
         .await
         .expect("Editor on the actor may attach an ability they only view");
@@ -445,7 +451,10 @@ mod tests {
             &state,
             viewer_id,
             false,
-            AttachAbilityToActorInput { actor_id, ability_id: ability.id },
+            AttachAbilityToActorInput {
+                actor_id,
+                ability_id: ability.id,
+            },
         )
         .await
         .expect_err("Owner on the ability must NOT grant attach rights on the actor");
@@ -464,10 +473,14 @@ mod tests {
         let actor_id = make_actor(&mut conn, world_id, scene_id, owner_id);
         drop(conn);
 
-        let ability = create_ability_impl(&state, owner_id, false, ability_input(world_id, "Cleave"))
-            .await
-            .unwrap();
-        let input = AttachAbilityToActorInput { actor_id, ability_id: ability.id };
+        let ability =
+            create_ability_impl(&state, owner_id, false, ability_input(world_id, "Cleave"))
+                .await
+                .unwrap();
+        let input = AttachAbilityToActorInput {
+            actor_id,
+            ability_id: ability.id,
+        };
 
         let first = attach_ability_to_actor_impl(&state, owner_id, false, input.clone())
             .await
@@ -478,7 +491,10 @@ mod tests {
 
         assert_eq!(first.id, second.id, "the same entry must be returned");
         assert_eq!(
-            actor_abilities_impl(&state, owner_id, false, actor_id).await.unwrap().len(),
+            actor_abilities_impl(&state, owner_id, false, actor_id)
+                .await
+                .unwrap()
+                .len(),
             1,
             "no duplicate row"
         );
@@ -506,7 +522,10 @@ mod tests {
             &state,
             owner_id,
             false,
-            AttachAbilityToActorInput { actor_id, ability_id: foreign.id },
+            AttachAbilityToActorInput {
+                actor_id,
+                ability_id: foreign.id,
+            },
         )
         .await
         .expect_err("an ability from another world must be rejected");
@@ -525,24 +544,32 @@ mod tests {
         let actor_id = make_actor(&mut conn, world_id, scene_id, owner_id);
         drop(conn);
 
-        let ability = create_ability_impl(&state, owner_id, false, ability_input(world_id, "Doomed"))
-            .await
-            .unwrap();
+        let ability =
+            create_ability_impl(&state, owner_id, false, ability_input(world_id, "Doomed"))
+                .await
+                .unwrap();
         attach_ability_to_actor_impl(
             &state,
             owner_id,
             false,
-            AttachAbilityToActorInput { actor_id, ability_id: ability.id },
+            AttachAbilityToActorInput {
+                actor_id,
+                ability_id: ability.id,
+            },
         )
         .await
         .unwrap();
 
         // The delete must succeed despite the actor knowing it.
-        assert!(delete_ability_impl(&state, owner_id, false, ability.id)
-            .await
-            .expect("deletion must not be blocked by an actor knowing the ability"));
+        assert!(
+            delete_ability_impl(&state, owner_id, false, ability.id)
+                .await
+                .expect("deletion must not be blocked by an actor knowing the ability")
+        );
 
-        let entries = actor_abilities_impl(&state, owner_id, false, actor_id).await.unwrap();
+        let entries = actor_abilities_impl(&state, owner_id, false, actor_id)
+            .await
+            .unwrap();
         assert_eq!(entries.len(), 1, "the entry survives as a tombstone");
         assert_eq!(entries[0].ability_id, None, "its reference is nulled");
         assert_eq!(
@@ -586,7 +613,10 @@ mod tests {
                 &state,
                 owner_id,
                 false,
-                AttachAbilityToActorInput { actor_id, ability_id },
+                AttachAbilityToActorInput {
+                    actor_id,
+                    ability_id,
+                },
             )
             .await
             .unwrap();
@@ -595,7 +625,9 @@ mod tests {
                 .unwrap();
         }
 
-        let player_view = actor_abilities_impl(&state, player_id, false, actor_id).await.unwrap();
+        let player_view = actor_abilities_impl(&state, player_id, false, actor_id)
+            .await
+            .unwrap();
         assert_eq!(player_view.len(), 2, "tombstones stay listed");
         for entry in &player_view {
             assert_eq!(
@@ -604,12 +636,16 @@ mod tests {
             );
         }
         assert!(
-            !player_view.iter().any(|e| e.ability_name.contains("Soul Harvest")),
+            !player_view
+                .iter()
+                .any(|e| e.ability_name.contains("Soul Harvest")),
             "the deleted GM-only ability's name must not leak"
         );
 
         // The DM still sees the real names — redaction is for players only.
-        let dm_view = actor_abilities_impl(&state, owner_id, false, actor_id).await.unwrap();
+        let dm_view = actor_abilities_impl(&state, owner_id, false, actor_id)
+            .await
+            .unwrap();
         let dm_names: Vec<&str> = dm_view.iter().map(|e| e.ability_name.as_str()).collect();
         assert!(dm_names.contains(&"Soul Harvest"));
         assert!(dm_names.contains(&"Cleave"));
@@ -644,17 +680,28 @@ mod tests {
                 &state,
                 owner_id,
                 false,
-                AttachAbilityToActorInput { actor_id, ability_id },
+                AttachAbilityToActorInput {
+                    actor_id,
+                    ability_id,
+                },
             )
             .await
             .unwrap();
         }
 
-        let dm_view = actor_abilities_impl(&state, owner_id, false, actor_id).await.unwrap();
+        let dm_view = actor_abilities_impl(&state, owner_id, false, actor_id)
+            .await
+            .unwrap();
         assert_eq!(dm_view.len(), 2, "the DM sees both");
 
-        let player_view = actor_abilities_impl(&state, player_id, false, actor_id).await.unwrap();
-        assert_eq!(player_view.len(), 1, "the player must not see the GM-only ability");
+        let player_view = actor_abilities_impl(&state, player_id, false, actor_id)
+            .await
+            .unwrap();
+        assert_eq!(
+            player_view.len(),
+            1,
+            "the player must not see the GM-only ability"
+        );
         assert_eq!(player_view[0].ability_name, "Cleave");
         assert!(
             !player_view.iter().any(|e| e.ability_name == "Soul Harvest"),
@@ -674,24 +721,33 @@ mod tests {
         let actor_id = make_actor(&mut conn, world_id, scene_id, owner_id);
         drop(conn);
 
-        let ability = create_ability_impl(&state, owner_id, false, ability_input(world_id, "Keeper"))
-            .await
-            .unwrap();
+        let ability =
+            create_ability_impl(&state, owner_id, false, ability_input(world_id, "Keeper"))
+                .await
+                .unwrap();
         let entry = attach_ability_to_actor_impl(
             &state,
             owner_id,
             false,
-            AttachAbilityToActorInput { actor_id, ability_id: ability.id },
+            AttachAbilityToActorInput {
+                actor_id,
+                ability_id: ability.id,
+            },
         )
         .await
         .unwrap();
 
-        assert!(detach_ability_from_actor_impl(&state, owner_id, false, entry.id)
-            .await
-            .unwrap());
+        assert!(
+            detach_ability_from_actor_impl(&state, owner_id, false, entry.id)
+                .await
+                .unwrap()
+        );
 
         assert!(
-            actor_abilities_impl(&state, owner_id, false, actor_id).await.unwrap().is_empty(),
+            actor_abilities_impl(&state, owner_id, false, actor_id)
+                .await
+                .unwrap()
+                .is_empty(),
             "the entry is gone"
         );
         // ...but the ability itself still exists in the world catalog.

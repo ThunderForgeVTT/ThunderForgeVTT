@@ -28,7 +28,10 @@ impl Default for ZoomLimits {
     /// needs roughly 4x. Zooming out is the operation a VTT needs most, so the
     /// range is deliberately lopsided toward it.
     fn default() -> Self {
-        Self { min: 0.1, max: 12.0 }
+        Self {
+            min: 0.1,
+            max: 12.0,
+        }
     }
 }
 
@@ -127,7 +130,10 @@ mod tests {
         let start = 2.0;
         let there = zoom_steps(start, 3.0, limits());
         let back = zoom_steps(there, -3.0, limits());
-        assert!((back - start).abs() < 1e-4, "{back} should return to {start}");
+        assert!(
+            (back - start).abs() < 1e-4,
+            "{back} should return to {start}"
+        );
     }
 
     #[test]
@@ -153,8 +159,7 @@ mod tests {
     #[test]
     fn the_anchor_point_stays_put_while_zooming() {
         let anchor = Vec2::new(300.0, -120.0);
-        let (translation, scale) =
-            zoom_toward(Vec2::new(50.0, 50.0), 2.0, anchor, 2.0, limits());
+        let (translation, scale) = zoom_toward(Vec2::new(50.0, 50.0), 2.0, anchor, 2.0, limits());
 
         // Screen offset of the anchor, before and after.
         let before = (anchor - Vec2::new(50.0, 50.0)) / 2.0;

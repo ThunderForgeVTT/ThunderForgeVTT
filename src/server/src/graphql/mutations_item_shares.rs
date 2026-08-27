@@ -9,13 +9,15 @@ use chrono::Utc;
 use diesel::prelude::*;
 use uuid::Uuid;
 
-use crate::auth::world_membership::is_dm_of_world;
 use crate::auth::item_permissions::effective_item_permission;
-use crate::graphql::types::{ActorPermissionLevel, GraphQLItem, GraphQLItemEffect, GraphQLItemShareLink, SharedItemPreview};
+use crate::auth::world_membership::is_dm_of_world;
+use crate::graphql::share_codes::generate_link_code;
+use crate::graphql::types::{
+    ActorPermissionLevel, GraphQLItem, GraphQLItemEffect, GraphQLItemShareLink, SharedItemPreview,
+};
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{ItemEffect, ItemShare, NewItemEffect, NewItemShare, NewWorldItem, WorldItem};
 use crate::schema::{world_item_effects, world_item_shares, world_items};
-use crate::graphql::share_codes::generate_link_code;
 use crate::state::AppState;
 
 #[derive(InputObject, Debug, Clone)]
@@ -40,7 +42,10 @@ impl From<String> for CopyError {
     }
 }
 
-fn load_active_share(conn: &mut diesel::PgConnection, share_code: &str) -> Result<ItemShare, String> {
+fn load_active_share(
+    conn: &mut diesel::PgConnection,
+    share_code: &str,
+) -> Result<ItemShare, String> {
     world_item_shares::table
         .filter(world_item_shares::share_code.eq(share_code))
         .filter(world_item_shares::revoked.eq(false))
@@ -51,7 +56,10 @@ fn load_active_share(conn: &mut diesel::PgConnection, share_code: &str) -> Resul
 
 /// Testable core of `ItemShareQuery::shared_item`. Authenticated-only, no
 /// world-membership check by design (mirrors `shared_actor_impl`).
-pub async fn shared_item_impl(state: &AppState, share_code: String) -> GraphQLResult<SharedItemPreview> {
+pub async fn shared_item_impl(
+    state: &AppState,
+    share_code: String,
+) -> GraphQLResult<SharedItemPreview> {
     let mut conn = state
         .db_pool
         .get()
@@ -176,7 +184,9 @@ pub async fn revoke_item_share_link_impl(
     let is_creator = share.created_by == user_id;
     let is_dm = is_dm_of_world(state, user_id, is_admin, world_id).await?;
     if !is_creator && !is_dm {
-        return Err(Error::new("Only the link's creator or the world's DM may revoke it"));
+        return Err(Error::new(
+            "Only the link's creator or the world's DM may revoke it",
+        ));
     }
 
     let mut conn = state
@@ -284,7 +294,11 @@ pub struct ItemShareQuery;
 
 #[async_graphql::Object]
 impl ItemShareQuery {
-    async fn shared_item(&self, ctx: &Context<'_>, share_code: String) -> GraphQLResult<SharedItemPreview> {
+    async fn shared_item(
+        &self,
+        ctx: &Context<'_>,
+        share_code: String,
+    ) -> GraphQLResult<SharedItemPreview> {
         let state = app_state(ctx)?;
         let _auth_user = authenticated_user(ctx)?;
         shared_item_impl(state, share_code).await
@@ -296,7 +310,11 @@ pub struct ItemShareMutation;
 
 #[async_graphql::Object]
 impl ItemShareMutation {
-    async fn create_item_share_link(&self, ctx: &Context<'_>, item_id: Uuid) -> GraphQLResult<GraphQLItemShareLink> {
+    async fn create_item_share_link(
+        &self,
+        ctx: &Context<'_>,
+        item_id: Uuid,
+    ) -> GraphQLResult<GraphQLItemShareLink> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         create_item_share_link_impl(state, auth_user.user_id, auth_user.is_admin, item_id)
@@ -304,7 +322,11 @@ impl ItemShareMutation {
             .map(GraphQLItemShareLink::from)
     }
 
-    async fn revoke_item_share_link(&self, ctx: &Context<'_>, share_id: Uuid) -> GraphQLResult<bool> {
+    async fn revoke_item_share_link(
+        &self,
+        ctx: &Context<'_>,
+        share_id: Uuid,
+    ) -> GraphQLResult<bool> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         revoke_item_share_link_impl(state, auth_user.user_id, auth_user.is_admin, share_id).await
@@ -318,7 +340,8 @@ impl ItemShareMutation {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         let (row, effects) =
-            copy_shared_item_to_world_impl(state, auth_user.user_id, auth_user.is_admin, input).await?;
+            copy_shared_item_to_world_impl(state, auth_user.user_id, auth_user.is_admin, input)
+                .await?;
         let my_permission_level =
             effective_item_permission(state, auth_user.user_id, auth_user.is_admin, row.id).await?;
         Ok(GraphQLItem::from_row(row, effects, my_permission_level))
@@ -328,7 +351,9 @@ impl ItemShareMutation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graphql::mutations_items::{add_item_effect_impl, create_item_impl, CreateItemInput, ItemEffectInput};
+    use crate::graphql::mutations_items::{
+        CreateItemInput, ItemEffectInput, add_item_effect_impl, create_item_impl,
+    };
     use crate::graphql::types::ItemEffectType;
     use crate::test_support::{insert_test_user, insert_test_world, test_app_state};
 
@@ -357,7 +382,10 @@ mod tests {
         .expect("DM should create item");
 
         let denied = create_item_share_link_impl(&state, outsider_id, false, item.id).await;
-        assert!(denied.is_err(), "a non-Owner-level caller must not be able to share the item");
+        assert!(
+            denied.is_err(),
+            "a non-Owner-level caller must not be able to share the item"
+        );
 
         let link = create_item_share_link_impl(&state, owner_id, false, item.id)
             .await
@@ -423,7 +451,10 @@ mod tests {
             },
         )
         .await;
-        assert!(denied.is_err(), "a caller without DM access on the destination must be rejected");
+        assert!(
+            denied.is_err(),
+            "a caller without DM access on the destination must be rejected"
+        );
 
         let (copy, effects) = copy_shared_item_to_world_impl(
             &state,
@@ -441,7 +472,10 @@ mod tests {
         assert_eq!(copy.world_id, dest_world_id);
         assert_eq!(copy.name, "Longsword");
         assert_eq!(effects.len(), 1, "effects must be cloned onto the copy");
-        assert_ne!(effects[0].item_id, source_item.id, "cloned effect must belong to the copy, not the source");
+        assert_ne!(
+            effects[0].item_id, source_item.id,
+            "cloned effect must belong to the copy, not the source"
+        );
     }
 
     /// Spec 015: a moderation-disabled item's share link must not leak
@@ -472,7 +506,11 @@ mod tests {
             .expect("owner should be able to share the item");
 
         // Sanity: share works before any takedown.
-        assert!(shared_item_impl(&state, link.share_code.clone()).await.is_ok());
+        assert!(
+            shared_item_impl(&state, link.share_code.clone())
+                .await
+                .is_ok()
+        );
 
         crate::graphql::mutations_moderation::submit_takedown_notice_impl(
             &state,

@@ -24,9 +24,7 @@ pub async fn connect_player(
     world_id: Uuid,
     scene_id: Option<Uuid>,
 ) -> Result<PlayersOnline, String> {
-    let mut conn = pool
-        .get()
-        .map_err(|e| format!("Pool error: {}", e))?;
+    let mut conn = pool.get().map_err(|e| format!("Pool error: {}", e))?;
 
     let now = Utc::now().naive_utc();
 
@@ -69,9 +67,7 @@ pub async fn disconnect_player(
     player_id: Uuid,
     world_id: Uuid,
 ) -> Result<(), String> {
-    let mut conn = pool
-        .get()
-        .map_err(|e| format!("Pool error: {}", e))?;
+    let mut conn = pool.get().map_err(|e| format!("Pool error: {}", e))?;
 
     diesel::delete(
         players_online::table.filter(
@@ -83,7 +79,10 @@ pub async fn disconnect_player(
     .execute(&mut conn)
     .map_err(|e| format!("Failed to delete player: {}", e))?;
 
-    eprintln!("🔌 Player {} disconnected from world {}", player_id, world_id);
+    eprintln!(
+        "🔌 Player {} disconnected from world {}",
+        player_id, world_id
+    );
 
     Ok(())
 }
@@ -92,14 +91,8 @@ pub async fn disconnect_player(
 ///
 /// Called on every mutation to update activity timestamp.
 /// Used by cleanup task to identify idle players.
-pub async fn touch_last_seen(
-    pool: DbPool,
-    player_id: Uuid,
-    world_id: Uuid,
-) -> Result<(), String> {
-    let mut conn = pool
-        .get()
-        .map_err(|e| format!("Pool error: {}", e))?;
+pub async fn touch_last_seen(pool: DbPool, player_id: Uuid, world_id: Uuid) -> Result<(), String> {
+    let mut conn = pool.get().map_err(|e| format!("Pool error: {}", e))?;
 
     let now = Utc::now().naive_utc();
 
@@ -145,19 +138,16 @@ pub fn spawn_session_cleanup_task(pool: DbPool) {
 
 /// Clean up idle sessions
 async fn cleanup_idle_sessions(pool: DbPool) -> Result<(), String> {
-    let mut conn = pool
-        .get()
-        .map_err(|e| format!("Pool error: {}", e))?;
+    let mut conn = pool.get().map_err(|e| format!("Pool error: {}", e))?;
 
     let now = Utc::now().naive_utc();
     let threshold = now - Duration::seconds(IDLE_THRESHOLD_SECS as i64);
 
     // Delete sessions idle for > threshold
-    let deleted = diesel::delete(
-        players_online::table.filter(players_online::last_seen.lt(threshold)),
-    )
-    .execute(&mut conn)
-    .map_err(|e| format!("Failed to delete idle sessions: {}", e))?;
+    let deleted =
+        diesel::delete(players_online::table.filter(players_online::last_seen.lt(threshold)))
+            .execute(&mut conn)
+            .map_err(|e| format!("Failed to delete idle sessions: {}", e))?;
 
     if deleted > 0 {
         eprintln!("🧹 Cleaned up {} idle sessions", deleted);

@@ -10,11 +10,11 @@ use uuid::Uuid;
 
 use crate::auth::world_membership::{WorldMembershipError, require_world_member};
 use crate::auth_middleware::AuthenticatedUser;
+use crate::graphql::share_codes::generate_link_code;
 use crate::models::{NewWorldInvite, NewWorldMember, WorldInvite, WorldMember};
 use crate::schema::world_events;
 use crate::schema::world_invites;
 use crate::schema::world_members;
-use crate::graphql::share_codes::generate_link_code;
 use crate::state::AppState;
 use thunderforge_core::models::invites::WorldMemberRole;
 
@@ -393,8 +393,7 @@ pub async fn join_world_impl(
         tokio::task::spawn_blocking(move || {
             world_invites::table
                 .inner_join(
-                    world_members::table
-                        .on(world_members::world_id.eq(world_invites::world_id)),
+                    world_members::table.on(world_members::world_id.eq(world_invites::world_id)),
                 )
                 .filter(world_invites::invite_code.eq(code))
                 .filter(world_members::user_id.eq(user_id))
@@ -716,8 +715,10 @@ async fn require_dm_of_world(
     if crate::auth::world_membership::is_dm_of_world(state, user_id, is_admin, world_id).await? {
         Ok(())
     } else {
-        Err(Error::new("Only Owners and GMs can manage this world's invite links")
-            .extend_with(|_, ext| ext.set("code", "FORBIDDEN")))
+        Err(
+            Error::new("Only Owners and GMs can manage this world's invite links")
+                .extend_with(|_, ext| ext.set("code", "FORBIDDEN")),
+        )
     }
 }
 
@@ -752,7 +753,8 @@ pub async fn update_member_role_impl(
     // world's actual Owner isn't wrongly rejected here.
     let caller_role_str = require_world_member(&mut conn, user_id, world_id)
         .map_err(|_| Error::new("You are not a member of this world"))?;
-    let caller_role = WorldMemberRole::from_str(&caller_role_str).unwrap_or(WorldMemberRole::Player);
+    let caller_role =
+        WorldMemberRole::from_str(&caller_role_str).unwrap_or(WorldMemberRole::Player);
 
     if !caller_role.can_change_roles() {
         return Err(Error::new(
@@ -840,7 +842,8 @@ pub async fn remove_member_impl(
     // fix as `update_member_role_impl` above.
     let caller_role_str = require_world_member(&mut conn, caller_id, world_id)
         .map_err(|_| Error::new("You are not a member of this world"))?;
-    let caller_role = WorldMemberRole::from_str(&caller_role_str).unwrap_or(WorldMemberRole::Player);
+    let caller_role =
+        WorldMemberRole::from_str(&caller_role_str).unwrap_or(WorldMemberRole::Player);
 
     // Check permission: Only Owner or GM can remove members
     if caller_role != WorldMemberRole::Owner && caller_role != WorldMemberRole::GM {
@@ -1057,7 +1060,9 @@ mod tests {
     // never actually call these two mutations end-to-end.
 
     use super::*;
-    use crate::test_support::{insert_test_user, insert_test_world, insert_test_world_member, test_app_state};
+    use crate::test_support::{
+        insert_test_user, insert_test_world, insert_test_world_member, test_app_state,
+    };
 
     /// Inserts an invite row. The **8-character** code is deliberate: it is
     /// exactly the shape codes had before spec 027, so every test built on
@@ -1317,7 +1322,9 @@ mod tests {
         join_world_impl(
             &state,
             first_joiner,
-            JoinWorldInput { invite_code: old_code.clone() },
+            JoinWorldInput {
+                invite_code: old_code.clone(),
+            },
         )
         .await
         .expect("the code must work before rotation — otherwise this proves nothing");
@@ -1326,7 +1333,10 @@ mod tests {
             .await
             .expect("a DM must be able to rotate their world's link");
 
-        assert_ne!(replacement.invite_code, old_code, "a new code must be issued");
+        assert_ne!(
+            replacement.invite_code, old_code,
+            "a new code must be issued"
+        );
         assert_eq!(replacement.state, WorldAccessLinkState::Active);
 
         // The retired code fails on its next use, with no grace window.
@@ -1337,7 +1347,9 @@ mod tests {
         let refused = join_world_impl(
             &state,
             second_joiner,
-            JoinWorldInput { invite_code: old_code },
+            JoinWorldInput {
+                invite_code: old_code,
+            },
         )
         .await;
         assert!(
@@ -1353,7 +1365,9 @@ mod tests {
         join_world_impl(
             &state,
             third_joiner,
-            JoinWorldInput { invite_code: replacement.invite_code },
+            JoinWorldInput {
+                invite_code: replacement.invite_code,
+            },
         )
         .await
         .expect("the replacement code must work");
@@ -1658,9 +1672,15 @@ mod tests {
         let joiner = insert_test_user(&mut conn);
         drop(conn);
 
-        join_world_impl(&state, joiner, JoinWorldInput { invite_code: code.clone() })
-            .await
-            .expect("first join should succeed");
+        join_world_impl(
+            &state,
+            joiner,
+            JoinWorldInput {
+                invite_code: code.clone(),
+            },
+        )
+        .await
+        .expect("first join should succeed");
 
         let count_after_first = {
             let mut conn = state.db_pool.get().unwrap();
@@ -1862,8 +1882,7 @@ mod tests {
 
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
-        let (world_id, owner_id, member_id) =
-            world_with_a_fully_granted_member(&mut conn, "Owner");
+        let (world_id, owner_id, member_id) = world_with_a_fully_granted_member(&mut conn, "Owner");
         drop(conn);
 
         remove_member_impl(&state, owner_id, world_id, member_id)
@@ -1890,8 +1909,7 @@ mod tests {
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
 
-        let (world_a, owner_a, member_id) =
-            world_with_a_fully_granted_member(&mut conn, "Editor");
+        let (world_a, owner_a, member_id) = world_with_a_fully_granted_member(&mut conn, "Editor");
 
         // The same user holds grants in an unrelated world.
         let world_b = {
@@ -1966,7 +1984,9 @@ mod tests {
 
         let removed = remove_member_impl(&state, owner_id, world_id, target_id)
             .await
-            .expect("the world's own owner, with no world_members row, must be able to remove members");
+            .expect(
+                "the world's own owner, with no world_members row, must be able to remove members",
+            );
         assert!(removed);
 
         let mut conn = state.db_pool.get().unwrap();

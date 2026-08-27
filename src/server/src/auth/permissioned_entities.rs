@@ -296,9 +296,7 @@ mod tests {
 
     /// One content row of each type in a fresh world, plus a member.
     /// Returns `(world_id, owner_id, member_id, [actor, item, lore, ability])`.
-    fn world_with_one_of_everything(
-        conn: &mut PgConnection,
-    ) -> (Uuid, Uuid, Uuid, [Uuid; 4]) {
+    fn world_with_one_of_everything(conn: &mut PgConnection) -> (Uuid, Uuid, Uuid, [Uuid; 4]) {
         let owner_id = insert_test_user(conn);
         let world_id = insert_test_world(conn, owner_id);
         let scene_id = insert_test_scene(conn, world_id, owner_id);
@@ -394,9 +392,7 @@ mod tests {
         let gm_id = insert_test_user(&mut conn);
         insert_test_world_member(&mut conn, world_id, gm_id, "GM");
         // Explicitly granting the GM only Viewer must not demote them.
-        grant_all_content_permissions(
-            &mut conn, gm_id, ids[0], ids[1], ids[2], ids[3], "Viewer",
-        );
+        grant_all_content_permissions(&mut conn, gm_id, ids[0], ids[1], ids[2], ids[3], "Viewer");
         drop(conn);
 
         let levels = all_four_levels(&state, gm_id, false, ids).await;
@@ -472,9 +468,7 @@ mod tests {
         insert_test_world_member(&mut conn, world_id, member_b, "Player");
 
         for user in [member_a, member_b] {
-            grant_all_content_permissions(
-                &mut conn, user, ids[0], ids[1], ids[2], ids[3], "Owner",
-            );
+            grant_all_content_permissions(&mut conn, user, ids[0], ids[1], ids[2], ids[3], "Owner");
         }
         drop(conn);
 
@@ -504,8 +498,8 @@ mod tests {
         let before = count_content_permissions(&mut conn, world_id, member_id);
         assert_eq!(before, (1, 1, 1, 1), "setup: one grant of each type");
 
-        let removed = purge_member_grants(&mut conn, world_id, member_id)
-            .expect("purge should succeed");
+        let removed =
+            purge_member_grants(&mut conn, world_id, member_id).expect("purge should succeed");
 
         // One row per declared type — derived from the declaration, so adding
         // a fifth type without wiring its cleanup fails right here.

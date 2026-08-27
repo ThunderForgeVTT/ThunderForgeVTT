@@ -232,8 +232,7 @@ mod tests {
         trace.mark("background_spawn");
         trace.record(16.5);
 
-        let json: serde_json::Value =
-            serde_json::from_str(&trace.to_json()).expect("valid JSON");
+        let json: serde_json::Value = serde_json::from_str(&trace.to_json()).expect("valid JSON");
         let sample = &json.as_array().unwrap()[0];
 
         assert_eq!(sample["frame"], 1);

@@ -7,9 +7,9 @@
 use serde::{Deserialize, Serialize};
 
 #[cfg(not(target_arch = "wasm32"))]
-use rand::{Rng, SeedableRng};
-#[cfg(not(target_arch = "wasm32"))]
 use rand::rngs::StdRng;
+#[cfg(not(target_arch = "wasm32"))]
+use rand::{Rng, SeedableRng};
 
 /// Advantage state for d20 roll
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]

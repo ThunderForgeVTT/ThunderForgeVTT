@@ -10,7 +10,9 @@ use uuid::Uuid;
 
 use crate::auth::actor_permissions::require_actor_permission;
 use crate::graphql::types::ActorPermissionLevel;
-use crate::graphql::{GraphQLActorClaim, GraphQLWorldActor, GraphQLWorldMember, app_state, authenticated_user};
+use crate::graphql::{
+    GraphQLActorClaim, GraphQLWorldActor, GraphQLWorldMember, app_state, authenticated_user,
+};
 use crate::models::{ActorClaim, NewActorClaim, NewWorldActor, WorldActor, WorldMember};
 use crate::schema::{users, world_actor_claims, world_actors, world_members, worlds};
 use crate::state::AppState;
@@ -91,12 +93,14 @@ pub async fn claimed_by_impl(
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(|e| Error::new(format!("Failed to look up claim: {e}")))?;
 
-    Ok(row.map(|(id, world_id, user_id, username)| GraphQLWorldMember {
-        id,
-        world_id,
-        user_id,
-        username,
-    }))
+    Ok(
+        row.map(|(id, world_id, user_id, username)| GraphQLWorldMember {
+            id,
+            world_id,
+            user_id,
+            username,
+        }),
+    )
 }
 
 /// Spec 023 (FR-004): the character `member_id` has claimed, if any — the
@@ -185,8 +189,7 @@ pub async fn available_actors_impl(
             .filter(world_actors::is_npc.eq(false))
             .filter(world_actors::available_for_claim.eq(true))
             .filter(diesel::dsl::not(diesel::dsl::exists(
-                world_actor_claims::table
-                    .filter(world_actor_claims::actor_id.eq(world_actors::id)),
+                world_actor_claims::table.filter(world_actor_claims::actor_id.eq(world_actors::id)),
             )))
             .select(WorldActor::as_select())
             .load::<WorldActor>(&mut conn)
@@ -259,7 +262,9 @@ pub async fn claim_actor_impl(
                 .map_err(|_| "Actor not found in this world".to_string())?;
 
             if actor.is_npc || !actor.available_for_claim {
-                return Err("This character is not available to claim".to_string().into());
+                return Err("This character is not available to claim"
+                    .to_string()
+                    .into());
             }
 
             let new_claim = NewActorClaim {
@@ -319,9 +324,9 @@ pub async fn create_and_claim_actor_impl(
                 .map_err(|_| "World not found".to_string())?;
 
             if !allow {
-                return Err(
-                    "This world's GM has not enabled player-created characters".to_string().into(),
-                );
+                return Err("This world's GM has not enabled player-created characters"
+                    .to_string()
+                    .into());
             }
 
             let scene_id = crate::schema::scenes::table
@@ -389,7 +394,14 @@ pub async fn set_actor_availability_impl(
     actor_id: Uuid,
     available: bool,
 ) -> GraphQLResult<GraphQLWorldActor> {
-    require_actor_permission(state, user_id, is_admin, actor_id, ActorPermissionLevel::Owner).await?;
+    require_actor_permission(
+        state,
+        user_id,
+        is_admin,
+        actor_id,
+        ActorPermissionLevel::Owner,
+    )
+    .await?;
 
     let mut conn = state
         .db_pool
@@ -430,7 +442,14 @@ pub async fn unclaim_actor_impl(
     is_admin: bool,
     actor_id: Uuid,
 ) -> GraphQLResult<GraphQLWorldActor> {
-    require_actor_permission(state, user_id, is_admin, actor_id, ActorPermissionLevel::Owner).await?;
+    require_actor_permission(
+        state,
+        user_id,
+        is_admin,
+        actor_id,
+        ActorPermissionLevel::Owner,
+    )
+    .await?;
 
     let mut conn = state
         .db_pool
@@ -491,11 +510,21 @@ impl ActorClaimMutation {
     ) -> GraphQLResult<GraphQLWorldActor> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        set_actor_availability_impl(state, auth_user.user_id, auth_user.is_admin, actor_id, available)
-            .await
+        set_actor_availability_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            actor_id,
+            available,
+        )
+        .await
     }
 
-    async fn unclaim_actor(&self, ctx: &Context<'_>, actor_id: Uuid) -> GraphQLResult<GraphQLWorldActor> {
+    async fn unclaim_actor(
+        &self,
+        ctx: &Context<'_>,
+        actor_id: Uuid,
+    ) -> GraphQLResult<GraphQLWorldActor> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         unclaim_actor_impl(state, auth_user.user_id, auth_user.is_admin, actor_id).await
@@ -593,7 +622,10 @@ mod tests {
         drop(conn);
 
         let result = claim_actor_impl(&state, outsider_id, world_id, actor_id).await;
-        assert!(result.is_err(), "a non-member must not be able to claim a character");
+        assert!(
+            result.is_err(),
+            "a non-member must not be able to claim a character"
+        );
     }
 
     #[tokio::test]
@@ -607,7 +639,10 @@ mod tests {
         let claim = my_actor_claim_impl(&state, owner_id, world_id)
             .await
             .expect("query should succeed for the owner");
-        assert!(claim.is_none(), "the GM/Owner must never be shown a claim gate");
+        assert!(
+            claim.is_none(),
+            "the GM/Owner must never be shown a claim gate"
+        );
     }
 
     #[tokio::test]
@@ -649,12 +684,18 @@ mod tests {
         assert_eq!(claim.actor_id, actor_id);
 
         let after = available_actors_impl(&state, world_id).await.unwrap();
-        assert!(after.is_empty(), "a claimed actor must disappear from the available list");
+        assert!(
+            after.is_empty(),
+            "a claimed actor must disappear from the available list"
+        );
 
         let my_claim = my_actor_claim_impl(&state, player_id, world_id)
             .await
             .unwrap();
-        assert!(my_claim.is_some(), "the claiming player should now see their claim");
+        assert!(
+            my_claim.is_some(),
+            "the claiming player should now see their claim"
+        );
     }
 
     // ===== Spec 023: claimed_actor_impl (the Players section's roster join) =====
@@ -684,7 +725,10 @@ mod tests {
         drop(conn);
 
         let before = claimed_actor_impl(&state, member_id).await.unwrap();
-        assert!(before.is_none(), "no claim yet — must be None, not an error");
+        assert!(
+            before.is_none(),
+            "no claim yet — must be None, not an error"
+        );
 
         let claim = claim_actor_impl(&state, player_id, world_id, actor_id)
             .await
@@ -719,7 +763,10 @@ mod tests {
             .expect("first claim should succeed");
 
         let result = claim_actor_impl(&state, player_id, world_id, second_actor).await;
-        assert!(result.is_err(), "a member with an existing claim must not claim a second character");
+        assert!(
+            result.is_err(),
+            "a member with an existing claim must not claim a second character"
+        );
     }
 
     #[tokio::test]
@@ -741,7 +788,10 @@ mod tests {
             None,
         )
         .await;
-        assert!(result.is_err(), "creation must be rejected when the world setting is off");
+        assert!(
+            result.is_err(),
+            "creation must be rejected when the world setting is off"
+        );
     }
 
     #[tokio::test]
@@ -766,7 +816,9 @@ mod tests {
         .await
         .expect("creation should succeed when the setting is on");
 
-        let my_claim = my_actor_claim_impl(&state, player_id, world_id).await.unwrap();
+        let my_claim = my_actor_claim_impl(&state, player_id, world_id)
+            .await
+            .unwrap();
         assert_eq!(my_claim.unwrap().actor_id, claim.actor_id);
     }
 
@@ -783,7 +835,10 @@ mod tests {
         drop(conn);
 
         let result = set_actor_availability_impl(&state, player_id, false, actor_id, true).await;
-        assert!(result.is_err(), "a non-Owner caller must not be able to set availability");
+        assert!(
+            result.is_err(),
+            "a non-Owner caller must not be able to set availability"
+        );
     }
 
     #[tokio::test]
@@ -815,7 +870,10 @@ mod tests {
         drop(conn);
 
         let result = set_actor_availability_impl(&state, owner_id, false, npc_id, true).await;
-        assert!(result.is_err(), "an NPC-classified actor must not be markable as available");
+        assert!(
+            result.is_err(),
+            "an NPC-classified actor must not be markable as available"
+        );
     }
 
     #[tokio::test]
@@ -834,16 +892,27 @@ mod tests {
         claim_actor_impl(&state, player_id, world_id, actor_id)
             .await
             .expect("claim should succeed");
-        assert!(available_actors_impl(&state, world_id).await.unwrap().is_empty());
+        assert!(
+            available_actors_impl(&state, world_id)
+                .await
+                .unwrap()
+                .is_empty()
+        );
 
         unclaim_actor_impl(&state, owner_id, false, actor_id)
             .await
             .expect("the DM should be able to unclaim");
 
         let available = available_actors_impl(&state, world_id).await.unwrap();
-        assert_eq!(available.len(), 1, "the actor should reappear as available without re-flagging");
+        assert_eq!(
+            available.len(),
+            1,
+            "the actor should reappear as available without re-flagging"
+        );
 
-        let previous_claimant = my_actor_claim_impl(&state, player_id, world_id).await.unwrap();
+        let previous_claimant = my_actor_claim_impl(&state, player_id, world_id)
+            .await
+            .unwrap();
         assert!(
             previous_claimant.is_none(),
             "the previous claimant should return to the no-character-selected state"
@@ -858,7 +927,10 @@ mod tests {
         ))
         .get_result::<bool>(&mut state.db_pool.get().unwrap())
         .unwrap();
-        assert!(still_member, "un-claiming must not remove the player from the world");
+        assert!(
+            still_member,
+            "un-claiming must not remove the player from the world"
+        );
     }
 
     #[tokio::test]
@@ -885,7 +957,10 @@ mod tests {
             .iter()
             .filter(|ok| **ok)
             .count();
-        assert_eq!(successes, 1, "exactly one of two concurrent claims must succeed (FR-006/SC-003)");
+        assert_eq!(
+            successes, 1,
+            "exactly one of two concurrent claims must succeed (FR-006/SC-003)"
+        );
 
         // Sanity: the unique constraint is genuinely load-bearing, not
         // just the app-level pre-check — force a raw duplicate insert
@@ -903,6 +978,9 @@ mod tests {
         .bind::<diesel::sql_types::Uuid, _>(actor_id)
         .bind::<diesel::sql_types::Uuid, _>(member_id)
         .execute(&mut conn);
-        assert!(dup.is_err(), "the UNIQUE(actor_id) constraint must reject a duplicate claim row");
+        assert!(
+            dup.is_err(),
+            "the UNIQUE(actor_id) constraint must reject a duplicate claim row"
+        );
     }
 }

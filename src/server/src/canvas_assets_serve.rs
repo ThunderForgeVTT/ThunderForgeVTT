@@ -19,17 +19,17 @@
 //! only ever talks to this route, never to RustFS directly).
 
 use axum::extract::{Path, State};
-use axum::http::{header, StatusCode};
+use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Extension, Router};
 use diesel::prelude::*;
 use uuid::Uuid;
 
-use crate::auth::world_membership::{require_world_member, WorldMembershipError};
+use crate::auth::world_membership::{WorldMembershipError, require_world_member};
 use crate::auth_middleware::AuthenticatedUser;
 use crate::state::AppState;
-use crate::storage::rustfs::{read_object, RustFsConfig};
+use crate::storage::rustfs::{RustFsConfig, read_object};
 
 pub fn router() -> Router<AppState> {
     Router::new().route("/canvas-assets/{asset_id}", get(serve_canvas_asset))
@@ -74,17 +74,24 @@ async fn serve_canvas_asset(
 
     let mut conn = match state.db_pool.get() {
         Ok(conn) => conn,
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "database unavailable").into_response(),
+        Err(_) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "database unavailable").into_response();
+        }
     };
 
-    let lookup = tokio::task::spawn_blocking(move || -> Result<Option<(Uuid, String)>, diesel::result::Error> {
-        use crate::schema::canvas_image_assets;
-        canvas_image_assets::table
-            .filter(canvas_image_assets::asset_id.eq(asset_id))
-            .select((canvas_image_assets::world_id, canvas_image_assets::storage_path))
-            .first::<(Uuid, String)>(&mut conn)
-            .optional()
-    })
+    let lookup = tokio::task::spawn_blocking(
+        move || -> Result<Option<(Uuid, String)>, diesel::result::Error> {
+            use crate::schema::canvas_image_assets;
+            canvas_image_assets::table
+                .filter(canvas_image_assets::asset_id.eq(asset_id))
+                .select((
+                    canvas_image_assets::world_id,
+                    canvas_image_assets::storage_path,
+                ))
+                .first::<(Uuid, String)>(&mut conn)
+                .optional()
+        },
+    )
     .await;
 
     let Ok(Ok(Some((world_id, storage_path)))) = lookup else {
@@ -94,15 +101,25 @@ async fn serve_canvas_asset(
     // FR-014, FR-019: same authorization rule as canvasImageAssetsForScene.
     let mut conn = match state.db_pool.get() {
         Ok(conn) => conn,
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "database unavailable").into_response(),
+        Err(_) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "database unavailable").into_response();
+        }
     };
-    let authz = tokio::task::spawn_blocking(move || require_world_member(&mut conn, user_id, world_id)).await;
+    let authz =
+        tokio::task::spawn_blocking(move || require_world_member(&mut conn, user_id, world_id))
+            .await;
     match authz {
         Ok(Ok(_role)) => {}
         Ok(Err(WorldMembershipError::NotAMember)) => {
             return (StatusCode::FORBIDDEN, "not a member of this world").into_response();
         }
-        _ => return (StatusCode::INTERNAL_SERVER_ERROR, "authorization check failed").into_response(),
+        _ => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "authorization check failed",
+            )
+                .into_response();
+        }
     }
 
     let cfg = RustFsConfig::from_env();
@@ -118,7 +135,11 @@ async fn serve_canvas_asset(
             .into_response(),
         Err(e) => {
             eprintln!("[canvas-assets] failed to read {storage_path}: {e}");
-            (StatusCode::BAD_GATEWAY, "failed to fetch asset from storage").into_response()
+            (
+                StatusCode::BAD_GATEWAY,
+                "failed to fetch asset from storage",
+            )
+                .into_response()
         }
     }
 }
@@ -130,7 +151,7 @@ mod tests {
     //! `graphql::mutations_assets::tests`'s convention.
 
     use super::*;
-    use crate::graphql::mutations_assets::{upload_canvas_image_impl, GraphQLCanvasImageAssetKind};
+    use crate::graphql::mutations_assets::{GraphQLCanvasImageAssetKind, upload_canvas_image_impl};
     use crate::test_support::*;
     use axum::body::to_bytes;
     use axum::extract::{Extension, Path, State};

@@ -62,8 +62,12 @@ impl From<diesel::result::Error> for LoreWriteError {
 fn to_graphql_error(e: LoreWriteError) -> Error {
     let msg = e.to_string();
     match e {
-        LoreWriteError::Conflict => Error::new(msg).extend_with(|_, ext| ext.set("code", "CONFLICT")),
-        LoreWriteError::NotFound => Error::new(msg).extend_with(|_, ext| ext.set("code", "NOT_FOUND")),
+        LoreWriteError::Conflict => {
+            Error::new(msg).extend_with(|_, ext| ext.set("code", "CONFLICT"))
+        }
+        LoreWriteError::NotFound => {
+            Error::new(msg).extend_with(|_, ext| ext.set("code", "NOT_FOUND"))
+        }
         _ => Error::new(msg),
     }
 }
@@ -77,7 +81,8 @@ fn replace_lore_links(
     links: &[PreparedLink],
 ) -> Result<(), diesel::result::Error> {
     diesel::delete(
-        world_lore_links::table.filter(world_lore_links::source_lore_entry_id.eq(source_lore_entry_id)),
+        world_lore_links::table
+            .filter(world_lore_links::source_lore_entry_id.eq(source_lore_entry_id)),
     )
     .execute(conn)?;
 
@@ -159,11 +164,14 @@ pub async fn create_lore_entry_impl(
                     })
                     .execute(conn)?;
 
-                diesel::update(world_lore_entries::table.filter(world_lore_entries::id.eq(entry_id)))
-                    .set(world_lore_entries::current_revision_id.eq(revision_id))
-                    .execute(conn)?;
+                diesel::update(
+                    world_lore_entries::table.filter(world_lore_entries::id.eq(entry_id)),
+                )
+                .set(world_lore_entries::current_revision_id.eq(revision_id))
+                .execute(conn)?;
 
-                let (_, links) = crate::markdown::links::extract_and_resolve(conn, world_id, &content, true)?;
+                let (_, links) =
+                    crate::markdown::links::extract_and_resolve(conn, world_id, &content, true)?;
                 replace_lore_links(conn, entry_id, &links)?;
             }
 
@@ -220,11 +228,19 @@ pub async fn update_lore_entry_impl(
                 .ok_or(LoreWriteError::NotFound)?;
 
             let now = Utc::now().naive_utc();
-            let new_title = input.title.clone().unwrap_or_else(|| existing.title.clone());
+            let new_title = input
+                .title
+                .clone()
+                .unwrap_or_else(|| existing.title.clone());
             let new_slug = if let Some(title) = &input.title
                 && title != &existing.title
             {
-                crate::markdown::slug::unique_slug_for_world(conn, existing.world_id, title, Some(entry_id))?
+                crate::markdown::slug::unique_slug_for_world(
+                    conn,
+                    existing.world_id,
+                    title,
+                    Some(entry_id),
+                )?
             } else {
                 existing.slug.clone()
             };
@@ -249,8 +265,12 @@ pub async fn update_lore_entry_impl(
                     })
                     .execute(conn)?;
 
-                let (_, links) =
-                    crate::markdown::links::extract_and_resolve(conn, existing.world_id, content, true)?;
+                let (_, links) = crate::markdown::links::extract_and_resolve(
+                    conn,
+                    existing.world_id,
+                    content,
+                    true,
+                )?;
                 replace_lore_links(conn, entry_id, &links)?;
 
                 current_revision_id = Some(revision_id);
@@ -290,9 +310,15 @@ pub async fn delete_lore_entry_impl(
     is_admin: bool,
     lore_entry_id: Uuid,
 ) -> Result<bool, LoreWriteError> {
-    require_lore_permission(state, user_id, is_admin, lore_entry_id, ActorPermissionLevel::Owner)
-        .await
-        .map_err(|e| LoreWriteError::Database(e.message))?;
+    require_lore_permission(
+        state,
+        user_id,
+        is_admin,
+        lore_entry_id,
+        ActorPermissionLevel::Owner,
+    )
+    .await
+    .map_err(|e| LoreWriteError::Database(e.message))?;
 
     let mut conn = state
         .db_pool
@@ -300,7 +326,8 @@ pub async fn delete_lore_entry_impl(
         .map_err(|e| LoreWriteError::Database(e.to_string()))?;
 
     let deleted = tokio::task::spawn_blocking(move || {
-        diesel::delete(world_lore_entries::table.filter(world_lore_entries::id.eq(lore_entry_id))).execute(&mut conn)
+        diesel::delete(world_lore_entries::table.filter(world_lore_entries::id.eq(lore_entry_id)))
+            .execute(&mut conn)
     })
     .await
     .map_err(|_| LoreWriteError::Database("Failed to spawn blocking task".to_string()))?
@@ -335,9 +362,15 @@ pub async fn restore_lore_revision_impl(
     .map_err(LoreWriteError::from)?
     .ok_or(LoreWriteError::NotFound)?;
 
-    require_lore_permission(state, user_id, is_admin, lore_entry_id, ActorPermissionLevel::Editor)
-        .await
-        .map_err(|e| LoreWriteError::Database(e.message))?;
+    require_lore_permission(
+        state,
+        user_id,
+        is_admin,
+        lore_entry_id,
+        ActorPermissionLevel::Editor,
+    )
+    .await
+    .map_err(|e| LoreWriteError::Database(e.message))?;
 
     let mut conn = state
         .db_pool
@@ -369,17 +402,23 @@ pub async fn restore_lore_revision_impl(
                 })
                 .execute(conn)?;
 
-            let (_, links) =
-                crate::markdown::links::extract_and_resolve(conn, entry.world_id, &target.content_markdown, true)?;
+            let (_, links) = crate::markdown::links::extract_and_resolve(
+                conn,
+                entry.world_id,
+                &target.content_markdown,
+                true,
+            )?;
             replace_lore_links(conn, lore_entry_id, &links)?;
 
-            diesel::update(world_lore_entries::table.filter(world_lore_entries::id.eq(lore_entry_id)))
-                .set((
-                    world_lore_entries::content.eq(&target.content_markdown),
-                    world_lore_entries::current_revision_id.eq(new_revision_id),
-                    world_lore_entries::updated_at.eq(now),
-                ))
-                .execute(conn)?;
+            diesel::update(
+                world_lore_entries::table.filter(world_lore_entries::id.eq(lore_entry_id)),
+            )
+            .set((
+                world_lore_entries::content.eq(&target.content_markdown),
+                world_lore_entries::current_revision_id.eq(new_revision_id),
+                world_lore_entries::updated_at.eq(now),
+            ))
+            .execute(conn)?;
 
             world_lore_entries::table
                 .filter(world_lore_entries::id.eq(lore_entry_id))
@@ -397,7 +436,11 @@ pub struct LoreMutation;
 
 #[async_graphql::Object]
 impl LoreMutation {
-    async fn create_lore_entry(&self, ctx: &Context<'_>, input: CreateLoreEntryInput) -> GraphQLResult<GraphQLLoreEntry> {
+    async fn create_lore_entry(
+        &self,
+        ctx: &Context<'_>,
+        input: CreateLoreEntryInput,
+    ) -> GraphQLResult<GraphQLLoreEntry> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         create_lore_entry_impl(state, auth_user.user_id, auth_user.is_admin, input)
@@ -406,7 +449,11 @@ impl LoreMutation {
             .map_err(to_graphql_error)
     }
 
-    async fn update_lore_entry(&self, ctx: &Context<'_>, input: UpdateLoreEntryInput) -> GraphQLResult<GraphQLLoreEntry> {
+    async fn update_lore_entry(
+        &self,
+        ctx: &Context<'_>,
+        input: UpdateLoreEntryInput,
+    ) -> GraphQLResult<GraphQLLoreEntry> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         update_lore_entry_impl(state, auth_user.user_id, auth_user.is_admin, input)
@@ -415,7 +462,11 @@ impl LoreMutation {
             .map_err(to_graphql_error)
     }
 
-    async fn delete_lore_entry(&self, ctx: &Context<'_>, lore_entry_id: Uuid) -> GraphQLResult<bool> {
+    async fn delete_lore_entry(
+        &self,
+        ctx: &Context<'_>,
+        lore_entry_id: Uuid,
+    ) -> GraphQLResult<bool> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         delete_lore_entry_impl(state, auth_user.user_id, auth_user.is_admin, lore_entry_id)
@@ -423,7 +474,11 @@ impl LoreMutation {
             .map_err(to_graphql_error)
     }
 
-    async fn restore_lore_revision(&self, ctx: &Context<'_>, revision_id: Uuid) -> GraphQLResult<GraphQLLoreEntry> {
+    async fn restore_lore_revision(
+        &self,
+        ctx: &Context<'_>,
+        revision_id: Uuid,
+    ) -> GraphQLResult<GraphQLLoreEntry> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         restore_lore_revision_impl(state, auth_user.user_id, auth_user.is_admin, revision_id)
@@ -436,7 +491,9 @@ impl LoreMutation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{insert_test_user, insert_test_world, insert_test_world_member, test_app_state};
+    use crate::test_support::{
+        insert_test_user, insert_test_world, insert_test_world_member, test_app_state,
+    };
 
     /// FR-002: only the DM may create a lore entry; FR-012/FR-013: slug
     /// is derived from the title.
@@ -463,7 +520,10 @@ mod tests {
 
         assert_eq!(entry.title, "Ancient Ruins of Veldrath");
         assert_eq!(entry.slug, "ancient-ruins-of-veldrath");
-        assert!(entry.current_revision_id.is_none(), "empty initial content creates no revision");
+        assert!(
+            entry.current_revision_id.is_none(),
+            "empty initial content creates no revision"
+        );
     }
 
     /// FR-002: a non-DM caller is rejected.
@@ -488,7 +548,10 @@ mod tests {
             },
         )
         .await;
-        assert!(result.is_err(), "a Player-role caller must not be able to create lore entries");
+        assert!(
+            result.is_err(),
+            "a Player-role caller must not be able to create lore entries"
+        );
     }
 
     /// FR-016: a content-bearing update appends a revision and updates
@@ -505,7 +568,11 @@ mod tests {
             &state,
             owner_id,
             false,
-            CreateLoreEntryInput { world_id, title: "Entry".to_string(), content: None },
+            CreateLoreEntryInput {
+                world_id,
+                title: "Entry".to_string(),
+                content: None,
+            },
         )
         .await
         .unwrap();
@@ -543,7 +610,11 @@ mod tests {
             &state,
             owner_id,
             false,
-            CreateLoreEntryInput { world_id, title: "Entry".to_string(), content: Some("v1".to_string()) },
+            CreateLoreEntryInput {
+                world_id,
+                title: "Entry".to_string(),
+                content: Some("v1".to_string()),
+            },
         )
         .await
         .unwrap();
@@ -587,7 +658,10 @@ mod tests {
             .select(LoreEntry::as_select())
             .first::<LoreEntry>(&mut conn)
             .unwrap();
-        assert_eq!(reloaded.content, "v2", "the rejected conflicting save must not appear");
+        assert_eq!(
+            reloaded.content, "v2",
+            "the rejected conflicting save must not appear"
+        );
     }
 
     /// FR-021: entry-level Owner (not DM-only) can delete; Editor cannot.
@@ -603,7 +677,11 @@ mod tests {
             &state,
             owner_id,
             false,
-            CreateLoreEntryInput { world_id, title: "Entry".to_string(), content: None },
+            CreateLoreEntryInput {
+                world_id,
+                title: "Entry".to_string(),
+                content: None,
+            },
         )
         .await
         .unwrap();
@@ -623,10 +701,16 @@ mod tests {
         drop(conn);
 
         let denied = delete_lore_entry_impl(&state, editor_id, false, entry.id).await;
-        assert!(denied.is_err(), "an Editor-level (not Owner-level) member must not be able to delete");
+        assert!(
+            denied.is_err(),
+            "an Editor-level (not Owner-level) member must not be able to delete"
+        );
 
         let allowed = delete_lore_entry_impl(&state, owner_id, false, entry.id).await;
-        assert!(allowed.is_ok(), "the DM (implicit Owner) should be able to delete");
+        assert!(
+            allowed.is_ok(),
+            "the DM (implicit Owner) should be able to delete"
+        );
     }
 
     /// FR-018: restoring a prior revision appends a new revision (never
@@ -643,7 +727,11 @@ mod tests {
             &state,
             owner_id,
             false,
-            CreateLoreEntryInput { world_id, title: "Entry".to_string(), content: Some("v1".to_string()) },
+            CreateLoreEntryInput {
+                world_id,
+                title: "Entry".to_string(),
+                content: Some("v1".to_string()),
+            },
         )
         .await
         .unwrap();
@@ -675,6 +763,9 @@ mod tests {
             .count()
             .get_result(&mut conn)
             .unwrap();
-        assert_eq!(revision_count, 3, "v1, v2, and the restore-as-v3 must all remain in history");
+        assert_eq!(
+            revision_count, 3,
+            "v1, v2, and the restore-as-v3 must all remain in history"
+        );
     }
 }

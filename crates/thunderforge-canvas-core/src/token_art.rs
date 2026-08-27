@@ -83,7 +83,10 @@ mod tests {
             Vec2::new(37.0, 41.0),
         ] {
             let size = fit_within_footprint(64.0, image);
-            assert!(size.x <= 64.0 + 0.0001 && size.y <= 64.0 + 0.0001, "got {size:?}");
+            assert!(
+                size.x <= 64.0 + 0.0001 && size.y <= 64.0 + 0.0001,
+                "got {size:?}"
+            );
         }
     }
 

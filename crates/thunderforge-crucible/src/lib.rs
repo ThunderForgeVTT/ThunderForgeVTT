@@ -109,8 +109,7 @@ mod tests {
             payload: serde_json::json!({ "x": 1, "y": 2 }),
         };
         let json = serde_json::to_string(&request).expect("serialize");
-        let round_tripped: AdjudicationRequest =
-            serde_json::from_str(&json).expect("deserialize");
+        let round_tripped: AdjudicationRequest = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(round_tripped.world_id, request.world_id);
         assert_eq!(round_tripped.actor_id, request.actor_id);
         assert_eq!(round_tripped.kind, request.kind);
