@@ -122,6 +122,28 @@ function hashDirectoryRecursive(hash, dirPath) {
   }
 }
 
+/**
+ * The workspace crates the engine is built from, read out of its own
+ * `Cargo.toml` rather than listed here.
+ *
+ * Derived on purpose: a hardcoded list is a list that goes stale the day
+ * someone adds a `path` dependency, and the symptom of it being stale is a
+ * silently skipped rebuild — the worst failure available here, because it
+ * looks like it worked. Whatever the engine says it depends on is what gets
+ * hashed.
+ */
+function engineLocalCrateDirs() {
+  if (!existsSync(ENGINE_CARGO_TOML)) {
+    return [];
+  }
+  const manifest = readFileSync(ENGINE_CARGO_TOML, "utf-8");
+  const dirs = new Set();
+  for (const match of manifest.matchAll(/path\s*=\s*"([^"]+)"/g)) {
+    dirs.add(join(ENGINE_DIR, match[1]));
+  }
+  return [...dirs].sort();
+}
+
 function getEngineInputsHash(profile = engineProfile()) {
   const hash = createHash("sha256");
 
@@ -135,6 +157,26 @@ function getEngineInputsHash(profile = engineProfile()) {
 
   hashFile(hash, ENGINE_CARGO_TOML);
   hashDirectoryRecursive(hash, ENGINE_SRC_DIR);
+
+  // The engine is not only `src/engine`. It compiles `crates/thunderforge-*`
+  // in, and editing one of those used to leave this hash unchanged: the dev
+  // loop would report "Engine is up to date, skipping build" and serve the
+  // previous wasm. Every cache change lives in those crates, so the whole of
+  // spec 028 was invisible to the dev loop — and a test run against a stale
+  // bundle does not fail, it passes for the wrong reason.
+  //
+  // `Cargo.lock` does not cover this either: a path dependency's *contents*
+  // are not in it, only the fact of it.
+  for (const crateDir of engineLocalCrateDirs()) {
+    const crateManifest = join(crateDir, "Cargo.toml");
+    if (existsSync(crateManifest)) {
+      hashFile(hash, crateManifest);
+    }
+    const crateSrc = join(crateDir, "src");
+    if (existsSync(crateSrc)) {
+      hashDirectoryRecursive(hash, crateSrc);
+    }
+  }
   // The profile is part of the cache key. Without it, switching between dev
   // and release leaves pkg.sum matching and the rebuild is silently skipped —
   // you would get whichever bundle happened to be on disk, which is the worst
