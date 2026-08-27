@@ -24,7 +24,13 @@ services:
     tmpfs:
       # In RAM on purpose. A torture run writes a lot and keeps none of it,
       # and this also removes disk I/O as a confound in the numbers.
-      - /var/lib/postgresql/data
+      #
+      # Mounted at /var/lib/postgresql, NOT /var/lib/postgresql/data.
+      # postgres:18 moved PGDATA into a versioned subdirectory and refuses to
+      # start if it finds a mount at the old path — it reads that as a
+      # half-finished major-version upgrade. The dev compose.yml already
+      # mounts the parent for the same reason.
+      - /var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d thunderforge"]
       interval: 1s

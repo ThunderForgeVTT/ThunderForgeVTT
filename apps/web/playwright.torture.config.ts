@@ -63,5 +63,11 @@ export default defineConfig({
     // silently run the storm against real data.
     reuseExistingServer: false,
     timeout: 180_000,
+    // Forward server output. Playwright hides webServer logs unless startup
+    // fails, which is the opposite of what a load run needs: when subscribers
+    // report missing events, the only way to tell "the server never sent it"
+    // from "the client never got it" is the server's own delivery log.
+    stdout: "pipe",
+    stderr: "pipe",
   },
 });

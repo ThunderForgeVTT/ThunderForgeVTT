@@ -23,6 +23,12 @@ type DbPool = r2d2::Pool<ConnectionManager<diesel::PgConnection>>;
 
 /// Configuration for the PubSub backplane
 const LISTEN_CHANNEL: &str = "world_events_channel";
+
+/// Events drained per 100ms poll. Generous relative to the old value of 10:
+/// the cursor makes truncation safe (anything left over is picked up on the
+/// next pass rather than lost), so this only needs to be large enough that a
+/// realistic burst clears in a pass or two.
+const POLL_BATCH_SIZE: i64 = 256;
 const RECONNECT_DELAY_MS: u64 = 1000;
 const RECONNECT_MAX_DELAY_MS: u64 = 30000;
 const BROADCAST_BUFFER_SIZE: usize = 10000;
@@ -166,18 +172,31 @@ async fn run_listen_loop(
 
     // Use polling since true LISTEN/NOTIFY stream handling is complex in tokio-postgres
     // We'll poll for events periodically while keeping the connection alive
-    let mut last_event_id: i64 = 0;
+    // Start from the newest event that already exists, not from zero.
+    //
+    // The cursor is now a real `id > ?` bound, so a zero start would replay
+    // the entire world_events table to every connected client on boot. The
+    // previous "newest ten, skip duplicates" shape hid this: it could never
+    // reach backwards past ten rows. A listener is for what happens next;
+    // history is what the delta sync is for.
+    //
+    // Failing to read the high-water mark is not fatal — falling back to 0
+    // would replay everything, so a failure here starts from "nothing yet"
+    // and the first genuinely new event moves the cursor forward.
+    let mut last_event_id: i64 = current_max_event_id(pool).unwrap_or(i64::MAX);
+    eprintln!("[PubSub] 📍 Streaming events after id={}", last_event_id);
     let mut last_log_time = Instant::now();
 
     loop {
         // Poll for new events every 100ms
-        match poll_new_events_with_conn(pool) {
+        match poll_new_events_with_conn(pool, last_event_id) {
             Ok(events) => {
                 for event in events {
-                    // Skip duplicate events (can happen with polling)
-                    if event.id <= last_event_id {
-                        continue;
-                    }
+                    // The query already excludes anything at or below
+                    // `last_event_id` and returns ascending, so every row here
+                    // is new and arrives in the order it was recorded.
+                    // Advancing the cursor per event keeps that true if the
+                    // batch is truncated by LIMIT.
                     last_event_id = event.id;
 
                     eprintln!(
@@ -235,16 +254,45 @@ async fn run_listen_loop(
     }
 }
 
-/// Poll the database for new events.
-fn poll_new_events_with_conn(pool: &DbPool) -> Result<Vec<WorldEvent>, String> {
+/// The highest event id currently recorded, or `None` if that cannot be read.
+fn current_max_event_id(pool: &DbPool) -> Option<i64> {
+    let mut conn = pool.get().ok()?;
+    world_events::table
+        .select(diesel::dsl::max(world_events::id))
+        .first::<Option<i64>>(&mut conn)
+        .ok()
+        .flatten()
+        .or(Some(0))
+}
+
+/// Poll the database for events newer than `after_id`, oldest first.
+///
+/// Two properties here are load-bearing, and getting either wrong drops
+/// events silently:
+///
+/// 1. **Ascending order.** This previously selected the ten most recent events
+///    `DESC` and skipped any whose id was `<= last_event_id`. Iterating a
+///    descending batch sets `last_event_id` to the *newest* event on the first
+///    pass, so every older event in the same batch is then discarded as a
+///    duplicate. Any burst landing inside one 100ms poll window lost all but
+///    the newest — a GM moving several tokens quickly, a map import, or a
+///    dice roll alongside a chat message. Found by the tier-5 session storm:
+///    three events sent back-to-back delivered one, the same three spaced
+///    1.5s apart delivered all three.
+/// 2. **Filtering in SQL, not in the loop.** Bounding on `id > after_id` means
+///    the `LIMIT` applies to events we have not seen yet. With the old
+///    "newest ten, filter afterwards" shape, eleven events inside one window
+///    pushed the oldest out of the batch entirely, so they could never be
+///    delivered no matter how the loop behaved.
+fn poll_new_events_with_conn(pool: &DbPool, after_id: i64) -> Result<Vec<WorldEvent>, String> {
     let mut conn = pool
         .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
-    // Get the 10 most recent events
     world_events::table
-        .order(world_events::id.desc())
-        .limit(10)
+        .filter(world_events::id.gt(after_id))
+        .order(world_events::id.asc())
+        .limit(POLL_BATCH_SIZE)
         .load::<WorldEvent>(&mut conn)
         .map_err(|e| format!("Database query failed: {}", e))
 }

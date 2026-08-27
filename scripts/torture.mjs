@@ -77,6 +77,16 @@ async function waitForPostgres() {
       await new Promise((r) => setTimeout(r, 1_000));
     }
   }
+  // Dump the container's own logs before giving up. Without this the failure
+  // is just "never became ready", which says nothing about why — and the
+  // containers are torn down immediately afterwards, taking the evidence
+  // with them.
+  console.error("[torture] postgres never became ready; its logs follow:");
+  await run(
+    "docker",
+    ["compose", "-f", "compose.torture.yml", "-p", project, "logs", "postgres"],
+    { env: composeEnv },
+  ).catch(() => {});
   throw new Error("postgres never became ready");
 }
 

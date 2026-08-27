@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import {
   graphql,
   registerAndCreateWorld,
@@ -46,6 +46,35 @@ import {
  */
 
 const SESSIONS = Number(process.env.TORTURE_SESSIONS ?? "5");
+
+/** One world-scoped chat message — the storm's unit of work. */
+async function sendChat(page: Page, worldId: string, body: string) {
+  const res = await graphql<{
+    data?: { sendChatMessage?: { id: string } };
+    errors?: { message: string }[];
+  }>(
+    page,
+    `
+      mutation ($input: SendChatMessageInput!) {
+        sendChatMessage(input: $input) {
+          id
+        }
+      }
+    `,
+    { input: { worldId, body } },
+  );
+  // Assert the stimulus actually happened. Not doing this is what made the
+  // first run look like total fan-out starvation when `createScene` simply
+  // emitted nothing — a storm that silently fails to fire is indistinguishable
+  // from a fan-out that silently fails to deliver, and only one of those is
+  // worth investigating.
+  if (res.errors?.length || !res.data?.sendChatMessage?.id) {
+    throw new Error(
+      `chat mutation failed, so no event was emitted: ${JSON.stringify(res.errors ?? res)}`,
+    );
+  }
+  return res;
+}
 /** Events every subscriber must see before fan-out counts as healthy. */
 const EVENTS_EXPECTED = 3;
 
@@ -140,26 +169,81 @@ test.describe(`Session storm — ${SESSIONS} concurrent subscribers`, () => {
       `only ${connected}/${SESSIONS} sockets completed the subscribe handshake`,
     ).toBe(SESSIONS);
 
-    // Drive real events. Scene creation broadcasts on the same world_events
-    // bus every client watches, so this exercises the production fan-out
-    // rather than a synthetic broadcast.
+    // Prove delivery is live before measuring anything.
+    //
+    // A socket acknowledges `connection_init` before the server has processed
+    // its `subscribe`, so a fixed sleep here is a guess — and the first run
+    // that used one produced distribution={"2":5}: every subscriber missing
+    // exactly the same single event. Uniform, so a registration race rather
+    // than fan-out loss, but indistinguishable from real loss in the summary.
+    //
+    // So instead of sleeping longer, send one warm-up event and wait until
+    // every subscriber has actually received something. Then reset the
+    // counters and start the real storm. That removes the guess entirely,
+    // and — importantly — does not hide the failure this test looks for: if
+    // fan-out later drops messages under burst, the distribution goes ragged
+    // and the assertion still catches it.
+    await sendChat(page, worldId, `warmup ${uniqueSuffix()}`);
+
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(() => {
+            const t = (
+              window as unknown as { __torture: { received: number[] } }
+            ).__torture;
+            return t.received.filter((c) => c > 0).length;
+          }),
+        {
+          message: "every subscriber should receive the warm-up event",
+          timeout: 30_000,
+        },
+      )
+      .toBe(SESSIONS);
+
+    // Counters zeroed: only the storm below is measured.
+    await page.evaluate(() => {
+      const t = (window as unknown as { __torture: { received: number[] } })
+        .__torture;
+      t.received.fill(0);
+    });
+
+    // Drive real events with chat messages.
+    //
+    // Deliberately NOT scene creation, which was tried first and produced a
+    // clean five-out-of-five "starvation" that was entirely self-inflicted:
+    // `createScene` writes no `world_events` row at all, so the storm drove
+    // nothing and every subscriber correctly reported zero. Chat is
+    // world-scoped, needs no scene or token fixture, and broadcasts on the
+    // same bus every client watches.
     for (let n = 0; n < EVENTS_EXPECTED; n += 1) {
-      await graphql(
-        page,
-        `
-          mutation ($worldId: UUID!, $name: String!) {
-            createScene(worldId: $worldId, name: $name) {
-              sceneId
-            }
-          }
-        `,
-        { worldId, name: `torture-${n}-${uniqueSuffix()}` },
-      );
+      await sendChat(page, worldId, `torture ${n} ${uniqueSuffix()}`);
+      // Spaced, not bursted. TORTURE_EVENT_SPACING_MS lets a diagnosis
+      // distinguish two very different failures that look identical in the
+      // totals: events being coalesced or dropped under burst (spacing fixes
+      // it) versus only the first event after subscribe ever arriving
+      // (spacing changes nothing).
+      const spacing = Number(process.env.TORTURE_EVENT_SPACING_MS ?? "0");
+      if (spacing > 0) await page.waitForTimeout(spacing);
     }
 
     // Settle window scales with tier: the server writes one notification per
     // subscriber, so 100 legitimately needs longer than 5.
-    await page.waitForTimeout(3_000 + SESSIONS * 120);
+    // Wait for delivery to actually settle rather than guessing at it: poll
+    // until counts stop moving, with a floor so a genuinely slow tier still
+    // gets time. A fixed sleep here cannot distinguish "not delivered" from
+    // "not delivered yet", and those mean opposite things.
+    let previousTotal = -1;
+    for (let stableRounds = 0; stableRounds < 3; ) {
+      await page.waitForTimeout(1_000);
+      const total = await page.evaluate(() => {
+        const t = (window as unknown as { __torture: { received: number[] } })
+          .__torture;
+        return t.received.reduce((a, b) => a + b, 0);
+      });
+      stableRounds = total === previousTotal ? stableRounds + 1 : 0;
+      previousTotal = total;
+    }
 
     const result = await page.evaluate<StormResult>(() => {
       const t = (
@@ -181,10 +265,21 @@ test.describe(`Session storm — ${SESSIONS} concurrent subscribers`, () => {
       (c) => c > 0 && c < EVENTS_EXPECTED,
     ).length;
 
+    // The distribution, not just the tally. A uniform shortfall (everyone
+    // missing exactly the same count) means a startup race on the first
+    // events; a ragged one means fan-out is genuinely losing messages under
+    // burst. Those need completely different fixes, and the summary counts
+    // alone cannot tell them apart.
+    const histogram = result.received.reduce<Record<number, number>>(
+      (acc, c) => ({ ...acc, [c]: (acc[c] ?? 0) + 1 }),
+      {},
+    );
     console.log(
-      `[torture] tier=${SESSIONS} starved=${starved.length} partial=${partial} ` +
+      `[torture] tier=${SESSIONS} expected=${EVENTS_EXPECTED} ` +
+        `starved=${starved.length} partial=${partial} ` +
         `full=${result.received.filter((c) => c >= EVENTS_EXPECTED).length} ` +
-        `errors=${result.errors.length}`,
+        `errors=${result.errors.length} ` +
+        `distribution=${JSON.stringify(histogram)}`,
     );
 
     // Starvation is the failure that matters. A subscriber receiving nothing
@@ -198,9 +293,21 @@ test.describe(`Session storm — ${SESSIONS} concurrent subscribers`, () => {
 
     expect(result.errors, "transport errors during the storm").toEqual([]);
 
-    // Partial delivery is reported, not failed: the settle window is a guess
-    // and asserting exact counts would make this a flaky timing test instead
-    // of a load test. Growth in this number across tiers is the signal.
+    // Partial delivery is reported, not failed.
+    //
+    // KNOWN, UNRESOLVED as of 2026-08-26: at tier 5 a burst of three events
+    // delivers two per subscriber (distribution={"2":5}); the same three
+    // spaced 1500ms apart deliver all three ({"3":5}). Set
+    // TORTURE_EVENT_SPACING_MS to reproduce the difference.
+    //
+    // One cause of this was found and fixed — `poll_new_events_with_conn`
+    // selected events `DESC` and skipped `id <= cursor` in the loop, so the
+    // first (newest) row advanced the cursor past every older row in the same
+    // batch. That took burst delivery from 1/3 to 2/3. The remaining shortfall
+    // is not understood, and is deliberately left visible here rather than
+    // absorbed by a longer settle: it is a real difference between bursted
+    // and spaced events, and the assertion below still guards the failure
+    // that matters most (total starvation).
     if (partial > 0) {
       console.warn(
         `[torture] ${partial}/${SESSIONS} received a partial event set — investigate if this grows with tier`,
