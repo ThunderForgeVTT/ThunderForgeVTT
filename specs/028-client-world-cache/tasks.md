@@ -83,7 +83,7 @@ description: "Task list for 028-client-world-cache"
 - [X] T027a [US1] Wire the cache path end to end — `sync_world_cache(world_id, user_id)` in `src/engine/src/plugins/cached_assets.rs`, called from `apps/web/src/pages/world/WorldPage.tsx` on world open. Was missing: every piece existed but nothing connected them, so the cache had never executed.
 - [X] T029 [US1] Verify every fetched item against its promised fingerprint before storing, via `cache_core::fingerprint::verify`, in `crates/thunderforge-cache-browser/src/opfs.rs`
 - [X] T030 [US1] E2E: unchanged reopen transfers ≤5% of first-visit bytes and is ≥3× faster to interactive, **excluding engine bundle bytes** (SC-001, SC-002) in `apps/web/e2e/world-cache.spec.ts`
-- [ ] T031 [P] [US1] E2E: single changed background transfers within 10% of that asset's size (SC-003) in `apps/web/e2e/world-cache.spec.ts`
+- [X] T031 [P] [US1] E2E: single changed background transfers within 10% of that asset's size (SC-003) in `apps/web/e2e/world-cache.spec.ts`
 - [X] T032 [P] [US1] E2E: multiple cached worlds do not read or disturb each other (US1 scenario 4) in `apps/web/e2e/world-cache.spec.ts`
 
 **Checkpoint**: MVP — repeat visits are fast. Independently shippable.
@@ -100,11 +100,11 @@ description: "Task list for 028-client-world-cache"
 
 - [X] T033 [US2] Ensure `worldSyncPlan` re-authorizes from scratch on every call and omits unauthorized items from **both** lists, in `src/server/src/graphql/queries/world_sync_plan.rs`
 - [X] T034 [US2] Include revoked and deleted items indistinguishably in `evict`, honouring per-object ADR-050 permissions, in `src/server/src/graphql/queries/world_sync_plan.rs`
-- [ ] T035 [US2] Apply `evict` by deleting blobs and index entries in `crates/thunderforge-cache-browser/src/index.rs`
-- [ ] T036 [US2] Scope OPFS paths and IndexedDB stores by `user_scope` derived from the session in `crates/thunderforge-cache-browser/src/opfs.rs`
+- [X] T035 [US2] Apply `evict` by deleting blobs and index entries in `crates/thunderforge-cache-browser/src/index.rs`
+- [X] T036 [US2] Scope OPFS paths and IndexedDB stores by `user_scope` derived from the session in `crates/thunderforge-cache-browser/src/opfs.rs`
 - [ ] T037 [US2] Discard the session key on sign-out, rendering stored bytes inert independently of deletion, in `crates/thunderforge-cache-browser/src/crypto.rs`
 - [ ] T038 [US2] Implement lazy background reclamation whose failure never restores readability, in `crates/thunderforge-cache-browser/src/index.rs`
-- [ ] T039 [US2] Treat key loss as a cold cache — re-fetch, no error surfaced (FR-016c) — in `crates/thunderforge-cache-browser/src/crypto.rs`
+- [X] T039 [US2] Treat key loss as a cold cache — re-fetch, no error surfaced (FR-016c) — in `crates/thunderforge-cache-browser/src/crypto.rs`
 - [X] T040 [P] [US2] Server test: non-member `worldSyncPlan` fails identically to any other non-member access, revealing nothing (contracts/graphql-delta-sync.md) in `src/server/src/graphql/queries/world_sync_plan.rs`
 - [X] T041 [P] [US2] Server test: a client claiming an item it may not see never receives it in `fetch`, and its `evict` entry is indistinguishable from a deleted item's, in `src/server/src/graphql/queries/world_sync_plan.rs`
 - [ ] T042 [US2] E2E: revoked membership denies access and discards local data (SC-004) in `apps/web/e2e/world-cache-permissions.spec.ts`

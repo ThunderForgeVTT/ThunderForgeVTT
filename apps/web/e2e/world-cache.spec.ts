@@ -85,96 +85,108 @@ function measure(page: Page): { stop: () => Promise<Traffic> } {
  * A fixture that fails silently does not produce a failing test, it produces
  * a lying one.
  */
-async function createCanvasAsset(page: Page, worldId: string): Promise<void> {
-  const result = await page.evaluate(async (world) => {
-    const csrf = () =>
-      document.cookie
-        .split(";")
-        .map((p) => p.trim())
-        .find((p) => p.startsWith("csrf_token="))
-        ?.slice("csrf_token=".length);
+async function createCanvasAsset(
+  page: Page,
+  worldId: string,
+  differentSeed = false,
+): Promise<{ assetId: string; byteSize: number }> {
+  const result = await page.evaluate(
+    async ({ world, differentSeed }) => {
+      const csrf = () =>
+        document.cookie
+          .split(";")
+          .map((p) => p.trim())
+          .find((p) => p.startsWith("csrf_token="))
+          ?.slice("csrf_token=".length);
 
-    const gql = async (query: string, variables: unknown) => {
+      const gql = async (query: string, variables: unknown) => {
+        const token = csrf();
+        const res = await fetch("/api/graphql", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { "x-csrf-token": token } : {}),
+          },
+          body: JSON.stringify({ query, variables }),
+        });
+        return res.json();
+      };
+
+      // uploadCanvasImage requires a real scene — sceneId is non-null.
+      const scenes = await gql(
+        `query($worldId: UUID!) { scenes(worldId: $worldId) { sceneId } }`,
+        { worldId: world },
+      );
+      const sceneId = scenes?.data?.scenes?.[0]?.sceneId;
+      if (!sceneId) {
+        return { ok: false, why: `no scene: ${JSON.stringify(scenes)}` };
+      }
+
+      // A 512x512 canvas of noise, not a 1x1 dot.
+      //
+      // Size is load-bearing here, not incidental. A trivial asset makes the
+      // fixed per-open cost (the sync plan query, the app's own boot queries)
+      // dominate the byte total completely, so the ratio measures how chatty
+      // page load is rather than whether the cache worked — the first version
+      // of this test reported 595% for exactly that reason. Real worlds are
+      // multi-megabyte maps; the asset has to be big enough for asset bytes to
+      // be the thing being compared.
+      const canvas = document.createElement("canvas");
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext("2d")!;
+      const img = ctx.createImageData(512, 512);
+      // Deterministic pseudo-noise: incompressible enough that WebP cannot
+      // shrink it to nothing, and identical across runs.
+      let seed = differentSeed ? 98765 : 12345;
+      for (let i = 0; i < img.data.length; i += 4) {
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+        img.data[i] = seed & 0xff;
+        img.data[i + 1] = (seed >> 8) & 0xff;
+        img.data[i + 2] = (seed >> 16) & 0xff;
+        img.data[i + 3] = 255;
+      }
+      ctx.putImageData(img, 0, 0);
+      const blob: Blob = await new Promise((resolve) =>
+        canvas.toBlob((b) => resolve(b!), "image/png"),
+      );
+      const bin = new Uint8Array(await blob.arrayBuffer());
+      const form = new FormData();
+      form.append(
+        "operations",
+        JSON.stringify({
+          query: `mutation($worldId: UUID!, $sceneId: UUID!, $file: Upload!) {
+          uploadCanvasImage(worldId: $worldId, sceneId: $sceneId, kind: PASTED, file: $file) { id byteSize }
+        }`,
+          variables: { worldId: world, sceneId, file: null },
+        }),
+      );
+      form.append("map", JSON.stringify({ "0": ["variables.file"] }));
+      form.append("0", new Blob([bin], { type: "image/png" }), "dot.png");
+
       const token = csrf();
       const res = await fetch("/api/graphql", {
         method: "POST",
         credentials: "same-origin",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { "x-csrf-token": token } : {}),
-        },
-        body: JSON.stringify({ query, variables }),
+        headers: token ? { "x-csrf-token": token } : {},
+        body: form,
       });
-      return res.json();
-    };
-
-    // uploadCanvasImage requires a real scene — sceneId is non-null.
-    const scenes = await gql(
-      `query($worldId: UUID!) { scenes(worldId: $worldId) { sceneId } }`,
-      { worldId: world },
-    );
-    const sceneId = scenes?.data?.scenes?.[0]?.sceneId;
-    if (!sceneId) {
-      return { ok: false, why: `no scene: ${JSON.stringify(scenes)}` };
-    }
-
-    // A 512x512 canvas of noise, not a 1x1 dot.
-    //
-    // Size is load-bearing here, not incidental. A trivial asset makes the
-    // fixed per-open cost (the sync plan query, the app's own boot queries)
-    // dominate the byte total completely, so the ratio measures how chatty
-    // page load is rather than whether the cache worked — the first version
-    // of this test reported 595% for exactly that reason. Real worlds are
-    // multi-megabyte maps; the asset has to be big enough for asset bytes to
-    // be the thing being compared.
-    const canvas = document.createElement("canvas");
-    canvas.width = 512;
-    canvas.height = 512;
-    const ctx = canvas.getContext("2d")!;
-    const img = ctx.createImageData(512, 512);
-    // Deterministic pseudo-noise: incompressible enough that WebP cannot
-    // shrink it to nothing, and identical across runs.
-    let seed = 12345;
-    for (let i = 0; i < img.data.length; i += 4) {
-      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-      img.data[i] = seed & 0xff;
-      img.data[i + 1] = (seed >> 8) & 0xff;
-      img.data[i + 2] = (seed >> 16) & 0xff;
-      img.data[i + 3] = 255;
-    }
-    ctx.putImageData(img, 0, 0);
-    const blob: Blob = await new Promise((resolve) =>
-      canvas.toBlob((b) => resolve(b!), "image/png"),
-    );
-    const bin = new Uint8Array(await blob.arrayBuffer());
-    const form = new FormData();
-    form.append(
-      "operations",
-      JSON.stringify({
-        query: `mutation($worldId: UUID!, $sceneId: UUID!, $file: Upload!) {
-          uploadCanvasImage(worldId: $worldId, sceneId: $sceneId, kind: PASTED, file: $file) { id byteSize }
-        }`,
-        variables: { worldId: world, sceneId, file: null },
-      }),
-    );
-    form.append("map", JSON.stringify({ "0": ["variables.file"] }));
-    form.append("0", new Blob([bin], { type: "image/png" }), "dot.png");
-
-    const token = csrf();
-    const res = await fetch("/api/graphql", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: token ? { "x-csrf-token": token } : {},
-      body: form,
-    });
-    const json = await res.json();
-    const assetId = json?.data?.uploadCanvasImage?.id;
-    return assetId
-      ? { ok: true, assetId }
-      : { ok: false, why: JSON.stringify(json) };
-  }, worldId);
+      const json = await res.json();
+      const assetId = json?.data?.uploadCanvasImage?.id;
+      const byteSize = json?.data?.uploadCanvasImage?.byteSize;
+      return assetId
+        ? { ok: true, assetId, byteSize }
+        : { ok: false, why: JSON.stringify(json) };
+    },
+    { world: worldId, differentSeed },
+  );
 
   expect(result.ok, `asset upload failed: ${result.why ?? ""}`).toBe(true);
+  return {
+    assetId: result.assetId as string,
+    byteSize: result.byteSize as number,
+  };
 }
 
 test.describe("Client world cache (US1, T030-T032)", () => {
@@ -242,6 +254,60 @@ test.describe("Client world cache (US1, T030-T032)", () => {
     // And the whole-payload figure is still reported above, so a regression
     // that made page load chattier stays visible rather than being hidden by
     // the narrower assertion.
+  });
+
+  test("one changed asset transfers about that asset, and nothing else (SC-003)", async ({
+    page,
+  }) => {
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Cache Delta ${uniqueSuffix()}`,
+      "e2edelta",
+    );
+    const first = await createCanvasAsset(page, worldId);
+
+    // Warm the cache on the first asset.
+    await clickPlay(page);
+    await waitForEngineReady(page);
+    await page.waitForTimeout(3_000);
+
+    // Add a second, different asset. The world now holds one item the client
+    // already has and one it has never seen — which is exactly the shape
+    // SC-003 describes: an otherwise-unchanged world with one change in it.
+    const second = await createCanvasAsset(
+      page,
+      worldId,
+      /* differentSeed */ true,
+    );
+    expect(second.assetId).not.toBe(first.assetId);
+
+    const delta = measure(page);
+    await page.reload();
+    await waitForEngineReady(page);
+    await page.waitForTimeout(3_000);
+    const traffic = await delta.stop();
+
+    const overhead =
+      second.byteSize > 0 ? traffic.assetBytes / second.byteSize : 0;
+    console.log(
+      `[cache] changed-asset: transferred ${traffic.assetBytes}B of assets ` +
+        `(${traffic.assetRequests} req) for a ${second.byteSize}B asset — ` +
+        `${(overhead * 100).toFixed(1)}% of its size`,
+    );
+
+    // The already-held asset must not come back down. Asserting the request
+    // count separately from the byte total means a regression says *which*
+    // thing broke: re-fetching everything, or fetching the right thing twice.
+    expect(
+      traffic.assetRequests,
+      "only the new asset should be fetched",
+    ).toBeLessThanOrEqual(1);
+
+    // SC-003: within 10% of the changed asset's own size. Stated as an upper
+    // bound on overhead — transferring less than the asset would mean it did
+    // not arrive.
+    expect(traffic.assetBytes).toBeGreaterThan(0);
+    expect(overhead).toBeLessThanOrEqual(1.1);
   });
 
   test("worlds do not read or disturb each other (US1 scenario 4)", async ({

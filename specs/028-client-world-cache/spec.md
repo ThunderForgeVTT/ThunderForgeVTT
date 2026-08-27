@@ -763,6 +763,9 @@ fetch and without a loading state.
   rather than quietly rescoped.
 - **SC-003**: When a single asset has changed in an otherwise-unchanged
   world, the bytes transferred are within 10% of that one asset's size.
+  *Measured 2026-08-26: exactly 100.0% — 179,378 bytes transferred for a
+  179,378 byte asset, in one request. The delta is the new asset and nothing
+  else; the already-held asset was not re-fetched.*
 - **SC-004**: 100% of revocation cases — world membership, scene access,
   actor permission, sign-out — result in the affected content being
   unreadable from the local store, verified by automated test.
