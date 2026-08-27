@@ -17,8 +17,8 @@ crate-type = ["rlib"]
 # of the `rand` ecosystem, so this crate accepts any injected `RngCore`
 # without depending on a concrete RNG or OS/entropy facility itself).
 [dependencies]
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.149"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
 rand_core = "0.10"
 
 [dev-dependencies]

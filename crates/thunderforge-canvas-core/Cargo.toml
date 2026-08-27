@@ -18,7 +18,7 @@ crate-type = ["rlib"]
 # with zero conversion, as long as the glam version here matches the one
 # the workspace's `bevy` pulls in (currently 0.30.x).
 [dependencies]
-glam = "0.30"
+glam = "0.33"
 serde_json = "1"
 
 [dev-dependencies]

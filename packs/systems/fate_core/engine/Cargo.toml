@@ -9,7 +9,7 @@ repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
 license.workspace = true
 
 [dependencies]
-bevy = { version = "0.18.1", default-features = false, features = [
+bevy = { version = "0.19.1", default-features = false, features = [
     "bevy_asset",
     "bevy_core_pipeline",
     "bevy_render",
@@ -21,15 +21,15 @@ bevy = { version = "0.18.1", default-features = false, features = [
     "png",
     "webgl2",
 ] }
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.149"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-bevy_winit = { version = "0.18.1" }
+bevy_winit = { version = "0.19.1" }
 fate-server = { path = "../server" }
 
 [lib]
