@@ -28,7 +28,7 @@ description: "Task list for 028-client-world-cache"
 - [x] T001 Author `docs/adrs/20260826-052-client-cache-offline-and-peer-adjudication.md` recording the amendment to ADR-046's server-authoritative model (offline authoring + peer distribution), the DMCA determination from plan.md, and the peer-transfer default decision — **BLOCKING, no implementation may begin until accepted (Constitution Principle IV)**
 - [x] T002 Add index row for ADR-052 to `docs/adrs/README.md`
 - [X] T003 Create crate `crates/thunderforge-cache-core/` with `Cargo.toml` (no `web-sys`, no Diesel, no network deps — enforce the purity boundary from contracts/cache-core-api.md), `[lints] workspace = true`, and `license.workspace = true`
-- [ ] T004 Create crate `crates/thunderforge-cache-browser/` with `Cargo.toml` targeting wasm32, depending on `thunderforge-cache-core`
+- [X] T004 Create crate `crates/thunderforge-cache-browser/` with `Cargo.toml` targeting wasm32, depending on `thunderforge-cache-core`
 - [X] T005 Register both crates in the workspace `members` list in `Cargo.toml`
 - [X] T006 [P] Add `sha2` to `crates/thunderforge-cache-core/Cargo.toml` and `web-sys` features (OPFS, WebCrypto, IndexedDB, RTCDataChannel) to `crates/thunderforge-cache-browser/Cargo.toml`
 
@@ -75,9 +75,9 @@ description: "Task list for 028-client-world-cache"
 - [X] T021 [P] [US1] Unit tests for all six `compute_plan` branches from contracts/graphql-delta-sync.md in `crates/thunderforge-cache-core/tests/delta.rs`
 - [ ] T022 [US1] Implement `worldSyncPlan` query per contracts/graphql-delta-sync.md in `src/server/src/graphql/queries/world_sync_plan.rs`, computing the plan **from** authorized items rather than filtering afterwards
 - [ ] T023 [US1] Register `worldSyncPlan` on the Query root in `src/server/src/graphql.rs`
-- [ ] T024 [P] [US1] Implement encrypted OPFS blob read/write keyed by fingerprint in `crates/thunderforge-cache-browser/src/opfs.rs`
-- [ ] T025 [P] [US1] Implement non-extractable AES-GCM session key generation and IndexedDB storage in `crates/thunderforge-cache-browser/src/crypto.rs`
-- [ ] T026 [US1] Implement the IndexedDB `index` store (fingerprint, size, last read, world) in `crates/thunderforge-cache-browser/src/index.rs`
+- [X] T024 [P] [US1] Implement encrypted OPFS blob read/write keyed by fingerprint in `crates/thunderforge-cache-browser/src/opfs.rs`
+- [X] T025 [P] [US1] Implement non-extractable AES-GCM session key generation and IndexedDB storage in `crates/thunderforge-cache-browser/src/crypto.rs`
+- [X] T026 [US1] Implement the IndexedDB `index` store (fingerprint, size, last read, world) in `crates/thunderforge-cache-browser/src/index.rs`
 - [ ] T027 [US1] Create `CachedAssetsPlugin` in `src/engine/src/plugins/cached_assets.rs` routing Bevy asset reads through the cache before the network, registered in `src/engine/src/lib.rs`
 - [ ] T028 [US1] Wire `worldSyncPlan` into world open in `apps/web/src/engine/world/sync/index.ts`, sending the manifest and applying the returned plan
 - [ ] T029 [US1] Verify every fetched item against its promised fingerprint before storing, via `cache_core::fingerprint::verify`, in `crates/thunderforge-cache-browser/src/opfs.rs`

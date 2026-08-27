@@ -1,0 +1,42 @@
+# Ephemeral stack for load/torture runs. Never share this with `compose.yml`.
+#
+# Three deliberate differences from the dev stack:
+#
+# 1. No `container_name`. That field is global, so the dev stack and a torture
+#    run could not coexist — and the whole point here is running against a
+#    throwaway database while your real one keeps its data.
+# 2. `tmpfs` instead of named volumes. Nothing reaches disk at all, so
+#    "nuke it" is just stopping the containers. No `down -v`, no orphaned
+#    volumes accumulating after a dozen runs.
+# 3. Non-default ports, so a torture run cannot accidentally point at — or be
+#    pointed at by — the dev stack on 5432/9000.
+#
+# Driven by scripts/torture.mjs; not intended to be run by hand.
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=thunderforge
+    ports:
+      - "${TORTURE_PG_PORT:-55432}:5432"
+    tmpfs:
+      # In RAM on purpose. A torture run writes a lot and keeps none of it,
+      # and this also removes disk I/O as a confound in the numbers.
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d thunderforge"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+  rustfs:
+    image: rustfs/rustfs:1.0.0-rc.2
+    environment:
+      - RUSTFS_ACCESS_KEY=${RUSTFS_ROOT_ACCESS_KEY:-thunderforge-rustfs-root}
+      - RUSTFS_SECRET_KEY=${RUSTFS_ROOT_SECRET_KEY:-thunderforge-rustfs-root-secret}
+    ports:
+      - "${TORTURE_RUSTFS_PORT:-59000}:9000"
+    tmpfs:
+      - /data

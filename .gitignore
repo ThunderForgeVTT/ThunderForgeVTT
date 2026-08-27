@@ -183,3 +183,6 @@ graphify-out/
 
 ### scratch resume notes (delete after resuming, never shipped) ###
 /TOMORROW.md
+
+# Spec 028 load runs: disposable artifacts, safe to delete wholesale
+apps/web/torture-results/

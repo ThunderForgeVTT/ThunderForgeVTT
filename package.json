@@ -10,7 +10,13 @@
     "build": "./scripts/build.mjs",
     "clean": "rimraf dist",
     "dev": "./scripts/dev.mjs",
-    "format": "prettier --check \"{apps,src,scripts}/**/*.{ts,tsx,js,mjs,json,scss}\"; cargo fmt"
+    "format": "prettier --check \"{apps,src,scripts}/**/*.{ts,tsx,js,mjs,json,scss}\"; cargo fmt",
+    "torture": "./scripts/torture.mjs",
+    "torture:5": "./scripts/torture.mjs 5",
+    "torture:10": "./scripts/torture.mjs 10",
+    "torture:25": "./scripts/torture.mjs 25",
+    "torture:50": "./scripts/torture.mjs 50",
+    "torture:100": "./scripts/torture.mjs 100"
   },
   "devDependencies": {
     "rimraf": "6.1.3"
