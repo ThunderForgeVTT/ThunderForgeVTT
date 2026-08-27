@@ -28,6 +28,13 @@
 import { createClient, type Client } from "graphql-ws";
 
 export interface WorldEventLike {
+  /**
+   * The server's `world_events.id` — monotonic, and the whole basis of the
+   * reconnect catch-up below. Optional because a replayed event constructed
+   * from the catch-up query and a live one both flow through here, and
+   * because older callers construct these in tests.
+   */
+  id?: number;
   event_code?: number;
   eventCode?: number;
   token_event?: unknown;
@@ -55,6 +62,52 @@ export type LiveSyncState =
   | { status: "reconnecting"; attempt: number };
 
 type LiveSyncStateListener = (state: LiveSyncState) => void;
+
+/**
+ * The highest `world_events.id` this tab has processed, per world.
+ *
+ * Module-level rather than per-subscription on purpose. A fully-mounted world
+ * page holds four to six independent subscriptions on this one socket (scene
+ * launch, canvas content, chat, combat, genie, playback), and every one of
+ * them sees every event for its world. A cursor per subscription would mean
+ * six clients each asking the server for the same backlog and six copies of
+ * every replayed event — and since the handlers are refetch-on-nudge, that is
+ * a refetch storm at the exact moment a connection has just recovered.
+ *
+ * One cursor per world, advanced by whichever subscription sees an event
+ * first, means one catch-up request and one replay.
+ */
+const lastSeenEventId = new Map<string, number>();
+
+/**
+ * Consumers to hand replayed events to, per world.
+ *
+ * A replayed event has to reach the same code that would have handled it live
+ * — the wall/token/shape/light appliers, the chat and combat panels — and
+ * those read from the async iterables `subscribeToWorldEvents` hands out. So
+ * the catch-up pushes into exactly those queues rather than inventing a
+ * second delivery path that could drift from the first.
+ */
+const worldConsumers = new Map<string, Set<(event: WorldEventLike) => void>>();
+
+/**
+ * Note an event as processed, whether it arrived live or by replay.
+ *
+ * Monotonic by construction: the server assigns ids in ascending order and a
+ * replay can only contain ids we have not seen, but taking the max means a
+ * late duplicate can never drag the cursor backwards and cause the same
+ * backlog to be requested twice.
+ */
+function noteSeen(worldId: string, event: WorldEventLike): void {
+  if (typeof event.id !== "number") return;
+  const current = lastSeenEventId.get(worldId) ?? 0;
+  if (event.id > current) lastSeenEventId.set(worldId, event.id);
+}
+
+/** What this tab believes it has processed for a world. */
+export function lastSeenEventIdFor(worldId: string): number {
+  return lastSeenEventId.get(worldId) ?? 0;
+}
 
 let client: Client | null = null;
 let liveSyncState: LiveSyncState = { status: "connecting" };
@@ -134,6 +187,7 @@ function getClient(): Client {
 const WORLD_EVENTS_SUBSCRIPTION = `
   subscription WorldEventsCreated($worldId: String!) {
     worldEventsCreated(worldId: $worldId) {
+      id
       eventCode
       tokenEvent
     }
@@ -154,12 +208,43 @@ export function subscribeToWorldEvents(worldId: string): AsyncIterable<WorldEven
   let error: unknown = null;
   let done = false;
 
+  /**
+   * Hand one event to this consumer.
+   *
+   * Shared by the live path and the catch-up replay so a replayed event is
+   * indistinguishable from a live one to everything downstream — which is the
+   * property that lets the existing per-code handlers stay untouched.
+   *
+   * Ids that are not newer than what this consumer has already taken are
+   * dropped. That is what makes replay safe to overlap with live delivery: an
+   * event can legitimately arrive twice — once in the catch-up batch and once
+   * on the wire, if it landed while the query was in flight — and applying it
+   * twice would mean a duplicate refetch.
+   */
+  let consumerHighWater = 0;
+  const deliver = (event: WorldEventLike) => {
+    if (typeof event.id === "number") {
+      if (event.id <= consumerHighWater) return;
+      consumerHighWater = event.id;
+    }
+    noteSeen(worldId, event);
+    queue.push(event);
+    pending?.resolve(false);
+    pending = null;
+  };
+
+  // Registered so the reconnect catch-up can reach this consumer.
+  const consumers = worldConsumers.get(worldId) ?? new Set();
+  consumers.add(deliver);
+  worldConsumers.set(worldId, consumers);
+
   const dispose = getClient().subscribe<{ worldEventsCreated: WorldEventLike }>(
     { query: WORLD_EVENTS_SUBSCRIPTION, variables: { worldId } },
     {
       next: (result) => {
         if (result.data?.worldEventsCreated) {
-          queue.push(result.data.worldEventsCreated);
+          deliver(result.data.worldEventsCreated);
+          return;
         }
         pending?.resolve(false);
         pending = null;
@@ -200,10 +285,114 @@ export function subscribeToWorldEvents(worldId: string): AsyncIterable<WorldEven
           return { value: undefined, done: true };
         },
         async return(): Promise<IteratorResult<WorldEventLike>> {
+          // Deregister before disposing, or the catch-up would keep pushing
+          // into a queue nobody is reading — a slow leak per unmounted panel.
+          worldConsumers.get(worldId)?.delete(deliver);
+          if (worldConsumers.get(worldId)?.size === 0) {
+            worldConsumers.delete(worldId);
+          }
           dispose();
           return { value: undefined, done: true };
         },
       };
     },
   };
+}
+
+/**
+ * Ask the server for everything this tab missed while its socket was down,
+ * and deliver it as though it had arrived live.
+ *
+ * # Why this exists
+ *
+ * Live delivery is at-most-once and always will be: a socket that is down
+ * receives nothing, and a subscriber that falls behind the server's per-world
+ * channel has messages dropped on the floor. `graphql-ws` reconnects and
+ * resumes, and until now that resumption silently assumed nothing had
+ * happened in the gap — a token moved, a scene launched or a message posted
+ * during a ten-second reconnect was simply never seen by this tab.
+ *
+ * # Why it is a query rather than part of the subscription
+ *
+ * `graphql-ws` re-sends the original subscribe payload verbatim on reconnect,
+ * so a cursor passed as a subscription variable would be frozen at whatever
+ * it was when the page first loaded — replaying from the same stale point
+ * forever and never catching up. Asking as a query reads the cursor at the
+ * moment of asking.
+ *
+ * # The contract with the caller
+ *
+ * Returns `"caught-up"` when the gap was replayed and downstream handlers
+ * have been fed, and `"resync-required"` when the gap was larger than the
+ * server will replay. In the second case **nothing has been delivered** and
+ * the caller must refetch the world; applying a partial backlog would leave
+ * the tab silently behind while believing it was current.
+ *
+ * Never throws. A catch-up that fails leaves this tab exactly where a
+ * reconnect used to leave it, which is the behaviour being improved on, not
+ * a new failure mode.
+ */
+export async function catchUpWorldEvents(
+  worldId: string,
+): Promise<"caught-up" | "resync-required" | "unavailable"> {
+  const afterId = lastSeenEventIdFor(worldId);
+
+  let payload: {
+    events?: WorldEventLike[];
+    truncated?: boolean;
+    latestId?: number;
+  } | null = null;
+
+  try {
+    const { postGraphQL } = await import("@/api/graphqlClient");
+    const data = await postGraphQL<{
+      worldEventsSince: {
+        events: WorldEventLike[];
+        truncated: boolean;
+        latestId: number;
+      };
+    }>(
+      `query WorldEventsSince($worldId: UUID!, $afterId: Int!) {
+         worldEventsSince(worldId: $worldId, afterId: $afterId) {
+           events { id eventCode tokenEvent }
+           truncated
+           latestId
+         }
+       }`,
+      { worldId, afterId },
+    );
+    payload = data.worldEventsSince;
+  } catch {
+    // Offline again, refused, or the server is unhappy. The caller's own
+    // resync path is the backstop.
+    return "unavailable";
+  }
+
+  if (!payload) return "unavailable";
+
+  if (payload.truncated) {
+    // Too far behind to replay. Move the cursor to where a resync will leave
+    // us, so the *next* reconnect measures its gap from the right place
+    // rather than from a point we are about to abandon.
+    if (typeof payload.latestId === "number") {
+      lastSeenEventId.set(worldId, payload.latestId);
+    }
+    return "resync-required";
+  }
+
+  const consumers = worldConsumers.get(worldId);
+  for (const event of payload.events ?? []) {
+    // Oldest first, and through the same `deliver` the live path uses — so a
+    // replayed event is indistinguishable downstream, and each consumer's own
+    // id check drops anything it already handled.
+    if (consumers) {
+      for (const deliver of consumers) deliver(event);
+    } else {
+      // Nobody is subscribed yet; the cursor still has to advance or the same
+      // backlog is requested again on the next reconnect.
+      noteSeen(worldId, event);
+    }
+  }
+
+  return "caught-up";
 }

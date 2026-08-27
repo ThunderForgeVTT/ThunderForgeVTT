@@ -20,6 +20,7 @@ import {
   startShapeMutationBridge,
   startTokenMutationBridge,
   startWallMutationBridge,
+  catchUpWorldEvents,
   subscribeToLiveSyncState,
   subscribeToWorldEvents,
   type LiveSyncState,
@@ -868,18 +869,72 @@ export default function WorldPage() {
   useEffect(() => {
     sceneIdRef.current = sceneId;
   }, [sceneId]);
+  // The world id, read the same way: the reconnect handler below runs from a
+  // subscription callback and must see the id as it is *now*, not as it was
+  // when the effect was created.
+  const idRef = useRef(id);
+  useEffect(() => {
+    idRef.current = id;
+  }, [id]);
   // Only a transition into `live` *after* having already been live once
   // counts as a reconnect worth re-fetching for — the very first
   // `connecting` -> `live` transition on initial mount is already covered
   // by the four loadXIntoStore effects above, and re-running them again
   // here would just be redundant (harmless, since they're idempotent
   // upserts per research.md §5, but pointless).
+  //
+  // Seeded from the connection's *current* state, not `false`. The socket is
+  // module-level and connects on the first `subscribeToWorldEvents`, which
+  // happens before this effect subscribes — so on a normal load this listener
+  // never sees the initial `connecting -> live` at all, and its first observed
+  // transition is already a reconnect. Starting at `false` meant that
+  // reconnect was mistaken for a first connect and **nothing was recovered**:
+  // not the catch-up, and not the scene refetch this ref was written for.
+  // Being already `live` when we start listening is exactly what "has been
+  // live once" means.
   const wasLiveRef = useRef(false);
   useEffect(() => {
+    // Read when the listener is actually attached, not during render: the
+    // socket is module-level and can finish connecting in the gap between
+    // this component rendering and its effects running, which is exactly
+    // what happens on a normal load.
+    if (getLiveSyncState().status === "live") {
+      wasLiveRef.current = true;
+    }
     const unsubscribe = subscribeToLiveSyncState((state) => {
       setLiveSyncState(state);
       if (state.status === "live") {
         const currentSceneId = sceneIdRef.current;
+        const worldIdNow = idRef.current;
+
+        // Replay first, refetch second.
+        //
+        // The loaders below recover *scene content* — walls, lights, shapes,
+        // tokens — which was the original fix for a reconnect losing updates.
+        // They do not recover anything else that happened in the gap: a scene
+        // launched, a chat message posted, combat advanced. Those arrive only
+        // as events, and events during an outage were simply lost.
+        //
+        // The catch-up asks the durable record for exactly those events and
+        // feeds them through the same handlers that would have run live, so a
+        // reconnect now recovers the whole world rather than four of its
+        // tables. When the gap is too large to replay the server says so, and
+        // the full refetch below is the fallback that already existed.
+        if (wasLiveRef.current && worldIdNow) {
+          void catchUpWorldEvents(worldIdNow)
+            .then((outcome) => {
+              if (outcome === "resync-required") {
+                console.warn(
+                  "Missed too many world events to replay; resynchronising.",
+                );
+                void getScenes(worldIdNow).then(setScenes).catch(() => {});
+              }
+            })
+            .catch(() => {
+              // Never fatal: the scene loaders below still run.
+            });
+        }
+
         if (wasLiveRef.current && currentSceneId) {
           void loadWallsIntoStore(worldStore, currentSceneId).catch((error) => {
             console.error(

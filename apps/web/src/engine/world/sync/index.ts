@@ -24,6 +24,8 @@ export {
 } from "./tokens";
 export {
   subscribeToWorldEvents,
+  catchUpWorldEvents,
+  lastSeenEventIdFor,
   getLiveSyncState,
   subscribeToLiveSyncState,
   type WorldEventLike,
