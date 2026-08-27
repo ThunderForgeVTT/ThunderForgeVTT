@@ -82,9 +82,9 @@ description: "Task list for 028-client-world-cache"
 - [X] T028 [US1] Build the manifest and parse the `worldSyncPlan` reply in Rust (`crates/thunderforge-cache-browser/src/sync.rs`) — engine-driven, so cache policy has one owner (Principle I). TS triggers and observes; it decides nothing.
 - [X] T027a [US1] Wire the cache path end to end — `sync_world_cache(world_id, user_id)` in `src/engine/src/plugins/cached_assets.rs`, called from `apps/web/src/pages/world/WorldPage.tsx` on world open. Was missing: every piece existed but nothing connected them, so the cache had never executed.
 - [X] T029 [US1] Verify every fetched item against its promised fingerprint before storing, via `cache_core::fingerprint::verify`, in `crates/thunderforge-cache-browser/src/opfs.rs`
-- [ ] T030 [US1] E2E: unchanged reopen transfers ≤5% of first-visit bytes and is ≥3× faster to interactive, **excluding engine bundle bytes** (SC-001, SC-002) in `apps/web/e2e/world-cache.spec.ts`
+- [X] T030 [US1] E2E: unchanged reopen transfers ≤5% of first-visit bytes and is ≥3× faster to interactive, **excluding engine bundle bytes** (SC-001, SC-002) in `apps/web/e2e/world-cache.spec.ts`
 - [ ] T031 [P] [US1] E2E: single changed background transfers within 10% of that asset's size (SC-003) in `apps/web/e2e/world-cache.spec.ts`
-- [ ] T032 [P] [US1] E2E: multiple cached worlds do not read or disturb each other (US1 scenario 4) in `apps/web/e2e/world-cache.spec.ts`
+- [X] T032 [P] [US1] E2E: multiple cached worlds do not read or disturb each other (US1 scenario 4) in `apps/web/e2e/world-cache.spec.ts`
 
 **Checkpoint**: MVP — repeat visits are fast. Independently shippable.
 

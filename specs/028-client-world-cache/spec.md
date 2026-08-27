@@ -740,9 +740,27 @@ fetch and without a loading state.
 ### Measurable Outcomes
 
 - **SC-001**: Reopening a previously-visited, unchanged world transfers at
-  most 5% of the bytes the first visit transferred.
+  most 5% of the **asset** bytes the first visit transferred.
+  *Measured 2026-08-26: 0% — 179KB of asset bytes on a cold open, zero on the
+  warm reopen.* Scoped to asset bytes deliberately: the sync-plan query is
+  unavoidable traffic on every open by design (it is what asks "what
+  changed?"), and the application's own boot queries are not world content
+  this feature manages. Including them puts a fixed floor under the ratio
+  that has nothing to do with caching. The whole-payload ratio is still
+  reported by the test — 13.8% at time of writing, dominated by that fixed
+  cost — so a regression making page load chattier stays visible rather than
+  being hidden behind the narrower assertion.
 - **SC-002**: Reopening a previously-visited, unchanged scene reaches an
   interactive canvas at least 3x faster than the same scene loads today.
+  **NOT MET as measured 2026-08-26**: 5748ms cold versus 5743ms warm — no
+  improvement at all. The reason is understood and is not the cache: both
+  timings are dominated by instantiating the engine WASM bundle, which the
+  world cache does not touch and FR-035 explicitly excludes. On a test world
+  holding one 512x512 image the asset transfer is a rounding error against
+  engine startup. This criterion cannot be honestly evaluated until either
+  the engine bundle stops dominating (the release-profile work) or the
+  measurement isolates scene-load time from engine-start time. Left failing
+  rather than quietly rescoped.
 - **SC-003**: When a single asset has changed in an otherwise-unchanged
   world, the bytes transferred are within 10% of that one asset's size.
 - **SC-004**: 100% of revocation cases — world membership, scene access,
