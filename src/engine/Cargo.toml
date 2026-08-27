@@ -46,6 +46,16 @@ bevy = { version = "0.18.1", default-features = false, features = [
   # same instant, i.e. the view could see the sprites and no system existed to
   # queue them.
   "bevy_sprite_render",
+  # `bevy_ui`/`bevy_ui_render` are currently unused: the only UI node in the
+  # crate was a one-line debug HUD, removed once it turned out to be pulling
+  # in two crates (including a whole render pipeline with its own extraction,
+  # queueing and batching) to draw a single string of developer text.
+  #
+  # Kept anyway, deliberately. Dropping them shrinks the bundle, but the
+  # release build already lands at ~4.15MB brotli, so the remaining size win
+  # is small — and re-adding a render pipeline later is far more disruptive
+  # than carrying it. If you are trimming features for size, measure first:
+  # this is not the one that matters.
   "bevy_ui_render",
   "bevy_gizmos_render",
   "bevy_text",

@@ -3,6 +3,7 @@
 import {
   ROOT_DIR,
   ensureEngineBuild,
+  engineProfile,
   log,
   parseArgs,
   spawnManaged,
@@ -45,7 +46,10 @@ async function run() {
     process.exit(1);
   });
 
-  await ensureEngineBuild({ force: args.force });
+  // The dev loop defaults to the fast profile: a seven-minute engine build
+  // after every edit is not a dev loop. Set ENGINE_PROFILE=release when you
+  // specifically want to look at load performance.
+  await ensureEngineBuild({ force: args.force, profile: engineProfile("dev") });
 
   log("dev", "Starting frontend and backend...");
   const frontend = spawnManaged("pnpm -F @thunderforge/web run dev", {

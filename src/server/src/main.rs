@@ -62,6 +62,7 @@ use diesel::{RunQueryDsl, pg::PgConnection};
 use std::net::SocketAddr;
 use tokio::sync::broadcast;
 use tower_cookies::{CookieManagerLayer, Key};
+use tower_http::compression::CompressionLayer;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
@@ -516,6 +517,15 @@ async fn main() {
                 .allow_headers(Any),
         )
         .layer(TraceLayer::new_for_http())
+        // Compress responses. The engine wasm dominates first load and was
+        // going out uncompressed: ~24.7MB release-built, ~4.15MB brotli. That
+        // ratio is not incidental — wasm is highly repetitive, so it
+        // compresses far better than typical binary content.
+        //
+        // Content negotiation means a client that asks for neither encoding
+        // still gets identity, so this cannot break anything that was working;
+        // it only takes the win where the browser already advertised support.
+        .layer(CompressionLayer::new().br(true).gzip(true))
         .layer(CookieManagerLayer::new())
         .layer(Extension(schema));
 

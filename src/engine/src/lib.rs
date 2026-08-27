@@ -782,20 +782,6 @@ fn setup_scene(mut commands: Commands, mut token_entities: ResMut<TokenEntities>
 
     token_entities.0.insert("npc".to_string(), npc_entity);
 
-    commands.spawn((
-        Text::new("Bevy wasm: move red token with WASD/arrows, or click-drag any token."),
-        TextFont {
-            font_size: 24.0,
-            ..default()
-        },
-        TextColor(Color::WHITE),
-        Node {
-            position_type: PositionType::Absolute,
-            top: px(16),
-            left: px(16),
-            ..default()
-        },
-    ));
 }
 
 fn move_player(

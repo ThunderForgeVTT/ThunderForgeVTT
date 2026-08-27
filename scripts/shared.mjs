@@ -122,7 +122,7 @@ function hashDirectoryRecursive(hash, dirPath) {
   }
 }
 
-function getEngineInputsHash() {
+function getEngineInputsHash(profile = engineProfile()) {
   const hash = createHash("sha256");
 
   if (existsSync(WORKSPACE_CARGO_TOML)) {
@@ -135,13 +135,42 @@ function getEngineInputsHash() {
 
   hashFile(hash, ENGINE_CARGO_TOML);
   hashDirectoryRecursive(hash, ENGINE_SRC_DIR);
+  // The profile is part of the cache key. Without it, switching between dev
+  // and release leaves pkg.sum matching and the rebuild is silently skipped —
+  // you would get whichever bundle happened to be on disk, which is the worst
+  // failure available here because it looks like it worked.
+  hash.update(profile);
   return hash.digest("hex");
 }
 
-export async function buildEngine() {
-  log("engine", "Building WebAssembly engine...");
+/**
+ * Which wasm-pack profile to build the engine with.
+ *
+ * `--dev` is seconds to build and 220MB to ship; `--release` is ~7 minutes to
+ * build and 24.7MB, of which 4.15MB after brotli. The gap is not mostly code:
+ * 71% of the dev bundle is the wasm `name` section — unmangled Rust and Bevy
+ * symbols — which is why it gzips 10:1 and why stripping it is worth so much.
+ *
+ * So the default follows the caller rather than being one global choice. The
+ * dev loop keeps `--dev`, because a seven-minute wait after every engine edit
+ * would be intolerable and nobody is measuring load time there. Everything
+ * else — production builds, and e2e runs where a 57MB unoptimized code
+ * section is compiled by the browser on every page load — gets `--release`.
+ *
+ * Override with ENGINE_PROFILE=dev|release when you want the other one.
+ */
+export function engineProfile(defaultProfile = "release") {
+  const requested = process.env.ENGINE_PROFILE;
+  if (requested === "dev" || requested === "release") {
+    return requested;
+  }
+  return defaultProfile;
+}
+
+export async function buildEngine({ profile = engineProfile() } = {}) {
+  log("engine", `Building WebAssembly engine (${profile})...`);
   const child = spawnManaged(
-    "wasm-pack build ./ --dev --target web --out-dir ../../dist/engine --scope thunderforge --out-name engine",
+    `wasm-pack build ./ --${profile} --target web --out-dir ../../dist/engine --scope thunderforge --out-name engine`,
     {
       cwd: ENGINE_DIR,
       prefix: "engine",
@@ -158,39 +187,42 @@ export async function buildEngine() {
   pkg.name = "@thunderforge/engine";
   writeFileSync(ENGINE_PKG_PACKAGE_JSON, JSON.stringify(pkg, null, 2), "utf-8");
 
-  const currentInputsHash = getEngineInputsHash();
+  const currentInputsHash = getEngineInputsHash(profile);
   writeFileSync(ENGINE_PKG_SUM, currentInputsHash, "utf-8");
   log("engine", "Build complete and pkg.sum updated.");
 }
 
-export async function ensureEngineBuild({ force = false } = {}) {
+export async function ensureEngineBuild({
+  force = false,
+  profile = engineProfile(),
+} = {}) {
   if (force) {
     log("engine", "Forcing build...", process.stderr);
-    await buildEngine();
+    await buildEngine({ profile });
     return;
   }
 
   if (!existsSync(ENGINE_PKG_DIR)) {
     log("engine", "No pkg directory found, building engine...");
-    await buildEngine();
+    await buildEngine({ profile });
     return;
   }
 
   if (!existsSync(ENGINE_PKG_SUM)) {
     log("engine", "No pkg.sum file found, building engine...");
-    await buildEngine();
+    await buildEngine({ profile });
     return;
   }
 
   const pkgSum = readFileSync(ENGINE_PKG_SUM, "utf-8").trim();
-  const currentInputsHash = getEngineInputsHash();
+  const currentInputsHash = getEngineInputsHash(profile);
   if (pkgSum === currentInputsHash) {
     log("engine", "Engine is up to date, skipping build...");
     return;
   }
 
   log("engine", "Engine is out of date, building...");
-  await buildEngine();
+  await buildEngine({ profile });
 }
 
 export async function terminateChildren(signal = "SIGINT") {

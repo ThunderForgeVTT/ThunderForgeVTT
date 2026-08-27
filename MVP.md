@@ -94,6 +94,18 @@ This section provides a high-level overview of the core objects and concepts tha
   - No cross-instance federation (talking to other ThunderForge servers) exists.
 - **Marketplace:** Not started.
   - A marketplace where users can upload and share their creations.
-- **Engine WASM bundle size / load-time:** Not started. The dev-served `dist/engine/engine_bg.wasm` is ~190MB (confirmed 2026-08-21) — every full page reload in e2e (and every real player's first load) re-instantiates it from scratch, which is now the dominant cost driving several e2e test timeouts up into the 3-8 minute range. Two independent options, not mutually exclusive:
-  - **Build profile**: that 190MB figure is from an unoptimized `dev` profile build (`wasm-pack`'s default in this repo's `scripts/build.mjs`, no `wasm-opt`, full debug info). Switching the served bundle to `--release` + `wasm-opt` requires no restructuring and is likely the highest-leverage first step — worth measuring before anything below.
-  - **Per-pack lazy loading**: WASM has no dynamic code-splitting analogous to JS's `import()` — a Cargo workspace split alone (e.g. separating `packs/systems/dnd5e/engine` further) won't shrink the single shipped `.wasm` unless each piece is actually compiled to its own wasm binary and fetched/instantiated independently at runtime, communicating with the host/core engine over a stable JS-glue boundary. The natural seam for this is the existing pack-system boundary (`packs/systems/*/engine`) — a given world only needs its one active game system's engine code, not every installed system's — but this is a real architectural change (host interface design, lazy-instantiation lifecycle) and should follow, not precede, the release-profile measurement above.
+- **Engine WASM bundle size / load-time:** Measured and largely addressed 2026-08-26. The dev-profile bundle had reached 220,099,904 bytes (~210MiB) — the earlier "~190MB (confirmed 2026-08-21)" figure had drifted ~16% unnoticed, which is itself worth knowing.
+  - **What the 210MB actually was**: 71.3% of it (157MB) is the wasm `name` custom section — unmangled Rust/Bevy symbol names — not code. There are no DWARF sections at all. That is why it gzipped 10:1, and why the number was always more alarming than the program it described.
+  - **Measured** (`wasm-pack build --release`, no source changes):
+
+    | Build | Raw | gzip -9 | brotli -q11 |
+    |---|---:|---:|---:|
+    | dev (was shipping) | 220.1 MB | 21.1 MB | — |
+    | release + `wasm-opt -O` | 24.7 MB | 6.7 MB | 4.15 MB |
+    | release + `wasm-opt -Oz` | 21.0 MB | 6.6 MB | 4.152 MB |
+
+    8.9x smaller raw, 5.1x on the wire. `-Oz` is not worth it: 3.7MB less raw for **1,861 bytes** less brotli, at ~6 extra minutes of optimizer time. Stay on wasm-pack's default `-O`.
+  - **Done**: `scripts/shared.mjs` now selects the profile per caller — the dev loop keeps `--dev` (a 7-minute rebuild after every engine edit is not a dev loop), everything else defaults to `--release`. `ENGINE_PROFILE=dev|release` overrides. The profile participates in the `pkg.sum` cache key, without which switching profiles silently skips the rebuild and serves whichever bundle was already on disk.
+  - **Done**: the server was serving the wasm **uncompressed** — `tower-http` had no compression feature and no `CompressionLayer` existed. That was a ~6x gap on first-load bytes on top of the release win, and the number that actually governs a real player's first load. Now brotli + gzip.
+  - **Still open — per-pack lazy loading**: WASM has no dynamic code-splitting analogous to JS's `import()`. A Cargo workspace split alone won't shrink the single shipped `.wasm` unless each piece compiles to its own binary, fetched and instantiated independently over a stable JS-glue boundary. The natural seam is `packs/systems/*/engine` — a world needs only its one active system's engine code. Real architectural work, and at 4.15MB brotli the case for it is now much weaker than it looked.
+  - **Still open — Bevy feature trim**: `bevy_ui`/`bevy_ui_render` are now unused (the one-line debug HUD that needed them was removed) but deliberately retained; `webp` appears unreferenced in the engine crate; `bevy_gizmos` is diagnostic-only and could be feature-gated. None measured. Behind the two changes above in value.
