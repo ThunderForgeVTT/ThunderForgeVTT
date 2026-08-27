@@ -47,8 +47,10 @@ extend type Query {
 - Requires an authenticated session and world membership, via the same
   `require_world_member` path `canvasImageAssetsForScene` uses.
 - The plan is computed **from what the caller may see**, not filtered
-  afterwards. An item the caller lacks permission for appears in neither
-  `fetch` nor `evict` — its existence is not disclosed.
+  afterwards. An item the caller lacks permission for can therefore never
+  appear in `fetch`. If the caller *claims* to hold one, it appears in
+  `evict` — the same answer a deleted item produces, so its existence is
+  still not disclosed while the client is correctly told to discard it.
 - Per-object permissions (ADR-050) narrow the plan further: an actor the
   caller may not view contributes nothing.
 
@@ -61,13 +63,21 @@ extend type Query {
 | Server fingerprint is `NULL` (un-backfilled) | Item in `fetch` — never treated as unchanged |
 | Item no longer exists | Item id in `evict` |
 | Caller lost permission since caching | Item id in `evict` |
-| Client claims an item it may not see | Omitted from both lists |
+| Client claims an item it may not see | Item id in `evict` — byte-identical to a deleted item |
 | `held` is empty | Full plan — the cold-start case |
 
-**`evict` deliberately conflates "gone" with "forbidden."** The client cannot
-distinguish them and must not try; both mean discard. This is what makes
-FR-015 fall out of the same mechanism as ordinary cache correctness rather
-than needing a parallel revocation channel.
+**`evict` deliberately conflates "gone", "forbidden", and "never existed."**
+All three produce a byte-identical response, which is what makes FR-015 fall
+out of ordinary cache correctness rather than needing a parallel revocation
+channel — and what prevents the manifest from becoming an existence oracle.
+
+An earlier draft of this table said an unauthorized held item was "omitted
+from both lists." That was wrong, and would have been a disclosure bug in the
+opposite direction from the one it was trying to avoid: silence means "your
+copy is current", so the client would have gone on holding content it may no
+longer see, indefinitely. Forbidden content must be evicted. Non-disclosure
+is preserved by making the eviction indistinguishable from a deleted item's,
+not by staying quiet about it.
 
 ### Errors
 

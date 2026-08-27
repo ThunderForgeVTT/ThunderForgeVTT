@@ -83,8 +83,11 @@ HeldItem { id: ItemId, fingerprint: Fingerprint }
 **Rules**
 
 - The server MUST NOT infer any permission from an item's presence here.
-  A client claiming to hold an item it may not see receives that item in
-  neither `fetch` nor `evict` — it is simply omitted, revealing nothing.
+- A client claiming to hold an item it may not see never receives it in
+  `fetch`, and its `evict` entry is byte-identical to a deleted item's. It
+  is told to discard, and learns nothing about whether the item exists.
+  Staying silent instead would be worse: silence means "your copy is
+  current", so the client would keep forbidden content indefinitely.
 
 ### `Manifest`
 

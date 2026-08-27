@@ -16,6 +16,8 @@ pub mod moderation;
 pub mod roll;
 pub mod scene;
 pub mod user;
+// Spec 028: the client-cache delta-sync plan (`worldSyncPlan`).
+pub mod world_sync_plan;
 
 pub use ability::AbilityQuery;
 pub use actor::ActorQuery;
@@ -30,3 +32,4 @@ pub use moderation::ModerationQuery;
 pub use roll::RollQuery;
 pub use scene::SceneQuery;
 pub use user::UserQuery;
+pub use world_sync_plan::WorldSyncPlanQuery;

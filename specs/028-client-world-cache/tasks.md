@@ -73,8 +73,8 @@ description: "Task list for 028-client-world-cache"
 
 - [X] T020 [P] [US1] Implement `compute_plan(held, authorized_current)` — matched omitted, `None` fingerprint fetched, unknown evicted — in `crates/thunderforge-cache-core/src/delta.rs`
 - [X] T021 [P] [US1] Unit tests for all six `compute_plan` branches from contracts/graphql-delta-sync.md in `crates/thunderforge-cache-core/tests/delta.rs`
-- [ ] T022 [US1] Implement `worldSyncPlan` query per contracts/graphql-delta-sync.md in `src/server/src/graphql/queries/world_sync_plan.rs`, computing the plan **from** authorized items rather than filtering afterwards
-- [ ] T023 [US1] Register `worldSyncPlan` on the Query root in `src/server/src/graphql.rs`
+- [X] T022 [US1] Implement `worldSyncPlan` query per contracts/graphql-delta-sync.md in `src/server/src/graphql/queries/world_sync_plan.rs`, computing the plan **from** authorized items rather than filtering afterwards
+- [X] T023 [US1] Register `worldSyncPlan` on the Query root in `src/server/src/graphql.rs`
 - [X] T024 [P] [US1] Implement encrypted OPFS blob read/write keyed by fingerprint in `crates/thunderforge-cache-browser/src/opfs.rs`
 - [X] T025 [P] [US1] Implement non-extractable AES-GCM session key generation and IndexedDB storage in `crates/thunderforge-cache-browser/src/crypto.rs`
 - [X] T026 [US1] Implement the IndexedDB `index` store (fingerprint, size, last read, world) in `crates/thunderforge-cache-browser/src/index.rs`
@@ -97,15 +97,15 @@ description: "Task list for 028-client-world-cache"
 
 **⚠️ Must ship in the same release as US1** — a cache outliving a permission grant is a disclosure bug
 
-- [ ] T033 [US2] Ensure `worldSyncPlan` re-authorizes from scratch on every call and omits unauthorized items from **both** lists, in `src/server/src/graphql/queries/world_sync_plan.rs`
-- [ ] T034 [US2] Include revoked and deleted items indistinguishably in `evict`, honouring per-object ADR-050 permissions, in `src/server/src/graphql/queries/world_sync_plan.rs`
+- [X] T033 [US2] Ensure `worldSyncPlan` re-authorizes from scratch on every call and omits unauthorized items from **both** lists, in `src/server/src/graphql/queries/world_sync_plan.rs`
+- [X] T034 [US2] Include revoked and deleted items indistinguishably in `evict`, honouring per-object ADR-050 permissions, in `src/server/src/graphql/queries/world_sync_plan.rs`
 - [ ] T035 [US2] Apply `evict` by deleting blobs and index entries in `crates/thunderforge-cache-browser/src/index.rs`
 - [ ] T036 [US2] Scope OPFS paths and IndexedDB stores by `user_scope` derived from the session in `crates/thunderforge-cache-browser/src/opfs.rs`
 - [ ] T037 [US2] Discard the session key on sign-out, rendering stored bytes inert independently of deletion, in `crates/thunderforge-cache-browser/src/crypto.rs`
 - [ ] T038 [US2] Implement lazy background reclamation whose failure never restores readability, in `crates/thunderforge-cache-browser/src/index.rs`
 - [ ] T039 [US2] Treat key loss as a cold cache — re-fetch, no error surfaced (FR-016c) — in `crates/thunderforge-cache-browser/src/crypto.rs`
-- [ ] T040 [P] [US2] Server test: non-member `worldSyncPlan` fails identically to any other non-member access, revealing nothing (contracts/graphql-delta-sync.md) in `src/server/src/graphql/queries/world_sync_plan.rs`
-- [ ] T041 [P] [US2] Server test: a client claiming an item it may not see receives it in neither list, in `src/server/src/graphql/queries/world_sync_plan.rs`
+- [X] T040 [P] [US2] Server test: non-member `worldSyncPlan` fails identically to any other non-member access, revealing nothing (contracts/graphql-delta-sync.md) in `src/server/src/graphql/queries/world_sync_plan.rs`
+- [X] T041 [P] [US2] Server test: a client claiming an item it may not see never receives it in `fetch`, and its `evict` entry is indistinguishable from a deleted item's, in `src/server/src/graphql/queries/world_sync_plan.rs`
 - [ ] T042 [US2] E2E: revoked membership denies access and discards local data (SC-004) in `apps/web/e2e/world-cache-permissions.spec.ts`
 - [ ] T043 [US2] E2E: downgraded actor permission evicts only the forbidden part while permitted content still loads from cache (US2 scenario 2) in `apps/web/e2e/world-cache-permissions.spec.ts`
 - [ ] T044 [US2] E2E: after sign-out, stored bytes are unreadable — asserted **against OPFS directly, before background cleanup runs**, not through the app (SC-004a) in `apps/web/e2e/world-cache-permissions.spec.ts`

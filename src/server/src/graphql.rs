@@ -71,6 +71,7 @@ pub mod queries;
 pub use queries::{
     AbilityQuery, ActorQuery, AdminQuery, GenieSessionQuery, HealthcheckQuery, InventoryQuery,
     InviteQuery, ItemQuery, LoreQuery, ModerationQuery, RollQuery, SceneQuery, UserQuery,
+    WorldSyncPlanQuery,
 };
 
 // Phase 4.10.B: Invite & Membership mutations for multiplayer campaigns
@@ -2495,6 +2496,9 @@ pub struct QueryRoot(
     GenieSessionQuery,
     ChatQuery,
     CombatQuery,
+    // Spec 028: `worldSyncPlan` — what a returning client must fetch and
+    // discard for one world.
+    WorldSyncPlanQuery,
 );
 
 #[derive(MergedObject, Default)]
