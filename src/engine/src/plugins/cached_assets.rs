@@ -321,6 +321,19 @@ enum Control {
     /// Decided off the main thread and applied here, because the resource is
     /// the only thing allowed to hold the answer.
     Readiness(bool),
+    /// The user signed out (FR-016a).
+    ///
+    /// Everything this resource holds describes what the *departing* session
+    /// was entitled to read: which scope's directory to open, which world's
+    /// blobs are ours, which fingerprints are promised, which handles were
+    /// issued. None of it survives the session that produced it, so this
+    /// returns the resource to its pre-configuration state and the read path
+    /// to plain network loads until somebody configures it again.
+    ///
+    /// This is *not* what makes the stored bytes unreadable — discarding the
+    /// key is (see `forget_world_cache`). This only stops the engine from
+    /// pointing at them.
+    Forget,
 }
 
 static CONTROL_QUEUE: OnceLock<Mutex<Vec<Control>>> = OnceLock::new();
@@ -445,6 +458,19 @@ fn apply_control(cache: &mut CanvasAssetCache, control: Control) {
             } else {
                 Readiness::Unavailable
             };
+        }
+        Control::Forget => {
+            cache.scope = None;
+            cache.world_id = None;
+            cache.fingerprints.clear();
+            cache.issued.clear();
+            // Back to `Unconfigured` rather than `Unavailable`: the cache is
+            // not broken, there is simply nobody signed in. A later
+            // `Configure` — the same user signing back in, or a different one
+            // — finds `scope: None`, so it reopens the backing store from
+            // scratch and mints a fresh key instead of quietly reusing
+            // handles the previous session opened.
+            cache.readiness = Readiness::Unconfigured;
         }
     }
 }
@@ -858,6 +884,114 @@ mod wasm {
         run_sync(world_id, user_id).await.to_string()
     }
 
+    /// Discard the signed-out user's session key, then reclaim their disk
+    /// space in the background (FR-016a, FR-016b).
+    ///
+    /// The two halves are deliberately unequal. Discarding the key is one
+    /// IndexedDB delete, is awaited, and is what actually makes this user's
+    /// stored blobs inert — immediately, whether or not a single byte is ever
+    /// deleted. Reclaiming the bytes is spawned and never awaited, because a
+    /// multi-gigabyte OPFS directory cannot be wiped before the tab closes and
+    /// waiting for it would make sign-out feel broken.
+    ///
+    /// **Reclamation can never restore readability.** It only deletes: index
+    /// rows and blob files. There is no path through it that writes a key, and
+    /// it runs strictly after `crypto::forget` has already resolved, so a
+    /// reclamation that fails, is interrupted by the tab closing, or never
+    /// runs at all leaves ciphertext whose key is gone. That ordering is the
+    /// whole reason this feature encrypts rather than merely deletes, so do
+    /// not move the `forget` below the spawn.
+    ///
+    /// **Never rejects and never throws.** Sign-out is the caller's business
+    /// and a cache problem has no standing to interfere with it, so every
+    /// failure — a malformed id, no IndexedDB, no OPFS — resolves to a summary
+    /// naming the reason and nothing more.
+    #[wasm_bindgen::prelude::wasm_bindgen]
+    pub async fn forget_world_cache(user_id: String) -> String {
+        run_forget(user_id).await.to_string()
+    }
+
+    async fn run_forget(user_id: String) -> serde_json::Value {
+        // Before anything that can fail: stop this tab reading the cache.
+        //
+        // The stored key is not the only copy — `Handles` holds a live
+        // `CryptoKey` that would keep decrypting happily long after the
+        // IndexedDB record is gone. Dropping it here is as much a part of
+        // FR-016a as the delete below, and doing it first means even the
+        // bad-uuid path leaves no usable key behind in this tab.
+        HANDLES.with(|slot| slot.borrow_mut().take());
+        OPENING.with(|slot| slot.borrow_mut().take());
+        if let Ok(mut queue) = control_queue().lock() {
+            queue.push(super::Control::Forget);
+        }
+
+        let Ok(user_uuid) = Uuid::parse_str(&user_id) else {
+            // Nothing scope-specific can be done, but the handles are already
+            // gone and the read path is already switched off.
+            return serde_json::json!({
+                "status": "degraded",
+                "reason": "user id is not a uuid",
+                "keyDiscarded": false,
+            });
+        };
+        let scope = UserScope::for_user(user_uuid);
+
+        // FR-016a. Awaited, because the answer to "is that user's cache inert
+        // yet" must be true by the time this resolves.
+        let discarded = match crypto::forget(&scope).await {
+            Ok(()) => true,
+            Err(err) => {
+                warn!(target: "cached_assets", "could not discard session key: {err}");
+                false
+            }
+        };
+
+        // FR-016b. Spawned either way — when the key survived, deleting the
+        // bytes is the only remaining defence, so a failed `forget` makes
+        // reclamation more important, not less.
+        spawn_local(reclaim(scope));
+
+        serde_json::json!({
+            "status": if discarded { "forgotten" } else { "degraded" },
+            "keyDiscarded": discarded,
+            "reclaiming": true,
+        })
+    }
+
+    /// Give back the disk the now-inert content occupies. Best-effort, in the
+    /// background, and safe to fail at any point (FR-016b).
+    ///
+    /// Nothing here opens a session key. `OpfsStore::open` needs none, and
+    /// `crypto::load_or_create` is deliberately not called: minting a fresh
+    /// key mid-reclamation would put a usable key back in the store for a
+    /// scope we just forgot.
+    async fn reclaim(scope: UserScope) {
+        // Index rows first. They are only a map of what we believe we hold;
+        // losing them costs a cold cache, never readability. If this fails the
+        // rows stay, point at blobs that are about to disappear, and the
+        // existing missing-blob repair (FR-019) plus the demand path heal it.
+        match IndexStore::open().await {
+            Ok(index) => {
+                if let Err(err) = index.clear().await {
+                    debug!(target: "cached_assets", "index reclamation failed: {err}");
+                }
+            }
+            Err(err) => debug!(target: "cached_assets", "index reclamation skipped: {err}"),
+        }
+
+        // Then the bytes. One directory removal for the whole scope; if it is
+        // interrupted, what remains on disk is ciphertext without a key.
+        match OpfsStore::open(scope).await {
+            Ok(store) => match store.remove_scope().await {
+                Ok(()) => info!(target: "cached_assets", "reclaimed the signed-out cache"),
+                Err(err) => {
+                    debug!(target: "cached_assets", "blob reclamation failed: {err}");
+                }
+            },
+            Err(err) => debug!(target: "cached_assets", "blob reclamation skipped: {err}"),
+        }
+    }
+
     fn degraded(reason: &str) -> serde_json::Value {
         debug!(target: "cached_assets", "world cache sync degraded: {reason}");
         serde_json::json!({ "status": "degraded", "reason": reason })
@@ -1267,5 +1401,64 @@ mod tests {
             )
             .is_none()
         );
+    }
+    /// Sign-out (FR-016a). The read path must stop intercepting the moment
+    /// the session ends, without waiting on anything slow: the key discard
+    /// and the byte reclamation both happen off in the wasm module, and
+    /// neither is allowed to be what stops a departed user's content being
+    /// served out of this process.
+    #[test]
+    fn forgetting_stops_the_read_path_immediately() {
+        let asset = Uuid::from_u128(9);
+        let mut cache = CanvasAssetCache {
+            readiness: Readiness::Ready,
+            world_id: Some(Uuid::nil()),
+            scope: Some("0123456789abcdef".to_owned()),
+            ..default()
+        };
+        apply_control(
+            &mut cache,
+            Control::Fingerprints(vec![(asset, Fingerprint::of_bytes(b"art"))]),
+        );
+        let mut images = Assets::<Image>::default();
+        assert!(try_cached(&mut cache, &asset_url(asset), &mut images).is_some());
+
+        apply_control(&mut cache, Control::Forget);
+
+        assert!(!cache.is_ready());
+        assert!(cache.scope.is_none());
+        assert!(cache.world_id.is_none());
+        assert!(cache.fingerprints.is_empty());
+        assert!(try_cached(&mut cache, &asset_url(asset), &mut images).is_none());
+    }
+
+    /// Signing back in must reopen the store rather than assume the handles
+    /// the previous session left behind are still good — they were dropped,
+    /// and the key they held was discarded. Clearing the scope is what makes
+    /// the identical-scope `Configure` take the reopen branch.
+    #[test]
+    fn signing_back_in_reopens_the_backing_store() {
+        let scope = "0123456789abcdef".to_owned();
+        let mut cache = CanvasAssetCache::default();
+        apply_control(
+            &mut cache,
+            Control::Configure {
+                scope: scope.clone(),
+                world_id: Uuid::nil(),
+            },
+        );
+        assert_eq!(cache.readiness, Readiness::Opening);
+
+        apply_control(&mut cache, Control::Forget);
+        assert_eq!(cache.readiness, Readiness::Unconfigured);
+
+        apply_control(
+            &mut cache,
+            Control::Configure {
+                scope,
+                world_id: Uuid::nil(),
+            },
+        );
+        assert_eq!(cache.readiness, Readiness::Opening);
     }
 }

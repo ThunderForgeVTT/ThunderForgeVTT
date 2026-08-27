@@ -24,6 +24,7 @@ import type {
   RegisterPayload,
 } from "@/types/auth";
 import { clearAssetCache } from "@/serviceWorker";
+import { discardWorldCache } from "@/services/worldCache";
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -44,7 +45,10 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function applySession(response: AuthSessionResponse, setSession: (value: AuthSession | null) => void) {
+function applySession(
+  response: AuthSessionResponse,
+  setSession: (value: AuthSession | null) => void,
+) {
   setSession(response.session ?? null);
   return response;
 }
@@ -59,7 +63,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
       return applySession(response, setSession);
     } catch (error) {
       setSession(null);
-      if (error instanceof Error && error.message === "No active session to refresh") {
+      if (
+        error instanceof Error &&
+        error.message === "No active session to refresh"
+      ) {
         return null;
       }
       throw error;
@@ -127,13 +134,24 @@ export function AuthProvider({ children }: PropsWithChildren) {
   );
 
   const logout = useCallback(async () => {
+    // Captured before the session is torn down: the engine derives the
+    // signed-out user's cache directory from this id, and after `setSession`
+    // there is nothing left to derive it from.
+    const userId = session?.user?.id ?? null;
+
     await logoutRequest();
     setSession(null);
     // Cached scene art is per browser profile, not per account. Two people
     // sharing a machine would otherwise share it, and the second would read
     // bytes the server never authorised for them.
     clearAssetCache();
-  }, []);
+    // Same reason, for the encrypted world cache (spec 028, FR-016a): drop the
+    // session key so everything it holds on disk is inert from here on,
+    // whether or not the bytes ever finish being deleted. Awaited because the
+    // discard is one IndexedDB delete, and never rejects — a cache that could
+    // fail a sign-out would be worse than no cache.
+    await discardWorldCache(userId);
+  }, [session]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

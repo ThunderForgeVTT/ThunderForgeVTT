@@ -102,8 +102,8 @@ description: "Task list for 028-client-world-cache"
 - [X] T034 [US2] Include revoked and deleted items indistinguishably in `evict`, honouring per-object ADR-050 permissions, in `src/server/src/graphql/queries/world_sync_plan.rs`
 - [X] T035 [US2] Apply `evict` by deleting blobs and index entries in `crates/thunderforge-cache-browser/src/index.rs`
 - [X] T036 [US2] Scope OPFS paths and IndexedDB stores by `user_scope` derived from the session in `crates/thunderforge-cache-browser/src/opfs.rs`
-- [ ] T037 [US2] Discard the session key on sign-out, rendering stored bytes inert independently of deletion, in `crates/thunderforge-cache-browser/src/crypto.rs`
-- [ ] T038 [US2] Implement lazy background reclamation whose failure never restores readability, in `crates/thunderforge-cache-browser/src/index.rs`
+- [X] T037 [US2] Discard the session key on sign-out, rendering stored bytes inert independently of deletion, in `crates/thunderforge-cache-browser/src/crypto.rs`
+- [X] T038 [US2] Implement lazy background reclamation whose failure never restores readability, in `crates/thunderforge-cache-browser/src/index.rs`
 - [X] T039 [US2] Treat key loss as a cold cache — re-fetch, no error surfaced (FR-016c) — in `crates/thunderforge-cache-browser/src/crypto.rs`
 - [X] T040 [P] [US2] Server test: non-member `worldSyncPlan` fails identically to any other non-member access, revealing nothing (contracts/graphql-delta-sync.md) in `src/server/src/graphql/queries/world_sync_plan.rs`
 - [X] T041 [P] [US2] Server test: a client claiming an item it may not see never receives it in `fetch`, and its `evict` entry is indistinguishable from a deleted item's, in `src/server/src/graphql/queries/world_sync_plan.rs`
