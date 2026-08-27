@@ -1,105 +1,81 @@
 /**
- * Service worker: cache-first delivery of canvas image assets.
+ * Service worker: a tombstone that deletes the canvas-asset cache.
  *
- * Scene backgrounds are the largest thing this app moves — a single imported
- * battle map is several megabytes — and today every scene switch, page reload
- * and reconnect re-downloads them. The engine fetches them itself from inside
- * wasm, so there is no JS call site to wrap; a service worker is the only
- * layer that sees those requests.
+ * This worker used to serve `/api/canvas-assets/*` cache-first, on the
+ * argument that those URLs are content-addressed — a new upload mints a new
+ * asset id, so a cached response can never be stale. That argument is sound
+ * about *staleness* and silent about *revocation*, which is the reason this
+ * file no longer caches anything (spec `028-client-world-cache`, T045b).
  *
- * # Why cache-first is safe here
+ * # Why it stopped caching rather than learning to evict
  *
- * `/api/canvas-assets/{uuid}` is effectively content-addressed: the id is
- * minted per upload and its bytes never change. Re-importing a map produces a
- * *new* asset id and the scene points at that instead. So a cached response
- * can never be stale, and there is nothing to revalidate — which is what makes
- * plain cache-first correct rather than merely convenient.
+ * A Cache Storage entry holds **plaintext** image bytes keyed by request URL,
+ * per browser profile, with no notion of who fetched them or which world they
+ * belong to. It outlived the one event that has to erase them: a member being
+ * removed from a world. Clearing on logout does not cover that — a revoked
+ * member stays signed in.
  *
- * # What is deliberately not cached
+ * Spec 028 replaced this layer with a store that does know: canvas image
+ * reads now go through `crates/thunderforge-cache-browser` (OPFS, encrypted
+ * under a session-scoped key) via the engine's `cached_assets` plugin, which
+ * evicts on the server's sync plan and discards a whole world when the server
+ * refuses that plan (T045a). Teaching this worker to participate in that
+ * eviction was the alternative; it was rejected because it would keep
+ * unencrypted bytes at rest between eviction events and would couple a layer
+ * with no session context to one built specifically to have it.
  *
- * - **Anything non-200.** A 401 from an expired session or a 403 from a
- *   world-membership check must never be cached: doing so would pin a user out
- *   of an asset they later regain access to, and would survive a re-login.
- * - **Every other `/api/` route.** GraphQL, session, and the rest are dynamic
- *   by definition.
- * - **Range requests.** A partial response cached as if whole would corrupt
- *   every later read of that asset.
+ * # Why the file still exists, and is still registered
  *
- * Authorization still happens on the server for the first fetch of any asset.
- * A cached entry is per-origin and per-browser-profile, so it cannot leak
- * across users on different machines — but it *is* shared between accounts
- * using the same browser profile, which is why the cache is cleared on logout
- * (see `clearCanvasAssetCache` in the app).
+ * Deleting it would leave every browser that already installed the old worker
+ * serving its cached plaintext indefinitely: unregistering a worker does not
+ * empty Cache Storage, and no page code can reach entries a departed worker
+ * left behind. Shipping a *new* worker that purges on activate is what
+ * actually reclaims those bytes. The app keeps registering it so that purge
+ * reaches existing installs on their next load.
+ *
+ * Bytes that used to come from here now come from the encrypted cache for the
+ * canvas (the large assets this ever mattered for), and from the HTTP cache
+ * for DOM `<img>` consumers such as the token palette — bounded by the
+ * `private, max-age=3600` the byte route sets.
  */
 
-// Bumping this name is how a deploy discards previously cached bytes.
-const CACHE_NAME = "thunderforge-canvas-assets-v1";
-const ASSET_PREFIX = "/api/canvas-assets/";
+// Every cache this worker has ever created, past and present.
+const CACHE_PREFIX = "thunderforge-canvas-assets-";
+
+/** Deletes every canvas-asset cache, whatever version created it. */
+async function purgeCanvasAssetCaches() {
+  const names = await caches.keys();
+  await Promise.all(
+    names.filter((name) => name.startsWith(CACHE_PREFIX)).map((name) => caches.delete(name)),
+  );
+}
 
 self.addEventListener("install", (event) => {
-  // Take over without waiting for existing tabs to close, so a fix to this
-  // worker reaches users on their next load rather than their next session.
+  // Take over without waiting for existing tabs to close: the point of this
+  // version is to displace a worker that is still serving cached plaintext,
+  // and waiting would leave it doing that until every tab closed.
   event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
-      // Drop caches from previous versions of this worker.
-      const names = await caches.keys();
-      await Promise.all(
-        names
-          .filter((name) => name.startsWith("thunderforge-canvas-assets-") && name !== CACHE_NAME)
-          .map((name) => caches.delete(name)),
-      );
+      await purgeCanvasAssetCaches();
       await self.clients.claim();
     })(),
   );
 });
 
 self.addEventListener("message", (event) => {
-  // The app asks for this on logout — see the note on profile sharing above.
+  // The app still asks for this on logout. Activation has normally purged
+  // already; this covers a client that installed the old worker, cached
+  // bytes, and signed out before this version activated.
   if (event.data?.type === "clear-canvas-asset-cache") {
-    event.waitUntil(caches.delete(CACHE_NAME));
+    event.waitUntil(purgeCanvasAssetCaches());
   }
 });
 
-self.addEventListener("fetch", (event) => {
-  const request = event.request;
-  const url = new URL(request.url);
-
-  if (
-    request.method !== "GET" ||
-    url.origin !== self.location.origin ||
-    !url.pathname.startsWith(ASSET_PREFIX) ||
-    // A cached partial would corrupt every later read of the asset.
-    request.headers.has("range")
-  ) {
-    return;
-  }
-
-  event.respondWith(
-    (async () => {
-      const cache = await caches.open(CACHE_NAME);
-      const cached = await cache.match(request);
-      if (cached) {
-        return cached;
-      }
-
-      const response = await fetch(request);
-
-      // Only a complete, successful, same-origin response is worth keeping.
-      // `type === "basic"` excludes opaque cross-origin responses, whose
-      // status is not readable and so cannot be checked.
-      if (response.ok && response.type === "basic") {
-        // Clone before returning: a Response body can only be read once.
-        cache.put(request, response.clone()).catch(() => {
-          // Storage pressure or a quota rejection. The response is still fine
-          // to serve — caching is an optimisation, never a requirement.
-        });
-      }
-
-      return response;
-    })(),
-  );
-});
+// Deliberately no `fetch` handler. With none registered the browser treats
+// every request as if this worker were not there, which is exactly the
+// behaviour wanted — and it is the difference between "caches nothing" and
+// "caches nothing but still costs a worker round-trip on every request".
