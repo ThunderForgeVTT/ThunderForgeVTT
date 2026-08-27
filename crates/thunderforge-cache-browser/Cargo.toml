@@ -1,0 +1,72 @@
+[lints]
+workspace = true
+
+[package]
+name = "thunderforge_cache_browser"
+version = "0.1.0"
+edition = "2024"
+repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
+license.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+# The browser half of spec 028 (plan.md "Project Structure", ADR-052). Every
+# rule this crate needs already lives in `thunderforge-cache-core`; what is
+# here is the I/O that only a browser can perform — OPFS blobs, WebCrypto
+# keys, IndexedDB records.
+#
+# The wasm toolchain is deliberately confined to
+# `[target.'cfg(target_arch = "wasm32")'.dependencies]`. That is not a
+# convenience: it makes the pure/impure split a *build-enforced* boundary
+# rather than a convention. Path derivation, envelope framing and index-entry
+# manipulation cannot reach for `web-sys` even by accident, because on a
+# native `cargo test` those crates are not in the dependency graph at all —
+# and those are exactly the parts worth unit-testing without a browser.
+[dependencies]
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+uuid = { version = "1.23.1", features = ["serde"] }
+thunderforge_cache_core = { path = "../thunderforge-cache-core" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2.120"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3.97"
+web-sys = { version = "0.3.97", features = [
+  # OPFS (R2): navigator.storage.getDirectory() and the handle tree below it.
+  "Navigator",
+  "StorageManager",
+  "FileSystemDirectoryHandle",
+  "FileSystemFileHandle",
+  "FileSystemHandle",
+  "FileSystemGetDirectoryOptions",
+  "FileSystemGetFileOptions",
+  "FileSystemRemoveOptions",
+  "FileSystemWritableFileStream",
+  "WritableStream",
+  "Blob",
+  "File",
+  # WebCrypto (R4): non-extractable AES-GCM session key.
+  "Crypto",
+  "SubtleCrypto",
+  "CryptoKey",
+  "AesKeyGenParams",
+  "AesGcmParams",
+  # IndexedDB (R2): the `index`, `keys`, `outbox` and `meta` stores.
+  "IdbFactory",
+  "IdbDatabase",
+  "IdbOpenDbRequest",
+  "IdbRequest",
+  "IdbTransaction",
+  "IdbTransactionMode",
+  "IdbObjectStore",
+  "IdbObjectStoreParameters",
+  "IdbVersionChangeEvent",
+  "DomStringList",
+  "DomException",
+  "Event",
+  "EventTarget",
+] }
+
+[dev-dependencies]

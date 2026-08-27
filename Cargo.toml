@@ -6,6 +6,7 @@ members = [
     "src/engine", 
     "crates/pack_system_spec",
     "crates/thunderforge-cache-core",
+    "crates/thunderforge-cache-browser",
     "crates/thunderforge-canvas-core",
     "crates/thunderforge-crucible",
     "crates/thunderforge-dice",
