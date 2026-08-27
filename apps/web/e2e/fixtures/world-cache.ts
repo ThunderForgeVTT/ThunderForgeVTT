@@ -426,6 +426,187 @@ export async function createCanvasAsset(
  * a permission change becomes visible: an item the caller may no longer see
  * is answered in `evict`, byte-identically to one that was deleted.
  */
+/**
+ * Paste a canvas image the way a user does, so it is **placed on the scene**
+ * and not merely uploaded.
+ *
+ * # Why this exists next to `createCanvasAsset`
+ *
+ * `createCanvasAsset` posts `uploadCanvasImage` directly. That stores the
+ * bytes and creates the asset row, and it is the right instrument for every
+ * question about *storage* — what the sync plan offers, what is on disk,
+ * what survives a revocation. But nothing on the scene refers to the result,
+ * so the engine never loads it, and `OpfsStore::read_blob` is therefore never
+ * called. Every assertion built on `createCanvasAsset` alone is about what
+ * the cache *holds*; none is about what it *serves*.
+ *
+ * Pasting goes through `AssetPasteTool` → `handleAssetPasted` → the world
+ * store's `upsert_canvas_image_asset`, which is what puts the image on the
+ * canvas. The engine then loads `/api/canvas-assets/{id}.webp`, and that load
+ * is the only thing in the application that exercises the read path.
+ *
+ * The paste event is synthesised rather than driven through
+ * `navigator.clipboard.write`, for the reasons `canvas-asset-paste.spec.ts`
+ * gives: `AssetPasteTool` listens for the DOM `paste` event on `document`,
+ * so dispatching one exercises the identical handler without depending on
+ * clipboard permissions in a headless browser.
+ *
+ * The image is 512x512 noise for the same reason `createCanvasAsset`'s is —
+ * a trivial asset compresses to nothing and is not representative of what
+ * the cache is for. `seed` varies the noise, so two pasted assets have
+ * genuinely different bytes and therefore different filenames on disk.
+ *
+ * Requires the world to be open for play and the session to own the scene
+ * (`AssetPasteTool` is rendered only for the scene owner). Asserts its own
+ * success: a paste that uploaded nothing is the exact failure that would
+ * make a cache test pass while measuring an empty store.
+ */
+export async function pasteCanvasImage(page: Page, seed: number): Promise<string> {
+  const uploads: { id?: string; errors?: unknown }[] = [];
+  const onResponse = async (res: Response) => {
+    if (!res.url().includes("/api/graphql")) return;
+    try {
+      const json = (await res.json()) as {
+        data?: { uploadCanvasImage?: { id: string } };
+        errors?: unknown;
+      };
+      if (json.data?.uploadCanvasImage) {
+        uploads.push({ id: json.data.uploadCanvasImage.id, errors: json.errors });
+      }
+    } catch {
+      // Not JSON, or a body already consumed elsewhere. Not our response.
+    }
+  };
+  page.on("response", onResponse);
+
+  await page.evaluate(async (noiseSeed) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 512;
+    const ctx = canvas.getContext("2d")!;
+    const img = ctx.createImageData(512, 512);
+    let state = noiseSeed;
+    for (let i = 0; i < img.data.length; i += 4) {
+      state = (state * 1103515245 + 12345) & 0x7fffffff;
+      img.data[i] = state & 0xff;
+      img.data[i + 1] = (state >> 8) & 0xff;
+      img.data[i + 2] = (state >> 16) & 0xff;
+      img.data[i + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    const blob: Blob = await new Promise((resolve) =>
+      canvas.toBlob((b) => resolve(b!), "image/png"),
+    );
+
+    const file = new File([await blob.arrayBuffer()], "pasted.png", {
+      type: "image/png",
+    });
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    document.dispatchEvent(
+      new ClipboardEvent("paste", {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: dt,
+      }),
+    );
+  }, seed);
+
+  await expect
+    .poll(() => uploads.length, {
+      timeout: 30_000,
+      message: "the paste should have uploaded a canvas image",
+    })
+    .toBeGreaterThan(0);
+  page.off("response", onResponse);
+
+  expect(uploads[0].errors, JSON.stringify(uploads[0].errors)).toBeFalsy();
+  const assetId = uploads[0].id;
+  expect(assetId, "the upload response should carry an asset id").toBeTruthy();
+  return assetId!;
+}
+
+/**
+ * Import a map, giving the scene a **persistent background asset**.
+ *
+ * # Why the read path needs this and a paste will not do
+ *
+ * Only one thing in the application makes the engine load a canvas asset on
+ * every open: the scene background. `WorldPage` dispatches
+ * `backgroundImagePath` from the scene's `backgroundUrl`, which is derived
+ * from `scenes.background_asset_id`, and only a map import writes that
+ * column.
+ *
+ * A pasted image looks like it should serve, and does not. `handleAssetPasted`
+ * dispatches `upsert_canvas_image_asset` into the world store, which places
+ * the sprite for *that session only*: the command has no reducer case, is
+ * never persisted, and nothing re-dispatches it on scene load
+ * (`fetchCanvasImageAssetsForScene` has exactly one caller, `TokenTool`'s art
+ * picker). So after a reload the image is simply not on the canvas, the
+ * engine never asks for it, and a test that corrupted its blob would prove
+ * only that nobody looked.
+ *
+ * Uses the real import UI — `setInputFiles` on the map-import tool — because
+ * the import is what creates the asset, sets the column, and refetches the
+ * scenes so the background dispatch fires. Requires the world to be open for
+ * play with a scene selected.
+ *
+ * The tool lives in the PlayDock's Settings section (`SettingsPanel.tsx`),
+ * which is collapsed by default, so the section is opened first — the same
+ * gate `canvas-authoring.spec.ts` handles before creating a scene.
+ */
+export async function importMapBackground(page: Page, filePath: string): Promise<void> {
+  const tool = page.getByTestId("map-import-tool");
+  if (!(await tool.isVisible().catch(() => false))) {
+    await page.getByTestId("world-dock-tab-settings").click();
+    await expect(tool).toBeVisible({ timeout: 15_000 });
+  }
+  await tool.locator('input[type="file"]').setInputFiles(filePath);
+  await expect(page.getByTestId("map-import-success")).toBeVisible({
+    timeout: 90_000,
+  });
+}
+
+/**
+ * The canvas-asset id serving a scene's background, from `backgroundUrl`.
+ *
+ * Asserts rather than returns null on absence: every caller has just imported
+ * a map, and a scene with no background at that point means the import did
+ * not do what the test believes it did — which is precisely the silent
+ * mis-setup this suite exists to avoid.
+ */
+export async function sceneBackgroundAssetId(
+  page: Page,
+  worldId: string,
+  sceneId: string,
+): Promise<string> {
+  const res = await graphql<
+    GqlResult<{ scenes: { sceneId: string; backgroundUrl: string | null }[] }>
+  >(
+    page,
+    `
+      query ($worldId: UUID!) {
+        scenes(worldId: $worldId) {
+          sceneId
+          backgroundUrl
+        }
+      }
+    `,
+    { worldId },
+  );
+  expect(res.errors, `scenes query failed: ${JSON.stringify(res.errors)}`).toBe(
+    undefined,
+  );
+  const scene = (res.data?.scenes ?? []).find((s) => s.sceneId === sceneId);
+  const url = scene?.backgroundUrl ?? "";
+  const match = /\/api\/canvas-assets\/([0-9a-f-]{36})/.exec(url);
+  expect(
+    match,
+    `scene ${sceneId} should have a canvas-asset background, got ${JSON.stringify(url)}`,
+  ).toBeTruthy();
+  return match![1];
+}
+
 export async function syncPlan(
   page: Page,
   worldId: string,
@@ -456,19 +637,44 @@ export async function syncPlan(
   );
 }
 
-/** Count canvas-asset requests for one asset until `stop()`. */
+/**
+ * Count canvas-asset **body** requests for one asset.
+ *
+ * `count()` reads the tally without detaching, so a test can wait for a
+ * refetch to happen; `stop()` detaches and returns the final figure. Both
+ * exist because the two questions are different — "has it refetched yet?"
+ * needs polling, and "how many did this page load make?" needs the listener
+ * gone before the next one starts.
+ *
+ * # GET only, and this is load-bearing
+ *
+ * `WorldPage` issues a **HEAD** to the scene's `backgroundUrl` on every scene
+ * load — a reachability check for FR-013, since the engine loads the sprite
+ * itself with no JS-visible success signal. It transfers no bytes and happens
+ * whether the cache hits, misses or is switched off entirely.
+ *
+ * Counting it makes this helper answer the wrong question. A test asking
+ * "did the corrupt blob fall through to the network?" gets a yes from the
+ * HEAD alone, and a test asking "is this open warm?" gets a spurious no —
+ * both without a single asset byte crossing the wire. Only a GET is evidence
+ * about the cache.
+ */
 export function countAssetRequests(
   page: Page,
   assetId: string,
-): { stop: () => number } {
+): { count: () => number; stop: () => number } {
   let requests = 0;
   const onResponse = (response: Response) => {
-    if (response.url().includes(`/api/canvas-assets/${assetId}`)) {
+    if (
+      response.request().method() === "GET" &&
+      response.url().includes(`/api/canvas-assets/${assetId}`)
+    ) {
       requests += 1;
     }
   };
   page.on("response", onResponse);
   return {
+    count: () => requests,
     stop: () => {
       page.off("response", onResponse);
       return requests;
