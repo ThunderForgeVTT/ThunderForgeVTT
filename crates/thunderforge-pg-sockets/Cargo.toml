@@ -1,0 +1,26 @@
+[lints]
+workspace = true
+
+[package]
+name = "thunderforge_pg_sockets"
+version = "0.1.0"
+edition = "2024"
+repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
+license.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+# Real-time world-event delivery: who gets woken, and when the cursor may
+# move.
+#
+# Deliberately depends on neither `diesel` nor the server crate. Everything
+# here is either a pure decision over plain values or a router over a payload
+# type the caller chooses, which is what makes the whole surface testable with
+# `cargo test` and no database. The Postgres I/O that feeds it stays in the
+# server, where the connection pool and the schema live.
+[dependencies]
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+dashmap = "6"
+tokio = { version = "1", features = ["sync"] }
+uuid = { version = "1.26.0", features = ["serde"] }

@@ -42,7 +42,10 @@ pub async fn websocket_handler(
     );
 
     let player_id = auth_user.user_id;
-    let broadcast_rx = app_state.world_event_sender.subscribe();
+    // This world's channel. Before per-world routing this was a receiver on
+    // one process-wide channel, and the loop below discarded every event that
+    // belonged to somebody else — which was most of them.
+    let broadcast_rx = app_state.world_events.subscribe(world_id);
 
     ws.on_upgrade(move |socket| handle_socket(socket, broadcast_rx, app_state, player_id, world_id))
 }
@@ -93,11 +96,8 @@ async fn handle_socket(
     loop {
         match broadcast_rx.recv().await {
             Ok(event) => {
-                // Filter by world_id
-                if event.world_id != world_id {
-                    continue;
-                }
-
+                // No world check: the receiver is this world's, so anything
+                // arriving is by construction for this connection.
                 // Convert event to JSON payload
                 let payload = serde_json::json!({
                     "type": "data",

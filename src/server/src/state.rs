@@ -2,6 +2,7 @@ use crate::config::{Config, Directories};
 use crate::models::WorldEvent;
 use crate::system_hooks::SystemHookRegistry;
 use axum::extract::FromRef;
+use thunderforge_pg_sockets::SharedWorldRouter;
 use tokio::sync::broadcast::Sender;
 use tower_cookies::Key;
 
@@ -14,7 +15,13 @@ pub type DbPool = Pool<ConnectionManager<PgConnection>>;
 pub struct AppState {
     pub config: Config,
     pub directories: Directories,
-    pub world_event_sender: Sender<WorldEvent>,
+    /// Per-world event fan-out (`thunderforge_pg_sockets::WorldRouter`).
+    ///
+    /// Was a single `Sender<WorldEvent>` that every subscriber in the process
+    /// shared, filtering by world itself — which delivered every event to
+    /// every connected client and cost O(total connections) per event. The
+    /// router delivers to one world's subscribers and nobody else.
+    pub world_events: SharedWorldRouter<WorldEvent>,
     pub presence_sender: Sender<serde_json::Value>, // Phase 4.9.B.3: Presence changes
     pub key: Key,
     pub db_pool: DbPool,

@@ -349,7 +349,10 @@ async fn main() {
     directories.create_if_not_present();
 
     // Use 10000 buffer size for broadcast channel to allow backpressure handling
-    let (world_event_sender, _) = broadcast::channel(10000);
+    // Per-world channels rather than one for the whole process. See
+    // `thunderforge_pg_sockets::router` for the measurement that motivated it.
+    let world_events: thunderforge_pg_sockets::SharedWorldRouter<_> =
+        std::sync::Arc::new(thunderforge_pg_sockets::WorldRouter::new());
     let (presence_sender, _) = broadcast::channel(10000); // Phase 4.9.B.3: Presence changes
 
     let key = Key::from(&general_purpose::STANDARD.decode(&config.secret).unwrap());
@@ -368,7 +371,7 @@ async fn main() {
     let app_state = AppState {
         config,
         directories: directories.clone(),
-        world_event_sender: world_event_sender.clone(),
+        world_events: world_events.clone(),
         presence_sender: presence_sender.clone(),
         key,
         db_pool: db_pool.clone(),
@@ -388,7 +391,7 @@ async fn main() {
 
     // Spawn the PostgreSQL LISTEN background task
     eprintln!("[Server] 🚀 Starting PostgreSQL LISTEN background task");
-    network::spawn_listen_task(db_pool.clone(), world_event_sender);
+    network::spawn_listen_task(db_pool.clone(), world_events);
 
     // Spawn the presence listener task (Phase 4.9.B.3)
     eprintln!("[Server] 🚀 Starting presence listener task");

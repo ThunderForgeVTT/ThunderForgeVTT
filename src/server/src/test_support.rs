@@ -39,13 +39,12 @@ pub fn test_app_state() -> AppState {
         .build(manager)
         .expect("failed to build test DB pool");
 
-    let (world_event_sender, _) = tokio::sync::broadcast::channel(16);
     let (presence_sender, _) = tokio::sync::broadcast::channel(16);
 
     AppState {
         config: Config::from_env(),
         directories: Directories::from(std::env::temp_dir().to_str().unwrap().to_string()),
-        world_event_sender,
+        world_events: std::sync::Arc::new(thunderforge_pg_sockets::WorldRouter::new()),
         presence_sender,
         key: Key::generate(),
         db_pool,

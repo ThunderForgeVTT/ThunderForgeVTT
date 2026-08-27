@@ -16,6 +16,7 @@ use diesel::r2d2::{self, ConnectionManager};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
+use thunderforge_pg_sockets::{RowStamp, SharedWorldRouter, settled_cursor};
 use tokio::sync::broadcast;
 use tokio::time::{sleep, timeout};
 
@@ -54,7 +55,7 @@ struct BroadcastMetrics {
 /// - Broadcasts notifications to all subscribers
 /// - Automatically recovers on connection loss with exponential backoff
 /// - Tracks metrics and logs periodically
-pub fn spawn_listen_task(pool: DbPool, broadcast_tx: broadcast::Sender<WorldEvent>) {
+pub fn spawn_listen_task(pool: DbPool, router: SharedWorldRouter<WorldEvent>) {
     let metrics = BroadcastMetrics {
         events_sent: Arc::new(AtomicU64::new(0)),
         events_dropped: Arc::new(AtomicU64::new(0)),
@@ -105,7 +106,7 @@ pub fn spawn_listen_task(pool: DbPool, broadcast_tx: broadcast::Sender<WorldEven
         loop {
             eprintln!("[PubSub] 🔄 Starting PostgreSQL LISTEN connection");
 
-            match run_listen_loop(&pool, &broadcast_tx, &metrics).await {
+            match run_listen_loop(&pool, &router, &metrics).await {
                 Ok(_) => {
                     // Unexpected end, reset reconnect delay
                     reconnect_delay = RECONNECT_DELAY_MS;
@@ -131,7 +132,7 @@ pub fn spawn_listen_task(pool: DbPool, broadcast_tx: broadcast::Sender<WorldEven
 /// Returns Err(String) if connection fails or LISTEN fails.
 async fn run_listen_loop(
     pool: &DbPool,
-    broadcast_tx: &broadcast::Sender<WorldEvent>,
+    router: &SharedWorldRouter<WorldEvent>,
     metrics: &BroadcastMetrics,
 ) -> Result<(), String> {
     // Get database URL from environment
@@ -225,8 +226,15 @@ async fn run_listen_loop(
                 // The cursor advances only past rows old enough that nothing
                 // older can still be uncommitted — never simply to the last id
                 // seen, which is what used to lose an out-of-order commit.
+                let stamps: Vec<RowStamp> = events
+                    .iter()
+                    .map(|e| RowStamp {
+                        id: e.id,
+                        created_at: e.created_at,
+                    })
+                    .collect();
                 let settled =
-                    settled_cursor(&events, last_event_id, chrono::Utc::now().naive_utc());
+                    settled_cursor(&stamps, last_event_id, chrono::Utc::now().naive_utc());
 
                 for event in events {
                     // Broadcast on first sight, whatever the cursor is doing.
@@ -237,47 +245,32 @@ async fn run_listen_loop(
                         continue;
                     }
 
-                    eprintln!(
-                        "[PubSub] 📡 Event id={}, world_id={}, code={}",
-                        event.id, event.world_id, event.event_code
-                    );
+                    let world_id = event.world_id;
+                    let event_id = event.id;
+                    let event_code = event.event_code;
 
-                    // Broadcast the full models::WorldEvent to all subscribers
-                    match broadcast_tx.send(event) {
-                        Ok(count) => {
-                            metrics.events_sent.fetch_add(1, Ordering::Relaxed);
-                            let buffer_len = broadcast_tx.len();
+                    // To that world's subscribers, and to nobody else. This
+                    // used to be one `send` on a process-wide channel that
+                    // woke every connected client in the system and let each
+                    // of them decide the event was not theirs.
+                    let count = router.publish(world_id, event);
+                    metrics.events_sent.fetch_add(1, Ordering::Relaxed);
 
-                            // Log backpressure warnings
-                            if buffer_len >= BACKPRESSURE_CRITICAL_THRESHOLD {
-                                eprintln!(
-                                    "[PubSub] 🔴 CRITICAL: Broadcast buffer at {}% capacity ({}/{})",
-                                    (buffer_len * 100) / BROADCAST_BUFFER_SIZE,
-                                    buffer_len,
-                                    BROADCAST_BUFFER_SIZE
-                                );
-                            } else if buffer_len >= BACKPRESSURE_WARNING_THRESHOLD {
-                                eprintln!(
-                                    "[PubSub] 🟡 WARNING: Broadcast buffer at {}% capacity ({}/{})",
-                                    (buffer_len * 100) / BROADCAST_BUFFER_SIZE,
-                                    buffer_len,
-                                    BROADCAST_BUFFER_SIZE
-                                );
-                            }
+                    if count == 0 {
+                        // Nobody has this world open. The ordinary case on a
+                        // busy server, and not a failure: the row is already
+                        // durable, and this is the live nudge, not the record.
+                        metrics.events_dropped.fetch_add(1, Ordering::Relaxed);
+                    }
 
-                            // Debug: log every 100 events or every 10 seconds
-                            let now = Instant::now();
-                            if now.duration_since(last_log_time) > Duration::from_secs(10) {
-                                eprintln!(
-                                    "[PubSub] 📢 Event sent to {} subscribers (buffer: {}/{})",
-                                    count, buffer_len, BROADCAST_BUFFER_SIZE
-                                );
-                                last_log_time = now;
-                            }
-                        }
-                        Err(broadcast::error::SendError(_)) => {
-                            eprintln!("[PubSub] ⚠️  No active subscribers");
-                        }
+                    let now = Instant::now();
+                    if now.duration_since(last_log_time) > Duration::from_secs(10) {
+                        eprintln!(
+                            "[PubSub] 📢 Event id={event_id} code={event_code} world={world_id} \
+                             → {count} subscriber(s); {} world(s) currently routed",
+                            router.active_worlds()
+                        );
+                        last_log_time = now;
                     }
                 }
 
@@ -286,6 +279,14 @@ async fn run_listen_loop(
                 // Anything the cursor has passed can never come back in a
                 // future poll, so remembering it serves no purpose.
                 delivered = delivered.split_off(&(last_event_id + 1));
+
+                // Channels for worlds everyone has left. Cheap (one scan of a
+                // map sized by *open* worlds) and only worth doing when we
+                // were awake anyway.
+                let reaped = router.reap();
+                if reaped > 0 {
+                    eprintln!("[PubSub] 🧹 Released {reaped} idle world channel(s)");
+                }
             }
             Err(e) => {
                 eprintln!("[PubSub] ⚠️  Poll error: {}", e);
@@ -309,60 +310,9 @@ fn current_max_event_id(pool: &DbPool) -> Option<i64> {
         .or(Some(0))
 }
 
-/// How long a row must have existed before the cursor may pass it.
-///
-/// This is the window in which a transaction can still be holding an id it
-/// took but has not committed. It bounds the race described on
-/// [`settled_cursor`]: a transaction that keeps its id longer than this can
-/// still be missed, and one that commits within it cannot.
-///
-/// Two seconds is chosen against what actually writes here — single-statement
-/// inserts at the end of a mutation that has already done its work — where
-/// the gap between taking an id and committing is sub-millisecond. It costs
-/// nothing at delivery time (see the loop: rows are broadcast the moment they
-/// are seen, not when they settle) and only delays how quickly the cursor
-/// forgets them.
-const COMMIT_GRACE: Duration = Duration::from_secs(2);
-
-/// The highest id the cursor may advance to, given what this poll returned.
-///
-/// # The bug this exists to prevent
-///
-/// `world_events.id` is `BIGSERIAL`. A sequence value is taken at **INSERT**
-/// and the row becomes visible at **COMMIT**, and those two orders need not
-/// agree. If transaction A takes id 102 and B takes 103, and B commits first,
-/// a poll landing between them sees only `[103]`. Advancing the cursor to 103
-/// means 102 — committing a millisecond later — can never satisfy
-/// `id > cursor` again. It is lost permanently, with no log, no metric and no
-/// `Lagged`: the quietest failure in the whole delivery path.
-///
-/// That is not hypothetical. `a_poll_between_out_of_order_commits_still_
-/// delivers_the_lower_id` stages exactly that interleaving against a real
-/// database, and before this rule existed it lost the event every time.
-///
-/// # The rule
-///
-/// Walk the batch in ascending id order and stop at the first row young
-/// enough that an older sibling could still be uncommitted. Everything before
-/// it is settled: any transaction that took a lower id has had longer than
-/// [`COMMIT_GRACE`] to commit, so if it has not appeared by now it never
-/// will (it rolled back, and its id is a permanent gap).
-///
-/// Delivery does not wait for this — rows are broadcast as soon as they are
-/// seen. Only the *cursor* waits, which is why the fix costs latency nowhere.
-/// The price is that a row is re-read from the database on each poll until it
-/// settles, and the caller must therefore remember what it has already sent.
-fn settled_cursor(events: &[WorldEvent], current: i64, now: chrono::NaiveDateTime) -> i64 {
-    let cutoff = now - chrono::Duration::from_std(COMMIT_GRACE).unwrap_or_default();
-    let mut settled = current;
-    for event in events {
-        if event.created_at >= cutoff {
-            break;
-        }
-        settled = settled.max(event.id);
-    }
-    settled
-}
+// `COMMIT_GRACE` and `settled_cursor` now live in
+// `thunderforge_pg_sockets::cursor`, where the rule can be exercised against
+// plain values instead of only against a live database.
 
 /// Poll the database for events newer than `after_id`, oldest first.
 ///
@@ -487,7 +437,14 @@ mod tests {
                         delivered: &mut Vec<(i64, i32)>,
                         seen: &mut std::collections::BTreeSet<i64>| {
             let events = poll_new_events_with_conn(&state.db_pool, *cursor).unwrap();
-            let settled = settled_cursor(&events, *cursor, chrono::Utc::now().naive_utc());
+            let stamps: Vec<RowStamp> = events
+                .iter()
+                .map(|e| RowStamp {
+                    id: e.id,
+                    created_at: e.created_at,
+                })
+                .collect();
+            let settled = settled_cursor(&stamps, *cursor, chrono::Utc::now().naive_utc());
             for event in &events {
                 if seen.insert(event.id) && event.world_id == world_id {
                     delivered.push((event.id, event.event_code));
@@ -520,61 +477,6 @@ mod tests {
             "a lagging cursor re-reads rows it has already sent, so each must \
              still be delivered exactly once; saw {codes:?}"
         );
-    }
-
-    /// The cursor must not pass a row young enough to have an uncommitted
-    /// older sibling — and must not stall on one either.
-    #[test]
-    fn the_cursor_stops_at_the_first_row_too_young_to_be_settled() {
-        let now = chrono::Utc::now().naive_utc();
-        let old = now - chrono::Duration::seconds(60);
-        let fresh = now - chrono::Duration::milliseconds(10);
-
-        let events = vec![
-            event_at(10, old),
-            event_at(11, old),
-            // Young: nothing at or beyond this may be passed, because a
-            // transaction holding an id below it could still commit.
-            event_at(12, fresh),
-            event_at(13, old),
-        ];
-
-        assert_eq!(
-            settled_cursor(&events, 9, now),
-            11,
-            "the cursor stops before the first unsettled row"
-        );
-        // Note 13 is old but comes after 12: order, not age, decides where the
-        // walk stops. Passing 13 would strand anything that took id 12.
-        assert_eq!(
-            settled_cursor(&[], 9, now),
-            9,
-            "an empty poll moves nothing"
-        );
-        assert_eq!(
-            settled_cursor(&[event_at(10, fresh)], 9, now),
-            9,
-            "a batch of nothing but fresh rows leaves the cursor where it was"
-        );
-        assert_eq!(
-            settled_cursor(&[event_at(10, old), event_at(11, old)], 9, now),
-            11,
-            "an entirely settled batch advances all the way"
-        );
-    }
-
-    fn event_at(id: i64, created_at: chrono::NaiveDateTime) -> WorldEvent {
-        WorldEvent {
-            id,
-            world_id: uuid::Uuid::nil(),
-            event_code: 1,
-            token_event: None,
-            created_at,
-            schema_version: 1,
-            updated_at: created_at,
-            created_by: uuid::Uuid::nil(),
-            updated_by: uuid::Uuid::nil(),
-        }
     }
 
     #[test]

@@ -2326,8 +2326,14 @@ impl SubscriptionRoot {
             (None, _) => (true, "Failed to get app state", None),
             (_, None) => (true, "Invalid world_id format", None),
             (_, _) if !membership_ok => (true, "You must be a member of this world", None),
-            (Some(app_state), Some(_)) => {
-                (false, "", Some(app_state.world_event_sender.subscribe()))
+            (Some(app_state), Some(world_uuid)) => {
+                // This world's channel, not the whole process's. The stream
+                // below no longer filters, because nothing else can arrive.
+                (
+                    false,
+                    "",
+                    Some(app_state.world_events.subscribe(*world_uuid)),
+                )
             }
         };
 
@@ -2339,23 +2345,27 @@ impl SubscriptionRoot {
         // Create a combined stream that works for both cases
         // Return type is Pin<Box<dyn Stream>> for type erasure
         if let Some(rx) = rx_opt {
-            // Success case: stream from broadcast channel
+            // Success case: stream this world's channel. The id is no longer
+            // needed to *filter* — the receiver is the filter now — but the
+            // lag diagnostic below still names the world it lost events for.
             let world_uuid = world_uuid.unwrap();
 
             let stream =
                 tokio_stream::wrappers::BroadcastStream::new(rx).filter_map(move |result| {
                     match result {
                         Ok(event) => {
-                            // Only send events for this world
-                            if event.world_id == world_uuid {
-                                eprintln!(
-                                    "[GraphQL Subscription] 📤 Sending event id={} to client",
-                                    event.id
-                                );
-                                Some(Ok(GraphQLWorldEvent::from(event)))
-                            } else {
-                                None
-                            }
+                            // No world check. The receiver is this world's
+                            // channel, so an event arriving here is ours by
+                            // construction — the old
+                            // `if event.world_id == world_uuid` was the
+                            // per-subscriber half of a fan-out that woke every
+                            // client in the process for every event and had
+                            // each of them throw away what was not theirs.
+                            eprintln!(
+                                "[GraphQL Subscription] 📤 Sending event id={} to client",
+                                event.id
+                            );
+                            Some(Ok(GraphQLWorldEvent::from(event)))
                         }
                         // The only error `BroadcastStream` yields is
                         // `Lagged(n)`: this receiver fell far enough behind
