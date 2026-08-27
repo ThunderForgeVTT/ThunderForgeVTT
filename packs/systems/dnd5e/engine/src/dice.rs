@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(not(target_arch = "wasm32"))]
 use rand::rngs::StdRng;
 #[cfg(not(target_arch = "wasm32"))]
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 
 /// Advantage state for d20 roll
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -66,17 +66,17 @@ pub fn roll_d20_seeded(modifier: i32, advantage: RollAdvantage, seed: u64) -> D2
 
     let result = match advantage {
         RollAdvantage::Normal => {
-            let roll = rng.gen_range(1..=20);
+            let roll = rng.random_range(1..=20);
             vec![roll]
         }
         RollAdvantage::Advantage => {
-            let roll1 = rng.gen_range(1..=20);
-            let roll2 = rng.gen_range(1..=20);
+            let roll1 = rng.random_range(1..=20);
+            let roll2 = rng.random_range(1..=20);
             vec![roll1, roll2]
         }
         RollAdvantage::Disadvantage => {
-            let roll1 = rng.gen_range(1..=20);
-            let roll2 = rng.gen_range(1..=20);
+            let roll1 = rng.random_range(1..=20);
+            let roll2 = rng.random_range(1..=20);
             vec![roll1, roll2]
         }
     };

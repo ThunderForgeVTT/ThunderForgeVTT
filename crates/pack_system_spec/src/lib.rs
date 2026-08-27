@@ -283,11 +283,27 @@ mod tests {
 
     #[test]
     fn test_get_schema() {
+        // Asserted against the parsed schema, not against its serialised
+        // text. The previous version searched the *pretty-printed* JSON for
+        // compact substrings (`"title":"SystemManifest"`, no space), which
+        // cannot match at any indentation — so it was testing the formatter
+        // rather than the schema, and a dependency upgrade that changed the
+        // spacing turned it red while the schema itself was correct.
         let schema = get_system_manifest_schema();
-        let schema_json = serde_json::to_string_pretty(&schema).unwrap();
-        // You can print the schema to see it
-        // println!("{}", schema_json);
-        assert!(schema_json.contains(r#""title":"SystemManifest""#));
-        assert!(schema_json.contains(r#""properties":{"id":"#));
+        let schema_json: serde_json::Value =
+            serde_json::to_value(&schema).expect("the schema should serialise");
+
+        assert_eq!(
+            schema_json.get("title").and_then(|t| t.as_str()),
+            Some("SystemManifest"),
+            "the schema must name the type it describes"
+        );
+        assert!(
+            schema_json
+                .get("properties")
+                .and_then(|p| p.get("id"))
+                .is_some(),
+            "a manifest is addressed by `id`, so the schema must declare it"
+        );
     }
 }
