@@ -744,7 +744,7 @@ pub(crate) fn sync_shape_visuals(
                     .spawn((
                         Text2d::new(label),
                         TextFont {
-                            font_size: 20.0,
+                            font_size: FontSize::Px(20.0),
                             ..default()
                         },
                         TextColor(color),

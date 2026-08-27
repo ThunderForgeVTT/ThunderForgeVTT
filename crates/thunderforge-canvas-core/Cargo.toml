@@ -16,9 +16,16 @@ crate-type = ["rlib"]
 # `bevy::prelude::Vec2` is a re-export of `glam::Vec2`, the identical type,
 # so engine code can pass Bevy `Vec2` values into this crate's functions
 # with zero conversion, as long as the glam version here matches the one
-# the workspace's `bevy` pulls in (currently 0.30.x).
+# the workspace's `bevy` pulls in — **bevy 0.19.1 uses glam 0.32**.
+#
+# This is not a soft preference. Cargo happily resolves two majors of glam
+# side by side, and then `bevy::prelude::Vec2` and this crate's `Vec2` are
+# distinct types that cannot be added, converted, or iterated into each
+# other. A dependency upgrade that moved this line to 0.33 while bevy stayed
+# on 0.32 broke the engine build in 44 places across 14 files, all of them
+# reading as unrelated type errors. Check bevy's glam before bumping this.
 [dependencies]
-glam = "0.33"
+glam = "0.32"
 serde_json = "1"
 
 [dev-dependencies]

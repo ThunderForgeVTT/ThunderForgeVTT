@@ -91,7 +91,7 @@ fn spawn_pending_roll(
                 parent.spawn((
                     Text2d::new(die.final_value.to_string()),
                     TextFont {
-                        font_size: 20.0,
+                        font_size: FontSize::Px(20.0),
                         ..default()
                     },
                     TextColor(Color::BLACK),

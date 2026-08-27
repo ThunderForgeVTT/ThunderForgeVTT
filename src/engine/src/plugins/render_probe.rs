@@ -238,7 +238,13 @@ fn trace_render_phases(
         info!(
             target: "render_probe",
             "render: view RenderVisibleEntities<Sprite>={}",
-            visible.iter::<Sprite>().count(),
+            // Bevy 0.19 replaced `iter::<Sprite>()` with a per-class lookup.
+            // Sprites are CPU-culled, so `entities_cpu_culling` is the list
+            // `queue_sprites` walks; an absent class means nothing sprite-like
+            // is visible from this view, which is the same zero.
+            visible
+                .get::<Sprite>()
+                .map_or(0, |class| class.entities_cpu_culling.len()),
         );
     }
 }

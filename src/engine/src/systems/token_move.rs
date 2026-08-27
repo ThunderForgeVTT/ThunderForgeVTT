@@ -201,7 +201,7 @@ pub(crate) fn draw_movement_plan(
             TextFont {
                 // Scaled to the grid so the label stays readable at any zoom
                 // and any cell size.
-                font_size: (grid.size * 0.28).clamp(12.0, 48.0),
+                font_size: FontSize::Px((grid.size * 0.28).clamp(12.0, 48.0)),
                 ..default()
             },
             TextColor(PLAN_COLOR),

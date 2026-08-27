@@ -41,6 +41,11 @@ use url::Url;
 /// authorization guard for canvas asset reads/writes.
 pub mod world_membership;
 
+/// Spec 028 (T045c): `scenes.hidden` visibility for scenes and the canvas
+/// assets attached to them — the rule the sync plan and the byte route must
+/// answer identically.
+pub mod scene_visibility;
+
 /// Spec 010: actor ownership/permission enforcement (`require_actor_permission`,
 /// `is_dm_of_world`).
 /// Spec 027 (US5): the single declaration of every permissioned content type,
@@ -2623,8 +2628,11 @@ fn verify_totp_code(username: &str, secret_base32: &str, code: &str) -> Result<b
         username.to_string(),
     )
     .map_err(|e| format!("Failed to build TOTP verifier: {e}"))?;
-    totp.check_current(code)
-        .map_err(|e| format!("Failed to validate TOTP code: {e}"))
+    // totp-rs 6.0 changed this from `Result<bool, _>` to `Option<u64>`: `Some`
+    // carries the matched time step so a caller can refuse to accept the same
+    // step twice, and there is no longer a fallible-clock error to surface.
+    // We only ask whether the code matched, so the step is dropped here.
+    Ok(totp.check_current(code).is_some())
 }
 
 fn decrypt_secret(ciphertext: &str, key: &[u8; 32]) -> Result<String, String> {

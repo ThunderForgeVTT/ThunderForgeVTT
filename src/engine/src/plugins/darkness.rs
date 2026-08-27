@@ -317,7 +317,7 @@ fn sync_darkness_quad(
 
     let mut existing = existing;
     if let Some((_, material_handle, mut transform)) = existing.iter_mut().next() {
-        if let Some(material) = materials.get_mut(&material_handle.0) {
+        if let Some(mut material) = materials.get_mut(&material_handle.0) {
             material.uniform = uniform;
         }
         transform.translation = translation;
@@ -388,7 +388,7 @@ fn sync_shadow_quads(
         .material
         .get_or_insert_with(|| color_materials.add(ColorMaterial::from_color(shadow_color)))
         .clone();
-    if let Some(existing_material) = color_materials.get_mut(&material) {
+    if let Some(mut existing_material) = color_materials.get_mut(&material) {
         existing_material.color = shadow_color;
     }
 
