@@ -222,13 +222,14 @@ async function assetFingerprint(page: Page, assetId: string): Promise<string> {
 /**
  * The status the **server** gives this session for an asset's bytes.
  *
- * The unique query string is not decoration. `public/sw.js` serves
- * `/api/canvas-assets/*` cache-first from a Cache Storage entry keyed by the
- * whole request URL, and a service worker sits in front of `cache:
- * "no-store"` as well — so a plain fetch of a previously-loaded asset never
- * reaches the network and answers 200 no matter what the server thinks. A
- * fresh URL misses that cache and asks the origin, which is the question this
- * helper exists to ask. What the service-worker cache still holds is a
+ * The unique query string is belt-and-braces rather than load-bearing now.
+ * `public/sw.js` used to serve `/api/canvas-assets/*` cache-first, and a
+ * service worker sits in front of `cache: "no-store"` as well, so a plain
+ * fetch of a previously-loaded asset answered 200 no matter what the server
+ * thought; a fresh URL missed that cache and asked the origin. T045b removed
+ * that fetch handler, but the nonce stays: it keeps this helper asking the
+ * origin even from a browser still running a stale worker, which is exactly
+ * the population this test is about. What Cache Storage still holds is a
  * separate question, measured by `serviceWorkerHoldsAsset` below.
  */
 async function assetStatus(page: Page, assetId: string): Promise<number> {
@@ -245,12 +246,12 @@ async function assetStatus(page: Page, assetId: string): Promise<number> {
 }
 
 /**
- * Whether the canvas-asset service worker still holds readable bytes for
- * this asset, read straight out of Cache Storage.
+ * Whether any Cache Storage entry still holds readable bytes for this asset.
  *
- * Reported, not asserted — see the note in the T042 test. This is a
- * different store from the one spec 028 governs, and it is measured here so
- * the gap is visible rather than invisible.
+ * This asks about a different store from the one spec 028 governs: the
+ * service worker's, which held plaintext keyed by URL and outlived
+ * revocation. T045b stopped it caching and made it purge on activate, so
+ * this is now asserted to be zero rather than merely reported.
  */
 async function serviceWorkerHoldsAsset(
   page: Page,
@@ -662,19 +663,16 @@ test.describe("Client world cache — losing access (US2, T042-T044)", () => {
       "a revoked member must not be able to fetch the asset from the server",
     ).not.toBe(200);
 
-    // Reported, deliberately not asserted: `public/sw.js` keeps a cache-first
-    // copy of every `/api/canvas-assets/*` response, per browser profile,
-    // and clears it only on logout. A revoked member's browser therefore
-    // still holds plaintext bytes for this asset, and the engine's own
-    // fetches go through that worker. That is a second local store, outside
-    // the one spec 028 governs and outside the files this test may touch, so
-    // failing here would only make the suite red about something these tests
-    // cannot fix. It is measured so it cannot be forgotten.
-    const swBytes = await serviceWorkerHoldsAsset(player, assetId);
-    console.log(
-      `[cache-perms] service-worker cache still holds ${swBytes}B for the ` +
-        `revoked asset (see public/sw.js — cleared only on logout)`,
-    );
+    // T045b: the service worker was a second local store that outlived this
+    // revocation. It kept a cache-first plaintext copy of every
+    // `/api/canvas-assets/*` response, per browser profile, cleared only on
+    // logout — and a revoked member stays signed in. It now caches nothing
+    // and purges on activate, so no Cache Storage entry may hold these bytes.
+    expect(
+      await serviceWorkerHoldsAsset(player, assetId),
+      "no Cache Storage entry may hold plaintext bytes for a revoked asset " +
+        "(see public/sw.js — it caches nothing and purges on activate)",
+    ).toBe(0);
 
     sync.stop();
     await player.context().close();
@@ -798,13 +796,12 @@ test.describe("Client world cache — losing access (US2, T042-T044)", () => {
     // nothing at all about the one they may, which is what "already current"
     // looks like on this wire.
     //
-    // Note what is *not* asserted here: that `GET /api/canvas-assets/<id>`
-    // starts refusing. That route authorizes on world membership only (see
-    // canvas_assets_serve.rs), and the player is still a member, so a URL
-    // they already know keeps answering. `scenes.hidden` is enforced by the
-    // queries that hand out ids — including this plan — not by the byte
-    // route. Asserting otherwise would be asserting a property the system
-    // does not have.
+    // The byte route is asserted below, after the plan. It used to be the
+    // gap this comment described: `GET /api/canvas-assets/<id>` authorized on
+    // world membership alone, the player was still a member, and a URL they
+    // already knew kept answering long after the plan stopped admitting the
+    // asset existed. T045c closed it — both now ask
+    // `auth::scene_visibility`.
     const plan = await syncPlan(player, worldId, [
       { id: `asset:${keptAsset}`, fingerprint: keptFingerprint },
       { id: `asset:${doomedAsset}`, fingerprint: doomedFingerprint },
@@ -825,6 +822,20 @@ test.describe("Client world cache — losing access (US2, T042-T044)", () => {
       (plan.data?.worldSyncPlan.fetch ?? []).map((f) => f.id),
       "nothing the player may not see may appear in fetch",
     ).not.toContain(`asset:${doomedAsset}`);
+
+    // T045c: and the bytes themselves. The player knows this id — they were
+    // holding the asset a moment ago — so this is exactly the case the plan
+    // cannot cover: a direct fetch of a URL already in hand. 404, not 403,
+    // because a hidden asset and a nonexistent one must be indistinguishable.
+    expect(
+      await assetStatus(player, doomedAsset),
+      "the byte route must stop serving art from a scene the player cannot see",
+    ).toBe(404);
+    expect(
+      await assetStatus(player, keptAsset),
+      "the visible scene's asset must still be served — the refusal is about " +
+        "scene visibility, not about the player having lost the world",
+    ).toBe(200);
 
     // --- reopen ---
     const requestsForKept = countAssetRequests(player, keptAsset);

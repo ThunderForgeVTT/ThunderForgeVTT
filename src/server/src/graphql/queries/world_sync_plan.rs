@@ -52,6 +52,7 @@ use thunderforge_cache_core::manifest::CANONICAL_VERSION;
 use thunderforge_cache_core::{Fingerprint, HeldItem, ItemId};
 use uuid::Uuid;
 
+use crate::auth::scene_visibility::visible_scene_ids;
 use crate::auth::world_membership::{WorldMembershipError, require_world_member};
 use crate::graphql::{app_state, authenticated_user};
 use crate::state::AppState;
@@ -190,7 +191,7 @@ fn authorized_current(
     is_admin: bool,
     world_id: Uuid,
 ) -> Result<BTreeMap<ItemId, CurrentItem>, WorldSyncPlanError> {
-    use crate::schema::{canvas_image_assets, scene_state_fingerprints, scenes};
+    use crate::schema::{canvas_image_assets, scene_state_fingerprints};
 
     // (T033) Re-authorized here, on every call, from the database — never
     // from anything the client sent.
@@ -200,22 +201,13 @@ fn authorized_current(
     })?;
     let is_dm = is_admin || role == "Owner" || role == "GM";
 
-    // Per-object visibility (T034, ADR-050). Scenes and canvas assets carry
-    // no permission-grant table of their own — the ADR-050 ladder covers
-    // actors, items, abilities and lore — so the per-object axis that
-    // actually applies to them is `scenes.hidden`, the same GM-only flag
-    // `scenes_impl` enforces. Building the visible-scene set first and
-    // deriving everything else from it keeps this query's answer consistent
-    // with what the ordinary scene queries would return.
-    let mut scene_query = scenes::table
-        .filter(scenes::world_id.eq(world_id))
-        .select(scenes::scene_id)
-        .into_boxed();
-    if !is_dm {
-        scene_query = scene_query.filter(scenes::hidden.eq(false));
-    }
-    let visible_scenes: Vec<Uuid> = scene_query
-        .load(conn)
+    // Per-object visibility (T034, ADR-050), via the rule stated in
+    // `auth::scene_visibility` — the same module the byte route now asks, so
+    // a plan and a direct `GET /canvas-assets/{id}` cannot disagree about
+    // which assets a player may have. Building the visible-scene set first
+    // and deriving everything else from it keeps this query's answer
+    // consistent with what the ordinary scene queries would return.
+    let visible_scenes: Vec<Uuid> = visible_scene_ids(conn, is_dm, world_id)
         .map_err(|e| WorldSyncPlanError::Database(e.to_string()))?;
     let visible_scene_set: HashSet<Uuid> = visible_scenes.iter().copied().collect();
 
