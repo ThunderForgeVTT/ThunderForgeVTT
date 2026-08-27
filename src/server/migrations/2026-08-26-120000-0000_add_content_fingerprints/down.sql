@@ -1,0 +1,4 @@
+DROP TABLE scene_state_fingerprints;
+ALTER TABLE canvas_image_assets DROP CONSTRAINT canvas_image_assets_content_hash_format;
+DROP INDEX canvas_image_assets_content_hash_idx;
+ALTER TABLE canvas_image_assets DROP COLUMN content_hash;

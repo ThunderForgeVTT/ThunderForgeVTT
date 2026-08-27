@@ -47,6 +47,7 @@ distribution can be shared without authority being shared.
 - Q: How much disk should the local store be allowed to use by default? → A: A share of the quota the browser reports for this origin (proportion and absolute ceiling to be set in planning), rather than a fixed number or unlimited. Recomputed when the browser's reported quota changes.
 - Q: How should cache effectiveness be observable after release? → A: A client-side diagnostics view (hit rate, bytes saved, peer vs server, repair events) for the current session. No telemetry leaves the machine; no server-side aggregation in this feature.
 - Q: How should the server defend against a change attributed to one user arriving over another user's connection? → A: It should not, in the GM's case. The GM is the trusted party — the software's relationship is *with* them, and a GM acting on a player's behalf, or even overriding them outright, is their prerogative at their own table. The server verifies only that the submitter genuinely holds the GM role. The real concern is a *player* disconnecting to fabricate outcomes, and the answer there is not prevention but **disclosure**: detect the discrepancy, flag it, and tell the GM. The GM decides.
+- Q: Should a Service Worker keep syncing scenes in the background, even ones the user has not opened? → A: No. `RTCPeerConnection` is unavailable in Service Worker scope, so the peer half is impossible outright; and waking a Service Worker for background updates needs Push (a third-party push service, contradicting the self-hosted no-telemetry posture) or Periodic Background Sync (Chrome-only, PWA-install and engagement gated). The value is also low — a world updating while nobody is playing helps no one, since delta sync already makes reopening cheap. The useful idea inside it survives as User Story 8: prefetch adjacent scenes *during a live session*, from the page, needing no Service Worker.
 - Q: Should peer-to-peer transfer be on by default? → A: Yes, on by default. Peer-to-peer with server adjudication is the intended model. No telemetry, for now.
 - Q: Which entities may be edited while disconnected? → A: Token position, rotation and scale only. Creation and deletion are refused offline, because precedence cannot resolve those conflicts without destroying work. Full offline authoring is explicitly post-MVP.
 - Q: What happens when a client loses the server but still has all its peers? → A: A third state, "server-isolated". Play continues, with peer-adjudicated movement and the GM as authority, but only while the client is connected to *every* peer in the session. Losing peers as well drops to fully-offline, which reports a likely internet problem. This further amends FR-034 and must be covered by ADR-052.
@@ -302,6 +303,43 @@ resulting state is one both parties can agree on.
 
 ---
 
+### User Story 8 - Switching to a scene I have not opened yet (Priority: P3)
+
+A GM running a session moves the party from the tavern to the dungeon. The
+dungeon is a scene in this world that this client has never loaded. Because
+it was fetched quietly in the background while play was going on, the switch
+is instant rather than a wait in front of everyone.
+
+**Why this priority**: A refinement of Story 1 rather than a new capability —
+it extends "recently visited scenes feel instant" to scenes not yet visited.
+Real value at the table (a mid-session scene change is the most visible wait
+in a session, with everyone watching) but strictly additive, and worthless
+until Story 1's machinery exists.
+
+**Independent Test**: With a multi-scene world open and idle for a short
+period, switch to a never-visited scene and confirm it appears without a
+fetch and without a loading state.
+
+**Acceptance Scenarios**:
+
+1. **Given** a world with several scenes and an open session, **When** the
+   client has been idle enough to prefetch, **Then** other scenes' content is
+   fetched at low priority without the active scene's responsiveness
+   degrading.
+2. **Given** a prefetched scene, **When** the GM switches to it, **Then** it
+   appears with no fetch and no loading state.
+3. **Given** prefetching in progress, **When** the user does anything that
+   needs the network, **Then** their action takes priority and prefetching
+   yields.
+4. **Given** a client near its storage budget, **When** prefetching would
+   exceed it, **Then** prefetching stops rather than evicting content the
+   user actually has.
+5. **Given** a scene the caller is not permitted to see, **When** prefetching
+   runs, **Then** it is never fetched, because it never appeared in the
+   caller's plan.
+
+---
+
 ### Edge Cases
 
 - **Two tabs, one world**: the same user has the world open in two tabs and
@@ -523,6 +561,23 @@ resulting state is one both parties can agree on.
   connection appears to be down, and MUST be shown that the application is
   attempting to reconnect, in the manner players already expect from online
   games.
+
+#### Background prefetch
+
+- **FR-069**: The client MAY fetch content for scenes in the current world
+  that the user has not yet opened, so that switching to one is immediate.
+- **FR-070**: Prefetching MUST yield to anything the user is actually doing.
+  It MUST NOT delay the active scene, a user-initiated fetch, or a live
+  update.
+- **FR-071**: Prefetching MUST stop rather than trigger eviction. Speculative
+  content must never displace content the user actually has (FR-023).
+- **FR-072**: Prefetching MUST draw only on the caller's own sync plan, so
+  content they are not permitted to see is never requested — the permission
+  boundary is the same one that governs every other fetch.
+- **FR-073**: Prefetching MUST be confined to the world currently open, and
+  MUST NOT run while the application is closed or backgrounded. This feature
+  introduces no Service Worker, no push subscription, and no
+  background-sync registration.
 
 #### Discrepancy detection and disclosure
 
@@ -751,6 +806,12 @@ resulting state is one both parties can agree on.
   one.
 - **SC-022**: In every disconnection scenario the user is told which state
   they are in within 5 seconds, and reconnection attempts are visible.
+- **SC-023**: Switching to a prefetched, never-before-opened scene shows no
+  loading state and issues no fetch for content already held.
+- **SC-024**: Prefetching never increases time-to-interactive for the active
+  scene by more than 5%, measured with prefetch enabled versus disabled.
+- **SC-025**: No network activity attributable to this feature occurs while
+  the application is closed, verified by automated test.
 - **SC-017**: The performance outcomes SC-001 through SC-003 can be
   confirmed from the diagnostics view during an ordinary session, without
   developer tooling or a test harness.
@@ -870,6 +931,18 @@ resulting state is one both parties can agree on.
   cache working for me" without creating a telemetry surface, an opt-out
   obligation, or a privacy disclosure. The trade-off accepted is that
   fleet-wide effectiveness across deployments will not be visible.
+- **Prefetch stays in the page, not a Service Worker.** Background sync via a
+  Service Worker was considered and rejected: `RTCPeerConnection` is
+  unavailable in Service Worker scope, so peer transfer could not work there
+  at all, and waking a worker for updates requires either a third-party push
+  service — contradicting the self-hosted, no-telemetry posture — or
+  Chrome-only Periodic Background Sync behind a PWA install. The value was
+  also weak: a world updating while nobody is playing helps no one, because
+  delta sync already makes reopening cheap at the moment someone cares. What
+  survives is the part that never needed a worker — fetching ahead during a
+  live session, when the page is open and the plan already says what is
+  missing. An offline app shell remains a reasonable future use for a Service
+  Worker, but that is a separate feature.
 - **Scope is scenes and their assets.** Compendium content, system packs,
   and world-level documents are not cached by this feature, though the
   mechanism is expected to generalise later.

@@ -16,7 +16,7 @@ description: "Task list for 028-client-world-cache"
 ## Format: `[ID] [P?] [Story] Description`
 
 - **[P]**: Can run in parallel (different files, no dependencies)
-- **[Story]**: US1–US7 per spec.md
+- **[Story]**: US1–US8 per spec.md
 - Exact file paths included
 
 ---
@@ -55,11 +55,11 @@ description: "Task list for 028-client-world-cache"
 
 ### Server fingerprints
 
-- [ ] T015 Create Diesel migration `src/server/migrations/NNNN_add_content_fingerprints/{up.sql,down.sql}` adding nullable indexed `content_hash` to `canvas_image_assets` and creating `scene_state_fingerprints`
-- [ ] T016 Update `src/server/src/schema.rs` for both schema changes
-- [ ] T017 Compute and persist `content_hash` over post-transcode WebP bytes in the same transaction as the asset row, in `src/server/src/graphql/mutations_assets.rs`
-- [ ] T018 Recompute `scene_state_fingerprints` when a scene-mutating `world_events` row lands, in `src/server/src/world/`
-- [ ] T019 [P] Server test: uploaded image yields `content_hash` of stored WebP, not the original upload, in `src/server/src/graphql/mutations_assets.rs`
+- [X] T015 Create Diesel migration `src/server/migrations/NNNN_add_content_fingerprints/{up.sql,down.sql}` adding nullable indexed `content_hash` to `canvas_image_assets` and creating `scene_state_fingerprints`
+- [X] T016 Update `src/server/src/schema.rs` for both schema changes
+- [X] T017 Compute and persist `content_hash` over post-transcode WebP bytes in the same transaction as the asset row, in `src/server/src/graphql/mutations_assets.rs`
+- [X] T018 Recompute `scene_state_fingerprints` when a scene-mutating `world_events` row lands, in `src/server/src/world/`
+- [X] T019 [P] Server test: uploaded image yields `content_hash` of stored WebP, not the original upload, in `src/server/src/graphql/mutations_assets.rs`
 
 **Checkpoint**: Shared rules proven by `cargo test -p thunderforge-cache-core`; server publishes fingerprints
 
@@ -266,15 +266,32 @@ description: "Task list for 028-client-world-cache"
 
 ---
 
+## Phase 10b: User Story 8 - Background Prefetch (Priority: P3)
+
+**Goal**: Switching to a never-visited scene in the open world is instant
+
+**Independent test**: Leave a multi-scene world idle briefly, switch to a never-visited scene, confirm no fetch and no loading state
+
+**Note**: A refinement of US1, not a new capability. Needs no Service Worker — the page is open, the WASM is running, and the sync plan already names what is missing.
+
+- [ ] T116 [P] [US8] Implement a low-priority prefetch queue drawing only on the caller's own `SyncPlan`, confined to the open world (FR-069, FR-072, FR-073) in `crates/thunderforge-cache-browser/src/lib.rs`
+- [ ] T117 [US8] Yield prefetching to the active scene, user-initiated fetches, and live updates (FR-070) in `crates/thunderforge-cache-browser/src/lib.rs`
+- [ ] T118 [US8] Stop prefetching rather than evicting — speculative content must never displace content the user actually has (FR-071) in `crates/thunderforge-cache-core/src/budget.rs`
+- [ ] T119 [P] [US8] E2E: switching to a prefetched never-opened scene shows no loading state and issues no fetch (SC-023) in `apps/web/e2e/world-cache-prefetch.spec.ts`
+- [ ] T120 [P] [US8] E2E: prefetch adds no more than 5% to active-scene time-to-interactive, measured enabled vs disabled (SC-024) in `apps/web/e2e/world-cache-prefetch.spec.ts`
+- [ ] T121 [US8] E2E: no network activity attributable to this feature occurs while the application is closed — no Service Worker, no push subscription, no background-sync registration (SC-025, FR-073) in `apps/web/e2e/world-cache-prefetch.spec.ts`
+
+---
+
 ## Phase 11: Polish & Cross-Cutting Concerns
 
-- [ ] T109 [P] Implement the diagnostics panel — hit rate, bytes saved, peer vs server, repairs — in `apps/web/src/components/diagnostics/CachePanel.tsx`
-- [ ] T110 [P] E2E: SC-001..003 confirmable from the diagnostics panel during an ordinary session without a test harness (SC-017) in `apps/web/e2e/world-cache-diagnostics.spec.ts`
-- [ ] T111 E2E: no outbound request carries cache statistics or usage telemetry (SC-018) in `apps/web/e2e/world-cache-diagnostics.spec.ts`
-- [ ] T112 [P] Backfill `content_hash` for existing assets via a background job in `src/server/src/storage/`, relying on NULL-means-fetch so it need not complete before release
-- [ ] T113 [P] Run `cargo fmt --all` and `cargo clippy --workspace --all-targets`; fix findings in the new crates
-- [ ] T114 [P] Document the two new crates in `docs/` and cross-reference ADR-052
-- [ ] T115 Update `MVP.md` post-MVP notes to reflect that engine load feedback shipped and that bundle-size work remains separate and open
+- [ ] T122 [P] Implement the diagnostics panel — hit rate, bytes saved, peer vs server, repairs — in `apps/web/src/components/diagnostics/CachePanel.tsx`
+- [ ] T123 [P] E2E: SC-001..003 confirmable from the diagnostics panel during an ordinary session without a test harness (SC-017) in `apps/web/e2e/world-cache-diagnostics.spec.ts`
+- [ ] T124 E2E: no outbound request carries cache statistics or usage telemetry (SC-018) in `apps/web/e2e/world-cache-diagnostics.spec.ts`
+- [ ] T125 [P] Backfill `content_hash` for existing assets via a background job in `src/server/src/storage/`, relying on NULL-means-fetch so it need not complete before release
+- [ ] T126 [P] Run `cargo fmt --all` and `cargo clippy --workspace --all-targets`; fix findings in the new crates
+- [ ] T127 [P] Document the two new crates in `docs/` and cross-reference ADR-052
+- [ ] T128 Update `MVP.md` post-MVP notes to reflect that engine load feedback shipped and that bundle-size work remains separate and open
 
 ---
 

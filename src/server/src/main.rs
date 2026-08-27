@@ -26,6 +26,7 @@ mod models;
 mod moderation; // Spec 015: DMCA notice-and-takedown content moderation
 mod network;
 mod pubsub;
+mod scene_fingerprint; // Spec 028: derived scene content fingerprints
 mod schema; // Add this line
 mod serve;
 mod session; // Phase 4.9.B.2: Session lifecycle management

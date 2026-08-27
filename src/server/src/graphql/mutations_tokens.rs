@@ -18,6 +18,7 @@ use diesel::result::Error as DieselError;
 
 use async_graphql::MaybeUndefined;
 use crate::graphql::{app_state, authenticated_user, GraphQLCreateTokenInput, GraphQLToken, GraphQLUpdateTokenInput};
+use crate::scene_fingerprint::refresh_scene_fingerprint;
 use crate::world_events::{record_world_event, world_id_for_scene, EVENT_CODE_TOKEN_CHANGED};
 
 #[derive(Default)]
@@ -79,6 +80,12 @@ impl TokenMutation {
                 ))
                 .returning(crate::models::Token::as_returning())
                 .get_result(&mut conn)?;
+
+            // Spec 028 FR-006: the scene's fingerprint must move with the
+            // change that caused it. A stale one would tell a client its copy
+            // is current when it is not — the one failure this feature must
+            // never produce.
+            refresh_scene_fingerprint(&mut conn, scene_id, user_id);
 
             if let Ok(world_id) = world_id_for_scene(&mut conn, scene_id) {
                 let _ = record_world_event(
@@ -194,6 +201,8 @@ impl TokenMutation {
                 .returning(crate::models::Token::as_returning())
                 .get_result(conn)?;
 
+                refresh_scene_fingerprint(conn, token.scene_id, user_id);
+
                 if let Ok(world_id) = world_id_for_scene(conn, token.scene_id) {
                     let _ = record_world_event(
                         conn,
@@ -255,6 +264,10 @@ impl TokenMutation {
                 ),
             )
             .execute(&mut conn)?;
+
+            if deleted_count > 0 && let Some(scene_id) = scene_id {
+                refresh_scene_fingerprint(&mut conn, scene_id, user_id);
+            }
 
             if deleted_count > 0
                 && let Some(scene_id) = scene_id
@@ -351,6 +364,8 @@ impl TokenMutation {
                 .returning(crate::models::Token::as_returning())
                 .get_result(&mut conn)?;
 
+            refresh_scene_fingerprint(&mut conn, token.scene_id, user_id);
+
             if let Ok(world_id) = world_id_for_scene(&mut conn, token.scene_id) {
                 let _ = record_world_event(
                     &mut conn,
@@ -403,6 +418,8 @@ impl TokenMutation {
             .set(tokens::photo_url.eq(photo_url))
             .returning(crate::models::Token::as_returning())
             .get_result(&mut conn)?;
+
+            refresh_scene_fingerprint(&mut conn, token.scene_id, user_id);
 
             if let Ok(world_id) = world_id_for_scene(&mut conn, token.scene_id) {
                 let _ = record_world_event(

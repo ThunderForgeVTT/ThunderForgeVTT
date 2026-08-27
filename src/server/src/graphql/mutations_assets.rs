@@ -136,6 +136,19 @@ pub async fn upload_canvas_image_impl(
     let asset_id = Uuid::now_v7();
     let key = object_key(user_id, world_id, Some(scene_id), asset_id);
     let byte_size = transcoded.webp_bytes.len() as i64;
+
+    // Spec 028 FR-005: fingerprint the bytes we are about to STORE, not the
+    // ones that were uploaded. The client never receives the original — it
+    // receives this WebP — so hashing the upload would produce a value no
+    // client could ever verify against what it actually holds.
+    //
+    // Computed here, while the bytes are already in memory, rather than on
+    // demand later: hashing on read would mean pulling every object back out
+    // of RustFS on every sync, which is the exact server load this feature
+    // exists to remove.
+    let content_hash =
+        thunderforge_cache_core::Fingerprint::of_bytes(&transcoded.webp_bytes).to_hex();
+
     let cfg = RustFsConfig::from_env();
     write_object(&cfg, &key, transcoded.webp_bytes, "image/webp")
         .await
@@ -159,6 +172,7 @@ pub async fn upload_canvas_image_impl(
         updated_by: user_id,
         created_at: now,
         updated_at: now,
+        content_hash: Some(content_hash),
     };
 
     let mut conn = state
@@ -325,6 +339,111 @@ mod tests {
             .first::<CanvasImageAsset>(&mut conn)
             .expect("row should exist");
         assert_eq!(reloaded.original_format, "png");
+    }
+
+    /// Spec 028 T019 (FR-005): the persisted `content_hash` is the hash of
+    /// the bytes we STORED, not the bytes that were uploaded.
+    ///
+    /// This distinction is the whole reason the column exists. A client never
+    /// receives the original — it receives the transcoded WebP — so a hash of
+    /// the upload would be a value no client could ever verify against what
+    /// it actually holds, and every cache check would miss forever while
+    /// looking perfectly valid in the database.
+    #[tokio::test]
+    async fn upload_records_hash_of_stored_bytes_not_uploaded_bytes() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        drop(conn);
+
+        let uploaded = tiny_png_bytes();
+        let asset = upload_canvas_image_impl(
+            &state,
+            owner_id,
+            world_id,
+            scene_id,
+            GraphQLCanvasImageAssetKind::Pasted,
+            uploaded.clone(),
+        )
+        .await
+        .expect("owner's upload should succeed");
+
+        let hash = asset
+            .content_hash
+            .as_deref()
+            .expect("upload must record a fingerprint; NULL is only for un-backfilled rows");
+
+        // Well-formed. The CHECK constraint enforces this at the database,
+        // but asserting here localises a failure to the code that wrote it.
+        assert_eq!(hash.len(), 64, "lowercase hex SHA-256");
+        assert!(hash.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c)));
+
+        // Not the upload's hash — the transcode makes these differ.
+        let uploaded_hash = thunderforge_cache_core::Fingerprint::of_bytes(&uploaded).to_hex();
+        assert_ne!(
+            hash, uploaded_hash,
+            "hashing the uploaded bytes would produce a value no client could verify"
+        );
+
+        // The stored object's hash: what a client computes over what it
+        // actually receives, and therefore the only value that can ever hit.
+        let stored = crate::storage::rustfs::read_object(
+            &crate::storage::rustfs::RustFsConfig::from_env(),
+            &asset.storage_path,
+        )
+        .await
+        .expect("stored object should be readable");
+        assert_eq!(
+            hash,
+            thunderforge_cache_core::Fingerprint::of_bytes(&stored).to_hex(),
+            "content_hash must match the bytes the client will actually receive"
+        );
+    }
+
+    /// Spec 028 T019: the same image uploaded twice fingerprints identically
+    /// under two different asset ids.
+    ///
+    /// Content addressing depends on this: it is what lets a peer serve a
+    /// blob by hash, and what lets a client recognise it already holds bytes
+    /// another scene introduced.
+    #[tokio::test]
+    async fn identical_content_produces_identical_fingerprints() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        drop(conn);
+
+        let bytes = tiny_png_bytes();
+        let first = upload_canvas_image_impl(
+            &state,
+            owner_id,
+            world_id,
+            scene_id,
+            GraphQLCanvasImageAssetKind::Pasted,
+            bytes.clone(),
+        )
+        .await
+        .expect("first upload should succeed");
+        let second = upload_canvas_image_impl(
+            &state,
+            owner_id,
+            world_id,
+            scene_id,
+            GraphQLCanvasImageAssetKind::Pasted,
+            bytes,
+        )
+        .await
+        .expect("second upload should succeed");
+
+        assert_ne!(first.asset_id, second.asset_id, "distinct rows");
+        assert_eq!(
+            first.content_hash, second.content_hash,
+            "identical content must fingerprint identically, or dedup and peer transfer cannot work"
+        );
     }
 
     /// T022 (FR-013): oversized upload is rejected before any row or

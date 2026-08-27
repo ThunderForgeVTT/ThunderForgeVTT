@@ -2,7 +2,7 @@ use crate::schema::{
     admin_bootstrap_oauth_sessions, admin_bootstrap_setup, auth_security_settings,
     canvas_image_assets, content_moderation_actions, fog_masks, game_systems, light_sources,
     login_two_factor_challenges,
-    oauth_authorization_sessions, oauth_link_challenges, oauth_providers, players_online, scenes,
+    oauth_authorization_sessions, oauth_link_challenges, oauth_providers, players_online, scene_state_fingerprints, scenes,
     shapes, tokens, user_oauth_accounts, user_sessions, users, walls, world_actor_claims,
     world_actor_inventory,
     world_abilities, world_ability_effects, world_ability_permissions, world_ability_shares,
@@ -529,6 +529,12 @@ pub struct CanvasImageAsset {
     pub updated_by: uuid::Uuid,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// Lowercase hex SHA-256 of the STORED WebP bytes (spec 028 FR-005).
+    ///
+    /// `None` on rows written before the fingerprint backfill reached them.
+    /// Callers must read that as "the client must fetch this", never as
+    /// "unchanged" — see `thunderforge_cache_core::delta::compute_plan`.
+    pub content_hash: Option<String>,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
@@ -548,6 +554,29 @@ pub struct NewCanvasImageAsset {
     pub updated_by: uuid::Uuid,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// Always `Some` on insert — the bytes are in hand at that moment, so
+    /// there is no reason to write a row that immediately needs backfilling.
+    pub content_hash: Option<String>,
+}
+
+// ========== Scene State Fingerprints (Spec 028) ==========
+
+/// A scene's fingerprint over its canonical form.
+///
+/// Derived data, kept out of `scenes` because it is rewritten on every
+/// scene-mutating event and should not contend with ordinary scene updates.
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = scene_state_fingerprints)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct SceneStateFingerprint {
+    pub scene_id: uuid::Uuid,
+    pub content_hash: String,
+    /// The canonical-serialization version this hash was computed under.
+    /// Stored so a format change invalidates old rows by comparison rather
+    /// than needing a migration to wipe them.
+    pub canonical_version: i32,
+    pub computed_at: chrono::NaiveDateTime,
+    pub updated_by: uuid::Uuid,
 }
 
 // ========== Wall Models (Phase 6) ==========

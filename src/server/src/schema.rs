@@ -65,6 +65,7 @@ diesel::table! {
         updated_by -> Uuid,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        content_hash -> Nullable<Text>,
     }
 }
 
@@ -237,6 +238,16 @@ diesel::table! {
         scene_id -> Uuid,
         byte_size -> Int8,
         created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    scene_state_fingerprints (scene_id) {
+        scene_id -> Uuid,
+        content_hash -> Text,
+        canonical_version -> Int4,
+        computed_at -> Timestamp,
+        updated_by -> Uuid,
     }
 }
 
@@ -873,6 +884,8 @@ diesel::joinable!(players_online -> scenes (scene_id));
 diesel::joinable!(players_online -> users (player_id));
 diesel::joinable!(players_online -> worlds (world_id));
 diesel::joinable!(policies -> worlds (world_id));
+diesel::joinable!(scene_state_fingerprints -> scenes (scene_id));
+diesel::joinable!(scene_state_fingerprints -> users (updated_by));
 diesel::joinable!(scenes -> users (owner_id));
 diesel::joinable!(shapes -> scenes (scene_id));
 diesel::joinable!(tokens -> scenes (scene_id));
@@ -961,6 +974,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     players_online,
     policies,
     scene_preview_images,
+    scene_state_fingerprints,
     scenes,
     shapes,
     tokens,
