@@ -15,6 +15,7 @@ use diesel::prelude::*;
 use futures_util::stream::{Stream, StreamExt};
 use std::convert::Infallible;
 use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -60,8 +61,21 @@ async fn world_events_by_id(
     State(state): State<AppState>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let rx = state.world_event_sender.subscribe();
+    // `msg.ok()` used to drop `Lagged(n)` without so much as a log — the
+    // quietest of the three places this crate discards events. An SSE client
+    // that falls behind loses n updates and is told nothing, by anyone.
     let stream = BroadcastStream::new(rx)
-        .filter_map(|msg| async { msg.ok() })
+        .filter_map(|msg| async {
+            match msg {
+                Ok(event) => Some(event),
+                Err(BroadcastStreamRecvError::Lagged(missed)) => {
+                    eprintln!(
+                        "[SSE] ⚠️  DROPPED {missed} event(s) for a subscriber: it fell behind                          the broadcast buffer. Those events will never be delivered to it."
+                    );
+                    None
+                }
+            }
+        })
         .map(|msg| Ok(Event::default().json_data(msg).unwrap()));
 
     Sse::new(stream).keep_alive(

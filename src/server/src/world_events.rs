@@ -55,7 +55,47 @@ pub const EVENT_CODE_CHAT_MESSAGE: i32 = 17;
 pub const EVENT_CODE_COMBAT_CHANGED: i32 = 18;
 
 /// Record a world event to the audit trail and trigger NOTIFY for real-time sync.
+///
+/// # Failures are logged here, not at the call sites
+///
+/// Almost every caller writes `let _ = record_world_event(...)`, and that is
+/// the right call shape: the mutation itself has already succeeded and
+/// committed, so failing it now would report an error for work that was done.
+/// An event is a nudge to other clients, not part of the transaction's
+/// promise.
+///
+/// But `let _ =` at a dozen call sites meant a failed event write was
+/// **completely invisible**: the mutation returned success, every layer
+/// downstream behaved perfectly, and there was simply no row — no log, no
+/// metric, nothing to find afterwards. That is the worst shape a bug can
+/// have, and it was a live candidate for a real event-loss investigation
+/// precisely because nothing could rule it out.
+///
+/// So the diagnostic lives here, once, where it cannot be forgotten by the
+/// next caller to adopt the same `let _ =`. The signature still returns the
+/// error, so a caller that *does* care keeps the choice.
 pub fn record_world_event(
+    conn: &mut PgConnection,
+    world_id: Uuid,
+    event_code: i32,
+    event_payload: Option<serde_json::Value>,
+    user_id: Uuid,
+) -> GraphQLResult<i64> {
+    let result = record_world_event_inner(conn, world_id, event_code, event_payload, user_id);
+    if let Err(err) = &result {
+        // Deliberately loud. A world event that was not recorded means every
+        // other client in that world is now looking at stale state until
+        // something else happens to refresh it.
+        eprintln!(
+            "[world_events] ⚠️  FAILED to record event code={} world={} user={}: {} \
+             — subscribers will not be told about this change",
+            event_code, world_id, user_id, err.message
+        );
+    }
+    result
+}
+
+fn record_world_event_inner(
     conn: &mut PgConnection,
     world_id: Uuid,
     event_code: i32,
@@ -79,6 +119,12 @@ pub fn record_world_event(
         .get_result::<i64>(conn)
         .map_err(|e| Error::new(format!("Failed to record event: {}", e)))?;
 
+    // Vestigial, and kept deliberately: `listener.rs` issues `LISTEN
+    // world_events_channel` and then never reads a notification — delivery is
+    // entirely the 100ms poll. This stays because an `AFTER INSERT` trigger
+    // sends the same notification anyway, and because a future listener that
+    // does consume it should not have to rediscover that the publish side was
+    // removed. It is not what makes an event arrive today.
     diesel::sql_query("SELECT pg_notify('world_events_channel', $1)")
         .bind::<diesel::sql_types::Text, _>(event_id.to_string())
         .execute(conn)

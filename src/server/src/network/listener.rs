@@ -180,24 +180,62 @@ async fn run_listen_loop(
     // reach backwards past ten rows. A listener is for what happens next;
     // history is what the delta sync is for.
     //
-    // Failing to read the high-water mark is not fatal — falling back to 0
-    // would replay everything, so a failure here starts from "nothing yet"
-    // and the first genuinely new event moves the cursor forward.
-    let mut last_event_id: i64 = current_max_event_id(pool).unwrap_or(i64::MAX);
+    // The high-water mark is waited for, not guessed at.
+    //
+    // This used to be `unwrap_or(i64::MAX)`, with a comment saying a failure
+    // "starts from nothing yet and the first genuinely new event moves the
+    // cursor forward". That is not what `i64::MAX` does. No row can ever
+    // satisfy `id > i64::MAX`, so a single failed query at boot — a pool not
+    // yet warm, a database still starting — left this task polling forever
+    // and delivering **nothing, ever**, while logging a cheerful
+    // "Streaming events after id=9223372036854775807" and looking healthy.
+    //
+    // Falling back to 0 is not the answer either: it would replay the entire
+    // `world_events` table to every client. Both guesses are wrong, so this
+    // does not guess. The database being unavailable at startup is a
+    // transient condition and the honest response is to wait for it.
+    let mut last_event_id: i64 = loop {
+        // `None` is the failure case; an empty table answers `Some(0)`.
+        match current_max_event_id(pool) {
+            Some(id) => break id,
+            None => {
+                eprintln!(
+                    "[PubSub] ⚠️  Cannot read the event high-water mark; retrying in 1s. \
+                     No events will be delivered until this succeeds."
+                );
+                sleep(Duration::from_secs(1)).await;
+            }
+        }
+    };
     eprintln!("[PubSub] 📍 Streaming events after id={}", last_event_id);
     let mut last_log_time = Instant::now();
+
+    // Ids already broadcast but not yet passed by the cursor.
+    //
+    // The cursor deliberately lags behind delivery (see `settled_cursor`), so
+    // each poll re-reads rows it has already sent. This is what stops them
+    // being sent twice. Bounded by the number of events inside one
+    // `COMMIT_GRACE` window and pruned every pass.
+    let mut delivered: std::collections::BTreeSet<i64> = std::collections::BTreeSet::new();
 
     loop {
         // Poll for new events every 100ms
         match poll_new_events_with_conn(pool, last_event_id) {
             Ok(events) => {
+                // The cursor advances only past rows old enough that nothing
+                // older can still be uncommitted — never simply to the last id
+                // seen, which is what used to lose an out-of-order commit.
+                let settled =
+                    settled_cursor(&events, last_event_id, chrono::Utc::now().naive_utc());
+
                 for event in events {
-                    // The query already excludes anything at or below
-                    // `last_event_id` and returns ascending, so every row here
-                    // is new and arrives in the order it was recorded.
-                    // Advancing the cursor per event keeps that true if the
-                    // batch is truncated by LIMIT.
-                    last_event_id = event.id;
+                    // Broadcast on first sight, whatever the cursor is doing.
+                    // Waiting for the row to settle would put `COMMIT_GRACE`
+                    // on every event's latency for a race that affects almost
+                    // none of them.
+                    if !delivered.insert(event.id) {
+                        continue;
+                    }
 
                     eprintln!(
                         "[PubSub] 📡 Event id={}, world_id={}, code={}",
@@ -242,6 +280,12 @@ async fn run_listen_loop(
                         }
                     }
                 }
+
+                // Only now, and only as far as the settled rule allows.
+                last_event_id = settled;
+                // Anything the cursor has passed can never come back in a
+                // future poll, so remembering it serves no purpose.
+                delivered = delivered.split_off(&(last_event_id + 1));
             }
             Err(e) => {
                 eprintln!("[PubSub] ⚠️  Poll error: {}", e);
@@ -263,6 +307,61 @@ fn current_max_event_id(pool: &DbPool) -> Option<i64> {
         .ok()
         .flatten()
         .or(Some(0))
+}
+
+/// How long a row must have existed before the cursor may pass it.
+///
+/// This is the window in which a transaction can still be holding an id it
+/// took but has not committed. It bounds the race described on
+/// [`settled_cursor`]: a transaction that keeps its id longer than this can
+/// still be missed, and one that commits within it cannot.
+///
+/// Two seconds is chosen against what actually writes here — single-statement
+/// inserts at the end of a mutation that has already done its work — where
+/// the gap between taking an id and committing is sub-millisecond. It costs
+/// nothing at delivery time (see the loop: rows are broadcast the moment they
+/// are seen, not when they settle) and only delays how quickly the cursor
+/// forgets them.
+const COMMIT_GRACE: Duration = Duration::from_secs(2);
+
+/// The highest id the cursor may advance to, given what this poll returned.
+///
+/// # The bug this exists to prevent
+///
+/// `world_events.id` is `BIGSERIAL`. A sequence value is taken at **INSERT**
+/// and the row becomes visible at **COMMIT**, and those two orders need not
+/// agree. If transaction A takes id 102 and B takes 103, and B commits first,
+/// a poll landing between them sees only `[103]`. Advancing the cursor to 103
+/// means 102 — committing a millisecond later — can never satisfy
+/// `id > cursor` again. It is lost permanently, with no log, no metric and no
+/// `Lagged`: the quietest failure in the whole delivery path.
+///
+/// That is not hypothetical. `a_poll_between_out_of_order_commits_still_
+/// delivers_the_lower_id` stages exactly that interleaving against a real
+/// database, and before this rule existed it lost the event every time.
+///
+/// # The rule
+///
+/// Walk the batch in ascending id order and stop at the first row young
+/// enough that an older sibling could still be uncommitted. Everything before
+/// it is settled: any transaction that took a lower id has had longer than
+/// [`COMMIT_GRACE`] to commit, so if it has not appeared by now it never
+/// will (it rolled back, and its id is a permanent gap).
+///
+/// Delivery does not wait for this — rows are broadcast as soon as they are
+/// seen. Only the *cursor* waits, which is why the fix costs latency nowhere.
+/// The price is that a row is re-read from the database on each poll until it
+/// settles, and the caller must therefore remember what it has already sent.
+fn settled_cursor(events: &[WorldEvent], current: i64, now: chrono::NaiveDateTime) -> i64 {
+    let cutoff = now - chrono::Duration::from_std(COMMIT_GRACE).unwrap_or_default();
+    let mut settled = current;
+    for event in events {
+        if event.created_at >= cutoff {
+            break;
+        }
+        settled = settled.max(event.id);
+    }
+    settled
 }
 
 /// Poll the database for events newer than `after_id`, oldest first.
@@ -326,6 +425,156 @@ mod tests {
         assert_eq!(RECONNECT_DELAY_MS, 1000);
         assert_eq!(RECONNECT_MAX_DELAY_MS, 30000);
         const { assert!(BROADCAST_BUFFER_SIZE > 1000) };
+    }
+
+    /// An event that takes a lower id but commits later must still be
+    /// delivered.
+    ///
+    /// `world_events.id` is `BIGSERIAL`: the sequence value is taken at
+    /// **INSERT**, the row appears at **COMMIT**, and those orders need not
+    /// agree. If A takes 102 and B takes 103, and B commits first, a poll
+    /// landing between them sees only `[103]`. A cursor that advances to the
+    /// last id seen puts 102 permanently out of reach — no log, no metric, no
+    /// `Lagged`, just an event that never arrives.
+    ///
+    /// This stages that interleaving against a real database: two
+    /// connections, two open transactions, ids taken in one order and
+    /// committed in the other, with a poll in between. It failed before
+    /// `settled_cursor` existed, reporting `Saw [901]`.
+    #[test]
+    fn a_poll_between_out_of_order_commits_still_delivers_the_lower_id() {
+        use crate::test_support::*;
+        use diesel::connection::SimpleConnection;
+        use uuid::Uuid;
+
+        let state = test_app_state();
+        let mut setup = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut setup);
+        let world_id = insert_test_world(&mut setup, owner_id);
+        let start = current_max_event_id(&state.db_pool).expect("high-water mark");
+        drop(setup);
+
+        // Two independent connections, so the transactions are genuinely
+        // concurrent rather than nested.
+        let mut a = state.db_pool.get().unwrap();
+        let mut b = state.db_pool.get().unwrap();
+
+        let insert = |world: Uuid, user: Uuid, code: i32| {
+            format!(
+                "INSERT INTO world_events \
+                 (world_id, event_code, schema_version, created_at, updated_at, \
+                  created_by, updated_by) \
+                 VALUES ('{world}', {code}, 1, now(), now(), '{user}', '{user}')"
+            )
+        };
+
+        // A takes the lower id first and holds its transaction open.
+        a.batch_execute("BEGIN").unwrap();
+        a.batch_execute(&insert(world_id, owner_id, 900)).unwrap();
+
+        // B takes the higher id and commits immediately.
+        b.batch_execute("BEGIN").unwrap();
+        b.batch_execute(&insert(world_id, owner_id, 901)).unwrap();
+        b.batch_execute("COMMIT").unwrap();
+
+        // One turn of the listener's loop, exactly as `run_listen_loop` does
+        // it: poll, deliver everything seen, then advance the cursor only as
+        // far as `settled_cursor` permits.
+        let mut cursor = start;
+        let mut delivered: Vec<(i64, i32)> = Vec::new();
+        let mut seen_ids = std::collections::BTreeSet::new();
+        let mut turn = |cursor: &mut i64,
+                        delivered: &mut Vec<(i64, i32)>,
+                        seen: &mut std::collections::BTreeSet<i64>| {
+            let events = poll_new_events_with_conn(&state.db_pool, *cursor).unwrap();
+            let settled = settled_cursor(&events, *cursor, chrono::Utc::now().naive_utc());
+            for event in &events {
+                if seen.insert(event.id) && event.world_id == world_id {
+                    delivered.push((event.id, event.event_code));
+                }
+            }
+            *cursor = settled;
+        };
+
+        turn(&mut cursor, &mut delivered, &mut seen_ids);
+
+        // A commits late, with the lower id.
+        a.batch_execute("COMMIT").unwrap();
+
+        turn(&mut cursor, &mut delivered, &mut seen_ids);
+
+        let codes: Vec<i32> = delivered.iter().map(|(_, code)| *code).collect();
+        assert!(
+            codes.contains(&901),
+            "the early-committing event must be delivered; saw {codes:?}"
+        );
+        assert!(
+            codes.contains(&900),
+            "the event that took the lower id but committed later was lost: the \
+             cursor advanced past it while it was still invisible, and \
+             `id > cursor` can never return it. Saw {codes:?}"
+        );
+        assert_eq!(
+            codes.len(),
+            2,
+            "a lagging cursor re-reads rows it has already sent, so each must \
+             still be delivered exactly once; saw {codes:?}"
+        );
+    }
+
+    /// The cursor must not pass a row young enough to have an uncommitted
+    /// older sibling — and must not stall on one either.
+    #[test]
+    fn the_cursor_stops_at_the_first_row_too_young_to_be_settled() {
+        let now = chrono::Utc::now().naive_utc();
+        let old = now - chrono::Duration::seconds(60);
+        let fresh = now - chrono::Duration::milliseconds(10);
+
+        let events = vec![
+            event_at(10, old),
+            event_at(11, old),
+            // Young: nothing at or beyond this may be passed, because a
+            // transaction holding an id below it could still commit.
+            event_at(12, fresh),
+            event_at(13, old),
+        ];
+
+        assert_eq!(
+            settled_cursor(&events, 9, now),
+            11,
+            "the cursor stops before the first unsettled row"
+        );
+        // Note 13 is old but comes after 12: order, not age, decides where the
+        // walk stops. Passing 13 would strand anything that took id 12.
+        assert_eq!(
+            settled_cursor(&[], 9, now),
+            9,
+            "an empty poll moves nothing"
+        );
+        assert_eq!(
+            settled_cursor(&[event_at(10, fresh)], 9, now),
+            9,
+            "a batch of nothing but fresh rows leaves the cursor where it was"
+        );
+        assert_eq!(
+            settled_cursor(&[event_at(10, old), event_at(11, old)], 9, now),
+            11,
+            "an entirely settled batch advances all the way"
+        );
+    }
+
+    fn event_at(id: i64, created_at: chrono::NaiveDateTime) -> WorldEvent {
+        WorldEvent {
+            id,
+            world_id: uuid::Uuid::nil(),
+            event_code: 1,
+            token_event: None,
+            created_at,
+            schema_version: 1,
+            updated_at: created_at,
+            created_by: uuid::Uuid::nil(),
+            updated_by: uuid::Uuid::nil(),
+        }
     }
 
     #[test]

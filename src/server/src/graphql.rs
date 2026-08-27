@@ -10,6 +10,7 @@ use futures_util::Stream;
 use std::time::Duration;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::IntervalStream;
+use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
 use crate::admin::{
     load_admin_stats, recalculate_disk_usage as calculate_disk_usage,
@@ -2341,22 +2342,45 @@ impl SubscriptionRoot {
             // Success case: stream from broadcast channel
             let world_uuid = world_uuid.unwrap();
 
-            let stream = tokio_stream::wrappers::BroadcastStream::new(rx)
-                .filter_map(move |result| {
+            let stream =
+                tokio_stream::wrappers::BroadcastStream::new(rx).filter_map(move |result| {
                     match result {
                         Ok(event) => {
                             // Only send events for this world
                             if event.world_id == world_uuid {
-                                eprintln!("[GraphQL Subscription] 📤 Sending event id={} to client", event.id);
+                                eprintln!(
+                                    "[GraphQL Subscription] 📤 Sending event id={} to client",
+                                    event.id
+                                );
                                 Some(Ok(GraphQLWorldEvent::from(event)))
                             } else {
                                 None
                             }
                         }
-                        Err(broadcast_err) => {
-                            // Handle lagged subscribers gracefully
-                            // BroadcastStream wraps RecvError, we just log and drop
-                            eprintln!("[GraphQL Subscription] ⚠️  Broadcast stream error: {:?} (backpressure/drop)", broadcast_err);
+                        // The only error `BroadcastStream` yields is
+                        // `Lagged(n)`: this receiver fell far enough behind
+                        // that the channel overwrote `n` messages it had not
+                        // read. Those events are **gone for this client** —
+                        // no retry, no backfill, and the stream continues as
+                        // if nothing happened.
+                        //
+                        // Dropping it to `None` is still the right stream
+                        // behaviour (ending the subscription would be worse
+                        // than missing an event), but it must not be quiet
+                        // about *how many*. This previously logged the error
+                        // with `{:?}` and no count in the message, which read
+                        // as a transient warning rather than "this client's
+                        // view of the world is now wrong".
+                        //
+                        // The client's recovery is the world sync it performs
+                        // on open; there is no resync signal on this wire yet,
+                        // which is precisely why the log has to be findable.
+                        Err(BroadcastStreamRecvError::Lagged(missed)) => {
+                            eprintln!(
+                                "[GraphQL Subscription] ⚠️  DROPPED {missed} event(s) for a \
+                                 subscriber of world {world_uuid}: it fell behind the broadcast \
+                                 buffer. Those events will never be delivered to it."
+                            );
                             None
                         }
                     }
@@ -2400,8 +2424,8 @@ impl SubscriptionRoot {
             // Success case: emit presence notifications
             // Note: This is a simple implementation that emits on each presence event.
             // In production, you'd query the DB to get the full player list on each event.
-            let stream = tokio_stream::wrappers::BroadcastStream::new(rx)
-                .filter_map(move |result| {
+            let stream =
+                tokio_stream::wrappers::BroadcastStream::new(rx).filter_map(move |result| {
                     match result {
                         Ok(_presence_event) => {
                             eprintln!("[GraphQL Subscription] 📤 Presence updated");
@@ -2411,8 +2435,18 @@ impl SubscriptionRoot {
                                 players: vec![],
                             }))
                         }
-                        Err(_broadcast_err) => {
-                            eprintln!("[GraphQL Subscription] ⚠️  Broadcast stream error (backpressure/drop)");
+                        // Same as the world-event stream above: `Lagged(n)`
+                        // means n presence updates were overwritten before
+                        // this subscriber read them. Less costly than a lost
+                        // world event — presence is a snapshot, and the next
+                        // update supersedes the ones missed — but the count
+                        // is still the difference between "a blip" and "this
+                        // client is minutes stale".
+                        Err(BroadcastStreamRecvError::Lagged(missed)) => {
+                            eprintln!(
+                                "[GraphQL Subscription] ⚠️  DROPPED {missed} presence update(s) \
+                                 for a subscriber: it fell behind the broadcast buffer."
+                            );
                             None
                         }
                     }
