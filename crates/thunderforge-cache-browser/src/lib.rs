@@ -110,6 +110,25 @@ impl From<PathError> for CacheError {
     }
 }
 
+/// A storage failure, flattened into this crate's vocabulary.
+///
+/// `thunderforge-opfs` keeps its own small error type so it can be used
+/// without this crate; the mapping is one-to-one and loses nothing a caller
+/// acts on. Note what is *not* here: absence. A blob that is not present, or
+/// that nobody has finished writing, is `Ok(None)` from the store, never an
+/// error — which is what lets every caller treat "no cache" and "cold cache"
+/// identically (FR-016c).
+impl From<thunderforge_opfs::store::StoreError> for CacheError {
+    fn from(err: thunderforge_opfs::store::StoreError) -> Self {
+        use thunderforge_opfs::store::StoreError;
+        match err {
+            StoreError::Unsupported(what) => Self::Unsupported(what),
+            StoreError::Backend(msg) => Self::Platform(msg),
+            StoreError::Path(err) => Self::Path(err),
+        }
+    }
+}
+
 impl From<EnvelopeError> for CacheError {
     fn from(err: EnvelopeError) -> Self {
         Self::Envelope(err)

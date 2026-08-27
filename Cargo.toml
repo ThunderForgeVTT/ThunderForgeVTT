@@ -11,6 +11,7 @@ members = [
     "crates/thunderforge-crucible",
     "crates/thunderforge-dice",
     "crates/thunderforge-mapforge",
+    "crates/thunderforge-opfs",
     "packs/systems/dnd5e/server",
     "packs/systems/dnd5e/engine",
     "packs/systems/genie/server",
