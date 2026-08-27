@@ -58,9 +58,14 @@ export default defineConfig({
   webServer: {
     command: "pnpm run dev",
     url: "http://localhost:5173",
-    // Never reuse: the script points the stack at an ephemeral database via
-    // env, and reusing a server already bound to the dev database would
-    // silently run the storm against real data.
+    // This starts **vite only** — `apps/web`'s own `dev` script is one word.
+    // The backend is started by `scripts/torture.mjs`, against the ephemeral
+    // database, before Playwright is invoked at all.
+    //
+    // That division is not cosmetic. This flag governs vite and nothing else,
+    // so on its own it never prevented a storm from reaching the dev backend
+    // through vite's `/api` proxy — which is what happened on every run until
+    // the script began starting a backend of its own.
     reuseExistingServer: false,
     timeout: 180_000,
     // Forward server output. Playwright hides webServer logs unless startup

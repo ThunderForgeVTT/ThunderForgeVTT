@@ -90,15 +90,71 @@ async function waitForPostgres() {
   throw new Error("postgres never became ready");
 }
 
+/**
+ * Wait for a service to answer on a port.
+ *
+ * Any HTTP status counts, 404 included: the question is whether something is
+ * listening and serving, not whether the path exists.
+ */
+async function waitForHttp(url, what, attempts = 120) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      await fetch(url);
+      return;
+    } catch {
+      await new Promise((r) => setTimeout(r, 1_000));
+    }
+  }
+  throw new Error(`${what} never answered on ${url}`);
+}
+
+/**
+ * Fail loudly if a container died on startup.
+ *
+ * RustFS spent this harness's entire history exiting immediately with a
+ * permission error, and nothing noticed — because nothing was reaching it
+ * (see below) and `docker compose up -d` returns success for a container
+ * that starts and then dies. A load run whose object storage is absent is
+ * not a load run.
+ */
+async function assertContainerRunning(service) {
+  const state = await new Promise((resolve, reject) => {
+    const child = spawn(
+      "docker",
+      ["compose", "-f", "compose.torture.yml", "-p", project, "ps", "-a",
+       "--format", "{{.State}}", service],
+      { env: composeEnv, stdio: ["ignore", "pipe", "inherit"] },
+    );
+    let out = "";
+    child.stdout.on("data", (chunk) => (out += chunk));
+    child.on("error", reject);
+    child.on("exit", () => resolve(out.trim()));
+  });
+  if (!state.startsWith("running")) {
+    console.error(`[torture] ${service} is "${state}"; its logs follow:`);
+    await run(
+      "docker",
+      ["compose", "-f", "compose.torture.yml", "-p", project, "logs", service],
+      { env: composeEnv },
+    ).catch(() => {});
+    throw new Error(`${service} is not running`);
+  }
+}
+
 const databaseUrl = `postgres://postgres:password@localhost:${pgPort}/thunderforge`;
 
 let started = false;
+let backendProcess = null;
 try {
   console.log(`[torture] tier=${requested} project=${project} pg=${pgPort} rustfs=${rustfsPort}`);
 
   await compose("up", "-d");
   started = true;
   await waitForPostgres();
+  // `up -d` succeeds for a container that starts and immediately dies, which
+  // is exactly what RustFS was doing here.
+  await assertContainerRunning("rustfs");
+  await waitForHttp(`http://localhost:${rustfsPort}/`, "rustfs");
 
   // Schema. The stack is empty every run, so this is a full migrate, not an
   // incremental one — which incidentally means a broken migration fails here
@@ -107,17 +163,79 @@ try {
     env: { ...composeEnv, DATABASE_URL: databaseUrl },
   });
 
+  // Make the instance look already-installed.
+  //
+  // A migrated database is not a usable one: with no admin, the server's
+  // `setup_status` answers `setup_required: true` and the app redirects every
+  // route — `/register` included — to `/setup`. The storm's first act is to
+  // register five users, so it sat for three minutes on a form that was not
+  // on the page.
+  //
+  // It has to be an **admin user**, not a completed bootstrap row. Seeding
+  // the row does not survive startup: `ensure_admin_bootstrap_code` runs on
+  // every boot and, finding no admin, sets `setup_completed_at` back to NULL
+  // and mints a fresh bootstrap code (`auth/mod.rs`). `admin_exists` is the
+  // only condition that short-circuits it.
+  //
+  // The password hash is deliberately not a real one. Nothing ever
+  // authenticates as this account — the storm registers its own users — and
+  // a hash that cannot verify is the honest way to say so.
+  await run(
+    "docker",
+    ["compose", "-f", "compose.torture.yml", "-p", project, "exec", "-T",
+     "postgres", "psql", "-U", "postgres", "-d", "thunderforge", "-v",
+     "ON_ERROR_STOP=1", "-c",
+     "INSERT INTO users (id, username, password_hash, email, is_admin, " +
+     "created_at, updated_at) VALUES (gen_random_uuid(), 'torture-admin', " +
+     "'x-not-a-usable-hash', 'torture-admin@example.invalid', true, now(), now()) " +
+     "ON CONFLICT DO NOTHING;"],
+    { env: composeEnv },
+  );
+
+  const stackEnv = {
+    ...composeEnv,
+    DATABASE_URL: databaseUrl,
+    RUSTFS_ENDPOINT: `http://localhost:${rustfsPort}`,
+    TORTURE_SESSIONS: String(requested),
+  };
+
+  // The backend, started here rather than by Playwright.
+  //
+  // This is the whole reason the isolation above was fiction. Playwright's
+  // `webServer` runs `pnpm run dev` with `apps/web` as its directory, and
+  // *that* `dev` script is one word: `vite`. So no process ever read the
+  // `DATABASE_URL` this script works so hard to create. With a dev stack
+  // running, every storm hit the dev backend and the dev database through
+  // vite's `/api` proxy, and `reuseExistingServer: false` did nothing about
+  // it, because it only ever governed vite. With no dev stack running, the
+  // run simply failed with ECONNREFUSED.
+  //
+  // Started before Playwright and waited for, which also removes the trap
+  // that a run beginning before the backend is up dies in `globalSetup`.
+  console.log("[torture] starting the backend against the throwaway stack");
+  const backend = spawn("cargo", ["run", "--bin", "thunderforge"], {
+    stdio: "inherit",
+    env: stackEnv,
+  });
+  backendProcess = backend;
+  const backendExited = new Promise((_, reject) => {
+    backend.on("exit", (code) =>
+      reject(new Error(`backend exited ${code} before the run started`)),
+    );
+    backend.on("error", reject);
+  });
+  await Promise.race([
+    waitForHttp("http://localhost:30000/", "the backend", 300),
+    backendExited,
+  ]);
+  console.log("[torture] backend is up");
+
   await run(
     "npx",
     ["playwright", "test", "--config=playwright.torture.config.ts"],
     {
       cwd: "apps/web",
-      env: {
-        ...composeEnv,
-        DATABASE_URL: databaseUrl,
-        RUSTFS_ENDPOINT: `http://localhost:${rustfsPort}`,
-        TORTURE_SESSIONS: String(requested),
-      },
+      env: stackEnv,
     },
   );
 
@@ -126,6 +244,10 @@ try {
   console.error(`[torture] tier=${requested} FAILED: ${error.message}`);
   process.exitCode = 1;
 } finally {
+  if (backendProcess && backendProcess.exitCode === null) {
+    console.log("[torture] stopping the backend");
+    backendProcess.kill("SIGTERM");
+  }
   if (started) {
     // `-v` as well as `down`: tmpfs leaves nothing behind, but if someone
     // later swaps tmpfs for a volume this keeps the promise on the tin.

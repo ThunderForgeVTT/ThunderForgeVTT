@@ -45,4 +45,11 @@ services:
     ports:
       - "${TORTURE_RUSTFS_PORT:-59000}:9000"
     tmpfs:
-      - /data
+      # `mode=1777`, and `/logs` as well as `/data`, are both load-bearing.
+      # The image runs as the non-root `rustfs` user, and a bare `tmpfs: -
+      # /data` is mounted root-owned and not group-writable — so the server
+      # died on startup with `[FATAL] Server runtime failed: Io error:
+      # Permission denied (os error 13)` on every run this harness has ever
+      # done. Nothing noticed, because nothing was reaching it.
+      - /data:mode=1777
+      - /logs:mode=1777
