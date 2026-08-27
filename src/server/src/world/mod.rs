@@ -1,27 +1,46 @@
+//! Small world REST endpoints.
+//!
+//! # Two routes were removed from here, and why
+//!
+//! `GET /world/{id}/events` (SSE) and `POST /world/{id}/event` used to live
+//! beside `all_worlds`. Both were unreachable from the client — there is no
+//! `EventSource` anywhere in `apps/web` and nothing referenced either path —
+//! and both were unauthorized in a way that made them worth deleting rather
+//! than repairing:
+//!
+//! - The SSE route bound `Extension(_auth_user)` and `Path(_id)` and then
+//!   used **neither**. It subscribed to the process-wide event channel and
+//!   streamed it verbatim, so any authenticated user could open it with any
+//!   world id and receive a live feed of **every world's events in the
+//!   system** — worlds they had never joined, worlds they had been revoked
+//!   from, and the ids of scenes, chat messages and combats inside them.
+//!   Bodies were not exposed (this bus carries nudges, not content), but who
+//!   is doing what, where and when was.
+//! - The POST route deserialized a client-supplied `WorldEvent` and pushed it
+//!   straight onto that same channel — no membership check, no world check,
+//!   no validation, and no database row. It let any authenticated user forge
+//!   arbitrary events into any world, delivered live to that world's real
+//!   subscribers.
+//!
+//! Together they were a cross-tenant read and write on dead code. Deleting
+//! them removes the surface; the supported path for world events is the
+//! `worldEventsCreated` GraphQL subscription, which authorizes world
+//! membership and filters by world.
+
 use crate::auth_middleware::AuthenticatedUser;
-use crate::models::{World, WorldEvent};
+use crate::models::World;
 use crate::schema::worlds;
 use crate::state::AppState;
 use axum::{
     Json, Router,
-    extract::{Extension, Path, State},
-    response::{
-        IntoResponse,
-        sse::{Event, Sse},
-    },
-    routing::{get, post},
+    extract::{Extension, State},
+    response::IntoResponse,
+    routing::get,
 };
 use diesel::prelude::*;
-use futures_util::stream::{Stream, StreamExt};
-use std::convert::Infallible;
-use tokio_stream::wrappers::BroadcastStream;
-use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
 pub fn router() -> Router<AppState> {
-    Router::new()
-        .route("/world/all", get(all_worlds))
-        .route("/world/{id}/events", get(world_events_by_id))
-        .route("/world/{id}/event", post(world_event_by_id))
+    Router::new().route("/world/all", get(all_worlds))
 }
 
 async fn all_worlds(
@@ -53,43 +72,4 @@ async fn all_worlds(
     .unwrap_or_default();
 
     Json(names)
-}
-
-async fn world_events_by_id(
-    Extension(_auth_user): Extension<AuthenticatedUser>,
-    Path(_id): Path<String>,
-    State(state): State<AppState>,
-) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    let rx = state.world_event_sender.subscribe();
-    // `msg.ok()` used to drop `Lagged(n)` without so much as a log — the
-    // quietest of the three places this crate discards events. An SSE client
-    // that falls behind loses n updates and is told nothing, by anyone.
-    let stream = BroadcastStream::new(rx)
-        .filter_map(|msg| async {
-            match msg {
-                Ok(event) => Some(event),
-                Err(BroadcastStreamRecvError::Lagged(missed)) => {
-                    eprintln!(
-                        "[SSE] ⚠️  DROPPED {missed} event(s) for a subscriber: it fell behind                          the broadcast buffer. Those events will never be delivered to it."
-                    );
-                    None
-                }
-            }
-        })
-        .map(|msg| Ok(Event::default().json_data(msg).unwrap()));
-
-    Sse::new(stream).keep_alive(
-        axum::response::sse::KeepAlive::new()
-            .interval(std::time::Duration::from_secs(1))
-            .text("keep-alive-text"),
-    )
-}
-
-async fn world_event_by_id(
-    Extension(_auth_user): Extension<AuthenticatedUser>,
-    Path(_id): Path<String>,
-    State(state): State<AppState>,
-    Json(payload): Json<WorldEvent>,
-) {
-    let _ = state.world_event_sender.send(payload);
 }
