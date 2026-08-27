@@ -13,6 +13,14 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 thunderforge_canvas_core = { path = "../../crates/thunderforge-canvas-core" }
+# Spec 028 (T027): the client world cache. `cache_core` holds the rules the
+# server and this engine must agree on — chiefly `fingerprint::verify`, the
+# only sanctioned way anything here decides bytes are what they claim to be.
+# `cache_browser` is the OPFS/WebCrypto/IndexedDB half; its wasm toolchain is
+# confined to a `cfg(target_arch = "wasm32")` block in its own manifest, so
+# depending on it unconditionally pulls no `web-sys` into a native build.
+thunderforge_cache_browser = { path = "../../crates/thunderforge-cache-browser" }
+thunderforge_cache_core = { path = "../../crates/thunderforge-cache-core" }
 thunderforge_dice = { path = "../../crates/thunderforge-dice" }
 bevy = { version = "0.18.1", default-features = false, features = [
   "bevy_asset",
@@ -79,3 +87,4 @@ gloo-net = { version = "0.6", features = ["http"] }
 wasm-bindgen-futures = "0.4"
 futures-util = "0.3"
 once_cell = "1.20"
+uuid = { version = "1.23.1", features = ["serde"] }

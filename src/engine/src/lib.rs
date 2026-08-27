@@ -30,9 +30,10 @@ mod integration_tests;
 use derived_data::*;
 use movement::PlayerControlled;
 use plugins::{
-    BackgroundPlugin, CameraPlugin, CanvasLayerPlugin, DarknessPlugin, DiceRollPlugin, GridPlugin,
-    LightingOverlayPlugin, LightingPlugin, RenderProbeEnabled, RenderProbePlugin, ScenePlugin,
-    SelectionPlugin, ShapePlugin, SystemRegistrationPlugin, TokenPlugin, WallPlugin,
+    BackgroundPlugin, CachedAssetsPlugin, CameraPlugin, CanvasLayerPlugin, DarknessPlugin,
+    DiceRollPlugin, GridPlugin, LightingOverlayPlugin, LightingPlugin, RenderProbeEnabled,
+    RenderProbePlugin, ScenePlugin, SelectionPlugin, ShapePlugin, SystemRegistrationPlugin,
+    TokenPlugin, WallPlugin,
 };
 use resources::{
     CameraManager, DoorState, GridSnapEnabled, GridVisible, IsGameMaster, LightSet,
@@ -645,6 +646,13 @@ pub fn start(canvas_selector: &str) {
                     ..default()
                 }),
         )
+        // Spec 028 (T027): canvas image reads consult the local encrypted
+        // cache before the network. Added after `DefaultPlugins` because it
+        // needs `Assets<Image>` to exist, and deliberately depended on by
+        // nothing: delete this one line and every canvas image loads through
+        // `AssetServer` exactly as it did before (Constitution Principle II
+        // — see the module docs in `plugins/cached_assets.rs`).
+        .add_plugins(CachedAssetsPlugin)
         // Phase 4.7.F2: System Registration & Plugin Setup
         .add_plugins(SystemRegistrationPlugin)
         // Phase 4.7: Canvas Rendering Infrastructure
@@ -781,7 +789,6 @@ fn setup_scene(mut commands: Commands, mut token_entities: ResMut<TokenEntities>
         .id();
 
     token_entities.0.insert("npc".to_string(), npc_entity);
-
 }
 
 fn move_player(

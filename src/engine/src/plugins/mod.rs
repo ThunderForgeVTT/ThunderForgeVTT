@@ -1,4 +1,5 @@
 pub mod background;
+pub mod cached_assets;
 pub mod camera;
 pub mod canvas_layer;
 pub mod darkness;
@@ -16,6 +17,7 @@ pub mod token;
 pub mod wall;
 
 pub use background::BackgroundPlugin;
+pub use cached_assets::{CachedAssetsPlugin, CanvasAssetCache};
 pub use camera::CameraPlugin;
 pub use canvas_layer::CanvasLayerPlugin;
 pub use darkness::DarknessPlugin;

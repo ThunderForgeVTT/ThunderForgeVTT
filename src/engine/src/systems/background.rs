@@ -5,6 +5,7 @@
 use bevy::prelude::*;
 use std::collections::HashMap;
 
+use crate::plugins::cached_assets::{CanvasAssetCache, load_canvas_image};
 use crate::plugins::mark_frame;
 use crate::resources::{BackgroundTextureCache, CanvasLayer, PlacedCanvasImages, SceneBackground};
 
@@ -24,11 +25,15 @@ pub(crate) fn sync_scene_background(
     mut commands: Commands,
     background: Res<SceneBackground>,
     asset_server: Res<AssetServer>,
+    mut images: ResMut<Assets<Image>>,
     existing: Query<Entity, With<BackgroundSprite>>,
     // Optional, like every other plugin-owned resource this loop touches:
     // without `BackgroundPlugin`'s cache the background still renders, it
     // just pays the upload again on every visit.
     mut texture_cache: Option<ResMut<BackgroundTextureCache>>,
+    // Spec 028 (T027): absent unless `CachedAssetsPlugin` is registered, in
+    // which case `load_canvas_image` is `asset_server.load` verbatim.
+    mut asset_cache: Option<ResMut<CanvasAssetCache>>,
 ) {
     if !background.is_changed() {
         return;
@@ -47,7 +52,12 @@ pub(crate) fn sync_scene_background(
         return;
     };
 
-    let image: Handle<Image> = asset_server.load(&path);
+    let image: Handle<Image> = load_canvas_image(
+        &path,
+        asset_cache.as_deref_mut(),
+        &mut images,
+        &asset_server,
+    );
 
     // Hold a strong handle past the sprite's lifetime. Despawning the old
     // background above dropped the only handle to its image, which freed
@@ -144,7 +154,10 @@ pub(crate) fn sync_placed_canvas_images(
     mut commands: Commands,
     placed: Res<PlacedCanvasImages>,
     asset_server: Res<AssetServer>,
+    mut images: ResMut<Assets<Image>>,
     existing: Query<(Entity, &PlacedCanvasImageSprite)>,
+    // See `sync_scene_background`: `None` when the plugin is not registered.
+    mut asset_cache: Option<ResMut<CanvasAssetCache>>,
 ) {
     if !placed.is_changed() {
         return;
@@ -166,7 +179,12 @@ pub(crate) fn sync_placed_canvas_images(
             continue;
         }
 
-        let handle: Handle<Image> = asset_server.load(&image.path);
+        let handle: Handle<Image> = load_canvas_image(
+            &image.path,
+            asset_cache.as_deref_mut(),
+            &mut images,
+            &asset_server,
+        );
         commands.spawn((
             Sprite {
                 image: handle,

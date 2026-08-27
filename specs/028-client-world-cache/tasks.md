@@ -78,7 +78,7 @@ description: "Task list for 028-client-world-cache"
 - [X] T024 [P] [US1] Implement encrypted OPFS blob read/write keyed by fingerprint in `crates/thunderforge-cache-browser/src/opfs.rs`
 - [X] T025 [P] [US1] Implement non-extractable AES-GCM session key generation and IndexedDB storage in `crates/thunderforge-cache-browser/src/crypto.rs`
 - [X] T026 [US1] Implement the IndexedDB `index` store (fingerprint, size, last read, world) in `crates/thunderforge-cache-browser/src/index.rs`
-- [ ] T027 [US1] Create `CachedAssetsPlugin` in `src/engine/src/plugins/cached_assets.rs` routing Bevy asset reads through the cache before the network, registered in `src/engine/src/lib.rs`
+- [X] T027 [US1] Create `CachedAssetsPlugin` in `src/engine/src/plugins/cached_assets.rs` routing Bevy asset reads through the cache before the network, registered in `src/engine/src/lib.rs`
 - [X] T028 [US1] Build the manifest and parse the `worldSyncPlan` reply in Rust (`crates/thunderforge-cache-browser/src/sync.rs`) — engine-driven, so cache policy has one owner (Principle I). TS triggers and observes; it decides nothing.
 - [X] T029 [US1] Verify every fetched item against its promised fingerprint before storing, via `cache_core::fingerprint::verify`, in `crates/thunderforge-cache-browser/src/opfs.rs`
 - [ ] T030 [US1] E2E: unchanged reopen transfers ≤5% of first-visit bytes and is ≥3× faster to interactive, **excluding engine bundle bytes** (SC-001, SC-002) in `apps/web/e2e/world-cache.spec.ts`
