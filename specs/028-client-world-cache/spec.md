@@ -506,6 +506,17 @@ fetch and without a loading state.
   in every other tab of the same browser profile, promptly and without
   requiring those tabs to reload. A key discarded from storage while another
   tab holds it in memory is not discarded.
+- **FR-021e**: Signing out in one tab MUST sign the user out of **every** tab
+  of that browser profile. The session cookie is already shared, so those
+  tabs are in fact signed out the moment the cookie is cleared — but their UI
+  continues to present a signed-in application until something happens to
+  fail. A tab that still shows a world, a character sheet, or a chat log
+  after the user signed out on another screen is showing content the person
+  believes they have closed, which is the same disclosure concern the cache
+  key addresses, one layer up.
+- **FR-021f**: The sign-out announcement MUST reach tabs that have never
+  mounted the engine. Most tabs of this application do not have it loaded,
+  and a signal only the engine can hear would miss them.
 - **FR-021c**: A tab MUST NOT evict content another tab is actively fetching
   or has just stored. Eviction and fetch for the same world MUST be
   serialised across tabs.

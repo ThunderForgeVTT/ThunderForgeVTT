@@ -24,7 +24,7 @@ import type {
   RegisterPayload,
 } from "@/types/auth";
 import { clearAssetCache } from "@/serviceWorker";
-import { discardWorldCache } from "@/services/worldCache";
+import { discardWorldCache, onCrossTabSignOut } from "@/services/worldCache";
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -71,6 +71,26 @@ export function AuthProvider({ children }: PropsWithChildren) {
       }
       throw error;
     }
+  }, []);
+
+  // FR-021e: signing out in one tab signs the user out of every tab.
+  //
+  // The session cookie is shared, so those tabs *are* already signed out —
+  // the server will refuse their next request. But until something happens to
+  // fail, they keep presenting a signed-in application: a world still on
+  // screen, a character sheet, a chat log. That is content the person
+  // believes they have closed, which is the same concern the cache key
+  // addresses, one layer up.
+  //
+  // Deliberately clears local state only. It does NOT call `logout()`: the
+  // originating tab already hit the endpoint and cleared the cookie, and
+  // having every other tab race to do it again would mean N redundant
+  // requests and an error in each of the ones that lose.
+  useEffect(() => {
+    return onCrossTabSignOut(() => {
+      setSession(null);
+      setIsLoading(false);
+    });
   }, []);
 
   useEffect(() => {

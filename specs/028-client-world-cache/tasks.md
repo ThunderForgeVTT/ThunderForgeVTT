@@ -151,6 +151,7 @@ description: "Task list for 028-client-world-cache"
 - [X] T055b [US3] Broadcast sign-out to every tab so an in-memory key is dropped without waiting for a reload (FR-021b) in `apps/web/src/services/worldCache.ts` and `src/engine/src/plugins/cached_assets.rs`
 - [X] T055c [US3] Serialise per-world sync/eviction across tabs so one tab cannot evict what another just fetched (FR-021c) in `crates/thunderforge-cache-browser/src/sync.rs`
 - [X] T055d [US3] Degrade cleanly where Web Locks or BroadcastChannel are unavailable — an extra fetch or an ineffective cache, never a failed load and never readable content after sign-out (FR-021d) in `crates/thunderforge-cache-browser/src/`
+- [X] T055g [US3] Sign every tab out when one signs out — the session cookie is already shared, but other tabs keep presenting a signed-in UI until a request fails, showing content the user believes they closed (FR-021e, FR-021f) in `apps/web/src/hooks/useAuth.ts`
 - [ ] T055e [P] [US3] E2E: two tabs open the same world concurrently; no corruption, and the cache still works in both (FR-021) in `apps/web/e2e/world-cache-multitab.spec.ts`
 - [ ] T055f [P] [US3] E2E: signing out in one tab makes cached content unreadable in another *without reloading it* (FR-021b) in `apps/web/e2e/world-cache-multitab.spec.ts`
 - [ ] T055 [US3] Guard concurrent multi-tab writes so a partially-written blob is never readable as complete (FR-021) in `crates/thunderforge-cache-browser/src/opfs.rs`

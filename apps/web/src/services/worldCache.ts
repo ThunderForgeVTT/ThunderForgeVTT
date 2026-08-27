@@ -81,9 +81,9 @@ const STORE_KEYS = "keys";
  * Both carry the same payload, and the receiver is idempotent, so a tab
  * getting both is not a problem worth suppressing.
  */
-const SIGNAL_CHANNEL = "thunderforge-cache";
-const SIGNAL_STORAGE_KEY = "thunderforge-cache:signal";
-const SIGNAL_SIGNED_OUT = "signed-out";
+export const SIGNAL_CHANNEL = "thunderforge-cache";
+export const SIGNAL_STORAGE_KEY = "thunderforge-cache:signal";
+export const SIGNAL_SIGNED_OUT = "signed-out";
 
 /**
  * Tell every other tab of this profile that the session ended.
@@ -258,4 +258,61 @@ export async function discardWorldCache(
     // The engine was never loaded, or has no cache entry point. Both are the
     // ordinary case on most sign-outs and neither leaves a readable cache.
   });
+}
+
+/**
+ * Run `onSignedOut` when any other tab of this profile signs out.
+ *
+ * Listens on both carriers the announcement uses, for the reason the second
+ * carrier exists at all: BroadcastChannel is not universal, and a tab still
+ * presenting a signed-in application after the user signed out elsewhere is
+ * showing content they believe they have closed.
+ *
+ * Both carriers can fire for one sign-out, so the handler must be idempotent.
+ * Returns an unsubscribe function; safe to call where neither API exists.
+ */
+export function onCrossTabSignOut(onSignedOut: () => void): () => void {
+  const handle = (raw: string | null) => {
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw) as { kind?: string };
+      if (parsed.kind === SIGNAL_SIGNED_OUT) onSignedOut();
+    } catch {
+      // Not ours, or not JSON. Another writer on the same key is not a
+      // reason to sign anyone out.
+    }
+  };
+
+  let channel: BroadcastChannel | null = null;
+  try {
+    if (typeof BroadcastChannel === "function") {
+      channel = new BroadcastChannel(SIGNAL_CHANNEL);
+      channel.onmessage = (event: MessageEvent) =>
+        handle(typeof event.data === "string" ? event.data : null);
+    }
+  } catch {
+    // Falls through to the storage carrier.
+  }
+
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === SIGNAL_STORAGE_KEY) handle(event.newValue);
+  };
+  try {
+    window.addEventListener("storage", onStorage);
+  } catch {
+    // Nothing to listen on.
+  }
+
+  return () => {
+    try {
+      channel?.close();
+    } catch {
+      /* already gone */
+    }
+    try {
+      window.removeEventListener("storage", onStorage);
+    } catch {
+      /* already gone */
+    }
+  };
 }

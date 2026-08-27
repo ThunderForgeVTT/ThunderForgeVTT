@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { discardWorldCache } from "../worldCache";
+import { discardWorldCache, onCrossTabSignOut } from "../worldCache";
 
 /**
  * Sign-out for the world cache (spec 028, FR-016a).
@@ -368,5 +368,129 @@ describe("cross-tab sign-out", () => {
     await expect(discardWorldCache(null)).resolves.toBeUndefined();
 
     expect(carriers.posted).toHaveLength(1);
+  });
+});
+
+/**
+ * A minimal `window` for the storage carrier.
+ *
+ * This suite runs in vitest's node environment (see vitest.config.ts), and
+ * jsdom is not a dependency. `EventTarget` is built in and gives exactly the
+ * three methods the listener uses, which is cheaper and more honest than
+ * pulling in a DOM implementation to test four lines of event plumbing.
+ */
+function installWindowStub(): () => void {
+  const target = new EventTarget();
+  const previous = (globalThis as { window?: unknown }).window;
+  (globalThis as { window?: unknown }).window = target;
+  return () => {
+    (globalThis as { window?: unknown }).window = previous;
+  };
+}
+
+/** A `storage`-shaped event, without needing StorageEvent to exist. */
+function storageEvent(key: string, newValue: string | null): Event {
+  const event = new Event("storage") as Event & {
+    key?: string;
+    newValue?: string | null;
+  };
+  event.key = key;
+  event.newValue = newValue;
+  return event;
+}
+
+describe("onCrossTabSignOut", () => {
+  it("fires on a BroadcastChannel announcement from another tab", async () => {
+    const listeners: ((e: MessageEvent) => void)[] = [];
+    const original = globalThis.BroadcastChannel;
+    // @ts-expect-error test double
+    globalThis.BroadcastChannel = class {
+      set onmessage(fn: (e: MessageEvent) => void) {
+        listeners.push(fn);
+      }
+      close() {}
+    };
+
+    let fired = 0;
+    const stop = onCrossTabSignOut(() => {
+      fired += 1;
+    });
+
+    listeners[0]?.({
+      data: JSON.stringify({ kind: "signed-out", nonce: "1" }),
+    } as MessageEvent);
+    expect(fired).toBe(1);
+
+    stop();
+    globalThis.BroadcastChannel = original;
+  });
+
+  it("fires on the storage carrier, which is why the carrier exists", async () => {
+    // BroadcastChannel is not universal. A tab left presenting a signed-in
+    // application after the user signed out elsewhere is the outcome this
+    // second carrier exists to prevent, so it must work with no channel at
+    // all.
+    const original = globalThis.BroadcastChannel;
+    // @ts-expect-error deliberately removing it
+    delete globalThis.BroadcastChannel;
+    const restoreWindow = installWindowStub();
+
+    let fired = 0;
+    const stop = onCrossTabSignOut(() => {
+      fired += 1;
+    });
+
+    (globalThis.window as EventTarget).dispatchEvent(
+      storageEvent(
+        "thunderforge-cache:signal",
+        JSON.stringify({ kind: "signed-out", nonce: "2" }),
+      ),
+    );
+    expect(fired).toBe(1);
+
+    stop();
+    restoreWindow();
+    globalThis.BroadcastChannel = original;
+  });
+
+  it("ignores unrelated storage traffic rather than signing people out", async () => {
+    // Another writer on the same key, or noise on the channel, must not end
+    // someone's session. A false positive here logs a user out mid-session
+    // for no reason.
+    const restoreWindow = installWindowStub();
+    const stop = onCrossTabSignOut(() => {
+      throw new Error("should not have fired");
+    });
+    const w = globalThis.window as EventTarget;
+
+    w.dispatchEvent(storageEvent("something-else", "x"));
+    w.dispatchEvent(storageEvent("thunderforge-cache:signal", "not json"));
+    w.dispatchEvent(
+      storageEvent(
+        "thunderforge-cache:signal",
+        JSON.stringify({ kind: "something-else" }),
+      ),
+    );
+
+    stop();
+    restoreWindow();
+  });
+
+  it("stops listening once unsubscribed", async () => {
+    const restoreWindow = installWindowStub();
+    let fired = 0;
+    const stop = onCrossTabSignOut(() => {
+      fired += 1;
+    });
+    stop();
+
+    (globalThis.window as EventTarget).dispatchEvent(
+      storageEvent(
+        "thunderforge-cache:signal",
+        JSON.stringify({ kind: "signed-out", nonce: "3" }),
+      ),
+    );
+    expect(fired).toBe(0);
+    restoreWindow();
   });
 });
