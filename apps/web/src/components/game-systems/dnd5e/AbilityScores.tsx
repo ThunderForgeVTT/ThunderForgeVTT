@@ -18,7 +18,8 @@ import { Card } from "@/components/ui/card/Card";
 import { cn } from "@/lib/utils";
 
 export interface AbilityScoresProps {
-  data?: Record<string, any>;
+  /** Ability id -> raw score, as stored in the actor's `ability_data` JSONB. */
+  data?: Record<string, number>;
   editable?: boolean;
   onUpdate?: (abilityId: string, score: number) => void;
 }

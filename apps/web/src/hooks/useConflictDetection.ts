@@ -7,6 +7,32 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * Maintains a log of recent conflicts and provides handlers for UI feedback.
  */
 
+/**
+ * The `token_event` JSONB an `event_code=2` row carries. Written by whoever
+ * emitted the conflict, so every field is optional here and checked before
+ * use: nothing in the schema forces the writer to include any of them.
+ */
+export interface ConflictEventPayload {
+  [key: string]: unknown;
+  token_id?: unknown;
+  client_version?: unknown;
+  server_version?: unknown;
+}
+
+/**
+ * One `world_events` row as the `worldEventCreated` subscription delivers it
+ * — `GraphQLWorldEvent` in `src/server/src/graphql/types.rs`, where every
+ * column but `token_event` is non-null.
+ */
+export interface WorldEventRecord {
+  id: number;
+  world_id: string;
+  event_code: number;
+  created_by: string;
+  created_at: string;
+  token_event?: ConflictEventPayload | null;
+}
+
 export interface ConflictRecord {
   eventId: number;
   tokenId: string;
@@ -15,7 +41,7 @@ export interface ConflictRecord {
   conflictTimestamp: string;
   clientVersion?: string;
   serverVersion: string;
-  appliedData: Record<string, any>;
+  appliedData: Record<string, unknown>;
   dismissed: boolean;
 }
 
@@ -60,7 +86,7 @@ export function useConflictDetection(_worldId: string | null) {
    * Process a world event and extract conflict if present
    * Phase 4.9.C: event_code=2 indicates conflict
    */
-  const processWorldEvent = useCallback((event: any) => {
+  const processWorldEvent = useCallback((event: WorldEventRecord) => {
     if (event.event_code !== EVENT_CODE_CONFLICT_LWW) {
       return; // Not a conflict event
     }
@@ -69,10 +95,20 @@ export function useConflictDetection(_worldId: string | null) {
       "🔔 [Phase4.9.C3] Conflict detected in worldEventCreated subscription",
     );
 
-    const payload = event.token_event || {};
-    const tokenId = payload.token_id || "unknown";
-    const clientVersion = payload.client_version;
-    const serverVersion = payload.server_version;
+    // The payload is free-form JSONB, so each field is checked rather than
+    // trusted: a conflict whose version stamps are missing must still be
+    // reported to the player, just without the timestamps to compare.
+    const payload: ConflictEventPayload = event.token_event ?? {};
+    const tokenId =
+      typeof payload.token_id === "string" && payload.token_id
+        ? payload.token_id
+        : "unknown";
+    const clientVersion =
+      typeof payload.client_version === "string"
+        ? payload.client_version
+        : undefined;
+    const serverVersion =
+      typeof payload.server_version === "string" ? payload.server_version : "";
 
     const conflict: ConflictRecord = {
       eventId: event.id,
@@ -194,8 +230,13 @@ export function useConflictDetection(_worldId: string | null) {
 /**
  * Helper to check if an event is a conflict event
  */
-export function isConflictEvent(event: any): boolean {
-  return event?.event_code === EVENT_CODE_CONFLICT_LWW;
+export function isConflictEvent(event: unknown): boolean {
+  return (
+    typeof event === "object" &&
+    event !== null &&
+    "event_code" in event &&
+    event.event_code === EVENT_CODE_CONFLICT_LWW
+  );
 }
 
 /**

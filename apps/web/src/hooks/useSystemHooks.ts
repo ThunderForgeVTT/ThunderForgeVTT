@@ -153,7 +153,12 @@ export interface SystemHooksContract {
 export interface HookInvokeStatus {
   loading: boolean;
   error?: string;
-  result?: any;
+  /**
+   * Whatever the invoked hook returned. Each hook in the contract returns
+   * something different and `useSystemHook` is generic over all of them, so
+   * callers narrow this to the return type of the hook they asked for.
+   */
+  result?: unknown;
 }
 
 /**
@@ -173,7 +178,7 @@ export function useSystemHooks() {
  */
 export function useSystemHook<T extends keyof SystemHooksContract>(
   hookName: T,
-  params?: Parameters<SystemHooksContract[T]>[0],
+  params?: Parameters<NonNullable<SystemHooksContract[T]>>[0],
 ): HookInvokeStatus {
   const { hooks } = useSystemHooks();
   const [status, setStatus] = useState<HookInvokeStatus>({ loading: false });
@@ -184,7 +189,14 @@ export function useSystemHook<T extends keyof SystemHooksContract>(
     const invokeHook = async () => {
       setStatus({ loading: true });
       try {
-        const hookFn = (hooks as any)[hookName];
+        // Once `T` is generic, `hooks[hookName]` is a union of every hook
+        // signature, and TypeScript refuses to call such a union even though
+        // `params` is already typed as that same hook's parameter. This
+        // restates the relationship the signature guarantees rather than
+        // widening anything.
+        const hookFn = hooks[hookName] as
+          | ((p: Parameters<NonNullable<SystemHooksContract[T]>>[0]) => unknown)
+          | undefined;
         if (!hookFn) {
           setStatus({
             loading: false,

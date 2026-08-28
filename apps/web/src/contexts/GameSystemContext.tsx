@@ -51,15 +51,19 @@ export type SystemManifestLegal = {
 };
 
 /**
- * System manifest type - extends any for flexibility
- * Each system (D&D 5e, Pathfinder 2e, etc.) exports its own manifest
+ * System manifest type. Each system (D&D 5e, Pathfinder 2e, etc.) exports its
+ * own manifest, so beyond the four keys every pack must publish the contents
+ * are whatever that pack chose. The index signature is `unknown` rather than
+ * `any` on purpose: a consumer reaching for a pack-specific table
+ * (`sizeCategories`, `abilityFacets`, …) has to say what shape it expects at
+ * the point it reads it, instead of every such read silently type-checking.
  */
 export type SystemManifest = {
   id: string;
   title: string;
   version: string;
   legal: SystemManifestLegal;
-  [key: string]: any;
+  [key: string]: unknown;
 };
 
 /**

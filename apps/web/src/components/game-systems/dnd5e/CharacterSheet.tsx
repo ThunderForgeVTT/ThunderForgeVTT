@@ -32,6 +32,18 @@ import { useGameSystemManifest } from "@/contexts/GameSystemContext";
 import { AbilityScores } from "./AbilityScores";
 import { SkillsList } from "./SkillsList";
 
+/**
+ * The slice of the `spell_data` JSONB column this sheet renders. That column
+ * arrives untyped from the server (`Record<string, any>`), so the shape the
+ * sheet actually depends on is written down once here instead of being
+ * re-assumed at every use site.
+ */
+interface Dnd5eSpellData {
+  spellcasting_ability?: string;
+  spell_slots?: Record<string, number>;
+  known_spells?: string[];
+}
+
 export interface CharacterSheetProps {
   actorId: string;
   actorName: string;
@@ -79,10 +91,8 @@ export function CharacterSheet({
   } = useUpdateActorData(actorId, gameSystemId);
 
   // E2.3: Load system manifest for calculators
-  const {
-    loading: manifestLoading,
-    error: manifestError,
-  } = useGameSystemManifest(gameSystemId);
+  const { loading: manifestLoading, error: manifestError } =
+    useGameSystemManifest(gameSystemId);
 
   const isLoading = dataLoading || manifestLoading;
   const isOptimistic = isMutating;
@@ -133,7 +143,7 @@ export function CharacterSheet({
   const proficiencyData = actorData.proficiency_data ?? {};
   const resourceData = actorData.resource_data ?? {};
   const traitData = actorData.trait_data ?? {};
-  const spellData = actorData.spell_data ?? {};
+  const spellData: Dnd5eSpellData = actorData.spell_data ?? {};
 
   const handleUpdateAbility = async (abilityId: string, score: number) => {
     try {
@@ -319,7 +329,7 @@ export function CharacterSheet({
                     </div>
                     <div className="flex flex-wrap gap-3">
                       {Object.entries(spellData.spell_slots).map(
-                        ([level, slots]: [string, any]) => (
+                        ([level, slots]) => (
                           <div
                             key={level}
                             className="flex items-center gap-1 rounded-md bg-muted px-3 py-1 text-sm"
@@ -343,11 +353,9 @@ export function CharacterSheet({
                       Known Spells
                     </div>
                     <ul className="grid list-disc gap-1 pl-4 text-sm">
-                      {spellData.known_spells.map(
-                        (spell: string, idx: number) => (
-                          <li key={idx}>{spell}</li>
-                        ),
-                      )}
+                      {spellData.known_spells.map((spell, idx) => (
+                        <li key={idx}>{spell}</li>
+                      ))}
                     </ul>
                   </div>
                 ) : (
