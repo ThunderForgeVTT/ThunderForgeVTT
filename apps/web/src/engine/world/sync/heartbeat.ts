@@ -56,6 +56,26 @@ let timer: ReturnType<typeof setInterval> | null = null;
 let offline = false;
 const listeners = new Set<HeartbeatListener>();
 
+/**
+ * Round trip of the last beat that arrived, in milliseconds.
+ *
+ * The heartbeat is already a round trip to the server on a fixed interval,
+ * so this costs one subtraction and needs no probe of its own — and it
+ * measures the path the client's own liveness depends on, rather than some
+ * other endpoint that might be healthy while this one is not.
+ *
+ * `null` means no beat has completed yet, or the last one failed. It is
+ * deliberately not "the previous value, still": a latency figure left on
+ * screen while nothing is getting through reads as a working connection,
+ * which is the one thing it must never say.
+ */
+let latencyMs: number | null = null;
+
+/** Round trip of the last successful beat, or `null` if there is none. */
+export function getHeartbeatLatencyMs(): number | null {
+  return latencyMs;
+}
+
 function publish(next: boolean): void {
   if (next === offline) return;
   offline = next;
@@ -77,11 +97,13 @@ export function subscribeToHeartbeat(listener: HeartbeatListener): () => void {
 
 /** Send one beat, updating the failure count. Exported for tests. */
 export async function beatOnce(worldId: string, sceneId: string | null): Promise<boolean> {
+  const sentAt = Date.now();
   try {
     await postGraphQL<{ heartbeat: boolean }>(HEARTBEAT_MUTATION, {
       worldId,
       sceneId,
     });
+    latencyMs = Date.now() - sentAt;
     consecutiveFailures = 0;
     publish(false);
     return true;
@@ -90,6 +112,7 @@ export async function beatOnce(worldId: string, sceneId: string | null): Promise
     // heartbeat refused because membership was revoked is every bit as much
     // "this client can no longer act on this world" as a dead network, and
     // the client's response — stop sending, start queueing — is the same.
+    latencyMs = null;
     consecutiveFailures += 1;
     publish(isOfflineAfter(consecutiveFailures));
     return false;
@@ -124,6 +147,7 @@ export function stopHeartbeat(): void {
     timer = null;
   }
   consecutiveFailures = 0;
+  latencyMs = null;
   publish(false);
 }
 
@@ -132,4 +156,5 @@ export function resetHeartbeatForTests(): void {
   stopHeartbeat();
   listeners.clear();
   offline = false;
+  latencyMs = null;
 }

@@ -40,6 +40,7 @@ import {
 } from "@/engine/world/sync/reconcile";
 import { ReconcileReport } from "@/components/world/ReconcileReport";
 import { PeerIndicator } from "@/components/diagnostics/PeerIndicator";
+import { EngineMonitor } from "@/components/diagnostics/EngineMonitor";
 
 /**
  * What the reconcile panel is currently showing.
@@ -1600,6 +1601,13 @@ export default function WorldPage() {
                 peers are actually connected. It manages its own visibility.
               */}
               <PeerIndicator />
+              {/*
+                The canvas readout: frames, latency, peers. Off by default
+                and remembered once turned on, from the dock's Settings
+                panel — diagnostics nobody asked for do not belong over the
+                map.
+              */}
+              <EngineMonitor />
               {reconcileReport ? (
                 <div
                   style={{

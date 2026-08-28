@@ -1,4 +1,10 @@
+import { useEffect, useState } from "react";
 import { MapImportTool } from "@/components/canvas-tools/MapImportTool";
+import { Switch } from "@/components/ui/switch";
+import {
+  setEngineMonitorVisible,
+  subscribeToEngineMonitor,
+} from "@/services/engineMonitor";
 import { SceneSwitcher } from "@/components/world/SceneSwitcher";
 import { Button } from "@/components/ui/button/Button";
 import type { SceneRecord } from "@/types/scene";
@@ -35,6 +41,12 @@ export function SettingsPanel({
   onBackToStaging,
 }: SettingsPanelProps) {
   const currentScene = scenes.find((scene) => scene.sceneId === sceneId) ?? null;
+
+  // Subscribed rather than read once: this panel is unmounted whenever the
+  // dock is collapsed, so it has no state of its own to trust on the way
+  // back in, and the setting can also change in another tab.
+  const [monitorVisible, setMonitorVisible] = useState(false);
+  useEffect(() => subscribeToEngineMonitor(setMonitorVisible), []);
 
   return (
     <div className="grid gap-5" data-testid="settings-panel">
@@ -92,6 +104,36 @@ export function SettingsPanel({
           </dl>
         </section>
       ) : null}
+
+      {/*
+        A display preference for this device, which is why it sits with the
+        scene controls rather than in world settings: it changes what this
+        screen shows, not anything about the world or anyone else's view of
+        it.
+      */}
+      <section className="grid gap-2 border-t border-border pt-4">
+        <h3 className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+          Display
+        </h3>
+        <label
+          className="flex items-center justify-between gap-3 text-sm"
+          htmlFor="engine-monitor-toggle"
+        >
+          <span className="grid gap-0.5">
+            <span>Performance readout</span>
+            <span className="text-xs text-muted-foreground">
+              Frames, server latency and connected players, along the bottom
+              of the map.
+            </span>
+          </span>
+          <Switch
+            id="engine-monitor-toggle"
+            data-testid="engine-monitor-toggle"
+            checked={monitorVisible}
+            onCheckedChange={setEngineMonitorVisible}
+          />
+        </label>
+      </section>
 
       <section className="border-t border-border pt-4">
         <Button

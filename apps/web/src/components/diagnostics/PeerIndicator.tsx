@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { subscribeToEngineMonitor } from "@/services/engineMonitor";
 import { subscribeToPeerTransfer, type PeerTransferState } from "@/services/peerTransfer";
 
 /**
@@ -26,9 +27,18 @@ import { subscribeToPeerTransfer, type PeerTransferState } from "@/services/peer
  */
 export function PeerIndicator() {
   const [state, setState] = useState<PeerTransferState | null>(null);
+  const [monitorShowing, setMonitorShowing] = useState(false);
 
   useEffect(() => subscribeToPeerTransfer(setState), []);
+  // The canvas readout reports a peer count of its own, as a link carrying
+  // this same explanation. Two overlays saying the same thing at once is
+  // the clutter the readout was asked not to be, so this one stands down
+  // while that one is showing — and comes back the moment it is switched
+  // off, because FR-049's disclosure is not the user's to turn off by
+  // hiding a diagnostics panel.
+  useEffect(() => subscribeToEngineMonitor(setMonitorShowing), []);
 
+  if (monitorShowing) return null;
   if (!state || !state.enabled || state.connectedPeers < 1) return null;
 
   return (
