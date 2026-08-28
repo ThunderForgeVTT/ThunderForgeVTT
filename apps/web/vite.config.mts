@@ -104,7 +104,15 @@ export default defineConfig({
     // header is the tunnel's own random *.trycloudflare.com subdomain,
     // not localhost. Allowing that suffix (not disabling the check
     // entirely) keeps the protection for every other unrecognized host.
-    allowedHosts: [".trycloudflare.com"],
+    // `.trycloudflare.com` covers a quick tunnel, whose hostname is random
+    // every run. A named tunnel has a stable hostname that this cannot
+    // predict, so it is named explicitly — without it Vite answers 403 to a
+    // tunnel that is working perfectly, which looks exactly like the tunnel
+    // being broken.
+    allowedHosts: [
+      ".trycloudflare.com",
+      ...(process.env.TUNNEL_HOSTNAME ? [process.env.TUNNEL_HOSTNAME] : []),
+    ],
     proxy: {
       "/api": {
         target: "http://127.0.0.1:30000",

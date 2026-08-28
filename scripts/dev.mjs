@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import {
   ROOT_DIR,
   ensureEngineBuild,
@@ -12,6 +15,35 @@ import {
 } from "./shared.mjs";
 
 let shuttingDown = false;
+
+/**
+ * The two tunnel keys from the repo-root `.env`, if it has them.
+ *
+ * Deliberately not a general dotenv loader: everything else that needs the
+ * file either reads it itself (the server, via dotenvy) or is handed it by
+ * the Makefile. This exists so that `pnpm dev --tunnel` and
+ * `make dev-tunnel` behave the same, because the alternative is a silent
+ * downgrade to an ephemeral URL with nothing on screen to explain it.
+ *
+ * Values are read as written — no quote stripping beyond a surrounding pair,
+ * no interpolation. A token that needs more parsing than this is a token
+ * that should be exported by the shell.
+ */
+function readTunnelEnv() {
+  const found = {};
+  try {
+    const text = readFileSync(path.join(ROOT_DIR, ".env"), "utf8");
+    for (const line of text.split("\n")) {
+      const match = /^\s*(TUNNEL_TOKEN|TUNNEL_HOSTNAME)\s*=\s*(.*)$/.exec(line);
+      if (!match) continue;
+      found[match[1]] = match[2].trim().replace(/^(['"])(.*)\1$/, "$2");
+    }
+  } catch {
+    // No .env, or unreadable. Not an error: the environment may carry these
+    // already, and if it does not the quick-tunnel path says so out loud.
+  }
+  return found;
+}
 
 async function run() {
   const args = parseArgs(process.argv.slice(2), { allowOnlyWasm: false, allowTunnel: true });
@@ -67,15 +99,70 @@ async function run() {
   ];
 
   if (args.tunnel) {
-    // A Cloudflare "quick tunnel" — no account/config needed, just an
-    // ephemeral https://<random>.trycloudflare.com forwarding to the
-    // Vite dev server. cloudflared logs (including the tunnel URL
-    // itself) go to stderr, which spawnManaged already pipes through
-    // with the "tunnel" prefix, so it just shows up in the console.
-    // vite.config.mts's server.allowedHosts is what actually lets Vite
-    // accept requests forwarded through that hostname.
-    log("dev", "Starting cloudflared tunnel (watch for the [tunnel] line below for the URL to share)...");
-    const tunnel = spawnManaged("cloudflared tunnel --url http://localhost:5173", {
+    // Two kinds of tunnel, and which one you get depends on whether
+    // TUNNEL_TOKEN is set.
+    //
+    // **Named tunnel (TUNNEL_TOKEN set).** A tunnel you created in the
+    // Cloudflare dashboard, with a hostname that does not change between
+    // runs. That is the difference that matters for a play test: people can
+    // bookmark the URL, and a restart does not invalidate the link you sent
+    // them. Where each hostname routes is configured on Cloudflare's side,
+    // so nothing about it lives here except the credential.
+    //
+    // **Quick tunnel (no token).** An ephemeral
+    // https://<random>.trycloudflare.com, needing no account. Convenient for
+    // a one-off, and the reason this is the fallback rather than the default:
+    // the URL changes every run, and the service is rate-limited and refuses
+    // connections often enough that "the tunnel is broken" is usually this.
+    //
+    // Either way `vite.config.mts`'s `server.allowedHosts` is what lets Vite
+    // accept requests arriving through the tunnel's hostname — a named
+    // tunnel needs TUNNEL_HOSTNAME set too, or Vite answers 403 to a tunnel
+    // that is working perfectly.
+    // Read from `.env` when the environment does not already carry them.
+    // `make dev-tunnel` exports the file, but `pnpm dev --tunnel` does not,
+    // and the difference is invisible: the tunnel silently falls back to an
+    // ephemeral URL and the person running it has no idea why. Only these
+    // two keys are read, and only as a fallback.
+    const fromEnvFile = readTunnelEnv();
+    const token = (process.env.TUNNEL_TOKEN ?? fromEnvFile.TUNNEL_TOKEN)?.trim();
+    const hostname = (
+      process.env.TUNNEL_HOSTNAME ?? fromEnvFile.TUNNEL_HOSTNAME
+    )?.trim();
+
+    let command;
+    if (token) {
+      if (!hostname) {
+        log(
+          "dev",
+          "TUNNEL_TOKEN is set but TUNNEL_HOSTNAME is not — Vite will reject requests " +
+            "arriving through the tunnel with a 403. Set TUNNEL_HOSTNAME to the hostname " +
+            "you configured for this tunnel.",
+        );
+      }
+      log(
+        "dev",
+        hostname
+          ? `Starting named cloudflared tunnel at https://${hostname}`
+          : "Starting named cloudflared tunnel",
+      );
+      // The token goes through the environment, not the command line.
+      // cloudflared reads TUNNEL_TOKEN itself, and an argument would be
+      // visible in `ps` to every other user on the machine — a credential
+      // that grants ingress to this tunnel has no business being there.
+      process.env.TUNNEL_TOKEN = token;
+      command = "cloudflared tunnel run";
+    } else {
+      log(
+        "dev",
+        "No TUNNEL_TOKEN set — starting an ephemeral quick tunnel. The URL changes every " +
+          "run and the service is often rate-limited; set TUNNEL_TOKEN in .env for a stable one. " +
+          "Watch for the [tunnel] line below for the URL to share.",
+      );
+      command = "cloudflared tunnel --url http://localhost:5173";
+    }
+
+    const tunnel = spawnManaged(command, {
       cwd: ROOT_DIR,
       prefix: "tunnel",
     });

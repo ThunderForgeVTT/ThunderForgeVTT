@@ -10,7 +10,9 @@ endif
 help:
 	@echo "Targets:"
 	@echo "  make dev              Start postgres+rustfs (if needed), run pending migrations, then start the app (frontend+backend)"
-	@echo "  make dev-tunnel       Same as 'make dev', plus a cloudflared quick tunnel exposing the frontend at a public https://*.trycloudflare.com URL"
+	@echo "  make dev-tunnel       Same as 'make dev', plus a cloudflared tunnel exposing the frontend publicly."
+	@echo "                          Set TUNNEL_TOKEN + TUNNEL_HOSTNAME in .env for a stable hostname;"
+	@echo "                          without them you get an ephemeral https://*.trycloudflare.com URL"
 	@echo "  make services-up      Start postgres+rustfs only (docker compose), detached"
 	@echo "  make services-down    Stop postgres+rustfs, keep their data volumes"
 	@echo "  make services-down-clean  Stop postgres+rustfs and DELETE their data volumes"
