@@ -13,6 +13,19 @@ type BevyWasmModule = {
    * degradation this whole path is designed around, not an error.
    */
   sync_world_cache?: (worldId: string, userId: string) => Promise<string>;
+  /**
+   * Spec 028 (US7, T072). Optional for the same reason `sync_world_cache`
+   * is: a bundle built before the outbox existed must still mount, and the
+   * caller treats its absence as "cannot queue" rather than as an error.
+   */
+  queue_offline_change?: (
+    worldId: string,
+    localId: string,
+    command: string,
+    isGameMaster: boolean,
+  ) => Promise<string>;
+  read_queued_changes?: (worldId: string) => Promise<string>;
+  forget_reconciled_changes?: (outcomesJson: string) => Promise<string>;
 };
 
 let loadPromise: Promise<BevyWasmModule> | null = null;
@@ -332,6 +345,74 @@ export async function syncWorldCache(
     }
     const summary = await module.sync_world_cache(worldId, userId);
     return JSON.parse(summary) as WorldCacheSyncSummary;
+  } catch {
+    return null;
+  }
+}
+
+/** One queued change, as the engine hands it over. */
+export interface QueuedChangeWire {
+  localId: string;
+  command: unknown;
+}
+
+/**
+ * Queue an edit made while disconnected (US7, FR-037).
+ *
+ * Returns `false` when the change could not be stored — no engine, an older
+ * bundle, a failed write. **The caller must not report the edit as accepted in
+ * that case.** This is the one path in the cache where a failure has to reach
+ * the user, because unlike a missing blob it cannot be recovered by fetching
+ * again: the work exists nowhere else.
+ */
+export async function queueOfflineChange(
+  worldId: string,
+  localId: string,
+  command: unknown,
+  isGameMaster: boolean,
+): Promise<boolean> {
+  try {
+    const module = await getWasmModule();
+    if (!module.queue_offline_change) return false;
+    const result = await module.queue_offline_change(
+      worldId,
+      localId,
+      JSON.stringify(command),
+      isGameMaster,
+    );
+    return (JSON.parse(result) as { queued?: boolean }).queued === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Everything queued for a world, in replay order. Empty on any failure. */
+export async function readQueuedChanges(worldId: string): Promise<QueuedChangeWire[]> {
+  try {
+    const module = await getWasmModule();
+    if (!module.read_queued_changes) return [];
+    return JSON.parse(await module.read_queued_changes(worldId)) as QueuedChangeWire[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Drop the queued changes the server answered for, keeping the rest.
+ *
+ * Returns how many are still queued, or `null` if the drain could not run —
+ * which is not a failure worth surfacing, because everything simply stays
+ * queued and is answered for on the next reconnect.
+ */
+export async function forgetReconciledChanges(
+  outcomes: { localId: string; applied: boolean }[],
+): Promise<number | null> {
+  try {
+    const module = await getWasmModule();
+    if (!module.forget_reconciled_changes) return null;
+    const result = await module.forget_reconciled_changes(JSON.stringify(outcomes));
+    const remaining = (JSON.parse(result) as { remaining?: number }).remaining;
+    return typeof remaining === "number" && remaining >= 0 ? remaining : null;
   } catch {
     return null;
   }

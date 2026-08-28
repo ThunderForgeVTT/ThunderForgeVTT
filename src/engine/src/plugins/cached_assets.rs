@@ -609,6 +609,7 @@ mod wasm {
     use futures_util::future::Shared;
     use thunderforge_cache_browser::index::IndexStore;
     use thunderforge_cache_browser::opfs::{OpfsStore, UserScope};
+    use thunderforge_cache_browser::outbox::OutboxStore;
     use thunderforge_cache_browser::{CacheSignal, IndexEntry, crypto};
     use thunderforge_cache_browser::{locks, signal, sync};
     use thunderforge_cache_core::delta::SyncPlan;
@@ -1024,6 +1025,135 @@ mod wasm {
     #[wasm_bindgen::prelude::wasm_bindgen]
     pub async fn sync_world_cache(world_id: String, user_id: String) -> String {
         run_sync(world_id, user_id).await.to_string()
+    }
+
+    /// Queue one edit made while disconnected (spec 028 US7, FR-037).
+    ///
+    /// `command` is the emitted world-store command as JSON text, stored
+    /// verbatim and never parsed here — the server replays it through the
+    /// ordinary mutation path, which is what makes re-authorization at
+    /// reconnect automatic rather than a mechanism of its own.
+    ///
+    /// **Await this before treating the edit as accepted.** The whole value
+    /// of an outbox is that it survives the tab closing, and a caller that
+    /// reports success without waiting for the write has reintroduced exactly
+    /// the loss it exists to prevent. The failure is reported rather than
+    /// swallowed for the same reason: this is the one place in the cache
+    /// where "it did not work" must reach the user, because unlike every
+    /// other failure here it cannot be recovered by fetching again.
+    #[wasm_bindgen::prelude::wasm_bindgen]
+    pub async fn queue_offline_change(
+        world_id: String,
+        local_id: String,
+        command: String,
+        is_game_master: bool,
+    ) -> String {
+        let (Ok(world_uuid), Ok(local_uuid)) =
+            (Uuid::parse_str(&world_id), Uuid::parse_str(&local_id))
+        else {
+            return serde_json::json!({ "queued": false, "reason": "bad-id" }).to_string();
+        };
+
+        let role = if is_game_master {
+            thunderforge_cache_core::conflict::Role::GameMaster
+        } else {
+            thunderforge_cache_core::conflict::Role::Player
+        };
+
+        let Ok(outbox) = OutboxStore::open().await else {
+            return serde_json::json!({ "queued": false, "reason": "no-store" }).to_string();
+        };
+        match outbox
+            .append(world_uuid, local_uuid, &command, role)
+            .await
+        {
+            Ok(change) => serde_json::json!({
+                "queued": true,
+                "localId": change.local_id.to_string(),
+                "seq": change.enqueued_seq,
+            })
+            .to_string(),
+            Err(err) => {
+                warn!(target: "cached_assets", "could not queue offline change: {err}");
+                serde_json::json!({ "queued": false, "reason": "write-failed" }).to_string()
+            }
+        }
+    }
+
+    /// Everything queued for a world, in the order it must be replayed.
+    ///
+    /// Returns a JSON array of `{localId, command}` — the shape
+    /// `reconcileQueuedChanges` takes — so the TypeScript side forwards it
+    /// without needing to understand a single command.
+    #[wasm_bindgen::prelude::wasm_bindgen]
+    pub async fn read_queued_changes(world_id: String) -> String {
+        let Ok(world_uuid) = Uuid::parse_str(&world_id) else {
+            return "[]".to_string();
+        };
+        let Ok(outbox) = OutboxStore::open().await else {
+            return "[]".to_string();
+        };
+        let Ok(changes) = outbox.for_world(world_uuid).await else {
+            return "[]".to_string();
+        };
+        let wire: Vec<serde_json::Value> = changes
+            .into_iter()
+            .map(|change| {
+                serde_json::json!({
+                    "localId": change.local_id.to_string(),
+                    // Parsed back to a value so it travels as JSON rather
+                    // than as a string containing JSON. A command we cannot
+                    // parse is still sent, as a string, and the server
+                    // rejects it as `INVALID` — which is an outcome, and
+                    // therefore not silent loss.
+                    "command": serde_json::from_str::<serde_json::Value>(&change.command)
+                        .unwrap_or(serde_json::Value::String(change.command.clone())),
+                })
+            })
+            .collect();
+        serde_json::Value::Array(wire).to_string()
+    }
+
+    /// Drop the queued changes the server accounted for, keeping the rest.
+    ///
+    /// `outcomes_json` is the mutation's reply. Anything it does not mention
+    /// stays queued (FR-041) and is answered for on the next reconnect —
+    /// re-sending an applied change is safe, because the server gives exactly
+    /// one outcome per submitted change, while dropping one is not
+    /// recoverable.
+    #[wasm_bindgen::prelude::wasm_bindgen]
+    pub async fn forget_reconciled_changes(outcomes_json: String) -> String {
+        #[derive(serde::Deserialize)]
+        struct WireOutcome {
+            #[serde(rename = "localId")]
+            local_id: String,
+            applied: bool,
+        }
+
+        let Ok(wire) = serde_json::from_str::<Vec<WireOutcome>>(&outcomes_json) else {
+            return serde_json::json!({ "remaining": -1, "reason": "bad-outcomes" }).to_string();
+        };
+        let outcomes: Vec<thunderforge_cache_core::queue::ReconcileOutcome> = wire
+            .into_iter()
+            .filter_map(|entry| {
+                Some(thunderforge_cache_core::queue::ReconcileOutcome {
+                    local_id: Uuid::parse_str(&entry.local_id).ok()?,
+                    applied: entry.applied,
+                    reason: None,
+                })
+            })
+            .collect();
+
+        let Ok(outbox) = OutboxStore::open().await else {
+            return serde_json::json!({ "remaining": -1, "reason": "no-store" }).to_string();
+        };
+        match outbox.forget_resolved(&outcomes).await {
+            Ok(remaining) => serde_json::json!({ "remaining": remaining.len() }).to_string(),
+            Err(err) => {
+                warn!(target: "cached_assets", "could not drain the outbox: {err}");
+                serde_json::json!({ "remaining": -1, "reason": "read-failed" }).to_string()
+            }
+        }
     }
 
     /// Discard the signed-out user's session key, then reclaim their disk
