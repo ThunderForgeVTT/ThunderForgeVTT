@@ -60,7 +60,10 @@ export interface ReconcileReportProps {
   onDismiss: () => void;
 }
 
-function reasonSentence(reason: RejectionReason | null | undefined, byRole?: string | null): string {
+function reasonSentence(
+  reason: RejectionReason | null | undefined,
+  byRole?: string | null,
+): string {
   switch (reason) {
     case "SUPERSEDED":
       return `${byRole === "GameMaster" ? "The Game Master" : "Someone else"} changed this while you were offline, and their change takes precedence.`;
@@ -94,7 +97,9 @@ export function ReconcileReport({
   // listed twice — once anonymously and once with a name, which would read as
   // twice as much having gone wrong.
   const onBehalfIds = new Set(onBehalf.map((entry) => entry.change.localId));
-  const ownRejected = rejected.filter((entry) => !onBehalfIds.has(entry.change.localId));
+  const ownRejected = rejected.filter(
+    (entry) => !onBehalfIds.has(entry.change.localId),
+  );
 
   return (
     <section
@@ -117,14 +122,17 @@ export function ReconcileReport({
           <h3 className="text-xs font-medium">Overridden since</h3>
           <ul className="grid gap-1">
             {superseded.map(({ change, byRole }) => (
-              <li key={change.localId} className="text-xs text-muted-foreground">
+              <li
+                key={change.localId}
+                className="text-xs text-muted-foreground"
+              >
                 {/* The Applied → Superseded case: this synced, and was then
                     overridden when someone else reconnected. Saying so is the
                     whole of FR-041 for this path — the user was already told
                     it worked. */}
                 A token you moved was changed again by{" "}
-                {byRole === "GameMaster" ? "the Game Master" : "another player"} when they
-                reconnected. Theirs is what everyone sees now.
+                {byRole === "GameMaster" ? "the Game Master" : "another player"}{" "}
+                when they reconnected. Theirs is what everyone sees now.
               </li>
             ))}
           </ul>
@@ -148,8 +156,8 @@ export function ReconcileReport({
                     server has now refused it — so the map no longer shows it,
                     and the person it belonged to should be told. */}
                 A move you adjudicated for another player was not accepted.{" "}
-                {reasonSentence(outcome.reason, outcome.supersededByRole)} Their token is back
-                to where the server has it.
+                {reasonSentence(outcome.reason, outcome.supersededByRole)} Their
+                token is back to where the server has it.
               </li>
             ))}
           </ul>
@@ -177,14 +185,20 @@ export function ReconcileReport({
         <div className="grid gap-1" data-testid="reconcile-unanswered">
           <h3 className="text-xs font-medium">Still to sync</h3>
           <p className="text-xs text-muted-foreground">
-            {unanswered.length} {unanswered.length === 1 ? "change is" : "changes are"} still
+            {unanswered.length}{" "}
+            {unanswered.length === 1 ? "change is" : "changes are"} still
             waiting and will be sent again. Nothing has been lost.
           </p>
         </div>
       )}
 
       <div>
-        <Button variant="outline" size="sm" onClick={onDismiss} data-testid="reconcile-dismiss">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onDismiss}
+          data-testid="reconcile-dismiss"
+        >
           Got it
         </Button>
       </div>

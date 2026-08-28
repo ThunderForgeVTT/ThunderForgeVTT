@@ -12,10 +12,15 @@ import { Container } from "@/components/ui/container/Container";
 import { Loader } from "@/components/ui/loader/Loader";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { useAuth } from "@/hooks/useAuth";
-import type { DmWorldSummary, SharedAbilityPreview } from "@/types/abilityShare";
-import { resolveAbilityLabel, toAbilityClassificationKey } from "@/utils/abilityFacets";
+import type {
+  DmWorldSummary,
+  SharedAbilityPreview,
+} from "@/types/abilityShare";
+import {
+  resolveAbilityLabel,
+  toAbilityClassificationKey,
+} from "@/utils/abilityFacets";
 import { effectTypeLabel } from "@/utils/effectLabels";
-
 
 /**
  * Spec 025 (T091, US6): the read-only view behind an ability share link.
@@ -37,7 +42,9 @@ export default function SharedAbilityPage() {
   const [dmWorlds, setDmWorlds] = useState<DmWorldSummary[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [step, setStep] = useState<"idle" | "confirming" | "copying" | "done">("idle");
+  const [step, setStep] = useState<"idle" | "confirming" | "copying" | "done">(
+    "idle",
+  );
   const [selectedWorldId, setSelectedWorldId] = useState("");
   const [copyError, setCopyError] = useState<string | null>(null);
   const [copiedWorldName, setCopiedWorldName] = useState<string | null>(null);
@@ -47,9 +54,12 @@ export default function SharedAbilityPage() {
       return;
     }
     if (!isAuthenticated) {
-      navigate(`/login?returnTo=${encodeURIComponent(`/shared/ability/${code}`)}`, {
-        replace: true,
-      });
+      navigate(
+        `/login?returnTo=${encodeURIComponent(`/shared/ability/${code}`)}`,
+        {
+          replace: true,
+        },
+      );
     }
   }, [authLoading, isAuthenticated, code, navigate]);
 
@@ -91,11 +101,14 @@ export default function SharedAbilityPage() {
     try {
       const created = await copySharedAbilityToWorld(code, selectedWorldId);
       setCopiedWorldName(
-        dmWorlds.find((world) => world.id === created.worldId)?.name ?? "your world",
+        dmWorlds.find((world) => world.id === created.worldId)?.name ??
+          "your world",
       );
       setStep("done");
     } catch (err) {
-      setCopyError(err instanceof Error ? err.message : "Failed to copy ability");
+      setCopyError(
+        err instanceof Error ? err.message : "Failed to copy ability",
+      );
       setStep("confirming");
     }
   };
@@ -109,7 +122,10 @@ export default function SharedAbilityPage() {
       <>
         <SEO title="Shared ability" description="Shared ability" noindex />
         <Container className="grid max-w-lg gap-4 py-16">
-          <Card className="grid gap-3 p-6 text-center" data-testid="shared-ability-unavailable">
+          <Card
+            className="grid gap-3 p-6 text-center"
+            data-testid="shared-ability-unavailable"
+          >
             <h1 className="text-lg font-semibold">Not available</h1>
             <p className="text-sm text-muted-foreground">
               {loadError ?? "This share link is no longer available."}
@@ -127,7 +143,11 @@ export default function SharedAbilityPage() {
 
   return (
     <>
-      <SEO title={`${preview.name} — shared ability`} description="Shared ability" noindex />
+      <SEO
+        title={`${preview.name} — shared ability`}
+        description="Shared ability"
+        noindex
+      />
       <Container className="grid max-w-lg gap-4 py-16">
         <Card className="grid gap-4 p-6" data-testid="shared-ability-page">
           <div>
@@ -139,7 +159,9 @@ export default function SharedAbilityPage() {
 
           <p className="text-sm whitespace-pre-wrap">
             {preview.description || (
-              <span className="text-muted-foreground italic">No description.</span>
+              <span className="text-muted-foreground italic">
+                No description.
+              </span>
             )}
           </p>
 
@@ -170,8 +192,8 @@ export default function SharedAbilityPage() {
             </div>
           ) : dmWorlds.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              You don&apos;t have DM-level access to any world yet, so there&apos;s nowhere to
-              copy this.
+              You don&apos;t have DM-level access to any world yet, so
+              there&apos;s nowhere to copy this.
             </p>
           ) : step === "idle" ? (
             <Button
@@ -214,7 +236,9 @@ export default function SharedAbilityPage() {
                   Cancel
                 </Button>
               </div>
-              {copyError ? <StatusBadge variant="danger">{copyError}</StatusBadge> : null}
+              {copyError ? (
+                <StatusBadge variant="danger">{copyError}</StatusBadge>
+              ) : null}
             </div>
           )}
         </Card>

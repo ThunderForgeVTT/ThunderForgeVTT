@@ -109,7 +109,13 @@ export async function applyWallWorldEvent(
   }
 
   const payload = (event.token_event ?? event.tokenEvent) as
-    | { action?: string; wall_id?: string; wallId?: string; scene_id?: string; sceneId?: string }
+    | {
+        action?: string;
+        wall_id?: string;
+        wallId?: string;
+        scene_id?: string;
+        sceneId?: string;
+      }
     | undefined;
 
   const eventSceneId = payload?.scene_id ?? payload?.sceneId;

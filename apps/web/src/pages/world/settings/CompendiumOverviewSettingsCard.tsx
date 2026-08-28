@@ -24,8 +24,12 @@ export interface CompendiumOverviewSettingsCardProps {
  * "what is this place" blurb can actually say whatever the GM wants,
  * with real Markdown instead of one fixed line.
  */
-export function CompendiumOverviewSettingsCard({ worldId }: CompendiumOverviewSettingsCardProps) {
-  const [entry, setEntry] = useState<LoreEntryRecord | null | undefined>(undefined);
+export function CompendiumOverviewSettingsCard({
+  worldId,
+}: CompendiumOverviewSettingsCardProps) {
+  const [entry, setEntry] = useState<LoreEntryRecord | null | undefined>(
+    undefined,
+  );
   const [content, setContent] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -60,7 +64,11 @@ export function CompendiumOverviewSettingsCard({ worldId }: CompendiumOverviewSe
       })
       .catch((err) => {
         if (active) {
-          setStatus(err instanceof Error ? err.message : "Failed to load compendium overview");
+          setStatus(
+            err instanceof Error
+              ? err.message
+              : "Failed to load compendium overview",
+          );
           setEntry(null);
         }
       });
@@ -86,7 +94,11 @@ export function CompendiumOverviewSettingsCard({ worldId }: CompendiumOverviewSe
       setContent(updated.content);
       setStatus("Saved.");
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to save compendium overview");
+      setStatus(
+        err instanceof Error
+          ? err.message
+          : "Failed to save compendium overview",
+      );
     } finally {
       setIsSaving(false);
     }
@@ -97,15 +109,17 @@ export function CompendiumOverviewSettingsCard({ worldId }: CompendiumOverviewSe
       <div>
         <h2 className="text-lg font-semibold">Compendium overview</h2>
         <p className="text-sm text-muted-foreground">
-          Shown at the top of the Compendium (NPCs/Lore/Items/Abilities). Write whatever sets the
-          scene — Markdown supported.
+          Shown at the top of the Compendium (NPCs/Lore/Items/Abilities). Write
+          whatever sets the scene — Markdown supported.
         </p>
       </div>
 
       {entry === undefined ? (
         <Loader label="Loading" />
       ) : entry === null ? (
-        <StatusBadge variant="danger">{status ?? "Failed to load compendium overview"}</StatusBadge>
+        <StatusBadge variant="danger">
+          {status ?? "Failed to load compendium overview"}
+        </StatusBadge>
       ) : (
         <>
           <LoreMarkdownEditor
@@ -120,7 +134,9 @@ export function CompendiumOverviewSettingsCard({ worldId }: CompendiumOverviewSe
               {isSaving ? "Saving..." : "Save"}
             </Button>
             {status ? (
-              <StatusBadge variant={status === "Saved." ? "success" : "danger"}>{status}</StatusBadge>
+              <StatusBadge variant={status === "Saved." ? "success" : "danger"}>
+                {status}
+              </StatusBadge>
             ) : null}
           </div>
         </>

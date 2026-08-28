@@ -119,7 +119,9 @@ export interface Proposal<TPayload = unknown> {
  * `SessionAdjudicator` trait.
  */
 export interface Adjudicator {
-  resolve<TPayload>(proposal: Proposal<TPayload>): Promise<IntentResult<TPayload>>;
+  resolve<TPayload>(
+    proposal: Proposal<TPayload>,
+  ): Promise<IntentResult<TPayload>>;
 }
 
 /** Everything a facet needs to be constructed. */

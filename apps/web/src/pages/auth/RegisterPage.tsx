@@ -86,12 +86,15 @@ export default function RegisterPage() {
 
       if (response.session?.authenticated) {
         navigate(
-          redirectTarget(location.search) ?? redirectAfterLogin(response.session.user),
+          redirectTarget(location.search) ??
+            redirectAfterLogin(response.session.user),
           { replace: true },
         );
       }
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Registration failed.");
+      setStatus(
+        error instanceof Error ? error.message : "Registration failed.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -104,10 +107,16 @@ export default function RegisterPage() {
         aside={
           <Card className="p-5">
             <div className="grid gap-2">
-              <Link to="/login" className="font-medium text-primary hover:underline">
+              <Link
+                to="/login"
+                className="font-medium text-primary hover:underline"
+              >
                 Return to login
               </Link>
-              <Link to="/welcome" className="font-medium text-primary hover:underline">
+              <Link
+                to="/welcome"
+                className="font-medium text-primary hover:underline"
+              >
                 Open the welcome hall
               </Link>
             </div>
@@ -167,7 +176,9 @@ export default function RegisterPage() {
                 type="password"
                 autoComplete="new-password"
                 value={passwordConfirmation}
-                onChange={(event) => setPasswordConfirmation(event.target.value)}
+                onChange={(event) =>
+                  setPasswordConfirmation(event.target.value)
+                }
                 placeholder="Confirm your password"
               />
             </Field>

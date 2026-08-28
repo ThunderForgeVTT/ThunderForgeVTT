@@ -19,10 +19,13 @@ export function MainLayout({ brandHref, navItems }: MainLayoutProps) {
         <Container>
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4 text-sm text-muted-foreground">
             <p>
-              ThunderForge keeps Bevy and world sync aligned beneath a single
-              UI shell.
+              ThunderForge keeps Bevy and world sync aligned beneath a single UI
+              shell.
             </p>
-            <Link to="/status" className="hover:text-foreground hover:underline">
+            <Link
+              to="/status"
+              className="hover:text-foreground hover:underline"
+            >
               System status
             </Link>
           </div>

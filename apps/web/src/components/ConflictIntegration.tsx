@@ -1,13 +1,16 @@
-import React, { useEffect } from 'react';
-import { useConflictsOptional } from '@/contexts/ConflictContext';
-import { ConflictNotification, ConflictPanel } from '@/components/ConflictNotification';
+import React, { useEffect } from "react";
+import { useConflictsOptional } from "@/contexts/ConflictContext";
+import {
+  ConflictNotification,
+  ConflictPanel,
+} from "@/components/ConflictNotification";
 
 /**
  * Phase 4.9.C.3: Integration Example
- * 
+ *
  * Shows how to integrate conflict detection with the world view.
  * This component displays notifications and a conflict panel.
- * 
+ *
  * Usage in App.tsx or World view:
  * ```tsx
  * <ConflictProvider worldId={worldId}>
@@ -15,7 +18,7 @@ import { ConflictNotification, ConflictPanel } from '@/components/ConflictNotifi
  *   <ConflictNotificationStack />
  * </ConflictProvider>
  * ```
- * 
+ *
  * Then in any child component, use:
  * ```tsx
  * const { lastConflict, dismissConflict, conflicts, unresolvedCount } = useConflicts();
@@ -35,10 +38,12 @@ export function ConflictNotificationStack() {
       {conflicts.lastConflict && (
         <ConflictNotification
           conflict={conflicts.lastConflict}
-          onDismiss={() => conflicts.dismissConflict(conflicts.lastConflict!.eventId)}
+          onDismiss={() =>
+            conflicts.dismissConflict(conflicts.lastConflict!.eventId)
+          }
           onViewDetails={() => {
             // Could open a modal or panel here
-            console.log('View conflict details:', conflicts.lastConflict);
+            console.log("View conflict details:", conflicts.lastConflict);
           }}
         />
       )}
@@ -62,7 +67,8 @@ export function ConflictBadge() {
       className="inline-flex items-center gap-1 rounded-full bg-amber-200 px-3 py-1 text-sm font-semibold text-amber-900 hover:bg-amber-300"
       title="Click to view conflict history"
     >
-      ⚡ {conflicts.unresolvedCount} conflict{conflicts.unresolvedCount !== 1 ? 's' : ''}
+      ⚡ {conflicts.unresolvedCount} conflict
+      {conflicts.unresolvedCount !== 1 ? "s" : ""}
     </button>
   );
 }
@@ -79,8 +85,11 @@ export function useWorldEventSubscription(worldId: string | null) {
 
     // Example: Hook into GraphQL subscription
     // In real implementation, this would connect to the actual worldEventCreated subscription
-    
-    console.log('🔌 [Phase4.9.C3] Conflict detection connected to world:', worldId);
+
+    console.log(
+      "🔌 [Phase4.9.C3] Conflict detection connected to world:",
+      worldId,
+    );
 
     // Simulate subscription (for demo)
     // In production, this would be integrated with the actual GraphQL subscription

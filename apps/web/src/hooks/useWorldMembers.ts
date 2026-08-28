@@ -19,10 +19,10 @@
  * remount) to pick up changes.
  */
 
-import { useCallback, useEffect, useState } from 'react';
-import { getWorldMembers } from '@/api/worldMembers';
-import type { WorldMemberDoc } from '../db/collections/worldMembersCollection';
-import { sortMembersByRole } from '../db/collections/worldMembersCollection';
+import { useCallback, useEffect, useState } from "react";
+import { getWorldMembers } from "@/api/worldMembers";
+import type { WorldMemberDoc } from "../db/collections/worldMembersCollection";
+import { sortMembersByRole } from "../db/collections/worldMembersCollection";
 
 export interface UseWorldMembersResult {
   members: WorldMemberDoc[];
@@ -31,8 +31,8 @@ export interface UseWorldMembersResult {
   refetch: () => Promise<void>;
 }
 
-function isMemberRole(role: string): role is 'Owner' | 'GM' | 'Player' {
-  return role === 'Owner' || role === 'GM' || role === 'Player';
+function isMemberRole(role: string): role is "Owner" | "GM" | "Player" {
+  return role === "Owner" || role === "GM" || role === "Player";
 }
 
 export function useWorldMembers(worldId: string): UseWorldMembersResult {
@@ -53,7 +53,7 @@ export function useWorldMembers(worldId: string): UseWorldMembersResult {
           id: record.id,
           world_id: record.worldId ?? worldId,
           user_id: record.userId,
-          role: record.role as 'Owner' | 'GM' | 'Player',
+          role: record.role as "Owner" | "GM" | "Player",
           joined_at: record.joinedAt,
           created_at: record.createdAt ?? record.joinedAt,
           updated_at: record.updatedAt ?? record.joinedAt,

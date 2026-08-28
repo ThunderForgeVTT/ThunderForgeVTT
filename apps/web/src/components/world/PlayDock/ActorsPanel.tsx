@@ -17,7 +17,14 @@ interface FolderProps {
   emptyLabel: string;
 }
 
-function Folder({ label, count, open, onToggle, children, emptyLabel }: FolderProps) {
+function Folder({
+  label,
+  count,
+  open,
+  onToggle,
+  children,
+  emptyLabel,
+}: FolderProps) {
   return (
     <section>
       <button
@@ -27,13 +34,21 @@ function Folder({ label, count, open, onToggle, children, emptyLabel }: FolderPr
         data-testid={`actor-folder-${label.toLowerCase()}`}
         className="flex w-full items-center gap-2 rounded-md px-1 py-1.5 text-xs font-semibold tracking-widest text-muted-foreground uppercase transition-colors hover:bg-muted hover:text-foreground"
       >
-        <span className={open ? "rotate-90 transition-transform" : "transition-transform"}>›</span>
+        <span
+          className={
+            open ? "rotate-90 transition-transform" : "transition-transform"
+          }
+        >
+          ›
+        </span>
         {label}
         <span className="ml-auto tabular-nums">{count}</span>
       </button>
       {open ? (
         count === 0 ? (
-          <p className="px-2 py-1 text-sm text-muted-foreground">{emptyLabel}</p>
+          <p className="px-2 py-1 text-sm text-muted-foreground">
+            {emptyLabel}
+          </p>
         ) : (
           <ul className="grid gap-1 py-1">{children}</ul>
         )
@@ -66,7 +81,10 @@ export function ActorsPanel({ worldId }: ActorsPanelProps) {
         if (active) setActors(result);
       })
       .catch((err) => {
-        if (active) setError(err instanceof Error ? err.message : "Failed to load actors");
+        if (active)
+          setError(
+            err instanceof Error ? err.message : "Failed to load actors",
+          );
       });
     return () => {
       active = false;
@@ -103,7 +121,9 @@ export function ActorsPanel({ worldId }: ActorsPanelProps) {
         <FantasyIcon name={actor.isNpc ? "skull" : "shield"} size={14} />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm">{actor.label}</span>
-          <span className="block truncate text-xs text-muted-foreground">{actor.actorType}</span>
+          <span className="block truncate text-xs text-muted-foreground">
+            {actor.actorType}
+          </span>
         </span>
       </Link>
     </li>

@@ -2,9 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { readEngineStats } from "@/engine/bevy/stats";
 import { getHeartbeatLatencyMs } from "@/engine/world/sync/heartbeat";
-import {
-  subscribeToEngineMonitor,
-} from "@/services/engineMonitor";
+import { subscribeToEngineMonitor } from "@/services/engineMonitor";
 import {
   subscribeToPeerTransfer,
   type PeerTransferState,

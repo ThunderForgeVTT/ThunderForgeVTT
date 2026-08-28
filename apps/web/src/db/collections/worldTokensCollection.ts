@@ -39,8 +39,7 @@ export interface WorldTokenDoc {
 export function computeTokenDerivedStats(token: WorldTokenDoc) {
   const health = token.health ?? 0;
   const maxHealth = token.max_health ?? 1;
-  const healthPercentage =
-    maxHealth > 0 ? (health / maxHealth) * 100 : 0;
+  const healthPercentage = maxHealth > 0 ? (health / maxHealth) * 100 : 0;
 
   return {
     healthPercentage: Math.max(0, Math.min(100, healthPercentage)),

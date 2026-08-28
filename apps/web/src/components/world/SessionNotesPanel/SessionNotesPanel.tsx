@@ -34,7 +34,12 @@ function renderNotesMarkdown(source: string): string {
  * textarea. Read-only for non-GM members. Saving an empty value is a
  * valid, explicit save — not treated as "no change" (FR-013).
  */
-export function SessionNotesPanel({ worldId, notes, isGm, onSaved }: SessionNotesPanelProps) {
+export function SessionNotesPanel({
+  worldId,
+  notes,
+  isGm,
+  onSaved,
+}: SessionNotesPanelProps) {
   const [draft, setDraft] = useState(notes ?? "");
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -55,7 +60,10 @@ export function SessionNotesPanel({ worldId, notes, isGm, onSaved }: SessionNote
   };
 
   const renderedDraft = useMemo(() => renderNotesMarkdown(draft), [draft]);
-  const renderedNotes = useMemo(() => renderNotesMarkdown(notes ?? ""), [notes]);
+  const renderedNotes = useMemo(
+    () => renderNotesMarkdown(notes ?? ""),
+    [notes],
+  );
 
   if (!isGm) {
     return (
@@ -75,7 +83,9 @@ export function SessionNotesPanel({ worldId, notes, isGm, onSaved }: SessionNote
   return (
     <div className="grid gap-2">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground">Markdown</span>
+        <span className="text-xs font-medium text-muted-foreground">
+          Markdown
+        </span>
         <Button
           type="button"
           size="sm"
@@ -98,7 +108,9 @@ export function SessionNotesPanel({ worldId, notes, isGm, onSaved }: SessionNote
           className="overflow-hidden rounded-md border border-border"
           data-testid="session-notes-editor"
         >
-          <Suspense fallback={<div className="h-[200px] animate-pulse bg-muted" />}>
+          <Suspense
+            fallback={<div className="h-[200px] animate-pulse bg-muted" />}
+          >
             <MarkdownCodeEditor
               value={draft}
               onChange={setDraft}
@@ -119,7 +131,9 @@ export function SessionNotesPanel({ worldId, notes, isGm, onSaved }: SessionNote
           {isSaving ? "Saving..." : "Save"}
         </Button>
         {status ? (
-          <StatusBadge variant={status === "Saved." ? "success" : "danger"}>{status}</StatusBadge>
+          <StatusBadge variant={status === "Saved." ? "success" : "danger"}>
+            {status}
+          </StatusBadge>
         ) : null}
       </div>
     </div>

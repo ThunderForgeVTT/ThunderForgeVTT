@@ -26,7 +26,9 @@ import type { Adjudicator, IntentResult, Proposal } from "./types";
  */
 export function createLocalAdjudicator(): Adjudicator {
   return {
-    async resolve<TPayload>(proposal: Proposal<TPayload>): Promise<IntentResult<TPayload>> {
+    async resolve<TPayload>(
+      proposal: Proposal<TPayload>,
+    ): Promise<IntentResult<TPayload>> {
       return { status: "accepted", value: proposal.payload };
     },
   };
@@ -43,7 +45,9 @@ export function createLocalAdjudicator(): Adjudicator {
  */
 export function createRemoteAdjudicator(endpoint: string): Adjudicator {
   return {
-    async resolve<TPayload>(proposal: Proposal<TPayload>): Promise<IntentResult<TPayload>> {
+    async resolve<TPayload>(
+      proposal: Proposal<TPayload>,
+    ): Promise<IntentResult<TPayload>> {
       let response: Response;
       try {
         response = await fetch(endpoint, {
@@ -63,7 +67,10 @@ export function createRemoteAdjudicator(endpoint: string): Adjudicator {
       }
 
       if (!response.ok) {
-        return { status: "rejected", reason: `adjudicator returned ${response.status}` };
+        return {
+          status: "rejected",
+          reason: `adjudicator returned ${response.status}`,
+        };
       }
 
       const verdict = (await response.json()) as {
@@ -87,7 +94,10 @@ export function createRemoteAdjudicator(endpoint: string): Adjudicator {
         case "Rejected":
           return { status: "rejected", reason: verdict.reason ?? "rejected" };
         default:
-          return { status: "rejected", reason: "unrecognised adjudicator outcome" };
+          return {
+            status: "rejected",
+            reason: "unrecognised adjudicator outcome",
+          };
       }
     },
   };

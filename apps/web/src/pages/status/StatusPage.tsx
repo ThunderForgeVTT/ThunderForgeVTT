@@ -90,7 +90,10 @@ function useStatusPoll() {
 
   useEffect(() => {
     void check();
-    const interval = window.setInterval(() => void check(), REFRESH_INTERVAL_MS);
+    const interval = window.setInterval(
+      () => void check(),
+      REFRESH_INTERVAL_MS,
+    );
     return () => window.clearInterval(interval);
   }, [check]);
 
@@ -113,11 +116,17 @@ export default function StatusPage() {
     fetchState === "checking"
       ? { label: "Checking the wards...", variant: "info" as const }
       : fetchState === "unreachable"
-        ? { label: "The Forge Core cannot be reached", variant: "danger" as const }
+        ? {
+            label: "The Forge Core cannot be reached",
+            variant: "danger" as const,
+          }
         : allUp
           ? { label: "All systems operational", variant: "success" as const }
           : anyUp
-            ? { label: "Degraded — some services are down", variant: "warning" as const }
+            ? {
+                label: "Degraded — some services are down",
+                variant: "warning" as const,
+              }
             : { label: "Major outage", variant: "danger" as const };
 
   return (
@@ -141,7 +150,9 @@ export default function StatusPage() {
 
           <Card className="grid gap-3 p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <StatusBadge variant={overall.variant}>{overall.label}</StatusBadge>
+              <StatusBadge variant={overall.variant}>
+                {overall.label}
+              </StatusBadge>
               <Button
                 variant="ghost"
                 size="sm"

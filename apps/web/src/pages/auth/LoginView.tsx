@@ -61,15 +61,17 @@ export function LoginView() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [twoFactorCode, setTwoFactorCode] = useState("");
-  const [twoFactorChallengeId, setTwoFactorChallengeId] = useState<string | null>(
-    null,
-  );
+  const [twoFactorChallengeId, setTwoFactorChallengeId] = useState<
+    string | null
+  >(null);
   const [loginStep, setLoginStep] = useState<LoginStep>("credentials");
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [providers, setProviders] = useState<SetupProvider[]>([]);
-  const [touched, setTouched] = useState<Partial<Record<LoginField, boolean>>>({});
+  const [touched, setTouched] = useState<Partial<Record<LoginField, boolean>>>(
+    {},
+  );
   const [credentialAttempted, setCredentialAttempted] = useState(false);
   const [twoFactorAttempted, setTwoFactorAttempted] = useState(false);
   const twoFactorInputRef = useRef<HTMLInputElement | null>(null);
@@ -158,14 +160,17 @@ export function LoginView() {
         setTwoFactorCode("");
         setTwoFactorAttempted(false);
         setLoginStep("twoFactor");
-        setStatus("Credentials accepted. Enter your two-factor code to finish signing in.");
+        setStatus(
+          "Credentials accepted. Enter your two-factor code to finish signing in.",
+        );
         return;
       }
 
       setStatus(response.message);
       if (response.session?.authenticated) {
         navigate(
-          redirectTarget(location.search) ?? redirectAfterLogin(response.session.user),
+          redirectTarget(location.search) ??
+            redirectAfterLogin(response.session.user),
           { replace: true },
         );
       }
@@ -201,11 +206,17 @@ export function LoginView() {
         twoFactorCode.trim(),
       );
       setStatus(response.message);
-      navigate(redirectTarget(location.search) ?? redirectAfterLogin(response.session?.user), {
-        replace: true,
-      });
+      navigate(
+        redirectTarget(location.search) ??
+          redirectAfterLogin(response.session?.user),
+        {
+          replace: true,
+        },
+      );
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Failed to verify 2FA.");
+      setStatus(
+        error instanceof Error ? error.message : "Failed to verify 2FA.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -233,19 +244,26 @@ export function LoginView() {
       if (response.loginTwoFactorChallengeId) {
         setTwoFactorChallengeId(response.loginTwoFactorChallengeId);
         setTwoFactorCode("");
-        setStatus("A new two-factor challenge was issued. Enter the latest code.");
+        setStatus(
+          "A new two-factor challenge was issued. Enter the latest code.",
+        );
         return;
       }
 
       setStatus(response.message);
       if (response.session?.authenticated) {
         navigate(
-          redirectTarget(location.search) ?? redirectAfterLogin(response.session.user),
+          redirectTarget(location.search) ??
+            redirectAfterLogin(response.session.user),
           { replace: true },
         );
       }
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Failed to refresh the challenge.");
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : "Failed to refresh the challenge.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -270,7 +288,10 @@ export function LoginView() {
             >
               Create a local account
             </Link>
-            <Link to="/welcome" className="font-medium text-primary hover:underline">
+            <Link
+              to="/welcome"
+              className="font-medium text-primary hover:underline"
+            >
               Review the welcome hall
             </Link>
           </div>
@@ -353,7 +374,9 @@ export function LoginView() {
                       size="sm"
                       className="absolute top-1/2 right-1 -translate-y-1/2"
                       onClick={() => setShowPassword((current) => !current)}
-                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      aria-label={
+                        showPassword ? "Hide password" : "Show password"
+                      }
                     >
                       {showPassword ? "Hide" : "Show"}
                     </Button>

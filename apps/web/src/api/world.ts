@@ -188,7 +188,10 @@ type WorldMemberQuery = {
  * assume RxDB's world-member collection has replicated their own new row
  * yet; this query hits the server's `world_members` table directly.
  */
-export function getMyWorldMemberRole(worldId: string, userId: string): Promise<string | null> {
+export function getMyWorldMemberRole(
+  worldId: string,
+  userId: string,
+): Promise<string | null> {
   return postGraphQL<WorldMemberQuery>(
     `
       query MyWorldMemberRole($worldId: ID!, $userId: ID!) {
@@ -205,7 +208,11 @@ export function getMyWorldMemberRole(worldId: string, userId: string): Promise<s
  * Spec 027 (FR-010): whether a link works right now, and if not, why.
  * Derived server-side from the row, never stored, so it cannot drift.
  */
-export type WorldAccessLinkState = "ACTIVE" | "EXPIRED" | "EXHAUSTED" | "REVOKED";
+export type WorldAccessLinkState =
+  | "ACTIVE"
+  | "EXPIRED"
+  | "EXHAUSTED"
+  | "REVOKED";
 
 export interface WorldInviteRecord {
   id: string;

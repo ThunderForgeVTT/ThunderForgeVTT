@@ -38,7 +38,10 @@ interface ErrorPayload {
  * GM-only: the caller (WorldPage) is responsible for only rendering this
  * component for the scene owner (FR-009), mirroring WallTool's gating.
  */
-export function MapImportTool({ sceneId, onImportComplete }: MapImportToolProps) {
+export function MapImportTool({
+  sceneId,
+  onImportComplete,
+}: MapImportToolProps) {
   const [status, setStatus] = useState<ImportStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<MapImportResult | null>(null);
@@ -76,7 +79,8 @@ export function MapImportTool({ sceneId, onImportComplete }: MapImportToolProps)
           let message = `Import failed with status ${response.status}`;
 
           if (response.status === 403) {
-            message = "You don't have permission to import a map into this scene.";
+            message =
+              "You don't have permission to import a map into this scene.";
           } else if (response.status === 413) {
             message = "That file is too large to upload.";
           }
@@ -100,7 +104,9 @@ export function MapImportTool({ sceneId, onImportComplete }: MapImportToolProps)
         setStatus("idle");
         onImportComplete?.(result);
       } catch {
-        setErrorMessage("Failed to upload the map file. Check your connection and try again.");
+        setErrorMessage(
+          "Failed to upload the map file. Check your connection and try again.",
+        );
         setStatus("error");
       }
     },
@@ -143,7 +149,11 @@ export function MapImportTool({ sceneId, onImportComplete }: MapImportToolProps)
       ) : null}
 
       {status === "idle" && lastResult ? (
-        <Panel variant="stone" className="grid gap-1" data-testid="map-import-success">
+        <Panel
+          variant="stone"
+          className="grid gap-1"
+          data-testid="map-import-success"
+        >
           <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
             Map imported
           </p>

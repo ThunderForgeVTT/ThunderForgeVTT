@@ -58,7 +58,8 @@ async function mountPersistence(
     return;
   }
   try {
-    const { default: IndexedDBStorage } = await import("flexsearch/db/indexeddb");
+    const { default: IndexedDBStorage } =
+      await import("flexsearch/db/indexeddb");
     const db = new IndexedDBStorage(`actor-search-${worldId}`);
     await document.mount(db);
   } catch {
@@ -79,7 +80,10 @@ function getOrCreateIndex(worldId: string): WorldIndex {
 
 /** (Re)indexes the given actors for a world. Safe to call on every
  * roster fetch — FlexSearch's `add` upserts by id. */
-export async function indexActors(worldId: string, actors: SearchableActor[]): Promise<void> {
+export async function indexActors(
+  worldId: string,
+  actors: SearchableActor[],
+): Promise<void> {
   const { document, ready } = getOrCreateIndex(worldId);
   await ready.catch(() => {});
   for (const actor of actors) {
@@ -103,7 +107,10 @@ export function removeActorFromIndex(worldId: string, actorId: string): void {
 /** Returns the ids of actors matching `query`, ranked by FlexSearch's
  * relevance. Empty/whitespace-only queries return `null` — callers should
  * treat that as "no filter, show everything" rather than "no matches". */
-export async function searchActorIds(worldId: string, query: string): Promise<string[] | null> {
+export async function searchActorIds(
+  worldId: string,
+  query: string,
+): Promise<string[] | null> {
   const trimmed = query.trim();
   if (!trimmed) {
     return null;

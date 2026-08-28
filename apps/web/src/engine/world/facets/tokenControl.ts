@@ -192,7 +192,10 @@ export function createTokenControlFacet(
       if (!entry.canMove) {
         return {
           status: "refused",
-          reason: context.principal.authority === "observer" ? "observer" : "not-yours",
+          reason:
+            context.principal.authority === "observer"
+              ? "observer"
+              : "not-yours",
         };
       }
 
@@ -225,13 +228,17 @@ export function createTokenControlFacet(
         return { status: "refused", reason: "unknown-subject" };
       }
 
-      const wantsFacing = intent.rotation !== undefined || intent.scale !== undefined;
+      const wantsFacing =
+        intent.rotation !== undefined || intent.scale !== undefined;
       const wantsArt = intent.photoUrl !== undefined;
       if (wantsFacing && !(entry.canRotate && entry.canResize)) {
         return { status: "refused", reason: "gm-only" };
       }
       if (wantsArt && !entry.canSetArt) {
-        return { status: "refused", reason: entry.canMove ? "gm-only" : "not-yours" };
+        return {
+          status: "refused",
+          reason: entry.canMove ? "gm-only" : "not-yours",
+        };
       }
 
       const result = await context.adjudicator.resolve<ManipulateIntent>({

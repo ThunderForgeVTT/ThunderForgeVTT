@@ -1,5 +1,9 @@
 import { postGraphQL } from "@/api/graphqlClient";
-import type { CreateShapeInput, ShapeRecord, UpdateShapeInput } from "@/types/shape";
+import type {
+  CreateShapeInput,
+  ShapeRecord,
+  UpdateShapeInput,
+} from "@/types/shape";
 
 const SHAPE_FIELDS = `
   shapeId

@@ -20,10 +20,15 @@ export interface CounterNoticeFormProps {
  * an authenticated session — `submitCounterNotice` checks world ownership
  * server-side regardless (Principle III).
  */
-export function CounterNoticeForm({ caseId, onSubmitted }: CounterNoticeFormProps) {
-  const [removedMaterialDescription, setRemovedMaterialDescription] = useState("");
+export function CounterNoticeForm({
+  caseId,
+  onSubmitted,
+}: CounterNoticeFormProps) {
+  const [removedMaterialDescription, setRemovedMaterialDescription] =
+    useState("");
   const [contactInformation, setContactInformation] = useState("");
-  const [goodFaithMistakeStatement, setGoodFaithMistakeStatement] = useState(false);
+  const [goodFaithMistakeStatement, setGoodFaithMistakeStatement] =
+    useState(false);
   const [consentToJurisdiction, setConsentToJurisdiction] = useState(false);
   const [signature, setSignature] = useState("");
 
@@ -45,15 +50,24 @@ export function CounterNoticeForm({ caseId, onSubmitted }: CounterNoticeFormProp
       });
       onSubmitted(outcome);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to submit counter-notice");
+      setError(
+        err instanceof Error ? err.message : "Failed to submit counter-notice",
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <form onSubmit={(e) => void handleSubmit(e)} className="grid gap-3" data-testid="counter-notice-form">
-      <Field label="Identification of the removed material" htmlFor="counter-notice-material">
+    <form
+      onSubmit={(e) => void handleSubmit(e)}
+      className="grid gap-3"
+      data-testid="counter-notice-form"
+    >
+      <Field
+        label="Identification of the removed material"
+        htmlFor="counter-notice-material"
+      >
         <Textarea
           id="counter-notice-material"
           value={removedMaterialDescription}
@@ -79,9 +93,12 @@ export function CounterNoticeForm({ caseId, onSubmitted }: CounterNoticeFormProp
           checked={goodFaithMistakeStatement}
           onCheckedChange={(v) => setGoodFaithMistakeStatement(v === true)}
         />
-        <Label htmlFor="counter-notice-good-faith" className="text-sm font-normal">
-          Under penalty of perjury, I have a good-faith belief the material was disabled as a
-          result of mistake or misidentification.
+        <Label
+          htmlFor="counter-notice-good-faith"
+          className="text-sm font-normal"
+        >
+          Under penalty of perjury, I have a good-faith belief the material was
+          disabled as a result of mistake or misidentification.
         </Label>
       </div>
 
@@ -91,13 +108,19 @@ export function CounterNoticeForm({ caseId, onSubmitted }: CounterNoticeFormProp
           checked={consentToJurisdiction}
           onCheckedChange={(v) => setConsentToJurisdiction(v === true)}
         />
-        <Label htmlFor="counter-notice-jurisdiction" className="text-sm font-normal">
-          I consent to the jurisdiction of the appropriate federal court and will accept
-          service of process from the original claimant.
+        <Label
+          htmlFor="counter-notice-jurisdiction"
+          className="text-sm font-normal"
+        >
+          I consent to the jurisdiction of the appropriate federal court and
+          will accept service of process from the original claimant.
         </Label>
       </div>
 
-      <Field label="Signature (type your full legal name)" htmlFor="counter-notice-signature">
+      <Field
+        label="Signature (type your full legal name)"
+        htmlFor="counter-notice-signature"
+      >
         <Input
           id="counter-notice-signature"
           value={signature}
@@ -108,7 +131,12 @@ export function CounterNoticeForm({ caseId, onSubmitted }: CounterNoticeFormProp
 
       {error ? <StatusBadge variant="danger">{error}</StatusBadge> : null}
 
-      <Button type="submit" variant="secondary" disabled={submitting} data-testid="counter-notice-submit">
+      <Button
+        type="submit"
+        variant="secondary"
+        disabled={submitting}
+        data-testid="counter-notice-submit"
+      >
         {submitting ? "Submitting..." : "File counter-notice"}
       </Button>
     </form>

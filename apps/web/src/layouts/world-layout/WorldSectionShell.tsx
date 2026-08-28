@@ -26,11 +26,21 @@ export interface WorldSectionShellProps {
  * that on anything smaller. Play's own full-screen canvas is unrelated
  * chrome and isn't wrapped by this component.
  */
-export function WorldSectionShell({ worldId, isGm, children }: WorldSectionShellProps) {
+export function WorldSectionShell({
+  worldId,
+  isGm,
+  children,
+}: WorldSectionShellProps) {
   return (
     <div className="mx-auto grid w-full max-w-[1800px] gap-4 p-4 sm:p-6 lg:p-8">
       <div className="flex justify-end">
-        <Button asChild variant="primary" size="lg" icon="spark" data-testid="play-button">
+        <Button
+          asChild
+          variant="primary"
+          size="lg"
+          icon="spark"
+          data-testid="play-button"
+        >
           <Link to={`/world/${worldId}/play`}>Play</Link>
         </Button>
       </div>

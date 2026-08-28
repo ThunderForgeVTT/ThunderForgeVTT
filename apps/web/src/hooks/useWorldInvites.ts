@@ -18,10 +18,14 @@
  * remount) to pick up changes.
  */
 
-import { useCallback, useEffect, useState } from 'react';
-import { getWorldInvites, revokeInviteCode, rotateInviteCode } from '@/api/world';
-import type { WorldInviteDoc } from '../db/collections/worldInvitesCollection';
-import { computeInviteDerivedData } from '../db/collections/worldInvitesCollection';
+import { useCallback, useEffect, useState } from "react";
+import {
+  getWorldInvites,
+  revokeInviteCode,
+  rotateInviteCode,
+} from "@/api/world";
+import type { WorldInviteDoc } from "../db/collections/worldInvitesCollection";
+import { computeInviteDerivedData } from "../db/collections/worldInvitesCollection";
 
 export interface UseWorldInvitesResult {
   invites: WorldInviteDoc[];

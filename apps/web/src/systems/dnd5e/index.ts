@@ -46,7 +46,14 @@ export const DnD5eSystemManifest = {
         wisdom: { type: "integer", min: 3, max: 20 },
         charisma: { type: "integer", min: 3, max: 20 },
       },
-      required: ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"],
+      required: [
+        "strength",
+        "dexterity",
+        "constitution",
+        "intelligence",
+        "wisdom",
+        "charisma",
+      ],
     },
 
     resource_data: {
@@ -81,7 +88,8 @@ export const DnD5eSystemManifest = {
     },
 
     trait_data: {
-      description: "D&D 5e Character Traits (Class, Subclass, Feats, Personality)",
+      description:
+        "D&D 5e Character Traits (Class, Subclass, Feats, Personality)",
       properties: {
         class: { type: "string" },
         level: { type: "integer", min: 1, max: 20 },
@@ -160,7 +168,9 @@ export const DnD5eSystemManifest = {
      * Get ability score color quality indicator
      * Used for visual design feedback in UI
      */
-    getScoreQuality(score: number): "critical" | "poor" | "average" | "good" | "excellent" | "legendary" {
+    getScoreQuality(
+      score: number,
+    ): "critical" | "poor" | "average" | "good" | "excellent" | "legendary" {
       if (score <= 3) return "critical";
       if (score <= 6) return "poor";
       if (score <= 10) return "average";
@@ -188,12 +198,20 @@ export const DnD5eSystemManifest = {
      * Calculate ability score modifier bonuses
      * Returns full modifier data for all 6 abilities
      */
-    calculateAllModifiers(abilityData: Record<string, number>): Record<string, number> {
+    calculateAllModifiers(
+      abilityData: Record<string, number>,
+    ): Record<string, number> {
       return {
         strength_mod: this.calculateAbilityModifier(abilityData.strength ?? 10),
-        dexterity_mod: this.calculateAbilityModifier(abilityData.dexterity ?? 10),
-        constitution_mod: this.calculateAbilityModifier(abilityData.constitution ?? 10),
-        intelligence_mod: this.calculateAbilityModifier(abilityData.intelligence ?? 10),
+        dexterity_mod: this.calculateAbilityModifier(
+          abilityData.dexterity ?? 10,
+        ),
+        constitution_mod: this.calculateAbilityModifier(
+          abilityData.constitution ?? 10,
+        ),
+        intelligence_mod: this.calculateAbilityModifier(
+          abilityData.intelligence ?? 10,
+        ),
         wisdom_mod: this.calculateAbilityModifier(abilityData.wisdom ?? 10),
         charisma_mod: this.calculateAbilityModifier(abilityData.charisma ?? 10),
       };

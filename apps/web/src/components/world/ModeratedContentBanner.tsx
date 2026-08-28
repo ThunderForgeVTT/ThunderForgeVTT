@@ -18,30 +18,37 @@ export interface ModeratedContentBannerProps {
  * (`moderated: true`). Only the entry's owner sees the counter-notice
  * flow — everyone else just sees that the content was disabled.
  */
-export function ModeratedContentBanner({ caseId, isOwner, restorationDueAt }: ModeratedContentBannerProps) {
+export function ModeratedContentBanner({
+  caseId,
+  isOwner,
+  restorationDueAt,
+}: ModeratedContentBannerProps) {
   const [filedCaseId, setFiledCaseId] = useState<string | null>(null);
 
   return (
     <Card className="grid gap-3 p-6">
       <StatusBadge variant="danger">Content disabled</StatusBadge>
       <p className="text-sm text-muted-foreground">
-        This content was disabled in response to a DMCA takedown notice and is currently
-        unavailable.
+        This content was disabled in response to a DMCA takedown notice and is
+        currently unavailable.
       </p>
       {restorationDueAt ? (
         <p className="text-sm text-muted-foreground">
-          A counter-notice was filed. Unless the claimant files a court action, this content
-          is scheduled to be restored on{" "}
+          A counter-notice was filed. Unless the claimant files a court action,
+          this content is scheduled to be restored on{" "}
           <strong>{new Date(restorationDueAt).toLocaleDateString()}</strong>.
         </p>
       ) : null}
       {isOwner && !restorationDueAt && caseId ? (
         <div className="grid gap-2">
           <p className="text-sm">
-            If you believe this was disabled by mistake or misidentification, you may file a
-            counter-notice.
+            If you believe this was disabled by mistake or misidentification,
+            you may file a counter-notice.
           </p>
-          <CounterNoticeForm caseId={caseId} onSubmitted={(record) => setFiledCaseId(record.caseId)} />
+          <CounterNoticeForm
+            caseId={caseId}
+            onSubmitted={(record) => setFiledCaseId(record.caseId)}
+          />
           {filedCaseId ? (
             <p className="text-xs text-muted-foreground">
               Counter-notice filed. Case reference: <code>{filedCaseId}</code>.

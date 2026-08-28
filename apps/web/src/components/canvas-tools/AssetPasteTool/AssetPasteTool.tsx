@@ -25,7 +25,12 @@ type PasteStatus = "idle" | "uploading" | "error";
  * component for the scene owner/authorized GM, mirroring
  * WallTool/ShapeTool's existing gating convention.
  */
-export function AssetPasteTool({ worldId, sceneId, active, onPasted }: AssetPasteToolProps) {
+export function AssetPasteTool({
+  worldId,
+  sceneId,
+  active,
+  onPasted,
+}: AssetPasteToolProps) {
   const [status, setStatus] = useState<PasteStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -36,7 +41,9 @@ export function AssetPasteTool({ worldId, sceneId, active, onPasted }: AssetPast
         return;
       }
 
-      const imageItem = Array.from(items).find((item) => item.type.startsWith("image/"));
+      const imageItem = Array.from(items).find((item) =>
+        item.type.startsWith("image/"),
+      );
       if (!imageItem) {
         // Not an image paste (e.g. pasted text) — ignore entirely, no upload attempted.
         return;
@@ -58,7 +65,9 @@ export function AssetPasteTool({ worldId, sceneId, active, onPasted }: AssetPast
         })
         .catch((error: unknown) => {
           setStatus("error");
-          setErrorMessage(error instanceof Error ? error.message : "Failed to paste image");
+          setErrorMessage(
+            error instanceof Error ? error.message : "Failed to paste image",
+          );
         });
     },
     [worldId, sceneId, onPasted],
@@ -82,8 +91,12 @@ export function AssetPasteTool({ worldId, sceneId, active, onPasted }: AssetPast
       aria-live="polite"
       className="pointer-events-none fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-md bg-background/90 px-3 py-1.5 text-sm shadow-md"
     >
-      {status === "uploading" && <span className="text-muted-foreground">Pasting image…</span>}
-      {status === "error" && <span className="text-destructive">{errorMessage}</span>}
+      {status === "uploading" && (
+        <span className="text-muted-foreground">Pasting image…</span>
+      )}
+      {status === "error" && (
+        <span className="text-destructive">{errorMessage}</span>
+      )}
     </div>
   );
 }

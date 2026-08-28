@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { WorldInviteDoc } from "../worldInvitesCollection";
-import { computeInviteDerivedData, inviteStateLabel } from "../worldInvitesCollection";
+import {
+  computeInviteDerivedData,
+  inviteStateLabel,
+} from "../worldInvitesCollection";
 
 /**
  * Spec 027 (T033, FR-010): link-state display.
@@ -32,7 +35,9 @@ function doc(overrides: Partial<WorldInviteDoc> = {}): WorldInviteDoc {
 
 describe("computeInviteDerivedData", () => {
   it("reports an active link as valid, with uses left", () => {
-    const derived = computeInviteDerivedData(doc({ used_count: 4, remaining_uses: 6 }));
+    const derived = computeInviteDerivedData(
+      doc({ used_count: 4, remaining_uses: 6 }),
+    );
     expect(derived.is_valid).toBe(true);
     expect(derived.status).toContain("6");
     expect(derived.status).toContain("Active");
@@ -41,7 +46,12 @@ describe("computeInviteDerivedData", () => {
   it("reports a revoked link as invalid — the case local derivation could not see", () => {
     // Counts and dates all look healthy. Only `state` reveals the truth.
     const derived = computeInviteDerivedData(
-      doc({ state: "REVOKED", used_count: 0, remaining_uses: 10, expires_at: null }),
+      doc({
+        state: "REVOKED",
+        used_count: 0,
+        remaining_uses: 10,
+        expires_at: null,
+      }),
     );
     expect(derived.is_valid).toBe(false);
     expect(derived.status).toBe("Revoked");
@@ -49,7 +59,9 @@ describe("computeInviteDerivedData", () => {
 
   it("distinguishes expired from exhausted rather than calling both expired", () => {
     // The old panel labelled anything unusable "Expired", regardless of why.
-    expect(computeInviteDerivedData(doc({ state: "EXPIRED" })).status).toBe("Expired");
+    expect(computeInviteDerivedData(doc({ state: "EXPIRED" })).status).toBe(
+      "Expired",
+    );
     expect(computeInviteDerivedData(doc({ state: "EXHAUSTED" })).status).toBe(
       "All uses claimed",
     );

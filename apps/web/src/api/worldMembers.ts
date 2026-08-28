@@ -91,7 +91,10 @@ type RemoveMemberMutation = {
 };
 
 /** Spec 023 (T004): promoted out of `CampaignSettingsPanel.tsx`'s inline-only call. */
-export function removeMember(worldId: string, userId: string): Promise<boolean> {
+export function removeMember(
+  worldId: string,
+  userId: string,
+): Promise<boolean> {
   return postGraphQL<RemoveMemberMutation>(
     `
       mutation RemoveMember($worldId: ID!, $userId: ID!) {

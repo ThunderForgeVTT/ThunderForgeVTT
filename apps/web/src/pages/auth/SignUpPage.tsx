@@ -1,1 +1,4 @@
-export { default, registerPageSeo as signUpPageSeo } from "@/pages/auth/RegisterPage";
+export {
+  default,
+  registerPageSeo as signUpPageSeo,
+} from "@/pages/auth/RegisterPage";

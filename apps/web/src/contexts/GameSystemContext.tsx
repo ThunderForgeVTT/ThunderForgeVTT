@@ -24,7 +24,14 @@
  * ```
  */
 
-import React, { ReactNode, createContext, useContext, useCallback, useRef, useState } from "react";
+import React, {
+  ReactNode,
+  createContext,
+  useContext,
+  useCallback,
+  useRef,
+  useState,
+} from "react";
 
 /**
  * Spec 016 (FR-001, contracts/manifest-legal-schema.md): a system pack's
@@ -75,7 +82,9 @@ interface GameSystemContextValue {
 /**
  * Internal context for shared state
  */
-const GameSystemContext = createContext<GameSystemContextValue | undefined>(undefined);
+const GameSystemContext = createContext<GameSystemContextValue | undefined>(
+  undefined,
+);
 
 /**
  * Provider component
@@ -85,47 +94,58 @@ export function GameSystemProvider({ children }: { children: ReactNode }) {
   const cacheRef = useRef<Map<string, SystemManifest>>(new Map());
   const [, setRefresh] = useState(0);
 
-  const loadManifest = useCallback(async (systemId: string): Promise<SystemManifest> => {
-    // Check cache first
-    const cached = cacheRef.current.get(systemId);
-    if (cached) {
-      return cached;
-    }
-
-    try {
-      // Dynamically import system manifest based on ID — one generic path
-      // for every system, no per-systemId special-casing. Every pack's
-      // `@/systems/<id>/index` (or, for packs living under
-      // `packs/systems/<id>/web`, whatever local re-export bridges it
-      // in) exports its manifest under a name containing "Manifest"
-      // (`DnD5eSystemManifest`, `genieSystemManifest`, etc.) — sniff for
-      // that key rather than hardcoding it per system.
-      const module = await import(
-        /* @vite-ignore */
-        `@/systems/${systemId}/index`
-      );
-
-      const keys = Object.keys(module);
-      const manifestKey = keys.find((k) => k.includes("Manifest"));
-      if (!manifestKey) {
-        throw new Error(`No manifest exported from @/systems/${systemId}/index`);
+  const loadManifest = useCallback(
+    async (systemId: string): Promise<SystemManifest> => {
+      // Check cache first
+      const cached = cacheRef.current.get(systemId);
+      if (cached) {
+        return cached;
       }
 
-      const manifest = module[manifestKey] as SystemManifest;
+      try {
+        // Dynamically import system manifest based on ID — one generic path
+        // for every system, no per-systemId special-casing. Every pack's
+        // `@/systems/<id>/index` (or, for packs living under
+        // `packs/systems/<id>/web`, whatever local re-export bridges it
+        // in) exports its manifest under a name containing "Manifest"
+        // (`DnD5eSystemManifest`, `genieSystemManifest`, etc.) — sniff for
+        // that key rather than hardcoding it per system.
+        const module = await import(
+          /* @vite-ignore */
+          `@/systems/${systemId}/index`
+        );
 
-      // Cache and return
-      cacheRef.current.set(systemId, manifest);
-      setRefresh((n) => n + 1); // Trigger re-render for subscriptions
-      return manifest;
-    } catch (error) {
-      console.error(`[GameSystemContext] Failed to load manifest for ${systemId}:`, error);
-      throw error;
-    }
-  }, []);
+        const keys = Object.keys(module);
+        const manifestKey = keys.find((k) => k.includes("Manifest"));
+        if (!manifestKey) {
+          throw new Error(
+            `No manifest exported from @/systems/${systemId}/index`,
+          );
+        }
 
-  const getCachedManifest = useCallback((systemId: string): SystemManifest | null => {
-    return cacheRef.current.get(systemId) ?? null;
-  }, []);
+        const manifest = module[manifestKey] as SystemManifest;
+
+        // Cache and return
+        cacheRef.current.set(systemId, manifest);
+        setRefresh((n) => n + 1); // Trigger re-render for subscriptions
+        return manifest;
+      } catch (error) {
+        console.error(
+          `[GameSystemContext] Failed to load manifest for ${systemId}:`,
+          error,
+        );
+        throw error;
+      }
+    },
+    [],
+  );
+
+  const getCachedManifest = useCallback(
+    (systemId: string): SystemManifest | null => {
+      return cacheRef.current.get(systemId) ?? null;
+    },
+    [],
+  );
 
   const clearCache = useCallback((systemId?: string) => {
     if (systemId) {
@@ -143,7 +163,11 @@ export function GameSystemProvider({ children }: { children: ReactNode }) {
     manifestCache: cacheRef.current,
   };
 
-  return <GameSystemContext.Provider value={value}>{children}</GameSystemContext.Provider>;
+  return (
+    <GameSystemContext.Provider value={value}>
+      {children}
+    </GameSystemContext.Provider>
+  );
 }
 
 /**
@@ -165,7 +189,9 @@ export function GameSystemProvider({ children }: { children: ReactNode }) {
 export function useGameSystemManifest(systemId: string) {
   const context = useContext(GameSystemContext);
   if (!context) {
-    throw new Error("useGameSystemManifest must be used within GameSystemProvider");
+    throw new Error(
+      "useGameSystemManifest must be used within GameSystemProvider",
+    );
   }
 
   const [manifest, setManifest] = useState<SystemManifest | null>(
@@ -224,10 +250,14 @@ export function useGameSystemManifest(systemId: string) {
  * }
  * ```
  */
-export function useCachedGameSystemManifest(systemId: string): SystemManifest | null {
+export function useCachedGameSystemManifest(
+  systemId: string,
+): SystemManifest | null {
   const context = useContext(GameSystemContext);
   if (!context) {
-    throw new Error("useCachedGameSystemManifest must be used within GameSystemProvider");
+    throw new Error(
+      "useCachedGameSystemManifest must be used within GameSystemProvider",
+    );
   }
 
   return context.getCachedManifest(systemId);

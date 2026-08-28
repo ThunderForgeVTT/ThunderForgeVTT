@@ -187,7 +187,12 @@ export function LightingTool({
             </Select>
           </div>
 
-          <Button type="button" variant="danger" icon="trash" onClick={deleteSelectedLight}>
+          <Button
+            type="button"
+            variant="danger"
+            icon="trash"
+            onClick={deleteSelectedLight}
+          >
             Delete light
           </Button>
         </Panel>

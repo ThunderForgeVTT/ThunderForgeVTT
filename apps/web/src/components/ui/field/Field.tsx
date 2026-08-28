@@ -30,9 +30,7 @@ export function Field({
         ) : null}
       </Label>
       {children}
-      {error ? (
-        <span className="text-sm text-destructive">{error}</span>
-      ) : null}
+      {error ? <span className="text-sm text-destructive">{error}</span> : null}
       {hint && !error ? (
         <span className="text-sm text-muted-foreground">{hint}</span>
       ) : null}

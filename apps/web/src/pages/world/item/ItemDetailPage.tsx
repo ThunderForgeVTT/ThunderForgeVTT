@@ -89,7 +89,10 @@ export default function ItemDetailPage({ mode }: ItemDetailPageProps) {
             <p className="text-muted-foreground">
               This item doesn't exist or you don't have access to it.
             </p>
-            <Link to={`/world/${worldId}/compendium`} className="text-primary hover:underline">
+            <Link
+              to={`/world/${worldId}/compendium`}
+              className="text-primary hover:underline"
+            >
               Back to Compendium
             </Link>
           </Card>
@@ -118,7 +121,10 @@ export default function ItemDetailPage({ mode }: ItemDetailPageProps) {
           >
             Back to Compendium
           </Button>
-          <ModeratedContentBanner caseId={item.moderationCaseId} isOwner={item.myPermissionLevel === "OWNER"} />
+          <ModeratedContentBanner
+            caseId={item.moderationCaseId}
+            isOwner={item.myPermissionLevel === "OWNER"}
+          />
         </Container>
       </>
     );
@@ -163,7 +169,9 @@ export default function ItemDetailPage({ mode }: ItemDetailPageProps) {
       setShareLinkId(link.id);
       await navigator.clipboard.writeText(url).catch(() => {});
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to create share link");
+      setStatus(
+        err instanceof Error ? err.message : "Failed to create share link",
+      );
     } finally {
       setIsSharing(false);
     }
@@ -181,7 +189,9 @@ export default function ItemDetailPage({ mode }: ItemDetailPageProps) {
       setShareLinkId(null);
       setStatus("Share link revoked.");
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to revoke share link");
+      setStatus(
+        err instanceof Error ? err.message : "Failed to revoke share link",
+      );
     } finally {
       setIsRevoking(false);
     }
@@ -189,7 +199,11 @@ export default function ItemDetailPage({ mode }: ItemDetailPageProps) {
 
   return (
     <>
-      <SEO title={`${item.name} — ${mode === "edit" ? "Edit" : "View"}`} description="Item detail" noindex />
+      <SEO
+        title={`${item.name} — ${mode === "edit" ? "Edit" : "View"}`}
+        description="Item detail"
+        noindex
+      />
       <Container className="grid max-w-2xl gap-6 py-10">
         <Button
           variant="ghost"
@@ -203,23 +217,39 @@ export default function ItemDetailPage({ mode }: ItemDetailPageProps) {
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">Item</p>
+            <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+              Item
+            </p>
             <h1 className="text-2xl font-semibold">{item.name}</h1>
           </div>
           {/* Share/Copy controls (US5) */}
           <div className="flex gap-2">
             {canEdit && mode === "view" ? (
-              <Button variant="secondary" onClick={() => navigate(`/world/${worldId}/item/${itemId}/edit`)}>
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  navigate(`/world/${worldId}/item/${itemId}/edit`)
+                }
+              >
                 Edit
               </Button>
             ) : null}
             {canShare ? (
-              <Button variant="secondary" icon="link" onClick={() => void handleShare()} disabled={isSharing}>
+              <Button
+                variant="secondary"
+                icon="link"
+                onClick={() => void handleShare()}
+                disabled={isSharing}
+              >
                 {isSharing ? "Sharing..." : "Share"}
               </Button>
             ) : null}
             {mode === "edit" && item.myPermissionLevel === "OWNER" ? (
-              <Button variant="danger" onClick={() => void handleDelete()} disabled={isDeleting}>
+              <Button
+                variant="danger"
+                onClick={() => void handleDelete()}
+                disabled={isDeleting}
+              >
                 {isDeleting ? "Deleting..." : "Delete"}
               </Button>
             ) : null}
@@ -228,8 +258,14 @@ export default function ItemDetailPage({ mode }: ItemDetailPageProps) {
 
         {shareLink ? (
           <Card className="grid gap-2 p-4">
-            <p className="text-sm text-muted-foreground">Share link copied to clipboard:</p>
-            <Input readOnly value={shareLink} data-testid="item-share-link-input" />
+            <p className="text-sm text-muted-foreground">
+              Share link copied to clipboard:
+            </p>
+            <Input
+              readOnly
+              value={shareLink}
+              data-testid="item-share-link-input"
+            />
             <Button
               variant="ghost"
               size="sm"
@@ -246,7 +282,11 @@ export default function ItemDetailPage({ mode }: ItemDetailPageProps) {
           {mode === "edit" ? (
             <>
               <Field label="Name" htmlFor="item-name">
-                <Input id="item-name" value={name} onChange={(e) => setName(e.target.value)} />
+                <Input
+                  id="item-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
               </Field>
               <Field label="Description" htmlFor="item-description">
                 <Textarea
@@ -261,18 +301,31 @@ export default function ItemDetailPage({ mode }: ItemDetailPageProps) {
                 <Button onClick={() => void handleSave()} disabled={isSaving}>
                   {isSaving ? "Saving..." : "Save"}
                 </Button>
-                <Button variant="ghost" onClick={() => navigate(`/world/${worldId}/item/${itemId}/view`)}>
+                <Button
+                  variant="ghost"
+                  onClick={() =>
+                    navigate(`/world/${worldId}/item/${itemId}/view`)
+                  }
+                >
                   Cancel
                 </Button>
               </div>
               {status ? (
-                <StatusBadge variant={status === "Saved." ? "success" : "danger"}>{status}</StatusBadge>
+                <StatusBadge
+                  variant={status === "Saved." ? "success" : "danger"}
+                >
+                  {status}
+                </StatusBadge>
               ) : null}
             </>
           ) : (
             <div className="grid gap-2">
               <p className="text-sm whitespace-pre-wrap">
-                {item.description || <span className="text-muted-foreground italic">No description.</span>}
+                {item.description || (
+                  <span className="text-muted-foreground italic">
+                    No description.
+                  </span>
+                )}
               </p>
             </div>
           )}
@@ -281,10 +334,14 @@ export default function ItemDetailPage({ mode }: ItemDetailPageProps) {
         <ItemEffectEditor
           itemId={itemId}
           effects={item.effects}
-          onChanged={(effects) => setItem((current) => (current ? { ...current, effects } : current))}
+          onChanged={(effects) =>
+            setItem((current) => (current ? { ...current, effects } : current))
+          }
         />
 
-        {isDm && mode === "edit" ? <ItemOwnershipBlock itemId={itemId} worldId={worldId} world={world} /> : null}
+        {isDm && mode === "edit" ? (
+          <ItemOwnershipBlock itemId={itemId} worldId={worldId} world={world} />
+        ) : null}
 
         {/* Spec 013 (T041, US3, FR-016): lore entries that reference this item. */}
         <Card className="grid gap-2 p-4" data-testid="item-lore-linked-from">
@@ -292,7 +349,9 @@ export default function ItemDetailPage({ mode }: ItemDetailPageProps) {
             Linked from (lore)
           </h2>
           {item.linkedFromLore.length === 0 ? (
-            <p className="text-sm text-muted-foreground italic">No lore entries link here yet.</p>
+            <p className="text-sm text-muted-foreground italic">
+              No lore entries link here yet.
+            </p>
           ) : (
             <ul className="grid gap-1">
               {item.linkedFromLore.map((source) => (

@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  offlineEditVerdict,
-  type OfflineEditKind,
-} from "../tokenControl";
+import { offlineEditVerdict, type OfflineEditKind } from "../tokenControl";
 
 /**
  * What may be changed while disconnected (spec 028 FR-035a, T074).
@@ -54,12 +51,17 @@ describe("offlineEditVerdict", () => {
     for (const kind of kinds) {
       const verdict = offlineEditVerdict(kind);
       if (verdict.permitted) {
-        expect(verdict.explanation, `${kind} is allowed and needs no excuse`).toBeUndefined();
+        expect(
+          verdict.explanation,
+          `${kind} is allowed and needs no excuse`,
+        ).toBeUndefined();
         continue;
       }
       expect(verdict.explanation, `${kind} must say why`).toBeTruthy();
-      expect(verdict.explanation!.length, `${kind}'s reason must be a sentence`)
-        .toBeGreaterThan(30);
+      expect(
+        verdict.explanation!.length,
+        `${kind}'s reason must be a sentence`,
+      ).toBeGreaterThan(30);
     }
   });
 

@@ -41,9 +41,7 @@ export function AuthLayout({
         <div className="grid gap-5 md:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)]">
           <div className="min-w-0">{children}</div>
           {aside ? (
-            <aside className="grid min-w-0 content-start gap-4">
-              {aside}
-            </aside>
+            <aside className="grid min-w-0 content-start gap-4">{aside}</aside>
           ) : null}
         </div>
       </Container>

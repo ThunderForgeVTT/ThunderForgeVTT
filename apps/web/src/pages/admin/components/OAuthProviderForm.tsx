@@ -4,7 +4,10 @@ import { Field } from "@/components/ui/field/Field";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { Switch } from "@/components/ui/switch";
-import type { OAuthProviderConfig, UpdateOAuthProviderInput } from "@/types/admin";
+import type {
+  OAuthProviderConfig,
+  UpdateOAuthProviderInput,
+} from "@/types/admin";
 
 interface OAuthProviderFormProps {
   provider: OAuthProviderConfig;
@@ -20,7 +23,9 @@ export function OAuthProviderForm({
 }: OAuthProviderFormProps) {
   const isEnvSourced = provider.configSource === "ENV";
   const [displayName, setDisplayName] = useState(provider.displayName);
-  const [oauthClientId, setOauthClientId] = useState(provider.oauthClientId ?? "");
+  const [oauthClientId, setOauthClientId] = useState(
+    provider.oauthClientId ?? "",
+  );
   const [oauthClientSecret, setOauthClientSecret] = useState("");
   const [userinfoUrl, setUserinfoUrl] = useState(provider.userinfoUrl ?? "");
   const [scopes, setScopes] = useState(provider.scopes.join(" "));
@@ -30,9 +35,7 @@ export function OAuthProviderForm({
 
   const providerSubtitle = useMemo(
     () =>
-      provider.configured
-        ? "Configured provider"
-        : "Awaiting credentials",
+      provider.configured ? "Configured provider" : "Awaiting credentials",
     [provider.configured],
   );
 
@@ -63,7 +66,9 @@ export function OAuthProviderForm({
       setOauthClientSecret("");
       setStatus("Provider configuration updated.");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Failed to update provider.");
+      setStatus(
+        error instanceof Error ? error.message : "Failed to update provider.",
+      );
     } finally {
       setIsSaving(false);
     }
@@ -80,8 +85,8 @@ export function OAuthProviderForm({
               className="mt-1 text-xs text-muted-foreground"
               data-testid={`${provider.id}-env-sourced-indicator`}
             >
-              Configured via environment variable — credentials, URLs, and
-              label are set by the server and can't be edited here. Only
+              Configured via environment variable — credentials, URLs, and label
+              are set by the server and can't be edited here. Only
               enabled/disabled is adjustable.
             </p>
           ) : null}

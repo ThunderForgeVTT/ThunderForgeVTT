@@ -140,21 +140,26 @@ export function StoragePanel() {
         <h2 className="text-lg font-semibold">Offline storage</h2>
         <p className="text-sm text-muted-foreground">
           Worlds you have opened are kept on this machine so they load quickly
-          and keep working when the connection does not. Clearing any of it
-          only affects this browser — nothing on the server changes, and a
-          cleared world loads again the next time you open it.
+          and keep working when the connection does not. Clearing any of it only
+          affects this browser — nothing on the server changes, and a cleared
+          world loads again the next time you open it.
         </p>
       </div>
 
       <p className="text-sm" data-testid="storage-total">
-        <span className="font-medium">{formatBytes(usage?.totalBytes ?? 0)}</span>{" "}
+        <span className="font-medium">
+          {formatBytes(usage?.totalBytes ?? 0)}
+        </span>{" "}
         <span className="text-muted-foreground">
           in use across {rows.length} {rows.length === 1 ? "world" : "worlds"}
         </span>
       </p>
 
       {rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground" data-testid="storage-empty">
+        <p
+          className="text-sm text-muted-foreground"
+          data-testid="storage-empty"
+        >
           Nothing is stored yet. Open a world and it will be kept here.
         </p>
       ) : (
@@ -171,11 +176,16 @@ export function StoragePanel() {
                   {world.name ?? "A world no longer in your list"}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {world.name ? world.worldId : "Cached content you can reclaim"}
+                  {world.name
+                    ? world.worldId
+                    : "Cached content you can reclaim"}
                 </span>
               </span>
               <span className="flex items-center gap-3">
-                <span className="text-sm tabular-nums" data-testid="storage-world-bytes">
+                <span
+                  className="text-sm tabular-nums"
+                  data-testid="storage-world-bytes"
+                >
                   {formatBytes(world.bytes)}
                 </span>
                 <Button
@@ -208,7 +218,11 @@ export function StoragePanel() {
       )}
 
       {note && (
-        <p className="text-sm text-muted-foreground" role="status" data-testid="storage-note">
+        <p
+          className="text-sm text-muted-foreground"
+          role="status"
+          data-testid="storage-note"
+        >
           {note}
         </p>
       )}

@@ -29,6 +29,9 @@ export interface ActorSheetProps {
   canEdit: boolean;
 }
 
-export const SYSTEM_ACTOR_SHEETS: Record<string, ComponentType<ActorSheetProps>> = {
+export const SYSTEM_ACTOR_SHEETS: Record<
+  string,
+  ComponentType<ActorSheetProps>
+> = {
   genie: GenieActorSheet,
 };

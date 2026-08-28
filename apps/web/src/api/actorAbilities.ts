@@ -9,8 +9,6 @@ import type { ActorAbilityEntryRecord } from "@/types/actorAbility";
  *   * flat scalar args → actorAbilities, detachAbilityFromActor
  */
 
-
-
 const ENTRY_FIELDS = `
   id
   actorId
@@ -20,10 +18,11 @@ const ENTRY_FIELDS = `
   gmOnly
 `;
 
-
 /** Requires Viewer on the ACTOR. GM-only abilities are omitted server-side
  * for non-DMs — silently, with no inferable trace (FR-023, FR-024b). */
-export function getActorAbilities(actorId: string): Promise<ActorAbilityEntryRecord[]> {
+export function getActorAbilities(
+  actorId: string,
+): Promise<ActorAbilityEntryRecord[]> {
   return postGraphQL<{ actorAbilities: ActorAbilityEntryRecord[] }>(
     `
       query ActorAbilities($actorId: UUID!) {

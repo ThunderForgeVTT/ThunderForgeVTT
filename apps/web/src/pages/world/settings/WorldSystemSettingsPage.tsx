@@ -48,9 +48,13 @@ export default function WorldSystemSettingsPage() {
   const navigate = useNavigate();
   const [world, setWorld] = useState<WorldRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeManifest, setActiveManifest] = useState<SystemManifest | null>(null);
+  const [activeManifest, setActiveManifest] = useState<SystemManifest | null>(
+    null,
+  );
   const [pendingSystemId, setPendingSystemId] = useState<string | null>(null);
-  const [pendingManifest, setPendingManifest] = useState<SystemManifest | null>(null);
+  const [pendingManifest, setPendingManifest] = useState<SystemManifest | null>(
+    null,
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const { isGm } = useWorldRole(worldId, world);
@@ -66,11 +70,13 @@ export default function WorldSystemSettingsPage() {
         }
         setWorld(worldResult);
         if (worldResult?.gameSystemId) {
-          return getGameSystemManifest(worldResult.gameSystemId).then((manifest) => {
-            if (active) {
-              setActiveManifest(manifest);
-            }
-          });
+          return getGameSystemManifest(worldResult.gameSystemId).then(
+            (manifest) => {
+              if (active) {
+                setActiveManifest(manifest);
+              }
+            },
+          );
         }
         return undefined;
       })
@@ -92,7 +98,9 @@ export default function WorldSystemSettingsPage() {
       const manifest = await getGameSystemManifest(systemId);
       setPendingManifest(manifest);
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to load system manifest");
+      setStatus(
+        err instanceof Error ? err.message : "Failed to load system manifest",
+      );
       setPendingSystemId(null);
     }
   };
@@ -129,7 +137,11 @@ export default function WorldSystemSettingsPage() {
       const updated = await updateWorldGenieResourceCarryover(worldId, enabled);
       setWorld(updated);
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to update resource carryover setting");
+      setStatus(
+        err instanceof Error
+          ? err.message
+          : "Failed to update resource carryover setting",
+      );
     } finally {
       setIsSavingCarryover(false);
     }
@@ -142,7 +154,11 @@ export default function WorldSystemSettingsPage() {
       const updated = await updateWorldDefaultSceneGridType(worldId, gridType);
       setWorld(updated);
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to update default scene grid type");
+      setStatus(
+        err instanceof Error
+          ? err.message
+          : "Failed to update default scene grid type",
+      );
     } finally {
       setIsSavingGridType(false);
     }
@@ -169,145 +185,192 @@ export default function WorldSystemSettingsPage() {
 
   return (
     <>
-      <SEO title={`${world.name} — System settings`} description="World system settings" noindex />
+      <SEO
+        title={`${world.name} — System settings`}
+        description="World system settings"
+        noindex
+      />
       <WorldSectionShell worldId={worldId} isGm={isGm}>
-      <Container className="mx-0 grid w-full max-w-4xl gap-6 py-10">
-        <Button
-          variant="ghost"
-          size="sm"
-          icon="arrow-left"
-          className="justify-self-start"
-          onClick={() => navigate(`/world/${worldId}/staging`)}
-        >
-          Back to Overview
-        </Button>
+        <Container className="mx-0 grid w-full max-w-4xl gap-6 py-10">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon="arrow-left"
+            className="justify-self-start"
+            onClick={() => navigate(`/world/${worldId}/staging`)}
+          >
+            Back to Overview
+          </Button>
 
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-            System settings
-          </p>
-          <h1 className="text-2xl font-semibold">{world.name}</h1>
-        </div>
-
-        <Card className="grid gap-4 p-6" data-testid="active-system-card">
-          <h2 className="text-lg font-semibold">Active system</h2>
-          {activeManifest ? (
-            <div className="grid gap-3">
-              <p className="text-sm">
-                Currently using <strong>{activeManifest.title}</strong>.
-              </p>
-              <SystemLegalNotice legal={activeManifest.legal} variant="settings" />
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground italic">No system assigned yet.</p>
-          )}
-        </Card>
-
-        {isGm ? <CompendiumOverviewSettingsCard worldId={worldId} /> : null}
-
-        {isGm ? (
-          <Card className="grid gap-4 p-6" data-testid="system-picker-card">
-            <h2 className="text-lg font-semibold">System Settings</h2>
-
-            <Field label="Change System" htmlFor="system-picker">
-              <Select value={pendingSystemId ?? undefined} onValueChange={(v) => void handlePickSystem(v)}>
-                <SelectTrigger id="system-picker" aria-label="Change System" data-testid="system-picker">
-                  <SelectValue placeholder="Select a system" />
-                </SelectTrigger>
-                <SelectContent>
-                  {BUNDLED_SYSTEM_IDS.map((systemId) => {
-                    const isImplemented = IMPLEMENTED_SYSTEM_IDS.has(systemId);
-                    return (
-                      <SelectItem key={systemId} value={systemId} disabled={!isImplemented}>
-                        {BUNDLED_SYSTEM_LABELS[systemId] ?? systemId}
-                        {isImplemented ? null : " (TBD)"}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </Field>
-
-            {pendingManifest ? (
-              <div className="grid gap-3" data-testid="pending-system-confirmation">
-                <p className="text-sm text-muted-foreground">
-                  Review the legal notice below, then confirm to assign{" "}
-                  <strong>{pendingManifest.title}</strong> to this world.
-                </p>
-                <SystemLegalNotice legal={pendingManifest.legal} variant="selection" />
-                <div className="flex gap-3">
-                  <Button onClick={() => void handleConfirm()} disabled={isSaving}>
-                    {isSaving ? "Assigning..." : "Confirm"}
-                  </Button>
-                  <Button variant="ghost" onClick={handleCancelPick} disabled={isSaving}>
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-
-            {status ? (
-              <StatusBadge variant={status === "System assigned." ? "success" : "danger"}>
-                {status}
-              </StatusBadge>
-            ) : null}
-
-            <Field
-              label="Default Scene Grid Type"
-              htmlFor="default-scene-grid-type"
-              hint="Applied to every newly created scene unless the GM picks a different grid type at creation time."
-            >
-              <Select
-                value={world.defaultSceneGridType}
-                onValueChange={(v) => void handleChangeDefaultGridType(v)}
-                disabled={isSavingGridType}
-              >
-                <SelectTrigger
-                  id="default-scene-grid-type"
-                  aria-label="Default Scene Grid Type"
-                  data-testid="default-scene-grid-type-picker"
-                >
-                  <SelectValue placeholder="Select a grid type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="gridless">None</SelectItem>
-                  <SelectItem value="square">Squares</SelectItem>
-                  <SelectItem value="hex">Hexagons</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-          </Card>
-        ) : null}
-
-        {isGm && world.gameSystemId === "genie" ? (
-          <Card className="grid gap-3 p-6" data-testid="genie-resource-carryover-card">
-            <h2 className="text-lg font-semibold">Session Resource carryover</h2>
-            <p className="text-sm text-muted-foreground">
-              When enabled, players' Insight/Favor/Essence holdings carry over into the next Genie
-              session instead of resetting to 0 — "the rope doesn't disappear."
+          <div>
+            <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+              System settings
             </p>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={world.genieResourceCarryoverEnabled}
-                disabled={isSavingCarryover}
-                onChange={(event) => void handleToggleCarryover(event.target.checked)}
-                data-testid="genie-resource-carryover-toggle"
-              />
-              Carry over Session Resource holdings between sessions
-            </label>
-          </Card>
-        ) : null}
+            <h1 className="text-2xl font-semibold">{world.name}</h1>
+          </div>
 
-        {!activeManifest && !isGm ? (
-          <p className="text-sm text-muted-foreground">
-            This world's GM hasn't assigned a system yet.{" "}
-            <Link to={`/world/${worldId}/staging`} className="underline underline-offset-2">
-              Back to Overview
-            </Link>
-          </p>
-        ) : null}
-      </Container>
+          <Card className="grid gap-4 p-6" data-testid="active-system-card">
+            <h2 className="text-lg font-semibold">Active system</h2>
+            {activeManifest ? (
+              <div className="grid gap-3">
+                <p className="text-sm">
+                  Currently using <strong>{activeManifest.title}</strong>.
+                </p>
+                <SystemLegalNotice
+                  legal={activeManifest.legal}
+                  variant="settings"
+                />
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground italic">
+                No system assigned yet.
+              </p>
+            )}
+          </Card>
+
+          {isGm ? <CompendiumOverviewSettingsCard worldId={worldId} /> : null}
+
+          {isGm ? (
+            <Card className="grid gap-4 p-6" data-testid="system-picker-card">
+              <h2 className="text-lg font-semibold">System Settings</h2>
+
+              <Field label="Change System" htmlFor="system-picker">
+                <Select
+                  value={pendingSystemId ?? undefined}
+                  onValueChange={(v) => void handlePickSystem(v)}
+                >
+                  <SelectTrigger
+                    id="system-picker"
+                    aria-label="Change System"
+                    data-testid="system-picker"
+                  >
+                    <SelectValue placeholder="Select a system" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BUNDLED_SYSTEM_IDS.map((systemId) => {
+                      const isImplemented =
+                        IMPLEMENTED_SYSTEM_IDS.has(systemId);
+                      return (
+                        <SelectItem
+                          key={systemId}
+                          value={systemId}
+                          disabled={!isImplemented}
+                        >
+                          {BUNDLED_SYSTEM_LABELS[systemId] ?? systemId}
+                          {isImplemented ? null : " (TBD)"}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              {pendingManifest ? (
+                <div
+                  className="grid gap-3"
+                  data-testid="pending-system-confirmation"
+                >
+                  <p className="text-sm text-muted-foreground">
+                    Review the legal notice below, then confirm to assign{" "}
+                    <strong>{pendingManifest.title}</strong> to this world.
+                  </p>
+                  <SystemLegalNotice
+                    legal={pendingManifest.legal}
+                    variant="selection"
+                  />
+                  <div className="flex gap-3">
+                    <Button
+                      onClick={() => void handleConfirm()}
+                      disabled={isSaving}
+                    >
+                      {isSaving ? "Assigning..." : "Confirm"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={handleCancelPick}
+                      disabled={isSaving}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
+              {status ? (
+                <StatusBadge
+                  variant={status === "System assigned." ? "success" : "danger"}
+                >
+                  {status}
+                </StatusBadge>
+              ) : null}
+
+              <Field
+                label="Default Scene Grid Type"
+                htmlFor="default-scene-grid-type"
+                hint="Applied to every newly created scene unless the GM picks a different grid type at creation time."
+              >
+                <Select
+                  value={world.defaultSceneGridType}
+                  onValueChange={(v) => void handleChangeDefaultGridType(v)}
+                  disabled={isSavingGridType}
+                >
+                  <SelectTrigger
+                    id="default-scene-grid-type"
+                    aria-label="Default Scene Grid Type"
+                    data-testid="default-scene-grid-type-picker"
+                  >
+                    <SelectValue placeholder="Select a grid type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gridless">None</SelectItem>
+                    <SelectItem value="square">Squares</SelectItem>
+                    <SelectItem value="hex">Hexagons</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+            </Card>
+          ) : null}
+
+          {isGm && world.gameSystemId === "genie" ? (
+            <Card
+              className="grid gap-3 p-6"
+              data-testid="genie-resource-carryover-card"
+            >
+              <h2 className="text-lg font-semibold">
+                Session Resource carryover
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                When enabled, players' Insight/Favor/Essence holdings carry over
+                into the next Genie session instead of resetting to 0 — "the
+                rope doesn't disappear."
+              </p>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={world.genieResourceCarryoverEnabled}
+                  disabled={isSavingCarryover}
+                  onChange={(event) =>
+                    void handleToggleCarryover(event.target.checked)
+                  }
+                  data-testid="genie-resource-carryover-toggle"
+                />
+                Carry over Session Resource holdings between sessions
+              </label>
+            </Card>
+          ) : null}
+
+          {!activeManifest && !isGm ? (
+            <p className="text-sm text-muted-foreground">
+              This world's GM hasn't assigned a system yet.{" "}
+              <Link
+                to={`/world/${worldId}/staging`}
+                className="underline underline-offset-2"
+              >
+                Back to Overview
+              </Link>
+            </p>
+          ) : null}
+        </Container>
       </WorldSectionShell>
     </>
   );

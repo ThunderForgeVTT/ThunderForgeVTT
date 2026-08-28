@@ -89,8 +89,12 @@ function reduceState(state: WorldState, command: WorldCommand): WorldState {
         ...state,
         tokens: nextTokens,
         selectedTokenId:
-          state.selectedTokenId === command.tokenId ? null : state.selectedTokenId,
-        selectedTokenIds: state.selectedTokenIds.filter((id) => id !== command.tokenId),
+          state.selectedTokenId === command.tokenId
+            ? null
+            : state.selectedTokenId,
+        selectedTokenIds: state.selectedTokenIds.filter(
+          (id) => id !== command.tokenId,
+        ),
       };
     }
 
@@ -154,7 +158,9 @@ function reduceState(state: WorldState, command: WorldCommand): WorldState {
         ...state,
         lights: nextLights,
         selectedLightId:
-          state.selectedLightId === command.lightId ? null : state.selectedLightId,
+          state.selectedLightId === command.lightId
+            ? null
+            : state.selectedLightId,
       };
     }
 
@@ -181,7 +187,9 @@ function reduceState(state: WorldState, command: WorldCommand): WorldState {
         ...state,
         shapes: nextShapes,
         selectedShapeId:
-          state.selectedShapeId === command.shapeId ? null : state.selectedShapeId,
+          state.selectedShapeId === command.shapeId
+            ? null
+            : state.selectedShapeId,
       };
     }
 

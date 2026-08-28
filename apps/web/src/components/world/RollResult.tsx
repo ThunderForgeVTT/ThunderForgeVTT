@@ -33,7 +33,11 @@
  * (FR-052, FR-054).
  */
 
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import type { RollResolutionRecord } from "@/types/roll";
 import { discrepancyFor } from "@/engine/world/sync/discrepancies";
 import { discrepancyToShow } from "./rollDiscrepancy";
@@ -90,7 +94,10 @@ export function RollResult({
   );
 
   return (
-    <p data-testid="roll-result" className="flex flex-wrap items-baseline gap-1.5 text-sm">
+    <p
+      data-testid="roll-result"
+      className="flex flex-wrap items-baseline gap-1.5 text-sm"
+    >
       <span className="text-muted-foreground">{resolution.formula}:</span>
       {discrepancy ? (
         <Popover>
@@ -105,7 +112,9 @@ export function RollResult({
             aria-label={`Result ${resolution.resultValue}. The server determined a different value; open for both.`}
           >
             {total}
-            <span className="text-xs font-normal text-muted-foreground">noted</span>
+            <span className="text-xs font-normal text-muted-foreground">
+              noted
+            </span>
           </PopoverTrigger>
           <PopoverContent
             align="start"
@@ -115,11 +124,17 @@ export function RollResult({
             <p className="font-medium">Two readings of this roll</p>
             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-muted-foreground">
               <dt>Reported{rolledBy ? ` by ${rolledBy}` : ""}</dt>
-              <dd data-testid="roll-discrepancy-claimed" className="text-foreground">
+              <dd
+                data-testid="roll-discrepancy-claimed"
+                className="text-foreground"
+              >
                 {discrepancy.claimedValue}
               </dd>
               <dt>Determined here</dt>
-              <dd data-testid="roll-discrepancy-determined" className="text-foreground">
+              <dd
+                data-testid="roll-discrepancy-determined"
+                className="text-foreground"
+              >
                 {discrepancy.determinedValue}
               </dd>
             </dl>
@@ -129,8 +144,8 @@ export function RollResult({
               not, and it will not (FR-066).
             */}
             <p className="text-muted-foreground">
-              The result stands as rolled. Nothing has been changed or reported, and only you
-              can see this note.
+              The result stands as rolled. Nothing has been changed or reported,
+              and only you can see this note.
             </p>
           </PopoverContent>
         </Popover>

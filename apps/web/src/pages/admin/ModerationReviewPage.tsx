@@ -26,8 +26,12 @@ export const moderationReviewPageSeo: SeoConfig = {
  * full moderation case history behind that flag.
  */
 export default function ModerationReviewPage() {
-  const [flaggedAccountIds, setFlaggedAccountIds] = useState<string[] | null>(null);
-  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  const [flaggedAccountIds, setFlaggedAccountIds] = useState<string[] | null>(
+    null,
+  );
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(
+    null,
+  );
   const [history, setHistory] = useState<ModerationCaseRecord[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,7 +45,11 @@ export default function ModerationReviewPage() {
       })
       .catch((err) => {
         if (active) {
-          setError(err instanceof Error ? err.message : "Failed to load repeat-infringer flags");
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Failed to load repeat-infringer flags",
+          );
         }
       });
     return () => {
@@ -56,7 +64,9 @@ export default function ModerationReviewPage() {
       const cases = await getModerationHistoryForAccount(accountId);
       setHistory(cases);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load case history");
+      setError(
+        err instanceof Error ? err.message : "Failed to load case history",
+      );
     }
   };
 
@@ -89,13 +99,22 @@ export default function ModerationReviewPage() {
           {flaggedAccountIds === null ? (
             <Loader label="Loading flags" />
           ) : flaggedAccountIds.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No accounts currently flagged.</p>
+            <p className="text-sm text-muted-foreground">
+              No accounts currently flagged.
+            </p>
           ) : (
             <ul className="grid gap-2">
               {flaggedAccountIds.map((accountId) => (
-                <li key={accountId} className="flex items-center justify-between gap-3">
+                <li
+                  key={accountId}
+                  className="flex items-center justify-between gap-3"
+                >
                   <code className="text-sm">{accountId}</code>
-                  <Button variant="secondary" size="sm" onClick={() => void loadHistory(accountId)}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => void loadHistory(accountId)}
+                  >
                     View history
                   </Button>
                 </li>
@@ -106,28 +125,40 @@ export default function ModerationReviewPage() {
 
         {selectedAccountId ? (
           <Card className="grid gap-3 p-6">
-            <h2 className="text-lg font-semibold">Case history — {selectedAccountId}</h2>
+            <h2 className="text-lg font-semibold">
+              Case history — {selectedAccountId}
+            </h2>
             {history === null ? (
               <Loader label="Loading case history" />
             ) : history.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No cases found for this account.</p>
+              <p className="text-sm text-muted-foreground">
+                No cases found for this account.
+              </p>
             ) : (
               <ul className="grid gap-3">
                 {history.map((moderationCase) => (
-                  <li key={moderationCase.caseId} className="grid gap-1 border-b pb-3 last:border-0">
+                  <li
+                    key={moderationCase.caseId}
+                    className="grid gap-1 border-b pb-3 last:border-0"
+                  >
                     <div className="flex items-center justify-between gap-3">
                       <code className="text-sm">{moderationCase.caseId}</code>
-                      <StatusBadge variant="warning">{moderationCase.currentStatus}</StatusBadge>
+                      <StatusBadge variant="warning">
+                        {moderationCase.currentStatus}
+                      </StatusBadge>
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {moderationCase.entityType} · {moderationCase.entityId}
                     </p>
-                    {moderationCase.currentStatus === "COUNTER_NOTICE_FORWARDED" ? (
+                    {moderationCase.currentStatus ===
+                    "COUNTER_NOTICE_FORWARDED" ? (
                       <Button
                         variant="danger"
                         size="sm"
                         className="justify-self-start"
-                        onClick={() => void handleResolve(moderationCase.caseId)}
+                        onClick={() =>
+                          void handleResolve(moderationCase.caseId)
+                        }
                       >
                         Block restoration (content remains disabled)
                       </Button>

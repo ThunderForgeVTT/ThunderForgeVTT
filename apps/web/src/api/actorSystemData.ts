@@ -46,10 +46,9 @@ const ACTOR_SYSTEM_DATA_QUERY = `
 export async function fetchActorSystemData(
   actorId: string,
 ): Promise<ActorSystemDataRecord | null> {
-  const data = await postGraphQL<{ actorSystemData: ActorSystemDataRecord | null }>(
-    ACTOR_SYSTEM_DATA_QUERY,
-    { actorId },
-  );
+  const data = await postGraphQL<{
+    actorSystemData: ActorSystemDataRecord | null;
+  }>(ACTOR_SYSTEM_DATA_QUERY, { actorId });
   return data.actorSystemData;
 }
 
@@ -85,9 +84,10 @@ export async function updateActorSystemData(
   dataType: ActorSystemDataType,
   data: Record<string, unknown>,
 ): Promise<ActorSystemDataRecord> {
-  const result = await postGraphQL<{ updateActorSystemData: ActorSystemDataRecord }>(
-    UPDATE_ACTOR_SYSTEM_DATA_MUTATION,
-    { input: { actorId, gameSystemId, dataType, data } },
-  );
+  const result = await postGraphQL<{
+    updateActorSystemData: ActorSystemDataRecord;
+  }>(UPDATE_ACTOR_SYSTEM_DATA_MUTATION, {
+    input: { actorId, gameSystemId, dataType, data },
+  });
   return result.updateActorSystemData;
 }

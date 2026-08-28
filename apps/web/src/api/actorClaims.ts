@@ -49,7 +49,9 @@ type MyActorClaimQuery = {
  * gated) or a non-GM member with no claim yet; otherwise the claimed
  * character. Drives the Actor Selection routing gate.
  */
-export function getMyActorClaim(worldId: string): Promise<ActorClaimRecord | null> {
+export function getMyActorClaim(
+  worldId: string,
+): Promise<ActorClaimRecord | null> {
   return postGraphQL<MyActorClaimQuery>(
     `
       query MyActorClaim($worldId: UUID!) {
@@ -67,7 +69,9 @@ type AvailableActorsQuery = {
 };
 
 /** Spec 017 (FR-005): PC-classified, flagged, and currently unclaimed. */
-export function getAvailableActors(worldId: string): Promise<WorldActorRecord[]> {
+export function getAvailableActors(
+  worldId: string,
+): Promise<WorldActorRecord[]> {
   return postGraphQL<AvailableActorsQuery>(
     `
       query AvailableActors($worldId: UUID!) {
@@ -85,7 +89,10 @@ type ClaimActorMutation = {
 };
 
 /** Spec 017 (FR-006): atomic — a lost race surfaces a specific error. */
-export function claimActor(worldId: string, actorId: string): Promise<ActorClaimRecord> {
+export function claimActor(
+  worldId: string,
+  actorId: string,
+): Promise<ActorClaimRecord> {
   return postGraphQL<ClaimActorMutation>(
     `
       mutation ClaimActor($worldId: UUID!, $actorId: UUID!) {

@@ -60,7 +60,9 @@ export function AbilityEffectEditor({
   const [draftType, setDraftType] = useState<AbilityEffectType>("MODIFIER");
   const [draftFormula, setDraftFormula] = useState("");
   const [draftTarget, setDraftTarget] = useState("");
-  const [draftTrigger, setDraftTrigger] = useState<"" | AbilityEffectTrigger>("");
+  const [draftTrigger, setDraftTrigger] = useState<"" | AbilityEffectTrigger>(
+    "",
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingEffectId, setPendingEffectId] = useState<string | null>(null);
@@ -99,7 +101,10 @@ export function AbilityEffectEditor({
         effectType: patch.effectType ?? effect.effectType,
         formula: patch.formula ?? effect.formula,
         target: patch.target ?? effect.target,
-        triggerKind: patch.triggerKind !== undefined ? patch.triggerKind : effect.triggerKind,
+        triggerKind:
+          patch.triggerKind !== undefined
+            ? patch.triggerKind
+            : effect.triggerKind,
         sortOrder: effect.sortOrder,
       });
       onChanged(effects.map((e) => (e.id === updated.id ? updated : e)));
@@ -166,7 +171,9 @@ export function AbilityEffectEditor({
                     aria-label="Formula"
                     onBlur={(event) => {
                       if (event.target.value !== effect.formula) {
-                        void handleUpdateField(effect, { formula: event.target.value });
+                        void handleUpdateField(effect, {
+                          formula: event.target.value,
+                        });
                       }
                     }}
                   />
@@ -176,7 +183,9 @@ export function AbilityEffectEditor({
                     aria-label="Target"
                     onBlur={(event) => {
                       if (event.target.value !== effect.target) {
-                        void handleUpdateField(effect, { target: event.target.value });
+                        void handleUpdateField(effect, {
+                          target: event.target.value,
+                        });
                       }
                     }}
                   />
@@ -187,7 +196,8 @@ export function AbilityEffectEditor({
                     aria-label="Trigger"
                     onChange={(event) =>
                       void handleUpdateField(effect, {
-                        triggerKind: (event.target.value || null) as AbilityEffectTrigger | null,
+                        triggerKind: (event.target.value ||
+                          null) as AbilityEffectTrigger | null,
                       })
                     }
                   >
@@ -210,8 +220,9 @@ export function AbilityEffectEditor({
               ) : (
                 <span className="col-span-full text-sm text-muted-foreground">
                   <span className="font-medium text-foreground">
-                    {EFFECT_TYPE_OPTIONS.find((o) => o.value === effect.effectType)?.label ??
-                      effect.effectType}
+                    {EFFECT_TYPE_OPTIONS.find(
+                      (o) => o.value === effect.effectType,
+                    )?.label ?? effect.effectType}
                   </span>{" "}
                   — {effect.formula} → {effect.target}
                 </span>
@@ -226,7 +237,9 @@ export function AbilityEffectEditor({
           <select
             className="rounded-md border border-border bg-background px-2 py-1 text-sm"
             value={draftType}
-            onChange={(event) => setDraftType(event.target.value as AbilityEffectType)}
+            onChange={(event) =>
+              setDraftType(event.target.value as AbilityEffectType)
+            }
             disabled={isSaving}
             aria-label="New effect type"
           >

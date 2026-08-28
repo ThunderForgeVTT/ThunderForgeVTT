@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
-import { deleteAbility, getAbility, setAbilityGmOnly, updateAbility } from "@/api/abilities";
-import { createAbilityShareLink, revokeAbilityShareLink } from "@/api/abilityShares";
+import {
+  deleteAbility,
+  getAbility,
+  setAbilityGmOnly,
+  updateAbility,
+} from "@/api/abilities";
+import {
+  createAbilityShareLink,
+  revokeAbilityShareLink,
+} from "@/api/abilityShares";
 import { getGameSystemManifest } from "@/api/gameSystems";
 import { getWorld } from "@/api/world";
 import { SEO } from "@/components/seo/SEO";
@@ -17,7 +25,10 @@ import { ModeratedContentBanner } from "@/components/world/ModeratedContentBanne
 import { useWorldRole } from "@/hooks/useWorldRole";
 import { AbilityEffectEditor } from "@/pages/world/ability/AbilityEffectEditor";
 import { AbilityOwnershipBlock } from "@/pages/world/ability/AbilityOwnershipBlock";
-import type { AbilityClassification, WorldAbilityRecord } from "@/types/ability";
+import type {
+  AbilityClassification,
+  WorldAbilityRecord,
+} from "@/types/ability";
 import type { WorldRecord } from "@/types/world";
 import {
   ABILITY_CLASSIFICATION_KEYS,
@@ -55,12 +66,15 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [classification, setClassification] = useState<AbilityClassification>("SPELL");
+  const [classification, setClassification] =
+    useState<AbilityClassification>("SPELL");
   const [status, setStatus] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isTogglingVisibility, setIsTogglingVisibility] = useState(false);
-  const [facets, setFacets] = useState<AbilityFacetsLookup | undefined>(undefined);
+  const [facets, setFacets] = useState<AbilityFacetsLookup | undefined>(
+    undefined,
+  );
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [shareLinkId, setShareLinkId] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState(false);
@@ -87,7 +101,9 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
         if (active) {
           // FR-025: a GM-only ability errors identically to a nonexistent one,
           // so this message must not try to distinguish them.
-          setLoadError(err instanceof Error ? err.message : "Failed to load ability");
+          setLoadError(
+            err instanceof Error ? err.message : "Failed to load ability",
+          );
         }
       })
       .finally(() => {
@@ -134,12 +150,15 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
         <Card className="grid gap-3 p-6" data-testid="ability-not-found">
           <h1 className="text-lg font-semibold">Ability not found</h1>
           <p className="text-sm text-muted-foreground">
-            {loadError ?? "This ability does not exist, or you do not have access to it."}
+            {loadError ??
+              "This ability does not exist, or you do not have access to it."}
           </p>
           <Button
             variant="secondary"
             className="justify-self-start"
-            onClick={() => navigate(`/world/${worldId}/compendium?tab=abilities`)}
+            onClick={() =>
+              navigate(`/world/${worldId}/compendium?tab=abilities`)
+            }
           >
             Back to Compendium
           </Button>
@@ -152,7 +171,9 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
 
   // Client-side convenience only — the server re-enforces on every mutation.
   if (mode === "edit" && !canEdit) {
-    return <Navigate to={`/world/${worldId}/ability/${abilityId}/view`} replace />;
+    return (
+      <Navigate to={`/world/${worldId}/ability/${abilityId}/view`} replace />
+    );
   }
 
   if (ability.moderated) {
@@ -200,7 +221,9 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
       await deleteAbility(abilityId);
       navigate(`/world/${worldId}/compendium?tab=abilities`);
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to delete ability");
+      setStatus(
+        err instanceof Error ? err.message : "Failed to delete ability",
+      );
       setIsDeleting(false);
     }
   };
@@ -215,7 +238,9 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
       setShareLinkId(link.id);
       await navigator.clipboard.writeText(url).catch(() => {});
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to create share link");
+      setStatus(
+        err instanceof Error ? err.message : "Failed to create share link",
+      );
     } finally {
       setIsSharing(false);
     }
@@ -233,7 +258,9 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
       setShareLinkId(null);
       setStatus("Share link revoked.");
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to revoke share link");
+      setStatus(
+        err instanceof Error ? err.message : "Failed to revoke share link",
+      );
     } finally {
       setIsSharing(false);
     }
@@ -245,9 +272,13 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
     try {
       const updated = await setAbilityGmOnly(abilityId, !ability.gmOnly);
       setAbility(updated);
-      setStatus(updated.gmOnly ? "Hidden from players." : "Visible to players.");
+      setStatus(
+        updated.gmOnly ? "Hidden from players." : "Visible to players.",
+      );
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to change visibility");
+      setStatus(
+        err instanceof Error ? err.message : "Failed to change visibility",
+      );
     } finally {
       setIsTogglingVisibility(false);
     }
@@ -293,7 +324,9 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
             {canEdit && mode === "view" ? (
               <Button
                 variant="secondary"
-                onClick={() => navigate(`/world/${worldId}/ability/${abilityId}/edit`)}
+                onClick={() =>
+                  navigate(`/world/${worldId}/ability/${abilityId}/edit`)
+                }
                 data-testid="ability-edit-button"
               >
                 Edit
@@ -342,10 +375,15 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
               Share link
             </p>
             <p className="text-xs text-muted-foreground">
-              Anyone with this link can view the ability and copy it into a world they run. It
-              is not listed or discoverable anywhere — revoke it to stop it working.
+              Anyone with this link can view the ability and copy it into a
+              world they run. It is not listed or discoverable anywhere — revoke
+              it to stop it working.
             </p>
-            <Input readOnly value={shareLink} data-testid="ability-share-link-input" />
+            <Input
+              readOnly
+              value={shareLink}
+              data-testid="ability-share-link-input"
+            />
             <Button
               variant="ghost"
               size="sm"
@@ -377,7 +415,9 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
                   className="w-full rounded-md border border-border bg-background px-2 py-2 text-sm"
                   value={classification}
                   onChange={(event) =>
-                    setClassification(event.target.value as AbilityClassification)
+                    setClassification(
+                      event.target.value as AbilityClassification,
+                    )
                   }
                   disabled={isSaving}
                   data-testid="ability-classification-select"
@@ -409,7 +449,9 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
                 </Button>
                 <Button
                   variant="ghost"
-                  onClick={() => navigate(`/world/${worldId}/ability/${abilityId}/view`)}
+                  onClick={() =>
+                    navigate(`/world/${worldId}/ability/${abilityId}/view`)
+                  }
                   disabled={isSaving}
                 >
                   Cancel
@@ -419,9 +461,14 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
             </>
           ) : (
             <>
-              <p className="text-sm whitespace-pre-wrap" data-testid="ability-description">
+              <p
+                className="text-sm whitespace-pre-wrap"
+                data-testid="ability-description"
+              >
                 {ability.description || (
-                  <span className="text-muted-foreground italic">No description.</span>
+                  <span className="text-muted-foreground italic">
+                    No description.
+                  </span>
                 )}
               </p>
               {status ? <StatusBadge>{status}</StatusBadge> : null}
@@ -432,11 +479,18 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
         {/* FR-026: DM-only, and edit-mode only — mirrors ItemDetailPage. The
             server rejects a non-DM regardless of this gate. */}
         {isDm && mode === "edit" ? (
-          <AbilityOwnershipBlock abilityId={abilityId} worldId={worldId} world={world} />
+          <AbilityOwnershipBlock
+            abilityId={abilityId}
+            worldId={worldId}
+            world={world}
+          />
         ) : null}
 
         {ability.linkedFromLore.length > 0 ? (
-          <Card className="grid gap-2 p-5" data-testid="ability-lore-linked-from">
+          <Card
+            className="grid gap-2 p-5"
+            data-testid="ability-lore-linked-from"
+          >
             <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
               Linked from (lore)
             </p>

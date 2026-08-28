@@ -116,7 +116,11 @@ export function ItemCompendiumTab({
   }, [worldId, newItemName, isGm]);
 
   if (error) {
-    return <p className="text-sm text-destructive">Failed to load items: {error.message}</p>;
+    return (
+      <p className="text-sm text-destructive">
+        Failed to load items: {error.message}
+      </p>
+    );
   }
 
   if (items === null) {
@@ -162,16 +166,35 @@ export function ItemCompendiumTab({
                 >
                   <td className="p-2 font-medium">{item.name}</td>
                   <td className="max-w-xs truncate p-2 text-muted-foreground">
-                    {item.description || <span className="italic">No description</span>}
+                    {item.description || (
+                      <span className="italic">No description</span>
+                    )}
                   </td>
                   <td className="p-2">
-                    <div className="flex gap-2" onClick={(event) => event.stopPropagation()}>
-                      <Button asChild variant="ghost" size="sm" data-testid={`item-catalog-view-${item.id}`}>
-                        <Link to={`/world/${worldId}/item/${item.id}/view`}>View</Link>
+                    <div
+                      className="flex gap-2"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <Button
+                        asChild
+                        variant="ghost"
+                        size="sm"
+                        data-testid={`item-catalog-view-${item.id}`}
+                      >
+                        <Link to={`/world/${worldId}/item/${item.id}/view`}>
+                          View
+                        </Link>
                       </Button>
                       {item.myPermissionLevel !== "VIEWER" ? (
-                        <Button asChild variant="ghost" size="sm" data-testid={`item-catalog-edit-${item.id}`}>
-                          <Link to={`/world/${worldId}/item/${item.id}/edit`}>Edit</Link>
+                        <Button
+                          asChild
+                          variant="ghost"
+                          size="sm"
+                          data-testid={`item-catalog-edit-${item.id}`}
+                        >
+                          <Link to={`/world/${worldId}/item/${item.id}/edit`}>
+                            Edit
+                          </Link>
                         </Button>
                       ) : null}
                     </div>
@@ -212,9 +235,13 @@ export function ItemCompendiumTab({
             </Button>
           </div>
           {suggestion ? (
-            <p className="text-xs text-muted-foreground" data-testid="item-name-suggestion">
-              Did you mean <span className="font-medium">{suggestion.name}</span>? Names can be
-              reused if that's intentional.
+            <p
+              className="text-xs text-muted-foreground"
+              data-testid="item-name-suggestion"
+            >
+              Did you mean{" "}
+              <span className="font-medium">{suggestion.name}</span>? Names can
+              be reused if that's intentional.
             </p>
           ) : null}
         </div>

@@ -80,12 +80,7 @@ export default function App() {
       <SEO
         title="ThunderForge VTT"
         description="Persistent worlds, secure first-run setup, and collaborative tabletop play in a fast React and Bevy experience."
-        keywords={[
-          "virtual tabletop",
-          "React Vite",
-          "Bevy",
-          "ThunderForge",
-        ]}
+        keywords={["virtual tabletop", "React Vite", "Bevy", "ThunderForge"]}
         prefetchHrefs={
           setupStatus.setup_required ? ["/setup"] : ["/login", "/signup"]
         }

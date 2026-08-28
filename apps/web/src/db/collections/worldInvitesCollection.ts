@@ -83,7 +83,8 @@ export function computeInviteDerivedData(invite: WorldInviteDoc): {
   is_valid: boolean;
 } {
   const remaining =
-    invite.remaining_uses ?? (invite.max_uses > 0 ? invite.max_uses - invite.used_count : null);
+    invite.remaining_uses ??
+    (invite.max_uses > 0 ? invite.max_uses - invite.used_count : null);
 
   const status =
     invite.state === "ACTIVE"

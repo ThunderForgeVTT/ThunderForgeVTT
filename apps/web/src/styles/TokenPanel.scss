@@ -20,10 +20,12 @@
 }
 
 .token-panel-content {
-  background: linear-gradient(135deg, #F5E6D3 0%, #F5F1E8 100%);
-  border: 2px solid #8B4513;
+  background: linear-gradient(135deg, #f5e6d3 0%, #f5f1e8 100%);
+  border: 2px solid #8b4513;
   border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
   padding: 24px;
   max-width: 500px;
   width: 90vw;
@@ -38,32 +40,34 @@
 
   &:focus {
     outline: none;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.3),
-      0 0 0 3px #D4AF37;
+    box-shadow:
+      0 8px 24px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3),
+      0 0 0 3px #d4af37;
   }
 }
 
 .token-panel-title {
-  color: #3E2723;
+  color: #3e2723;
   font-size: 24px;
   font-weight: 700;
   margin: 0 0 8px 0;
-  font-family: 'Georgia', serif;
+  font-family: "Georgia", serif;
   text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.5);
 }
 
 .token-panel-description {
-  color: #5D4E37;
+  color: #5d4e37;
   font-size: 14px;
   margin: 0 0 16px 0;
   font-style: italic;
 }
 
 .token-panel-error {
-  background-color: #FFE5E5;
-  border: 1px solid #C85A5A;
+  background-color: #ffe5e5;
+  border: 1px solid #c85a5a;
   border-radius: 4px;
-  color: #8B0000;
+  color: #8b0000;
   padding: 12px;
   margin-bottom: 16px;
   font-size: 13px;
@@ -76,7 +80,7 @@
   background: none;
   border: none;
   font-size: 24px;
-  color: #8B4513;
+  color: #8b4513;
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
@@ -84,7 +88,7 @@
 
   &:hover {
     background-color: rgba(139, 69, 19, 0.1);
-    color: #3E2723;
+    color: #3e2723;
   }
 
   &:active {
@@ -103,12 +107,12 @@
   padding: 8px;
   background-color: rgba(255, 255, 255, 0.4);
   border-radius: 4px;
-  border: 1px solid #D4AF37;
+  border: 1px solid #d4af37;
 }
 
 .token-list-empty {
   text-align: center;
-  color: #8B4513;
+  color: #8b4513;
   padding: 20px;
   font-style: italic;
   font-size: 14px;
@@ -119,15 +123,15 @@
   align-items: center;
   gap: 12px;
   padding: 12px;
-  background-color: #F5E6D3;
-  border: 1px solid #A89968;
+  background-color: #f5e6d3;
+  border: 1px solid #a89968;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    background-color: #FFFAEE;
-    border-color: #D4AF37;
+    background-color: #fffaee;
+    border-color: #d4af37;
     box-shadow: 0 2px 8px rgba(212, 175, 55, 0.2);
     transform: translateX(4px);
   }
@@ -141,7 +145,7 @@
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  border: 2px solid #8B4513;
+  border: 2px solid #8b4513;
   background-color: #fff;
   flex-shrink: 0;
   object-fit: cover;
@@ -156,7 +160,7 @@
 
 .token-label {
   font-weight: 600;
-  color: #3E2723;
+  color: #3e2723;
   font-size: 14px;
 }
 
@@ -169,8 +173,8 @@
 .health-bar-container {
   width: 100px;
   height: 8px;
-  background-color: #E8D5C4;
-  border: 1px solid #8B4513;
+  background-color: #e8d5c4;
+  border: 1px solid #8b4513;
   border-radius: 2px;
   overflow: hidden;
   position: relative;
@@ -178,21 +182,21 @@
 
 .health-bar {
   height: 100%;
-  background: linear-gradient(90deg, #C85A5A 0%, #E85A5A 100%);
+  background: linear-gradient(90deg, #c85a5a 0%, #e85a5a 100%);
   transition: width 0.3s ease;
   box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.2);
 }
 
 .health-text {
   font-size: 11px;
-  color: #5D4E37;
+  color: #5d4e37;
   font-weight: 600;
 }
 
 // ========== Token Popover (Details) ==========
 .token-popover-content {
-  background: linear-gradient(135deg, #FFFAEE 0%, #F5E6D3 100%);
-  border: 2px solid #8B4513;
+  background: linear-gradient(135deg, #fffaee 0%, #f5e6d3 100%);
+  border: 2px solid #8b4513;
   border-radius: 6px;
   padding: 16px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
@@ -207,29 +211,29 @@
 
   h4 {
     margin: 0;
-    color: #3E2723;
+    color: #3e2723;
     font-size: 16px;
   }
 }
 
 .token-position {
   background-color: rgba(212, 175, 55, 0.1);
-  border-left: 3px solid #D4AF37;
+  border-left: 3px solid #d4af37;
   padding: 8px;
   border-radius: 3px;
 
   p {
     margin: 4px 0;
-    color: #5D4E37;
+    color: #5d4e37;
     font-size: 12px;
-    font-family: 'Courier New', monospace;
+    font-family: "Courier New", monospace;
   }
 }
 
 .token-delete-button {
-  background-color: #C85A5A;
+  background-color: #c85a5a;
   color: #fff;
-  border: 1px solid #8B0000;
+  border: 1px solid #8b0000;
   border-radius: 4px;
   padding: 8px 12px;
   font-size: 13px;
@@ -238,7 +242,7 @@
   transition: all 0.2s ease;
 
   &:hover:not(:disabled) {
-    background-color: #E85A5A;
+    background-color: #e85a5a;
     box-shadow: 0 2px 6px rgba(139, 0, 0, 0.3);
   }
 
@@ -256,25 +260,31 @@
 .token-create-button {
   width: 100%;
   padding: 12px;
-  background: linear-gradient(135deg, #D4AF37 0%, #C99A37 100%);
-  color: #3E2723;
-  border: 1px solid #8B4513;
+  background: linear-gradient(135deg, #d4af37 0%, #c99a37 100%);
+  color: #3e2723;
+  border: 1px solid #8b4513;
   border-radius: 6px;
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 6px rgba(212, 175, 55, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  box-shadow:
+    0 2px 6px rgba(212, 175, 55, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
 
   &:hover:not(:disabled) {
-    background: linear-gradient(135deg, #E8C547 0%, #DDB943 100%);
-    box-shadow: 0 4px 12px rgba(212, 175, 55, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    background: linear-gradient(135deg, #e8c547 0%, #ddb943 100%);
+    box-shadow:
+      0 4px 12px rgba(212, 175, 55, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
     transform: translateY(-2px);
   }
 
   &:active:not(:disabled) {
     transform: translateY(0);
-    box-shadow: 0 2px 4px rgba(212, 175, 55, 0.3), inset 0 1px 2px rgba(0, 0, 0, 0.1);
+    box-shadow:
+      0 2px 4px rgba(212, 175, 55, 0.3),
+      inset 0 1px 2px rgba(0, 0, 0, 0.1);
   }
 
   &:disabled {
@@ -285,10 +295,12 @@
 
 // ========== Create Dialog ==========
 .token-create-dialog {
-  background: linear-gradient(135deg, #F5E6D3 0%, #F5F1E8 100%);
-  border: 2px solid #8B4513;
+  background: linear-gradient(135deg, #f5e6d3 0%, #f5f1e8 100%);
+  border: 2px solid #8b4513;
   border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
   padding: 24px;
   max-width: 400px;
   width: 90vw;
@@ -299,9 +311,13 @@
   // Spec 009: above WorldLayout's right-docked sidebar (z-[1050]).
   z-index: 1060;
 
-  h1, h2, h3, h4, h5 {
-    color: #3E2723;
-    font-family: 'Georgia', serif;
+  h1,
+  h2,
+  h3,
+  h4,
+  h5 {
+    color: #3e2723;
+    font-family: "Georgia", serif;
     margin-top: 0;
   }
 }
@@ -319,29 +335,29 @@
   gap: 6px;
 
   label {
-    color: #3E2723;
+    color: #3e2723;
     font-size: 13px;
     font-weight: 600;
   }
 
   input {
     padding: 8px 10px;
-    border: 1px solid #A89968;
+    border: 1px solid #a89968;
     border-radius: 4px;
-    background-color: #FFFAEE;
-    color: #3E2723;
+    background-color: #fffaee;
+    color: #3e2723;
     font-size: 13px;
     transition: all 0.2s ease;
 
     &:focus {
       outline: none;
-      border-color: #D4AF37;
+      border-color: #d4af37;
       box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.1);
       background-color: #fff;
     }
 
     &::placeholder {
-      color: #A89968;
+      color: #a89968;
     }
   }
 }
@@ -365,12 +381,12 @@
 }
 
 .button-cancel {
-  background-color: #E8D5C4;
-  color: #3E2723;
-  border-color: #A89968;
+  background-color: #e8d5c4;
+  color: #3e2723;
+  border-color: #a89968;
 
   &:hover:not(:disabled) {
-    background-color: #D8C5B4;
+    background-color: #d8c5b4;
   }
 
   &:active:not(:disabled) {
@@ -383,13 +399,13 @@
 }
 
 .button-create {
-  background: linear-gradient(135deg, #D4AF37 0%, #C99A37 100%);
-  color: #3E2723;
-  border-color: #8B4513;
+  background: linear-gradient(135deg, #d4af37 0%, #c99a37 100%);
+  color: #3e2723;
+  border-color: #8b4513;
   box-shadow: 0 2px 6px rgba(212, 175, 55, 0.3);
 
   &:hover:not(:disabled) {
-    background: linear-gradient(135deg, #E8C547 0%, #DDB943 100%);
+    background: linear-gradient(135deg, #e8c547 0%, #ddb943 100%);
     box-shadow: 0 4px 10px rgba(212, 175, 55, 0.4);
   }
 
@@ -427,10 +443,10 @@
 
 .token-list::-webkit-scrollbar-thumb,
 .token-panel-content::-webkit-scrollbar-thumb {
-  background: #D4AF37;
+  background: #d4af37;
   border-radius: 3px;
 
   &:hover {
-    background: #C99A37;
+    background: #c99a37;
   }
 }

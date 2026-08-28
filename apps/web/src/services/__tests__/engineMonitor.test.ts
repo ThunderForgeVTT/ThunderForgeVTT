@@ -88,7 +88,9 @@ describe("the performance readout setting", () => {
   it("tells every subscriber, and stops once unsubscribed", async () => {
     const { setEngineMonitorVisible, subscribeToEngineMonitor } = await load();
     const seen: boolean[] = [];
-    const unsubscribe = subscribeToEngineMonitor((visible) => seen.push(visible));
+    const unsubscribe = subscribeToEngineMonitor((visible) =>
+      seen.push(visible),
+    );
 
     // Subscribing reports the current value at once, so a caller does not
     // have to render a wrong state until the first change.
@@ -108,6 +110,8 @@ describe("the performance readout setting", () => {
     subscribeToEngineMonitor((visible) => seen.push(visible));
 
     setEngineMonitorVisible(false);
-    expect(seen, "a no-op write must not wake every subscriber").toEqual([false]);
+    expect(seen, "a no-op write must not wake every subscriber").toEqual([
+      false,
+    ]);
   });
 });

@@ -102,7 +102,9 @@ export default function JoinWorldPage() {
             world: null,
             alreadyMember: false,
             status:
-              error instanceof Error ? error.message : "Failed to load campaign.",
+              error instanceof Error
+                ? error.message
+                : "Failed to load campaign.",
             isLoading: false,
           });
         }

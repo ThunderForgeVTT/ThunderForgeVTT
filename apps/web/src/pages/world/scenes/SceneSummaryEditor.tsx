@@ -17,7 +17,11 @@ export interface SceneSummaryEditorProps {
  * have no use for (a scene's map image is set via dd2vtt import, not
  * pasted into its summary).
  */
-export function SceneSummaryEditor({ value, onChange, disabled }: SceneSummaryEditorProps) {
+export function SceneSummaryEditor({
+  value,
+  onChange,
+  disabled,
+}: SceneSummaryEditorProps) {
   const { theme } = useTheme();
 
   return (
@@ -28,7 +32,11 @@ export function SceneSummaryEditor({ value, onChange, disabled }: SceneSummaryEd
         extensions={[markdown()]}
         theme={theme}
         editable={!disabled}
-        basicSetup={{ lineNumbers: true, foldGutter: true, closeBrackets: false }}
+        basicSetup={{
+          lineNumbers: true,
+          foldGutter: true,
+          closeBrackets: false,
+        }}
         placeholder="Write this scene's summary using Markdown — what it is, what to expect, anything the table should know."
       />
     </div>

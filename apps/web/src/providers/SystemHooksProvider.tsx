@@ -5,8 +5,8 @@
  * and makes hooks available to child components via React context.
  */
 
-import React, { createContext, useEffect, useState, ReactNode } from 'react';
-import { SystemHooksContract } from '../hooks/useSystemHooks';
+import React, { createContext, useEffect, useState, ReactNode } from "react";
+import { SystemHooksContract } from "../hooks/useSystemHooks";
 
 /**
  * System context value
@@ -22,7 +22,9 @@ export interface SystemContextValue {
 /**
  * Create the hooks context
  */
-export const SystemHooksContext = createContext<SystemContextValue | undefined>(undefined);
+export const SystemHooksContext = createContext<SystemContextValue | undefined>(
+  undefined,
+);
 
 interface SystemHooksProviderProps {
   worldId: string;
@@ -67,10 +69,10 @@ export const SystemHooksProvider: React.FC<SystemHooksProviderProps> = ({
       // 2. Load CSS files
       if (manifest.styles && Array.isArray(manifest.styles)) {
         for (const stylePath of manifest.styles) {
-          const link = document.createElement('link');
-          link.rel = 'stylesheet';
+          const link = document.createElement("link");
+          link.rel = "stylesheet";
           link.href = `/api/systems/${systemId}/${stylePath}`;
-          link.id = `system-style-${systemId}-${stylePath.replace(/\//g, '-')}`;
+          link.id = `system-style-${systemId}-${stylePath.replace(/\//g, "-")}`;
           document.head.appendChild(link);
         }
       }
@@ -95,10 +97,7 @@ export const SystemHooksProvider: React.FC<SystemHooksProviderProps> = ({
               Object.assign(loadedHooks, module);
             }
           } catch (err) {
-            console.warn(
-              `Failed to load system module ${modulePath}:`,
-              err,
-            );
+            console.warn(`Failed to load system module ${modulePath}:`, err);
             // Don't fail entire provider if one module fails
             // Just skip it and continue with other modules
           }
@@ -107,9 +106,10 @@ export const SystemHooksProvider: React.FC<SystemHooksProviderProps> = ({
 
       setHooks(loadedHooks);
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Unknown error loading system';
+      const errorMsg =
+        err instanceof Error ? err.message : "Unknown error loading system";
       setError(errorMsg);
-      console.error('Error loading system modules:', err);
+      console.error("Error loading system modules:", err);
       setHooks({});
     } finally {
       setLoading(false);
@@ -125,7 +125,9 @@ export const SystemHooksProvider: React.FC<SystemHooksProviderProps> = ({
   useEffect(() => {
     return () => {
       if (systemId) {
-        const links = document.querySelectorAll(`link[id^="system-style-${systemId}"]`);
+        const links = document.querySelectorAll(
+          `link[id^="system-style-${systemId}"]`,
+        );
         links.forEach((link) => link.remove());
       }
     };

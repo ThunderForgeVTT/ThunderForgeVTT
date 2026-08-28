@@ -19,16 +19,28 @@ import {
 describe("connectivityFor", () => {
   it("stays quiet through a brief drop", () => {
     expect(
-      connectivityFor({ hasConnectedOnce: true, attempt: 1, browserOffline: false }),
+      connectivityFor({
+        hasConnectedOnce: true,
+        attempt: 1,
+        browserOffline: false,
+      }),
     ).toEqual({ status: "reconnecting", attempt: 1 });
     expect(
-      connectivityFor({ hasConnectedOnce: true, attempt: 2, browserOffline: false }),
+      connectivityFor({
+        hasConnectedOnce: true,
+        attempt: 2,
+        browserOffline: false,
+      }),
     ).toEqual({ status: "reconnecting", attempt: 2 });
   });
 
   it("calls it a disconnection once retrying stops looking temporary", () => {
     expect(
-      connectivityFor({ hasConnectedOnce: true, attempt: 3, browserOffline: false }),
+      connectivityFor({
+        hasConnectedOnce: true,
+        attempt: 3,
+        browserOffline: false,
+      }),
     ).toEqual({ status: "disconnected", attempt: 3, browserOffline: false });
   });
 
@@ -40,7 +52,11 @@ describe("connectivityFor", () => {
    */
   it("believes the browser immediately when it says there is no network", () => {
     expect(
-      connectivityFor({ hasConnectedOnce: true, attempt: 0, browserOffline: true }),
+      connectivityFor({
+        hasConnectedOnce: true,
+        attempt: 0,
+        browserOffline: true,
+      }),
     ).toEqual({ status: "disconnected", attempt: 0, browserOffline: true });
   });
 
@@ -51,7 +67,11 @@ describe("connectivityFor", () => {
    */
   it("does not treat an interface being up as the server being reachable", () => {
     expect(
-      connectivityFor({ hasConnectedOnce: true, attempt: 5, browserOffline: false }),
+      connectivityFor({
+        hasConnectedOnce: true,
+        attempt: 5,
+        browserOffline: false,
+      }),
     ).toEqual({ status: "disconnected", attempt: 5, browserOffline: false });
   });
 
@@ -62,14 +82,22 @@ describe("connectivityFor", () => {
    */
   it("keeps a first handshake in connecting, however many attempts it takes", () => {
     expect(
-      connectivityFor({ hasConnectedOnce: false, attempt: 9, browserOffline: false }),
+      connectivityFor({
+        hasConnectedOnce: false,
+        attempt: 9,
+        browserOffline: false,
+      }),
     ).toEqual({ status: "connecting" });
   });
 
   /** But a browser reporting no network at all outranks even that. */
   it("reports no-network during a first handshake too", () => {
     expect(
-      connectivityFor({ hasConnectedOnce: false, attempt: 0, browserOffline: true }).status,
+      connectivityFor({
+        hasConnectedOnce: false,
+        attempt: 0,
+        browserOffline: true,
+      }).status,
     ).toBe("disconnected");
   });
 });
@@ -80,7 +108,11 @@ describe("isDisconnected", () => {
     expect(isDisconnected({ status: "connecting" })).toBe(false);
     expect(isDisconnected({ status: "reconnecting", attempt: 2 })).toBe(false);
     expect(
-      isDisconnected({ status: "disconnected", attempt: 3, browserOffline: false }),
+      isDisconnected({
+        status: "disconnected",
+        attempt: 3,
+        browserOffline: false,
+      }),
     ).toBe(true);
   });
 });
@@ -101,10 +133,18 @@ describe("peerAdjudicationAvailable", () => {
     // majority and both make progress, leaving two histories that cannot be
     // merged afterwards without destroying somebody's work.
     expect(
-      peerAdjudicationAvailable({ expected: 4, reachable: 3, gmReachable: true }),
+      peerAdjudicationAvailable({
+        expected: 4,
+        reachable: 3,
+        gmReachable: true,
+      }),
     ).toBe(false);
     expect(
-      peerAdjudicationAvailable({ expected: 4, reachable: 4, gmReachable: true }),
+      peerAdjudicationAvailable({
+        expected: 4,
+        reachable: 4,
+        gmReachable: true,
+      }),
     ).toBe(true);
   });
 
@@ -113,7 +153,11 @@ describe("peerAdjudicationAvailable", () => {
     // would mean two adjudicators in one session and no single chain of
     // authority.
     expect(
-      peerAdjudicationAvailable({ expected: 3, reachable: 3, gmReachable: false }),
+      peerAdjudicationAvailable({
+        expected: 3,
+        reachable: 3,
+        gmReachable: false,
+      }),
     ).toBe(false);
   });
 
@@ -121,7 +165,11 @@ describe("peerAdjudicationAvailable", () => {
     // There is nobody to adjudicate among, and the ordinary offline path —
     // queue and reconcile — is already the right answer.
     expect(
-      peerAdjudicationAvailable({ expected: 0, reachable: 0, gmReachable: true }),
+      peerAdjudicationAvailable({
+        expected: 0,
+        reachable: 0,
+        gmReachable: true,
+      }),
     ).toBe(false);
   });
 
@@ -234,12 +282,16 @@ describe("connectivityFor, with peers", () => {
 
 describe("isServerIsolated", () => {
   it("is what decides whether a move is put to the table instead of the server", () => {
-    expect(isServerIsolated({ status: "server-isolated", attempt: 3, peers: 3 })).toBe(
-      true,
-    );
+    expect(
+      isServerIsolated({ status: "server-isolated", attempt: 3, peers: 3 }),
+    ).toBe(true);
     expect(isServerIsolated({ status: "live" })).toBe(false);
     expect(
-      isServerIsolated({ status: "disconnected", attempt: 3, browserOffline: false }),
+      isServerIsolated({
+        status: "disconnected",
+        attempt: 3,
+        browserOffline: false,
+      }),
     ).toBe(false);
   });
 
@@ -247,8 +299,8 @@ describe("isServerIsolated", () => {
     // The failure this catches would be silent and permanent: a change the
     // table agreed, applied on every screen, that skipped the outbox and so
     // was never submitted, re-authorized, or recorded (FR-062).
-    expect(isDisconnected({ status: "server-isolated", attempt: 3, peers: 3 })).toBe(
-      true,
-    );
+    expect(
+      isDisconnected({ status: "server-isolated", attempt: 3, peers: 3 }),
+    ).toBe(true);
   });
 });

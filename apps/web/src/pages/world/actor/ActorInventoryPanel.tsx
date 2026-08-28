@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { addItemToInventory, adjustInventoryQuantity, getActorInventory, removeInventoryEntry } from "@/api/inventory";
+import {
+  addItemToInventory,
+  adjustInventoryQuantity,
+  getActorInventory,
+  removeInventoryEntry,
+} from "@/api/inventory";
 import { getWorldItems } from "@/api/items";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
@@ -22,7 +27,11 @@ export interface ActorInventoryPanelProps {
  * `itemName` (the server's `item_name_snapshot`) rather than vanishing
  * (Edge Cases).
  */
-export function ActorInventoryPanel({ actorId, worldId, canManage }: ActorInventoryPanelProps) {
+export function ActorInventoryPanel({
+  actorId,
+  worldId,
+  canManage,
+}: ActorInventoryPanelProps) {
   const [entries, setEntries] = useState<InventoryEntryRecord[] | null>(null);
   const [catalog, setCatalog] = useState<WorldItemRecord[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +43,11 @@ export function ActorInventoryPanel({ actorId, worldId, canManage }: ActorInvent
   const refresh = () => {
     getActorInventory(actorId)
       .then(setEntries)
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load inventory"));
+      .catch((err) =>
+        setError(
+          err instanceof Error ? err.message : "Failed to load inventory",
+        ),
+      );
   };
 
   useEffect(() => {
@@ -47,7 +60,9 @@ export function ActorInventoryPanel({ actorId, worldId, canManage }: ActorInvent
       })
       .catch((err) => {
         if (active) {
-          setError(err instanceof Error ? err.message : "Failed to load inventory");
+          setError(
+            err instanceof Error ? err.message : "Failed to load inventory",
+          );
         }
       });
     return () => {
@@ -95,7 +110,10 @@ export function ActorInventoryPanel({ actorId, worldId, canManage }: ActorInvent
     }
   };
 
-  const handleAdjust = async (entry: InventoryEntryRecord, nextQuantity: number) => {
+  const handleAdjust = async (
+    entry: InventoryEntryRecord,
+    nextQuantity: number,
+  ) => {
     if (nextQuantity < 0) {
       return;
     }
@@ -105,7 +123,9 @@ export function ActorInventoryPanel({ actorId, worldId, canManage }: ActorInvent
       await adjustInventoryQuantity(entry.id, nextQuantity);
       refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to adjust quantity");
+      setError(
+        err instanceof Error ? err.message : "Failed to adjust quantity",
+      );
     } finally {
       setPendingEntryId(null);
     }
@@ -148,10 +168,14 @@ export function ActorInventoryPanel({ actorId, worldId, canManage }: ActorInvent
                 <strong className="text-sm">
                   {entry.itemName}
                   {entry.itemId === null ? (
-                    <span className="ml-2 text-xs text-muted-foreground italic">(deleted item)</span>
+                    <span className="ml-2 text-xs text-muted-foreground italic">
+                      (deleted item)
+                    </span>
                   ) : null}
                 </strong>
-                <p className="text-xs text-muted-foreground">Quantity: {entry.quantity}</p>
+                <p className="text-xs text-muted-foreground">
+                  Quantity: {entry.quantity}
+                </p>
               </div>
               {canManage ? (
                 <div className="flex items-center gap-2">
@@ -199,7 +223,9 @@ export function ActorInventoryPanel({ actorId, worldId, canManage }: ActorInvent
             data-testid="inventory-add-item-select"
             aria-label="Item to add"
           >
-            <option value="">{catalog === null ? "Loading items…" : "Select an item…"}</option>
+            <option value="">
+              {catalog === null ? "Loading items…" : "Select an item…"}
+            </option>
             {(catalog ?? []).map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name}

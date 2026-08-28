@@ -46,7 +46,9 @@ export function SystemLegalNotice({ legal, variant }: SystemLegalNoticeProps) {
       <p className="text-sm whitespace-pre-wrap">{legal.attributionText}</p>
 
       {legal.disclaimer ? (
-        <p className="text-sm text-muted-foreground italic">{legal.disclaimer}</p>
+        <p className="text-sm text-muted-foreground italic">
+          {legal.disclaimer}
+        </p>
       ) : null}
 
       {legal.trademarkRestrictions && legal.trademarkRestrictions.length > 0 ? (

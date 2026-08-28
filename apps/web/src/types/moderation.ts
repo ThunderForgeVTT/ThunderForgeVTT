@@ -1,4 +1,7 @@
-export type ModerationEntityType = "WORLD_ACTOR" | "WORLD_ITEM" | "WORLD_LORE_ENTRY";
+export type ModerationEntityType =
+  | "WORLD_ACTOR"
+  | "WORLD_ITEM"
+  | "WORLD_LORE_ENTRY";
 
 export type ModerationActionType =
   | "NOTICE_RECEIVED"

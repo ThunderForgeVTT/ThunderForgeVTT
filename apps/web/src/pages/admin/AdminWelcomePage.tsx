@@ -40,7 +40,11 @@ export default function AdminWelcomePage() {
       })
       .catch((error) => {
         if (active) {
-          setStatus(error instanceof Error ? error.message : "Failed to load admin summary.");
+          setStatus(
+            error instanceof Error
+              ? error.message
+              : "Failed to load admin summary.",
+          );
         }
       });
 
@@ -127,16 +131,28 @@ export default function AdminWelcomePage() {
                 <Card surface="parchment" className="grid gap-3 p-6">
                   <h2 className="text-lg font-semibold">Quick links</h2>
                   <div className="grid gap-2">
-                    <Link to="/admin/settings" className="font-semibold text-primary hover:underline">
+                    <Link
+                      to="/admin/settings"
+                      className="font-semibold text-primary hover:underline"
+                    >
                       System Settings
                     </Link>
-                    <Link to="/admin/oauth" className="font-semibold text-primary hover:underline">
+                    <Link
+                      to="/admin/oauth"
+                      className="font-semibold text-primary hover:underline"
+                    >
                       OAuth Providers
                     </Link>
-                    <Link to="/admin/analytics" className="font-semibold text-primary hover:underline">
+                    <Link
+                      to="/admin/analytics"
+                      className="font-semibold text-primary hover:underline"
+                    >
                       Analytics Dashboard
                     </Link>
-                    <Link to="/admin/system" className="font-semibold text-primary hover:underline">
+                    <Link
+                      to="/admin/system"
+                      className="font-semibold text-primary hover:underline"
+                    >
                       Manifest Configuration
                     </Link>
                   </div>
@@ -144,9 +160,9 @@ export default function AdminWelcomePage() {
                 <Card surface="leather" className="grid gap-3 p-6">
                   <h2 className="text-lg font-semibold">Notes</h2>
                   <p className="text-muted-foreground">
-                    Admin metrics here are sourced from persisted tables and live
-                    data-directory inspection, so they reflect the current state
-                    without relying on mock counters.
+                    Admin metrics here are sourced from persisted tables and
+                    live data-directory inspection, so they reflect the current
+                    state without relying on mock counters.
                   </p>
                 </Card>
               </section>

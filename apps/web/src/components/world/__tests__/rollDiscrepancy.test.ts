@@ -16,7 +16,9 @@ import { discrepancyToShow } from "../rollDiscrepancy";
  */
 describe("discrepancyToShow", () => {
   it("shows the two values when the server genuinely determined a different one", () => {
-    expect(discrepancyToShow({ claimedValue: 18, determinedValue: 11 }, true)).toEqual({
+    expect(
+      discrepancyToShow({ claimedValue: 18, determinedValue: 11 }, true),
+    ).toEqual({
       claimedValue: 18,
       determinedValue: 11,
     });
@@ -28,12 +30,16 @@ describe("discrepancyToShow", () => {
    * design is built to avoid, and it would arrive with no way to ask about it.
    */
   it("shows a player nothing, however far apart the numbers are", () => {
-    expect(discrepancyToShow({ claimedValue: 20, determinedValue: 3 }, false)).toBeNull();
+    expect(
+      discrepancyToShow({ claimedValue: 20, determinedValue: 3 }, false),
+    ).toBeNull();
   });
 
   /** An agreeing comparison is not a discrepancy; it is the ordinary case. */
   it("says nothing when the two values agree", () => {
-    expect(discrepancyToShow({ claimedValue: 12, determinedValue: 12 }, true)).toBeNull();
+    expect(
+      discrepancyToShow({ claimedValue: 12, determinedValue: 12 }, true),
+    ).toBeNull();
   });
 
   /**
@@ -54,7 +60,9 @@ describe("discrepancyToShow", () => {
   it("says nothing when only one of the two values arrived", () => {
     expect(discrepancyToShow({ claimedValue: 18 }, true)).toBeNull();
     expect(discrepancyToShow({ determinedValue: 11 }, true)).toBeNull();
-    expect(discrepancyToShow({ claimedValue: 18, determinedValue: null }, true)).toBeNull();
+    expect(
+      discrepancyToShow({ claimedValue: 18, determinedValue: null }, true),
+    ).toBeNull();
   });
 
   /**
@@ -63,9 +71,17 @@ describe("discrepancyToShow", () => {
    * possible false positive, and the easiest to ship.
    */
   it("says nothing when a value is not a number it can compare", () => {
-    expect(discrepancyToShow({ claimedValue: Number.NaN, determinedValue: 11 }, true)).toBeNull();
     expect(
-      discrepancyToShow({ claimedValue: 18, determinedValue: Number.POSITIVE_INFINITY }, true),
+      discrepancyToShow(
+        { claimedValue: Number.NaN, determinedValue: 11 },
+        true,
+      ),
+    ).toBeNull();
+    expect(
+      discrepancyToShow(
+        { claimedValue: 18, determinedValue: Number.POSITIVE_INFINITY },
+        true,
+      ),
     ).toBeNull();
     expect(
       discrepancyToShow(
@@ -81,7 +97,9 @@ describe("discrepancyToShow", () => {
    * the whole feature rather than fail visibly.
    */
   it("reads either spelling the comparison may ship under", () => {
-    expect(discrepancyToShow({ claimed_value: 18, determined_value: 11 }, true)).toEqual({
+    expect(
+      discrepancyToShow({ claimed_value: 18, determined_value: 11 }, true),
+    ).toEqual({
       claimedValue: 18,
       determinedValue: 11,
     });

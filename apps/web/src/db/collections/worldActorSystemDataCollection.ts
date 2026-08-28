@@ -59,11 +59,14 @@ export interface WorldActorSystemDataDoc {
  */
 export function computeActorDerivedStats(
   data: WorldActorSystemDataDoc,
-  gameSystemId: string
+  gameSystemId: string,
 ) {
-  const hasAbilityData = !!data.ability_data && Object.keys(data.ability_data).length > 0;
-  const hasResourceData = !!data.resource_data && Object.keys(data.resource_data).length > 0;
-  const hasTraitData = !!data.trait_data && Object.keys(data.trait_data).length > 0;
+  const hasAbilityData =
+    !!data.ability_data && Object.keys(data.ability_data).length > 0;
+  const hasResourceData =
+    !!data.resource_data && Object.keys(data.resource_data).length > 0;
+  const hasTraitData =
+    !!data.trait_data && Object.keys(data.trait_data).length > 0;
 
   const baseStats = {
     isFullyConfigured: hasAbilityData && hasResourceData && hasTraitData,

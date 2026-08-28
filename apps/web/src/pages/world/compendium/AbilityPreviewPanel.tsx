@@ -17,7 +17,6 @@ export interface AbilityPreviewPanelProps {
   onClose: () => void;
 }
 
-
 /**
  * Spec 025 (T026): the Abilities tab's row-select preview. Mirrors
  * `ItemPreviewPanel` — a compact read-only summary docked beside the table,
@@ -39,7 +38,9 @@ export function AbilityPreviewPanel({
         className="grid place-items-center p-6 text-center"
         data-testid="ability-preview-panel-empty"
       >
-        <p className="text-sm text-muted-foreground">Select an ability to preview it.</p>
+        <p className="text-sm text-muted-foreground">
+          Select an ability to preview it.
+        </p>
       </Card>
     );
   }
@@ -84,7 +85,9 @@ export function AbilityPreviewPanel({
       <div className="grid gap-2">
         <p className="text-sm whitespace-pre-wrap">
           {ability.description || (
-            <span className="text-muted-foreground italic">No description.</span>
+            <span className="text-muted-foreground italic">
+              No description.
+            </span>
           )}
         </p>
       </div>
@@ -110,12 +113,24 @@ export function AbilityPreviewPanel({
       )}
 
       <div className="flex gap-2">
-        <Button asChild variant="secondary" size="sm" data-testid="ability-preview-panel-view">
+        <Button
+          asChild
+          variant="secondary"
+          size="sm"
+          data-testid="ability-preview-panel-view"
+        >
           <Link to={`/world/${worldId}/ability/${ability.id}/view`}>View</Link>
         </Button>
         {canEdit ? (
-          <Button asChild variant="secondary" size="sm" data-testid="ability-preview-panel-edit">
-            <Link to={`/world/${worldId}/ability/${ability.id}/edit`}>Edit</Link>
+          <Button
+            asChild
+            variant="secondary"
+            size="sm"
+            data-testid="ability-preview-panel-edit"
+          >
+            <Link to={`/world/${worldId}/ability/${ability.id}/edit`}>
+              Edit
+            </Link>
           </Button>
         ) : null}
       </div>

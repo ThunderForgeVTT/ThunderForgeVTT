@@ -4,7 +4,11 @@
 // itself.
 
 import { postGraphQL } from "@/api/graphqlClient";
-import type { PlaceholderBinding, RollRecordRecord, RollResolutionRecord } from "@/types/roll";
+import type {
+  PlaceholderBinding,
+  RollRecordRecord,
+  RollResolutionRecord,
+} from "@/types/roll";
 
 const ROLL_RESOLUTION_FIELDS = `
   formula
@@ -50,7 +54,10 @@ type WorldRollRecordsQuery = {
 };
 
 /** DM-only (FR-014's stated floor). */
-export function getWorldRollRecords(worldId: string, limit?: number): Promise<RollRecordRecord[]> {
+export function getWorldRollRecords(
+  worldId: string,
+  limit?: number,
+): Promise<RollRecordRecord[]> {
   return postGraphQL<WorldRollRecordsQuery>(
     `
       query WorldRollRecords($worldId: UUID!, $limit: Int) {

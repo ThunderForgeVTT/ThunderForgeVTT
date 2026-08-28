@@ -100,7 +100,9 @@ export async function userScopeName(userId: string): Promise<string | null> {
  * is by size and then by id so the list is stable — a panel whose rows
  * reorder between refreshes because two worlds tie looks broken.
  */
-export function summariseUsage(blobs: StoredBlob[]): Omit<CacheUsage, "unavailable"> {
+export function summariseUsage(
+  blobs: StoredBlob[],
+): Omit<CacheUsage, "unavailable"> {
   const byWorld = new Map<string, WorldUsage>();
   for (const blob of blobs) {
     const existing = byWorld.get(blob.worldId);
@@ -142,7 +144,10 @@ export function formatBytes(bytes: number): string {
 interface DirLike {
   kind: string;
   entries(): AsyncIterable<[string, DirLike]>;
-  getDirectoryHandle(name: string, opts?: { create?: boolean }): Promise<DirLike>;
+  getDirectoryHandle(
+    name: string,
+    opts?: { create?: boolean },
+  ): Promise<DirLike>;
   getFile(): Promise<File>;
   removeEntry(name: string, opts?: { recursive?: boolean }): Promise<void>;
 }
@@ -173,7 +178,11 @@ async function scopeDirectory(userId: string): Promise<DirLike | null> {
 export async function readCacheUsage(userId: string): Promise<CacheUsage> {
   const scopeDir = await scopeDirectory(userId);
   if (!scopeDir) {
-    return { totalBytes: 0, worlds: [], unavailable: !navigator.storage?.getDirectory };
+    return {
+      totalBytes: 0,
+      worlds: [],
+      unavailable: !navigator.storage?.getDirectory,
+    };
   }
 
   const blobs: StoredBlob[] = [];
@@ -271,7 +280,8 @@ export async function clearWorldCache(
   worldId: string,
 ): Promise<ClearOutcome> {
   const usage = await readCacheUsage(userId);
-  const freedBytes = usage.worlds.find((w) => w.worldId === worldId)?.bytes ?? 0;
+  const freedBytes =
+    usage.worlds.find((w) => w.worldId === worldId)?.bytes ?? 0;
 
   const scopeDir = await scopeDirectory(userId);
   let ok = true;
@@ -302,7 +312,8 @@ export async function clearAllCache(userId: string): Promise<ClearOutcome> {
 
   if (scope && navigator.storage?.getDirectory) {
     try {
-      const root = (await navigator.storage.getDirectory()) as unknown as DirLike;
+      const root =
+        (await navigator.storage.getDirectory()) as unknown as DirLike;
       await root.removeEntry(scope, { recursive: true });
     } catch {
       ok = false;

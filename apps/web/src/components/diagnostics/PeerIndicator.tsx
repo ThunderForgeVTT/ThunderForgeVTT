@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { subscribeToEngineMonitor } from "@/services/engineMonitor";
-import { subscribeToPeerTransfer, type PeerTransferState } from "@/services/peerTransfer";
+import {
+  subscribeToPeerTransfer,
+  type PeerTransferState,
+} from "@/services/peerTransfer";
 
 /**
  * The visible half of FR-049, on the world canvas (spec 028, T092).

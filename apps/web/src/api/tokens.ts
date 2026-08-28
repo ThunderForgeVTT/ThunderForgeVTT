@@ -1,5 +1,9 @@
 import { postGraphQL } from "@/api/graphqlClient";
-import type { CreateTokenInput, TokenRecord, UpdateTokenInput } from "@/types/token";
+import type {
+  CreateTokenInput,
+  TokenRecord,
+  UpdateTokenInput,
+} from "@/types/token";
 
 const TOKEN_FIELDS = `
   tokenId

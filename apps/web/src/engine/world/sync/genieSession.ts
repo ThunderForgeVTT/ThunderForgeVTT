@@ -77,7 +77,9 @@ export function applyGenieSessionWorldEvent(
     return;
   }
 
-  const payload = (event.token_event ?? event.tokenEvent) as GenieSessionWorldEventPayload | undefined;
+  const payload = (event.token_event ?? event.tokenEvent) as
+    | GenieSessionWorldEventPayload
+    | undefined;
   if (!payload || !payload.kind) {
     return;
   }
@@ -87,7 +89,11 @@ export function applyGenieSessionWorldEvent(
   // route them through onResourceTradeChanged too. clock_reward can
   // change BOTH the clock's segment state and a recipient's holdings, so
   // it fires both handlers rather than picking one.
-  if (payload.kind === "resource_trade" || payload.kind === "resource_grant" || payload.kind === "purchase") {
+  if (
+    payload.kind === "resource_trade" ||
+    payload.kind === "resource_grant" ||
+    payload.kind === "purchase"
+  ) {
     handlers.onResourceTradeChanged?.(payload);
   } else if (payload.kind === "clock_reward") {
     handlers.onSessionStateChanged?.(payload);

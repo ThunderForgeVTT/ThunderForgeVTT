@@ -68,7 +68,9 @@ export function ShapeTool({
   canvasContainerRef,
 }: ShapeToolProps) {
   const [activeTool, setActiveTool] = useState<DrawTool>("none");
-  const [textPlacement, setTextPlacement] = useState<TextPlacement | null>(null);
+  const [textPlacement, setTextPlacement] = useState<TextPlacement | null>(
+    null,
+  );
   const [textValue, setTextValue] = useState("");
   const [textVisibleToPlayers, setTextVisibleToPlayers] = useState(false);
   const [textSubmitting, setTextSubmitting] = useState(false);
@@ -197,7 +199,10 @@ export function ShapeTool({
 
   return (
     <div className="grid gap-3" data-testid="shape-tool">
-      <div className="grid grid-cols-1 gap-1.5" data-testid="shape-tool-buttons">
+      <div
+        className="grid grid-cols-1 gap-1.5"
+        data-testid="shape-tool-buttons"
+      >
         {DRAW_TOOLS.map((tool) => (
           <Button
             key={tool.value}
@@ -286,7 +291,12 @@ export function ShapeTool({
             <Label htmlFor="shape-visible-to-players">Visible to players</Label>
           </div>
 
-          <Button type="button" variant="danger" icon="trash" onClick={deleteSelectedShape}>
+          <Button
+            type="button"
+            variant="danger"
+            icon="trash"
+            onClick={deleteSelectedShape}
+          >
             Delete shape
           </Button>
         </Panel>

@@ -47,7 +47,10 @@ describe("userScopeName", () => {
 });
 
 describe("summariseUsage", () => {
-  const blob = (worldId: string, bytes: number): StoredBlob => ({ worldId, bytes });
+  const blob = (worldId: string, bytes: number): StoredBlob => ({
+    worldId,
+    bytes,
+  });
 
   it("totals each world separately and the whole store together", () => {
     const summary = summariseUsage([
@@ -76,15 +79,26 @@ describe("summariseUsage", () => {
       blob("a", 17),
     ]);
 
-    const summed = summary.worlds.reduce((total, world) => total + world.bytes, 0);
+    const summed = summary.worlds.reduce(
+      (total, world) => total + world.bytes,
+      0,
+    );
     expect(summary.totalBytes).toBe(summed);
   });
 
   /** Ties break on id, so a refresh cannot reorder rows that are equal. */
   it("orders by size and breaks ties deterministically", () => {
-    const summary = summariseUsage([blob("zeta", 100), blob("alpha", 100), blob("mid", 500)]);
+    const summary = summariseUsage([
+      blob("zeta", 100),
+      blob("alpha", 100),
+      blob("mid", 500),
+    ]);
 
-    expect(summary.worlds.map((w) => w.worldId)).toEqual(["mid", "alpha", "zeta"]);
+    expect(summary.worlds.map((w) => w.worldId)).toEqual([
+      "mid",
+      "alpha",
+      "zeta",
+    ]);
   });
 
   it("reports an empty store as zero rather than failing", () => {

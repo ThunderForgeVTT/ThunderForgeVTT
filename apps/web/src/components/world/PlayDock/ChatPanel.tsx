@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getWorldChatMessages, sendChatMessage } from "@/api/chat";
 import { Button } from "@/components/ui/button/Button";
-import { subscribeToWorldEvents, startPlayPanelEventSync } from "@/engine/world/sync";
+import {
+  subscribeToWorldEvents,
+  startPlayPanelEventSync,
+} from "@/engine/world/sync";
 import type { ChatMessageRecord } from "@/types/chat";
 
 export interface ChatPanelProps {
@@ -19,7 +22,12 @@ export interface ChatPanelProps {
  * whatever it is given and never decides visibility itself, so there is no
  * client rule that can drift out of sync with the server's.
  */
-export function ChatPanel({ worldId, sceneId, currentUserId, isGm }: ChatPanelProps) {
+export function ChatPanel({
+  worldId,
+  sceneId,
+  currentUserId,
+  isGm,
+}: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessageRecord[] | null>(null);
   const [body, setBody] = useState("");
   const [gmOnly, setGmOnly] = useState(false);
@@ -30,7 +38,9 @@ export function ChatPanel({ worldId, sceneId, currentUserId, isGm }: ChatPanelPr
   const refresh = useCallback(() => {
     return getWorldChatMessages(worldId)
       .then(setMessages)
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load chat"));
+      .catch((err) =>
+        setError(err instanceof Error ? err.message : "Failed to load chat"),
+      );
   }, [worldId]);
 
   useEffect(() => {
@@ -63,7 +73,12 @@ export function ChatPanel({ worldId, sceneId, currentUserId, isGm }: ChatPanelPr
     setSending(true);
     setError(null);
     try {
-      await sendChatMessage({ worldId, sceneId, body: trimmed, gmOnly: isGm ? gmOnly : false });
+      await sendChatMessage({
+        worldId,
+        sceneId,
+        body: trimmed,
+        gmOnly: isGm ? gmOnly : false,
+      });
       setBody("");
       await refresh();
     } catch (err) {
@@ -75,7 +90,10 @@ export function ChatPanel({ worldId, sceneId, currentUserId, isGm }: ChatPanelPr
 
   return (
     <div className="flex h-full flex-col gap-3" data-testid="chat-panel">
-      <div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+      <div
+        ref={scrollRef}
+        className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1"
+      >
         {messages === null ? (
           <p className="text-sm text-muted-foreground">Loading chat…</p>
         ) : messages.length === 0 ? (

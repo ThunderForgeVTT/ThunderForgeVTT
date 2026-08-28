@@ -1,5 +1,9 @@
 import { useState, useEffect } from "react";
-import { generateInviteCode, getWorld, updateWorldAllowPlayerCreatedActors } from "@/api/world";
+import {
+  generateInviteCode,
+  getWorld,
+  updateWorldAllowPlayerCreatedActors,
+} from "@/api/world";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import { Input } from "@/components/ui/input";
@@ -41,9 +45,12 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [busyInviteId, setBusyInviteId] = useState<string | null>(null);
-  const [confirmingRevokeId, setConfirmingRevokeId] = useState<string | null>(null);
+  const [confirmingRevokeId, setConfirmingRevokeId] = useState<string | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
-  const [allowPlayerCreatedActors, setAllowPlayerCreatedActors] = useState(false);
+  const [allowPlayerCreatedActors, setAllowPlayerCreatedActors] =
+    useState(false);
   const [isUpdatingAllowSetting, setIsUpdatingAllowSetting] = useState(false);
 
   useEffect(() => {
@@ -67,7 +74,8 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
     }
   };
 
-  const generateInviteUrl = (code: string) => `${window.location.origin}/join/${code}`;
+  const generateInviteUrl = (code: string) =>
+    `${window.location.origin}/join/${code}`;
 
   const copyLink = async (code: string) => {
     try {
@@ -87,7 +95,9 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
       await copyLink(created.inviteCode);
       await loadInvites();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to generate invite code");
+      setError(
+        err instanceof Error ? err.message : "Failed to generate invite code",
+      );
     } finally {
       setIsGenerating(false);
     }
@@ -105,7 +115,9 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
       const newCode = await rotate(inviteId);
       await copyLink(newCode);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to refresh this link");
+      setError(
+        err instanceof Error ? err.message : "Failed to refresh this link",
+      );
     } finally {
       setBusyInviteId(null);
     }
@@ -118,7 +130,9 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
       await revoke(inviteId);
       setConfirmingRevokeId(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to revoke this link");
+      setError(
+        err instanceof Error ? err.message : "Failed to revoke this link",
+      );
     } finally {
       setBusyInviteId(null);
     }
@@ -139,13 +153,16 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
           </p>
         </div>
 
-        {displayError && <StatusBadge variant="danger">{displayError}</StatusBadge>}
+        {displayError && (
+          <StatusBadge variant="danger">{displayError}</StatusBadge>
+        )}
 
         {/* Invite Players Section */}
         <div className="grid gap-3">
           <h3 className="font-semibold">Invite Players</h3>
           <p className="text-sm text-muted-foreground">
-            Generate join links to share with other players. Each link allows a specific number of joins.
+            Generate join links to share with other players. Each link allows a
+            specific number of joins.
           </p>
 
           <Button
@@ -190,7 +207,8 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
                         </StatusBadge>
                       </span>
                       <span className="text-sm text-muted-foreground">
-                        {invite.remaining_uses === null || invite.remaining_uses === undefined
+                        {invite.remaining_uses === null ||
+                        invite.remaining_uses === undefined
                           ? `${invite.used_count} joins`
                           : `${invite.remaining_uses} of ${invite.max_uses} uses left`}
                       </span>
@@ -213,9 +231,13 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
                         size="sm"
                         disabled={isRevoked}
                         onClick={() => void copyLink(invite.invite_code)}
-                        icon={copiedCode === invite.invite_code ? "check" : "copy"}
+                        icon={
+                          copiedCode === invite.invite_code ? "check" : "copy"
+                        }
                       >
-                        {copiedCode === invite.invite_code ? "Copied!" : "Copy link"}
+                        {copiedCode === invite.invite_code
+                          ? "Copied!"
+                          : "Copy link"}
                       </Button>
                       {/* Refresh works on an expired or exhausted link too —
                           a GM can always revive a dead one. Only an already
@@ -266,15 +288,22 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
 
                     {confirmingRevokeId === invite.id && (
                       <p className="text-xs text-muted-foreground">
-                        This cannot be undone. Anyone who already joined with this link keeps
-                        their place — only future joins are stopped.
+                        This cannot be undone. Anyone who already joined with
+                        this link keeps their place — only future joins are
+                        stopped.
                       </p>
                     )}
 
                     <div className="flex gap-4 text-xs text-muted-foreground">
-                      <span>Created: {new Date(invite.created_at).toLocaleDateString()}</span>
+                      <span>
+                        Created:{" "}
+                        {new Date(invite.created_at).toLocaleDateString()}
+                      </span>
                       {invite.expires_at && (
-                        <span>Expires: {new Date(invite.expires_at).toLocaleDateString()}</span>
+                        <span>
+                          Expires:{" "}
+                          {new Date(invite.expires_at).toLocaleDateString()}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -288,15 +317,20 @@ export function CampaignSettingsPanel({ worldId }: CampaignSettingsPanelProps) {
         <div className="grid gap-3">
           <h3 className="font-semibold">Player-created characters</h3>
           <p className="text-sm text-muted-foreground">
-            When on, a joining player without a GM-designated character can create their own
-            on the Actor Selection screen. Off by default.
+            When on, a joining player without a GM-designated character can
+            create their own on the Actor Selection screen. Off by default.
           </p>
-          <label className="flex items-center gap-2 text-sm" data-testid="allow-player-created-actors-toggle">
+          <label
+            className="flex items-center gap-2 text-sm"
+            data-testid="allow-player-created-actors-toggle"
+          >
             <input
               type="checkbox"
               checked={allowPlayerCreatedActors}
               disabled={isUpdatingAllowSetting}
-              onChange={(e) => void handleToggleAllowPlayerCreatedActors(e.target.checked)}
+              onChange={(e) =>
+                void handleToggleAllowPlayerCreatedActors(e.target.checked)
+              }
             />
             Allow players to create their own actors
           </label>

@@ -54,5 +54,7 @@ export function clearAssetCache(): void {
   if (!isSupported()) {
     return;
   }
-  navigator.serviceWorker.controller?.postMessage({ type: "clear-canvas-asset-cache" });
+  navigator.serviceWorker.controller?.postMessage({
+    type: "clear-canvas-asset-cache",
+  });
 }

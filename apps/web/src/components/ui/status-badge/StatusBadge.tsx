@@ -11,7 +11,10 @@ export interface StatusBadgeProps {
   className?: string;
 }
 
-const VARIANT_MAP: Record<StatusBadgeVariant, "default" | "secondary" | "destructive" | "outline"> = {
+const VARIANT_MAP: Record<
+  StatusBadgeVariant,
+  "default" | "secondary" | "destructive" | "outline"
+> = {
   success: "default",
   warning: "outline",
   danger: "destructive",

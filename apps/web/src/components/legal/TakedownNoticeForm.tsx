@@ -5,10 +5,19 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field/Field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { Textarea } from "@/components/ui/textarea";
-import type { ModerationCaseRecord, ModerationEntityType } from "@/types/moderation";
+import type {
+  ModerationCaseRecord,
+  ModerationEntityType,
+} from "@/types/moderation";
 
 /**
  * Spec 015 (FR-002, FR-003): the public takedown intake channel. Collects
@@ -18,12 +27,15 @@ import type { ModerationCaseRecord, ModerationEntityType } from "@/types/moderat
  * missing.
  */
 export function TakedownNoticeForm() {
-  const [entityType, setEntityType] = useState<ModerationEntityType>("WORLD_ACTOR");
+  const [entityType, setEntityType] =
+    useState<ModerationEntityType>("WORLD_ACTOR");
   const [entityId, setEntityId] = useState("");
   const [claimantName, setClaimantName] = useState("");
   const [claimantContact, setClaimantContact] = useState("");
-  const [copyrightedWorkDescription, setCopyrightedWorkDescription] = useState("");
-  const [infringingMaterialLocation, setInfringingMaterialLocation] = useState("");
+  const [copyrightedWorkDescription, setCopyrightedWorkDescription] =
+    useState("");
+  const [infringingMaterialLocation, setInfringingMaterialLocation] =
+    useState("");
   const [goodFaithStatement, setGoodFaithStatement] = useState(false);
   const [accuracyStatement, setAccuracyStatement] = useState(false);
   const [signature, setSignature] = useState("");
@@ -77,17 +89,24 @@ export function TakedownNoticeForm() {
       <div className="grid gap-2" data-testid="takedown-notice-accepted">
         <StatusBadge variant="success">Notice received</StatusBadge>
         <p className="text-sm text-muted-foreground">
-          Case reference: <code>{result.caseId}</code>. The identified content has
-          been disabled and its owner has been notified.
+          Case reference: <code>{result.caseId}</code>. The identified content
+          has been disabled and its owner has been notified.
         </p>
       </div>
     );
   }
 
   return (
-    <form onSubmit={(e) => void handleSubmit(e)} className="grid gap-4" data-testid="takedown-notice-form">
+    <form
+      onSubmit={(e) => void handleSubmit(e)}
+      className="grid gap-4"
+      data-testid="takedown-notice-form"
+    >
       <Field label="Content type" htmlFor="dmca-entity-type">
-        <Select value={entityType} onValueChange={(v) => setEntityType(v as ModerationEntityType)}>
+        <Select
+          value={entityType}
+          onValueChange={(v) => setEntityType(v as ModerationEntityType)}
+        >
           <SelectTrigger id="dmca-entity-type" aria-label="Content type">
             <SelectValue />
           </SelectTrigger>
@@ -110,7 +129,12 @@ export function TakedownNoticeForm() {
       </Field>
 
       <Field label="Your name" htmlFor="dmca-claimant-name">
-        <Input id="dmca-claimant-name" value={claimantName} onChange={(e) => setClaimantName(e.target.value)} required />
+        <Input
+          id="dmca-claimant-name"
+          value={claimantName}
+          onChange={(e) => setClaimantName(e.target.value)}
+          required
+        />
       </Field>
 
       <Field label="Your contact information" htmlFor="dmca-claimant-contact">
@@ -123,7 +147,10 @@ export function TakedownNoticeForm() {
         />
       </Field>
 
-      <Field label="Identification of the copyrighted work" htmlFor="dmca-work-description">
+      <Field
+        label="Identification of the copyrighted work"
+        htmlFor="dmca-work-description"
+      >
         <Textarea
           id="dmca-work-description"
           value={copyrightedWorkDescription}
@@ -133,7 +160,10 @@ export function TakedownNoticeForm() {
         />
       </Field>
 
-      <Field label="Location of the allegedly infringing material" htmlFor="dmca-infringing-location">
+      <Field
+        label="Location of the allegedly infringing material"
+        htmlFor="dmca-infringing-location"
+      >
         <Textarea
           id="dmca-infringing-location"
           value={infringingMaterialLocation}
@@ -151,8 +181,8 @@ export function TakedownNoticeForm() {
           onCheckedChange={(v) => setGoodFaithStatement(v === true)}
         />
         <Label htmlFor="dmca-good-faith" className="text-sm font-normal">
-          I have a good-faith belief that use of the material is not authorized by the
-          copyright owner, its agent, or the law.
+          I have a good-faith belief that use of the material is not authorized
+          by the copyright owner, its agent, or the law.
         </Label>
       </div>
 
@@ -163,18 +193,30 @@ export function TakedownNoticeForm() {
           onCheckedChange={(v) => setAccuracyStatement(v === true)}
         />
         <Label htmlFor="dmca-accuracy" className="text-sm font-normal">
-          Under penalty of perjury, this notice is accurate and I am authorized to act
-          on behalf of the copyright owner.
+          Under penalty of perjury, this notice is accurate and I am authorized
+          to act on behalf of the copyright owner.
         </Label>
       </div>
 
-      <Field label="Signature (type your full legal name)" htmlFor="dmca-signature">
-        <Input id="dmca-signature" value={signature} onChange={(e) => setSignature(e.target.value)} required />
+      <Field
+        label="Signature (type your full legal name)"
+        htmlFor="dmca-signature"
+      >
+        <Input
+          id="dmca-signature"
+          value={signature}
+          onChange={(e) => setSignature(e.target.value)}
+          required
+        />
       </Field>
 
       {error ? <StatusBadge variant="danger">{error}</StatusBadge> : null}
 
-      <Button type="submit" disabled={submitting} data-testid="takedown-notice-submit">
+      <Button
+        type="submit"
+        disabled={submitting}
+        data-testid="takedown-notice-submit"
+      >
         {submitting ? "Submitting..." : "Submit takedown notice"}
       </Button>
     </form>

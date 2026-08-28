@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { createActorShareLink, revokeActorShareLink } from "@/api/actorShares";
-import { getActor, setActorAvailability, unclaimActor, updateActor } from "@/api/actors";
+import {
+  getActor,
+  setActorAvailability,
+  unclaimActor,
+  updateActor,
+} from "@/api/actors";
 import { getWorld } from "@/api/world";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
@@ -94,7 +99,10 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
             <p className="text-muted-foreground">
               This actor doesn't exist or you don't have access to it.
             </p>
-            <Link to={`/world/${worldId}/staging`} className="text-primary hover:underline">
+            <Link
+              to={`/world/${worldId}/staging`}
+              className="text-primary hover:underline"
+            >
               Back to staging
             </Link>
           </Card>
@@ -136,7 +144,9 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
       setShareLinkId(link.id);
       await navigator.clipboard.writeText(url).catch(() => {});
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to create share link");
+      setStatus(
+        err instanceof Error ? err.message : "Failed to create share link",
+      );
     } finally {
       setIsSharing(false);
     }
@@ -149,7 +159,9 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
       const updated = await setActorAvailability(actorId, available);
       setActor(updated);
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to update availability");
+      setStatus(
+        err instanceof Error ? err.message : "Failed to update availability",
+      );
     } finally {
       setIsUpdatingClaim(false);
     }
@@ -162,7 +174,9 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
       const updated = await unclaimActor(actorId);
       setActor(updated);
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to unclaim character");
+      setStatus(
+        err instanceof Error ? err.message : "Failed to unclaim character",
+      );
     } finally {
       setIsUpdatingClaim(false);
     }
@@ -180,7 +194,9 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
       setShareLinkId(null);
       setStatus("Share link revoked.");
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to revoke share link");
+      setStatus(
+        err instanceof Error ? err.message : "Failed to revoke share link",
+      );
     } finally {
       setIsRevoking(false);
     }
@@ -215,13 +231,20 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
             {canEdit && mode === "view" ? (
               <Button
                 variant="secondary"
-                onClick={() => navigate(`/world/${worldId}/actor/${actorId}/edit`)}
+                onClick={() =>
+                  navigate(`/world/${worldId}/actor/${actorId}/edit`)
+                }
               >
                 Edit
               </Button>
             ) : null}
             {canShare ? (
-              <Button variant="secondary" icon="link" onClick={() => void handleShare()} disabled={isSharing}>
+              <Button
+                variant="secondary"
+                icon="link"
+                onClick={() => void handleShare()}
+                disabled={isSharing}
+              >
                 {isSharing ? "Sharing..." : "Share"}
               </Button>
             ) : null}
@@ -230,7 +253,9 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
 
         {shareLink ? (
           <Card className="grid gap-2 p-4">
-            <p className="text-sm text-muted-foreground">Share link copied to clipboard:</p>
+            <p className="text-sm text-muted-foreground">
+              Share link copied to clipboard:
+            </p>
             <Input readOnly value={shareLink} data-testid="share-link-input" />
             <Button
               variant="ghost"
@@ -248,7 +273,11 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
           {mode === "edit" ? (
             <>
               <Field label="Name" htmlFor="actor-label">
-                <Input id="actor-label" value={label} onChange={(e) => setLabel(e.target.value)} />
+                <Input
+                  id="actor-label"
+                  value={label}
+                  onChange={(e) => setLabel(e.target.value)}
+                />
               </Field>
               <Field label="Description" htmlFor="actor-description">
                 <Textarea
@@ -273,25 +302,40 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
                 </Button>
                 <Button
                   variant="ghost"
-                  onClick={() => navigate(`/world/${worldId}/actor/${actorId}/view`)}
+                  onClick={() =>
+                    navigate(`/world/${worldId}/actor/${actorId}/view`)
+                  }
                 >
                   Cancel
                 </Button>
               </div>
-              {status ? <StatusBadge variant={status === "Saved." ? "success" : "danger"}>{status}</StatusBadge> : null}
+              {status ? (
+                <StatusBadge
+                  variant={status === "Saved." ? "success" : "danger"}
+                >
+                  {status}
+                </StatusBadge>
+              ) : null}
             </>
           ) : (
             <div className="grid gap-2">
               <p className="text-sm text-muted-foreground">
-                Classification: {actor.isNpc ? "Non-Player Character" : "Player Character"}
+                Classification:{" "}
+                {actor.isNpc ? "Non-Player Character" : "Player Character"}
               </p>
-              <p className="text-sm text-muted-foreground">Type: {actor.actorType}</p>
+              <p className="text-sm text-muted-foreground">
+                Type: {actor.actorType}
+              </p>
               {actor.gameSystemId ? (
-                <p className="text-sm text-muted-foreground">Game system: {actor.gameSystemId}</p>
+                <p className="text-sm text-muted-foreground">
+                  Game system: {actor.gameSystemId}
+                </p>
               ) : null}
               <p className="text-sm whitespace-pre-wrap">
                 {actor.description || (
-                  <span className="text-muted-foreground italic">No description.</span>
+                  <span className="text-muted-foreground italic">
+                    No description.
+                  </span>
                 )}
               </p>
             </div>
@@ -304,7 +348,9 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
             Linked from (lore)
           </h2>
           {actor.loreLinkedFrom.length === 0 ? (
-            <p className="text-sm text-muted-foreground italic">No lore entries link here yet.</p>
+            <p className="text-sm text-muted-foreground italic">
+              No lore entries link here yet.
+            </p>
           ) : (
             <ul className="grid gap-1">
               {actor.loreLinkedFrom.map((source) => (
@@ -322,11 +368,19 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
         </Card>
 
         {(() => {
-          const ActorSheet = actor.gameSystemId ? SYSTEM_ACTOR_SHEETS[actor.gameSystemId] : undefined;
-          return ActorSheet ? <ActorSheet actor={actor} canEdit={canEdit && mode === "edit"} /> : null;
+          const ActorSheet = actor.gameSystemId
+            ? SYSTEM_ACTOR_SHEETS[actor.gameSystemId]
+            : undefined;
+          return ActorSheet ? (
+            <ActorSheet actor={actor} canEdit={canEdit && mode === "edit"} />
+          ) : null;
         })()}
 
-        <ActorInventoryPanel actorId={actorId} worldId={worldId} canManage={canEdit} />
+        <ActorInventoryPanel
+          actorId={actorId}
+          worldId={worldId}
+          canManage={canEdit}
+        />
 
         {/* Spec 025 (T055): known abilities, beside inventory. `canManage` is
             the ACTOR's own permission (FR-022) — not the caller's permission on
@@ -345,7 +399,12 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
             it, and hidden entirely from non-GM viewers when it has none
             (GenieShopPanel's own "Scenario 6" check). */}
         {actor.gameSystemId === "genie" && actor.isNpc ? (
-          <GenieShopPanel worldId={worldId} npcActorId={actorId} currentUserId={user?.id} isGm={isDm} />
+          <GenieShopPanel
+            worldId={worldId}
+            npcActorId={actorId}
+            currentUserId={user?.id}
+            isGm={isDm}
+          />
         ) : null}
 
         {/* Spec 017 (T028, US3): GM-only, PC-only "available for claiming"
@@ -358,7 +417,10 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
             {actor.claimedBy ? (
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm text-muted-foreground">
-                  Claimed by <span className="font-medium text-foreground">{actor.claimedBy.username}</span>
+                  Claimed by{" "}
+                  <span className="font-medium text-foreground">
+                    {actor.claimedBy.username}
+                  </span>
                 </p>
                 <Button
                   variant="secondary"
@@ -375,7 +437,9 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
                   type="checkbox"
                   checked={actor.availableForClaim}
                   disabled={isUpdatingClaim}
-                  onChange={(e) => void handleToggleAvailability(e.target.checked)}
+                  onChange={(e) =>
+                    void handleToggleAvailability(e.target.checked)
+                  }
                 />
                 Available for a joining player to claim
               </label>
@@ -384,7 +448,11 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
         ) : null}
 
         {isDm && mode === "edit" ? (
-          <ActorOwnershipBlock actorId={actorId} worldId={worldId} world={world} />
+          <ActorOwnershipBlock
+            actorId={actorId}
+            worldId={worldId}
+            world={world}
+          />
         ) : null}
       </Container>
     </>

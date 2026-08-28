@@ -29,7 +29,10 @@ export function AppHeader({ brandHref, navItems }: AppHeaderProps) {
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur-sm">
       <div className="mx-auto flex min-h-20 w-[calc(100%-2rem)] max-w-[1160px] flex-wrap items-center justify-between gap-4 py-3 md:flex-nowrap md:py-0">
-        <NavLink to={brandHref} className="inline-flex min-w-0 items-center gap-3">
+        <NavLink
+          to={brandHref}
+          className="inline-flex min-w-0 items-center gap-3"
+        >
           <span className="inline-grid size-10 shrink-0 place-items-center rounded-full border border-border bg-secondary">
             <FantasyIcon name="crown" size={20} />
           </span>
@@ -82,7 +85,9 @@ export function AppHeader({ brandHref, navItems }: AppHeaderProps) {
             }
             items={[
               {
-                label: isAdmin ? "Open admin command center" : "Open welcome hall",
+                label: isAdmin
+                  ? "Open admin command center"
+                  : "Open welcome hall",
                 icon: isAdmin ? "crown" : "scene",
                 onSelect: () => navigate(isAdmin ? "/admin" : "/welcome"),
               },

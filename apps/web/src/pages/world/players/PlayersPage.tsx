@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { getWorldMembers, removeMember, updateMemberRole } from "@/api/worldMembers";
+import {
+  getWorldMembers,
+  removeMember,
+  updateMemberRole,
+} from "@/api/worldMembers";
 import type { WorldMemberRecord } from "@/api/worldMembers";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button/Button";
@@ -27,7 +31,8 @@ export function PlayersPage({ worldId, isGm }: PlayersPageProps) {
   const [refreshTick, setRefreshTick] = useState(0);
   const [busyMemberId, setBusyMemberId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const currentUserRole = members?.find((member) => member.userId === user?.id)?.role ?? null;
+  const currentUserRole =
+    members?.find((member) => member.userId === user?.id)?.role ?? null;
 
   useEffect(() => {
     let active = true;
@@ -58,21 +63,30 @@ export function PlayersPage({ worldId, isGm }: PlayersPageProps) {
     return currentLevel > targetLevel;
   };
 
-  const handleChangeRole = async (member: WorldMemberRecord, newRole: string) => {
+  const handleChangeRole = async (
+    member: WorldMemberRecord,
+    newRole: string,
+  ) => {
     setActionError(null);
     setBusyMemberId(member.id);
     try {
       await updateMemberRole(worldId, member.userId, newRole);
       setRefreshTick((current) => current + 1);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Failed to change member role");
+      setActionError(
+        err instanceof Error ? err.message : "Failed to change member role",
+      );
     } finally {
       setBusyMemberId(null);
     }
   };
 
   const handleRemove = async (member: WorldMemberRecord) => {
-    if (!window.confirm("Are you sure you want to remove this member from the world?")) {
+    if (
+      !window.confirm(
+        "Are you sure you want to remove this member from the world?",
+      )
+    ) {
       return;
     }
     setActionError(null);
@@ -81,14 +95,20 @@ export function PlayersPage({ worldId, isGm }: PlayersPageProps) {
       await removeMember(worldId, member.userId);
       setRefreshTick((current) => current + 1);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Failed to remove member");
+      setActionError(
+        err instanceof Error ? err.message : "Failed to remove member",
+      );
     } finally {
       setBusyMemberId(null);
     }
   };
 
   if (error) {
-    return <p className="text-sm text-destructive">Failed to load players: {error.message}</p>;
+    return (
+      <p className="text-sm text-destructive">
+        Failed to load players: {error.message}
+      </p>
+    );
   }
 
   if (members === null) {
@@ -106,7 +126,9 @@ export function PlayersPage({ worldId, isGm }: PlayersPageProps) {
         </p>
       </header>
 
-      {actionError ? <p className="text-sm text-destructive">{actionError}</p> : null}
+      {actionError ? (
+        <p className="text-sm text-destructive">{actionError}</p>
+      ) : null}
 
       <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full text-sm" data-testid="players-table">
@@ -127,7 +149,10 @@ export function PlayersPage({ worldId, isGm }: PlayersPageProps) {
                 <td className="p-2">
                   <Badge variant="secondary">{member.role}</Badge>
                 </td>
-                <td className="p-2" data-testid={`player-character-${member.id}`}>
+                <td
+                  className="p-2"
+                  data-testid={`player-character-${member.id}`}
+                >
                   {member.claimedActor ? (
                     <Link
                       to={`/world/${worldId}/actor/${member.claimedActor.id}/view`}
@@ -136,7 +161,9 @@ export function PlayersPage({ worldId, isGm }: PlayersPageProps) {
                       {member.claimedActor.label}
                     </Link>
                   ) : (
-                    <span className="text-muted-foreground italic">No character claimed</span>
+                    <span className="text-muted-foreground italic">
+                      No character claimed
+                    </span>
                   )}
                 </td>
                 {isGm ? (
@@ -145,7 +172,9 @@ export function PlayersPage({ worldId, isGm }: PlayersPageProps) {
                       <div className="flex items-center gap-2">
                         <select
                           value={member.role}
-                          onChange={(event) => void handleChangeRole(member, event.target.value)}
+                          onChange={(event) =>
+                            void handleChangeRole(member, event.target.value)
+                          }
                           disabled={busyMemberId === member.id}
                           data-testid={`player-role-select-${member.id}`}
                           className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"

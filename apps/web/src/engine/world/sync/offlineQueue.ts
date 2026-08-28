@@ -33,7 +33,10 @@ import {
   type RejectedChange,
   type SubmittedChange,
 } from "./reconcile";
-import { offlineEditVerdict, type OfflineEditKind } from "../facets/tokenControl";
+import {
+  offlineEditVerdict,
+  type OfflineEditKind,
+} from "../facets/tokenControl";
 
 /** What a caller learns when it tries to make an edit with no connection. */
 export interface QueueAttempt {
@@ -273,7 +276,9 @@ async function drainQueue(
       return {
         localId: change.localId,
         tokenId: tokenIdOf(change.command),
-        ...(adjudication ? { originatorUserId: adjudication.originatorUserId } : {}),
+        ...(adjudication
+          ? { originatorUserId: adjudication.originatorUserId }
+          : {}),
       };
     });
     for (const change of queued) submittedAlready.add(change.localId);
@@ -323,7 +328,10 @@ async function drainQueue(
 
     const matched = matchOutcomes(submitted, outcomes);
     await forgetReconciledChanges(
-      outcomes.map((outcome) => ({ localId: outcome.localId, applied: outcome.applied })),
+      outcomes.map((outcome) => ({
+        localId: outcome.localId,
+        applied: outcome.applied,
+      })),
     );
 
     report.applied.push(...matched.applied);
@@ -351,7 +359,10 @@ async function drainQueue(
       }
     }
     if (options.selfUserId) {
-      report.onBehalf = noticesFor(report.rejected, options.selfUserId).onBehalf;
+      report.onBehalf = noticesFor(
+        report.rejected,
+        options.selfUserId,
+      ).onBehalf;
     }
   }
 

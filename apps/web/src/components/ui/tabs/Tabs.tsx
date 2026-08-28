@@ -27,7 +27,13 @@ export interface TabsProps {
   onValueChange?: (value: string) => void;
 }
 
-export function Tabs({ items, defaultValue, className, value, onValueChange }: TabsProps) {
+export function Tabs({
+  items,
+  defaultValue,
+  className,
+  value,
+  onValueChange,
+}: TabsProps) {
   return (
     <ShadcnTabs
       defaultValue={defaultValue}

@@ -29,7 +29,12 @@ export interface TokenStackPickerProps {
  * "there is something here you do not control" is information a player
  * needs to make sense of the square.
  */
-export function TokenStackPicker({ members, at, onPick, onDismiss }: TokenStackPickerProps) {
+export function TokenStackPicker({
+  members,
+  at,
+  onPick,
+  onDismiss,
+}: TokenStackPickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -53,7 +58,9 @@ export function TokenStackPicker({ members, at, onPick, onDismiss }: TokenStackP
     window.addEventListener("pointerdown", onPointerDown, { capture: true });
     return () => {
       window.removeEventListener("keydown", onKeyDown, { capture: true });
-      window.removeEventListener("pointerdown", onPointerDown, { capture: true });
+      window.removeEventListener("pointerdown", onPointerDown, {
+        capture: true,
+      });
     };
   }, [onDismiss]);
 
@@ -92,7 +99,11 @@ export function TokenStackPicker({ members, at, onPick, onDismiss }: TokenStackP
         >
           <span className="bg-muted grid size-7 shrink-0 place-items-center overflow-hidden rounded">
             {token.photoUrl ? (
-              <img src={token.photoUrl} alt="" className="size-full object-contain" />
+              <img
+                src={token.photoUrl}
+                alt=""
+                className="size-full object-contain"
+              />
             ) : (
               <span className="text-muted-foreground text-[0.6rem]">—</span>
             )}

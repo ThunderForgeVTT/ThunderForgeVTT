@@ -15,8 +15,6 @@ import type {
  * re-opens it.
  */
 
-
-
 const EFFECT_FIELDS = `
   id
   abilityId
@@ -27,9 +25,10 @@ const EFFECT_FIELDS = `
   sortOrder
 `;
 
-
 /** FR-032: Owner-level only, enforced server-side. */
-export function createAbilityShareLink(abilityId: string): Promise<AbilityShareLinkRecord> {
+export function createAbilityShareLink(
+  abilityId: string,
+): Promise<AbilityShareLinkRecord> {
   return postGraphQL<{ createAbilityShareLink: AbilityShareLinkRecord }>(
     `
       mutation CreateAbilityShareLink($abilityId: UUID!) {
@@ -60,7 +59,9 @@ export function revokeAbilityShareLink(shareId: string): Promise<boolean> {
 }
 
 /** Requires login but NOT world membership — that is the point of a share. */
-export function getSharedAbility(shareCode: string): Promise<SharedAbilityPreview> {
+export function getSharedAbility(
+  shareCode: string,
+): Promise<SharedAbilityPreview> {
   return postGraphQL<{ sharedAbility: SharedAbilityPreview }>(
     `
       query SharedAbility($shareCode: String!) {

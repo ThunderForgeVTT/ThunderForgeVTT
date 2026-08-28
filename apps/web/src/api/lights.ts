@@ -1,5 +1,9 @@
 import { postGraphQL } from "@/api/graphqlClient";
-import type { CreateLightInput, LightRecord, UpdateLightInput } from "@/types/light";
+import type {
+  CreateLightInput,
+  LightRecord,
+  UpdateLightInput,
+} from "@/types/light";
 
 const LIGHT_FIELDS = `
   lightId

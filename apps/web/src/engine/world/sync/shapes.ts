@@ -116,7 +116,13 @@ export async function applyShapeWorldEvent(
   }
 
   const payload = (event.token_event ?? event.tokenEvent) as
-    | { action?: string; shape_id?: string; shapeId?: string; scene_id?: string; sceneId?: string }
+    | {
+        action?: string;
+        shape_id?: string;
+        shapeId?: string;
+        scene_id?: string;
+        sceneId?: string;
+      }
     | undefined;
 
   const eventSceneId = payload?.scene_id ?? payload?.sceneId;

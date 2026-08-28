@@ -36,7 +36,11 @@
 import type { WorldStore } from "../store";
 import type { WorldToken } from "../types";
 import type { ControllableToken, FacetContext, IntentResult } from "./types";
-import { resolveTokenPermissions, type MoveIntent, type TokenControlFacet } from "./tokenControl";
+import {
+  resolveTokenPermissions,
+  type MoveIntent,
+  type TokenControlFacet,
+} from "./tokenControl";
 
 /** A world-space point. */
 export interface WorldPoint {

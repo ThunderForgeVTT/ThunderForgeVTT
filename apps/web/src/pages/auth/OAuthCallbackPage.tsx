@@ -1,6 +1,11 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import {
   confirmOAuthLink,
   consumeOAuthReturnTo,
@@ -21,7 +26,8 @@ import type { SeoConfig } from "@/types/seo";
 
 export const oauthCallbackPageSeo: SeoConfig = {
   title: "OAuth callback",
-  description: "Complete OAuth sign-in or account linking for ThunderForge VTT.",
+  description:
+    "Complete OAuth sign-in or account linking for ThunderForge VTT.",
   canonicalPath: "/oauth/callback",
   noindex: true,
 };
@@ -58,7 +64,9 @@ export default function OAuthCallbackPage() {
   const [status, setStatus] = useState<string | null>(callbackError);
   const [isWorking, setIsWorking] = useState(callbackError === null);
   const [linkChallengeId, setLinkChallengeId] = useState<string | null>(null);
-  const [twoFactorChallengeId, setTwoFactorChallengeId] = useState<string | null>(null);
+  const [twoFactorChallengeId, setTwoFactorChallengeId] = useState<
+    string | null
+  >(null);
   const [password, setPassword] = useState("");
   const [twoFactorCode, setTwoFactorCode] = useState("");
 
@@ -92,7 +100,9 @@ export default function OAuthCallbackPage() {
           setTwoFactorChallengeId(payload.loginTwoFactorChallengeId);
           setStatus(payload.message);
         } else {
-          setStatus(error instanceof Error ? error.message : "OAuth sign-in failed.");
+          setStatus(
+            error instanceof Error ? error.message : "OAuth sign-in failed.",
+          );
         }
       } finally {
         if (active) {
@@ -121,7 +131,11 @@ export default function OAuthCallbackPage() {
       await refresh();
       navigate(consumeOAuthReturnTo("/welcome"), { replace: true });
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Failed to confirm account link.");
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : "Failed to confirm account link.",
+      );
     } finally {
       setIsWorking(false);
     }
@@ -135,12 +149,17 @@ export default function OAuthCallbackPage() {
 
     setIsWorking(true);
     try {
-      const response = await verifyTwoFactor(twoFactorChallengeId, twoFactorCode);
+      const response = await verifyTwoFactor(
+        twoFactorChallengeId,
+        twoFactorCode,
+      );
       setStatus(response.message);
       await refresh();
       navigate(consumeOAuthReturnTo("/welcome"), { replace: true });
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Failed to verify 2FA.");
+      setStatus(
+        error instanceof Error ? error.message : "Failed to verify 2FA.",
+      );
     } finally {
       setIsWorking(false);
     }
@@ -216,10 +235,16 @@ export default function OAuthCallbackPage() {
             ) : null}
 
             <div className="grid gap-2">
-              <Link to="/login" className="font-medium text-primary hover:underline">
+              <Link
+                to="/login"
+                className="font-medium text-primary hover:underline"
+              >
                 Return to login
               </Link>
-              <Link to="/register" className="font-medium text-primary hover:underline">
+              <Link
+                to="/register"
+                className="font-medium text-primary hover:underline"
+              >
                 Create a local account
               </Link>
             </div>

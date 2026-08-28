@@ -68,13 +68,13 @@ export function NpcRoster({ worldId, refreshKey }: NpcRosterProps) {
             to={`/world/${worldId}/actor/${npc.id}/view`}
             className="flex items-center gap-2 rounded-lg border border-border p-2 hover:bg-muted"
           >
-          <FantasyIcon name="skull" size={16} />
-          <div>
-            <strong className="block text-sm">{npc.label}</strong>
-            <small className="text-xs text-muted-foreground uppercase tracking-wide">
-              {npc.actorType}
-            </small>
-          </div>
+            <FantasyIcon name="skull" size={16} />
+            <div>
+              <strong className="block text-sm">{npc.label}</strong>
+              <small className="text-xs text-muted-foreground uppercase tracking-wide">
+                {npc.actorType}
+              </small>
+            </div>
           </Link>
         </li>
       ))}

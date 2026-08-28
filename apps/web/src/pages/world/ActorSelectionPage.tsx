@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { claimActor, createAndClaimActor, getAvailableActors, getMyActorClaim } from "@/api/actorClaims";
+import {
+  claimActor,
+  createAndClaimActor,
+  getAvailableActors,
+  getMyActorClaim,
+} from "@/api/actorClaims";
 import { getWorld } from "@/api/world";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
@@ -41,7 +46,9 @@ export default function ActorSelectionPage() {
         setAvailable(actorsResult);
       })
       .catch((err) => {
-        setStatus(err instanceof Error ? err.message : "Failed to load Actor Selection");
+        setStatus(
+          err instanceof Error ? err.message : "Failed to load Actor Selection",
+        );
       })
       .finally(() => {
         setIsLoading(false);
@@ -104,7 +111,11 @@ export default function ActorSelectionPage() {
     setIsCreating(true);
     setStatus(null);
     try {
-      await createAndClaimActor(worldId, newName.trim(), newDescription.trim() || undefined);
+      await createAndClaimActor(
+        worldId,
+        newName.trim(),
+        newDescription.trim() || undefined,
+      );
       navigate(`/world/${worldId}`, { replace: true });
     } catch (err) {
       setStatus(
@@ -139,7 +150,11 @@ export default function ActorSelectionPage() {
 
   return (
     <>
-      <SEO title={`${world.name} — Choose your character`} description="Actor selection" noindex />
+      <SEO
+        title={`${world.name} — Choose your character`}
+        description="Actor selection"
+        noindex
+      />
       <Container className="grid max-w-2xl gap-6 py-10">
         <div>
           <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
@@ -147,7 +162,10 @@ export default function ActorSelectionPage() {
           </p>
           <h1 className="text-2xl font-semibold">Choose your character</h1>
           <p className="mt-1 text-muted-foreground">
-            Pick a character your GM has prepared, {canCreateOwn ? "or create your own." : "or wait for your GM to prepare one."}
+            Pick a character your GM has prepared,{" "}
+            {canCreateOwn
+              ? "or create your own."
+              : "or wait for your GM to prepare one."}
           </p>
         </div>
 
@@ -168,7 +186,9 @@ export default function ActorSelectionPage() {
                   <div>
                     <p className="font-medium">{actor.label}</p>
                     {actor.description ? (
-                      <p className="text-sm text-muted-foreground">{actor.description}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {actor.description}
+                      </p>
                     ) : null}
                   </div>
                   <Button
@@ -196,7 +216,10 @@ export default function ActorSelectionPage() {
                 placeholder="Your character's name"
               />
             </Field>
-            <Field label="Description (optional)" htmlFor="new-character-description">
+            <Field
+              label="Description (optional)"
+              htmlFor="new-character-description"
+            >
               <Input
                 id="new-character-description"
                 value={newDescription}
@@ -215,12 +238,16 @@ export default function ActorSelectionPage() {
         ) : null}
 
         {!hasAvailable && !canCreateOwn ? (
-          <Card className="grid gap-2 p-6 text-center" data-testid="waiting-for-gm">
+          <Card
+            className="grid gap-2 p-6 text-center"
+            data-testid="waiting-for-gm"
+          >
             <h2 className="text-lg font-semibold">No characters ready yet</h2>
             <p className="text-muted-foreground">
-              Ask your GM to mark a character as available for you to claim, or to turn on
-              player-created characters. You're already a member of this world — you'll be
-              able to jump in as soon as one of those happens.
+              Ask your GM to mark a character as available for you to claim, or
+              to turn on player-created characters. You're already a member of
+              this world — you'll be able to jump in as soon as one of those
+              happens.
             </p>
           </Card>
         ) : null}

@@ -103,7 +103,9 @@ const GENIE_SESSION_QUERY = `
 
 /** Returns the world's active Genie session, or `null` if none has been
  * started yet. Readable by any world member, not just the GM. */
-export async function fetchGenieSession(worldId: string): Promise<GenieSessionRecord | null> {
+export async function fetchGenieSession(
+  worldId: string,
+): Promise<GenieSessionRecord | null> {
   const data = await postGraphQL<{ genieSession: GenieSessionRecord | null }>(
     GENIE_SESSION_QUERY,
     { worldId },
@@ -125,10 +127,9 @@ export async function fetchGenieResourceHoldings(
   sessionId: string,
   actorId: string,
 ): Promise<GenieResourceHoldingRecord[]> {
-  const data = await postGraphQL<{ genieResourceHoldings: GenieResourceHoldingRecord[] }>(
-    GENIE_RESOURCE_HOLDINGS_QUERY,
-    { sessionId, actorId },
-  );
+  const data = await postGraphQL<{
+    genieResourceHoldings: GenieResourceHoldingRecord[];
+  }>(GENIE_RESOURCE_HOLDINGS_QUERY, { sessionId, actorId });
   return data.genieResourceHoldings;
 }
 
@@ -153,10 +154,9 @@ const GENIE_TRADE_PROPOSALS_QUERY = `
 export async function fetchGenieTradeProposals(
   actorId: string,
 ): Promise<GenieTradeProposalRecord[]> {
-  const data = await postGraphQL<{ genieTradeProposals: GenieTradeProposalRecord[] }>(
-    GENIE_TRADE_PROPOSALS_QUERY,
-    { actorId },
-  );
+  const data = await postGraphQL<{
+    genieTradeProposals: GenieTradeProposalRecord[];
+  }>(GENIE_TRADE_PROPOSALS_QUERY, { actorId });
   return data.genieTradeProposals;
 }
 
@@ -193,10 +193,13 @@ export async function spendWish(
   sessionId: string,
   narrativeEffect: string,
 ): Promise<GenieSessionRecord> {
-  const data = await postGraphQL<{ spendWish: GenieSessionRecord }>(SPEND_WISH_MUTATION, {
-    sessionId,
-    narrativeEffect,
-  });
+  const data = await postGraphQL<{ spendWish: GenieSessionRecord }>(
+    SPEND_WISH_MUTATION,
+    {
+      sessionId,
+      narrativeEffect,
+    },
+  );
   return data.spendWish;
 }
 
@@ -268,10 +271,13 @@ export async function advancePuzzleClock(
   delta: number,
   actorId?: string,
 ): Promise<GeniePuzzleClockRecord> {
-  const data = await postGraphQL<{ advancePuzzleClock: GeniePuzzleClockRecord }>(
-    ADVANCE_PUZZLE_CLOCK_MUTATION,
-    { clockId, delta, actorId: actorId ?? null },
-  );
+  const data = await postGraphQL<{
+    advancePuzzleClock: GeniePuzzleClockRecord;
+  }>(ADVANCE_PUZZLE_CLOCK_MUTATION, {
+    clockId,
+    delta,
+    actorId: actorId ?? null,
+  });
   return data.advancePuzzleClock;
 }
 
@@ -321,10 +327,9 @@ export interface ProposeResourceTradeInput {
 export async function proposeResourceTrade(
   input: ProposeResourceTradeInput,
 ): Promise<GenieTradeProposalRecord> {
-  const data = await postGraphQL<{ proposeResourceTrade: GenieTradeProposalRecord }>(
-    PROPOSE_RESOURCE_TRADE_MUTATION,
-    input,
-  );
+  const data = await postGraphQL<{
+    proposeResourceTrade: GenieTradeProposalRecord;
+  }>(PROPOSE_RESOURCE_TRADE_MUTATION, input);
   return data.proposeResourceTrade;
 }
 
@@ -343,10 +348,9 @@ const ACCEPT_RESOURCE_TRADE_MUTATION = `
 export async function acceptResourceTrade(
   proposalId: string,
 ): Promise<GenieResourceHoldingRecord[]> {
-  const data = await postGraphQL<{ acceptResourceTrade: GenieResourceHoldingRecord[] }>(
-    ACCEPT_RESOURCE_TRADE_MUTATION,
-    { proposalId },
-  );
+  const data = await postGraphQL<{
+    acceptResourceTrade: GenieResourceHoldingRecord[];
+  }>(ACCEPT_RESOURCE_TRADE_MUTATION, { proposalId });
   return data.acceptResourceTrade;
 }
 
@@ -371,10 +375,9 @@ const DECLINE_RESOURCE_TRADE_MUTATION = `
 export async function declineResourceTrade(
   proposalId: string,
 ): Promise<GenieTradeProposalRecord> {
-  const data = await postGraphQL<{ declineResourceTrade: GenieTradeProposalRecord }>(
-    DECLINE_RESOURCE_TRADE_MUTATION,
-    { proposalId },
-  );
+  const data = await postGraphQL<{
+    declineResourceTrade: GenieTradeProposalRecord;
+  }>(DECLINE_RESOURCE_TRADE_MUTATION, { proposalId });
   return data.declineResourceTrade;
 }
 
@@ -408,10 +411,14 @@ export async function spendResourceOnPuzzleClock(
   resourceType: string,
   quantity: number,
 ): Promise<GeniePuzzleClockRecord> {
-  const data = await postGraphQL<{ spendResourceOnPuzzleClock: GeniePuzzleClockRecord }>(
-    SPEND_RESOURCE_ON_PUZZLE_CLOCK_MUTATION,
-    { clockId, actorId, resourceType, quantity },
-  );
+  const data = await postGraphQL<{
+    spendResourceOnPuzzleClock: GeniePuzzleClockRecord;
+  }>(SPEND_RESOURCE_ON_PUZZLE_CLOCK_MUTATION, {
+    clockId,
+    actorId,
+    resourceType,
+    quantity,
+  });
   return data.spendResourceOnPuzzleClock;
 }
 
@@ -438,11 +445,12 @@ const GENIE_SHOP_LISTINGS_QUERY = `
 /** Readable by any world member (FR-004's shop is player-facing). Empty
  * for an NPC with no configured listings — the shop panel should render
  * nothing in that case (Scenario 6). */
-export async function fetchGenieShopListings(actorId: string): Promise<GenieShopListingRecord[]> {
-  const data = await postGraphQL<{ genieShopListings: GenieShopListingRecord[] }>(
-    GENIE_SHOP_LISTINGS_QUERY,
-    { actorId },
-  );
+export async function fetchGenieShopListings(
+  actorId: string,
+): Promise<GenieShopListingRecord[]> {
+  const data = await postGraphQL<{
+    genieShopListings: GenieShopListingRecord[];
+  }>(GENIE_SHOP_LISTINGS_QUERY, { actorId });
   return data.genieShopListings;
 }
 
@@ -463,10 +471,14 @@ export async function grantSessionResource(
   resourceType: string,
   amount: number,
 ): Promise<GenieResourceHoldingRecord> {
-  const data = await postGraphQL<{ grantSessionResource: GenieResourceHoldingRecord }>(
-    GRANT_SESSION_RESOURCE_MUTATION,
-    { sessionId, actorId, resourceType, amount },
-  );
+  const data = await postGraphQL<{
+    grantSessionResource: GenieResourceHoldingRecord;
+  }>(GRANT_SESSION_RESOURCE_MUTATION, {
+    sessionId,
+    actorId,
+    resourceType,
+    amount,
+  });
   return data.grantSessionResource;
 }
 
@@ -518,7 +530,9 @@ export interface CreateShopListingInput {
 
 /** GM-only (server-enforced, FR-004). Exactly one of the resource or item
  * price pair must be provided, matching priceKind. */
-export async function createShopListing(input: CreateShopListingInput): Promise<GenieShopListingRecord> {
+export async function createShopListing(
+  input: CreateShopListingInput,
+): Promise<GenieShopListingRecord> {
   const data = await postGraphQL<{ createShopListing: GenieShopListingRecord }>(
     CREATE_SHOP_LISTING_MUTATION,
     {
@@ -613,11 +627,12 @@ const GENIE_PUZZLE_CLOCK_REWARDS_QUERY = `
 `;
 
 /** Readable by any world member. */
-export async function fetchGeniePuzzleClockRewards(clockId: string): Promise<GeniePuzzleClockRewardRecord[]> {
-  const data = await postGraphQL<{ geniePuzzleClockRewards: GeniePuzzleClockRewardRecord[] }>(
-    GENIE_PUZZLE_CLOCK_REWARDS_QUERY,
-    { clockId },
-  );
+export async function fetchGeniePuzzleClockRewards(
+  clockId: string,
+): Promise<GeniePuzzleClockRewardRecord[]> {
+  const data = await postGraphQL<{
+    geniePuzzleClockRewards: GeniePuzzleClockRewardRecord[];
+  }>(GENIE_PUZZLE_CLOCK_REWARDS_QUERY, { clockId });
   return data.geniePuzzleClockRewards;
 }
 
@@ -626,17 +641,16 @@ export async function fetchGeniePuzzleClockRewards(clockId: string): Promise<Gen
 export async function configurePuzzleClockReward(
   input: ConfigurePuzzleClockRewardInput,
 ): Promise<GeniePuzzleClockRewardRecord> {
-  const data = await postGraphQL<{ configurePuzzleClockReward: GeniePuzzleClockRewardRecord }>(
-    CONFIGURE_PUZZLE_CLOCK_REWARD_MUTATION,
-    {
-      clockId: input.clockId,
-      triggerSegment: input.triggerSegment,
-      rewardResourceType: input.rewardResourceType ?? null,
-      rewardResourceAmount: input.rewardResourceAmount ?? null,
-      rewardItemId: input.rewardItemId ?? null,
-      rewardItemQuantity: input.rewardItemQuantity ?? null,
-      recipientMode: input.recipientMode,
-    },
-  );
+  const data = await postGraphQL<{
+    configurePuzzleClockReward: GeniePuzzleClockRewardRecord;
+  }>(CONFIGURE_PUZZLE_CLOCK_REWARD_MUTATION, {
+    clockId: input.clockId,
+    triggerSegment: input.triggerSegment,
+    rewardResourceType: input.rewardResourceType ?? null,
+    rewardResourceAmount: input.rewardResourceAmount ?? null,
+    rewardItemId: input.rewardItemId ?? null,
+    rewardItemQuantity: input.rewardItemQuantity ?? null,
+    recipientMode: input.recipientMode,
+  });
   return data.configurePuzzleClockReward;
 }

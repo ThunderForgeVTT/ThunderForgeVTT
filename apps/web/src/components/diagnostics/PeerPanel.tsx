@@ -80,15 +80,19 @@ function DisableWarningDialog({
                 still reach each other, ThunderForge normally lets you keep
                 moving tokens, with the GM&apos;s client deciding what sticks.
                 That runs over the same peer connections, so it stops working
-                too. You will drop straight to offline instead: your changes
-                are kept on this machine and sync when the server returns.
+                too. You will drop straight to offline instead: your changes are
+                kept on this machine and sync when the server returns.
               </p>
               <p>You can turn peer transfer back on here at any time.</p>
             </div>
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="ghost" onClick={onCancel} data-testid="peer-disable-cancel">
+          <Button
+            variant="ghost"
+            onClick={onCancel}
+            data-testid="peer-disable-cancel"
+          >
             Keep it on
           </Button>
           <Button
@@ -130,13 +134,13 @@ export function PeerPanel() {
       <div className="grid gap-1">
         <h2 className="text-lg font-semibold">Peer transfer</h2>
         <p className="text-sm text-muted-foreground">
-          To load maps and art faster, ThunderForge can fetch them directly
-          from other people at your table instead of from the server. A direct
+          To load maps and art faster, ThunderForge can fetch them directly from
+          other people at your table instead of from the server. A direct
           connection lets those people&apos;s devices see your network address,
           and yours see theirs — the same as any voice or video call. Nothing
           else is shared, and every file is checked against the server&apos;s
-          own fingerprint before it is used, so a peer cannot send you
-          something different from what you asked for.
+          own fingerprint before it is used, so a peer cannot send you something
+          different from what you asked for.
         </p>
       </div>
 
@@ -145,7 +149,10 @@ export function PeerPanel() {
           <span className="text-sm font-medium">
             Fetch content from other players
           </span>
-          <span className="text-xs text-muted-foreground" data-testid="peer-toggle-state">
+          <span
+            className="text-xs text-muted-foreground"
+            data-testid="peer-toggle-state"
+          >
             {state.enabled
               ? "On — content may come from peers or the server, whichever is quicker"
               : "Off — content only ever comes from the server"}
@@ -187,7 +194,10 @@ export function PeerPanel() {
             server (FR-046, FR-048).
           */}
           {state.verificationFailures > 0 && (
-            <p className="text-sm text-muted-foreground" data-testid="peer-verification-failures">
+            <p
+              className="text-sm text-muted-foreground"
+              data-testid="peer-verification-failures"
+            >
               {state.verificationFailures}{" "}
               {state.verificationFailures === 1 ? "response" : "responses"} from
               peers did not match what was asked for and{" "}
@@ -198,7 +208,10 @@ export function PeerPanel() {
           )}
         </div>
       ) : (
-        <p className="text-sm text-muted-foreground" data-testid="peer-disabled-note">
+        <p
+          className="text-sm text-muted-foreground"
+          data-testid="peer-disabled-note"
+        >
           Peer transfer is off. No direct connections are made, so no one at
           your table sees your network address — and playing through a server
           outage is unavailable, because it needs those same connections.

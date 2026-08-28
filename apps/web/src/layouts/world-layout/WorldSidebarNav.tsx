@@ -114,7 +114,9 @@ export function WorldSidebarNav({ worldId, isGm }: WorldSidebarNavProps) {
     if (category.matchPrefix) {
       const [, query] = category.to.split("?");
       const wantedTab = new URLSearchParams(query).get("tab");
-      return location.pathname === category.matchPrefix && currentTab === wantedTab;
+      return (
+        location.pathname === category.matchPrefix && currentTab === wantedTab
+      );
     }
     return location.pathname === category.to;
   };
@@ -151,7 +153,12 @@ export function WorldSidebarNav({ worldId, isGm }: WorldSidebarNavProps) {
       data-testid="world-sidebar-nav"
       aria-label="World navigation"
     >
-      <div className={cn("flex items-center", collapsed ? "justify-center" : "justify-end")}>
+      <div
+        className={cn(
+          "flex items-center",
+          collapsed ? "justify-center" : "justify-end",
+        )}
+      >
         <Button
           type="button"
           variant="ghost"

@@ -26,9 +26,17 @@ interface WorldLayoutProps {
  * canvas handle is exactly what spec 009's research.md §1 found load-
  * bearing not to do.
  */
-export function WorldLayout({ worldId, canvas, toolRail, dock }: WorldLayoutProps) {
+export function WorldLayout({
+  worldId,
+  canvas,
+  toolRail,
+  dock,
+}: WorldLayoutProps) {
   return (
-    <div className="relative h-screen w-screen overflow-hidden" data-world-id={worldId}>
+    <div
+      className="relative h-screen w-screen overflow-hidden"
+      data-world-id={worldId}
+    >
       <div className="absolute inset-0">{canvas}</div>
       {toolRail}
       {dock}

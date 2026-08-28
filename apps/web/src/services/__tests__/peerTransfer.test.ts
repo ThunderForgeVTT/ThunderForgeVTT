@@ -118,7 +118,10 @@ describe("activity reported by the engine", () => {
     const seen: number[] = [];
     peer.subscribeToPeerTransfer((state) => seen.push(state.connectedPeers));
 
-    peer.reportPeerTransferActivity({ connectedPeers: 2, bytesFromPeers: 4096 });
+    peer.reportPeerTransferActivity({
+      connectedPeers: 2,
+      bytesFromPeers: 4096,
+    });
 
     expect(peer.getPeerTransferState()).toMatchObject({
       enabled: true,
@@ -152,7 +155,10 @@ describe("activity reported by the engine", () => {
 
   it("starts from zero again when peer transfer is turned back on", async () => {
     const peer = await loadModule();
-    peer.reportPeerTransferActivity({ connectedPeers: 3, verificationFailures: 1 });
+    peer.reportPeerTransferActivity({
+      connectedPeers: 3,
+      verificationFailures: 1,
+    });
     peer.setPeerTransferEnabled(false);
 
     peer.setPeerTransferEnabled(true);

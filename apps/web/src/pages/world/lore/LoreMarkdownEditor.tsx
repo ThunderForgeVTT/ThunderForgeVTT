@@ -1,5 +1,10 @@
 import { useMemo, useState } from "react";
-import { type Completion, type CompletionContext, type CompletionResult, autocompletion } from "@codemirror/autocomplete";
+import {
+  type Completion,
+  type CompletionContext,
+  type CompletionResult,
+  autocompletion,
+} from "@codemirror/autocomplete";
 import { markdown } from "@codemirror/lang-markdown";
 import { EditorView } from "@codemirror/view";
 import CodeMirror from "@uiw/react-codemirror";
@@ -67,14 +72,18 @@ export function LoreMarkdownEditor({
           });
         })
         .catch((err) => {
-          setUploadError(err instanceof Error ? err.message : "Failed to upload image");
+          setUploadError(
+            err instanceof Error ? err.message : "Failed to upload image",
+          );
         })
         .finally(() => {
           setIsUploading(false);
         });
     };
 
-    const loreLinkCompletionSource = async (context: CompletionContext): Promise<CompletionResult | null> => {
+    const loreLinkCompletionSource = async (
+      context: CompletionContext,
+    ): Promise<CompletionResult | null> => {
       const match = context.matchBefore(/\[\[[^[\]]*/);
       if (!match) {
         return null;
@@ -103,7 +112,12 @@ export function LoreMarkdownEditor({
       const options: Completion[] = targets.map((target) => ({
         label: target.title,
         detail: LORE_LINK_TARGET_LABELS[target.kind] ?? "Link",
-        apply: (view: EditorView, _completion: Completion, _from: number, to: number) => {
+        apply: (
+          view: EditorView,
+          _completion: Completion,
+          _from: number,
+          to: number,
+        ) => {
           const text = `[[${target.title}]]`;
           view.dispatch({
             changes: { from: match.from, to, insert: text },
@@ -120,7 +134,9 @@ export function LoreMarkdownEditor({
       EditorView.domEventHandlers({
         paste(event, view) {
           const items = Array.from(event.clipboardData?.items ?? []);
-          const imageItem = items.find((item) => item.type.startsWith("image/"));
+          const imageItem = items.find((item) =>
+            item.type.startsWith("image/"),
+          );
           const file = imageItem?.getAsFile();
           if (!file) {
             return false;
@@ -131,7 +147,9 @@ export function LoreMarkdownEditor({
         },
         drop(event, view) {
           const files = Array.from(event.dataTransfer?.files ?? []);
-          const imageFile = files.find((file) => file.type.startsWith("image/"));
+          const imageFile = files.find((file) =>
+            file.type.startsWith("image/"),
+          );
           if (!imageFile) {
             return false;
           }
@@ -162,7 +180,12 @@ export function LoreMarkdownEditor({
         // autocompletion: this editor supplies its own via `extensions`
         // above (the `[[Title]]` source) — basicSetup's default ambient
         // one would otherwise run alongside it for no reason.
-        basicSetup={{ lineNumbers: true, foldGutter: true, closeBrackets: false, autocompletion: false }}
+        basicSetup={{
+          lineNumbers: true,
+          foldGutter: true,
+          closeBrackets: false,
+          autocompletion: false,
+        }}
         placeholder="Write this entry's lore using Markdown — tables, task lists, code blocks, `[[Other Entry]]` links, and pasted images are all supported."
       />
 

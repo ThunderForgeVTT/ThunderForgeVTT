@@ -54,17 +54,16 @@ export async function uploadCanvasImage(
       }
     }
   `;
-  const data = await postGraphQLMultipart<{ uploadCanvasImage: CanvasImageAsset }>(
-    mutation,
-    { worldId, sceneId, kind },
-    file,
-    "file",
-  );
+  const data = await postGraphQLMultipart<{
+    uploadCanvasImage: CanvasImageAsset;
+  }>(mutation, { worldId, sceneId, kind }, file, "file");
   return data.uploadCanvasImage;
 }
 
 /** FR-019: assets for a scene, readable by any owner/accepted member of the owning world. */
-export async function fetchCanvasImageAssetsForScene(sceneId: string): Promise<CanvasImageAsset[]> {
+export async function fetchCanvasImageAssetsForScene(
+  sceneId: string,
+): Promise<CanvasImageAsset[]> {
   const query = `
     query CanvasImageAssetsForScene($sceneId: UUID!) {
       canvasImageAssetsForScene(sceneId: $sceneId) {
@@ -77,7 +76,9 @@ export async function fetchCanvasImageAssetsForScene(sceneId: string): Promise<C
   // indistinguishable from the real empty case. It now throws like every other
   // call, so a background-image load failure is visible rather than looking
   // like an empty scene.
-  const data = await postGraphQL<{ canvasImageAssetsForScene: CanvasImageAsset[] }>(query, {
+  const data = await postGraphQL<{
+    canvasImageAssetsForScene: CanvasImageAsset[];
+  }>(query, {
     sceneId,
   });
   return data.canvasImageAssetsForScene;

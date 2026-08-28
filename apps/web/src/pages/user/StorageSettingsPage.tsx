@@ -27,7 +27,9 @@ export function StorageSettingsPage() {
       <Container>
         <div className="grid gap-6 py-8">
           <header className="grid gap-1">
-            <h1 className="text-2xl font-semibold">Storage and sharing on this device</h1>
+            <h1 className="text-2xl font-semibold">
+              Storage and sharing on this device
+            </h1>
             <p className="text-sm text-muted-foreground">
               Everything here is a choice about this browser, on this machine.
               Clearing stored worlds never touches your account, your worlds, or

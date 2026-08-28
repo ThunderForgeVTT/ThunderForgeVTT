@@ -98,16 +98,25 @@ function explain(result: IntentResult<unknown>): string | null {
   }
 }
 
-export function TokenTool({ control, selectedTokenId, worldId, sceneId }: TokenToolProps) {
+export function TokenTool({
+  control,
+  selectedTokenId,
+  worldId,
+  sceneId,
+}: TokenToolProps) {
   // Read through the facet on every render rather than from a `tokens`
   // prop: permissions and token data then come from one place, and the
   // parent re-renders on every store change anyway (it holds the world
   // state), so this stays current without a second subscription.
-  const selected = selectedTokenId ? control.permissions(selectedTokenId) : null;
+  const selected = selectedTokenId
+    ? control.permissions(selectedTokenId)
+    : null;
   const selectedToken = selected?.token ?? null;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [artStatus, setArtStatus] = useState<"idle" | "uploading" | "error">("idle");
+  const [artStatus, setArtStatus] = useState<"idle" | "uploading" | "error">(
+    "idle",
+  );
   const [artError, setArtError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
   const [assets, setAssets] = useState<CanvasImageAsset[]>([]);
@@ -119,7 +128,10 @@ export function TokenTool({ control, selectedTokenId, worldId, sceneId }: TokenT
       if (!selectedTokenId) {
         return;
       }
-      const result = await control.manipulate({ tokenId: selectedTokenId, ...changes });
+      const result = await control.manipulate({
+        tokenId: selectedTokenId,
+        ...changes,
+      });
       // Shown rather than swallowed: a button that does nothing and says
       // nothing is the failure mode this migration exists to remove.
       setRefusal(explain(result));
@@ -148,7 +160,9 @@ export function TokenTool({ control, selectedTokenId, worldId, sceneId }: TokenT
         })
         .catch((error: unknown) => {
           setArtStatus("error");
-          setArtError(error instanceof Error ? error.message : "Failed to upload art");
+          setArtError(
+            error instanceof Error ? error.message : "Failed to upload art",
+          );
         });
     },
     [worldId, sceneId, setArt],
@@ -166,7 +180,9 @@ export function TokenTool({ control, selectedTokenId, worldId, sceneId }: TokenT
       .catch((error: unknown) => {
         if (cancelled) return;
         setArtStatus("error");
-        setArtError(error instanceof Error ? error.message : "Failed to load art");
+        setArtError(
+          error instanceof Error ? error.message : "Failed to load art",
+        );
       });
     return () => {
       cancelled = true;
@@ -192,7 +208,8 @@ export function TokenTool({ control, selectedTokenId, worldId, sceneId }: TokenT
   };
 
   const rotate = (deltaDegrees: number) => {
-    const nextRotation = (selectedToken.rotation ?? 0) + (deltaDegrees * Math.PI) / 180;
+    const nextRotation =
+      (selectedToken.rotation ?? 0) + (deltaDegrees * Math.PI) / 180;
     void applyTokenChange({ rotation: nextRotation });
   };
 
@@ -356,10 +373,16 @@ export function TokenTool({ control, selectedTokenId, worldId, sceneId }: TokenT
                     aria-pressed={currentArt === url}
                     onClick={() => setArt(url)}
                     className={`bg-muted overflow-hidden rounded border transition ${
-                      currentArt === url ? "border-primary" : "hover:border-primary/50"
+                      currentArt === url
+                        ? "border-primary"
+                        : "hover:border-primary/50"
                     }`}
                   >
-                    <img src={url} alt="" className="aspect-square size-full object-contain" />
+                    <img
+                      src={url}
+                      alt=""
+                      className="aspect-square size-full object-contain"
+                    />
                   </button>
                 );
               })}
@@ -379,7 +402,11 @@ export function TokenTool({ control, selectedTokenId, worldId, sceneId }: TokenT
       </div>
 
       {refusal ? (
-        <span className="text-destructive text-xs" role="alert" data-testid="token-tool-refusal">
+        <span
+          className="text-destructive text-xs"
+          role="alert"
+          data-testid="token-tool-refusal"
+        >
           {refusal}
         </span>
       ) : null}

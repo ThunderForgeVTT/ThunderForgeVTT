@@ -50,7 +50,8 @@ export interface RollDiscrepancyRecord {
 
 function finite(...candidates: (number | null | undefined)[]): number | null {
   for (const candidate of candidates) {
-    if (typeof candidate === "number" && Number.isFinite(candidate)) return candidate;
+    if (typeof candidate === "number" && Number.isFinite(candidate))
+      return candidate;
   }
   return null;
 }

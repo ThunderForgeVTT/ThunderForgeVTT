@@ -79,7 +79,9 @@ export class GraphQLRequestError extends Error {
  * without a name is fine and simply yields `undefined`.
  */
 export function operationNameOf(query: string): string | undefined {
-  return /\b(?:query|mutation|subscription)\s+([A-Za-z_][A-Za-z0-9_]*)/.exec(query)?.[1];
+  return /\b(?:query|mutation|subscription)\s+([A-Za-z_][A-Za-z0-9_]*)/.exec(
+    query,
+  )?.[1];
 }
 
 function collectMessages(errors: GraphQLErrorEntry[] | undefined): string[] {
@@ -94,7 +96,9 @@ function collectMessages(errors: GraphQLErrorEntry[] | undefined): string[] {
  * Returns `null` when the body is not parseable, so the caller can report the
  * HTTP status instead of a `SyntaxError` about an unexpected `<`.
  */
-async function readPayload<TData>(response: Response): Promise<GraphQLResponse<TData> | null> {
+async function readPayload<TData>(
+  response: Response,
+): Promise<GraphQLResponse<TData> | null> {
   let raw: string;
   try {
     raw = await response.text();
@@ -133,7 +137,9 @@ function unwrap<TData>(
 
   if (!response.ok || messages.length > 0) {
     throw new GraphQLRequestError(
-      messages.length > 0 ? messages.join("; ") : `${notOkFallback} (HTTP ${response.status})`,
+      messages.length > 0
+        ? messages.join("; ")
+        : `${notOkFallback} (HTTP ${response.status})`,
       { operation, status: response.status, errors: messages },
     );
   }
@@ -155,19 +161,28 @@ async function send(
   timeoutMs: number | null,
 ): Promise<Response> {
   const controller = timeoutMs === null ? null : new AbortController();
-  const timer = controller === null ? null : setTimeout(() => controller.abort(), timeoutMs ?? 0);
+  const timer =
+    controller === null
+      ? null
+      : setTimeout(() => controller.abort(), timeoutMs ?? 0);
 
   try {
     return await fetch(url, { ...init, signal: controller?.signal });
   } catch {
     if (controller?.signal.aborted) {
-      throw new GraphQLRequestError("The request timed out. Please try again.", { operation });
+      throw new GraphQLRequestError(
+        "The request timed out. Please try again.",
+        { operation },
+      );
     }
     // A rejected fetch is a transport failure — DNS, offline, CORS, connection
     // reset. The browser's raw TypeError is not useful to a user.
-    throw new GraphQLRequestError("Could not reach the server. Check your connection.", {
-      operation,
-    });
+    throw new GraphQLRequestError(
+      "Could not reach the server. Check your connection.",
+      {
+        operation,
+      },
+    );
   } finally {
     if (timer !== null) {
       clearTimeout(timer);
@@ -194,7 +209,12 @@ export async function postGraphQL<TData>(
     options.timeoutMs === undefined ? DEFAULT_TIMEOUT_MS : options.timeoutMs,
   );
 
-  return unwrap<TData>(await readPayload<TData>(response), response, operation, "Request failed");
+  return unwrap<TData>(
+    await readPayload<TData>(response),
+    response,
+    operation,
+    "Request failed",
+  );
 }
 
 /**
@@ -216,9 +236,15 @@ export async function postGraphQLMultipart<TData>(
   const formData = new FormData();
   formData.append(
     "operations",
-    JSON.stringify({ query, variables: { ...variables, [filePathInVariables]: null } }),
+    JSON.stringify({
+      query,
+      variables: { ...variables, [filePathInVariables]: null },
+    }),
   );
-  formData.append("map", JSON.stringify({ "0": [`variables.${filePathInVariables}`] }));
+  formData.append(
+    "map",
+    JSON.stringify({ "0": [`variables.${filePathInVariables}`] }),
+  );
   formData.append("0", file);
 
   const response = await send(
@@ -235,5 +261,10 @@ export async function postGraphQLMultipart<TData>(
     options.timeoutMs === undefined ? null : options.timeoutMs,
   );
 
-  return unwrap<TData>(await readPayload<TData>(response), response, operation, "Upload failed");
+  return unwrap<TData>(
+    await readPayload<TData>(response),
+    response,
+    operation,
+    "Upload failed",
+  );
 }

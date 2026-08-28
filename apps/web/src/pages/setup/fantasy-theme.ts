@@ -20,7 +20,8 @@ export const fantasyTheme = {
   },
   shadows: {
     panel: "0 22px 56px rgba(7, 4, 2, 0.45)",
-    inner: "inset 0 1px 0 rgba(255, 230, 163, 0.18), inset 0 -12px 28px rgba(18, 12, 9, 0.1)",
+    inner:
+      "inset 0 1px 0 rgba(255, 230, 163, 0.18), inset 0 -12px 28px rgba(18, 12, 9, 0.1)",
     glow: "0 0 28px rgba(255, 230, 163, 0.18)",
   },
   textures: {

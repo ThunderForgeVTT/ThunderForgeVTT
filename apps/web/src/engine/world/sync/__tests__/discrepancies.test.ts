@@ -63,10 +63,17 @@ describe("disclosed discrepancies", () => {
       reportedValue: 20,
       determinedValue: Number.POSITIVE_INFINITY,
     });
-    noteDiscrepancy(null, { userId: "u", reportedValue: 20, determinedValue: 7 });
+    noteDiscrepancy(null, {
+      userId: "u",
+      reportedValue: 20,
+      determinedValue: 7,
+    });
 
     for (const id of ["a", "b", "c", "d", "e"]) {
-      expect(discrepancyFor(id), `${id} was incomplete and must be dropped`).toBeNull();
+      expect(
+        discrepancyFor(id),
+        `${id} was incomplete and must be dropped`,
+      ).toBeNull();
     }
   });
 
@@ -83,24 +90,36 @@ describe("disclosed discrepancies", () => {
     const stored = discrepancyFor("roll-2")!;
 
     const shown = discrepancyToShow(
-      { claimedValue: stored.reportedValue, determinedValue: stored.determinedValue },
+      {
+        claimedValue: stored.reportedValue,
+        determinedValue: stored.determinedValue,
+      },
       true,
     );
     expect(shown).toEqual({ claimedValue: 20, determinedValue: 7 });
 
     // And straight from the server's spelling, with no translation at all.
-    expect(discrepancyToShow({ reportedValue: 20, determinedValue: 7 }, true)).toEqual({
+    expect(
+      discrepancyToShow({ reportedValue: 20, determinedValue: 7 }, true),
+    ).toEqual({
       claimedValue: 20,
       determinedValue: 7,
     });
   });
 
   it("still shows nothing to a player, however it arrived", () => {
-    noteDiscrepancy("roll-3", { userId: "u", reportedValue: 20, determinedValue: 7 });
+    noteDiscrepancy("roll-3", {
+      userId: "u",
+      reportedValue: 20,
+      determinedValue: 7,
+    });
     const stored = discrepancyFor("roll-3")!;
 
     expect(
-      discrepancyToShow({ reportedValue: stored.reportedValue, determinedValue: 7 }, false),
+      discrepancyToShow(
+        { reportedValue: stored.reportedValue, determinedValue: 7 },
+        false,
+      ),
       "FR-067: the note exists for the Game Master and for nobody else",
     ).toBeNull();
   });

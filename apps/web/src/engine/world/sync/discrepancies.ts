@@ -51,7 +51,8 @@ export function noteDiscrepancy(
   if (!recordId || !disclosed) return;
   const { userId, reportedValue, determinedValue } = disclosed;
   if (typeof userId !== "string") return;
-  if (!Number.isFinite(reportedValue) || !Number.isFinite(determinedValue)) return;
+  if (!Number.isFinite(reportedValue) || !Number.isFinite(determinedValue))
+    return;
   byRecordId.set(recordId, {
     userId,
     reportedValue: reportedValue as number,

@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { copySharedActorToWorld, getMyDmWorlds, getSharedActor } from "@/api/actorShares";
+import {
+  copySharedActorToWorld,
+  getMyDmWorlds,
+  getSharedActor,
+} from "@/api/actorShares";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
@@ -25,13 +29,17 @@ export default function SharedActorPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [dmWorlds, setDmWorlds] = useState<DmWorldSummary[] | null>(null);
   const [selectedWorldId, setSelectedWorldId] = useState("");
-  const [step, setStep] = useState<"idle" | "confirming" | "copying" | "done">("idle");
+  const [step, setStep] = useState<"idle" | "confirming" | "copying" | "done">(
+    "idle",
+  );
   const [copyError, setCopyError] = useState<string | null>(null);
   const [copiedWorldName, setCopiedWorldName] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      navigate(`/login?returnTo=${encodeURIComponent(`/shared/actor/${code}`)}`);
+      navigate(
+        `/login?returnTo=${encodeURIComponent(`/shared/actor/${code}`)}`,
+      );
     }
   }, [authLoading, isAuthenticated, code, navigate]);
 
@@ -51,7 +59,11 @@ export default function SharedActorPage() {
       })
       .catch((err) => {
         if (active) {
-          setLoadError(err instanceof Error ? err.message : "This share link is no longer available.");
+          setLoadError(
+            err instanceof Error
+              ? err.message
+              : "This share link is no longer available.",
+          );
         }
       })
       .finally(() => {
@@ -81,7 +93,9 @@ export default function SharedActorPage() {
     setCopyError(null);
     try {
       const created = await copySharedActorToWorld(code, selectedWorldId);
-      setCopiedWorldName(dmWorlds?.find((w) => w.id === created.worldId)?.name ?? "your world");
+      setCopiedWorldName(
+        dmWorlds?.find((w) => w.id === created.worldId)?.name ?? "your world",
+      );
       setStep("done");
     } catch (err) {
       setCopyError(err instanceof Error ? err.message : "Failed to copy actor");
@@ -91,7 +105,11 @@ export default function SharedActorPage() {
 
   return (
     <>
-      <SEO title="Shared actor" description="A shared actor from ThunderForge" noindex />
+      <SEO
+        title="Shared actor"
+        description="A shared actor from ThunderForge"
+        noindex
+      />
       <Container>
         <main className="grid min-h-[60vh] place-items-center py-16">
           {loadError || !preview ? (
@@ -116,9 +134,13 @@ export default function SharedActorPage() {
                   {preview.isNpc ? "NPC" : "Player Character"}
                 </p>
                 <h1 className="text-2xl font-semibold">{preview.label}</h1>
-                <p className="text-muted-foreground">Type: {preview.actorType}</p>
+                <p className="text-muted-foreground">
+                  Type: {preview.actorType}
+                </p>
                 {preview.gameSystemId ? (
-                  <p className="text-muted-foreground">Game system: {preview.gameSystemId}</p>
+                  <p className="text-muted-foreground">
+                    Game system: {preview.gameSystemId}
+                  </p>
                 ) : null}
               </div>
 
@@ -153,12 +175,14 @@ export default function SharedActorPage() {
                           Cancel
                         </Button>
                       </div>
-                      {copyError ? <StatusBadge variant="danger">{copyError}</StatusBadge> : null}
+                      {copyError ? (
+                        <StatusBadge variant="danger">{copyError}</StatusBadge>
+                      ) : null}
                     </>
                   ) : (
                     <p className="text-sm text-muted-foreground">
-                      You don't have DM-level access to any world yet — create or run a world
-                      first to copy this actor into it.
+                      You don't have DM-level access to any world yet — create
+                      or run a world first to copy this actor into it.
                     </p>
                   )}
                 </div>

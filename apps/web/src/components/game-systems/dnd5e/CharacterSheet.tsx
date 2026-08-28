@@ -65,21 +65,25 @@ export function CharacterSheet({
   onError,
 }: CharacterSheetProps): ReactNode {
   // E2.1: Load actor system data via direct GraphQL fetch
-  const { data: actorData, loading: dataLoading, error: dataError } = useActorSystemData(
-    actorId,
-    gameSystemId,
-  );
+  const {
+    data: actorData,
+    loading: dataLoading,
+    error: dataError,
+  } = useActorSystemData(actorId, gameSystemId);
 
   // E2.2: Setup mutation handler with optimistic updates
-  const { mutate: updateActorData, isPending: isMutating, error: mutationError } = useUpdateActorData(
-    actorId,
-    gameSystemId,
-  );
+  const {
+    mutate: updateActorData,
+    isPending: isMutating,
+    error: mutationError,
+  } = useUpdateActorData(actorId, gameSystemId);
 
   // E2.3: Load system manifest for calculators
-  const { manifest, loading: manifestLoading, error: manifestError } = useGameSystemManifest(
-    gameSystemId,
-  );
+  const {
+    manifest,
+    loading: manifestLoading,
+    error: manifestError,
+  } = useGameSystemManifest(gameSystemId);
 
   const isLoading = dataLoading || manifestLoading;
   const isOptimistic = isMutating;
@@ -141,7 +145,10 @@ export function CharacterSheet({
     }
   };
 
-  const handleToggleProficiency = async (skillId: string, proficient: boolean) => {
+  const handleToggleProficiency = async (
+    skillId: string,
+    proficient: boolean,
+  ) => {
     try {
       const updated = { ...proficiencyData, [skillId]: proficient };
       await updateActorData("proficiency_data", updated);
@@ -155,7 +162,12 @@ export function CharacterSheet({
   return (
     <Container className="grid gap-6 py-6">
       {/* Character Header */}
-      <div className={cn("flex items-center justify-between gap-4", isOptimistic && "opacity-80")}>
+      <div
+        className={cn(
+          "flex items-center justify-between gap-4",
+          isOptimistic && "opacity-80",
+        )}
+      >
         <div>
           <h1 className="text-2xl font-semibold">{actorName}</h1>
           <p className="text-sm text-muted-foreground">
@@ -189,19 +201,33 @@ export function CharacterSheet({
                 <Card surface="parchment" className="p-6">
                   <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                     <div className="grid gap-1">
-                      <span className="text-xs text-muted-foreground">Hit Points</span>
-                      <span className="text-xl font-semibold">{resourceData.hp ?? 0}</span>
+                      <span className="text-xs text-muted-foreground">
+                        Hit Points
+                      </span>
+                      <span className="text-xl font-semibold">
+                        {resourceData.hp ?? 0}
+                      </span>
                     </div>
                     <div className="grid gap-1">
-                      <span className="text-xs text-muted-foreground">Armor Class</span>
-                      <span className="text-xl font-semibold">{resourceData.ac ?? 10}</span>
+                      <span className="text-xs text-muted-foreground">
+                        Armor Class
+                      </span>
+                      <span className="text-xl font-semibold">
+                        {resourceData.ac ?? 10}
+                      </span>
                     </div>
                     <div className="grid gap-1">
-                      <span className="text-xs text-muted-foreground">Speed</span>
-                      <span className="text-xl font-semibold">{resourceData.speed ?? 30} ft</span>
+                      <span className="text-xs text-muted-foreground">
+                        Speed
+                      </span>
+                      <span className="text-xl font-semibold">
+                        {resourceData.speed ?? 30} ft
+                      </span>
                     </div>
                     <div className="grid gap-1">
-                      <span className="text-xs text-muted-foreground">Initiative</span>
+                      <span className="text-xs text-muted-foreground">
+                        Initiative
+                      </span>
                       <span className="text-xl font-semibold">
                         {dexModifier >= 0 ? "+" : ""}
                         {dexModifier}
@@ -234,7 +260,9 @@ export function CharacterSheet({
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                   <div className="grid gap-1">
                     <span className="text-xs text-muted-foreground">Class</span>
-                    <span className="font-medium">{traitData.class ?? "—"}</span>
+                    <span className="font-medium">
+                      {traitData.class ?? "—"}
+                    </span>
                   </div>
                   <div className="grid gap-1">
                     <span className="text-xs text-muted-foreground">Level</span>
@@ -245,16 +273,28 @@ export function CharacterSheet({
                     <span className="font-medium">{traitData.race ?? "—"}</span>
                   </div>
                   <div className="grid gap-1">
-                    <span className="text-xs text-muted-foreground">Background</span>
-                    <span className="font-medium">{traitData.background ?? "—"}</span>
+                    <span className="text-xs text-muted-foreground">
+                      Background
+                    </span>
+                    <span className="font-medium">
+                      {traitData.background ?? "—"}
+                    </span>
                   </div>
                   <div className="grid gap-1">
-                    <span className="text-xs text-muted-foreground">Alignment</span>
-                    <span className="font-medium">{traitData.alignment ?? "—"}</span>
+                    <span className="text-xs text-muted-foreground">
+                      Alignment
+                    </span>
+                    <span className="font-medium">
+                      {traitData.alignment ?? "—"}
+                    </span>
                   </div>
                   <div className="grid gap-1">
-                    <span className="text-xs text-muted-foreground">Experience</span>
-                    <span className="font-medium">{traitData.experience ?? 0}</span>
+                    <span className="text-xs text-muted-foreground">
+                      Experience
+                    </span>
+                    <span className="font-medium">
+                      {traitData.experience ?? 0}
+                    </span>
                   </div>
                 </div>
               </Card>
@@ -268,7 +308,8 @@ export function CharacterSheet({
                 <div>
                   <h3 className="text-lg font-semibold">Spellbook</h3>
                   <p className="text-sm text-muted-foreground">
-                    Spellcasting ability: {spellData.spellcasting_ability ?? "—"}
+                    Spellcasting ability:{" "}
+                    {spellData.spellcasting_ability ?? "—"}
                   </p>
                 </div>
 
@@ -278,19 +319,23 @@ export function CharacterSheet({
                       Spell Slots
                     </div>
                     <div className="flex flex-wrap gap-3">
-                      {Object.entries(spellData.spell_slots).map(([level, slots]: [string, any]) => (
-                        <div
-                          key={level}
-                          className="flex items-center gap-1 rounded-md bg-muted px-3 py-1 text-sm"
-                        >
-                          <span>{level}:</span>
-                          <span className="font-medium">{slots}</span>
-                        </div>
-                      ))}
+                      {Object.entries(spellData.spell_slots).map(
+                        ([level, slots]: [string, any]) => (
+                          <div
+                            key={level}
+                            className="flex items-center gap-1 rounded-md bg-muted px-3 py-1 text-sm"
+                          >
+                            <span>{level}:</span>
+                            <span className="font-medium">{slots}</span>
+                          </div>
+                        ),
+                      )}
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">No spell slots recorded</p>
+                  <p className="text-sm text-muted-foreground">
+                    No spell slots recorded
+                  </p>
                 )}
 
                 {spellData.known_spells && spellData.known_spells.length > 0 ? (
@@ -299,13 +344,17 @@ export function CharacterSheet({
                       Known Spells
                     </div>
                     <ul className="grid list-disc gap-1 pl-4 text-sm">
-                      {spellData.known_spells.map((spell: string, idx: number) => (
-                        <li key={idx}>{spell}</li>
-                      ))}
+                      {spellData.known_spells.map(
+                        (spell: string, idx: number) => (
+                          <li key={idx}>{spell}</li>
+                        ),
+                      )}
                     </ul>
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">No spells known</p>
+                  <p className="text-sm text-muted-foreground">
+                    No spells known
+                  </p>
                 )}
               </Card>
             ),

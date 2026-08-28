@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * Phase 4.9.C.3: Client-side Conflict Detection
- * 
+ *
  * Listens to worldEventCreated subscription and detects conflicts (event_code=2).
  * Maintains a log of recent conflicts and provides handlers for UI feedback.
  */
@@ -31,11 +31,11 @@ const MAX_STORED_CONFLICTS = 50;
 
 /**
  * Hook to detect conflicts from world events
- * 
+ *
  * Usage:
  * ```tsx
  * const { conflicts, unresolvedCount, lastConflict, dismissConflict } = useConflictDetection(worldId);
- * 
+ *
  * if (lastConflict) {
  *   return <ConflictNotification conflict={lastConflict} onDismiss={() => dismissConflict(lastConflict.eventId)} />
  * }
@@ -60,10 +60,12 @@ export function useConflictDetection(worldId: string | null) {
       return; // Not a conflict event
     }
 
-    console.log('🔔 [Phase4.9.C3] Conflict detected in worldEventCreated subscription');
+    console.log(
+      "🔔 [Phase4.9.C3] Conflict detected in worldEventCreated subscription",
+    );
 
     const payload = event.token_event || {};
-    const tokenId = payload.token_id || 'unknown';
+    const tokenId = payload.token_id || "unknown";
     const clientVersion = payload.client_version;
     const serverVersion = payload.server_version;
 
@@ -83,12 +85,11 @@ export function useConflictDetection(worldId: string | null) {
 
     // Keep only last MAX_STORED_CONFLICTS
     if (conflictsRef.current.size > MAX_STORED_CONFLICTS) {
-      const oldest = Array.from(conflictsRef.current.entries())
-        .sort((a, b) => {
-          const timeA = new Date(a[1].conflictTimestamp).getTime();
-          const timeB = new Date(b[1].conflictTimestamp).getTime();
-          return timeA - timeB;
-        })[0];
+      const oldest = Array.from(conflictsRef.current.entries()).sort((a, b) => {
+        const timeA = new Date(a[1].conflictTimestamp).getTime();
+        const timeB = new Date(b[1].conflictTimestamp).getTime();
+        return timeA - timeB;
+      })[0];
 
       if (oldest) {
         conflictsRef.current.delete(oldest[0]);
@@ -110,7 +111,7 @@ export function useConflictDetection(worldId: string | null) {
     });
 
     // Log conflict for debugging
-    console.warn('⚠️  [Phase4.9.C3] Conflict applied (Last-Write-Wins):', {
+    console.warn("⚠️  [Phase4.9.C3] Conflict applied (Last-Write-Wins):", {
       tokenId,
       clientExpected: clientVersion,
       serverActual: serverVersion,
@@ -136,7 +137,10 @@ export function useConflictDetection(worldId: string | null) {
         ...prev,
         unresolvedCount,
         hasConflicts: unresolvedCount > 0,
-        lastConflict: unresolvedCount > 0 ? allConflicts.find((c) => !c.dismissed) : undefined,
+        lastConflict:
+          unresolvedCount > 0
+            ? allConflicts.find((c) => !c.dismissed)
+            : undefined,
       }));
     }
   }, []);
@@ -146,7 +150,7 @@ export function useConflictDetection(worldId: string | null) {
    */
   const getTokenConflicts = useCallback((tokenId: string): ConflictRecord[] => {
     return Array.from(conflictsRef.current.values()).filter(
-      (c) => c.tokenId === tokenId && !c.dismissed
+      (c) => c.tokenId === tokenId && !c.dismissed,
     );
   }, []);
 

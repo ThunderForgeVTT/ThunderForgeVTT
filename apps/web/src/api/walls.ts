@@ -1,5 +1,9 @@
 import { postGraphQL } from "@/api/graphqlClient";
-import type { CreateWallInput, UpdateWallInput, WallRecord } from "@/types/wall";
+import type {
+  CreateWallInput,
+  UpdateWallInput,
+  WallRecord,
+} from "@/types/wall";
 
 const WALL_FIELDS = `
   wallId

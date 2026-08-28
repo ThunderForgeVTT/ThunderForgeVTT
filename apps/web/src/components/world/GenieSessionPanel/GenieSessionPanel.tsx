@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import { SessionClocks, SessionResourceTrade, SessionWishPool } from "@thunderforge/genie";
+import {
+  SessionClocks,
+  SessionResourceTrade,
+  SessionWishPool,
+} from "@thunderforge/genie";
 import { getWorldItems } from "@/api/items";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
@@ -65,9 +69,9 @@ export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
   const [rewardResourceAmount, setRewardResourceAmount] = useState("1");
   const [rewardItemId, setRewardItemId] = useState("");
   const [rewardItemQuantity, setRewardItemQuantity] = useState("1");
-  const [rewardRecipientMode, setRewardRecipientMode] = useState<"TRIGGERING_ACTOR" | "WHOLE_PARTY">(
-    "TRIGGERING_ACTOR",
-  );
+  const [rewardRecipientMode, setRewardRecipientMode] = useState<
+    "TRIGGERING_ACTOR" | "WHOLE_PARTY"
+  >("TRIGGERING_ACTOR");
   const [isConfiguringReward, setIsConfiguringReward] = useState(false);
   const [rewardError, setRewardError] = useState<string | null>(null);
 
@@ -78,7 +82,9 @@ export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
 
   useEffect(() => {
     if (!isGm) return;
-    getWorldItems(worldId).then(setWorldItems).catch(() => setWorldItems([]));
+    getWorldItems(worldId)
+      .then(setWorldItems)
+      .catch(() => setWorldItems([]));
   }, [isGm, worldId]);
 
   if (loading) {
@@ -86,7 +92,11 @@ export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
   }
 
   if (error) {
-    return <p className="text-sm text-destructive">Failed to load Genie session: {error.message}</p>;
+    return (
+      <p className="text-sm text-destructive">
+        Failed to load Genie session: {error.message}
+      </p>
+    );
   }
 
   if (!session) {
@@ -100,7 +110,9 @@ export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
         Start Genie session
       </Button>
     ) : (
-      <p className="text-sm text-muted-foreground">No Genie session has started yet.</p>
+      <p className="text-sm text-muted-foreground">
+        No Genie session has started yet.
+      </p>
     );
   }
 
@@ -116,7 +128,9 @@ export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
       await grantSessionResource(grantActorId, grantResourceType, amount);
       setGrantAmount("1");
     } catch (err) {
-      setGrantError(err instanceof Error ? err.message : "Failed to grant resource");
+      setGrantError(
+        err instanceof Error ? err.message : "Failed to grant resource",
+      );
     } finally {
       setIsGranting(false);
     }
@@ -132,15 +146,24 @@ export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
       await configurePuzzleClockReward({
         clockId: rewardClockId,
         triggerSegment,
-        rewardResourceType: rewardKind === "resource" ? rewardResourceType : undefined,
-        rewardResourceAmount: rewardKind === "resource" ? Number.parseInt(rewardResourceAmount, 10) : undefined,
+        rewardResourceType:
+          rewardKind === "resource" ? rewardResourceType : undefined,
+        rewardResourceAmount:
+          rewardKind === "resource"
+            ? Number.parseInt(rewardResourceAmount, 10)
+            : undefined,
         rewardItemId: rewardKind === "item" ? rewardItemId : undefined,
-        rewardItemQuantity: rewardKind === "item" ? Number.parseInt(rewardItemQuantity, 10) : undefined,
+        rewardItemQuantity:
+          rewardKind === "item"
+            ? Number.parseInt(rewardItemQuantity, 10)
+            : undefined,
         recipientMode: rewardRecipientMode,
       });
       setRewardTriggerSegment("1");
     } catch (err) {
-      setRewardError(err instanceof Error ? err.message : "Failed to configure reward");
+      setRewardError(
+        err instanceof Error ? err.message : "Failed to configure reward",
+      );
     } finally {
       setIsConfiguringReward(false);
     }
@@ -152,7 +175,11 @@ export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
     if (!Number.isFinite(delta) || delta === 0) return;
     setIsAdvancing(true);
     try {
-      await advancePuzzleClock(advanceClockId, delta, advanceActorId || undefined);
+      await advancePuzzleClock(
+        advanceClockId,
+        delta,
+        advanceActorId || undefined,
+      );
     } finally {
       setIsAdvancing(false);
     }
@@ -161,9 +188,16 @@ export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
   return (
     <div className="grid gap-4" data-testid="genie-session-panel">
       {isGm ? (
-        <Card className="grid gap-2 p-4" data-testid="genie-grant-resource-panel">
-          <h4 className="text-sm font-semibold tracking-tight">Grant Session Resource</h4>
-          {grantError ? <p className="text-sm text-destructive">{grantError}</p> : null}
+        <Card
+          className="grid gap-2 p-4"
+          data-testid="genie-grant-resource-panel"
+        >
+          <h4 className="text-sm font-semibold tracking-tight">
+            Grant Session Resource
+          </h4>
+          {grantError ? (
+            <p className="text-sm text-destructive">{grantError}</p>
+          ) : null}
           <div className="grid grid-cols-3 gap-2">
             <select
               value={grantActorId}
@@ -224,13 +258,24 @@ export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
         sessionStatus={session.status}
         isGm={isGm}
         onAdvanceDoomClock={(delta) => advanceDoomClock(delta)}
-        onAdvancePuzzleClock={(clockId, delta) => advancePuzzleClock(clockId, delta)}
-        onCreatePuzzleClock={(label, segmentsMax) => createPuzzleClock(label, segmentsMax)}
+        onAdvancePuzzleClock={(clockId, delta) =>
+          advancePuzzleClock(clockId, delta)
+        }
+        onCreatePuzzleClock={(label, segmentsMax) =>
+          createPuzzleClock(label, segmentsMax)
+        }
       />
       {isGm && session.puzzleClocks.length > 0 ? (
-        <Card className="grid gap-3 p-4" data-testid="genie-puzzle-clock-rewards-panel">
-          <h4 className="text-sm font-semibold tracking-tight">Puzzle Clock Rewards</h4>
-          {rewardError ? <p className="text-sm text-destructive">{rewardError}</p> : null}
+        <Card
+          className="grid gap-3 p-4"
+          data-testid="genie-puzzle-clock-rewards-panel"
+        >
+          <h4 className="text-sm font-semibold tracking-tight">
+            Puzzle Clock Rewards
+          </h4>
+          {rewardError ? (
+            <p className="text-sm text-destructive">{rewardError}</p>
+          ) : null}
           <div className="grid gap-2">
             <select
               value={rewardClockId}
@@ -251,14 +296,20 @@ export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
                 type="number"
                 min={1}
                 value={rewardTriggerSegment}
-                onChange={(event) => setRewardTriggerSegment(event.target.value)}
+                onChange={(event) =>
+                  setRewardTriggerSegment(event.target.value)
+                }
                 className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
                 data-testid="reward-trigger-segment-input"
                 aria-label="Segment that triggers this reward"
               />
               <select
                 value={rewardRecipientMode}
-                onChange={(event) => setRewardRecipientMode(event.target.value as "TRIGGERING_ACTOR" | "WHOLE_PARTY")}
+                onChange={(event) =>
+                  setRewardRecipientMode(
+                    event.target.value as "TRIGGERING_ACTOR" | "WHOLE_PARTY",
+                  )
+                }
                 className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
                 data-testid="reward-recipient-mode-select"
                 aria-label="Who receives this reward"
@@ -269,11 +320,19 @@ export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
             </div>
             <div className="flex items-center gap-2 text-sm">
               <label className="flex items-center gap-1">
-                <input type="radio" checked={rewardKind === "resource"} onChange={() => setRewardKind("resource")} />
+                <input
+                  type="radio"
+                  checked={rewardKind === "resource"}
+                  onChange={() => setRewardKind("resource")}
+                />
                 Resource
               </label>
               <label className="flex items-center gap-1">
-                <input type="radio" checked={rewardKind === "item"} onChange={() => setRewardKind("item")} />
+                <input
+                  type="radio"
+                  checked={rewardKind === "item"}
+                  onChange={() => setRewardKind("item")}
+                />
                 Item
               </label>
             </div>
@@ -281,7 +340,9 @@ export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
               <div className="grid grid-cols-2 gap-2">
                 <select
                   value={rewardResourceType}
-                  onChange={(event) => setRewardResourceType(event.target.value)}
+                  onChange={(event) =>
+                    setRewardResourceType(event.target.value)
+                  }
                   className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
                   data-testid="reward-resource-type-select"
                   aria-label="Reward resource type"
@@ -296,7 +357,9 @@ export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
                   type="number"
                   min={1}
                   value={rewardResourceAmount}
-                  onChange={(event) => setRewardResourceAmount(event.target.value)}
+                  onChange={(event) =>
+                    setRewardResourceAmount(event.target.value)
+                  }
                   className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
                   data-testid="reward-resource-amount-input"
                   aria-label="Reward resource amount"
@@ -312,7 +375,9 @@ export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
                   data-testid="reward-item-select"
                   aria-label="Reward item"
                 >
-                  <option value="">{worldItems === null ? "Loading items…" : "Select an item…"}</option>
+                  <option value="">
+                    {worldItems === null ? "Loading items…" : "Select an item…"}
+                  </option>
                   {(worldItems ?? []).map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.name}
@@ -323,7 +388,9 @@ export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
                   type="number"
                   min={1}
                   value={rewardItemQuantity}
-                  onChange={(event) => setRewardItemQuantity(event.target.value)}
+                  onChange={(event) =>
+                    setRewardItemQuantity(event.target.value)
+                  }
                   className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
                   data-testid="reward-item-quantity-input"
                   aria-label="Reward item quantity"
@@ -333,7 +400,11 @@ export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
             <Button
               type="button"
               size="sm"
-              disabled={isConfiguringReward || !rewardClockId || (rewardKind === "item" && !rewardItemId)}
+              disabled={
+                isConfiguringReward ||
+                !rewardClockId ||
+                (rewardKind === "item" && !rewardItemId)
+              }
               onClick={() => void handleConfigureReward()}
               data-testid="reward-configure-button"
             >
@@ -400,12 +471,16 @@ export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
           myActorId={myActor.id}
           myHoldings={myHoldings}
           resourceTypes={GENIE_SESSION_RESOURCE_TYPES}
-          partyMembers={partyMembers.map((actor) => ({ actorId: actor.id, label: actor.label }))}
+          partyMembers={partyMembers.map((actor) => ({
+            actorId: actor.id,
+            label: actor.label,
+          }))}
           incomingProposals={incomingProposals.map((proposal) => ({
             id: proposal.id,
             fromActorId: proposal.fromActorId,
             fromActorLabel:
-              partyMembers.find((actor) => actor.id === proposal.fromActorId)?.label ?? "Unknown",
+              partyMembers.find((actor) => actor.id === proposal.fromActorId)
+                ?.label ?? "Unknown",
             fromResourceType: proposal.fromResourceType,
             fromQuantity: proposal.fromQuantity,
             toResourceType: proposal.toResourceType,

@@ -16,11 +16,20 @@ export interface ActorPreviewPanelProps {
  * Presentation-only: it receives an already-resolved `WorldActorRecord`
  * and performs no data fetching of its own (research.md §3).
  */
-export function ActorPreviewPanel({ worldId, actor, onClose }: ActorPreviewPanelProps) {
+export function ActorPreviewPanel({
+  worldId,
+  actor,
+  onClose,
+}: ActorPreviewPanelProps) {
   if (!actor) {
     return (
-      <Card className="grid place-items-center p-6 text-center" data-testid="actor-preview-panel-empty">
-        <p className="text-sm text-muted-foreground">Select an NPC to preview it.</p>
+      <Card
+        className="grid place-items-center p-6 text-center"
+        data-testid="actor-preview-panel-empty"
+      >
+        <p className="text-sm text-muted-foreground">
+          Select an NPC to preview it.
+        </p>
       </Card>
     );
   }
@@ -49,25 +58,40 @@ export function ActorPreviewPanel({ worldId, actor, onClose }: ActorPreviewPanel
 
       <div className="grid gap-2">
         <p className="text-sm text-muted-foreground">
-          Classification: {actor.isNpc ? "Non-Player Character" : "Player Character"}
+          Classification:{" "}
+          {actor.isNpc ? "Non-Player Character" : "Player Character"}
         </p>
         <p className="text-sm text-muted-foreground">Type: {actor.actorType}</p>
         {actor.gameSystemId ? (
-          <p className="text-sm text-muted-foreground">Game system: {actor.gameSystemId}</p>
+          <p className="text-sm text-muted-foreground">
+            Game system: {actor.gameSystemId}
+          </p>
         ) : null}
         <p className="text-sm whitespace-pre-wrap">
           {actor.description || (
-            <span className="text-muted-foreground italic">No description.</span>
+            <span className="text-muted-foreground italic">
+              No description.
+            </span>
           )}
         </p>
       </div>
 
       <div className="flex gap-2">
-        <Button asChild variant="secondary" size="sm" data-testid="actor-preview-panel-view">
+        <Button
+          asChild
+          variant="secondary"
+          size="sm"
+          data-testid="actor-preview-panel-view"
+        >
           <Link to={`/world/${worldId}/actor/${actor.id}/view`}>View</Link>
         </Button>
         {canEdit ? (
-          <Button asChild variant="secondary" size="sm" data-testid="actor-preview-panel-edit">
+          <Button
+            asChild
+            variant="secondary"
+            size="sm"
+            data-testid="actor-preview-panel-edit"
+          >
             <Link to={`/world/${worldId}/actor/${actor.id}/edit`}>Edit</Link>
           </Button>
         ) : null}

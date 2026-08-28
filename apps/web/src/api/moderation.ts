@@ -102,7 +102,9 @@ type ModerationHistoryQuery = {
 };
 
 /** Compliance-staff-only. */
-export function getModerationHistoryForAccount(accountId: string): Promise<ModerationCaseRecord[]> {
+export function getModerationHistoryForAccount(
+  accountId: string,
+): Promise<ModerationCaseRecord[]> {
   return postGraphQL<ModerationHistoryQuery>(
     `
       query ModerationHistoryForAccount($accountId: UUID!) {

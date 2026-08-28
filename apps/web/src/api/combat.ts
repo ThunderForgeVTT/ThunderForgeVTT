@@ -43,7 +43,10 @@ export function getActiveCombat(worldId: string): Promise<CombatRecord | null> {
 }
 
 /** GM-only. Idempotent — returns the running combat if one already exists. */
-export function startCombat(worldId: string, sceneId?: string | null): Promise<CombatRecord> {
+export function startCombat(
+  worldId: string,
+  sceneId?: string | null,
+): Promise<CombatRecord> {
   return postGraphQL<{ startCombat: CombatRecord }>(
     `
       mutation StartCombat($input: StartCombatInput!) {

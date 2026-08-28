@@ -121,7 +121,10 @@ type UpdateSceneMutation = {
 
 /** Spec 022: also used by the Scenes section's summary editor
  * (`summaryMarkdown` re-renders `summaryRenderedHtml` server-side). */
-export function updateScene(sceneId: string, input: UpdateSceneInput): Promise<SceneRecord> {
+export function updateScene(
+  sceneId: string,
+  input: UpdateSceneInput,
+): Promise<SceneRecord> {
   return postGraphQL<UpdateSceneMutation>(
     `
       mutation UpdateScene($sceneId: UUID!, $input: GraphQLUpdateSceneInput!) {
@@ -139,7 +142,10 @@ type UpdateSceneHiddenMutation = {
 };
 
 /** Spec 022 (FR-007): GM/Owner-only, toggles a scene's player-facing visibility. */
-export function updateSceneHidden(sceneId: string, hidden: boolean): Promise<SceneRecord> {
+export function updateSceneHidden(
+  sceneId: string,
+  hidden: boolean,
+): Promise<SceneRecord> {
   return postGraphQL<UpdateSceneHiddenMutation>(
     `
       mutation UpdateSceneHidden($sceneId: UUID!, $hidden: Boolean!) {
@@ -166,7 +172,10 @@ type LaunchSceneMutation = {
  * server-authoritative active scene and broadcasts the switch to every
  * world member currently in Play — the Scenes section's "Launch" action.
  */
-export function launchScene(worldId: string, sceneId: string): Promise<LaunchSceneResult> {
+export function launchScene(
+  worldId: string,
+  sceneId: string,
+): Promise<LaunchSceneResult> {
   return postGraphQL<LaunchSceneMutation>(
     `
       mutation LaunchScene($worldId: UUID!, $sceneId: UUID!) {

@@ -107,7 +107,10 @@ export function resolveAbilityPluralLabel(
   if (!entry) {
     return DEFAULT_ABILITY_FACETS[classification].pluralLabel;
   }
-  if (typeof entry.pluralLabel === "string" && entry.pluralLabel.trim() !== "") {
+  if (
+    typeof entry.pluralLabel === "string" &&
+    entry.pluralLabel.trim() !== ""
+  ) {
     return entry.pluralLabel;
   }
   return entry.label;
@@ -117,7 +120,9 @@ export function resolveAbilityPluralLabel(
  * classification key, so callers can resolve a label without an unchecked
  * cast. Returns `"spell"` for anything unrecognized, matching the server's
  * own `AbilityClassification::from_db_str` fallback. */
-export function toAbilityClassificationKey(value: string): AbilityClassificationKey {
+export function toAbilityClassificationKey(
+  value: string,
+): AbilityClassificationKey {
   const lowered = value.toLowerCase();
   return (ABILITY_CLASSIFICATION_KEYS as string[]).includes(lowered)
     ? (lowered as AbilityClassificationKey)

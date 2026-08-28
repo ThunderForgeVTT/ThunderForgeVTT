@@ -10,7 +10,10 @@ interface MetricsCardProps {
   emphasis?: "gold" | "violet" | "forest";
 }
 
-const EMPHASIS_BORDER: Record<NonNullable<MetricsCardProps["emphasis"]>, string> = {
+const EMPHASIS_BORDER: Record<
+  NonNullable<MetricsCardProps["emphasis"]>,
+  string
+> = {
   gold: "border-border",
   violet: "border-primary/30",
   forest: "border-emerald-500/30",

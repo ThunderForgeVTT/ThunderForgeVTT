@@ -43,7 +43,8 @@ export default function PlayersRoutePage() {
 
   const seo: SeoConfig = {
     title: world ? `${world.name} — Players` : "World players",
-    description: "Browse this world's members and the characters they've claimed.",
+    description:
+      "Browse this world's members and the characters they've claimed.",
     canonicalPath: `/world/${id}/players`,
     noindex: true,
   };

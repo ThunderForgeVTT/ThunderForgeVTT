@@ -1,5 +1,8 @@
 import { useState, type ReactNode } from "react";
-import { FantasyIcon, type FantasyIconName } from "@/components/ui/fantasy-icon/FantasyIcon";
+import {
+  FantasyIcon,
+  type FantasyIconName,
+} from "@/components/ui/fantasy-icon/FantasyIcon";
 import { cn } from "@/lib/utils";
 
 export type GmToolId = "walls" | "lights" | "shapes" | "tokens";
@@ -55,7 +58,11 @@ export function GmToolRail({ tools }: GmToolRailProps) {
               aria-label={tool.label}
               aria-expanded={isOpen}
               data-testid={`gm-tool-${tool.id}`}
-              onClick={() => setOpenToolId((current) => (current === tool.id ? null : tool.id))}
+              onClick={() =>
+                setOpenToolId((current) =>
+                  current === tool.id ? null : tool.id,
+                )
+              }
               className={cn(
                 "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
                 isOpen

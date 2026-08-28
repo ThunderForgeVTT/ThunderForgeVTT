@@ -54,9 +54,8 @@ export async function submitQueuedChanges(
   worldId: string,
   changes: QueuedChangePayload[],
 ): Promise<ReconcileOutcome[]> {
-  const data = await postGraphQL<{ reconcileQueuedChanges: ReconcileOutcome[] }>(
-    RECONCILE_MUTATION,
-    { worldId, changes },
-  );
+  const data = await postGraphQL<{
+    reconcileQueuedChanges: ReconcileOutcome[];
+  }>(RECONCILE_MUTATION, { worldId, changes });
   return data.reconcileQueuedChanges;
 }

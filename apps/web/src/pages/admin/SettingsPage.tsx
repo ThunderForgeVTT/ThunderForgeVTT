@@ -30,7 +30,11 @@ import { MetricsCard } from "./components/MetricsCard";
 import { OAuthProviderForm } from "./components/OAuthProviderForm";
 import { SecurityPanel } from "./components/SecurityPanel";
 
-type AdminSettingsSection = "overview" | "configuration" | "storage" | "security";
+type AdminSettingsSection =
+  | "overview"
+  | "configuration"
+  | "storage"
+  | "security";
 
 interface SettingsPageProps {
   initialSection?: AdminSettingsSection;
@@ -77,7 +81,11 @@ export default function SettingsPage({
       })
       .catch((error) => {
         if (active) {
-          setPageStatus(error instanceof Error ? error.message : "Failed to load admin settings.");
+          setPageStatus(
+            error instanceof Error
+              ? error.message
+              : "Failed to load admin settings.",
+          );
         }
       })
       .finally(() => {
@@ -187,7 +195,10 @@ export default function SettingsPage({
     return updated;
   };
 
-  const updateManifest = async (key: string, value: string): Promise<SystemManifest> => {
+  const updateManifest = async (
+    key: string,
+    value: string,
+  ): Promise<SystemManifest> => {
     const updated = await updateManifestKey(key, value);
     setData((current) =>
       current
@@ -216,7 +227,11 @@ export default function SettingsPage({
       );
       setPageStatus("Disk usage recalculated from the current data root.");
     } catch (error) {
-      setPageStatus(error instanceof Error ? error.message : "Failed to recalculate disk usage.");
+      setPageStatus(
+        error instanceof Error
+          ? error.message
+          : "Failed to recalculate disk usage.",
+      );
     } finally {
       setIsRefreshingDisk(false);
     }
@@ -268,8 +283,8 @@ export default function SettingsPage({
               </h1>
               <p className="max-w-[62ch] text-muted-foreground">
                 This page binds together persisted metrics, OAuth provider
-                state, manifest metadata, disk usage, and security policy in
-                a single command surface.
+                state, manifest metadata, disk usage, and security policy in a
+                single command surface.
               </p>
             </div>
             <div className="grid content-start gap-1 rounded-lg border border-border bg-secondary p-4">
@@ -426,13 +441,17 @@ export default function SettingsPage({
                 <Card surface="stone" className="grid gap-4 p-6">
                   <SecurityPanel
                     settings={data.authSecuritySettings}
-                    bootstrapSettings={data.adminBootstrapSettings as AdminBootstrapSettings | null}
+                    bootstrapSettings={
+                      data.adminBootstrapSettings as AdminBootstrapSettings | null
+                    }
                     onUpdate={updateSecurity}
                   />
                 </Card>
               </section>
 
-              {pageStatus ? <StatusBadge variant="info">{pageStatus}</StatusBadge> : null}
+              {pageStatus ? (
+                <StatusBadge variant="info">{pageStatus}</StatusBadge>
+              ) : null}
             </div>
           </div>
         </main>

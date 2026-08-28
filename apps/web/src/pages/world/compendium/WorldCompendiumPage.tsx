@@ -37,24 +37,35 @@ export interface WorldCompendiumPageProps {
  */
 const COMPENDIUM_TAB_VALUES = ["npcs", "lore", "items", "abilities"];
 
-export function WorldCompendiumPage({ worldId, world }: WorldCompendiumPageProps) {
+export function WorldCompendiumPage({
+  worldId,
+  world,
+}: WorldCompendiumPageProps) {
   // Spec 021 (world sidebar nav): the tab is URL-driven so sidebar links
   // (e.g. `/compendium?tab=lore`) land directly on that tab instead of
   // always opening to NPCs.
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
-  const activeTab = COMPENDIUM_TAB_VALUES.includes(requestedTab ?? "") ? requestedTab! : "npcs";
+  const activeTab = COMPENDIUM_TAB_VALUES.includes(requestedTab ?? "")
+    ? requestedTab!
+    : "npcs";
   const [selectedActorId, setSelectedActorId] = useState<string | null>(null);
   const [roster, setRoster] = useState<WorldActorRecord[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [itemCatalog, setItemCatalog] = useState<WorldItemRecord[]>([]);
-  const [selectedAbilityId, setSelectedAbilityId] = useState<string | null>(null);
-  const [abilityCatalog, setAbilityCatalog] = useState<WorldAbilityRecord[]>([]);
+  const [selectedAbilityId, setSelectedAbilityId] = useState<string | null>(
+    null,
+  );
+  const [abilityCatalog, setAbilityCatalog] = useState<WorldAbilityRecord[]>(
+    [],
+  );
   // Spec 025 (T028, FR-010/FR-012): the active system's optional ability
   // presentation facets. `undefined` (no system, no facets block, or a failed
   // manifest fetch) means every classification renders its built-in default
   // label — the resolver is total, so this never needs a loading state.
-  const [abilityFacets, setAbilityFacets] = useState<AbilityFacetsLookup | undefined>(undefined);
+  const [abilityFacets, setAbilityFacets] = useState<
+    AbilityFacetsLookup | undefined
+  >(undefined);
   const { isGm } = useWorldRole(worldId, world);
 
   // Spec 021: the header blurb is GM-authored Markdown (a reserved lore
@@ -67,7 +78,9 @@ export function WorldCompendiumPage({ worldId, world }: WorldCompendiumPageProps
     getLoreEntry(worldId, COMPENDIUM_OVERVIEW_SLUG)
       .then((entry) => {
         if (active) {
-          setOverviewHtml(entry && !entry.moderated ? entry.renderedHtml : null);
+          setOverviewHtml(
+            entry && !entry.moderated ? entry.renderedHtml : null,
+          );
         }
       })
       .catch(() => {
@@ -90,7 +103,9 @@ export function WorldCompendiumPage({ worldId, world }: WorldCompendiumPageProps
     getGameSystemManifest(gameSystemId)
       .then((manifest) => {
         if (active) {
-          setAbilityFacets(manifest.abilityFacets as AbilityFacetsLookup | undefined);
+          setAbilityFacets(
+            manifest.abilityFacets as AbilityFacetsLookup | undefined,
+          );
         }
       })
       .catch(() => {
@@ -116,27 +131,39 @@ export function WorldCompendiumPage({ worldId, world }: WorldCompendiumPageProps
   );
 
   const selectedAbility = useMemo(
-    () => abilityCatalog.find((ability) => ability.id === selectedAbilityId) ?? null,
+    () =>
+      abilityCatalog.find((ability) => ability.id === selectedAbilityId) ??
+      null,
     [abilityCatalog, selectedAbilityId],
   );
 
   return (
     <main className="grid w-full gap-4" data-testid="world-compendium-page">
       <header className="grid gap-1 rounded-lg border border-border bg-card px-4 py-3">
-        <h1 className="text-xl font-semibold">{world?.name ?? "World"} artifacts</h1>
+        <h1 className="text-xl font-semibold">
+          {world?.name ?? "World"} artifacts
+        </h1>
         {overviewHtml ? (
-          <LoreMarkdownRenderer html={overviewHtml} className="text-sm text-muted-foreground" />
+          <LoreMarkdownRenderer
+            html={overviewHtml}
+            className="text-sm text-muted-foreground"
+          />
         ) : null}
       </header>
 
       <Tabs
         defaultValue="npcs"
         value={activeTab}
-        onValueChange={(tab) => setSearchParams((current) => {
-          const next = new URLSearchParams(current);
-          next.set("tab", tab);
-          return next;
-        }, { replace: true })}
+        onValueChange={(tab) =>
+          setSearchParams(
+            (current) => {
+              const next = new URLSearchParams(current);
+              next.set("tab", tab);
+              return next;
+            },
+            { replace: true },
+          )
+        }
         items={[
           {
             value: "npcs",

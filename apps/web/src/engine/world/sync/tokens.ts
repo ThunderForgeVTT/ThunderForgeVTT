@@ -43,7 +43,13 @@
  *    already-persisted tokens routes straight to `updateToken` for them.
  */
 
-import { createToken, deleteToken, getTokens, moveOwnToken, updateToken } from "@/api/tokens";
+import {
+  createToken,
+  deleteToken,
+  getTokens,
+  moveOwnToken,
+  updateToken,
+} from "@/api/tokens";
 import type { TokenRecord, UpdateTokenInput } from "@/types/token";
 import type { WorldStore } from "../store";
 import type { WorldCommand, WorldToken } from "../types";
@@ -96,7 +102,13 @@ export async function applyTokenWorldEvent(
   }
 
   const payload = (event.token_event ?? event.tokenEvent) as
-    | { action?: string; token_id?: string; tokenId?: string; scene_id?: string; sceneId?: string }
+    | {
+        action?: string;
+        token_id?: string;
+        tokenId?: string;
+        scene_id?: string;
+        sceneId?: string;
+      }
     | undefined;
 
   const eventSceneId = payload?.scene_id ?? payload?.sceneId;
@@ -282,7 +294,10 @@ export function startTokenMutationBridge(
       }
     })
     .catch((error) => {
-      console.error("Failed to seed known scene tokens for mutation bridge:", error);
+      console.error(
+        "Failed to seed known scene tokens for mutation bridge:",
+        error,
+      );
     });
 
   const unsubscribe = worldStore.subscribe((event) => {
@@ -329,7 +344,10 @@ export function startTokenMutationBridge(
           }
           await queueTokenEditWhileOffline(
             worldId,
-            { type: "upsert_token", token: { ...token, id: knownTokenId } } as WorldCommand,
+            {
+              type: "upsert_token",
+              token: { ...token, id: knownTokenId },
+            } as WorldCommand,
             isSceneOwner,
           );
           return;

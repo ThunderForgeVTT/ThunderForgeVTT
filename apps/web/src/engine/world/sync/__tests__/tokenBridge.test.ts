@@ -49,7 +49,12 @@ async function settle(): Promise<void> {
 
 function bridgeOnStore(isSceneOwner = true) {
   const store = createWorldStore({ worldId: WORLD_ID });
-  const stop = startTokenMutationBridge(store, SCENE_ID, isSceneOwner, WORLD_ID);
+  const stop = startTokenMutationBridge(
+    store,
+    SCENE_ID,
+    isSceneOwner,
+    WORLD_ID,
+  );
   return { store, stop };
 }
 
@@ -96,7 +101,10 @@ describe("startTokenMutationBridge", () => {
     expect(queueEdit.mock.calls[0][0]).toMatchObject({
       worldId: WORLD_ID,
       kind: "move",
-      command: { type: "upsert_token", token: { id: TOKEN_ID, x: 180, y: -120 } },
+      command: {
+        type: "upsert_token",
+        token: { id: TOKEN_ID, x: 180, y: -120 },
+      },
     });
     expect(updateToken).not.toHaveBeenCalled();
     stop();

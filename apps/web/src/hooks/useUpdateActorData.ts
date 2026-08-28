@@ -86,7 +86,10 @@ export function useUpdateActorData(
  * Convenience hook for updating ability data specifically
  */
 export function useUpdateAbilityData(actorId: string, gameSystemId: string) {
-  const { mutate, isPending, error } = useUpdateActorData(actorId, gameSystemId);
+  const { mutate, isPending, error } = useUpdateActorData(
+    actorId,
+    gameSystemId,
+  );
 
   return {
     updateAbilities: async (abilities: Record<string, number>) =>
@@ -99,8 +102,14 @@ export function useUpdateAbilityData(actorId: string, gameSystemId: string) {
 /**
  * Convenience hook for updating proficiency data specifically
  */
-export function useUpdateProficiencyData(actorId: string, gameSystemId: string) {
-  const { mutate, isPending, error } = useUpdateActorData(actorId, gameSystemId);
+export function useUpdateProficiencyData(
+  actorId: string,
+  gameSystemId: string,
+) {
+  const { mutate, isPending, error } = useUpdateActorData(
+    actorId,
+    gameSystemId,
+  );
 
   return {
     updateProficiencies: async (proficiencies: Record<string, boolean>) =>
@@ -114,7 +123,10 @@ export function useUpdateProficiencyData(actorId: string, gameSystemId: string) 
  * Convenience hook for updating resource data specifically
  */
 export function useUpdateResourceData(actorId: string, gameSystemId: string) {
-  const { mutate, isPending, error } = useUpdateActorData(actorId, gameSystemId);
+  const { mutate, isPending, error } = useUpdateActorData(
+    actorId,
+    gameSystemId,
+  );
 
   return {
     updateResources: async (resources: Record<string, any>) =>
@@ -128,7 +140,10 @@ export function useUpdateResourceData(actorId: string, gameSystemId: string) {
  * Convenience hook for updating trait data specifically
  */
 export function useUpdateTraitData(actorId: string, gameSystemId: string) {
-  const { mutate, isPending, error } = useUpdateActorData(actorId, gameSystemId);
+  const { mutate, isPending, error } = useUpdateActorData(
+    actorId,
+    gameSystemId,
+  );
 
   return {
     updateTraits: async (traits: Record<string, any>) =>
@@ -142,7 +157,10 @@ export function useUpdateTraitData(actorId: string, gameSystemId: string) {
  * Convenience hook for updating spell data specifically
  */
 export function useUpdateSpellData(actorId: string, gameSystemId: string) {
-  const { mutate, isPending, error } = useUpdateActorData(actorId, gameSystemId);
+  const { mutate, isPending, error } = useUpdateActorData(
+    actorId,
+    gameSystemId,
+  );
 
   return {
     updateSpells: async (spells: Record<string, any>) =>

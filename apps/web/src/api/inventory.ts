@@ -14,7 +14,9 @@ type ActorInventoryQuery = {
 };
 
 /** Requires at least Viewer on the actor (FR-013). */
-export function getActorInventory(actorId: string): Promise<InventoryEntryRecord[]> {
+export function getActorInventory(
+  actorId: string,
+): Promise<InventoryEntryRecord[]> {
   return postGraphQL<ActorInventoryQuery>(
     `
       query ActorInventory($actorId: UUID!) {
@@ -76,7 +78,9 @@ type RemoveInventoryEntryMutation = {
   removeInventoryEntry: boolean;
 };
 
-export function removeInventoryEntry(inventoryEntryId: string): Promise<boolean> {
+export function removeInventoryEntry(
+  inventoryEntryId: string,
+): Promise<boolean> {
   return postGraphQL<RemoveInventoryEntryMutation>(
     `
       mutation RemoveInventoryEntry($inventoryEntryId: UUID!) {

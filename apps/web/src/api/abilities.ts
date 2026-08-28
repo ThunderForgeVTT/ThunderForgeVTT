@@ -22,9 +22,6 @@ import type {
  *   * flat scalar args → deleteAbility, setAbilityGmOnly, and every query
  */
 
-
-
-
 const ABILITY_EFFECT_FIELDS = `
   id
   abilityId
@@ -56,7 +53,6 @@ const WORLD_ABILITY_FIELDS = `
     slug
   }
 `;
-
 
 /**
  * FR-005: every world member may browse. GM-only abilities are filtered
@@ -120,7 +116,9 @@ export type CreateAbilityInput = {
 };
 
 /** FR-002: DM-only, enforced server-side. */
-export function createAbility(input: CreateAbilityInput): Promise<WorldAbilityRecord> {
+export function createAbility(
+  input: CreateAbilityInput,
+): Promise<WorldAbilityRecord> {
   return postGraphQL<{ createAbility: WorldAbilityRecord }>(
     `
       mutation CreateAbility($input: CreateAbilityInput!) {
@@ -147,7 +145,9 @@ export type UpdateAbilityInput = {
   clearDescription?: boolean;
 };
 
-export function updateAbility(input: UpdateAbilityInput): Promise<WorldAbilityRecord> {
+export function updateAbility(
+  input: UpdateAbilityInput,
+): Promise<WorldAbilityRecord> {
   return postGraphQL<{ updateAbility: WorldAbilityRecord }>(
     `
       mutation UpdateAbility($input: UpdateAbilityInput!) {
@@ -253,7 +253,9 @@ export function removeAbilityEffect(effectId: string): Promise<boolean> {
 }
 
 /** FR-026: DM-only, enforced server-side. */
-export function getAbilityPermissions(abilityId: string): Promise<AbilityPermissionRecord[]> {
+export function getAbilityPermissions(
+  abilityId: string,
+): Promise<AbilityPermissionRecord[]> {
   return postGraphQL<{ abilityPermissions: AbilityPermissionRecord[] }>(
     `
       query AbilityPermissions($abilityId: UUID!) {
@@ -291,7 +293,10 @@ export function setAbilityPermission(
 
 /** Idempotent — removing a nonexistent grant resolves false, and removing an
  * existing one reverts that member to the implicit Viewer default (FR-024). */
-export function removeAbilityPermission(abilityId: string, userId: string): Promise<boolean> {
+export function removeAbilityPermission(
+  abilityId: string,
+  userId: string,
+): Promise<boolean> {
   return postGraphQL<{ removeAbilityPermission: boolean }>(
     `
       mutation RemoveAbilityPermission($abilityId: UUID!, $userId: UUID!) {

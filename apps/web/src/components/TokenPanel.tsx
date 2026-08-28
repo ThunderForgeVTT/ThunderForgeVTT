@@ -1,20 +1,23 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import * as Dialog from '@radix-ui/react-dialog';
-import * as Popover from '@radix-ui/react-popover';
+import React, { useCallback, useEffect, useState } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
+import * as Popover from "@radix-ui/react-popover";
 import {
   createToken,
   deleteToken,
   getTokens,
   setOwnPrimaryTokenPhoto,
   updateToken,
-} from '../api/tokens';
-import { getWorldActors } from '../api/actors';
-import { getGameSystemManifest } from '../api/gameSystems';
-import { useActorSystemData } from '../hooks/useActorSystemData';
-import { resolveSizeScale, type SizeCategoriesLookup } from '../utils/sizeCategory';
-import type { TokenRecord } from '../types/token';
-import type { WorldActorRecord } from '../types/actor';
-import '../styles/TokenPanel.scss';
+} from "../api/tokens";
+import { getWorldActors } from "../api/actors";
+import { getGameSystemManifest } from "../api/gameSystems";
+import { useActorSystemData } from "../hooks/useActorSystemData";
+import {
+  resolveSizeScale,
+  type SizeCategoriesLookup,
+} from "../utils/sizeCategory";
+import type { TokenRecord } from "../types/token";
+import type { WorldActorRecord } from "../types/actor";
+import "../styles/TokenPanel.scss";
 
 interface TokenPanelProps {
   sceneId: string;
@@ -53,7 +56,9 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
   const [tokens, setTokens] = useState<TokenRecord[]>([]);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [newTokenHealth, setNewTokenHealth] = useState<number | undefined>();
-  const [newTokenMaxHealth, setNewTokenMaxHealth] = useState<number | undefined>();
+  const [newTokenMaxHealth, setNewTokenMaxHealth] = useState<
+    number | undefined
+  >();
   const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,8 +68,10 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
   // additive — a blank `newTokenActorId` behaves exactly like before
   // (createToken called with no `actorId`/`scale` override).
   const [npcActors, setNpcActors] = useState<WorldActorRecord[]>([]);
-  const [newTokenActorId, setNewTokenActorId] = useState<string>('');
-  const [sizeCategories, setSizeCategories] = useState<SizeCategoriesLookup | undefined>();
+  const [newTokenActorId, setNewTokenActorId] = useState<string>("");
+  const [sizeCategories, setSizeCategories] = useState<
+    SizeCategoriesLookup | undefined
+  >();
 
   const selectedActor = npcActors.find((a) => a.id === newTokenActorId) ?? null;
   const { data: selectedActorSystemData } = useActorSystemData(
@@ -77,7 +84,7 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
     getWorldActors(worldId)
       .then((actors) => setNpcActors(actors.filter((a) => a.isNpc)))
       .catch((err) => {
-        console.error('Failed to load NPC roster for token creation:', err);
+        console.error("Failed to load NPC roster for token creation:", err);
       });
   }, [isOpen, worldId, isSceneOwner]);
 
@@ -91,11 +98,16 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
     getGameSystemManifest(gameSystemId)
       .then((manifest) => {
         if (active) {
-          setSizeCategories(manifest.sizeCategories as SizeCategoriesLookup | undefined);
+          setSizeCategories(
+            manifest.sizeCategories as SizeCategoriesLookup | undefined,
+          );
         }
       })
       .catch((err) => {
-        console.error('Failed to load game system manifest for token scale:', err);
+        console.error(
+          "Failed to load game system manifest for token scale:",
+          err,
+        );
         if (active) setSizeCategories(undefined);
       });
     return () => {
@@ -109,7 +121,9 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
   const resolvedNewTokenScale: number | undefined = newTokenActorId
     ? resolveSizeScale(
         sizeCategories,
-        (selectedActorSystemData?.trait_data?.size_category as string | undefined) ?? null,
+        (selectedActorSystemData?.trait_data?.size_category as
+          | string
+          | undefined) ?? null,
       )
     : undefined;
   // Root cause of the primary-checkbox hang (spec 006 US2, found via
@@ -136,7 +150,7 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
     getTokens(sceneId)
       .then(setTokens)
       .catch((err) => {
-        console.error('Failed to load scene tokens:', err);
+        console.error("Failed to load scene tokens:", err);
       });
   }, [sceneId]);
 
@@ -163,19 +177,28 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
       });
       setNewTokenHealth(undefined);
       setNewTokenMaxHealth(undefined);
-      setNewTokenActorId('');
+      setNewTokenActorId("");
       setCreateDialogOpen(false);
       refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error creating token');
+      setError(
+        err instanceof Error ? err.message : "Unknown error creating token",
+      );
     } finally {
       setLoading(false);
     }
-  }, [sceneId, newTokenHealth, newTokenMaxHealth, newTokenActorId, resolvedNewTokenScale, refresh]);
+  }, [
+    sceneId,
+    newTokenHealth,
+    newTokenMaxHealth,
+    newTokenActorId,
+    resolvedNewTokenScale,
+    refresh,
+  ]);
 
   const handleDeleteToken = useCallback(
     async (tokenId: string) => {
-      if (!window.confirm('Delete this token?')) return;
+      if (!window.confirm("Delete this token?")) return;
       setLoading(true);
       setError(null);
       try {
@@ -183,7 +206,9 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
         setSelectedTokenId(null);
         refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unknown error deleting token');
+        setError(
+          err instanceof Error ? err.message : "Unknown error deleting token",
+        );
       } finally {
         setLoading(false);
       }
@@ -199,7 +224,9 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
         await setOwnPrimaryTokenPhoto(tokenId, photoUrl);
         refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unknown error setting photo');
+        setError(
+          err instanceof Error ? err.message : "Unknown error setting photo",
+        );
       } finally {
         setLoading(false);
       }
@@ -245,7 +272,11 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
         refresh();
       } catch (err) {
         if (rollbackTokens) setTokens(rollbackTokens);
-        setError(err instanceof Error ? err.message : 'Unknown error updating ownership');
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Unknown error updating ownership",
+        );
       } finally {
         setLoading(false);
       }
@@ -254,9 +285,13 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
   );
 
   const getTokenAvatar = (token: TokenRecord): string =>
-    token.photoUrl ?? `https://api.dicebear.com/9.x/adventurer-neutral/svg?seed=${token.tokenId}`;
+    token.photoUrl ??
+    `https://api.dicebear.com/9.x/adventurer-neutral/svg?seed=${token.tokenId}`;
 
-  const getHealthPercentage = (health?: number | null, maxHealth?: number | null): number => {
+  const getHealthPercentage = (
+    health?: number | null,
+    maxHealth?: number | null,
+  ): number => {
     if (health == null || maxHealth == null || maxHealth <= 0) return 0;
     return (health / maxHealth) * 100;
   };
@@ -266,7 +301,9 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
       <Dialog.Portal>
         <Dialog.Overlay className="token-panel-overlay" />
         <Dialog.Content className="token-panel-content">
-          <Dialog.Title className="token-panel-title">Token Management</Dialog.Title>
+          <Dialog.Title className="token-panel-title">
+            Token Management
+          </Dialog.Title>
           <Dialog.Description className="token-panel-description">
             Create, manage, and position tokens on this scene.
           </Dialog.Description>
@@ -275,17 +312,22 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
 
           <div className="token-list">
             {tokens.length === 0 ? (
-              <div className="token-list-empty">No tokens yet. Create one to get started.</div>
+              <div className="token-list-empty">
+                No tokens yet. Create one to get started.
+              </div>
             ) : (
               tokens.map((token) => {
-                const isMyPrimary = token.isPrimary && token.ownerUserId === currentUserId;
+                const isMyPrimary =
+                  token.isPrimary && token.ownerUserId === currentUserId;
                 const canEditPhoto = isSceneOwner || isMyPrimary;
 
                 return (
                   <Popover.Root
                     key={token.tokenId}
                     open={selectedTokenId === token.tokenId}
-                    onOpenChange={(open) => setSelectedTokenId(open ? token.tokenId : null)}
+                    onOpenChange={(open) =>
+                      setSelectedTokenId(open ? token.tokenId : null)
+                    }
                   >
                     <Popover.Trigger asChild>
                       <div
@@ -293,10 +335,14 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
                         role="button"
                         data-testid={`token-list-item-${token.tokenId}`}
                       >
-                        <img src={getTokenAvatar(token)} alt="Token" className="token-avatar" />
+                        <img
+                          src={getTokenAvatar(token)}
+                          alt="Token"
+                          className="token-avatar"
+                        />
                         <div className="token-info">
                           <div className="token-label">
-                            {token.isPrimary ? 'Primary — ' : ''}
+                            {token.isPrimary ? "Primary — " : ""}
                             Token {token.tokenId.slice(0, 8)}
                           </div>
                           {token.health != null && (
@@ -304,7 +350,9 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
                               <div className="health-bar-container">
                                 <div
                                   className="health-bar"
-                                  style={{ width: `${getHealthPercentage(token.health, token.maxHealth)}%` }}
+                                  style={{
+                                    width: `${getHealthPercentage(token.health, token.maxHealth)}%`,
+                                  }}
                                 />
                               </div>
                               <span className="health-text">
@@ -326,16 +374,22 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
 
                         {canEditPhoto && (
                           <div className="form-group">
-                            <label htmlFor={`photo-${token.tokenId}`}>Photo URL</label>
+                            <label htmlFor={`photo-${token.tokenId}`}>
+                              Photo URL
+                            </label>
                             <input
                               id={`photo-${token.tokenId}`}
                               data-testid={`token-photo-input-${token.tokenId}`}
                               type="text"
-                              defaultValue={token.photoUrl ?? ''}
+                              defaultValue={token.photoUrl ?? ""}
                               placeholder="https://..."
                               onBlur={(e) => {
                                 const value = e.target.value.trim();
-                                if (value) void handleSetPrimaryPhoto(token.tokenId, value);
+                                if (value)
+                                  void handleSetPrimaryPhoto(
+                                    token.tokenId,
+                                    value,
+                                  );
                               }}
                             />
                           </div>
@@ -343,20 +397,29 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
 
                         {isSceneOwner && (
                           <div className="form-group">
-                            <label htmlFor={`owner-${token.tokenId}`}>Owner user ID</label>
+                            <label htmlFor={`owner-${token.tokenId}`}>
+                              Owner user ID
+                            </label>
                             <input
                               id={`owner-${token.tokenId}`}
                               data-testid={`token-owner-input-${token.tokenId}`}
                               type="text"
-                              defaultValue={token.ownerUserId ?? ''}
+                              defaultValue={token.ownerUserId ?? ""}
                               placeholder="(unassigned)"
                               onChange={(e) => {
                                 const value = e.target.value;
-                                setOwnerDrafts((prev) => ({ ...prev, [token.tokenId]: value }));
+                                setOwnerDrafts((prev) => ({
+                                  ...prev,
+                                  [token.tokenId]: value,
+                                }));
                               }}
                               onBlur={(e) => {
                                 const value = e.target.value.trim();
-                                void handleSetOwnership(token.tokenId, value || null, token.isPrimary);
+                                void handleSetOwnership(
+                                  token.tokenId,
+                                  value || null,
+                                  token.isPrimary,
+                                );
                               }}
                             />
                             <label>
@@ -365,10 +428,18 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
                                 data-testid={`token-primary-checkbox-${token.tokenId}`}
                                 checked={token.isPrimary}
                                 disabled={
-                                  !(ownerDrafts[token.tokenId] ?? token.ownerUserId ?? '').trim()
+                                  !(
+                                    ownerDrafts[token.tokenId] ??
+                                    token.ownerUserId ??
+                                    ""
+                                  ).trim()
                                 }
                                 onChange={(e) =>
-                                  void handleSetOwnership(token.tokenId, token.ownerUserId, e.target.checked)
+                                  void handleSetOwnership(
+                                    token.tokenId,
+                                    token.ownerUserId,
+                                    e.target.checked,
+                                  )
                                 }
                               />
                               Primary token for this owner
@@ -382,7 +453,7 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
                             onClick={() => handleDeleteToken(token.tokenId)}
                             disabled={loading}
                           >
-                            {loading ? 'Deleting...' : 'Delete'}
+                            {loading ? "Deleting..." : "Delete"}
                           </button>
                         )}
                       </div>
@@ -394,14 +465,17 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
           </div>
 
           {isSceneOwner && (
-            <Dialog.Root open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+            <Dialog.Root
+              open={createDialogOpen}
+              onOpenChange={setCreateDialogOpen}
+            >
               <Dialog.Trigger asChild>
                 <button
                   className="token-create-button"
                   data-testid="token-create-trigger"
                   disabled={loading}
                 >
-                  {loading ? 'Creating...' : '+ Create Token'}
+                  {loading ? "Creating..." : "+ Create Token"}
                 </button>
               </Dialog.Trigger>
 
@@ -409,7 +483,9 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
                 <Dialog.Overlay className="token-panel-overlay" />
                 <Dialog.Content className="token-create-dialog">
                   <Dialog.Title>Create New Token</Dialog.Title>
-                  <Dialog.Description>Fill in token details. Leave blank for defaults.</Dialog.Description>
+                  <Dialog.Description>
+                    Fill in token details. Leave blank for defaults.
+                  </Dialog.Description>
 
                   <div className="token-form">
                     {npcActors.length > 0 && (
@@ -444,9 +520,13 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
                       <input
                         id="token-health"
                         type="number"
-                        value={newTokenHealth ?? ''}
+                        value={newTokenHealth ?? ""}
                         onChange={(e) =>
-                          setNewTokenHealth(e.target.value ? parseInt(e.target.value, 10) : undefined)
+                          setNewTokenHealth(
+                            e.target.value
+                              ? parseInt(e.target.value, 10)
+                              : undefined,
+                          )
                         }
                         placeholder="e.g., 50"
                       />
@@ -457,9 +537,13 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
                       <input
                         id="token-max-health"
                         type="number"
-                        value={newTokenMaxHealth ?? ''}
+                        value={newTokenMaxHealth ?? ""}
                         onChange={(e) =>
-                          setNewTokenMaxHealth(e.target.value ? parseInt(e.target.value, 10) : undefined)
+                          setNewTokenMaxHealth(
+                            e.target.value
+                              ? parseInt(e.target.value, 10)
+                              : undefined,
+                          )
                         }
                         placeholder="e.g., 100"
                       />
@@ -467,7 +551,11 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
                   </div>
 
                   <div className="token-dialog-actions">
-                    <button className="button-cancel" onClick={() => setCreateDialogOpen(false)} disabled={loading}>
+                    <button
+                      className="button-cancel"
+                      onClick={() => setCreateDialogOpen(false)}
+                      disabled={loading}
+                    >
                       Cancel
                     </button>
                     <button
@@ -476,7 +564,7 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
                       onClick={handleCreateToken}
                       disabled={loading}
                     >
-                      {loading ? 'Creating...' : 'Create Token'}
+                      {loading ? "Creating..." : "Create Token"}
                     </button>
                   </div>
                 </Dialog.Content>

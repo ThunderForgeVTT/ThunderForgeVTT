@@ -22,7 +22,11 @@ export interface MarkdownCodeEditorProps {
  * light/dark mode (useTheme) instead of `@uiw/react-codemirror`'s
  * hardcoded `"light"` default — otherwise the editor stays a bright
  * white box inside an otherwise-dark page. */
-export default function MarkdownCodeEditor({ value, onChange, placeholder }: MarkdownCodeEditorProps) {
+export default function MarkdownCodeEditor({
+  value,
+  onChange,
+  placeholder,
+}: MarkdownCodeEditorProps) {
   const { theme } = useTheme();
   return (
     <CodeMirror

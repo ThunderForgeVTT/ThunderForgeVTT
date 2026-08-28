@@ -55,14 +55,19 @@ export type FantasyIconName =
 
 type IconTone = "default" | "gold" | "violet" | "forest" | "ember";
 
-export interface FantasyIconProps
-  extends Omit<SVGProps<SVGSVGElement>, "name"> {
+export interface FantasyIconProps extends Omit<
+  SVGProps<SVGSVGElement>,
+  "name"
+> {
   name: FantasyIconName;
   size?: number;
   tone?: IconTone;
 }
 
-const ICON_MAP: Record<FantasyIconName, React.ComponentType<SVGProps<SVGSVGElement>>> = {
+const ICON_MAP: Record<
+  FantasyIconName,
+  React.ComponentType<SVGProps<SVGSVGElement>>
+> = {
   actors: Users,
   "arrow-left": ArrowLeft,
   check: Check,

@@ -2,7 +2,6 @@
 
 import type { RollDiscrepancyRecord } from "@/components/world/rollDiscrepancy";
 
-
 export type DieSidesKind = "NUMERIC" | "FATE" | "COIN";
 
 export interface DieOutcomeRecord {

@@ -87,7 +87,11 @@ export function NpcCompendiumTab({
         const npcs = result.filter((actor) => actor.isNpc);
         void indexActors(
           worldId,
-          npcs.map((npc) => ({ id: npc.id, label: npc.label, description: npc.description })),
+          npcs.map((npc) => ({
+            id: npc.id,
+            label: npc.label,
+            description: npc.description,
+          })),
         );
       })
       .catch((err) => {
@@ -114,7 +118,10 @@ export function NpcCompendiumTab({
     };
   }, [worldId, query]);
 
-  const npcs = useMemo(() => (actors ?? []).filter((actor) => actor.isNpc), [actors]);
+  const npcs = useMemo(
+    () => (actors ?? []).filter((actor) => actor.isNpc),
+    [actors],
+  );
 
   const visibleNpcs = useMemo(() => {
     if (matchedIds === null) {
@@ -128,7 +135,9 @@ export function NpcCompendiumTab({
 
   if (error) {
     return (
-      <p className="text-sm text-destructive">Failed to load NPCs: {error.message}</p>
+      <p className="text-sm text-destructive">
+        Failed to load NPCs: {error.message}
+      </p>
     );
   }
 
@@ -150,7 +159,9 @@ export function NpcCompendiumTab({
       {npcs.length === 0 ? (
         <p className="text-sm text-muted-foreground">No NPCs yet.</p>
       ) : visibleNpcs.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No NPCs match "{query}".</p>
+        <p className="text-sm text-muted-foreground">
+          No NPCs match "{query}".
+        </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm" data-testid="npc-catalog-table">
@@ -175,17 +186,24 @@ export function NpcCompendiumTab({
                 >
                   <td className="p-2 font-medium">{npc.label}</td>
                   <td className="max-w-xs truncate p-2 text-muted-foreground">
-                    {npc.description || <span className="italic">No description</span>}
+                    {npc.description || (
+                      <span className="italic">No description</span>
+                    )}
                   </td>
                   <td className="p-2">
-                    <div className="flex gap-2" onClick={(event) => event.stopPropagation()}>
+                    <div
+                      className="flex gap-2"
+                      onClick={(event) => event.stopPropagation()}
+                    >
                       <Button
                         asChild
                         variant="ghost"
                         size="sm"
                         data-testid={`npc-catalog-view-${npc.id}`}
                       >
-                        <Link to={`/world/${worldId}/actor/${npc.id}/view`}>View</Link>
+                        <Link to={`/world/${worldId}/actor/${npc.id}/view`}>
+                          View
+                        </Link>
                       </Button>
                       {npc.myPermissionLevel !== "VIEWER" ? (
                         <Button
@@ -194,7 +212,9 @@ export function NpcCompendiumTab({
                           size="sm"
                           data-testid={`npc-catalog-edit-${npc.id}`}
                         >
-                          <Link to={`/world/${worldId}/actor/${npc.id}/edit`}>Edit</Link>
+                          <Link to={`/world/${worldId}/actor/${npc.id}/edit`}>
+                            Edit
+                          </Link>
                         </Button>
                       ) : null}
                     </div>

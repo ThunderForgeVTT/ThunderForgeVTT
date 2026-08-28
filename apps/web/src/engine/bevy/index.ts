@@ -45,7 +45,10 @@ type BevyWasmModule = {
   ) => boolean;
   stop_peer_transfer?: () => void;
   offer_to_peer?: (sessionId: string) => Promise<void>;
-  receive_peer_signal?: (fromSessionId: string, payload: string) => Promise<void>;
+  receive_peer_signal?: (
+    fromSessionId: string,
+    payload: string,
+  ) => Promise<void>;
   peer_transfer_activity?: () => string;
   /**
    * Spec 028 (US7, T098/T100/T101). The peer-adjudication protocol, optional
@@ -446,11 +449,15 @@ export async function queueOfflineChange(
 }
 
 /** Everything queued for a world, in replay order. Empty on any failure. */
-export async function readQueuedChanges(worldId: string): Promise<QueuedChangeWire[]> {
+export async function readQueuedChanges(
+  worldId: string,
+): Promise<QueuedChangeWire[]> {
   try {
     const module = await getWasmModule();
     if (!module.read_queued_changes) return [];
-    return JSON.parse(await module.read_queued_changes(worldId)) as QueuedChangeWire[];
+    return JSON.parse(
+      await module.read_queued_changes(worldId),
+    ) as QueuedChangeWire[];
   } catch {
     return [];
   }
@@ -469,14 +476,15 @@ export async function forgetReconciledChanges(
   try {
     const module = await getWasmModule();
     if (!module.forget_reconciled_changes) return null;
-    const result = await module.forget_reconciled_changes(JSON.stringify(outcomes));
+    const result = await module.forget_reconciled_changes(
+      JSON.stringify(outcomes),
+    );
     const remaining = (JSON.parse(result) as { remaining?: number }).remaining;
     return typeof remaining === "number" && remaining >= 0 ? remaining : null;
   } catch {
     return null;
   }
 }
-
 
 // ---------------------------------------------------------------------------
 // Peer-assisted content distribution (spec 028 T088-T091, FR-044 to FR-050)
@@ -557,24 +565,33 @@ export async function startPeerTransfer(worldId: string): Promise<boolean> {
     // user id, it is not stored, and it does not survive a reload (FR-050).
     const sessionId = crypto.randomUUID();
 
-    const started = module.start_peer_transfer(worldId, sessionId, (to, payload) => {
-      // Fire and forget. A signal that does not arrive costs one peer
-      // connection, and the contract already says the server does not
-      // promise reachability.
-      // `fromSessionId` is mandatory and **verified, not trusted**: the
-      // server only relays as a session that is registered, in this world,
-      // to this user. So it must be the same id the subscription registered
-      // with, and a mismatch is silently `false` rather than an error.
-      //
-      // A `false` reply is "that peer is gone" — the session ended, or lost
-      // membership — and is not a transport failure. There is nothing to
-      // retry: an unanswered offer simply never becomes a channel, and the
-      // fetch it would have served falls to the server like every other
-      // peer failure.
-      void postGraphQL(PEER_SIGNAL_MUTATION, {
-        input: { worldId, fromSessionId: sessionId, toSessionId: to, payload },
-      }).catch(() => undefined);
-    });
+    const started = module.start_peer_transfer(
+      worldId,
+      sessionId,
+      (to, payload) => {
+        // Fire and forget. A signal that does not arrive costs one peer
+        // connection, and the contract already says the server does not
+        // promise reachability.
+        // `fromSessionId` is mandatory and **verified, not trusted**: the
+        // server only relays as a session that is registered, in this world,
+        // to this user. So it must be the same id the subscription registered
+        // with, and a mismatch is silently `false` rather than an error.
+        //
+        // A `false` reply is "that peer is gone" — the session ended, or lost
+        // membership — and is not a transport failure. There is nothing to
+        // retry: an unanswered offer simply never becomes a channel, and the
+        // fetch it would have served falls to the server like every other
+        // peer failure.
+        void postGraphQL(PEER_SIGNAL_MUTATION, {
+          input: {
+            worldId,
+            fromSessionId: sessionId,
+            toSessionId: to,
+            payload,
+          },
+        }).catch(() => undefined);
+      },
+    );
     if (!started) return false;
 
     // A connection of this module's own rather than the world-event socket's
@@ -597,7 +614,10 @@ export async function startPeerTransfer(worldId: string): Promise<boolean> {
         next: (result) => {
           const signal = result.data?.peerSignals;
           if (!signal) return;
-          void module.receive_peer_signal?.(signal.fromSessionId, signal.payload);
+          void module.receive_peer_signal?.(
+            signal.fromSessionId,
+            signal.payload,
+          );
         },
         // Signaling unavailable means peer transfer is off for the session and
         // everything else works (peer-protocol.md, "Failure modes"). There is
@@ -689,7 +709,9 @@ export async function beginPeerAdjudication(
 ): Promise<boolean> {
   try {
     const module = await getWasmModule();
-    return module.begin_peer_adjudication?.(selfUserId, gmUserId, onApplied) ?? false;
+    return (
+      module.begin_peer_adjudication?.(selfUserId, gmUserId, onApplied) ?? false
+    );
   } catch {
     return false;
   }
@@ -709,7 +731,9 @@ export async function peerAdjudicationActive(): Promise<boolean> {
  * The server is reachable again: stop adjudicating, and keep what was applied
  * for submission (FR-062).
  */
-export async function endPeerAdjudication(serverReturned: boolean): Promise<void> {
+export async function endPeerAdjudication(
+  serverReturned: boolean,
+): Promise<void> {
   try {
     const module = await getWasmModule();
     if (serverReturned) {

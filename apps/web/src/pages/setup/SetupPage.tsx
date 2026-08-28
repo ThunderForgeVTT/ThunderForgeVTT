@@ -155,9 +155,9 @@ export default function SetupPage({
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [oauthUsername, setOauthUsername] = useState("");
   const [status, setStatus] = useState<string | null>(null);
-  const [touched, setTouched] = useState<Partial<Record<SetupFieldName, boolean>>>(
-    {},
-  );
+  const [touched, setTouched] = useState<
+    Partial<Record<SetupFieldName, boolean>>
+  >({});
   const [localAttempted, setLocalAttempted] = useState(false);
   const [oauthAttempted, setOAuthAttempted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -167,7 +167,8 @@ export default function SetupPage({
   const resolvedAdminCode = adminCode || code || "";
   const resolvedStatus = status ?? oauthError;
   const passwordStrength = evaluatePasswordStrength(password);
-  const hasConfiguredProviders = setupStatus.configured_oauth_providers.length > 0;
+  const hasConfiguredProviders =
+    setupStatus.configured_oauth_providers.length > 0;
 
   const localErrors = {
     adminCode: resolvedAdminCode.trim()
@@ -177,10 +178,9 @@ export default function SetupPage({
       username.trim().length >= 3
         ? undefined
         : "Choose a username with at least 3 characters.",
-    email:
-      emailPattern.test(email.trim())
-        ? undefined
-        : "Enter a valid email address for recovery and notices.",
+    email: emailPattern.test(email.trim())
+      ? undefined
+      : "Enter a valid email address for recovery and notices.",
     password:
       password.length >= 12
         ? undefined
@@ -239,12 +239,14 @@ export default function SetupPage({
       content: (
         <div className="grid gap-3 text-sm text-muted-foreground">
           <p>
-            The bootstrap code is single-use. It binds this setup session to
-            the server instance before any account can claim it.
+            The bootstrap code is single-use. It binds this setup session to the
+            server instance before any account can claim it.
           </p>
           <ul className="grid list-disc gap-1.5 pl-4">
             <li>Paste the code exactly as issued by the server.</li>
-            <li>Use the local path if no OAuth providers are configured yet.</li>
+            <li>
+              Use the local path if no OAuth providers are configured yet.
+            </li>
             <li>Keep the code private until setup is complete.</li>
           </ul>
         </div>
@@ -391,9 +393,18 @@ export default function SetupPage({
                 </p>
               </div>
               <ol className="mt-4 grid list-decimal gap-2 pl-4 text-sm text-muted-foreground">
-                <li>Claim the bootstrap code from the server logs or startup output.</li>
-                <li>Choose your path: local credentials or a configured OAuth provider.</li>
-                <li>Finish setup and enter the admin welcome page as the first administrator.</li>
+                <li>
+                  Claim the bootstrap code from the server logs or startup
+                  output.
+                </li>
+                <li>
+                  Choose your path: local credentials or a configured OAuth
+                  provider.
+                </li>
+                <li>
+                  Finish setup and enter the admin welcome page as the first
+                  administrator.
+                </li>
               </ol>
               <p className="mt-4 text-sm text-muted-foreground">
                 {hasConfiguredProviders
@@ -426,10 +437,9 @@ export default function SetupPage({
                   Choose the setup method for this instance.
                 </h2>
                 <p className="text-muted-foreground">
-                  Local credentials favor direct control. OAuth bootstrap lets
-                  a trusted identity step through an already configured
-                  provider. Both paths use the same server-approved first-run
-                  flow.
+                  Local credentials favor direct control. OAuth bootstrap lets a
+                  trusted identity step through an already configured provider.
+                  Both paths use the same server-approved first-run flow.
                 </p>
               </div>
               <div className="grid justify-items-end gap-1 text-right">
@@ -437,7 +447,9 @@ export default function SetupPage({
                   First administrator
                 </span>
                 <strong>
-                  {hasConfiguredProviders ? "Two paths available" : "Local setup ready"}
+                  {hasConfiguredProviders
+                    ? "Two paths available"
+                    : "Local setup ready"}
                 </strong>
                 <small className="text-xs text-muted-foreground">
                   {hasConfiguredProviders
@@ -453,7 +465,8 @@ export default function SetupPage({
                   key={step.label}
                   className={cn(
                     "rounded-lg border border-border p-4",
-                    step.state === "complete" && "border-primary/40 bg-primary/5",
+                    step.state === "complete" &&
+                      "border-primary/40 bg-primary/5",
                     step.state === "active" && "border-ring",
                   )}
                 >
@@ -600,7 +613,9 @@ export default function SetupPage({
                           "h-full rounded-full transition-all",
                           STRENGTH_BAR_CLASSES[passwordStrength.tone],
                         )}
-                        style={{ width: `${Math.max(passwordStrength.score, 0) * 25}%` }}
+                        style={{
+                          width: `${Math.max(passwordStrength.score, 0) * 25}%`,
+                        }}
                       />
                     </div>
                     <p className="text-xs text-muted-foreground">
@@ -646,8 +661,8 @@ export default function SetupPage({
                 <footer className="border-t border-border pt-4 text-sm text-muted-foreground">
                   <p>
                     The local method stores credentials on this instance and
-                    opens the admin welcome page immediately after a
-                    successful setup.
+                    opens the admin welcome page immediately after a successful
+                    setup.
                   </p>
                 </footer>
               </form>
@@ -747,8 +762,8 @@ export default function SetupPage({
                 <footer className="border-t border-border pt-4 text-sm text-muted-foreground">
                   <p>
                     Recommended when your instance already trusts an external
-                    identity provider and you want the founding administrator
-                    to begin with federation.
+                    identity provider and you want the founding administrator to
+                    begin with federation.
                   </p>
                 </footer>
               </div>

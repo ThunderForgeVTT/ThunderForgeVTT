@@ -50,8 +50,12 @@ export function DiceRollerPanel({
       const resolution = await rollDice(worldId, formula);
 
       if (engineReady) {
-        void triggerDiceRollAnimation(resolution.dice.map((d) => ({ finalValue: d.finalValue })));
-        await new Promise((resolve) => setTimeout(resolve, ANIMATION_REVEAL_MS));
+        void triggerDiceRollAnimation(
+          resolution.dice.map((d) => ({ finalValue: d.finalValue })),
+        );
+        await new Promise((resolve) =>
+          setTimeout(resolve, ANIMATION_REVEAL_MS),
+        );
       }
 
       setResult(resolution);
@@ -84,7 +88,12 @@ export function DiceRollerPanel({
           placeholder="1d20+5"
           style={{ flex: 1, minWidth: 0 }}
         />
-        <button data-testid="dice-roll-button" type="button" onClick={() => void handleRoll()} disabled={isRolling}>
+        <button
+          data-testid="dice-roll-button"
+          type="button"
+          onClick={() => void handleRoll()}
+          disabled={isRolling}
+        >
           {isRolling ? "Rolling…" : "Roll"}
         </button>
       </div>

@@ -28,34 +28,110 @@ export interface SkillsListProps {
 interface Skill {
   id: string;
   name: string;
-  ability: "strength" | "dexterity" | "constitution" | "intelligence" | "wisdom" | "charisma";
+  ability:
+    | "strength"
+    | "dexterity"
+    | "constitution"
+    | "intelligence"
+    | "wisdom"
+    | "charisma";
   abilityShort: string;
 }
 
 const SKILLS: Skill[] = [
   // Strength
-  { id: "athletics", name: "Athletics", ability: "strength", abilityShort: "STR" },
+  {
+    id: "athletics",
+    name: "Athletics",
+    ability: "strength",
+    abilityShort: "STR",
+  },
   // Dexterity
-  { id: "acrobatics", name: "Acrobatics", ability: "dexterity", abilityShort: "DEX" },
-  { id: "sleight_of_hand", name: "Sleight of Hand", ability: "dexterity", abilityShort: "DEX" },
+  {
+    id: "acrobatics",
+    name: "Acrobatics",
+    ability: "dexterity",
+    abilityShort: "DEX",
+  },
+  {
+    id: "sleight_of_hand",
+    name: "Sleight of Hand",
+    ability: "dexterity",
+    abilityShort: "DEX",
+  },
   { id: "stealth", name: "Stealth", ability: "dexterity", abilityShort: "DEX" },
   // Intelligence
-  { id: "arcana", name: "Arcana", ability: "intelligence", abilityShort: "INT" },
-  { id: "history", name: "History", ability: "intelligence", abilityShort: "INT" },
-  { id: "investigation", name: "Investigation", ability: "intelligence", abilityShort: "INT" },
-  { id: "nature", name: "Nature", ability: "intelligence", abilityShort: "INT" },
-  { id: "religion", name: "Religion", ability: "intelligence", abilityShort: "INT" },
+  {
+    id: "arcana",
+    name: "Arcana",
+    ability: "intelligence",
+    abilityShort: "INT",
+  },
+  {
+    id: "history",
+    name: "History",
+    ability: "intelligence",
+    abilityShort: "INT",
+  },
+  {
+    id: "investigation",
+    name: "Investigation",
+    ability: "intelligence",
+    abilityShort: "INT",
+  },
+  {
+    id: "nature",
+    name: "Nature",
+    ability: "intelligence",
+    abilityShort: "INT",
+  },
+  {
+    id: "religion",
+    name: "Religion",
+    ability: "intelligence",
+    abilityShort: "INT",
+  },
   // Wisdom
-  { id: "animal_handling", name: "Animal Handling", ability: "wisdom", abilityShort: "WIS" },
+  {
+    id: "animal_handling",
+    name: "Animal Handling",
+    ability: "wisdom",
+    abilityShort: "WIS",
+  },
   { id: "insight", name: "Insight", ability: "wisdom", abilityShort: "WIS" },
   { id: "medicine", name: "Medicine", ability: "wisdom", abilityShort: "WIS" },
-  { id: "perception", name: "Perception", ability: "wisdom", abilityShort: "WIS" },
+  {
+    id: "perception",
+    name: "Perception",
+    ability: "wisdom",
+    abilityShort: "WIS",
+  },
   { id: "survival", name: "Survival", ability: "wisdom", abilityShort: "WIS" },
   // Charisma
-  { id: "deception", name: "Deception", ability: "charisma", abilityShort: "CHA" },
-  { id: "intimidation", name: "Intimidation", ability: "charisma", abilityShort: "CHA" },
-  { id: "performance", name: "Performance", ability: "charisma", abilityShort: "CHA" },
-  { id: "persuasion", name: "Persuasion", ability: "charisma", abilityShort: "CHA" },
+  {
+    id: "deception",
+    name: "Deception",
+    ability: "charisma",
+    abilityShort: "CHA",
+  },
+  {
+    id: "intimidation",
+    name: "Intimidation",
+    ability: "charisma",
+    abilityShort: "CHA",
+  },
+  {
+    id: "performance",
+    name: "Performance",
+    ability: "charisma",
+    abilityShort: "CHA",
+  },
+  {
+    id: "persuasion",
+    name: "Persuasion",
+    ability: "charisma",
+    abilityShort: "CHA",
+  },
 ];
 
 function calculateAbilityModifier(score?: number): number {
@@ -65,7 +141,7 @@ function calculateAbilityModifier(score?: number): number {
 function calculateSkillModifier(
   abilityModifier: number,
   isProficient: boolean,
-  proficiencyBonus: number = 2
+  proficiencyBonus: number = 2,
 ): number {
   return abilityModifier + (isProficient ? proficiencyBonus : 0);
 }
@@ -89,7 +165,8 @@ function SkillRow({
   const skillModifier = calculateSkillModifier(abilityModifier, isProficient);
   const passiveCheck = 10 + skillModifier;
 
-  const modifierText = skillModifier >= 0 ? `+${skillModifier}` : `${skillModifier}`;
+  const modifierText =
+    skillModifier >= 0 ? `+${skillModifier}` : `${skillModifier}`;
 
   return (
     <div
@@ -161,7 +238,7 @@ export function SkillsList({
       acc[skill.ability].push(skill);
       return acc;
     },
-    {} as Record<string, Skill[]>
+    {} as Record<string, Skill[]>,
   );
 
   const abilityOrder = [
@@ -212,7 +289,8 @@ export function SkillsList({
 
       {editable && (
         <div className="text-xs text-muted-foreground">
-          Click proficiency circle to toggle skill proficiency. Modifiers update automatically.
+          Click proficiency circle to toggle skill proficiency. Modifiers update
+          automatically.
         </div>
       )}
     </Card>

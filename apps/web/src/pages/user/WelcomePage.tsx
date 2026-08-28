@@ -122,10 +122,20 @@ export default function WelcomePage() {
             </h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {sortedWorlds.map(({ world, role }) => (
-                <Card key={world.id} surface="parchment" className="grid gap-3 p-6">
+                <Card
+                  key={world.id}
+                  surface="parchment"
+                  className="grid gap-3 p-6"
+                >
                   <div className="flex items-start justify-between gap-2">
                     <h3 className="text-lg font-semibold">{world.name}</h3>
-                    <Badge variant={role === "Owner" || role === "GM" ? "default" : "secondary"}>
+                    <Badge
+                      variant={
+                        role === "Owner" || role === "GM"
+                          ? "default"
+                          : "secondary"
+                      }
+                    >
                       {roleBadgeLabel(role)}
                     </Badge>
                   </div>
@@ -133,7 +143,9 @@ export default function WelcomePage() {
                     {world.description ?? "Jump back into this world."}
                   </p>
                   <Button asChild icon="worlds">
-                    <Link to={`/world/${world.id}/staging`}>Enter {world.name}</Link>
+                    <Link to={`/world/${world.id}/staging`}>
+                      Enter {world.name}
+                    </Link>
                   </Button>
                 </Card>
               ))}

@@ -40,7 +40,8 @@ export function SettingsPanel({
   onMapImportComplete,
   onBackToStaging,
 }: SettingsPanelProps) {
-  const currentScene = scenes.find((scene) => scene.sceneId === sceneId) ?? null;
+  const currentScene =
+    scenes.find((scene) => scene.sceneId === sceneId) ?? null;
 
   // Subscribed rather than read once: this panel is unmounted whenever the
   // dock is collapsed, so it has no state of its own to trust on the way
@@ -122,8 +123,8 @@ export function SettingsPanel({
           <span className="grid gap-0.5">
             <span>Performance readout</span>
             <span className="text-xs text-muted-foreground">
-              Frames, server latency and connected players, along the bottom
-              of the map.
+              Frames, server latency and connected players, along the bottom of
+              the map.
             </span>
           </span>
           <Switch

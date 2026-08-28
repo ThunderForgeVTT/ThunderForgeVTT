@@ -61,14 +61,20 @@ export function ScenesPage({ worldId, isGm }: ScenesPageProps) {
       setNewName("");
       setRefreshTick((current) => current + 1);
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : "Failed to create scene");
+      setCreateError(
+        err instanceof Error ? err.message : "Failed to create scene",
+      );
     } finally {
       setIsCreating(false);
     }
   };
 
   if (error) {
-    return <p className="text-sm text-destructive">Failed to load scenes: {error.message}</p>;
+    return (
+      <p className="text-sm text-destructive">
+        Failed to load scenes: {error.message}
+      </p>
+    );
   }
 
   if (scenes === null) {
@@ -94,7 +100,9 @@ export function ScenesPage({ worldId, isGm }: ScenesPageProps) {
             <thead>
               <tr className="border-b border-border bg-muted/50 text-left text-xs tracking-wide text-muted-foreground uppercase">
                 <th className="p-2 font-semibold">Name</th>
-                {isGm ? <th className="p-2 font-semibold">Visibility</th> : null}
+                {isGm ? (
+                  <th className="p-2 font-semibold">Visibility</th>
+                ) : null}
               </tr>
             </thead>
             <tbody>
@@ -105,7 +113,10 @@ export function ScenesPage({ worldId, isGm }: ScenesPageProps) {
                   data-testid={`scene-row-${scene.sceneId}`}
                 >
                   <td className="p-2 font-medium">
-                    <Link to={`/world/${worldId}/scenes/${scene.sceneId}`} className="hover:underline">
+                    <Link
+                      to={`/world/${worldId}/scenes/${scene.sceneId}`}
+                      className="hover:underline"
+                    >
                       {scene.name}
                     </Link>
                   </td>
@@ -142,7 +153,11 @@ export function ScenesPage({ worldId, isGm }: ScenesPageProps) {
           >
             New scene
           </Button>
-          {createError ? <p className="text-sm text-destructive sm:col-span-2">{createError}</p> : null}
+          {createError ? (
+            <p className="text-sm text-destructive sm:col-span-2">
+              {createError}
+            </p>
+          ) : null}
         </div>
       ) : null}
     </div>

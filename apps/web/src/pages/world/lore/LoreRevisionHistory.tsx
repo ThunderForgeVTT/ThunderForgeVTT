@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { getLoreEntry, getLoreEntryRevisions, restoreLoreRevision } from "@/api/lore";
+import {
+  getLoreEntry,
+  getLoreEntryRevisions,
+  restoreLoreRevision,
+} from "@/api/lore";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
@@ -22,7 +26,9 @@ import { cn } from "@/lib/utils";
 export default function LoreRevisionHistory() {
   const { id: worldId = "", slug = "" } = useParams();
   const navigate = useNavigate();
-  const [entry, setEntry] = useState<LoreEntryRecord | null | undefined>(undefined);
+  const [entry, setEntry] = useState<LoreEntryRecord | null | undefined>(
+    undefined,
+  );
   const [revisions, setRevisions] = useState<LoreRevisionRecord[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -70,7 +76,10 @@ export default function LoreRevisionHistory() {
         <main className="grid min-h-[60vh] place-items-center py-16">
           <Card className="grid gap-3 p-6 text-center">
             <h1 className="text-xl font-semibold">Lore entry not found</h1>
-            <Link to={`/world/${worldId}/compendium`} className="text-primary hover:underline">
+            <Link
+              to={`/world/${worldId}/compendium`}
+              className="text-primary hover:underline"
+            >
               Back to compendium
             </Link>
           </Card>
@@ -94,9 +103,13 @@ export default function LoreRevisionHistory() {
       const freshRevisions = await getLoreEntryRevisions(updated.id);
       setRevisions(freshRevisions);
       setSelectedId(freshRevisions[0]?.id ?? null);
-      setStatus("Restored — a new revision recording this restore has been added.");
+      setStatus(
+        "Restored — a new revision recording this restore has been added.",
+      );
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to restore revision");
+      setStatus(
+        err instanceof Error ? err.message : "Failed to restore revision",
+      );
     } finally {
       setIsRestoring(false);
     }
@@ -104,7 +117,11 @@ export default function LoreRevisionHistory() {
 
   return (
     <>
-      <SEO title={`${entry.title} — History`} description="Lore entry revision history" noindex />
+      <SEO
+        title={`${entry.title} — History`}
+        description="Lore entry revision history"
+        noindex
+      />
       <Container className="grid max-w-4xl gap-6 py-10">
         <Button
           variant="ghost"
@@ -124,11 +141,18 @@ export default function LoreRevisionHistory() {
         </div>
 
         {status ? (
-          <StatusBadge variant={status.startsWith("Restored") ? "success" : "danger"}>{status}</StatusBadge>
+          <StatusBadge
+            variant={status.startsWith("Restored") ? "success" : "danger"}
+          >
+            {status}
+          </StatusBadge>
         ) : null}
 
         <div className="grid gap-4 lg:grid-cols-[1fr_2fr]">
-          <div className="grid content-start gap-2" data-testid="lore-revision-list">
+          <div
+            className="grid content-start gap-2"
+            data-testid="lore-revision-list"
+          >
             {rows.map((revision) => (
               <button
                 key={revision.id}
@@ -140,9 +164,13 @@ export default function LoreRevisionHistory() {
                   selected?.id === revision.id && "bg-muted",
                 )}
               >
-                <p className="font-medium">{new Date(revision.createdAt).toLocaleString()}</p>
+                <p className="font-medium">
+                  {new Date(revision.createdAt).toLocaleString()}
+                </p>
                 <p className="text-xs text-muted-foreground">
-                  {revision.restoredFromRevisionId ? "Restored revision" : "Edit"}
+                  {revision.restoredFromRevisionId
+                    ? "Restored revision"
+                    : "Edit"}
                 </p>
               </button>
             ))}
@@ -153,7 +181,11 @@ export default function LoreRevisionHistory() {
               <>
                 <LoreMarkdownRenderer html={selected.renderedHtml} />
                 {canRestore && selected.id !== rows[0]?.id ? (
-                  <Button onClick={() => void handleRestore()} disabled={isRestoring} className="justify-self-start">
+                  <Button
+                    onClick={() => void handleRestore()}
+                    disabled={isRestoring}
+                    className="justify-self-start"
+                  >
                     {isRestoring ? "Restoring..." : "Restore this revision"}
                   </Button>
                 ) : null}

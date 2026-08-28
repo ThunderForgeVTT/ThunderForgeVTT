@@ -13,7 +13,7 @@
  * (camelCase) rather than the Diesel model's snake_case.
  */
 
-export type WallDoorState = 'none' | 'open' | 'closed';
+export type WallDoorState = "none" | "open" | "closed";
 
 /**
  * Type definition for a wall record (mirrors the GraphQL `Wall` type,

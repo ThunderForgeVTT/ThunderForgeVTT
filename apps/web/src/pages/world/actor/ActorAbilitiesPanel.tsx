@@ -46,9 +46,13 @@ export function ActorAbilitiesPanel({
   gameSystemId,
   canManage,
 }: ActorAbilitiesPanelProps) {
-  const [entries, setEntries] = useState<ActorAbilityEntryRecord[] | null>(null);
+  const [entries, setEntries] = useState<ActorAbilityEntryRecord[] | null>(
+    null,
+  );
   const [catalog, setCatalog] = useState<WorldAbilityRecord[] | null>(null);
-  const [facets, setFacets] = useState<AbilityFacetsLookup | undefined>(undefined);
+  const [facets, setFacets] = useState<AbilityFacetsLookup | undefined>(
+    undefined,
+  );
   const [error, setError] = useState<string | null>(null);
   const [selectedAbilityId, setSelectedAbilityId] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -58,7 +62,9 @@ export function ActorAbilitiesPanel({
     try {
       setEntries(await getActorAbilities(actorId));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load known abilities");
+      setError(
+        err instanceof Error ? err.message : "Failed to load known abilities",
+      );
     }
   }, [actorId]);
 
@@ -72,7 +78,11 @@ export function ActorAbilitiesPanel({
       })
       .catch((err) => {
         if (active) {
-          setError(err instanceof Error ? err.message : "Failed to load known abilities");
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Failed to load known abilities",
+          );
         }
       });
     return () => {
@@ -156,7 +166,9 @@ export function ActorAbilitiesPanel({
   if (entries === null) {
     return (
       <Card className="p-5" data-testid="actor-abilities-panel">
-        <p className="text-sm text-muted-foreground">Loading known abilities…</p>
+        <p className="text-sm text-muted-foreground">
+          Loading known abilities…
+        </p>
       </Card>
     );
   }
@@ -168,7 +180,9 @@ export function ActorAbilitiesPanel({
       </p>
 
       {entries.length === 0 ? (
-        <p className="text-sm text-muted-foreground italic">No known abilities.</p>
+        <p className="text-sm text-muted-foreground italic">
+          No known abilities.
+        </p>
       ) : (
         <ul className="grid gap-1">
           {entries.map((entry) => (
@@ -200,7 +214,9 @@ export function ActorAbilitiesPanel({
                 ) : (
                   // Tombstone: the ability was deleted, but the entry and its
                   // name snapshot survive (FR-023).
-                  <span className="ml-2 text-muted-foreground italic">(deleted ability)</span>
+                  <span className="ml-2 text-muted-foreground italic">
+                    (deleted ability)
+                  </span>
                 )}
                 {entry.gmOnly ? (
                   <span

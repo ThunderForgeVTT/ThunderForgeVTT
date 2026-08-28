@@ -14,7 +14,7 @@
  * wire (camelCase) rather than the Diesel model's snake_case.
  */
 
-export type ShapeKind = 'STROKE' | 'RECT' | 'ELLIPSE' | 'LINE' | 'TEXT';
+export type ShapeKind = "STROKE" | "RECT" | "ELLIPSE" | "LINE" | "TEXT";
 
 /**
  * Type definition for a shape record (mirrors the GraphQL `Shape` type,

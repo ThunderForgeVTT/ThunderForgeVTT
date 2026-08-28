@@ -37,7 +37,8 @@ describe("isOfflineAfter", () => {
    * its own verdict at 3 beats of 5s.
    */
   it("agrees with the server's presence timeout", () => {
-    const clientVerdictMs = HEARTBEAT_FAILURES_BEFORE_OFFLINE * HEARTBEAT_INTERVAL_MS;
+    const clientVerdictMs =
+      HEARTBEAT_FAILURES_BEFORE_OFFLINE * HEARTBEAT_INTERVAL_MS;
     const serverTimeoutMs = 15_000;
 
     expect(clientVerdictMs).toBeLessThanOrEqual(serverTimeoutMs);

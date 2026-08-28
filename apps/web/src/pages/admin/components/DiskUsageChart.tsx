@@ -72,7 +72,9 @@ export function DiskUsageChart({
             >
               <div
                 className="h-full rounded-[inherit] bg-primary"
-                style={{ width: `${Math.max((segment.value / total) * 100, 3)}%` }}
+                style={{
+                  width: `${Math.max((segment.value / total) * 100, 3)}%`,
+                }}
               />
             </div>
           </div>

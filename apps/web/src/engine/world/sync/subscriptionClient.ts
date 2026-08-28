@@ -289,7 +289,9 @@ export function connectivityFor(input: {
  * outbox because peers had agreed it would be a change the server never hears
  * about.
  */
-export function isDisconnected(state: LiveSyncState = getLiveSyncState()): boolean {
+export function isDisconnected(
+  state: LiveSyncState = getLiveSyncState(),
+): boolean {
   return state.status === "disconnected" || state.status === "server-isolated";
 }
 
@@ -322,7 +324,9 @@ export function getLiveSyncState(): LiveSyncState {
  * shared connection. Returns an unsubscribe function. Does not call
  * `listener` immediately with the current state — callers that need the
  * current value up front should also call `getLiveSyncState()`. */
-export function subscribeToLiveSyncState(listener: LiveSyncStateListener): () => void {
+export function subscribeToLiveSyncState(
+  listener: LiveSyncStateListener,
+): () => void {
   liveSyncStateListeners.add(listener);
   return () => {
     liveSyncStateListeners.delete(listener);
@@ -386,7 +390,10 @@ function judge(): LiveSyncState {
 function refreshLiveSyncState(): void {
   if (!hasConnectedOnce) return;
   const next = judge();
-  if (next.status !== "server-isolated" && liveSyncState.status !== "server-isolated") {
+  if (
+    next.status !== "server-isolated" &&
+    liveSyncState.status !== "server-isolated"
+  ) {
     return;
   }
   // Only on a real change. `setLiveSyncState` notifies unconditionally, and a
@@ -410,7 +417,8 @@ function sameState(a: LiveSyncState, b: LiveSyncState): boolean {
       );
     case "server-isolated":
       return (
-        a.attempt === (b as typeof a).attempt && a.peers === (b as typeof a).peers
+        a.attempt === (b as typeof a).attempt &&
+        a.peers === (b as typeof a).peers
       );
     default:
       return true;
@@ -538,8 +546,13 @@ const WORLD_EVENTS_SUBSCRIPTION = `
  * consumers that want `for await` rather than callbacks. Returns a fresh,
  * independent subscription each call.
  */
-export function subscribeToWorldEvents(worldId: string): AsyncIterable<WorldEventLike> {
-  type Pending = { resolve: (done: boolean) => void; reject: (err: unknown) => void };
+export function subscribeToWorldEvents(
+  worldId: string,
+): AsyncIterable<WorldEventLike> {
+  type Pending = {
+    resolve: (done: boolean) => void;
+    reject: (err: unknown) => void;
+  };
 
   const queue: WorldEventLike[] = [];
   let pending: Pending | null = null;

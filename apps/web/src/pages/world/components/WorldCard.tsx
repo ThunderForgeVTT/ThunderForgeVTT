@@ -60,18 +60,14 @@ export function WorldCard({ world, showOwner = false }: WorldCardProps) {
           </strong>
         </div>
         <div>
-          <span className="block text-xs text-muted-foreground">
-            Created
-          </span>
+          <span className="block text-xs text-muted-foreground">Created</span>
           <strong className="font-medium">
             {formatTimestamp(world.createdAt)}
           </strong>
         </div>
         {showOwner ? (
           <div>
-            <span className="block text-xs text-muted-foreground">
-              Owner
-            </span>
+            <span className="block text-xs text-muted-foreground">Owner</span>
             <strong className="font-medium">
               {shortenId(world.createdBy)}
             </strong>

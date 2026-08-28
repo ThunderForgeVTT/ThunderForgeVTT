@@ -21,7 +21,10 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 function textResponse(body: string, status = 200): Response {
-  return new Response(body, { status, headers: { "content-type": "text/html" } });
+  return new Response(body, {
+    status,
+    headers: { "content-type": "text/html" },
+  });
 }
 
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -40,11 +43,16 @@ const QUERY = `query WorldAbilities($worldId: UUID!) { worldAbilities(worldId: $
 
 describe("postGraphQL — happy path", () => {
   it("returns data and posts the query and variables", async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ data: { worldAbilities: [{ id: "a" }] } }));
+    fetchMock.mockResolvedValue(
+      jsonResponse({ data: { worldAbilities: [{ id: "a" }] } }),
+    );
 
-    const data = await postGraphQL<{ worldAbilities: { id: string }[] }>(QUERY, {
-      worldId: "w1",
-    });
+    const data = await postGraphQL<{ worldAbilities: { id: string }[] }>(
+      QUERY,
+      {
+        worldId: "w1",
+      },
+    );
 
     expect(data.worldAbilities).toEqual([{ id: "a" }]);
     const [url, init] = fetchMock.mock.calls[0];
@@ -68,7 +76,9 @@ describe("postGraphQL — non-JSON responses", () => {
   it("reports the HTTP status instead of a JSON parse error", async () => {
     // The old copies did `await response.json()` unconditionally, so this
     // surfaced as `SyntaxError: Unexpected token '<'`.
-    fetchMock.mockResolvedValue(textResponse("<html>502 Bad Gateway</html>", 502));
+    fetchMock.mockResolvedValue(
+      textResponse("<html>502 Bad Gateway</html>", 502),
+    );
 
     const err = await postGraphQL(QUERY).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(GraphQLRequestError);
@@ -93,37 +103,52 @@ describe("postGraphQL — non-JSON responses", () => {
 describe("postGraphQL — GraphQL errors", () => {
   it("surfaces ALL error messages, not just the first", async () => {
     fetchMock.mockResolvedValue(
-      jsonResponse({ errors: [{ message: "first problem" }, { message: "second problem" }] }),
+      jsonResponse({
+        errors: [{ message: "first problem" }, { message: "second problem" }],
+      }),
     );
 
-    const err = (await postGraphQL(QUERY).catch((e: unknown) => e)) as GraphQLRequestError;
+    const err = (await postGraphQL(QUERY).catch(
+      (e: unknown) => e,
+    )) as GraphQLRequestError;
     expect(err.message).toContain("first problem");
     expect(err.message).toContain("second problem");
     expect(err.errors).toEqual(["first problem", "second problem"]);
   });
 
   it("attaches the operation name and status for diagnosis", async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ errors: [{ message: "nope" }] }, 400));
-    const err = (await postGraphQL(QUERY).catch((e: unknown) => e)) as GraphQLRequestError;
+    fetchMock.mockResolvedValue(
+      jsonResponse({ errors: [{ message: "nope" }] }, 400),
+    );
+    const err = (await postGraphQL(QUERY).catch(
+      (e: unknown) => e,
+    )) as GraphQLRequestError;
     expect(err.operation).toBe("WorldAbilities");
     expect(err.status).toBe(400);
   });
 
   it("prefers a GraphQL message over the bare HTTP status", async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ errors: [{ message: "Ability not found" }] }, 500));
+    fetchMock.mockResolvedValue(
+      jsonResponse({ errors: [{ message: "Ability not found" }] }, 500),
+    );
     await expect(postGraphQL(QUERY)).rejects.toThrow("Ability not found");
   });
 
   it("throws rather than returning partial data when both are present", async () => {
     // Deliberate: callers are typed as receiving complete results.
     fetchMock.mockResolvedValue(
-      jsonResponse({ data: { worldAbilities: [] }, errors: [{ message: "partial failure" }] }),
+      jsonResponse({
+        data: { worldAbilities: [] },
+        errors: [{ message: "partial failure" }],
+      }),
     );
     await expect(postGraphQL(QUERY)).rejects.toThrow("partial failure");
   });
 
   it("ignores blank error messages rather than throwing an empty string", async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ errors: [{ message: "   " }] }, 500));
+    fetchMock.mockResolvedValue(
+      jsonResponse({ errors: [{ message: "   " }] }, 500),
+    );
     const err = (await postGraphQL(QUERY).catch((e: unknown) => e)) as Error;
     expect(err.message.trim()).not.toBe("");
     expect(err.message).toContain("500");
@@ -138,7 +163,9 @@ describe("postGraphQL — GraphQL errors", () => {
 describe("postGraphQL — transport failures", () => {
   it("turns a rejected fetch into a readable message", async () => {
     fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
-    const err = (await postGraphQL(QUERY).catch((e: unknown) => e)) as GraphQLRequestError;
+    const err = (await postGraphQL(QUERY).catch(
+      (e: unknown) => e,
+    )) as GraphQLRequestError;
     expect(err).toBeInstanceOf(GraphQLRequestError);
     expect(err.message).toMatch(/could not reach the server/i);
     expect(err.operation).toBe("WorldAbilities");
@@ -153,7 +180,9 @@ describe("postGraphQL — transport failures", () => {
       });
     });
 
-    await expect(postGraphQL(QUERY, undefined, { timeoutMs: 10 })).rejects.toThrow(/timed out/i);
+    await expect(
+      postGraphQL(QUERY, undefined, { timeoutMs: 10 }),
+    ).rejects.toThrow(/timed out/i);
   });
 
   it("passes an abort signal so the timeout can actually cancel", async () => {
@@ -173,13 +202,22 @@ describe("postGraphQLMultipart", () => {
   const UPLOAD = `mutation UploadLoreImage($loreEntryId: UUID!, $file: Upload!) { uploadLoreImage(loreEntryId: $loreEntryId, file: $file) { id } }`;
 
   it("builds a spec-compliant multipart body and omits Content-Type", async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ data: { uploadLoreImage: { id: "i1" } } }));
+    fetchMock.mockResolvedValue(
+      jsonResponse({ data: { uploadLoreImage: { id: "i1" } } }),
+    );
 
-    await postGraphQLMultipart(UPLOAD, { loreEntryId: "l1" }, new Blob(["x"]), "file");
+    await postGraphQLMultipart(
+      UPLOAD,
+      { loreEntryId: "l1" },
+      new Blob(["x"]),
+      "file",
+    );
 
     const init = fetchMock.mock.calls[0][1] as RequestInit;
     const form = init.body as FormData;
-    expect(JSON.parse(form.get("map") as string)).toEqual({ "0": ["variables.file"] });
+    expect(JSON.parse(form.get("map") as string)).toEqual({
+      "0": ["variables.file"],
+    });
     const ops = JSON.parse(form.get("operations") as string);
     // The file slot must be null in `variables`; the map points at it.
     expect(ops.variables).toEqual({ loreEntryId: "l1", file: null });
@@ -204,11 +242,15 @@ describe("postGraphQLMultipart", () => {
 
 describe("operationNameOf", () => {
   it("extracts query, mutation, and subscription names", () => {
-    expect(operationNameOf("query WorldAbilities($a: ID!) { x }")).toBe("WorldAbilities");
-    expect(operationNameOf("mutation CreateAbility($input: X!) { y }")).toBe("CreateAbility");
-    expect(operationNameOf("subscription WorldEventsCreated($w: String!) { z }")).toBe(
-      "WorldEventsCreated",
+    expect(operationNameOf("query WorldAbilities($a: ID!) { x }")).toBe(
+      "WorldAbilities",
     );
+    expect(operationNameOf("mutation CreateAbility($input: X!) { y }")).toBe(
+      "CreateAbility",
+    );
+    expect(
+      operationNameOf("subscription WorldEventsCreated($w: String!) { z }"),
+    ).toBe("WorldEventsCreated");
   });
 
   it("returns undefined for an anonymous operation rather than guessing", () => {

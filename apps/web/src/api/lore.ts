@@ -36,7 +36,9 @@ const LORE_ENTRY_FIELDS = `
  */
 
 /** FR-001: every lore entry in the world, visible to any member. */
-export function getWorldLoreEntries(worldId: string): Promise<LoreEntryRecord[]> {
+export function getWorldLoreEntries(
+  worldId: string,
+): Promise<LoreEntryRecord[]> {
   return postGraphQL<{ worldLoreEntries: LoreEntryRecord[] }>(
     `
       query WorldLoreEntries($worldId: UUID!) {
@@ -50,7 +52,10 @@ export function getWorldLoreEntries(worldId: string): Promise<LoreEntryRecord[]>
 }
 
 /** FR-014: the canonical detail-page lookup — `null` for a stale/missing slug. */
-export function getLoreEntry(worldId: string, slug: string): Promise<LoreEntryRecord | null> {
+export function getLoreEntry(
+  worldId: string,
+  slug: string,
+): Promise<LoreEntryRecord | null> {
   return postGraphQL<{ loreEntry: LoreEntryRecord | null }>(
     `
       query LoreEntry($worldId: UUID!, $slug: String!) {
@@ -70,7 +75,9 @@ type CreateLoreEntryInput = {
 };
 
 /** DM-only (FR-002). */
-export function createLoreEntry(input: CreateLoreEntryInput): Promise<LoreEntryRecord> {
+export function createLoreEntry(
+  input: CreateLoreEntryInput,
+): Promise<LoreEntryRecord> {
   return postGraphQL<{ createLoreEntry: LoreEntryRecord }>(
     `
       mutation CreateLoreEntry($input: CreateLoreEntryInput!) {
@@ -98,7 +105,9 @@ type UpdateLoreEntryInput = {
  * rejected outright with a "CONFLICT"-coded error (FR-019); the caller
  * must reload and retry, not silently overwrite.
  */
-export function updateLoreEntry(input: UpdateLoreEntryInput): Promise<LoreEntryRecord> {
+export function updateLoreEntry(
+  input: UpdateLoreEntryInput,
+): Promise<LoreEntryRecord> {
   return postGraphQL<{ updateLoreEntry: LoreEntryRecord }>(
     `
       mutation UpdateLoreEntry($input: UpdateLoreEntryInput!) {
@@ -124,7 +133,10 @@ export function deleteLoreEntry(loreEntryId: string): Promise<boolean> {
 }
 
 /** FR-007a: autocomplete candidates for the editor's `[[`-trigger popover. */
-export function getLoreLinkTargets(worldId: string, prefix: string): Promise<LoreLinkTargetRecord[]> {
+export function getLoreLinkTargets(
+  worldId: string,
+  prefix: string,
+): Promise<LoreLinkTargetRecord[]> {
   return postGraphQL<{ loreLinkTargets: LoreLinkTargetRecord[] }>(
     `
       query LoreLinkTargets($worldId: UUID!, $prefix: String!) {
@@ -140,7 +152,9 @@ export function getLoreLinkTargets(worldId: string, prefix: string): Promise<Lor
 }
 
 /** FR-017: full revision history, newest first. */
-export function getLoreEntryRevisions(loreEntryId: string): Promise<LoreRevisionRecord[]> {
+export function getLoreEntryRevisions(
+  loreEntryId: string,
+): Promise<LoreRevisionRecord[]> {
   return postGraphQL<{ loreEntryRevisions: LoreRevisionRecord[] }>(
     `
       query LoreEntryRevisions($loreEntryId: UUID!) {
@@ -160,7 +174,9 @@ export function getLoreEntryRevisions(loreEntryId: string): Promise<LoreRevision
 }
 
 /** FR-018: appends a new revision recording the restore. */
-export function restoreLoreRevision(revisionId: string): Promise<LoreEntryRecord> {
+export function restoreLoreRevision(
+  revisionId: string,
+): Promise<LoreEntryRecord> {
   return postGraphQL<{ restoreLoreRevision: LoreEntryRecord }>(
     `
       mutation RestoreLoreRevision($revisionId: UUID!) {
@@ -174,7 +190,9 @@ export function restoreLoreRevision(revisionId: string): Promise<LoreEntryRecord
 }
 
 /** DM-only (FR-003). Returns only explicit ownership-block rows. */
-export function getLoreEntryPermissions(loreEntryId: string): Promise<LorePermissionRecord[]> {
+export function getLoreEntryPermissions(
+  loreEntryId: string,
+): Promise<LorePermissionRecord[]> {
   return postGraphQL<{ loreEntryPermissions: LorePermissionRecord[] }>(
     `
       query LoreEntryPermissions($loreEntryId: UUID!) {
@@ -212,7 +230,10 @@ export function setLorePermission(
 }
 
 /** DM-only. Idempotent — reverts the member to default Viewer. */
-export function removeLorePermission(loreEntryId: string, userId: string): Promise<boolean> {
+export function removeLorePermission(
+  loreEntryId: string,
+  userId: string,
+): Promise<boolean> {
   return postGraphQL<{ removeLorePermission: boolean }>(
     `
       mutation RemoveLorePermission($loreEntryId: UUID!, $userId: UUID!) {
@@ -228,7 +249,10 @@ export function removeLorePermission(loreEntryId: string, userId: string): Promi
  * processed server-side (normalized rendition + thumbnail, both WebP)
  * and stored. Throws with a message suitable for direct display.
  */
-export async function uploadLoreImage(loreEntryId: string, file: Blob): Promise<LoreImageAssetRecord> {
+export async function uploadLoreImage(
+  loreEntryId: string,
+  file: Blob,
+): Promise<LoreImageAssetRecord> {
   const mutation = `
     mutation UploadLoreImage($loreEntryId: UUID!, $file: Upload!) {
       uploadLoreImage(loreEntryId: $loreEntryId, file: $file) {
@@ -241,11 +265,8 @@ export async function uploadLoreImage(loreEntryId: string, file: Blob): Promise<
       }
     }
   `;
-  const data = await postGraphQLMultipart<{ uploadLoreImage: LoreImageAssetRecord }>(
-    mutation,
-    { loreEntryId },
-    file,
-    "file",
-  );
+  const data = await postGraphQLMultipart<{
+    uploadLoreImage: LoreImageAssetRecord;
+  }>(mutation, { loreEntryId }, file, "file");
   return data.uploadLoreImage;
 }

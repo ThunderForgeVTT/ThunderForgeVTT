@@ -109,7 +109,9 @@ export function matchOutcomes(
   rejected: { change: SubmittedChange; outcome: ReconcileOutcome }[];
   unanswered: SubmittedChange[];
 } {
-  const byLocalId = new Map(outcomes.map((outcome) => [outcome.localId, outcome]));
+  const byLocalId = new Map(
+    outcomes.map((outcome) => [outcome.localId, outcome]),
+  );
   const applied: SubmittedChange[] = [];
   const rejected: { change: SubmittedChange; outcome: ReconcileOutcome }[] = [];
   const unanswered: SubmittedChange[] = [];
@@ -157,9 +159,11 @@ export interface ReconciledEvent {
  * for supersession — someone moving a token at the table is not overriding
  * anybody's queued work, it is just play.
  */
-export function parseReconciledEvent(event: WorldEventLike): ReconciledEvent | null {
-  const payload = ((event as { token_event?: unknown; tokenEvent?: unknown }).token_event ??
-    (event as { tokenEvent?: unknown }).tokenEvent) as
+export function parseReconciledEvent(
+  event: WorldEventLike,
+): ReconciledEvent | null {
+  const payload = ((event as { token_event?: unknown; tokenEvent?: unknown })
+    .token_event ?? (event as { tokenEvent?: unknown }).tokenEvent) as
     | {
         token_id?: string;
         tokenId?: string;
@@ -259,8 +263,15 @@ const ADJUDICATION_KEY = "adjudication";
  * attribute, and inventing a wrapper would change the shape the server
  * replays.
  */
-export function attributeCommand(command: unknown, originatorUserId: string): unknown {
-  if (typeof command !== "object" || command === null || Array.isArray(command)) {
+export function attributeCommand(
+  command: unknown,
+  originatorUserId: string,
+): unknown {
+  if (
+    typeof command !== "object" ||
+    command === null ||
+    Array.isArray(command)
+  ) {
     return command;
   }
   if (originatorUserId.length === 0) return command;
@@ -281,7 +292,8 @@ export function readAdjudication(command: unknown): Adjudication | null {
   if (typeof command !== "object" || command === null) return null;
   const raw = (command as Record<string, unknown>)[ADJUDICATION_KEY];
   if (typeof raw !== "object" || raw === null) return null;
-  const originator = (raw as { originator_user_id?: unknown }).originator_user_id;
+  const originator = (raw as { originator_user_id?: unknown })
+    .originator_user_id;
   if (typeof originator !== "string" || originator.length === 0) return null;
   return { originatorUserId: originator };
 }

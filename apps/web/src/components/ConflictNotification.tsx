@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import type { ConflictRecord } from '@/hooks/useConflictDetection';
-import { extractVersionInfo } from '@/hooks/useConflictDetection';
+import React, { useState } from "react";
+import type { ConflictRecord } from "@/hooks/useConflictDetection";
+import { extractVersionInfo } from "@/hooks/useConflictDetection";
 
 /**
  * Phase 4.9.C.3: Conflict Notification Component
- * 
+ *
  * Displays conflict alerts with:
  * - What changed (token moved to new position)
  * - Who caused it (user ID)
@@ -27,7 +27,7 @@ export function ConflictNotification({
   const versionInfo = extractVersionInfo(conflict);
 
   const formatTime = (isoString: string | undefined) => {
-    if (!isoString) return 'unknown';
+    if (!isoString) return "unknown";
     try {
       const date = new Date(isoString);
       return date.toLocaleTimeString();
@@ -37,7 +37,10 @@ export function ConflictNotification({
   };
 
   return (
-    <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 shadow-md" role="alert">
+    <div
+      className="rounded-lg border border-amber-300 bg-amber-50 p-4 shadow-md"
+      role="alert"
+    >
       {/* Header */}
       <div className="mb-3 flex items-start justify-between">
         <div className="flex items-center gap-2">
@@ -47,8 +50,11 @@ export function ConflictNotification({
               Conflict Resolved (Last-Write-Wins)
             </h3>
             <p className="text-sm text-amber-800">
-              Token <code className="font-mono text-amber-900">{conflict.tokenId}</code> was updated
-              by another player
+              Token{" "}
+              <code className="font-mono text-amber-900">
+                {conflict.tokenId}
+              </code>{" "}
+              was updated by another player
             </p>
           </div>
         </div>
@@ -71,7 +77,7 @@ export function ConflictNotification({
         }}
         className="mb-2 text-sm font-medium text-amber-700 hover:text-amber-900 underline"
       >
-        {showDetails ? '▼' : '▶'} Version Details
+        {showDetails ? "▼" : "▶"} Version Details
       </button>
 
       {/* Expanded Details */}
@@ -79,19 +85,29 @@ export function ConflictNotification({
         <div className="mt-3 space-y-2 rounded-md bg-amber-100 p-3 text-sm font-mono">
           <div>
             <span className="font-semibold text-amber-900">Your version:</span>
-            <span className="ml-2 text-amber-700">{formatTime(versionInfo.clientVersion)}</span>
+            <span className="ml-2 text-amber-700">
+              {formatTime(versionInfo.clientVersion)}
+            </span>
           </div>
           <div>
-            <span className="font-semibold text-amber-900">Server version:</span>
-            <span className="ml-2 text-amber-700">{formatTime(versionInfo.serverVersion)}</span>
+            <span className="font-semibold text-amber-900">
+              Server version:
+            </span>
+            <span className="ml-2 text-amber-700">
+              {formatTime(versionInfo.serverVersion)}
+            </span>
           </div>
           <div>
             <span className="font-semibold text-amber-900">Time diff:</span>
-            <span className="ml-2 text-amber-700">{versionInfo.timeDiffMs}ms</span>
+            <span className="ml-2 text-amber-700">
+              {versionInfo.timeDiffMs}ms
+            </span>
           </div>
           {conflict.appliedData && (
             <div>
-              <span className="font-semibold text-amber-900">Applied data:</span>
+              <span className="font-semibold text-amber-900">
+                Applied data:
+              </span>
               <pre className="mt-1 overflow-x-auto rounded bg-white p-2 text-xs text-gray-700">
                 {JSON.stringify(conflict.appliedData, null, 2)}
               </pre>
@@ -115,7 +131,7 @@ export function ConflictNotification({
 
 /**
  * Phase 4.9.C.3: Conflict Panel Component
- * 
+ *
  * Shows all recent conflicts in a collapsible panel
  */
 
@@ -144,7 +160,7 @@ export function ConflictPanel({
           onClick={() => setIsOpen(!isOpen)}
           className="flex items-center gap-2 font-semibold text-amber-900 hover:text-amber-700"
         >
-          {isOpen ? '▼' : '▶'} Conflicts ({unresolvedCount} unresolved)
+          {isOpen ? "▼" : "▶"} Conflicts ({unresolvedCount} unresolved)
         </button>
         {unresolvedCount > 0 && (
           <button
@@ -163,8 +179,8 @@ export function ConflictPanel({
               key={conflict.eventId}
               className={`rounded border p-2 ${
                 conflict.dismissed
-                  ? 'border-gray-300 bg-gray-100 opacity-50'
-                  : 'border-amber-200 bg-white'
+                  ? "border-gray-300 bg-gray-100 opacity-50"
+                  : "border-amber-200 bg-white"
               }`}
             >
               <div className="flex items-center justify-between">

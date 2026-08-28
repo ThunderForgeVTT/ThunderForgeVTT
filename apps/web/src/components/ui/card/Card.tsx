@@ -23,10 +23,7 @@ export function Card({
   ...props
 }: CardProps) {
   return (
-    <ShadcnCard
-      className={cn(SURFACE_CLASSES[surface], className)}
-      {...props}
-    >
+    <ShadcnCard className={cn(SURFACE_CLASSES[surface], className)} {...props}>
       {children}
     </ShadcnCard>
   );

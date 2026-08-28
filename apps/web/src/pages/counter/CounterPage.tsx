@@ -169,8 +169,8 @@ export default function CounterPage() {
             </h1>
             <p className="max-w-2xl text-muted-foreground">
               This page acts as the UI showcase: shadcn primitives, themed
-              panels, Dicebear identity previews, and integration notes for
-              the next content phases.
+              panels, Dicebear identity previews, and integration notes for the
+              next content phases.
             </p>
             <div className="flex flex-wrap items-center gap-3">
               <Tooltip content="Preview the scene shell with the Bevy canvas still mounted beneath the new chrome.">
@@ -188,8 +188,8 @@ export default function CounterPage() {
                 <div className="grid gap-1">
                   <strong>Design tokens</strong>
                   <p className="text-sm text-muted-foreground">
-                    A neutral shadcn palette composes the shared token
-                    language for every page.
+                    A neutral shadcn palette composes the shared token language
+                    for every page.
                   </p>
                 </div>
               </Popover>
@@ -371,7 +371,11 @@ export default function CounterPage() {
 
           <Grid columns="three">
             {insights.map((insight) => (
-              <Card key={insight.title} surface="stone" className="grid gap-2 p-6">
+              <Card
+                key={insight.title}
+                surface="stone"
+                className="grid gap-2 p-6"
+              >
                 <h2 className="text-lg font-semibold">{insight.title}</h2>
                 <p className="text-muted-foreground">{insight.body}</p>
               </Card>

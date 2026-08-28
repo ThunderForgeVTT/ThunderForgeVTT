@@ -1,8 +1,16 @@
 import { useState, type ReactNode } from "react";
-import { FantasyIcon, type FantasyIconName } from "@/components/ui/fantasy-icon/FantasyIcon";
+import {
+  FantasyIcon,
+  type FantasyIconName,
+} from "@/components/ui/fantasy-icon/FantasyIcon";
 import { cn } from "@/lib/utils";
 
-export type DockSectionId = "chat" | "actors" | "combat" | "clocks" | "settings";
+export type DockSectionId =
+  | "chat"
+  | "actors"
+  | "combat"
+  | "clocks"
+  | "settings";
 
 export interface DockSection {
   id: DockSectionId;
@@ -36,7 +44,8 @@ export function WorldDock({ sections, defaultSectionId }: WorldDockProps) {
     defaultSectionId ?? null,
   );
 
-  const openSection = sections.find((section) => section.id === openSectionId) ?? null;
+  const openSection =
+    sections.find((section) => section.id === openSectionId) ?? null;
 
   const toggle = (id: DockSectionId) => {
     setOpenSectionId((current) => (current === id ? null : id));
@@ -70,9 +79,11 @@ export function WorldDock({ sections, defaultSectionId }: WorldDockProps) {
             </button>
           </header>
           {/* min-h-0 is what lets an overflowing child actually scroll
-            * inside this flex column instead of stretching the dock past
-            * the viewport. */}
-          <div className="min-h-0 flex-1 overflow-y-auto p-4">{openSection.content}</div>
+           * inside this flex column instead of stretching the dock past
+           * the viewport. */}
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            {openSection.content}
+          </div>
         </section>
       ) : null}
 

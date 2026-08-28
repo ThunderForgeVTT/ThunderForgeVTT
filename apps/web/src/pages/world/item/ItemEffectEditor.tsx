@@ -4,7 +4,11 @@ import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
-import type { ItemEffectRecord, ItemEffectTrigger, ItemEffectType } from "@/types/item";
+import type {
+  ItemEffectRecord,
+  ItemEffectTrigger,
+  ItemEffectType,
+} from "@/types/item";
 
 export interface ItemEffectEditorProps {
   itemId: string;
@@ -19,18 +23,23 @@ const EFFECT_TYPE_OPTIONS: Array<{ value: ItemEffectType; label: string }> = [
   { value: "ATTACK_ROLL", label: "Attack Roll" },
 ];
 
-const TRIGGER_OPTIONS: Array<{ value: "" | ItemEffectTrigger; label: string }> = [
-  { value: "", label: "Unspecified" },
-  { value: "ON_USE", label: "On use (consumable)" },
-  { value: "PASSIVE", label: "Passive (always active)" },
-];
+const TRIGGER_OPTIONS: Array<{ value: "" | ItemEffectTrigger; label: string }> =
+  [
+    { value: "", label: "Unspecified" },
+    { value: "ON_USE", label: "On use (consumable)" },
+    { value: "PASSIVE", label: "Passive (always active)" },
+  ];
 
 /**
  * Spec 013 (T027): add/edit/remove an Item's structured effects (FR-005).
  * Each effect is authored data only — no dice rolling, no trigger
  * evaluation happens here (FR-004a, Clarifications).
  */
-export function ItemEffectEditor({ itemId, effects, onChanged }: ItemEffectEditorProps) {
+export function ItemEffectEditor({
+  itemId,
+  effects,
+  onChanged,
+}: ItemEffectEditorProps) {
   const [draftType, setDraftType] = useState<ItemEffectType>("MODIFIER");
   const [draftFormula, setDraftFormula] = useState("");
   const [draftTarget, setDraftTarget] = useState("");
@@ -77,7 +86,10 @@ export function ItemEffectEditor({ itemId, effects, onChanged }: ItemEffectEdito
     }
   };
 
-  const handleUpdateField = async (effect: ItemEffectRecord, patch: Partial<ItemEffectRecord>) => {
+  const handleUpdateField = async (
+    effect: ItemEffectRecord,
+    patch: Partial<ItemEffectRecord>,
+  ) => {
     setPendingEffectId(effect.id);
     setError(null);
     try {
@@ -116,7 +128,9 @@ export function ItemEffectEditor({ itemId, effects, onChanged }: ItemEffectEdito
                 value={effect.effectType}
                 disabled={pendingEffectId === effect.id}
                 onChange={(event) =>
-                  void handleUpdateField(effect, { effectType: event.target.value as ItemEffectType })
+                  void handleUpdateField(effect, {
+                    effectType: event.target.value as ItemEffectType,
+                  })
                 }
                 className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
                 aria-label="Effect type"
@@ -130,14 +144,20 @@ export function ItemEffectEditor({ itemId, effects, onChanged }: ItemEffectEdito
               <Input
                 defaultValue={effect.formula}
                 disabled={pendingEffectId === effect.id}
-                onBlur={(event) => void handleUpdateField(effect, { formula: event.target.value })}
+                onBlur={(event) =>
+                  void handleUpdateField(effect, {
+                    formula: event.target.value,
+                  })
+                }
                 placeholder="Formula (e.g. 3d6)"
                 aria-label="Effect formula"
               />
               <Input
                 defaultValue={effect.target}
                 disabled={pendingEffectId === effect.id}
-                onBlur={(event) => void handleUpdateField(effect, { target: event.target.value })}
+                onBlur={(event) =>
+                  void handleUpdateField(effect, { target: event.target.value })
+                }
                 placeholder="Target (e.g. Hit Points)"
                 aria-label="Effect target"
               />
@@ -146,7 +166,8 @@ export function ItemEffectEditor({ itemId, effects, onChanged }: ItemEffectEdito
                 disabled={pendingEffectId === effect.id}
                 onChange={(event) =>
                   void handleUpdateField(effect, {
-                    triggerKind: (event.target.value || null) as ItemEffectTrigger | null,
+                    triggerKind: (event.target.value ||
+                      null) as ItemEffectTrigger | null,
                   })
                 }
                 className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
@@ -175,7 +196,9 @@ export function ItemEffectEditor({ itemId, effects, onChanged }: ItemEffectEdito
       <div className="grid gap-2 rounded-lg border border-dashed border-border p-3 sm:grid-cols-[1fr_1fr_1fr_1fr_auto]">
         <select
           value={draftType}
-          onChange={(event) => setDraftType(event.target.value as ItemEffectType)}
+          onChange={(event) =>
+            setDraftType(event.target.value as ItemEffectType)
+          }
           className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
           aria-label="New effect type"
         >
@@ -201,7 +224,9 @@ export function ItemEffectEditor({ itemId, effects, onChanged }: ItemEffectEdito
         />
         <select
           value={draftTrigger}
-          onChange={(event) => setDraftTrigger(event.target.value as "" | ItemEffectTrigger)}
+          onChange={(event) =>
+            setDraftTrigger(event.target.value as "" | ItemEffectTrigger)
+          }
           className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
           aria-label="New effect trigger"
         >

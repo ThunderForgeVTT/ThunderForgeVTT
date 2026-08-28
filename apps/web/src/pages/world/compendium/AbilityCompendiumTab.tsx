@@ -1,10 +1,17 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { createAbility, getWorldAbilities, suggestAbilityName } from "@/api/abilities";
+import {
+  createAbility,
+  getWorldAbilities,
+  suggestAbilityName,
+} from "@/api/abilities";
 import { Button } from "@/components/ui/button/Button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import type { AbilityClassification, WorldAbilityRecord } from "@/types/ability";
+import type {
+  AbilityClassification,
+  WorldAbilityRecord,
+} from "@/types/ability";
 import {
   ABILITY_CLASSIFICATION_KEYS,
   resolveAbilityLabel,
@@ -55,7 +62,8 @@ export function AbilityCompendiumTab({
   const [refreshTick, setRefreshTick] = useState(0);
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
-  const [newClassification, setNewClassification] = useState<AbilityClassification>("SPELL");
+  const [newClassification, setNewClassification] =
+    useState<AbilityClassification>("SPELL");
   const [isCreating, setIsCreating] = useState(false);
   const [suggestion, setSuggestion] = useState<WorldAbilityRecord | null>(null);
 
@@ -135,7 +143,11 @@ export function AbilityCompendiumTab({
   }, [worldId, newName, isGm]);
 
   if (error) {
-    return <p className="text-sm text-destructive">Failed to load abilities: {error.message}</p>;
+    return (
+      <p className="text-sm text-destructive">
+        Failed to load abilities: {error.message}
+      </p>
+    );
   }
 
   if (abilities === null) {
@@ -199,17 +211,26 @@ export function AbilityCompendiumTab({
                     )}
                   </td>
                   <td className="max-w-xs truncate p-2 text-muted-foreground">
-                    {ability.description || <span className="italic">No description</span>}
+                    {ability.description || (
+                      <span className="italic">No description</span>
+                    )}
                   </td>
                   <td className="p-2">
-                    <div className="flex gap-2" onClick={(event) => event.stopPropagation()}>
+                    <div
+                      className="flex gap-2"
+                      onClick={(event) => event.stopPropagation()}
+                    >
                       <Button
                         asChild
                         variant="ghost"
                         size="sm"
                         data-testid={`ability-catalog-view-${ability.id}`}
                       >
-                        <Link to={`/world/${worldId}/ability/${ability.id}/view`}>View</Link>
+                        <Link
+                          to={`/world/${worldId}/ability/${ability.id}/view`}
+                        >
+                          View
+                        </Link>
                       </Button>
                       {ability.myPermissionLevel !== "VIEWER" ? (
                         <Button
@@ -218,7 +239,11 @@ export function AbilityCompendiumTab({
                           size="sm"
                           data-testid={`ability-catalog-edit-${ability.id}`}
                         >
-                          <Link to={`/world/${worldId}/ability/${ability.id}/edit`}>Edit</Link>
+                          <Link
+                            to={`/world/${worldId}/ability/${ability.id}/edit`}
+                          >
+                            Edit
+                          </Link>
                         </Button>
                       ) : null}
                     </div>
@@ -244,7 +269,9 @@ export function AbilityCompendiumTab({
               className="rounded-md border border-border bg-background px-2 text-sm"
               value={newClassification}
               onChange={(event) =>
-                setNewClassification(event.target.value as AbilityClassification)
+                setNewClassification(
+                  event.target.value as AbilityClassification,
+                )
               }
               disabled={isCreating}
               aria-label="Ability type"
@@ -275,9 +302,13 @@ export function AbilityCompendiumTab({
             </Button>
           </div>
           {suggestion ? (
-            <p className="text-xs text-muted-foreground" data-testid="ability-name-suggestion">
-              Did you mean <span className="font-medium">{suggestion.name}</span>? Names can be
-              reused if that&apos;s intentional.
+            <p
+              className="text-xs text-muted-foreground"
+              data-testid="ability-name-suggestion"
+            >
+              Did you mean{" "}
+              <span className="font-medium">{suggestion.name}</span>? Names can
+              be reused if that&apos;s intentional.
             </p>
           ) : null}
         </div>

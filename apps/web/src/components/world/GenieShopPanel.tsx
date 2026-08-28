@@ -31,13 +31,20 @@ export interface GenieShopPanelProps {
  * nothing for a player when the NPC has zero listings (Scenario 6) —
  * only the GM sees the "create listing" affordance in that case.
  */
-export function GenieShopPanel({ worldId, npcActorId, currentUserId, isGm }: GenieShopPanelProps) {
-  const { myActor, fetchShopListings, createShopListing, purchaseFromShop } = useGenieSession(
-    worldId,
-    currentUserId,
+export function GenieShopPanel({
+  worldId,
+  npcActorId,
+  currentUserId,
+  isGm,
+}: GenieShopPanelProps) {
+  const { myActor, fetchShopListings, createShopListing, purchaseFromShop } =
+    useGenieSession(worldId, currentUserId);
+  const [listings, setListings] = useState<GenieShopListingRecord[] | null>(
+    null,
   );
-  const [listings, setListings] = useState<GenieShopListingRecord[] | null>(null);
-  const [npcInventory, setNpcInventory] = useState<InventoryEntryRecord[] | null>(null);
+  const [npcInventory, setNpcInventory] = useState<
+    InventoryEntryRecord[] | null
+  >(null);
   const [worldItems, setWorldItems] = useState<WorldItemRecord[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingListingId, setPendingListingId] = useState<string | null>(null);
@@ -54,7 +61,11 @@ export function GenieShopPanel({ worldId, npcActorId, currentUserId, isGm }: Gen
   const refresh = () => {
     fetchShopListings(npcActorId)
       .then(setListings)
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load shop listings"));
+      .catch((err) =>
+        setError(
+          err instanceof Error ? err.message : "Failed to load shop listings",
+        ),
+      );
   };
 
   useEffect(() => {
@@ -64,7 +75,9 @@ export function GenieShopPanel({ worldId, npcActorId, currentUserId, isGm }: Gen
 
   useEffect(() => {
     if (!isGm) return;
-    getActorInventory(npcActorId).then(setNpcInventory).catch(() => setNpcInventory([]));
+    getActorInventory(npcActorId)
+      .then(setNpcInventory)
+      .catch(() => setNpcInventory([]));
   }, [isGm, npcActorId]);
 
   // Every viewer (not just the GM) needs item names to render listing
@@ -72,7 +85,9 @@ export function GenieShopPanel({ worldId, npcActorId, currentUserId, isGm }: Gen
   // has no other way to know what "priceItemId: <uuid>" or a listing's
   // own itemId actually names.
   useEffect(() => {
-    getWorldItems(worldId).then(setWorldItems).catch(() => setWorldItems([]));
+    getWorldItems(worldId)
+      .then(setWorldItems)
+      .catch(() => setWorldItems([]));
   }, [worldId]);
 
   const handleCreateListing = async () => {
@@ -84,10 +99,17 @@ export function GenieShopPanel({ worldId, npcActorId, currentUserId, isGm }: Gen
         actorId: npcActorId,
         itemId: newItemId,
         priceKind,
-        priceResourceType: priceKind === "RESOURCE" ? priceResourceType : undefined,
-        priceResourceAmount: priceKind === "RESOURCE" ? Number.parseInt(priceResourceAmount, 10) : undefined,
+        priceResourceType:
+          priceKind === "RESOURCE" ? priceResourceType : undefined,
+        priceResourceAmount:
+          priceKind === "RESOURCE"
+            ? Number.parseInt(priceResourceAmount, 10)
+            : undefined,
         priceItemId: priceKind === "ITEM" ? priceItemId : undefined,
-        priceItemQuantity: priceKind === "ITEM" ? Number.parseInt(priceItemQuantity, 10) : undefined,
+        priceItemQuantity:
+          priceKind === "ITEM"
+            ? Number.parseInt(priceItemQuantity, 10)
+            : undefined,
       });
       setNewItemId("");
       setPriceItemId("");
@@ -114,11 +136,15 @@ export function GenieShopPanel({ worldId, npcActorId, currentUserId, isGm }: Gen
   };
 
   const itemLabel = (itemId: string) =>
-    worldItems?.find((i) => i.id === itemId)?.name ?? npcInventory?.find((e) => e.itemId === itemId)?.itemName ?? itemId;
+    worldItems?.find((i) => i.id === itemId)?.name ??
+    npcInventory?.find((e) => e.itemId === itemId)?.itemName ??
+    itemId;
 
   // Scenario 6: a plain NPC with no listings shows nothing to a non-GM viewer.
   if (listings === null) {
-    return isGm ? <p className="text-sm text-muted-foreground">Loading shop…</p> : null;
+    return isGm ? (
+      <p className="text-sm text-muted-foreground">Loading shop…</p>
+    ) : null;
   }
   if (!isGm && listings.length === 0) {
     return null;
@@ -154,7 +180,10 @@ export function GenieShopPanel({ worldId, npcActorId, currentUserId, isGm }: Gen
                 <Button
                   type="button"
                   size="sm"
-                  disabled={pendingListingId === listing.id || listing.stockQuantity <= 0}
+                  disabled={
+                    pendingListingId === listing.id ||
+                    listing.stockQuantity <= 0
+                  }
                   onClick={() => void handlePurchase(listing)}
                   data-testid={`shop-buy-${listing.id}`}
                 >
@@ -178,7 +207,9 @@ export function GenieShopPanel({ worldId, npcActorId, currentUserId, isGm }: Gen
             aria-label="Item to sell"
           >
             <option value="">
-              {npcInventory === null ? "Loading NPC inventory…" : "Select an item from this NPC's inventory…"}
+              {npcInventory === null
+                ? "Loading NPC inventory…"
+                : "Select an item from this NPC's inventory…"}
             </option>
             {(npcInventory ?? []).map((entry) =>
               entry.itemId ? (
@@ -198,7 +229,11 @@ export function GenieShopPanel({ worldId, npcActorId, currentUserId, isGm }: Gen
               Resource price
             </label>
             <label className="flex items-center gap-1 text-sm">
-              <input type="radio" checked={priceKind === "ITEM"} onChange={() => setPriceKind("ITEM")} />
+              <input
+                type="radio"
+                checked={priceKind === "ITEM"}
+                onChange={() => setPriceKind("ITEM")}
+              />
               Item barter
             </label>
           </div>
@@ -233,7 +268,9 @@ export function GenieShopPanel({ worldId, npcActorId, currentUserId, isGm }: Gen
                 className="h-9 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none"
                 aria-label="Required barter item"
               >
-                <option value="">{worldItems === null ? "Loading items…" : "Required item…"}</option>
+                <option value="">
+                  {worldItems === null ? "Loading items…" : "Required item…"}
+                </option>
                 {(worldItems ?? []).map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.name}

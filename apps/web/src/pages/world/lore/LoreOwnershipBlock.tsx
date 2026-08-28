@@ -18,7 +18,10 @@ export interface LoreOwnershipBlockProps {
   world: WorldRecord | null;
 }
 
-const LEVEL_OPTIONS: Array<{ value: "" | ActorPermissionLevel; label: string }> = [
+const LEVEL_OPTIONS: Array<{
+  value: "" | ActorPermissionLevel;
+  label: string;
+}> = [
   { value: "", label: "Default (Viewer)" },
   { value: "VIEWER", label: "Viewer" },
   { value: "EDITOR", label: "Editor" },
@@ -34,9 +37,15 @@ const LEVEL_OPTIONS: Array<{ value: "" | ActorPermissionLevel; label: string }> 
  * DM viewer — non-DM callers who reach it anyway are still rejected
  * server-side by every mutation here.
  */
-export function LoreOwnershipBlock({ loreEntryId, worldId, world }: LoreOwnershipBlockProps) {
+export function LoreOwnershipBlock({
+  loreEntryId,
+  worldId,
+  world,
+}: LoreOwnershipBlockProps) {
   const [members, setMembers] = useState<WorldMemberRecord[] | null>(null);
-  const [permissions, setPermissions] = useState<LorePermissionRecord[] | null>(null);
+  const [permissions, setPermissions] = useState<LorePermissionRecord[] | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
 
@@ -50,7 +59,9 @@ export function LoreOwnershipBlock({ loreEntryId, worldId, world }: LoreOwnershi
       })
       .catch((err) => {
         if (active) {
-          setError(err instanceof Error ? err.message : "Failed to load world members");
+          setError(
+            err instanceof Error ? err.message : "Failed to load world members",
+          );
         }
       });
     return () => {
@@ -68,7 +79,11 @@ export function LoreOwnershipBlock({ loreEntryId, worldId, world }: LoreOwnershi
       })
       .catch((err) => {
         if (active) {
-          setError(err instanceof Error ? err.message : "Failed to load ownership block");
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Failed to load ownership block",
+          );
         }
       });
     return () => {
@@ -76,10 +91,18 @@ export function LoreOwnershipBlock({ loreEntryId, worldId, world }: LoreOwnershi
     };
   }, [loreEntryId]);
 
-  const ownerHasMembership = (members ?? []).some((member) => member.userId === world?.createdBy);
+  const ownerHasMembership = (members ?? []).some(
+    (member) => member.userId === world?.createdBy,
+  );
   const subjects = [
     ...(world && !ownerHasMembership
-      ? [{ userId: world.createdBy, role: "Owner", displayName: null as string | null }]
+      ? [
+          {
+            userId: world.createdBy,
+            role: "Owner",
+            displayName: null as string | null,
+          },
+        ]
       : []),
     ...(members ?? []).map((member) => ({
       userId: member.userId,
@@ -94,16 +117,24 @@ export function LoreOwnershipBlock({ loreEntryId, worldId, world }: LoreOwnershi
     try {
       if (value === "") {
         await removeLorePermission(loreEntryId, userId);
-        setPermissions((current) => (current ?? []).filter((row) => row.userId !== userId));
+        setPermissions((current) =>
+          (current ?? []).filter((row) => row.userId !== userId),
+        );
       } else {
-        const updated = await setLorePermission(loreEntryId, userId, value as ActorPermissionLevel);
+        const updated = await setLorePermission(
+          loreEntryId,
+          userId,
+          value as ActorPermissionLevel,
+        );
         setPermissions((current) => {
           const rest = (current ?? []).filter((row) => row.userId !== userId);
           return [...rest, updated];
         });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update permission");
+      setError(
+        err instanceof Error ? err.message : "Failed to update permission",
+      );
     } finally {
       setPendingUserId(null);
     }
@@ -124,8 +155,11 @@ export function LoreOwnershipBlock({ loreEntryId, worldId, world }: LoreOwnershi
 
       <div className="grid gap-2">
         {subjects.map((subject) => {
-          const explicit = permissions.find((row) => row.userId === subject.userId);
-          const isDmSubject = subject.userId === world?.createdBy && subject.role === "Owner";
+          const explicit = permissions.find(
+            (row) => row.userId === subject.userId,
+          );
+          const isDmSubject =
+            subject.userId === world?.createdBy && subject.role === "Owner";
           return (
             <div
               key={subject.userId}
@@ -145,7 +179,9 @@ export function LoreOwnershipBlock({ loreEntryId, worldId, world }: LoreOwnershi
                 data-testid={`lore-ownership-select-${subject.userId}`}
                 value={explicit?.level ?? ""}
                 disabled={pendingUserId === subject.userId}
-                onChange={(event) => void handleChange(subject.userId, event.target.value)}
+                onChange={(event) =>
+                  void handleChange(subject.userId, event.target.value)
+                }
                 className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 {LEVEL_OPTIONS.map((option) => (

@@ -1,4 +1,7 @@
-import type { AbilityClassification, AbilityEffectRecord } from "@/types/ability";
+import type {
+  AbilityClassification,
+  AbilityEffectRecord,
+} from "@/types/ability";
 
 export type { DmWorldSummary } from "@/types/actorShare";
 

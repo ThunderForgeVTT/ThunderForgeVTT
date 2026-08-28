@@ -5,8 +5,8 @@
  * Systems implement these interfaces to customize VTT behavior.
  */
 
-import { useContext, useCallback, useState, useEffect } from 'react';
-import { SystemHooksContext } from '../providers/SystemHooksProvider';
+import { useContext, useCallback, useState, useEffect } from "react";
+import { SystemHooksContext } from "../providers/SystemHooksProvider";
 
 /**
  * Base token data (sent from server)
@@ -106,13 +106,17 @@ export interface SystemHooksContract {
    * Called to compute derived token statistics from base stats.
    * Should return computed derived stats (never sent over network).
    */
-  computeDerivedStats?: (baseStats: BaseTokenStats) => DerivedTokenStats | Promise<DerivedTokenStats>;
+  computeDerivedStats?: (
+    baseStats: BaseTokenStats,
+  ) => DerivedTokenStats | Promise<DerivedTokenStats>;
 
   /**
    * Called to validate a dice roll string.
    * Returns parsed roll or error details.
    */
-  validateRoll?: (params: DiceRollParams) => DiceRollResult | Promise<DiceRollResult>;
+  validateRoll?: (
+    params: DiceRollParams,
+  ) => DiceRollResult | Promise<DiceRollResult>;
 
   /**
    * Called to format damage output for display.
@@ -124,13 +128,17 @@ export interface SystemHooksContract {
    * Called when a condition is applied or removed.
    * Return false to prevent the change, true to allow it.
    */
-  onConditionChange?: (params: ConditionChangeParams) => boolean | Promise<boolean>;
+  onConditionChange?: (
+    params: ConditionChangeParams,
+  ) => boolean | Promise<boolean>;
 
   /**
    * Called to check if one token can see another (fog of war).
    * Return true if visible, false if hidden.
    */
-  checkTokenVisibility?: (params: TokenVisibilityParams) => boolean | Promise<boolean>;
+  checkTokenVisibility?: (
+    params: TokenVisibilityParams,
+  ) => boolean | Promise<boolean>;
 
   /**
    * Called to compute armor class for a token.
@@ -155,7 +163,7 @@ export interface HookInvokeStatus {
 export function useSystemHooks() {
   const context = useContext(SystemHooksContext);
   if (!context) {
-    throw new Error('useSystemHooks must be used within SystemHooksProvider');
+    throw new Error("useSystemHooks must be used within SystemHooksProvider");
   }
   return context;
 }
@@ -190,7 +198,7 @@ export function useSystemHook<T extends keyof SystemHooksContract>(
       } catch (error) {
         setStatus({
           loading: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: error instanceof Error ? error.message : "Unknown error",
         });
       }
     };

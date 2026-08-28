@@ -23,12 +23,14 @@ const forgetReconciledChanges = vi.fn();
 vi.mock("@/engine/bevy", () => ({
   readQueuedChanges: (...args: unknown[]) => readQueuedChanges(...args),
   queueOfflineChange: (...args: unknown[]) => queueOfflineChange(...args),
-  forgetReconciledChanges: (...args: unknown[]) => forgetReconciledChanges(...args),
+  forgetReconciledChanges: (...args: unknown[]) =>
+    forgetReconciledChanges(...args),
 }));
 
 vi.mock("../heartbeat", () => ({ isHeartbeatOffline: () => true }));
 
-const { queueAdjudicatedChange, reconcileWorld } = await import("../offlineQueue");
+const { queueAdjudicatedChange, reconcileWorld } =
+  await import("../offlineQueue");
 const { readAdjudication } = await import("../reconcile");
 
 const WORLD = "11111111-1111-4111-8111-111111111111";
@@ -37,8 +39,15 @@ const TOKEN_B = "33333333-3333-4333-8333-333333333333";
 const GM = "gm-user";
 const PLAYER = "player-user";
 
-const move = (tokenId: string) => ({ type: "upsert_token", token: { id: tokenId, x: 1, y: 2 } });
-const queued = (localId: string, tokenId: string, command: unknown = move(tokenId)) => ({
+const move = (tokenId: string) => ({
+  type: "upsert_token",
+  token: { id: tokenId, x: 1, y: 2 },
+});
+const queued = (
+  localId: string,
+  tokenId: string,
+  command: unknown = move(tokenId),
+) => ({
   localId,
   command,
 });
@@ -67,7 +76,8 @@ describe("queueAdjudicatedChange", () => {
 
     expect(attempt.queued).toBe(true);
     expect(queueOfflineChange).toHaveBeenCalledTimes(1);
-    const [worldId, localId, command, isGameMaster] = queueOfflineChange.mock.calls[0];
+    const [worldId, localId, command, isGameMaster] =
+      queueOfflineChange.mock.calls[0];
     expect(worldId).toBe(WORLD);
     expect(localId).toBe("a");
     expect(isGameMaster).toBe(true);
@@ -88,7 +98,10 @@ describe("queueAdjudicatedChange", () => {
       originatorUserId: PLAYER,
     });
 
-    const command = queueOfflineChange.mock.calls[0][2] as Record<string, unknown>;
+    const command = queueOfflineChange.mock.calls[0][2] as Record<
+      string,
+      unknown
+    >;
     expect(command.type).toBe("upsert_token");
     expect(command.token).toEqual({ id: TOKEN_A, x: 1, y: 2 });
   });
@@ -122,7 +135,10 @@ describe("reconcileWorld", () => {
    * server's state, asked for once per token.
    */
   it("returns the refused change's token to the server's state", async () => {
-    readQueuedChanges.mockResolvedValueOnce([queued("a", TOKEN_A), queued("b", TOKEN_A)]);
+    readQueuedChanges.mockResolvedValueOnce([
+      queued("a", TOKEN_A),
+      queued("b", TOKEN_A),
+    ]);
     readQueuedChanges.mockResolvedValue([]);
     submitQueuedChanges.mockResolvedValue([
       { localId: "a", applied: false, reason: "PERMISSION_DENIED" },
@@ -192,7 +208,9 @@ describe("reconcileWorld", () => {
 
     const report = await reconcileWorld(WORLD, { selfUserId: GM });
 
-    expect(report?.onBehalf.map((entry) => entry.change.localId)).toEqual(["a"]);
+    expect(report?.onBehalf.map((entry) => entry.change.localId)).toEqual([
+      "a",
+    ]);
     expect(report?.rejected).toHaveLength(2);
   });
 
@@ -262,7 +280,10 @@ describe("reconcileWorld", () => {
    * that makes an interrupted submission survivable rather than detectable.
    */
   it("keeps an unanswered change queued rather than reporting it as decided", async () => {
-    readQueuedChanges.mockResolvedValueOnce([queued("a", TOKEN_A), queued("b", TOKEN_B)]);
+    readQueuedChanges.mockResolvedValueOnce([
+      queued("a", TOKEN_A),
+      queued("b", TOKEN_B),
+    ]);
     readQueuedChanges.mockResolvedValue([]);
     submitQueuedChanges.mockResolvedValue([{ localId: "a", applied: true }]);
 

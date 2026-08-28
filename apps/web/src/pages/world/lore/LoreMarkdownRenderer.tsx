@@ -27,7 +27,10 @@ export interface LoreMarkdownRendererProps {
   className?: string;
 }
 
-export function LoreMarkdownRenderer({ html, className }: LoreMarkdownRendererProps) {
+export function LoreMarkdownRenderer({
+  html,
+  className,
+}: LoreMarkdownRendererProps) {
   return (
     <div
       className={cn("lore-markdown break-words", className)}

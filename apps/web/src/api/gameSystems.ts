@@ -48,7 +48,9 @@ export const IMPLEMENTED_SYSTEM_IDS: ReadonlySet<string> = new Set(["genie"]);
  * (`GET /api/systems/:id/manifest.json`, `systems.rs::get_system_manifest`).
  * This is a plain REST route, not GraphQL: manifest content lives in each
  * pack's on-disk `system.json`, not the database. */
-export function getGameSystemManifest(systemId: string): Promise<SystemManifest> {
+export function getGameSystemManifest(
+  systemId: string,
+): Promise<SystemManifest> {
   return fetch(`/api/systems/${encodeURIComponent(systemId)}/manifest.json`, {
     credentials: "same-origin",
   }).then(async (response) => {

@@ -131,7 +131,7 @@ export default function AppRoutes({
         { to: "/setup", label: "Setup", prefetch: "setup", icon: "settings" },
         { to: "/counter", label: "Status", prefetch: "counter", icon: "scene" },
       ]
-      : isAuthenticated && isAdmin
+    : isAuthenticated && isAdmin
       ? [
           {
             to: "/admin",
@@ -306,7 +306,10 @@ export default function AppRoutes({
             </RequireAdmin>
           }
         />
-        <Route path="/admin/welcome" element={<Navigate to="/admin" replace />} />
+        <Route
+          path="/admin/welcome"
+          element={<Navigate to="/admin" replace />}
+        />
         <Route
           path="/admin/settings"
           element={<Navigate to="/admin" replace />}
@@ -360,7 +363,10 @@ export default function AppRoutes({
           path="/admin/moderation"
           element={
             <RequireAdmin>
-              {renderLazyPage(<AdminModerationReviewPage />, "Loading moderation review")}
+              {renderLazyPage(
+                <AdminModerationReviewPage />,
+                "Loading moderation review",
+              )}
             </RequireAdmin>
           }
         />
@@ -415,7 +421,10 @@ export default function AppRoutes({
           path="/world/:id/staging"
           element={
             <RequireAuthenticated>
-              {renderLazyPage(<WorldStagingRoutePage />, "Loading world staging")}
+              {renderLazyPage(
+                <WorldStagingRoutePage />,
+                "Loading world staging",
+              )}
             </RequireAuthenticated>
           }
         />
@@ -423,7 +432,10 @@ export default function AppRoutes({
           path="/world/:id/actor-select"
           element={
             <RequireAuthenticated>
-              {renderLazyPage(<ActorSelectionPage />, "Loading Actor Selection")}
+              {renderLazyPage(
+                <ActorSelectionPage />,
+                "Loading Actor Selection",
+              )}
             </RequireAuthenticated>
           }
         />
@@ -431,7 +443,10 @@ export default function AppRoutes({
           path="/world/:id/compendium"
           element={
             <RequireAuthenticated>
-              {renderLazyPage(<WorldCompendiumRoutePage />, "Loading world compendium")}
+              {renderLazyPage(
+                <WorldCompendiumRoutePage />,
+                "Loading world compendium",
+              )}
             </RequireAuthenticated>
           }
         />
@@ -479,7 +494,10 @@ export default function AppRoutes({
           path="/world/:id/lore/:slug/view"
           element={
             <RequireAuthenticated>
-              {renderLazyPage(<LoreEntryDetailPage mode="view" />, "Loading lore entry")}
+              {renderLazyPage(
+                <LoreEntryDetailPage mode="view" />,
+                "Loading lore entry",
+              )}
             </RequireAuthenticated>
           }
         />
@@ -487,7 +505,10 @@ export default function AppRoutes({
           path="/world/:id/lore/:slug/edit"
           element={
             <RequireAuthenticated>
-              {renderLazyPage(<LoreEntryDetailPage mode="edit" />, "Loading lore entry")}
+              {renderLazyPage(
+                <LoreEntryDetailPage mode="edit" />,
+                "Loading lore entry",
+              )}
             </RequireAuthenticated>
           }
         />
@@ -495,7 +516,10 @@ export default function AppRoutes({
           path="/world/:id/lore/:slug/history"
           element={
             <RequireAuthenticated>
-              {renderLazyPage(<LoreRevisionHistory />, "Loading revision history")}
+              {renderLazyPage(
+                <LoreRevisionHistory />,
+                "Loading revision history",
+              )}
             </RequireAuthenticated>
           }
         />
@@ -511,7 +535,10 @@ export default function AppRoutes({
           path="/world/:id/ability/:abilityId/view"
           element={
             <RequireAuthenticated>
-              {renderLazyPage(<AbilityDetailPage mode="view" />, "Loading ability")}
+              {renderLazyPage(
+                <AbilityDetailPage mode="view" />,
+                "Loading ability",
+              )}
             </RequireAuthenticated>
           }
         />
@@ -519,7 +546,10 @@ export default function AppRoutes({
           path="/world/:id/ability/:abilityId/edit"
           element={
             <RequireAuthenticated>
-              {renderLazyPage(<AbilityDetailPage mode="edit" />, "Loading ability")}
+              {renderLazyPage(
+                <AbilityDetailPage mode="edit" />,
+                "Loading ability",
+              )}
             </RequireAuthenticated>
           }
         />
@@ -563,7 +593,10 @@ export default function AppRoutes({
           path="/settings/storage"
           element={
             <RequireAuthenticated>
-              {renderLazyPage(<StorageSettingsPage />, "Loading storage settings")}
+              {renderLazyPage(
+                <StorageSettingsPage />,
+                "Loading storage settings",
+              )}
             </RequireAuthenticated>
           }
         />
@@ -571,7 +604,10 @@ export default function AppRoutes({
           path="/world/:id/settings/system"
           element={
             <RequireAuthenticated>
-              {renderLazyPage(<WorldSystemSettingsPage />, "Loading system settings")}
+              {renderLazyPage(
+                <WorldSystemSettingsPage />,
+                "Loading system settings",
+              )}
             </RequireAuthenticated>
           }
         />

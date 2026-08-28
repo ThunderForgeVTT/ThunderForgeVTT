@@ -128,17 +128,13 @@ export default function WorldListPage() {
               ))}
             </section>
           ) : (
-            <Card
-              surface="leather"
-              className="grid gap-3 p-8 text-center"
-            >
+            <Card surface="leather" className="grid gap-3 p-8 text-center">
               <h2 className="text-xl font-semibold">
                 No worlds have been created yet.
               </h2>
               <p className="text-muted-foreground">
-                Begin with a fresh world and ThunderForge will carry its
-                scenes, actors, events, and interface hooks through later
-                phases.
+                Begin with a fresh world and ThunderForge will carry its scenes,
+                actors, events, and interface hooks through later phases.
               </p>
               <Link to="/worlds/create" className="mx-auto">
                 <Button variant="secondary" icon="worlds">

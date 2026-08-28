@@ -24,13 +24,14 @@ export default function NotFoundPage({ setupRequired }: NotFoundPageProps) {
     <>
       <SEO {...notFoundPageSeo} />
       <Container narrow className="grid min-h-screen place-items-center">
-        <Card surface="parchment" className="grid max-w-md gap-4 p-8 text-center">
-          <h1 className="text-2xl font-semibold">
-            That page does not exist.
-          </h1>
+        <Card
+          surface="parchment"
+          className="grid max-w-md gap-4 p-8 text-center"
+        >
+          <h1 className="text-2xl font-semibold">That page does not exist.</h1>
           <p className="text-muted-foreground">
-            The route you requested is missing or no longer available. Head
-            back to the main ThunderForge flow to continue.
+            The route you requested is missing or no longer available. Head back
+            to the main ThunderForge flow to continue.
           </p>
           <Button asChild icon="arrow-left" className="justify-self-center">
             <Link to={destination}>

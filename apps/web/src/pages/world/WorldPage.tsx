@@ -322,9 +322,8 @@ export default function WorldPage() {
   // carries the map art and the grid: their canvas silently had neither.
   // The server now lets a member read the one scene their world is actually
   // playing, and this is the fetch that asks for it.
-  const [activeSceneRecord, setActiveSceneRecord] = useState<SceneRecord | null>(
-    null,
-  );
+  const [activeSceneRecord, setActiveSceneRecord] =
+    useState<SceneRecord | null>(null);
   // Which scene id we have finished trying to find a record for, whether or
   // not we found one. The scene-load state below needs "we looked and there
   // is nothing" — resolving on "we have not looked yet" would clear the
@@ -1107,7 +1106,9 @@ export default function WorldPage() {
       selfUserId: user?.id,
       revert: () => {
         const currentSceneId = sceneIdRef.current;
-        return currentSceneId ? loadTokensIntoStore(worldStore, currentSceneId) : undefined;
+        return currentSceneId
+          ? loadTokensIntoStore(worldStore, currentSceneId)
+          : undefined;
       },
     }),
     [user?.id, worldStore],
@@ -1229,7 +1230,12 @@ export default function WorldPage() {
         const change = JSON.parse(changeJson) as {
           entityId?: string;
           originUser?: string;
-          transform?: { x?: number; y?: number; rotation?: number; scale?: number };
+          transform?: {
+            x?: number;
+            y?: number;
+            rotation?: number;
+            scale?: number;
+          };
         };
         const tokenId = change.entityId;
         const transform = change.transform;
@@ -1245,7 +1251,9 @@ export default function WorldPage() {
             ...(transform.rotation !== undefined
               ? { rotation: transform.rotation }
               : {}),
-            ...(transform.scale !== undefined ? { scale: transform.scale } : {}),
+            ...(transform.scale !== undefined
+              ? { scale: transform.scale }
+              : {}),
           },
         };
 
@@ -1279,7 +1287,9 @@ export default function WorldPage() {
             // submitter" as an ordinary unattributed change. Dropping it
             // instead would lose the edit, which is the unrecoverable error.
             originatorUserId:
-              typeof change.originUser === "string" ? change.originUser : user.id,
+              typeof change.originUser === "string"
+                ? change.originUser
+                : user.id,
           });
         }
       } catch {
@@ -1426,7 +1436,9 @@ export default function WorldPage() {
                 console.warn(
                   "Missed too many world events to replay; resynchronising.",
                 );
-                void getScenes(worldIdNow).then(setScenes).catch(() => {});
+                void getScenes(worldIdNow)
+                  .then(setScenes)
+                  .catch(() => {});
               }
             })
             .catch(() => {

@@ -25,7 +25,10 @@
  * a memory leak with a plausible excuse.
  */
 
-import { subscribeToWorldEvents, type WorldEventLike } from "../sync/subscriptionClient";
+import {
+  subscribeToWorldEvents,
+  type WorldEventLike,
+} from "../sync/subscriptionClient";
 
 /** Entries retained. Roughly a long session's worth of notable events. */
 export const DEFAULT_HISTORY_LIMIT = 500;

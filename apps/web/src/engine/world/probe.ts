@@ -62,7 +62,14 @@ export interface WorldProbe {
  *  most carry an id under one of a few shapes. */
 function commandId(command: WorldCommand): string | undefined {
   const record = command as unknown as Record<string, unknown>;
-  for (const key of ["tokenId", "wallId", "lightId", "shapeId", "assetId", "worldId"]) {
+  for (const key of [
+    "tokenId",
+    "wallId",
+    "lightId",
+    "shapeId",
+    "assetId",
+    "worldId",
+  ]) {
     const value = record[key];
     if (typeof value === "string") return value;
   }
@@ -111,7 +118,8 @@ export function installWorldProbe(store: WorldStore): () => void {
           scale: token.scale,
         })),
         selectionResolves:
-          state.selectedTokenId !== null && tokenIds.includes(state.selectedTokenId),
+          state.selectedTokenId !== null &&
+          tokenIds.includes(state.selectedTokenId),
         counts: {
           tokens: tokenIds.length,
           walls: Object.keys(state.walls).length,

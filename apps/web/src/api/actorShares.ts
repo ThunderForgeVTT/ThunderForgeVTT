@@ -1,12 +1,18 @@
 import { postGraphQL } from "@/api/graphqlClient";
-import type { ActorShareLinkRecord, DmWorldSummary, SharedActorPreview } from "@/types/actorShare";
+import type {
+  ActorShareLinkRecord,
+  DmWorldSummary,
+  SharedActorPreview,
+} from "@/types/actorShare";
 
 type CreateActorShareLinkMutation = {
   createActorShareLink: ActorShareLinkRecord;
 };
 
 /** Requires effective Owner on the actor (FR-023). */
-export function createActorShareLink(actorId: string): Promise<ActorShareLinkRecord> {
+export function createActorShareLink(
+  actorId: string,
+): Promise<ActorShareLinkRecord> {
   return postGraphQL<CreateActorShareLinkMutation>(
     `
       mutation CreateActorShareLink($actorId: UUID!) {

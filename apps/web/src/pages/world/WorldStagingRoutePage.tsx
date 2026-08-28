@@ -68,7 +68,9 @@ export default function WorldStagingRoutePage() {
           world={world}
           isGm={isGm}
           onSessionNotesSaved={(notes) =>
-            setWorld((current) => (current ? { ...current, sessionNotes: notes } : current))
+            setWorld((current) =>
+              current ? { ...current, sessionNotes: notes } : current,
+            )
           }
         />
       </WorldSectionShell>

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { createTokenControlFacet, resolveTokenPermissions } from "../tokenControl";
+import {
+  createTokenControlFacet,
+  resolveTokenPermissions,
+} from "../tokenControl";
 import { createLocalAdjudicator } from "../adjudicator";
 import { createWorldStore } from "../../store";
 import { didApply } from "../types";
@@ -21,7 +24,10 @@ const observer: FacetPrincipal = { userId: "u-o", authority: "observer" };
 
 describe("resolveTokenPermissions", () => {
   it("gives a GM every control on any token", () => {
-    const permissions = resolveTokenPermissions(token({ ownerUserId: "someone-else" }), gm);
+    const permissions = resolveTokenPermissions(
+      token({ ownerUserId: "someone-else" }),
+      gm,
+    );
     expect(permissions).toMatchObject({
       canMove: true,
       canRotate: true,
@@ -32,19 +38,28 @@ describe("resolveTokenPermissions", () => {
   });
 
   it("lets a player move a token they own", () => {
-    const permissions = resolveTokenPermissions(token({ ownerUserId: "u-p" }), player);
+    const permissions = resolveTokenPermissions(
+      token({ ownerUserId: "u-p" }),
+      player,
+    );
     expect(permissions.canMove).toBe(true);
   });
 
   it("does not let a player move someone else's token", () => {
-    const permissions = resolveTokenPermissions(token({ ownerUserId: "u-other" }), player);
+    const permissions = resolveTokenPermissions(
+      token({ ownerUserId: "u-other" }),
+      player,
+    );
     expect(permissions.canMove).toBe(false);
   });
 
   it("keeps size and facing GM-only even on a player's own token", () => {
     // Spec 004 FR-010. A client that allowed these would produce an action
     // the server refuses, which is worse than a disabled button.
-    const permissions = resolveTokenPermissions(token({ ownerUserId: "u-p" }), player);
+    const permissions = resolveTokenPermissions(
+      token({ ownerUserId: "u-p" }),
+      player,
+    );
     expect(permissions.canRotate).toBe(false);
     expect(permissions.canResize).toBe(false);
   });
@@ -59,7 +74,10 @@ describe("resolveTokenPermissions", () => {
 
   it("gives an observer nothing, even on a token carrying their id", () => {
     // The case a boolean `isGm` collapses into "player".
-    const permissions = resolveTokenPermissions(token({ ownerUserId: "u-o" }), observer);
+    const permissions = resolveTokenPermissions(
+      token({ ownerUserId: "u-o" }),
+      observer,
+    );
     expect(permissions).toMatchObject({
       canMove: false,
       canRotate: false,
@@ -98,7 +116,10 @@ describe("createTokenControlFacet", () => {
       initialTokens: [{ id: "t1", x: 0, y: 0, z: 0, ...token }],
     });
 
-  const facetFor = (store: ReturnType<typeof createWorldStore>, principal: FacetPrincipal) =>
+  const facetFor = (
+    store: ReturnType<typeof createWorldStore>,
+    principal: FacetPrincipal,
+  ) =>
     createTokenControlFacet(store, {
       worldId: "w1",
       sceneId: "s1",
@@ -108,7 +129,10 @@ describe("createTokenControlFacet", () => {
 
   it("applies a manipulate the principal is permitted", async () => {
     const store = scene({ ownerUserId: "u-gm" });
-    const result = await facetFor(store, gm).manipulate({ tokenId: "t1", scale: 3 });
+    const result = await facetFor(store, gm).manipulate({
+      tokenId: "t1",
+      scale: 3,
+    });
 
     expect(result.status).toBe("accepted");
     expect(store.getState().tokens.t1.scale).toBe(3);
@@ -119,7 +143,10 @@ describe("createTokenControlFacet", () => {
     // these from the same permission the facet refuses them by, so an
     // enabled control and a refused intent cannot disagree.
     const store = scene({ ownerUserId: "u-p", scale: 1 });
-    const result = await facetFor(store, player).manipulate({ tokenId: "t1", scale: 4 });
+    const result = await facetFor(store, player).manipulate({
+      tokenId: "t1",
+      scale: 4,
+    });
 
     expect(result).toEqual({ status: "refused", reason: "gm-only" });
     expect(store.getState().tokens.t1.scale).toBe(1);
@@ -144,12 +171,20 @@ describe("createTokenControlFacet", () => {
     });
 
     expect(result.status).toBe("accepted");
-    expect(store.getState().tokens.t1.photoUrl).toBe("/api/canvas-assets/x.webp");
+    expect(store.getState().tokens.t1.photoUrl).toBe(
+      "/api/canvas-assets/x.webp",
+    );
   });
 
   it("carries a null photoUrl through, because clearing art is not the same as leaving it", async () => {
-    const store = scene({ ownerUserId: "u-gm", photoUrl: "/api/canvas-assets/x.webp" });
-    const result = await facetFor(store, gm).manipulate({ tokenId: "t1", photoUrl: null });
+    const store = scene({
+      ownerUserId: "u-gm",
+      photoUrl: "/api/canvas-assets/x.webp",
+    });
+    const result = await facetFor(store, gm).manipulate({
+      tokenId: "t1",
+      photoUrl: null,
+    });
 
     expect(result.status).toBe("accepted");
     expect(store.getState().tokens.t1.photoUrl).toBeNull();
@@ -157,7 +192,10 @@ describe("createTokenControlFacet", () => {
 
   it("refuses an unknown token rather than dispatching a phantom", async () => {
     const store = scene({});
-    const result = await facetFor(store, gm).manipulate({ tokenId: "ghost", scale: 2 });
+    const result = await facetFor(store, gm).manipulate({
+      tokenId: "ghost",
+      scale: 2,
+    });
 
     expect(result).toEqual({ status: "refused", reason: "unknown-subject" });
   });
@@ -172,7 +210,11 @@ describe("createTokenControlFacet", () => {
       principal: player,
       adjudicator: {
         async resolve(proposal) {
-          const requested = proposal.payload as { tokenId: string; x: number; y: number };
+          const requested = proposal.payload as {
+            tokenId: string;
+            x: number;
+            y: number;
+          };
           return {
             status: "adjusted",
             value: { ...requested, x: 10 } as typeof proposal.payload,
@@ -200,6 +242,8 @@ describe("createTokenControlFacet", () => {
     const facet = facetFor(store, player);
 
     expect(facet.tokens()).toHaveLength(2);
-    expect(facet.controllable().map((entry) => entry.token.id)).toEqual(["mine"]);
+    expect(facet.controllable().map((entry) => entry.token.id)).toEqual([
+      "mine",
+    ]);
   });
 });

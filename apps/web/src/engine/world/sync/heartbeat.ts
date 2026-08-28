@@ -96,7 +96,10 @@ export function subscribeToHeartbeat(listener: HeartbeatListener): () => void {
 }
 
 /** Send one beat, updating the failure count. Exported for tests. */
-export async function beatOnce(worldId: string, sceneId: string | null): Promise<boolean> {
+export async function beatOnce(
+  worldId: string,
+  sceneId: string | null,
+): Promise<boolean> {
   const sentAt = Date.now();
   try {
     await postGraphQL<{ heartbeat: boolean }>(HEARTBEAT_MUTATION, {

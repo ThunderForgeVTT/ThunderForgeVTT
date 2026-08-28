@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { getScene, launchScene, updateScene, updateSceneHidden } from "@/api/scenes";
+import {
+  getScene,
+  launchScene,
+  updateScene,
+  updateSceneHidden,
+} from "@/api/scenes";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import { Loader } from "@/components/ui/loader/Loader";
@@ -26,7 +31,11 @@ export interface SceneDetailPageProps {
  * scene), so a view/edit mode split would just be two names for the same
  * non-GM branch.
  */
-export function SceneDetailPage({ worldId, sceneId, isGm }: SceneDetailPageProps) {
+export function SceneDetailPage({
+  worldId,
+  sceneId,
+  isGm,
+}: SceneDetailPageProps) {
   const [scene, setScene] = useState<SceneRecord | null | undefined>(undefined);
   const [summaryDraft, setSummaryDraft] = useState("");
   const [isSavingSummary, setIsSavingSummary] = useState(false);
@@ -80,7 +89,9 @@ export function SceneDetailPage({ worldId, sceneId, isGm }: SceneDetailPageProps
     setIsSavingSummary(true);
     setStatus(null);
     try {
-      const updated = await updateScene(sceneId, { summaryMarkdown: summaryDraft });
+      const updated = await updateScene(sceneId, {
+        summaryMarkdown: summaryDraft,
+      });
       setScene(updated);
       setStatus("Summary saved.");
     } catch (err) {
@@ -97,7 +108,9 @@ export function SceneDetailPage({ worldId, sceneId, isGm }: SceneDetailPageProps
       const updated = await updateSceneHidden(sceneId, hidden);
       setScene(updated);
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to update visibility");
+      setStatus(
+        err instanceof Error ? err.message : "Failed to update visibility",
+      );
     } finally {
       setIsSavingHidden(false);
     }
@@ -122,12 +135,18 @@ export function SceneDetailPage({ worldId, sceneId, isGm }: SceneDetailPageProps
 
   if (!scene) {
     return (
-      <Card className="grid gap-3 p-6 text-center" data-testid="scene-not-found">
+      <Card
+        className="grid gap-3 p-6 text-center"
+        data-testid="scene-not-found"
+      >
         <h1 className="text-xl font-semibold">Scene not found</h1>
         <p className="text-muted-foreground">
           This scene doesn't exist, or you don't have access to it.
         </p>
-        <Link to={`/world/${worldId}/scenes`} className="text-primary hover:underline">
+        <Link
+          to={`/world/${worldId}/scenes`}
+          className="text-primary hover:underline"
+        >
           Back to Scenes
         </Link>
       </Card>
@@ -181,7 +200,10 @@ export function SceneDetailPage({ worldId, sceneId, isGm }: SceneDetailPageProps
             <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
               Import map
             </h2>
-            <MapImportTool sceneId={sceneId} onImportComplete={handleMapImported} />
+            <MapImportTool
+              sceneId={sceneId}
+              onImportComplete={handleMapImported}
+            />
           </Card>
 
           <Card className="grid gap-3 p-4" data-testid="scene-hidden-card">
@@ -190,7 +212,9 @@ export function SceneDetailPage({ worldId, sceneId, isGm }: SceneDetailPageProps
                 type="checkbox"
                 checked={!scene.hidden}
                 disabled={isSavingHidden}
-                onChange={(event) => void handleToggleHidden(!event.target.checked)}
+                onChange={(event) =>
+                  void handleToggleHidden(!event.target.checked)
+                }
                 data-testid="scene-hidden-toggle"
               />
               Visible to players
@@ -210,14 +234,19 @@ export function SceneDetailPage({ worldId, sceneId, isGm }: SceneDetailPageProps
               disabled={isSavingSummary}
             />
             <div className="flex items-center gap-3">
-              <Button onClick={() => void handleSaveSummary()} disabled={isSavingSummary}>
+              <Button
+                onClick={() => void handleSaveSummary()}
+                disabled={isSavingSummary}
+              >
                 {isSavingSummary ? "Saving..." : "Save summary"}
               </Button>
             </div>
           </Card>
 
           {status ? (
-            <StatusBadge variant={status.includes("Failed") ? "danger" : "success"}>
+            <StatusBadge
+              variant={status.includes("Failed") ? "danger" : "success"}
+            >
               {status}
             </StatusBadge>
           ) : null}

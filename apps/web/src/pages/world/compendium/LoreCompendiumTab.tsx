@@ -70,7 +70,10 @@ export function LoreCompendiumTab({ worldId, isGm }: LoreCompendiumTabProps) {
   // System settings, not this catalog — exclude it here so it doesn't show
   // up as an ordinary, editable/deletable-looking lore row.
   const catalogEntries = useMemo(
-    () => (entries ?? []).filter((entry) => entry.slug !== COMPENDIUM_OVERVIEW_SLUG),
+    () =>
+      (entries ?? []).filter(
+        (entry) => entry.slug !== COMPENDIUM_OVERVIEW_SLUG,
+      ),
     [entries],
   );
 
@@ -79,11 +82,17 @@ export function LoreCompendiumTab({ worldId, isGm }: LoreCompendiumTabProps) {
     if (!q) {
       return catalogEntries;
     }
-    return catalogEntries.filter((entry) => entry.title.toLowerCase().includes(q));
+    return catalogEntries.filter((entry) =>
+      entry.title.toLowerCase().includes(q),
+    );
   }, [catalogEntries, query]);
 
   if (error) {
-    return <p className="text-sm text-destructive">Failed to load lore: {error.message}</p>;
+    return (
+      <p className="text-sm text-destructive">
+        Failed to load lore: {error.message}
+      </p>
+    );
   }
 
   if (entries === null) {
@@ -104,7 +113,9 @@ export function LoreCompendiumTab({ worldId, isGm }: LoreCompendiumTabProps) {
       {catalogEntries.length === 0 ? (
         <p className="text-sm text-muted-foreground">No lore entries yet.</p>
       ) : visibleEntries.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No lore entries match "{query}".</p>
+        <p className="text-sm text-muted-foreground">
+          No lore entries match "{query}".
+        </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm" data-testid="lore-catalog-table">
@@ -139,7 +150,9 @@ export function LoreCompendiumTab({ worldId, isGm }: LoreCompendiumTabProps) {
                         size="sm"
                         data-testid={`lore-catalog-view-${entry.id}`}
                       >
-                        <Link to={`/world/${worldId}/lore/${entry.slug}/view`}>View</Link>
+                        <Link to={`/world/${worldId}/lore/${entry.slug}/view`}>
+                          View
+                        </Link>
                       </Button>
                       {entry.myPermissionLevel !== "VIEWER" ? (
                         <Button
@@ -148,7 +161,11 @@ export function LoreCompendiumTab({ worldId, isGm }: LoreCompendiumTabProps) {
                           size="sm"
                           data-testid={`lore-catalog-edit-${entry.id}`}
                         >
-                          <Link to={`/world/${worldId}/lore/${entry.slug}/edit`}>Edit</Link>
+                          <Link
+                            to={`/world/${worldId}/lore/${entry.slug}/edit`}
+                          >
+                            Edit
+                          </Link>
                         </Button>
                       ) : null}
                     </div>

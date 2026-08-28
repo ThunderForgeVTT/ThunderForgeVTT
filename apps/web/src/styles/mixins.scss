@@ -2,14 +2,18 @@
 
 @mixin focus-ring {
   outline: none;
-  box-shadow: 0 0 0 1px rgba(tokens.$color-gold-bright, 0.58),
-    0 0 0 4px rgba(tokens.$color-violet-soft, 0.2), tokens.$shadow-glow;
+  box-shadow:
+    0 0 0 1px rgba(tokens.$color-gold-bright, 0.58),
+    0 0 0 4px rgba(tokens.$color-violet-soft, 0.2),
+    tokens.$shadow-glow;
 }
 
 @mixin gold-frame {
   border: 1px solid tokens.$color-border-strong;
-  box-shadow: inset 0 0 0 1px rgba(tokens.$color-background, 0.42),
-    inset 0 0 24px rgba(tokens.$color-candlelight, 0.06), tokens.$shadow-md;
+  box-shadow:
+    inset 0 0 0 1px rgba(tokens.$color-background, 0.42),
+    inset 0 0 24px rgba(tokens.$color-candlelight, 0.06),
+    tokens.$shadow-md;
 }
 
 @mixin surface($background: tokens.$color-surface) {
@@ -40,7 +44,8 @@
     inset: 0;
     border-radius: inherit;
     pointer-events: none;
-    background: radial-gradient(
+    background:
+      radial-gradient(
         circle at top left,
         rgba(tokens.$color-candlelight, 0.32),
         transparent 26%
@@ -77,11 +82,8 @@
 
 @mixin tome-bar {
   @include leather-panel;
-  background: linear-gradient(
-      180deg,
-      rgba(tokens.$color-gold-bright, 0.08),
-      transparent
-    ),
+  background:
+    linear-gradient(180deg, rgba(tokens.$color-gold-bright, 0.08), transparent),
     linear-gradient(
       180deg,
       rgba(tokens.$color-umber, 0.96),
@@ -90,7 +92,8 @@
 }
 
 @mixin page-gradient {
-  background: radial-gradient(
+  background:
+    radial-gradient(
       circle at top left,
       rgba(tokens.$color-violet-soft, 0.18),
       transparent 26%

@@ -31,11 +31,15 @@ export interface LoreEntryDetailPageProps {
  * regardless of this client-side redirect, Principle III). DM viewers
  * additionally see the ownership block (T029c) while editing.
  */
-export default function LoreEntryDetailPage({ mode }: LoreEntryDetailPageProps) {
+export default function LoreEntryDetailPage({
+  mode,
+}: LoreEntryDetailPageProps) {
   const { id: worldId = "", slug = "" } = useParams();
   const navigate = useNavigate();
   const [world, setWorld] = useState<WorldRecord | null>(null);
-  const [entry, setEntry] = useState<LoreEntryRecord | null | undefined>(undefined);
+  const [entry, setEntry] = useState<LoreEntryRecord | null | undefined>(
+    undefined,
+  );
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [status, setStatus] = useState<string | null>(null);
@@ -84,10 +88,13 @@ export default function LoreEntryDetailPage({ mode }: LoreEntryDetailPageProps) 
           <Card className="grid gap-3 p-6 text-center">
             <h1 className="text-xl font-semibold">Lore entry not found</h1>
             <p className="text-muted-foreground">
-              This entry doesn't exist, its link may be out of date, or you don't have access to
-              it.
+              This entry doesn't exist, its link may be out of date, or you
+              don't have access to it.
             </p>
-            <Link to={`/world/${worldId}/compendium`} className="text-primary hover:underline">
+            <Link
+              to={`/world/${worldId}/compendium`}
+              className="text-primary hover:underline"
+            >
               Back to compendium
             </Link>
           </Card>
@@ -99,13 +106,18 @@ export default function LoreEntryDetailPage({ mode }: LoreEntryDetailPageProps) 
   // A Viewer-only caller reaching /edit is redirected to /view — the
   // server independently rejects the mutation regardless (Principle III).
   if (mode === "edit" && entry.myPermissionLevel === "VIEWER") {
-    return <Navigate to={`/world/${worldId}/lore/${entry.slug}/view`} replace />;
+    return (
+      <Navigate to={`/world/${worldId}/lore/${entry.slug}/view`} replace />
+    );
   }
 
   if (entry.moderated) {
     return (
       <Container className="grid max-w-2xl gap-6 py-10">
-        <Link to={`/world/${worldId}/compendium`} className="justify-self-start text-primary hover:underline">
+        <Link
+          to={`/world/${worldId}/compendium`}
+          className="justify-self-start text-primary hover:underline"
+        >
           Back to compendium
         </Link>
         <ModeratedContentBanner
@@ -134,10 +146,14 @@ export default function LoreEntryDetailPage({ mode }: LoreEntryDetailPageProps) 
       setContent(updated.content);
       setStatus("Saved.");
       if (updated.slug !== slug) {
-        navigate(`/world/${worldId}/lore/${updated.slug}/edit`, { replace: true });
+        navigate(`/world/${worldId}/lore/${updated.slug}/edit`, {
+          replace: true,
+        });
       }
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to save lore entry");
+      setStatus(
+        err instanceof Error ? err.message : "Failed to save lore entry",
+      );
     } finally {
       setIsSaving(false);
     }
@@ -150,7 +166,9 @@ export default function LoreEntryDetailPage({ mode }: LoreEntryDetailPageProps) 
       await deleteLoreEntry(entry.id);
       navigate(`/world/${worldId}/compendium`);
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to delete lore entry");
+      setStatus(
+        err instanceof Error ? err.message : "Failed to delete lore entry",
+      );
       setIsDeleting(false);
     }
   };
@@ -168,7 +186,11 @@ export default function LoreEntryDetailPage({ mode }: LoreEntryDetailPageProps) 
 
   return (
     <>
-      <SEO title={`${entry.title} — ${mode === "edit" ? "Edit" : "View"}`} description="Lore entry" noindex />
+      <SEO
+        title={`${entry.title} — ${mode === "edit" ? "Edit" : "View"}`}
+        description="Lore entry"
+        noindex
+      />
       <Container className="grid max-w-3xl gap-6 py-10">
         <Button
           variant="ghost"
@@ -182,19 +204,27 @@ export default function LoreEntryDetailPage({ mode }: LoreEntryDetailPageProps) 
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">Lore entry</p>
+            <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+              Lore entry
+            </p>
             <h1 className="text-2xl font-semibold">{entry.title}</h1>
           </div>
           <div className="flex flex-wrap gap-2">
             {canEdit && mode === "view" ? (
               <Button
                 variant="secondary"
-                onClick={() => navigate(`/world/${worldId}/lore/${entry.slug}/edit`)}
+                onClick={() =>
+                  navigate(`/world/${worldId}/lore/${entry.slug}/edit`)
+                }
               >
                 Edit
               </Button>
             ) : null}
-            <Button variant="ghost" icon="link" onClick={() => void handleCopyLink()}>
+            <Button
+              variant="ghost"
+              icon="link"
+              onClick={() => void handleCopyLink()}
+            >
               Copy link
             </Button>
             <Button
@@ -203,7 +233,9 @@ export default function LoreEntryDetailPage({ mode }: LoreEntryDetailPageProps) 
               icon="rune"
               data-testid="lore-view-history-link"
             >
-              <Link to={`/world/${worldId}/lore/${entry.slug}/history`}>History</Link>
+              <Link to={`/world/${worldId}/lore/${entry.slug}/history`}>
+                History
+              </Link>
             </Button>
             {canDelete && mode === "edit" ? (
               <Button
@@ -218,13 +250,19 @@ export default function LoreEntryDetailPage({ mode }: LoreEntryDetailPageProps) 
           </div>
         </div>
 
-        {copyStatus ? <StatusBadge variant="info">{copyStatus}</StatusBadge> : null}
+        {copyStatus ? (
+          <StatusBadge variant="info">{copyStatus}</StatusBadge>
+        ) : null}
 
         <Card className="grid gap-4 p-6">
           {mode === "edit" ? (
             <>
               <Field label="Title" htmlFor="lore-entry-title">
-                <Input id="lore-entry-title" value={title} onChange={(e) => setTitle(e.target.value)} />
+                <Input
+                  id="lore-entry-title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                />
               </Field>
               <Field label="Content" htmlFor="lore-entry-content">
                 <LoreMarkdownEditor
@@ -241,13 +279,19 @@ export default function LoreEntryDetailPage({ mode }: LoreEntryDetailPageProps) 
                 </Button>
                 <Button
                   variant="ghost"
-                  onClick={() => navigate(`/world/${worldId}/lore/${entry.slug}/view`)}
+                  onClick={() =>
+                    navigate(`/world/${worldId}/lore/${entry.slug}/view`)
+                  }
                 >
                   Cancel
                 </Button>
               </div>
               {status ? (
-                <StatusBadge variant={status === "Saved." ? "success" : "danger"}>{status}</StatusBadge>
+                <StatusBadge
+                  variant={status === "Saved." ? "success" : "danger"}
+                >
+                  {status}
+                </StatusBadge>
               ) : null}
             </>
           ) : (
@@ -261,7 +305,9 @@ export default function LoreEntryDetailPage({ mode }: LoreEntryDetailPageProps) 
             Linked from
           </h2>
           {entry.linkedFrom.length === 0 ? (
-            <p className="text-sm text-muted-foreground italic">No other lore entries link here yet.</p>
+            <p className="text-sm text-muted-foreground italic">
+              No other lore entries link here yet.
+            </p>
           ) : (
             <ul className="grid gap-1">
               {entry.linkedFrom.map((source) => (
@@ -279,7 +325,11 @@ export default function LoreEntryDetailPage({ mode }: LoreEntryDetailPageProps) 
         </Card>
 
         {isDm && mode === "edit" ? (
-          <LoreOwnershipBlock loreEntryId={entry.id} worldId={worldId} world={world} />
+          <LoreOwnershipBlock
+            loreEntryId={entry.id}
+            worldId={worldId}
+            world={world}
+          />
         ) : null}
       </Container>
     </>

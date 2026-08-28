@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_SIZE_SCALE, resolveSizeScale, type SizeCategoriesLookup } from "../sizeCategory";
+import {
+  DEFAULT_SIZE_SCALE,
+  resolveSizeScale,
+  type SizeCategoriesLookup,
+} from "../sizeCategory";
 
 const GENIE_SIZE_CATEGORIES: SizeCategoriesLookup = {
   diminutive: { scale: 0.5, label: "Diminutive" },
@@ -20,12 +24,18 @@ describe("resolveSizeScale", () => {
   });
 
   it("falls back to the default scale for an unrecognized category", () => {
-    expect(resolveSizeScale(GENIE_SIZE_CATEGORIES, "gigantic")).toBe(DEFAULT_SIZE_SCALE);
+    expect(resolveSizeScale(GENIE_SIZE_CATEGORIES, "gigantic")).toBe(
+      DEFAULT_SIZE_SCALE,
+    );
   });
 
   it("falls back to the default scale when the actor has no size category", () => {
-    expect(resolveSizeScale(GENIE_SIZE_CATEGORIES, null)).toBe(DEFAULT_SIZE_SCALE);
-    expect(resolveSizeScale(GENIE_SIZE_CATEGORIES, undefined)).toBe(DEFAULT_SIZE_SCALE);
+    expect(resolveSizeScale(GENIE_SIZE_CATEGORIES, null)).toBe(
+      DEFAULT_SIZE_SCALE,
+    );
+    expect(resolveSizeScale(GENIE_SIZE_CATEGORIES, undefined)).toBe(
+      DEFAULT_SIZE_SCALE,
+    );
   });
 
   it("falls back to the default scale when the game system publishes no sizeCategories table", () => {

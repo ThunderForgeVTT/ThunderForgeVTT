@@ -16,7 +16,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getWorldActors } from "@/api/actors";
-import { startGenieSessionEventSync, subscribeToWorldEvents } from "@/engine/world/sync";
+import {
+  startGenieSessionEventSync,
+  subscribeToWorldEvents,
+} from "@/engine/world/sync";
 import {
   acceptResourceTrade as acceptResourceTradeRequest,
   advanceDoomClock as advanceDoomClockRequest,
@@ -57,9 +60,15 @@ export interface UseGenieSessionResult {
   advanceDoomClock: (delta: number) => Promise<void>;
   createPuzzleClock: (label: string, segmentsMax: number) => Promise<void>;
   /** `actorId` optional (spec 020 FR-006a): attributes a triggering_actor-mode reward to that actor; omitted, falls back to a whole-party split. */
-  advancePuzzleClock: (clockId: string, delta: number, actorId?: string) => Promise<void>;
+  advancePuzzleClock: (
+    clockId: string,
+    delta: number,
+    actorId?: string,
+  ) => Promise<void>;
   proposeResourceTrade: (input: ProposeResourceTradeInput) => Promise<void>;
-  acceptResourceTrade: (proposalId: string) => Promise<GenieResourceHoldingRecord[]>;
+  acceptResourceTrade: (
+    proposalId: string,
+  ) => Promise<GenieResourceHoldingRecord[]>;
   declineResourceTrade: (proposalId: string) => Promise<void>;
   spendResourceOnPuzzleClock: (
     clockId: string,
@@ -68,17 +77,29 @@ export interface UseGenieSessionResult {
     quantity: number,
   ) => Promise<void>;
   /** Spec 020 (FR-001): GM-only direct grant. */
-  grantSessionResource: (actorId: string, resourceType: string, amount: number) => Promise<void>;
+  grantSessionResource: (
+    actorId: string,
+    resourceType: string,
+    amount: number,
+  ) => Promise<void>;
   /** Spec 020 (FR-004): GM-only. Refreshes shopListings for actorId on success. */
   createShopListing: (input: CreateShopListingInput) => Promise<void>;
   /** Spec 020 (FR-005/FR-005a). Refreshes shopListings for the purchased listing's actor on success. */
-  purchaseFromShop: (listingId: string, buyerActorId: string, sellerActorId: string) => Promise<void>;
+  purchaseFromShop: (
+    listingId: string,
+    buyerActorId: string,
+    sellerActorId: string,
+  ) => Promise<void>;
   /** Spec 020 (FR-006): GM-only Puzzle Clock reward configuration. */
-  configurePuzzleClockReward: (input: ConfigurePuzzleClockRewardInput) => Promise<void>;
+  configurePuzzleClockReward: (
+    input: ConfigurePuzzleClockRewardInput,
+  ) => Promise<void>;
   /** Spec 020: fetches (and caches by actorId) an NPC's shop listings for display. */
   fetchShopListings: (actorId: string) => Promise<GenieShopListingRecord[]>;
   /** Spec 020: fetches a Puzzle Clock's configured reward entries for display. */
-  fetchPuzzleClockRewards: (clockId: string) => Promise<GeniePuzzleClockRewardRecord[]>;
+  fetchPuzzleClockRewards: (
+    clockId: string,
+  ) => Promise<GeniePuzzleClockRewardRecord[]>;
   /** Spec 019: the viewer's own PC in this world (first non-NPC actor they
    * own), and every *other* PC — the two things `SessionResourceTrade`
    * needs to offer a trade to someone. `null` while unresolved/absent. */
@@ -101,8 +122,12 @@ export function useGenieSession(
   const [error, setError] = useState<Error | null>(null);
   const [myActor, setMyActor] = useState<WorldActorRecord | null>(null);
   const [partyMembers, setPartyMembers] = useState<WorldActorRecord[]>([]);
-  const [myHoldings, setMyHoldings] = useState<GenieResourceHoldingRecord[]>([]);
-  const [incomingProposals, setIncomingProposals] = useState<GenieTradeProposalRecord[]>([]);
+  const [myHoldings, setMyHoldings] = useState<GenieResourceHoldingRecord[]>(
+    [],
+  );
+  const [incomingProposals, setIncomingProposals] = useState<
+    GenieTradeProposalRecord[]
+  >([]);
 
   const refetch = useCallback(async () => {
     if (!worldId) {
@@ -158,7 +183,8 @@ export function useGenieSession(
         // the real invite-and-claim flow never resolved as "my actor" at
         // all). Falls back to ownedBy for an actor nobody has claimed —
         // e.g. the GM's own PC, played directly without a claim.
-        const controllerId = (actor: WorldActorRecord) => actor.claimedBy?.userId ?? actor.ownedBy;
+        const controllerId = (actor: WorldActorRecord) =>
+          actor.claimedBy?.userId ?? actor.ownedBy;
         setMyActor(pcs.find((a) => controllerId(a) === currentUserId) ?? null);
         setPartyMembers(pcs.filter((a) => controllerId(a) !== currentUserId));
       })
@@ -236,8 +262,14 @@ export function useGenieSession(
   const createPuzzleClock = useCallback(
     async (label: string, segmentsMax: number) => {
       if (!session) return;
-      const clock = await createPuzzleClockRequest(session.id, label, segmentsMax);
-      setSession((prev) => (prev ? { ...prev, puzzleClocks: [...prev.puzzleClocks, clock] } : prev));
+      const clock = await createPuzzleClockRequest(
+        session.id,
+        label,
+        segmentsMax,
+      );
+      setSession((prev) =>
+        prev ? { ...prev, puzzleClocks: [...prev.puzzleClocks, clock] } : prev,
+      );
     },
     [session],
   );
@@ -254,15 +286,29 @@ export function useGenieSession(
   // the persisted status, this is just keeping the client in sync with
   // what that same mutation just did, the same way advanceDoomClock/
   // spendWish already set state straight from their own responses.
-  const advancePuzzleClock = useCallback(async (clockId: string, delta: number, actorId?: string) => {
-    const updatedClock = await advancePuzzleClockRequest(clockId, delta, actorId);
-    setSession((prev) => {
-      if (!prev) return prev;
-      const puzzleClocks = prev.puzzleClocks.map((c) => (c.id === clockId ? updatedClock : c));
-      const allResolved = puzzleClocks.length > 0 && puzzleClocks.every((c) => c.resolvedAt);
-      return { ...prev, puzzleClocks, status: allResolved ? "WON" : prev.status };
-    });
-  }, []);
+  const advancePuzzleClock = useCallback(
+    async (clockId: string, delta: number, actorId?: string) => {
+      const updatedClock = await advancePuzzleClockRequest(
+        clockId,
+        delta,
+        actorId,
+      );
+      setSession((prev) => {
+        if (!prev) return prev;
+        const puzzleClocks = prev.puzzleClocks.map((c) =>
+          c.id === clockId ? updatedClock : c,
+        );
+        const allResolved =
+          puzzleClocks.length > 0 && puzzleClocks.every((c) => c.resolvedAt);
+        return {
+          ...prev,
+          puzzleClocks,
+          status: allResolved ? "WON" : prev.status,
+        };
+      });
+    },
+    [],
+  );
 
   const proposeResourceTrade = useCallback(
     async (input: ProposeResourceTradeInput) => {
@@ -293,7 +339,12 @@ export function useGenieSession(
   // clock and win the session, so it merges the response locally instead
   // of refetching into a null-because-concluded genieSession(worldId).
   const spendResourceOnPuzzleClock = useCallback(
-    async (clockId: string, actorId: string, resourceType: string, quantity: number) => {
+    async (
+      clockId: string,
+      actorId: string,
+      resourceType: string,
+      quantity: number,
+    ) => {
       const updatedClock = await spendResourceOnPuzzleClockRequest(
         clockId,
         actorId,
@@ -302,9 +353,16 @@ export function useGenieSession(
       );
       setSession((prev) => {
         if (!prev) return prev;
-        const puzzleClocks = prev.puzzleClocks.map((c) => (c.id === clockId ? updatedClock : c));
-        const allResolved = puzzleClocks.length > 0 && puzzleClocks.every((c) => c.resolvedAt);
-        return { ...prev, puzzleClocks, status: allResolved ? "WON" : prev.status };
+        const puzzleClocks = prev.puzzleClocks.map((c) =>
+          c.id === clockId ? updatedClock : c,
+        );
+        const allResolved =
+          puzzleClocks.length > 0 && puzzleClocks.every((c) => c.resolvedAt);
+        return {
+          ...prev,
+          puzzleClocks,
+          status: allResolved ? "WON" : prev.status,
+        };
       });
     },
     [],
@@ -318,15 +376,23 @@ export function useGenieSession(
   const grantSessionResource = useCallback(
     async (actorId: string, resourceType: string, amount: number) => {
       if (!session) return;
-      await grantSessionResourceRequest(session.id, actorId, resourceType, amount);
+      await grantSessionResourceRequest(
+        session.id,
+        actorId,
+        resourceType,
+        amount,
+      );
       await refetchTrades();
     },
     [session, refetchTrades],
   );
 
-  const createShopListing = useCallback(async (input: CreateShopListingInput) => {
-    await createShopListingRequest(input);
-  }, []);
+  const createShopListing = useCallback(
+    async (input: CreateShopListingInput) => {
+      await createShopListingRequest(input);
+    },
+    [],
+  );
 
   const purchaseFromShop = useCallback(
     async (listingId: string, buyerActorId: string, _sellerActorId: string) => {
@@ -336,13 +402,22 @@ export function useGenieSession(
     [refetchTrades],
   );
 
-  const configurePuzzleClockReward = useCallback(async (input: ConfigurePuzzleClockRewardInput) => {
-    await configurePuzzleClockRewardRequest(input);
-  }, []);
+  const configurePuzzleClockReward = useCallback(
+    async (input: ConfigurePuzzleClockRewardInput) => {
+      await configurePuzzleClockRewardRequest(input);
+    },
+    [],
+  );
 
-  const fetchShopListings = useCallback((actorId: string) => fetchGenieShopListings(actorId), []);
+  const fetchShopListings = useCallback(
+    (actorId: string) => fetchGenieShopListings(actorId),
+    [],
+  );
 
-  const fetchPuzzleClockRewards = useCallback((clockId: string) => fetchGeniePuzzleClockRewards(clockId), []);
+  const fetchPuzzleClockRewards = useCallback(
+    (clockId: string) => fetchGeniePuzzleClockRewards(clockId),
+    [],
+  );
 
   return {
     session,

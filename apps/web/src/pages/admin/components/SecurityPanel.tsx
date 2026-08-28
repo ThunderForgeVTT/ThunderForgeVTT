@@ -32,7 +32,11 @@ export function SecurityPanel({
       await onUpdate(requiredForAllUsers);
       setStatus("2FA enforcement policy updated.");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Failed to update security policy.");
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : "Failed to update security policy.",
+      );
     } finally {
       setIsSaving(false);
     }
@@ -44,8 +48,7 @@ export function SecurityPanel({
         <div>
           <h3 className="font-semibold">Two-factor enforcement</h3>
           <p className="text-muted-foreground">
-            Decide whether every user must complete two-factor
-            authentication.
+            Decide whether every user must complete two-factor authentication.
           </p>
         </div>
         <label className="flex items-center gap-2 text-sm">
@@ -87,7 +90,9 @@ export function SecurityPanel({
             <p className="text-muted-foreground">
               <strong className="text-foreground">Admin code generated:</strong>{" "}
               {bootstrapSettings.adminCodeGeneratedAt
-                ? new Date(bootstrapSettings.adminCodeGeneratedAt).toLocaleString()
+                ? new Date(
+                    bootstrapSettings.adminCodeGeneratedAt,
+                  ).toLocaleString()
                 : "Not recorded"}
             </p>
             <p className="text-muted-foreground">
@@ -98,7 +103,9 @@ export function SecurityPanel({
             </p>
           </div>
         ) : (
-          <StatusBadge variant="warning">Bootstrap settings are unavailable.</StatusBadge>
+          <StatusBadge variant="warning">
+            Bootstrap settings are unavailable.
+          </StatusBadge>
         )}
       </div>
 

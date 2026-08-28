@@ -51,7 +51,11 @@ export function WallTool({ worldStore, walls, selectedWallId }: WallToolProps) {
   }, []);
 
   const updateSelectedWall = useCallback(
-    (changes: Partial<Pick<WorldWall, "blocksVision" | "blocksMovement" | "doorState">>) => {
+    (
+      changes: Partial<
+        Pick<WorldWall, "blocksVision" | "blocksMovement" | "doorState">
+      >,
+    ) => {
       if (!selectedWall) {
         return;
       }
@@ -73,10 +77,7 @@ export function WallTool({ worldStore, walls, selectedWallId }: WallToolProps) {
       return;
     }
 
-    worldStore.dispatch(
-      { type: "delete_wall", wallId: selectedWall.id },
-      "ui",
-    );
+    worldStore.dispatch({ type: "delete_wall", wallId: selectedWall.id }, "ui");
     worldStore.dispatch({ type: "select_wall", wallId: null }, "ui");
   }, [selectedWall, worldStore]);
 
@@ -141,7 +142,12 @@ export function WallTool({ worldStore, walls, selectedWallId }: WallToolProps) {
             </Select>
           </div>
 
-          <Button type="button" variant="danger" icon="trash" onClick={deleteSelectedWall}>
+          <Button
+            type="button"
+            variant="danger"
+            icon="trash"
+            onClick={deleteSelectedWall}
+          >
             Delete wall
           </Button>
         </Panel>

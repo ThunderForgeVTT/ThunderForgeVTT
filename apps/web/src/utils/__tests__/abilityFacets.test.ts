@@ -38,8 +38,12 @@ describe("resolveAbilityLabel", () => {
   });
 
   it("falls back when the label is empty or whitespace-only", () => {
-    expect(resolveAbilityLabel({ spell: { label: "" } }, "spell")).toBe("Spell");
-    expect(resolveAbilityLabel({ spell: { label: "   " } }, "spell")).toBe("Spell");
+    expect(resolveAbilityLabel({ spell: { label: "" } }, "spell")).toBe(
+      "Spell",
+    );
+    expect(resolveAbilityLabel({ spell: { label: "   " } }, "spell")).toBe(
+      "Spell",
+    );
   });
 
   it("falls back when the entry is not an object", () => {
@@ -81,11 +85,15 @@ describe("resolveAbilityPluralLabel", () => {
   it("falls back to the built-in plural when the entry is unusable", () => {
     expect(resolveAbilityPluralLabel(undefined, "feat")).toBe("Feats");
     expect(resolveAbilityPluralLabel({}, "feat")).toBe("Feats");
-    expect(resolveAbilityPluralLabel({ feat: { label: "  " } }, "feat")).toBe("Feats");
+    expect(resolveAbilityPluralLabel({ feat: { label: "  " } }, "feat")).toBe(
+      "Feats",
+    );
   });
 
   it("falls back to the singular when pluralLabel is empty", () => {
-    const lookup: AbilityFacetsLookup = { spell: { label: "Scroll", pluralLabel: "  " } };
+    const lookup: AbilityFacetsLookup = {
+      spell: { label: "Scroll", pluralLabel: "  " },
+    };
     expect(resolveAbilityPluralLabel(lookup, "spell")).toBe("Scroll");
   });
 });

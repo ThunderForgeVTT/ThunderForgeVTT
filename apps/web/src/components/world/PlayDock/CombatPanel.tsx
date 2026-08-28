@@ -10,7 +10,10 @@ import {
 } from "@/api/combat";
 import { getWorldActors } from "@/api/actors";
 import { Button } from "@/components/ui/button/Button";
-import { subscribeToWorldEvents, startPlayPanelEventSync } from "@/engine/world/sync";
+import {
+  subscribeToWorldEvents,
+  startPlayPanelEventSync,
+} from "@/engine/world/sync";
 import { cn } from "@/lib/utils";
 import type { CombatRecord } from "@/types/combat";
 import type { WorldActorRecord } from "@/types/actor";
@@ -45,7 +48,9 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
   const refresh = useCallback(() => {
     return getActiveCombat(worldId)
       .then(setCombat)
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load combat"))
+      .catch((err) =>
+        setError(err instanceof Error ? err.message : "Failed to load combat"),
+      )
       .finally(() => setLoading(false));
   }, [worldId]);
 
@@ -63,7 +68,9 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
 
   useEffect(() => {
     if (!isGm) return;
-    getWorldActors(worldId).then(setActors).catch(() => setActors([]));
+    getWorldActors(worldId)
+      .then(setActors)
+      .catch(() => setActors([]));
   }, [worldId, isGm]);
 
   /** Runs a mutation, adopts its authoritative result, and surfaces failures. */
@@ -104,7 +111,8 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
   }
 
   const addableActors = actors.filter(
-    (actor) => !combat.combatants.some((combatant) => combatant.actorId === actor.id),
+    (actor) =>
+      !combat.combatants.some((combatant) => combatant.actorId === actor.id),
   );
 
   return (
@@ -164,21 +172,31 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
                     aria-label={`Initiative for ${combatant.label}`}
                     className="h-7 w-12 rounded border border-input bg-transparent px-1 text-sm tabular-nums outline-none"
                     onChange={(event) => {
-                      const initiative = Number.parseInt(event.target.value, 10);
+                      const initiative = Number.parseInt(
+                        event.target.value,
+                        10,
+                      );
                       if (!Number.isFinite(initiative)) return;
                       void run(() =>
-                        updateCombatant({ combatantId: combatant.id, initiative }),
+                        updateCombatant({
+                          combatantId: combatant.id,
+                          initiative,
+                        }),
                       );
                     }}
                   />
                 ) : (
-                  <span className="w-8 text-sm tabular-nums">{combatant.initiative}</span>
+                  <span className="w-8 text-sm tabular-nums">
+                    {combatant.initiative}
+                  </span>
                 )}
 
                 <span className="min-w-0 flex-1 truncate text-sm">
                   {combatant.label}
                   {combatant.isNpc ? (
-                    <span className="ml-1 text-xs text-muted-foreground">NPC</span>
+                    <span className="ml-1 text-xs text-muted-foreground">
+                      NPC
+                    </span>
                   ) : null}
                 </span>
 
@@ -210,7 +228,9 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
                       aria-label={`Remove ${combatant.label}`}
                       disabled={busy}
                       className="rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-destructive"
-                      onClick={() => void run(() => removeCombatant(combatant.id))}
+                      onClick={() =>
+                        void run(() => removeCombatant(combatant.id))
+                      }
                     >
                       ✕
                     </button>
@@ -251,7 +271,9 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
               disabled={busy || !addActorId}
               data-testid="combat-add-button"
               onClick={() => {
-                const actor = actors.find((candidate) => candidate.id === addActorId);
+                const actor = actors.find(
+                  (candidate) => candidate.id === addActorId,
+                );
                 if (!actor) return;
                 void run(() =>
                   addCombatant({

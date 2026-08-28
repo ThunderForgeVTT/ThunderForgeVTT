@@ -21,7 +21,9 @@ export function ManifestEditor({ manifest, onSaveKey }: ManifestEditorProps) {
   );
 
   const [values, setValues] = useState<Record<string, string>>(
-    Object.fromEntries(editableEntries.map((entry) => [entry.key, entry.value])),
+    Object.fromEntries(
+      editableEntries.map((entry) => [entry.key, entry.value]),
+    ),
   );
   const [status, setStatus] = useState<string | null>(null);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -34,7 +36,9 @@ export function ManifestEditor({ manifest, onSaveKey }: ManifestEditorProps) {
       await onSaveKey(key, values[key] ?? "");
       setStatus(`Manifest key "${key}" updated.`);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Failed to update manifest.");
+      setStatus(
+        error instanceof Error ? error.message : "Failed to update manifest.",
+      );
     } finally {
       setSavingKey(null);
     }

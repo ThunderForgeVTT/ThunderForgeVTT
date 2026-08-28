@@ -10,7 +10,10 @@ import type { WorldStore } from "../store";
 import { createLocalAdjudicator } from "./adjudicator";
 import { createPlaybackFacet, type PlaybackFacet } from "./playback";
 import { createSelectionFacet, type SelectionFacet } from "./selection";
-import { createTokenControlFacet, type TokenControlFacet } from "./tokenControl";
+import {
+  createTokenControlFacet,
+  type TokenControlFacet,
+} from "./tokenControl";
 import type { Adjudicator, FacetContext, FacetPrincipal } from "./types";
 
 export * from "./types";

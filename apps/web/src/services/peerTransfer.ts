@@ -99,7 +99,12 @@ export function setPeerTransferEnabled(enabled: boolean): void {
   }
   state = enabled
     ? { ...state, enabled: true }
-    : { enabled: false, connectedPeers: 0, bytesFromPeers: 0, verificationFailures: 0 };
+    : {
+        enabled: false,
+        connectedPeers: 0,
+        bytesFromPeers: 0,
+        verificationFailures: 0,
+      };
   publish();
 }
 

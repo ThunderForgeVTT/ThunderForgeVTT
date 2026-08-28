@@ -129,7 +129,8 @@ export default function WorldDashboardPage() {
     } catch (error) {
       setWorldState((current) => ({
         ...current,
-        status: error instanceof Error ? error.message : "Failed to delete world.",
+        status:
+          error instanceof Error ? error.message : "Failed to delete world.",
       }));
       setIsDeleting(false);
     }
@@ -158,10 +159,15 @@ export default function WorldDashboardPage() {
                 This world could not be opened.
               </h1>
               <p className="text-muted-foreground">
-                The world may be missing, or your access does not permit
-                viewing this dashboard.
+                The world may be missing, or your access does not permit viewing
+                this dashboard.
               </p>
-              <Button asChild variant="secondary" icon="arrow-left" className="mx-auto">
+              <Button
+                asChild
+                variant="secondary"
+                icon="arrow-left"
+                className="mx-auto"
+              >
                 <Link to="/worlds">Return to archive</Link>
               </Button>
             </Card>

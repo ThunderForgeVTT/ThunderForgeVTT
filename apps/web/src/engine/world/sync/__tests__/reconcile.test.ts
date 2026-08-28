@@ -15,8 +15,15 @@ import {
   type SubmittedChange,
 } from "../reconcile";
 
-const change = (localId: string, tokenId: string): SubmittedChange => ({ localId, tokenId });
-const applied = (localId: string, tokenId: string, at: number): AppliedChange => ({
+const change = (localId: string, tokenId: string): SubmittedChange => ({
+  localId,
+  tokenId,
+});
+const applied = (
+  localId: string,
+  tokenId: string,
+  at: number,
+): AppliedChange => ({
   localId,
   tokenId,
   appliedAt: at,
@@ -27,7 +34,12 @@ describe("matchOutcomes", () => {
     const submitted = [change("a", "t1"), change("b", "t2")];
     const outcomes: ReconcileOutcome[] = [
       { localId: "a", applied: true },
-      { localId: "b", applied: false, reason: "SUPERSEDED", supersededByRole: "GameMaster" },
+      {
+        localId: "b",
+        applied: false,
+        reason: "SUPERSEDED",
+        supersededByRole: "GameMaster",
+      },
     ];
 
     const result = matchOutcomes(submitted, outcomes);
@@ -54,10 +66,13 @@ describe("matchOutcomes", () => {
   });
 
   it("ignores an outcome for something never submitted", () => {
-    const result = matchOutcomes([change("a", "t1")], [
-      { localId: "a", applied: true },
-      { localId: "phantom", applied: true },
-    ]);
+    const result = matchOutcomes(
+      [change("a", "t1")],
+      [
+        { localId: "a", applied: true },
+        { localId: "phantom", applied: true },
+      ],
+    );
 
     expect(result.applied).toHaveLength(1);
     expect(result.unanswered).toEqual([]);
@@ -65,12 +80,18 @@ describe("matchOutcomes", () => {
 });
 
 describe("parseReconciledEvent", () => {
-  const event = (payload: unknown) => ({ id: 1, token_event: payload }) as never;
+  const event = (payload: unknown) =>
+    ({ id: 1, token_event: payload }) as never;
 
   it("reads a reconciled token change", () => {
     expect(
       parseReconciledEvent(
-        event({ token_id: "t1", reconciled: true, by_user: "u1", by_role: "GameMaster" }),
+        event({
+          token_id: "t1",
+          reconciled: true,
+          by_user: "u1",
+          by_role: "GameMaster",
+        }),
       ),
     ).toEqual({ tokenId: "t1", byUser: "u1", byRole: "GameMaster" });
   });
@@ -80,13 +101,19 @@ describe("parseReconciledEvent", () => {
    * queued work. Only a replay can supersede, so only a replay is a candidate.
    */
   it("does not treat an ordinary live edit as a replay", () => {
-    expect(parseReconciledEvent(event({ token_id: "t1", action: "moved" }))).toBeNull();
+    expect(
+      parseReconciledEvent(event({ token_id: "t1", action: "moved" })),
+    ).toBeNull();
   });
 
   it("refuses a reconciled event that cannot say who made it", () => {
-    expect(parseReconciledEvent(event({ token_id: "t1", reconciled: true }))).toBeNull();
     expect(
-      parseReconciledEvent(event({ reconciled: true, by_user: "u1", by_role: "Player" })),
+      parseReconciledEvent(event({ token_id: "t1", reconciled: true })),
+    ).toBeNull();
+    expect(
+      parseReconciledEvent(
+        event({ reconciled: true, by_user: "u1", by_role: "Player" }),
+      ),
     ).toBeNull();
   });
 });
@@ -111,13 +138,21 @@ describe("supersededBy", () => {
    */
   it("does not report a client superseding itself", () => {
     expect(
-      supersededBy({ tokenId: "t1", byUser: "me", byRole: "Player" }, mine, "me"),
+      supersededBy(
+        { tokenId: "t1", byUser: "me", byRole: "Player" },
+        mine,
+        "me",
+      ),
     ).toEqual([]);
   });
 
   it("ignores a replay touching a token this client never changed", () => {
     expect(
-      supersededBy({ tokenId: "other", byUser: "them", byRole: "GameMaster" }, mine, "me"),
+      supersededBy(
+        { tokenId: "other", byUser: "them", byRole: "GameMaster" },
+        mine,
+        "me",
+      ),
     ).toEqual([]);
   });
 });
@@ -149,10 +184,9 @@ describe("remainingAfterInterruption", () => {
     const submitted = [change("a", "t1"), change("b", "t2"), change("c", "t3")];
     const partial: ReconcileOutcome[] = [{ localId: "a", applied: true }];
 
-    expect(remainingAfterInterruption(submitted, partial).map((c) => c.localId)).toEqual([
-      "b",
-      "c",
-    ]);
+    expect(
+      remainingAfterInterruption(submitted, partial).map((c) => c.localId),
+    ).toEqual(["b", "c"]);
   });
 
   it("keeps everything when the call answered nothing at all", () => {
@@ -179,7 +213,10 @@ describe("attributeCommand / readAdjudication", () => {
    * the outbox is the only durable store in the path.
    */
   it("carries the author inside the stored command, where a reload cannot lose it", () => {
-    const command = attributeCommand({ type: "upsert_token", token: { id: "t1" } }, "player-1");
+    const command = attributeCommand(
+      { type: "upsert_token", token: { id: "t1" } },
+      "player-1",
+    );
     expect(readAdjudication(command)).toEqual({ originatorUserId: "player-1" });
   });
 
@@ -191,14 +228,19 @@ describe("attributeCommand / readAdjudication", () => {
    */
   it("leaves the parts the server replays untouched", () => {
     const original = { type: "upsert_token", token: { id: "t1", x: 3 } };
-    const command = attributeCommand(original, "player-1") as Record<string, unknown>;
+    const command = attributeCommand(original, "player-1") as Record<
+      string,
+      unknown
+    >;
     expect(command.type).toBe("upsert_token");
     expect(command.token).toEqual({ id: "t1", x: 3 });
   });
 
   /** An ordinary offline edit has no author but the submitter, and no stamp. */
   it("reads nothing off a command that was never attributed", () => {
-    expect(readAdjudication({ type: "upsert_token", token: { id: "t1" } })).toBeNull();
+    expect(
+      readAdjudication({ type: "upsert_token", token: { id: "t1" } }),
+    ).toBeNull();
   });
 
   /**
@@ -207,8 +249,12 @@ describe("attributeCommand / readAdjudication", () => {
    * attribution rather than as a guess.
    */
   it("refuses to guess at a malformed stamp", () => {
-    expect(readAdjudication({ adjudication: { originator_user_id: "" } })).toBeNull();
-    expect(readAdjudication({ adjudication: { originator_user_id: 7 } })).toBeNull();
+    expect(
+      readAdjudication({ adjudication: { originator_user_id: "" } }),
+    ).toBeNull();
+    expect(
+      readAdjudication({ adjudication: { originator_user_id: 7 } }),
+    ).toBeNull();
     expect(readAdjudication({ adjudication: "player-1" })).toBeNull();
     expect(readAdjudication(null)).toBeNull();
     expect(readAdjudication("not a command")).toBeNull();
@@ -217,7 +263,11 @@ describe("attributeCommand / readAdjudication", () => {
 
 describe("noticesFor", () => {
   const rejection = (localId: string, originatorUserId?: string) => ({
-    change: { localId, tokenId: "t1", ...(originatorUserId ? { originatorUserId } : {}) },
+    change: {
+      localId,
+      tokenId: "t1",
+      ...(originatorUserId ? { originatorUserId } : {}),
+    },
     outcome: { localId, applied: false, reason: "PERMISSION_DENIED" as const },
   });
 
@@ -249,8 +299,13 @@ describe("tokensToRevert", () => {
    * something went wrong.
    */
   it("asks once per token however many of its changes were refused", () => {
-    expect(tokensToRevert([rejection("a", "t1"), rejection("b", "t1"), rejection("c", "t2")]))
-      .toEqual(["t1", "t2"]);
+    expect(
+      tokensToRevert([
+        rejection("a", "t1"),
+        rejection("b", "t1"),
+        rejection("c", "t2"),
+      ]),
+    ).toEqual(["t1", "t2"]);
   });
 
   /**

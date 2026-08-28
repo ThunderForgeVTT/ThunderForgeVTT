@@ -1,9 +1,18 @@
-import React, { createContext, useCallback, useContext, useEffect, ReactNode } from 'react';
-import { useConflictDetection, type ConflictDetectionState } from '@/hooks/useConflictDetection';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  ReactNode,
+} from "react";
+import {
+  useConflictDetection,
+  type ConflictDetectionState,
+} from "@/hooks/useConflictDetection";
 
 /**
  * Phase 4.9.C.3: Conflict Detection Context
- * 
+ *
  * Provides conflict detection state and handlers throughout the app.
  * Integrates with worldEventCreated subscription to detect conflicts in real-time.
  */
@@ -14,7 +23,9 @@ interface ConflictContextValue extends ConflictDetectionState {
   clearAllConflicts: () => void;
 }
 
-const ConflictContext = createContext<ConflictContextValue | undefined>(undefined);
+const ConflictContext = createContext<ConflictContextValue | undefined>(
+  undefined,
+);
 
 interface ConflictProviderProps {
   worldId: string | null;
@@ -37,12 +48,15 @@ export function ConflictProvider({
    * Handle incoming world events from subscription
    * Call this whenever worldEventCreated fires
    */
-  const handleWorldEvent = useCallback((event: any) => {
-    if (onSubscriptionEvent) {
-      onSubscriptionEvent(event);
-    }
-    conflictDetection.processWorldEvent(event);
-  }, [conflictDetection, onSubscriptionEvent]);
+  const handleWorldEvent = useCallback(
+    (event: any) => {
+      if (onSubscriptionEvent) {
+        onSubscriptionEvent(event);
+      }
+      conflictDetection.processWorldEvent(event);
+    },
+    [conflictDetection, onSubscriptionEvent],
+  );
 
   const value: ConflictContextValue = {
     ...conflictDetection,
@@ -62,7 +76,7 @@ export function ConflictProvider({
 export function useConflicts(): ConflictContextValue {
   const context = useContext(ConflictContext);
   if (!context) {
-    throw new Error('useConflicts must be used within ConflictProvider');
+    throw new Error("useConflicts must be used within ConflictProvider");
   }
   return context;
 }

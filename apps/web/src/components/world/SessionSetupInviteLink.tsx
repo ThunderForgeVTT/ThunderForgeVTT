@@ -14,7 +14,9 @@ interface SessionSetupInviteLinkProps {
  * doesn't need to leave this page to copy/distribute it. Reuses the same
  * `generateInviteCode` mutation — no new server surface for this.
  */
-export function SessionSetupInviteLink({ worldId }: SessionSetupInviteLinkProps) {
+export function SessionSetupInviteLink({
+  worldId,
+}: SessionSetupInviteLinkProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -32,7 +34,9 @@ export function SessionSetupInviteLink({ worldId }: SessionSetupInviteLinkProps)
       await navigator.clipboard.writeText(url).catch(() => {});
       setStatus("Copied to clipboard.");
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed to generate invite link");
+      setStatus(
+        err instanceof Error ? err.message : "Failed to generate invite link",
+      );
     } finally {
       setIsGenerating(false);
     }
@@ -51,9 +55,15 @@ export function SessionSetupInviteLink({ worldId }: SessionSetupInviteLinkProps)
         {isGenerating ? "Generating..." : "Copy invite link"}
       </Button>
       {inviteUrl ? (
-        <Input readOnly value={inviteUrl} data-testid="session-setup-invite-url" />
+        <Input
+          readOnly
+          value={inviteUrl}
+          data-testid="session-setup-invite-url"
+        />
       ) : null}
-      {status ? <p className="text-xs text-muted-foreground">{status}</p> : null}
+      {status ? (
+        <p className="text-xs text-muted-foreground">{status}</p>
+      ) : null}
     </div>
   );
 }

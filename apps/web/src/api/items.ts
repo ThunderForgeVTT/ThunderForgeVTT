@@ -1,5 +1,10 @@
 import { postGraphQL } from "@/api/graphqlClient";
-import type { ItemEffectType, ItemEffectTrigger, ItemPermissionRecord, WorldItemRecord } from "@/types/item";
+import type {
+  ItemEffectType,
+  ItemEffectTrigger,
+  ItemPermissionRecord,
+  WorldItemRecord,
+} from "@/types/item";
 
 const ITEM_EFFECT_FIELDS = `
   id
@@ -37,7 +42,10 @@ type WorldItemsQuery = {
 };
 
 /** Every world member sees every item at at least Viewer level by default (FR-008). */
-export function getWorldItems(worldId: string, search?: string): Promise<WorldItemRecord[]> {
+export function getWorldItems(
+  worldId: string,
+  search?: string,
+): Promise<WorldItemRecord[]> {
   return postGraphQL<WorldItemsQuery>(
     `
       query WorldItems($worldId: UUID!, $search: String) {
@@ -72,7 +80,10 @@ type SuggestItemNameQuery = {
 };
 
 /** Non-blocking "did you mean?" nudge (FR-020) — never gates createItem. */
-export function suggestItemName(worldId: string, name: string): Promise<WorldItemRecord[]> {
+export function suggestItemName(
+  worldId: string,
+  name: string,
+): Promise<WorldItemRecord[]> {
   return postGraphQL<SuggestItemNameQuery>(
     `
       query SuggestItemName($worldId: UUID!, $name: String!) {
@@ -216,7 +227,9 @@ type ItemPermissionsQuery = {
 };
 
 /** DM-only to open/change (mirrors ActorOwnershipBlock — FR-003). */
-export function getItemPermissions(itemId: string): Promise<ItemPermissionRecord[]> {
+export function getItemPermissions(
+  itemId: string,
+): Promise<ItemPermissionRecord[]> {
   return postGraphQL<ItemPermissionsQuery>(
     `
       query ItemPermissions($itemId: UUID!) {
@@ -261,7 +274,10 @@ type RemoveItemPermissionMutation = {
 };
 
 /** Resets a member back to the implicit default Viewer level. */
-export function removeItemPermission(itemId: string, userId: string): Promise<boolean> {
+export function removeItemPermission(
+  itemId: string,
+  userId: string,
+): Promise<boolean> {
   return postGraphQL<RemoveItemPermissionMutation>(
     `
       mutation RemoveItemPermission($itemId: UUID!, $userId: UUID!) {

@@ -49,14 +49,21 @@ export function WorldStagingPage({
          * here now live in WorldSectionShell (persistent sidebar + a single
          * top-right Play button shared by every world hub screen). */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-border bg-card/50 px-4 py-2 text-sm text-muted-foreground">
-          <span>Confirm the scene and roster below, then hand the screen to the game.</span>
+          <span>
+            Confirm the scene and roster below, then hand the screen to the
+            game.
+          </span>
         </div>
       </header>
 
       {/* The story so far, read before the roster check — catching up on
        * where things left off naturally comes before confirming who's in
        * the room for tonight. */}
-      <Panel variant="parchment" className="rounded-xl border border-border" data-testid="session-notes-panel">
+      <Panel
+        variant="parchment"
+        className="rounded-xl border border-border"
+        data-testid="session-notes-panel"
+      >
         <p className="mb-3 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
           Last session notes
         </p>
@@ -71,7 +78,10 @@ export function WorldStagingPage({
       {/* Spec 023: the roster itself lives in its own Players sidebar
        * section now — this stays just the invite link. */}
       {isGm ? (
-        <Panel variant="stone" className="grid gap-2 rounded-xl border border-border sm:max-w-xs">
+        <Panel
+          variant="stone"
+          className="grid gap-2 rounded-xl border border-border sm:max-w-xs"
+        >
           <SessionSetupInviteLink worldId={worldId} />
         </Panel>
       ) : null}

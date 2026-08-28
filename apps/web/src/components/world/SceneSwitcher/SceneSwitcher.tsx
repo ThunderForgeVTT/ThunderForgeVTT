@@ -106,7 +106,11 @@ export function SceneSwitcher({
       {canCreateScene ? (
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button variant="secondary" size="sm" data-testid={`${testIdPrefix}new-scene-button`}>
+            <Button
+              variant="secondary"
+              size="sm"
+              data-testid={`${testIdPrefix}new-scene-button`}
+            >
               New scene
             </Button>
           </DialogTrigger>
@@ -114,7 +118,13 @@ export function SceneSwitcher({
             <DialogHeader>
               <DialogTitle>Create a new scene</DialogTitle>
             </DialogHeader>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.5rem",
+              }}
+            >
               <Label htmlFor="new-scene-name">Scene name</Label>
               <Input
                 id="new-scene-name"
@@ -125,7 +135,13 @@ export function SceneSwitcher({
                 autoFocus
               />
               {error ? (
-                <p role="alert" style={{ color: "var(--destructive, #dc2626)", fontSize: "0.85rem" }}>
+                <p
+                  role="alert"
+                  style={{
+                    color: "var(--destructive, #dc2626)",
+                    fontSize: "0.85rem",
+                  }}
+                >
                   {error}
                 </p>
               ) : null}

@@ -1,5 +1,9 @@
 import { postGraphQL } from "@/api/graphqlClient";
-import type { ActorPermissionLevel, ActorPermissionRecord, WorldActorRecord } from "@/types/actor";
+import type {
+  ActorPermissionLevel,
+  ActorPermissionRecord,
+  WorldActorRecord,
+} from "@/types/actor";
 
 const WORLD_ACTOR_FIELDS = `
   id
@@ -78,7 +82,10 @@ type SearchActorsQuery = {
  * server-authoritative match against a roster too large to keep in
  * sync client-side.
  */
-export function searchActors(worldId: string, query: string): Promise<WorldActorRecord[]> {
+export function searchActors(
+  worldId: string,
+  query: string,
+): Promise<WorldActorRecord[]> {
   return postGraphQL<SearchActorsQuery>(
     `
       query SearchActors($worldId: UUID!, $query: String!) {
@@ -105,7 +112,9 @@ type CreateActorMutation = {
 };
 
 /** DM-only (FR-019). Creates a new actor in the world's default scene. */
-export function createActor(input: CreateActorInput): Promise<WorldActorRecord> {
+export function createActor(
+  input: CreateActorInput,
+): Promise<WorldActorRecord> {
   return postGraphQL<CreateActorMutation>(
     `
       mutation CreateActor($input: CreateActorInput!) {
@@ -131,7 +140,9 @@ type UpdateActorMutation = {
 };
 
 /** Requires Editor or Owner effective permission (FR-010, FR-011). */
-export function updateActor(input: UpdateActorInput): Promise<WorldActorRecord> {
+export function updateActor(
+  input: UpdateActorInput,
+): Promise<WorldActorRecord> {
   return postGraphQL<UpdateActorMutation>(
     `
       mutation UpdateActor($input: UpdateActorInput!) {
@@ -149,7 +160,9 @@ type ActorPermissionsQuery = {
 };
 
 /** DM-only (FR-014). Returns only explicit ownership-block rows. */
-export function getActorPermissions(actorId: string): Promise<ActorPermissionRecord[]> {
+export function getActorPermissions(
+  actorId: string,
+): Promise<ActorPermissionRecord[]> {
   return postGraphQL<ActorPermissionsQuery>(
     `
       query ActorPermissions($actorId: UUID!) {
@@ -195,7 +208,10 @@ type RemoveActorPermissionMutation = {
 };
 
 /** DM-only (FR-014). Idempotent — reverts the member to default Viewer. */
-export function removeActorPermission(actorId: string, userId: string): Promise<boolean> {
+export function removeActorPermission(
+  actorId: string,
+  userId: string,
+): Promise<boolean> {
   return postGraphQL<RemoveActorPermissionMutation>(
     `
       mutation RemoveActorPermission($actorId: UUID!, $userId: UUID!) {
@@ -214,7 +230,10 @@ type SetActorAvailabilityMutation = {
  * Spec 017 (FR-004): GM-only (Owner-level Actor permission). Marks/unmarks
  * a PC-classified actor as offered on the Actor Selection screen.
  */
-export function setActorAvailability(actorId: string, available: boolean): Promise<WorldActorRecord> {
+export function setActorAvailability(
+  actorId: string,
+  available: boolean,
+): Promise<WorldActorRecord> {
   return postGraphQL<SetActorAvailabilityMutation>(
     `
       mutation SetActorAvailability($actorId: UUID!, $available: Boolean!) {

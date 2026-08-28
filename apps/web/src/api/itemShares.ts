@@ -1,5 +1,9 @@
 import { postGraphQL } from "@/api/graphqlClient";
-import type { DmWorldSummary, ItemShareLinkRecord, SharedItemPreview } from "@/types/itemShare";
+import type {
+  DmWorldSummary,
+  ItemShareLinkRecord,
+  SharedItemPreview,
+} from "@/types/itemShare";
 import type { WorldItemRecord } from "@/types/item";
 
 type CreateItemShareLinkMutation = {
@@ -7,7 +11,9 @@ type CreateItemShareLinkMutation = {
 };
 
 /** Requires effective Owner on the item (FR-022). */
-export function createItemShareLink(itemId: string): Promise<ItemShareLinkRecord> {
+export function createItemShareLink(
+  itemId: string,
+): Promise<ItemShareLinkRecord> {
   return postGraphQL<CreateItemShareLinkMutation>(
     `
       mutation CreateItemShareLink($itemId: UUID!) {

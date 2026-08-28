@@ -21,8 +21,8 @@ export function ClocksPanel({ worldId, isGm, gameSystemId }: ClocksPanelProps) {
   if (gameSystemId !== "genie") {
     return (
       <p className="text-sm text-muted-foreground" data-testid="clocks-panel">
-        This world&apos;s system has no clocks or timers yet. Genie worlds get the Doom
-        Clock and Puzzle Clocks here.
+        This world&apos;s system has no clocks or timers yet. Genie worlds get
+        the Doom Clock and Puzzle Clocks here.
       </p>
     );
   }
