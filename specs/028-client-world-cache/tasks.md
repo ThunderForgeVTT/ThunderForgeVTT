@@ -306,7 +306,7 @@ description: "Task list for 028-client-world-cache"
 - [ ] T125 [P] Backfill `content_hash` for existing assets via a background job in `src/server/src/storage/`, relying on NULL-means-fetch so it need not complete before release
 - [ ] T126 [P] Run `cargo fmt --all` and `cargo clippy --workspace --all-targets`; fix findings in the new crates
 - [ ] T127 [P] Document the two new crates in `docs/` and cross-reference ADR-052
-- [ ] T128 Update `MVP.md` post-MVP notes to reflect that engine load feedback shipped and that bundle-size work remains separate and open
+- [X] T128 Update `MVP.md` post-MVP notes to reflect that engine load feedback shipped and that bundle-size work remains separate and open. Stated as a distinction rather than a status line, because the two are easy to conflate: feedback is not size, and a first load that reports itself honestly is a different problem from a first load that is large. Only the first is closed
 
 ---
 
