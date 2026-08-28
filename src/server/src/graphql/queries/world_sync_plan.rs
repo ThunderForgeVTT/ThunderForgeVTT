@@ -92,12 +92,23 @@ pub struct GraphQLPlanItem {
     pub id: String,
     pub fingerprint: String,
     pub byte_size: i32,
-    /// Whether peers in this session are known to hold it (FR-044).
-    /// Advisory: a client must behave identically whether it is true, false,
-    /// or ignored, because peer transfer is a strict optimization with a
-    /// mandatory server fallback (FR-048). Always `false` until T087 wires
-    /// the peer registry — reporting "no peer" can only cost a server fetch,
-    /// whereas a wrong `true` would cost a stall.
+    /// Whether any peer is *reachable* for this world right now (FR-044) —
+    /// not whether any peer holds this item.
+    ///
+    /// The distinction is deliberate (T087). The server does not track which
+    /// bytes each client caches and must not start: nothing in the spec asks
+    /// for it, and a standing map of who-has-what would be a real privacy
+    /// cost paid for an advisory hint. So this is `true` when at least one
+    /// other live session is registered for the world, and `false` otherwise.
+    /// Its usefulness is letting a client skip peer attempts entirely when it
+    /// is alone at the table, which is the common case.
+    ///
+    /// Advisory either way: a client must behave identically whether it is
+    /// true, false, or ignored, because peer transfer is a strict
+    /// optimization with a mandatory server fallback (FR-048). That asymmetry
+    /// is why reachability is the safe thing to report — a `false` can only
+    /// cost a server fetch the client was going to be able to make anyway,
+    /// whereas a wrong `true` costs a stall before the same fallback.
     pub peer_available: bool,
 }
 
@@ -327,28 +338,36 @@ pub async fn world_sync_plan_impl(
     .map_err(|e| WorldSyncPlanError::Database(e.to_string()))?
 }
 
-impl From<SyncPlan> for GraphQLSyncPlan {
-    fn from(plan: SyncPlan) -> Self {
-        Self {
-            fetch: plan
-                .fetch
-                .into_iter()
-                .map(|item| GraphQLPlanItem {
-                    id: item.id.to_wire(),
-                    fingerprint: item.fingerprint.to_hex(),
-                    // `Int` is 32-bit in GraphQL. Saturating rather than
-                    // wrapping: an asset larger than 2GiB cannot exist here
-                    // (uploads are capped far below it), and if one somehow
-                    // did, "very large" is a survivable lie where a negative
-                    // size is not.
-                    byte_size: i32::try_from(item.byte_size).unwrap_or(i32::MAX),
-                    peer_available: false,
-                })
-                .collect(),
-            evict: plan.evict.iter().map(ItemId::to_wire).collect(),
-            budget_hint: None,
-            canonical_version: CANONICAL_VERSION as i32,
-        }
+/// Render a computed plan onto the wire.
+///
+/// Takes `peer_available` rather than reading the registry itself, and is a
+/// function rather than a `From` impl for that reason: the hint is a property
+/// of *who is online*, which this module has no business reaching out for,
+/// and passing it in is what lets the plan shape be tested without a live
+/// connection registry.
+pub fn to_graphql_plan(plan: SyncPlan, peer_available: bool) -> GraphQLSyncPlan {
+    GraphQLSyncPlan {
+        fetch: plan
+            .fetch
+            .into_iter()
+            .map(|item| GraphQLPlanItem {
+                id: item.id.to_wire(),
+                fingerprint: item.fingerprint.to_hex(),
+                // `Int` is 32-bit in GraphQL. Saturating rather than
+                // wrapping: an asset larger than 2GiB cannot exist here
+                // (uploads are capped far below it), and if one somehow
+                // did, "very large" is a survivable lie where a negative
+                // size is not.
+                byte_size: i32::try_from(item.byte_size).unwrap_or(i32::MAX),
+                // One answer for every item in the plan, because the
+                // question this field answers is "is anyone else here",
+                // not "does anyone have this".
+                peer_available,
+            })
+            .collect(),
+        evict: plan.evict.iter().map(ItemId::to_wire).collect(),
+        budget_hint: None,
+        canonical_version: CANONICAL_VERSION as i32,
     }
 }
 
@@ -369,7 +388,12 @@ impl WorldSyncPlanQuery {
             world_sync_plan_impl(state, auth_user.user_id, auth_user.is_admin, world_id, held)
                 .await
                 .map_err(to_graphql_error)?;
-        Ok(plan.into())
+        // Read after authorization, never before: a caller who may not see
+        // this world must not learn from the shape of a refusal whether
+        // anybody is playing in it.
+        let peer_available =
+            crate::peer_signaling::registry().has_peer_for(world_id, auth_user.user_id);
+        Ok(to_graphql_plan(plan, peer_available))
     }
 }
 
@@ -832,5 +856,88 @@ mod tests {
             too_many,
             WorldSyncPlanError::TooManyHeldItems { .. }
         ));
+    }
+
+    /// T087: the hint answers "is anyone else at this table", and it answers
+    /// it for the whole plan at once — because the server does not know, and
+    /// deliberately never learns, which bytes any client actually holds.
+    ///
+    /// Exercised through the process registry the resolver reads, rather than
+    /// by passing a literal, so a change that stops the resolver's question
+    /// ("is a peer reachable") from matching the registry's answer shows up
+    /// here.
+    #[tokio::test]
+    async fn peer_available_is_false_alone_and_true_once_another_session_is_live() {
+        use crate::peer_signaling::registry;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let other_id = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world_id, other_id, "Player");
+        let asset_id = insert_asset(&mut conn, world_id, None, owner_id, Some(&hex(1)));
+        drop(conn);
+
+        async fn plan_now(
+            state: &AppState,
+            owner_id: Uuid,
+            world_id: Uuid,
+            peers: bool,
+        ) -> GraphQLSyncPlan {
+            let p = world_sync_plan_impl(state, owner_id, false, world_id, vec![])
+                .await
+                .expect("the owner must receive a plan");
+            to_graphql_plan(p, peers)
+        }
+
+        // Alone. The owner's own session does not count as a peer to itself —
+        // a second tab shares the browser origin, and therefore shares the
+        // very cache a transfer would be filling.
+        let (_own, _own_rx) = registry().register(world_id, format!("own-{world_id}"), owner_id);
+        let alone = plan_now(
+            &state,
+            owner_id,
+            world_id,
+            registry().has_peer_for(world_id, owner_id),
+        )
+        .await;
+        assert!(
+            alone
+                .fetch
+                .iter()
+                .any(|i| i.id == ItemId::CanvasAsset(asset_id).to_wire()),
+            "the fixture asset must actually be in the plan, or this asserts nothing"
+        );
+        assert!(
+            alone.fetch.iter().all(|i| !i.peer_available),
+            "with nobody else connected a client must be told not to bother trying peers"
+        );
+
+        // Somebody else joins.
+        let (theirs, _their_rx) =
+            registry().register(world_id, format!("theirs-{world_id}"), other_id);
+        let together = plan_now(
+            &state,
+            owner_id,
+            world_id,
+            registry().has_peer_for(world_id, owner_id),
+        )
+        .await;
+        assert!(
+            together.fetch.iter().all(|i| i.peer_available),
+            "another live session in the same world makes peers worth attempting"
+        );
+
+        // And it is reachability, not history: when they go, it goes.
+        drop(theirs);
+        let after = plan_now(
+            &state,
+            owner_id,
+            world_id,
+            registry().has_peer_for(world_id, owner_id),
+        )
+        .await;
+        assert!(after.fetch.iter().all(|i| !i.peer_available));
     }
 }

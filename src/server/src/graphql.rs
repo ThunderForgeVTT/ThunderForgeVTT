@@ -2427,6 +2427,26 @@ impl SubscriptionRoot {
         }
     }
 
+    /// Spec 028 (T086): receive WebRTC signaling addressed to this session.
+    ///
+    /// The stream **is** the registration. It begins when this subscription
+    /// is established and ends when it drops, which is what confines peer
+    /// connections to the session (FR-050) without a cleanup job that could
+    /// be skipped on a crash.
+    ///
+    /// `sessionId` is a deliberate, minimal extension to the contract's SDL:
+    /// a client cannot be reachable without naming the address it wants to be
+    /// reachable at, and `PeerSignal` carries no field that could tell it one.
+    /// The server treats the value as opaque and forgets it on disconnect.
+    async fn peer_signals(
+        &self,
+        ctx: &Context<'_>,
+        world_id: uuid::Uuid,
+        session_id: String,
+    ) -> impl Stream<Item = Result<crate::peer_signaling::GraphQLPeerSignal, Error>> {
+        crate::peer_signaling::peer_signals_stream(ctx, world_id, session_id).await
+    }
+
     /// Subscribe to player presence changes (Phase 4.9.B.3)
     ///
     /// Streams updates when players connect, disconnect, or change scenes.
@@ -2578,6 +2598,8 @@ pub struct QueryRoot(
     // Live delivery is at-most-once by construction, so the durable record is
     // what a reconnecting client asks, not the wire it just lost.
     WorldEventsSinceQuery,
+    // Spec 028 (T086): `peerSessions` — who else is reachable right now.
+    crate::peer_signaling::PeerSignalingQuery,
 );
 
 #[derive(MergedObject, Default)]
@@ -2617,6 +2639,8 @@ pub struct MutationRoot(
     CombatMutation,
     ReconcileMutation,
     HeartbeatMutation,
+    // Spec 028 (T086): `sendPeerSignal` — the post box.
+    crate::peer_signaling::PeerSignalingMutation,
 );
 
 pub type AppSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;

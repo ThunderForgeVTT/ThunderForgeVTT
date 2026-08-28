@@ -24,6 +24,7 @@ mod markdown; // Spec 012: lore wiki GFM rendering, [[link]] resolution, slug ge
 mod models;
 mod moderation; // Spec 015: DMCA notice-and-takedown content moderation
 mod network;
+mod peer_signaling; // Spec 028: opaque WebRTC signaling relay between live sessions
 mod pubsub;
 mod scene_assets_serve; // Spec 022: authenticated proxy for scene preview images (mirrors lore_assets_serve)
 mod scene_fingerprint; // Spec 028: derived scene content fingerprints

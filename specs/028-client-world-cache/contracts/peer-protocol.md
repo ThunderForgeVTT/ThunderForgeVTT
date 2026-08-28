@@ -20,6 +20,7 @@ Extends the existing subscription; no new service, no new auth surface.
 ```graphql
 input PeerSignalInput {
   worldId: UUID!
+  fromSessionId: String!
   toSessionId: String!
   """Opaque SDP offer/answer or ICE candidate. Server never interprets it."""
   payload: String!
@@ -34,10 +35,37 @@ type PeerSignal {
   payload: String!
 }
 
+extend type Query {
+  """Live sessions in this world other than the caller's own."""
+  peerSessions(worldId: UUID!): [String!]!
+}
+
 extend type Subscription {
-  peerSignals(worldId: UUID!): PeerSignal!
+  peerSignals(worldId: UUID!, sessionId: String!): PeerSignal!
 }
 ```
+
+**A session is one live client connection**, not a user: a person may have two
+tabs open, and FR-050 requires peer connections not to outlive the session.
+The client mints an opaque id per page load and presents it when subscribing.
+
+Three details were added while implementing this, and are recorded here
+rather than left for the next reader to discover from the code:
+
+- `sessionId` on the subscription, because a client must know its own address
+  to be reachable and `PeerSignal` carries no field that could tell it.
+  Registration lasts exactly as long as the stream, which is FR-050 enforced
+  by construction rather than by a cleanup job.
+- `fromSessionId` on the input, because a user may hold several connections
+  and the server otherwise cannot know which one is speaking. It is treated
+  as a **claim and verified** against the registry: a caller may only send as
+  a session registered, in that world, to them. Without the check a member
+  could forge `PeerSignal.fromSessionId` and impersonate another participant
+  on the very channel the recipient is about to trust for SDP.
+- `peerSessions`, the roster. Discovery is a query rather than a server push
+  because the newcomer always initiates: it reads the roster and offers to
+  each, and departures are noticed when the data channel closes. That keeps
+  the server a post box rather than a presence service.
 
 **Server obligations**
 
