@@ -1,6 +1,7 @@
 import { SEO } from "@/components/seo/SEO";
 import { Container } from "@/components/ui/container/Container";
 import { StoragePanel } from "@/components/diagnostics/StoragePanel";
+import { PeerPanel } from "@/components/diagnostics/PeerPanel";
 import type { SeoConfig } from "@/types/seo";
 
 export const storageSettingsPageSeo: SeoConfig = {
@@ -26,14 +27,22 @@ export function StorageSettingsPage() {
       <Container>
         <div className="grid gap-6 py-8">
           <header className="grid gap-1">
-            <h1 className="text-2xl font-semibold">Storage on this device</h1>
+            <h1 className="text-2xl font-semibold">Storage and sharing on this device</h1>
             <p className="text-sm text-muted-foreground">
-              Everything here lives in this browser, on this machine. Clearing
-              it never touches your account, your worlds, or anyone else&apos;s
-              copy.
+              Everything here is a choice about this browser, on this machine.
+              Clearing stored worlds never touches your account, your worlds, or
+              anyone else&apos;s copy.
             </p>
           </header>
           <StoragePanel />
+          {/*
+            Spec 028 FR-049. Peer transfer is the other thing this machine does
+            on its own behalf while a world is open, and it is a per-user,
+            per-device choice — the same shape as the cache above, so it sits
+            on the same page rather than getting a settings screen of its own
+            that nobody would find.
+          */}
+          <PeerPanel />
         </div>
       </Container>
     </>

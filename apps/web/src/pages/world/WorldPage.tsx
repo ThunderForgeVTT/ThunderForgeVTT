@@ -39,6 +39,7 @@ import {
   type SubmittedChange,
 } from "@/engine/world/sync/reconcile";
 import { ReconcileReport } from "@/components/world/ReconcileReport";
+import { PeerIndicator } from "@/components/diagnostics/PeerIndicator";
 
 /**
  * What the reconcile panel is currently showing.
@@ -1592,6 +1593,13 @@ export default function WorldPage() {
                       : `Reconnecting… (attempt ${liveSyncState.attempt})`}
                 </div>
               ) : null}
+              {/*
+                Spec 028 FR-049 (T092). The disclosure that peer transfer is
+                in use has to reach someone who is playing, not someone who
+                went to a settings page — so it renders here, and only while
+                peers are actually connected. It manages its own visibility.
+              */}
+              <PeerIndicator />
               {reconcileReport ? (
                 <div
                   style={{
