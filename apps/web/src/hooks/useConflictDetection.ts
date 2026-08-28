@@ -41,7 +41,12 @@ const MAX_STORED_CONFLICTS = 50;
  * }
  * ```
  */
-export function useConflictDetection(worldId: string | null) {
+// `_worldId` is deliberate, not an oversight. The events this consumes arrive
+// on a per-world channel (`thunderforge-pg-sockets`'s `WorldRouter`), so they
+// are already scoped by construction — that crate's docs say callers "have
+// nothing to filter, which is the point". The parameter stays because it
+// documents what the hook is about and every caller has one.
+export function useConflictDetection(_worldId: string | null) {
   const [state, setState] = useState<ConflictDetectionState>({
     conflicts: [],
     unresolvedCount: 0,

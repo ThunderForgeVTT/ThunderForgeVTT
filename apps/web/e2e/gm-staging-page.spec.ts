@@ -1,4 +1,4 @@
-import { test, expect, type Browser, type Page } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 
 /**
  * specs/009-gm-staging-page: the GM staging page and full-screen play
@@ -188,16 +188,6 @@ test.describe("US2: the play dock exposes scenes/actors/settings without losing 
 });
 
 test.describe("US3: players get the same shell, read-only and independent of the GM", () => {
-  async function secondSessionSameLogin(
-    browser: Browser,
-    sourcePage: Page,
-  ): Promise<{ context: Awaited<ReturnType<Browser["newContext"]>>; page: Page }> {
-    const storageState = await sourcePage.context().storageState();
-    const context = await browser.newContext({ storageState });
-    const page = await context.newPage();
-    return { context, page };
-  }
-
   test("an invited player sees the staging page with GM controls hidden, and can enter full-screen independently", async ({
     page,
     browser,

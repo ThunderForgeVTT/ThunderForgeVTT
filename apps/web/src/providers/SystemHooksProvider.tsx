@@ -36,7 +36,6 @@ interface SystemHooksProviderProps {
  * Provider component
  */
 export const SystemHooksProvider: React.FC<SystemHooksProviderProps> = ({
-  worldId,
   systemId,
   children,
 }) => {

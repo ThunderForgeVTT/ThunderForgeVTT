@@ -48,7 +48,12 @@ pub fn handle_keyboard_movement(
     let step_size = grid.as_ref().map_or(32.0, |g| g.size);
     let delta = direction.normalize() * step_size;
 
-    for (entity, mut grid_pos, token_id, _) in query.iter_mut() {
+    // `.next()` rather than a `for` that breaks at the bottom. The loop said
+    // "for every token" and then contradicted itself twenty lines later,
+    // which is why clippy called it a loop that never loops — and a reader
+    // had to reach the `break` to learn the rule. Only the first
+    // player-controlled token moves; this says so at the point it is decided.
+    if let Some((entity, mut grid_pos, token_id, _)) = query.iter_mut().next() {
         let old_x = grid_pos.x;
         let old_y = grid_pos.y;
         let old_z = grid_pos.z;
@@ -93,8 +98,6 @@ pub fn handle_keyboard_movement(
             format!("Mutation queued: id={}", mutation_id),
             0.0,
         );
-
-        break; // Only move first player-controlled token
     }
 }
 

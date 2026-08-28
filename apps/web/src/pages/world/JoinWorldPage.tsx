@@ -16,6 +16,7 @@ interface WorldInfo {
   description?: string;
 }
 
+/** What the invite lookup answers with, in the one place it is described. */
 interface JoinResponse {
   world: WorldInfo;
   alreadyMember: boolean;
@@ -43,12 +44,13 @@ export default function JoinWorldPage() {
   const navigate = useNavigate();
   const { code = "" } = useParams();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
-  const [worldState, setWorldState] = useState<{
-    world: WorldInfo | null;
-    alreadyMember: boolean;
-    status: string | null;
-    isLoading: boolean;
-  }>({
+  const [worldState, setWorldState] = useState<
+    Omit<JoinResponse, "world"> & {
+      world: WorldInfo | null;
+      status: string | null;
+      isLoading: boolean;
+    }
+  >({
     world: null,
     alreadyMember: false,
     status: null,
@@ -71,10 +73,9 @@ export default function JoinWorldPage() {
 
     const fetchWorld = async () => {
       try {
-        const data = await postGraphQL<{
-          worldByInviteCode: WorldInfo;
-          alreadyMember: boolean;
-        }>(
+        const data = await postGraphQL<
+          Omit<JoinResponse, "world"> & { worldByInviteCode: WorldInfo }
+        >(
           `
             query worldByInviteCode($code: String!) {
               worldByInviteCode(code: $code) {

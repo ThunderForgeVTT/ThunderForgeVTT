@@ -59,7 +59,9 @@ export interface WorldActorSystemDataDoc {
  */
 export function computeActorDerivedStats(
   data: WorldActorSystemDataDoc,
-  gameSystemId: string,
+  // Kept in the signature because every caller has one and a future rule
+  // will be system-specific; nothing here branches on it yet.
+  _gameSystemId: string,
 ) {
   const hasAbilityData =
     !!data.ability_data && Object.keys(data.ability_data).length > 0;

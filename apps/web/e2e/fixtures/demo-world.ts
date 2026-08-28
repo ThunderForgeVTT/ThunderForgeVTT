@@ -18,10 +18,17 @@ function readDemoWorld(): DemoWorld {
  * needed. Use this for specs that exercise the engine itself rather than
  * onboarding/world-creation flows.
  */
+// Playwright builds its fixture dependency graph by parsing these
+// destructuring patterns, so `{}` is how a fixture declares it needs none.
+// Naming the parameter instead would leave Playwright unable to tell what
+// each fixture depends on, so the rule is disabled here rather than the code
+// changed to satisfy it.
 export const test = base.extend<{ demoWorld: DemoWorld }>({
+  // eslint-disable-next-line no-empty-pattern
   storageState: async ({}, use) => {
     await use(DEMO_STATE_PATH);
   },
+  // eslint-disable-next-line no-empty-pattern
   demoWorld: async ({}, use) => {
     await use(readDemoWorld());
   },

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { EngineMountOptions, EngineState } from "./types";
+import type { EngineMountOptions } from "./types";
 import {
   mountEngine,
   type EngineLoadProgress,

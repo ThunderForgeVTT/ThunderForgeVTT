@@ -80,7 +80,6 @@ export function CharacterSheet({
 
   // E2.3: Load system manifest for calculators
   const {
-    manifest,
     loading: manifestLoading,
     error: manifestError,
   } = useGameSystemManifest(gameSystemId);

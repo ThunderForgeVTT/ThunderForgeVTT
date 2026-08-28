@@ -5,7 +5,7 @@
  * Systems implement these interfaces to customize VTT behavior.
  */
 
-import { useContext, useCallback, useState, useEffect } from "react";
+import { useContext, useState, useEffect } from "react";
 import { SystemHooksContext } from "../providers/SystemHooksProvider";
 
 /**

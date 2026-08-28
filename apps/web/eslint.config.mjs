@@ -20,6 +20,17 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   eslintConfigPrettier,
   {
+    // The service worker is not a browser page and does not have a `window`.
+    // Linting it with the browser globals reported `self` and `caches` as
+    // undefined — seven errors describing the environment wrongly rather
+    // than the code. Its own globals are what it actually runs with.
+    files: ["public/sw.js"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      globals: globals.serviceworker,
+    },
+  },
+  {
     files: ["src/**/*.{ts,tsx}"],
     languageOptions: {
       ecmaVersion: "latest",
@@ -35,6 +46,22 @@ export default tseslint.config(
       "react-refresh": reactRefresh,
     },
     rules: {
+      // An underscore prefix means "deliberately unused" — a parameter kept
+      // because the signature requires it, or a destructured field being
+      // skipped. Without this the only way to satisfy the rule is to delete
+      // the name, which loses the documentation of what that position *is*.
+      // `_sellerActorId` in useGenieSession was already written this way, in
+      // the expectation the convention was configured. It is now.
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+          destructuredArrayIgnorePattern: "^_",
+        },
+      ],
+
       ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": [
         "warn",
