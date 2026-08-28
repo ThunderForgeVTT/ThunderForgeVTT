@@ -93,8 +93,10 @@ pub mod mutations_shapes;
 pub use mutations_shapes::ShapeMutation;
 
 // Native canvas authoring: scene-scoped token mutations
+pub mod mutations_heartbeat;
 pub mod mutations_reconcile;
 pub mod mutations_tokens;
+pub use mutations_heartbeat::{HeartbeatMutation, PresenceQuery};
 pub use mutations_reconcile::ReconcileMutation;
 pub use mutations_tokens::TokenMutation;
 
@@ -2543,6 +2545,7 @@ pub struct CollaboratorMutation;
 
 #[derive(MergedObject, Default)]
 pub struct QueryRoot(
+    PresenceQuery,
     HealthcheckQuery,
     UserQuery,
     AdminQuery,
@@ -2613,6 +2616,7 @@ pub struct MutationRoot(
     ChatMutation,
     CombatMutation,
     ReconcileMutation,
+    HeartbeatMutation,
 );
 
 pub type AppSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;

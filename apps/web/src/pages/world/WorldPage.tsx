@@ -27,6 +27,10 @@ import {
 } from "@/engine/world/sync";
 import { reconcileWorld } from "@/engine/world/sync/offlineQueue";
 import {
+  startHeartbeat,
+  subscribeToHeartbeat,
+} from "@/engine/world/sync/heartbeat";
+import {
   parseReconciledEvent,
   pruneApplied,
   supersededBy,
@@ -989,6 +993,47 @@ export default function WorldPage() {
   // not the catch-up, and not the scene refetch this ref was written for.
   // Being already `live` when we start listening is exactly what "has been
   // live once" means.
+
+  /**
+   * The session heartbeat (spec 028 US7).
+   *
+   * Started for as long as a world is open. It is what tells the server this
+   * client is still at the table — so a Game Master can be told when someone
+   * drops — and what tells this client whether its edits can be sent at all.
+   * The WebSocket cannot answer the second question: `graphql-ws` is lazy and
+   * lets its connection go whenever nothing is subscribed.
+   */
+  useEffect(() => {
+    if (!id) return;
+    const stop = startHeartbeat(id, () => sceneIdRef.current);
+    const unsubscribe = subscribeToHeartbeat((offline) => {
+      if (offline) return;
+      // Recovered. Replay before anything refetches server state, or the
+      // refetch overwrites the local view with the pre-reconcile truth and
+      // the user watches their offline work vanish and reappear.
+      const worldIdNow = idRef.current;
+      if (!worldIdNow) return;
+      void reconcileWorld(worldIdNow)
+        .then((report) => {
+          if (!report) return;
+          appliedRef.current = [
+            ...pruneApplied(appliedRef.current, Date.now()),
+            ...report.applied.map((change) => ({
+              ...change,
+              appliedAt: Date.now(),
+            })),
+          ];
+          setReconcileReport({ ...report, superseded: [] });
+        })
+        .catch(() => {
+          // Everything stays queued and goes again on the next recovery.
+        });
+    });
+    return () => {
+      unsubscribe();
+      stop();
+    };
+  }, [id]);
 
   const wasLiveRef = useRef(false);
   useEffect(() => {

@@ -20,7 +20,7 @@ import {
   queueOfflineChange,
   readQueuedChanges,
 } from "@/engine/bevy";
-import { isDisconnected } from "./subscriptionClient";
+import { isHeartbeatOffline } from "./heartbeat";
 import {
   matchOutcomes,
   remainingAfterInterruption,
@@ -74,9 +74,20 @@ export async function queueEdit(input: {
   return { queued: true };
 }
 
-/** Whether an edit right now should go to the outbox rather than the wire. */
+/**
+ * Whether an edit right now should go to the outbox rather than the wire.
+ *
+ * Keyed on the **heartbeat**, not the WebSocket. `graphql-ws` is lazy and
+ * drops its connection when nothing is subscribed, so socket liveness answers
+ * "is anything listening" rather than "can this client reach the server" —
+ * and using it produced both mistakes: queueing edits during an idle moment
+ * when the server was perfectly reachable, and reporting a live connection
+ * while holding no socket at all, which sent offline edits into a void.
+ *
+ * A heartbeat either arrived or it did not.
+ */
 export function shouldQueue(): boolean {
-  return isDisconnected();
+  return isHeartbeatOffline();
 }
 
 /** What a reconnect did with the queue. */

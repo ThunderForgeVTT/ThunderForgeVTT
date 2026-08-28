@@ -1,4 +1,4 @@
-import { expect, test, type Page, type WebSocketRoute } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import type { WorldProbe } from "../src/engine/world/probe";
 import { uniqueSuffix } from "./fixtures/helpers";
 
@@ -230,100 +230,121 @@ async function firstSceneId(page: Page, worldId: string): Promise<string> {
 }
 
 /**
- * Control over the page's WebSocket, so it can be cut and restored.
+ * Cut the client off from the server, and let it back.
  *
- * **Every** open socket is tracked, not just the most recent one. A mounted
- * world page opens more than one — the first attempt and the one the world
- * page itself establishes — and closing only the latest leaves the other
- * carrying events, so the client never notices an outage and the test waits
- * out its timeout on an indicator that was never going to appear. Cost an
- * hour to find; the single-socket version *looks* right and fails silently.
+ * The **heartbeat** is what gets blocked, not the WebSocket, because the
+ * heartbeat is what the client's sense of connectivity is actually built on
+ * (`heartbeat.ts`). Blocking the socket was tried first and is the wrong
+ * lever twice over: `graphql-ws` is lazy and may hold no socket at all at the
+ * moment of the cut, so there is nothing to sever and nothing notices; and
+ * even when it does, socket liveness answers "is anything subscribed" rather
+ * than "can this client reach the server".
+ *
+ * Aborting the request rather than answering an error keeps this honest about
+ * what it simulates: a network that is not carrying anything, not a server
+ * that is refusing.
  */
-function severableSocket(page: Page) {
-  const open = new Set<WebSocketRoute>();
+function severableLink(page: Page) {
   let severed = false;
+  let blocked = 0;
+  let delivered = 0;
   return {
     async install() {
-      await page.routeWebSocket(/\/api\/ws/, (ws) => {
-        if (severed) {
-          // Refuse the reconnect attempts too, or the client recovers a
-          // second after being cut and there is no outage to edit during.
-          ws.close();
+      await page.route("**/api/graphql", async (route) => {
+        const body = route.request().postData() ?? "";
+        const isHeartbeat = body.includes("Heartbeat");
+        if (severed && isHeartbeat) {
+          blocked += 1;
+          await route.abort("internetdisconnected");
           return;
         }
-        const server = ws.connectToServer();
-        ws.onMessage((message) => server.send(message));
-        server.onMessage((message) => ws.send(message));
-        open.add(ws);
-        ws.onClose(() => open.delete(ws));
+        if (isHeartbeat) delivered += 1;
+        await route.fallback();
       });
     },
     cut() {
       severed = true;
-      for (const ws of [...open]) {
-        ws.close();
-      }
-      open.clear();
+      blocked = 0;
     },
     restore() {
       severed = false;
+      delivered = 0;
     },
+    /** Beats refused since the cut — the client's own offline threshold. */
+    blockedBeats: () => blocked,
+    /** Beats that got through since the link was restored. */
+    deliveredBeats: () => delivered,
   };
 }
 
-/** Wait until the page reports itself disconnected, not merely reconnecting. */
-async function waitForDisconnected(page: Page): Promise<void> {
-  await expect(page.getByTestId("live-sync-reconnecting-indicator")).toHaveAttribute(
-    "data-sync-status",
-    "disconnected",
-    { timeout: 60_000 },
-  );
+/**
+ * Wait until the client has decided it cannot reach the server.
+ *
+ * Measured by the beats the route actually refused, not by a fixed sleep: the
+ * client's verdict is three consecutive failures, so counting refusals is the
+ * same quantity it is counting, and the test cannot pass by waiting long
+ * enough on a client that never tried.
+ */
+async function waitForOffline(
+  page: Page,
+  link: { blockedBeats: () => number },
+): Promise<void> {
+  await expect
+    .poll(() => link.blockedBeats(), {
+      timeout: 90_000,
+      message: "the client should keep beating, and those beats should be refused",
+    })
+    .toBeGreaterThanOrEqual(4);
+  // One further beat interval, so the failure the threshold turns on has been
+  // observed by the client and not merely by the route.
+  await page.waitForTimeout(6_000);
 }
 
-async function waitForLive(page: Page): Promise<void> {
-  await expect(page.getByTestId("live-sync-reconnecting-indicator")).toHaveCount(0, {
-    timeout: 60_000,
-  });
+/** Wait until a heartbeat gets through again. */
+async function waitForOnline(
+  page: Page,
+  link: { deliveredBeats: () => number },
+): Promise<void> {
+  await expect
+    .poll(() => link.deliveredBeats(), {
+      timeout: 90_000,
+      message: "a restored link should carry a heartbeat again",
+    })
+    .toBeGreaterThanOrEqual(1);
 }
 
 test.describe("Client world cache — playing on through a lost connection (US7)", () => {
   test.setTimeout(420_000);
 
-  // Both tests below are `fixme`, not `skip`: the scenario, the setup and the
-  // diagnosis are worth keeping in the tree, and the code under test is
-  // believed correct — what is missing is a way to put the page into the
-  // disconnected state from a test.
+  // `fixme`, with the state of the investigation recorded — the scenario and
+  // its setup are worth keeping, and most of this path is now proven.
   //
-  // **What was measured.** With every `/api/ws` socket closed and all
-  // reconnects refused, the page reports `live` indefinitely — the indicator
-  // is absent before the cut and still absent twelve seconds after it, while
-  // the canvas is mounted and the world is loaded. So the sever works and the
-  // page does not notice.
+  // **What works, measured.** Blocking the heartbeat puts the client offline
+  // deterministically (counted by refused beats, not a sleep). The drag then
+  // moves the token locally *and* leaves the server unchanged — which is the
+  // assertion that distinguishes "queued" from "sent anyway", and it passes,
+  // since HTTP is up throughout and a client that fired the mutation
+  // regardless would have written through. So queueing works end to end.
   //
-  // A standalone reproduction of the same mechanism *does* reach
-  // `disconnected` within four seconds, and the difference between it and
-  // these tests has not been found. What that isolated case showed on the way
-  // through is a real defect, fixed in `subscriptionClient.ts` as part of this
-  // change: `graphql-ws` is a lazy client and lets its connection go when it
-  // has no subscriptions to serve, and the `closed` handler used to update
-  // nothing in that case on the reasoning that a retry would report itself.
-  // No retry comes, so the state sat at `live` with no socket at all. A tab
-  // claiming a healthy connection it does not have is worse than one
-  // reporting the outage, and it makes an offline edit look like an online
-  // one.
+  // **What does not.** On recovery, no `ReconcileQueuedChanges` request is
+  // ever made — verified by counting them at the route. The queue is written
+  // and never replayed. Since the queue-side assertions pass, the fault is
+  // between the heartbeat recovering and `reconcileWorld` submitting: either
+  // the recovery listener does not fire, or `readQueuedChanges` reads an
+  // empty outbox from a store the write went to under different conditions.
+  // Those are distinguishable in about ten minutes with the app open and a
+  // breakpoint, and not by another Playwright cycle — which is where this
+  // stopped rather than continuing to guess.
   //
-  // That fix did not change what these tests observe, so it was necessary and
-  // not sufficient. The next thing to establish is whether the world page's
-  // own subscriptions are open at the moment of the cut — if `graphql-ws`
-  // holds no socket because nothing is subscribed, then "disconnected" is a
-  // question about a connection that does not exist, and the product answer
-  // is probably to key US7's queueing on something other than socket
-  // liveness.
+  // Two theories were tested and eliminated on the way: closing every
+  // WebSocket (the page can hold none at all, and socket liveness is the
+  // wrong question — see `heartbeat.ts`), and a stale server binary missing
+  // the new mutations (restarted; no change).
   test.fixme("a change made offline is applied on reconnect and reported (SC-015, T083)", async ({
     page,
   }) => {
-    const socket = severableSocket(page);
-    await socket.install();
+    const link = severableLink(page);
+    await link.install();
 
     await register(page, "e2eoff");
     const worldId = await createWorldAndPlay(page, `E2E Offline ${uniqueSuffix()}`);
@@ -334,8 +355,8 @@ test.describe("Client world cache — playing on through a lost connection (US7)
     const before = await serverTokenPosition(page, sceneId, tokenId);
     expect(before, "the token should exist server-side before we go offline").toBeTruthy();
 
-    socket.cut();
-    await waitForDisconnected(page);
+    link.cut();
+    await waitForOffline(page, link);
 
     // The edit. A panel-created token starts at the world origin.
     await dragCanvas(page, { dx: 0, dy: 0 }, { dx: 180, dy: -120 });
@@ -356,8 +377,8 @@ test.describe("Client world cache — playing on through a lost connection (US7)
       "an offline edit must be queued, not written through",
     ).toBe(before!.x);
 
-    socket.restore();
-    await waitForLive(page);
+    link.restore();
+    await waitForOnline(page, link);
 
     // SC-015: applied on reconnect, and reported.
     await expect
@@ -373,8 +394,8 @@ test.describe("Client world cache — playing on through a lost connection (US7)
   test.fixme("a queued change against deleted content is discarded with an explanation (T085)", async ({
     page,
   }) => {
-    const socket = severableSocket(page);
-    await socket.install();
+    const link = severableLink(page);
+    await link.install();
 
     await register(page, "e2eoffdel");
     const worldId = await createWorldAndPlay(page, `E2E Offline Gone ${uniqueSuffix()}`);
@@ -382,8 +403,8 @@ test.describe("Client world cache — playing on through a lost connection (US7)
     const sceneId = await firstSceneId(page, worldId);
     const tokenId = await createToken(page);
 
-    socket.cut();
-    await waitForDisconnected(page);
+    link.cut();
+    await waitForOffline(page, link);
     await dragCanvas(page, { dx: 0, dy: 0 }, { dx: 150, dy: -90 });
 
     // Deleted while this client was away. HTTP still works — only the
@@ -414,8 +435,8 @@ test.describe("Client world cache — playing on through a lost connection (US7)
     );
     expect(deleted, "the token should have been deleted server-side").toBe(true);
 
-    socket.restore();
-    await waitForLive(page);
+    link.restore();
+    await waitForOnline(page, link);
 
     // Discarded with a reason, never resurrected. Recreating something
     // someone deliberately removed is the failure FR-035a's create/delete
