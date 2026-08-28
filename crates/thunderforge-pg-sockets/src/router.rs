@@ -123,10 +123,28 @@ impl<T: Clone> WorldRouter<T> {
     /// between a subscriber appearing and its first event is simply recreated
     /// by the next `subscribe`, and the subscriber that lost its channel sees
     /// a closed receiver, which every caller already treats as "resync".
+    ///
+    /// The count is of entries this call actually dropped, taken as they are
+    /// dropped. It used to be `len()` before minus `len()` after, which is a
+    /// different quantity the moment anyone subscribes concurrently — and
+    /// somebody always does, since reaping runs on a timer against a live
+    /// server. One new world entering the map during the retain makes the
+    /// second `len()` the larger of the two, and an unsigned subtraction of
+    /// two independently-observed lengths then panics the worker thread in a
+    /// debug build and reports a nonsense count near `usize::MAX` in a
+    /// release one. Observed: a panic here took out a `tokio-rt-worker`
+    /// between "Released 2 idle world channel(s)" and a burst of new
+    /// subscriptions.
     pub fn reap(&self) -> usize {
-        let before = self.routes.len();
-        self.routes.retain(|_, tx| tx.receiver_count() > 0);
-        before - self.routes.len()
+        let mut reaped = 0;
+        self.routes.retain(|_, tx| {
+            let keep = tx.receiver_count() > 0;
+            if !keep {
+                reaped += 1;
+            }
+            keep
+        });
+        reaped
     }
 
     /// How many worlds currently have at least one channel.
@@ -160,6 +178,61 @@ mod tests {
 
         assert_eq!(router.publish(world(1), 42), 1);
         assert_eq!(rx.try_recv().unwrap(), 42);
+    }
+
+    /// Reaping while somebody subscribes must not panic, and must not lie.
+    ///
+    /// This is the shape the server actually runs: reaping is on a timer
+    /// against a live process, so new worlds arrive in the middle of it. The
+    /// old count — `len()` before minus `len()` after — turned that ordinary
+    /// overlap into an unsigned underflow, which panicked the worker thread
+    /// in a debug build. Threads rather than a contrived injection point,
+    /// because the race is between the retain and an insert and there is no
+    /// seam between them to hook.
+    #[test]
+    fn reaping_survives_worlds_appearing_while_it_runs() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::thread;
+
+        let router: Arc<WorldRouter<i32>> = Arc::new(WorldRouter::new());
+
+        // 64 dead worlds for reap to find, so it has real work to do.
+        for n in 0..64 {
+            drop(router.subscribe(world(n)));
+        }
+
+        let stop = Arc::new(AtomicBool::new(false));
+        let subscriber = {
+            let router = Arc::clone(&router);
+            let stop = Arc::clone(&stop);
+            thread::spawn(move || {
+                // Held, so these worlds are live and must survive the reap.
+                let mut held = Vec::new();
+                let mut n = 1_000u128;
+                while !stop.load(Ordering::Relaxed) {
+                    held.push(router.subscribe(world(n)));
+                    n += 1;
+                }
+                held.len()
+            })
+        };
+
+        let mut reaped = 0;
+        for _ in 0..200 {
+            reaped += router.reap();
+        }
+        stop.store(true, Ordering::Relaxed);
+        let added = subscriber.join().expect("the subscriber thread must not panic");
+
+        assert_eq!(
+            reaped, 64,
+            "reap must report the entries it actually dropped, however many \
+             worlds appeared while it was running",
+        );
+        assert!(
+            router.active_worlds() >= 1,
+            "worlds with a live receiver must survive the reap ({added} were added)",
+        );
     }
 
     #[test]
