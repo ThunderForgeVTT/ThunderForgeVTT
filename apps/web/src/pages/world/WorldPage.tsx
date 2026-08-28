@@ -25,6 +25,11 @@ import {
   subscribeToWorldEvents,
   type LiveSyncState,
 } from "@/engine/world/sync";
+import {
+  reconcileWorld,
+  type ReconcileReport as OfflineReconcileReport,
+} from "@/engine/world/sync/offlineQueue";
+import { ReconcileReport } from "@/components/world/ReconcileReport";
 import { useCanvasEngine } from "@/engine/bevy/useCanvasEngine";
 import { EngineLoader } from "@/components/engine/EngineLoader";
 import { getWorld } from "@/api/world";
@@ -689,6 +694,9 @@ export default function WorldPage() {
       worldStore,
       sceneId,
       isSceneOwner,
+      // Spec 028 US7: the bridge needs the world to queue an edit against
+      // when there is nowhere to send it.
+      id,
     );
 
     return () => {
@@ -702,6 +710,8 @@ export default function WorldPage() {
     sceneLoadGeneration,
     markSceneResourceLoaded,
     markSceneResourceFailed,
+    // The world the token bridge queues offline edits against (spec 028 US7).
+    id,
   ]);
 
   useEffect(() => {
@@ -892,6 +902,8 @@ export default function WorldPage() {
   // not the catch-up, and not the scene refetch this ref was written for.
   // Being already `live` when we start listening is exactly what "has been
   // live once" means.
+  const [reconcileReport, setReconcileReport] =
+    useState<OfflineReconcileReport | null>(null);
   const wasLiveRef = useRef(false);
   useEffect(() => {
     // Read when the listener is actually attached, not during render: the
@@ -920,6 +932,23 @@ export default function WorldPage() {
         // reconnect now recovers the whole world rather than four of its
         // tables. When the gap is too large to replay the server says so, and
         // the full refetch below is the fallback that already existed.
+        // Spec 028 US7: replay what was edited while there was nowhere to
+        // send it, before the loaders below refetch server state — otherwise
+        // a refetch would overwrite the local view with the pre-reconcile
+        // truth and the user would watch their offline work vanish and then
+        // reappear.
+        if (wasLiveRef.current && worldIdNow) {
+          void reconcileWorld(worldIdNow)
+            .then((report) => {
+              if (report) setReconcileReport(report);
+            })
+            .catch(() => {
+              // Everything stays queued and goes again next reconnect. The
+              // user has already been told they were offline; a second
+              // failure notice here would be noise they cannot act on.
+            });
+        }
+
         if (wasLiveRef.current && worldIdNow) {
           void catchUpWorldEvents(worldIdNow)
             .then((outcome) => {
@@ -1320,6 +1349,28 @@ export default function WorldPage() {
                         ? "Offline — your changes are saved here and will sync when you reconnect"
                         : "Can't reach the server — your changes are saved here and will sync when it's back"
                       : `Reconnecting… (attempt ${liveSyncState.attempt})`}
+                </div>
+              ) : null}
+              {reconcileReport ? (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "4rem",
+                    right: "4rem",
+                    zIndex: 1000,
+                    maxWidth: "22rem",
+                  }}
+                >
+                  <ReconcileReport
+                    applied={reconcileReport.applied}
+                    rejected={reconcileReport.rejected}
+                    unanswered={reconcileReport.unanswered}
+                    // Supersession that happens *later* arrives as a world
+                    // event, not in this report; the list here is what the
+                    // reconcile call itself refused as superseded.
+                    superseded={[]}
+                    onDismiss={() => setReconcileReport(null)}
+                  />
                 </div>
               ) : null}
               {isSceneOwner && sceneId ? (

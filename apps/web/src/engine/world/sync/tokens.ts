@@ -46,7 +46,8 @@
 import { createToken, deleteToken, getTokens, moveOwnToken, updateToken } from "@/api/tokens";
 import type { TokenRecord, UpdateTokenInput } from "@/types/token";
 import type { WorldStore } from "../store";
-import type { WorldToken } from "../types";
+import type { WorldCommand, WorldToken } from "../types";
+import { queueEdit, shouldQueue } from "./offlineQueue";
 
 type WorldEventLike = {
   event_code?: number;
@@ -196,10 +197,45 @@ export async function loadTokensIntoStore(
  * handles rendered for non-GMs, per FR-010), so a non-GM's `upsert_token`
  * commands are position-only by construction.
  */
+/**
+ * Spec 028 US7: while disconnected, a token edit goes to the outbox instead
+ * of the wire.
+ *
+ * This is the right seam for it because every token edit already funnels
+ * through here — the alternative, hooking each call site, is how one path
+ * ends up queueing and another silently dropping. The command is stored
+ * exactly as the store emitted it, which is what lets the server replay it
+ * through the ordinary mutation on reconnect.
+ *
+ * Creation is deliberately **not** queued (FR-035a): the bridge's create
+ * branch is skipped entirely while offline, because precedence cannot settle
+ * a create racing a delete without destroying work nobody can see was
+ * destroyed. The user is told by `WorldPage`'s indicator, which is already
+ * saying that changes are being held.
+ */
+async function queueTokenEditWhileOffline(
+  worldId: string,
+  command: WorldCommand,
+  isGameMaster: boolean,
+): Promise<boolean> {
+  const attempt = await queueEdit({
+    worldId,
+    localId: crypto.randomUUID(),
+    kind: "move",
+    command,
+    isGameMaster,
+  });
+  if (!attempt.queued && attempt.explanation) {
+    console.warn("[offline] change not queued:", attempt.explanation);
+  }
+  return attempt.queued;
+}
+
 export function startTokenMutationBridge(
   worldStore: WorldStore,
   sceneId: string,
   isSceneOwner: boolean,
+  worldId?: string,
 ): () => void {
   const engineIdToTokenId = new Map<string, string>();
   const creating = new Set<string>();
@@ -225,8 +261,26 @@ export function startTokenMutationBridge(
     if (command.type === "upsert_token") {
       const { token } = command;
 
-      void ready.then(() => {
+      void ready.then(async () => {
         const knownTokenId = engineIdToTokenId.get(token.id);
+
+        // US7. Asked before anything is sent, rather than after a mutation
+        // fails: firing into a dead socket costs a timeout per edit before
+        // the user sees their token move, which is what makes offline play
+        // feel broken rather than merely disconnected.
+        if (worldId && shouldQueue()) {
+          if (!knownTokenId) {
+            // A token this scene has never seen is a creation, and FR-035a
+            // refuses those offline.
+            return;
+          }
+          await queueTokenEditWhileOffline(
+            worldId,
+            { type: "upsert_token", token: { ...token, id: knownTokenId } } as WorldCommand,
+            isSceneOwner,
+          );
+          return;
+        }
 
         if (knownTokenId) {
           if (isSceneOwner) {
