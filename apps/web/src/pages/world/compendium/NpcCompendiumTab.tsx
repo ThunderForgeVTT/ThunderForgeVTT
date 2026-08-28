@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { Link } from "react-router-dom";
 import { createActor, getWorldActors } from "@/api/actors";
 import { indexActors, searchActorIds } from "@/search/actorSearch";
@@ -72,10 +73,19 @@ export function NpcCompendiumTab({
     }
   };
 
+  // Reset during render rather than at the top of the effect below: this
+  // is state derived from the arguments, and doing it in the effect commits
+  // one render pairing the new key with the previous key's data.
+  useResetOnChange(
+    `${worldId}|${refreshKey ?? ""}|${internalRefreshTick}`,
+    () => {
+      setActors(null);
+      setError(null);
+    },
+  );
+
   useEffect(() => {
     let active = true;
-    setActors(null);
-    setError(null);
 
     getWorldActors(worldId)
       .then((result) => {

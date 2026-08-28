@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { createActorShareLink, revokeActorShareLink } from "@/api/actorShares";
 import {
@@ -58,9 +59,15 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
   const { isGm: isDm } = useWorldRole(worldId, world);
   const { user } = useAuth();
 
+  // Reset during render rather than at the top of the effect below: this
+  // is state derived from the arguments, and doing it in the effect commits
+  // one render pairing the new key with the previous key's data.
+  useResetOnChange(`${worldId}|${actorId}`, () => {
+    setIsLoading(true);
+  });
+
   useEffect(() => {
     let active = true;
-    setIsLoading(true);
 
     Promise.all([getWorld(worldId), getActor(worldId, actorId)])
       .then(([worldResult, actorResult]) => {

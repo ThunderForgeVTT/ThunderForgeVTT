@@ -269,6 +269,16 @@ export default function WorldPage() {
       "lights",
       "shapes",
     ]);
+    // Deliberately left in the effect: this reset is one atomic step with
+    // the `pendingSceneResourcesRef` write above it, and a ref cannot be
+    // written during render (react-hooks/refs). Hoisting only the state half
+    // would leave a window where the status says "loading" for the new scene
+    // while the pending set is still the old scene's — and the pending set is
+    // what decides when the overlay lifts, so an in-flight loader resolving
+    // into that window would empty it and report a scene ready that had not
+    // started loading. The two belong together, in the commit phase, where
+    // the loader effects below see the same state they report into.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSceneLoadState({ status: "loading" });
   }, [sceneId, sceneLoadGeneration]);
 
@@ -329,12 +339,20 @@ export default function WorldPage() {
   // not we found one. The scene-load state below needs "we looked and there
   // is nothing" — resolving on "we have not looked yet" would clear the
   // loading overlay before the answer was known.
-  const [sceneRecordSettledFor, setSceneRecordSettledFor] = useState<
+  // Only the by-id fetch's outcome is state. A scene the world's own list
+  // already contains has been "looked for" by definition, and that is
+  // derived below rather than written from inside the effect that notices
+  // it (react-hooks/set-state-in-effect).
+  const [sceneRecordFetchedFor, setSceneRecordFetchedFor] = useState<
     string | null
   >(null);
+  const sceneIsInWorldList = scenes.some((scene) => scene.sceneId === sceneId);
   const selectedScene =
     scenes.find((scene) => scene.sceneId === sceneId) ??
     (activeSceneRecord?.sceneId === sceneId ? activeSceneRecord : null);
+  const sceneRecordSettledFor = sceneIsInWorldList
+    ? sceneId
+    : sceneRecordFetchedFor;
 
   useEffect(() => {
     if (!id) {
@@ -404,9 +422,9 @@ export default function WorldPage() {
     if (!sceneId || scenesFetchedForWorld !== id) {
       return;
     }
-    if (scenes.some((scene) => scene.sceneId === sceneId)) {
-      setActiveSceneRecord(null);
-      setSceneRecordSettledFor(sceneId);
+    // Already in the world's list — no by-id fetch to make, and
+    // `sceneRecordSettledFor` above already reads as settled for it.
+    if (sceneIsInWorldList) {
       return;
     }
     if (activeSceneRecord?.sceneId === sceneId) {
@@ -429,14 +447,20 @@ export default function WorldPage() {
       })
       .finally(() => {
         if (active) {
-          setSceneRecordSettledFor(sceneId);
+          setSceneRecordFetchedFor(sceneId);
         }
       });
 
     return () => {
       active = false;
     };
-  }, [sceneId, scenes, scenesFetchedForWorld, id, activeSceneRecord]);
+  }, [
+    sceneId,
+    sceneIsInWorldList,
+    scenesFetchedForWorld,
+    id,
+    activeSceneRecord,
+  ]);
 
   // Spec 009: stabilized with useCallback — useCanvasEngine's mount effect
   // depends on this callback's identity (see useCanvasEngine.ts), so a
@@ -482,7 +506,14 @@ export default function WorldPage() {
   // <body>, plus applying playViewRef's current value whenever a canvas
   // shows up, catches it regardless of timing.
   const playViewRef = useRef(playView);
-  playViewRef.current = playView;
+  // Synced in an effect rather than assigned during render: a ref write
+  // while rendering is exactly what `react-hooks/refs` warns about under a
+  // render React may discard. The initial value is already in the ref, and
+  // this effect is declared above both readers below, so it commits before
+  // either of them can observe a stale value.
+  useEffect(() => {
+    playViewRef.current = playView;
+  }, [playView]);
 
   const applyCanvasVisibility = useCallback((canvas: HTMLCanvasElement) => {
     if (playViewRef.current === "playing") {

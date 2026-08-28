@@ -29,6 +29,7 @@
  */
 
 import { useEffect, useState, useCallback } from "react";
+import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { fetchActorSystemData } from "@/api/actorSystemData";
 
 function fromGraphQLRecord(
@@ -109,32 +110,67 @@ export function useActorSystemData(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  const load = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  // Deliberately writes no state: the mount/args effect below has to be able
+  // to call it without a synchronous setState
+  // (react-hooks/set-state-in-effect).
+  const query = useCallback(async (): Promise<ActorSystemData | null> => {
+    const remote = await fetchActorSystemData(actorId);
+    if (!remote || (gameSystemId && remote.gameSystemId !== gameSystemId)) {
+      return null;
+    }
+    return fromGraphQLRecord(remote);
+  }, [actorId, gameSystemId]);
 
-      const remote = await fetchActorSystemData(actorId);
-      if (!remote || (gameSystemId && remote.gameSystemId !== gameSystemId)) {
-        setData(null);
-      } else {
-        setData(fromGraphQLRecord(remote));
-      }
-      setLoading(false);
+  // Different actor/system: loading again, no stale error. Done during render
+  // (see useResetOnChange) rather than at the top of the effect below.
+  useResetOnChange(`${actorId}|${gameSystemId ?? ""}`, () => {
+    setLoading(true);
+    setError(null);
+  });
+
+  useEffect(() => {
+    let active = true;
+    query()
+      .then((result) => {
+        if (active) {
+          setData(result);
+          setError(null);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        const error = err instanceof Error ? err : new Error(String(err));
+        if (active) {
+          setError(error);
+          setData(null);
+          setLoading(false);
+        }
+        console.error("[useActorSystemData] Query failed:", error);
+      });
+    // The `active` guard is new with this restructure and fixes a real race:
+    // before it, a slow response for a previously-requested actor could land
+    // after a faster one for the current actor and overwrite it.
+    return () => {
+      active = false;
+    };
+  }, [query]);
+
+  const refetch = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setData(await query());
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       setError(error);
       setData(null);
-      setLoading(false);
       console.error("[useActorSystemData] Query failed:", error);
+    } finally {
+      setLoading(false);
     }
-  }, [actorId, gameSystemId]);
+  }, [query]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  return { data, loading, error, refetch: load };
+  return { data, loading, error, refetch };
 }
 
 /**

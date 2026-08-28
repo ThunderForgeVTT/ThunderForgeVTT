@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { deleteLoreEntry, getLoreEntry, updateLoreEntry } from "@/api/lore";
 import { getWorld } from "@/api/world";
@@ -48,9 +49,15 @@ export default function LoreEntryDetailPage({
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const { isGm: isDm } = useWorldRole(worldId, world);
 
+  // Reset during render rather than at the top of the effect below: this
+  // is state derived from the arguments, and doing it in the effect commits
+  // one render pairing the new key with the previous key's data.
+  useResetOnChange(`${worldId}|${slug}`, () => {
+    setEntry(undefined);
+  });
+
   useEffect(() => {
     let active = true;
-    setEntry(undefined);
 
     Promise.all([getWorld(worldId), getLoreEntry(worldId, slug)])
       .then(([worldResult, entryResult]) => {

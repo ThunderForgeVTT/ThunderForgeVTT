@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { Link } from "react-router-dom";
 import {
   getScene,
@@ -43,9 +44,15 @@ export function SceneDetailPage({
   const [isLaunching, setIsLaunching] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
+  // Reset during render rather than at the top of the effect below: this
+  // is state derived from the arguments, and doing it in the effect commits
+  // one render pairing the new key with the previous key's data.
+  useResetOnChange(sceneId, () => {
+    setScene(undefined);
+  });
+
   useEffect(() => {
     let active = true;
-    setScene(undefined);
 
     getScene(sceneId)
       .then((result) => {

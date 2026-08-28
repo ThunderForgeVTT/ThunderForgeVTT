@@ -29,7 +29,6 @@ import React, {
   createContext,
   useContext,
   useCallback,
-  useRef,
   useState,
 } from "react";
 
@@ -95,13 +94,19 @@ const GameSystemContext = createContext<GameSystemContextValue | undefined>(
  * Wrap your app with this to enable useGameSystemManifest hook
  */
 export function GameSystemProvider({ children }: { children: ReactNode }) {
-  const cacheRef = useRef<Map<string, SystemManifest>>(new Map());
+  // One Map for the provider's lifetime, mutated in place — a ref in every
+  // respect except that it is handed out on the context value below and so
+  // is read during consumers' renders, which `react-hooks/refs` rightly
+  // rejects for a ref. A lazily-initialised state value is just as stable
+  // and legal to read while rendering. `setRefresh` remains the way a fill
+  // or a clear is announced, exactly as before.
+  const [cache] = useState<Map<string, SystemManifest>>(() => new Map());
   const [, setRefresh] = useState(0);
 
   const loadManifest = useCallback(
     async (systemId: string): Promise<SystemManifest> => {
       // Check cache first
-      const cached = cacheRef.current.get(systemId);
+      const cached = cache.get(systemId);
       if (cached) {
         return cached;
       }
@@ -130,7 +135,7 @@ export function GameSystemProvider({ children }: { children: ReactNode }) {
         const manifest = module[manifestKey] as SystemManifest;
 
         // Cache and return
-        cacheRef.current.set(systemId, manifest);
+        cache.set(systemId, manifest);
         setRefresh((n) => n + 1); // Trigger re-render for subscriptions
         return manifest;
       } catch (error) {
@@ -141,30 +146,33 @@ export function GameSystemProvider({ children }: { children: ReactNode }) {
         throw error;
       }
     },
-    [],
+    [cache],
   );
 
   const getCachedManifest = useCallback(
     (systemId: string): SystemManifest | null => {
-      return cacheRef.current.get(systemId) ?? null;
+      return cache.get(systemId) ?? null;
     },
-    [],
+    [cache],
   );
 
-  const clearCache = useCallback((systemId?: string) => {
-    if (systemId) {
-      cacheRef.current.delete(systemId);
-    } else {
-      cacheRef.current.clear();
-    }
-    setRefresh((n) => n + 1);
-  }, []);
+  const clearCache = useCallback(
+    (systemId?: string) => {
+      if (systemId) {
+        cache.delete(systemId);
+      } else {
+        cache.clear();
+      }
+      setRefresh((n) => n + 1);
+    },
+    [cache],
+  );
 
   const value: GameSystemContextValue = {
     loadManifest,
     getCachedManifest,
     clearCache,
-    manifestCache: cacheRef.current,
+    manifestCache: cache,
   };
 
   return (
@@ -198,41 +206,48 @@ export function useGameSystemManifest(systemId: string) {
     );
   }
 
-  const [manifest, setManifest] = useState<SystemManifest | null>(
-    context.getCachedManifest(systemId),
-  );
-  const [loading, setLoading] = useState(!manifest);
-  const [error, setError] = useState<Error | null>(null);
+  // A cache hit is not something to copy into state from an effect: it is
+  // already available while rendering, and mirroring it cost a second render
+  // (and, on a systemId change, one render still showing the previous
+  // system's manifest). Only the outcome of an actual load is state, and it
+  // is stored with the systemId it belongs to so a late response for a
+  // system we have since navigated away from can never be read as this one's.
+  const cached = context.getCachedManifest(systemId);
+  const [loaded, setLoaded] = useState<{
+    systemId: string;
+    manifest: SystemManifest | null;
+    error: Error | null;
+  } | null>(null);
+
+  const settled = loaded?.systemId === systemId ? loaded : null;
+  const manifest = cached ?? settled?.manifest ?? null;
+  const error = settled?.error ?? null;
+  const loading = !manifest && !error;
 
   React.useEffect(() => {
-    // If already loaded, use cached version
-    const cached = context.getCachedManifest(systemId);
-    if (cached) {
-      setManifest(cached);
-      setLoading(false);
+    // Already cached: `manifest` above is serving it, nothing to load.
+    if (context.getCachedManifest(systemId)) {
       return;
     }
 
-    // Load manifest
     let isMounted = true;
 
-    (async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const loaded = await context.loadManifest(systemId);
-
+    context
+      .loadManifest(systemId)
+      .then((result) => {
         if (isMounted) {
-          setManifest(loaded);
-          setLoading(false);
+          setLoaded({ systemId, manifest: result, error: null });
         }
-      } catch (err) {
+      })
+      .catch((err) => {
         if (isMounted) {
-          setError(err instanceof Error ? err : new Error(String(err)));
-          setLoading(false);
+          setLoaded({
+            systemId,
+            manifest: null,
+            error: err instanceof Error ? err : new Error(String(err)),
+          });
         }
-      }
-    })();
+      });
 
     return () => {
       isMounted = false;

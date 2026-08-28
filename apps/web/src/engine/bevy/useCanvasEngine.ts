@@ -55,7 +55,11 @@ export function useCanvasEngine(
 ): UseCanvasEngineResult {
   const containerRef = useRef<HTMLDivElement>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
-  const engineRef = useRef<any>(null);
+  // The mounted engine is state, not a ref: it is returned to the caller and
+  // therefore read during render, which `react-hooks/refs` rightly rejects
+  // for a ref. It is set in the same tick as `engineReady` below, so nothing
+  // about when callers see it changes.
+  const [engine, setEngine] = useState<any>(null);
   const [engineReady, setEngineReady] = useState(false);
   const [loadStage, setLoadStage] = useState<EngineLoadStage>("downloading");
   const [loadProgress, setLoadProgress] = useState<EngineLoadProgress | null>(
@@ -81,7 +85,7 @@ export function useCanvasEngine(
 
     const mountAsync = async () => {
       try {
-        const engine = await mountEngine(
+        const mounted = await mountEngine(
           {
             canvasSelector: options.canvasSelector,
             worldId: options.worldId,
@@ -90,7 +94,7 @@ export function useCanvasEngine(
           setLoadProgress,
         );
 
-        engineRef.current = engine;
+        setEngine(mounted);
         setEngineReady(true);
       } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err));
@@ -165,7 +169,7 @@ export function useCanvasEngine(
 
   return {
     containerRef,
-    engine: engineRef.current,
+    engine,
     engineReady,
     loadStage,
     loadProgress,

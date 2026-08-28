@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { Link } from "react-router-dom";
 import { createScene, getScenes } from "@/api/scenes";
 import { Badge } from "@/components/ui/badge";
@@ -27,10 +28,16 @@ export function ScenesPage({ worldId, isGm }: ScenesPageProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let active = true;
+  // Reset during render rather than at the top of the effect below: this
+  // is state derived from the arguments, and doing it in the effect commits
+  // one render pairing the new key with the previous key's data.
+  useResetOnChange(`${worldId}|${refreshTick}`, () => {
     setScenes(null);
     setError(null);
+  });
+
+  useEffect(() => {
+    let active = true;
 
     getScenes(worldId)
       .then((result) => {

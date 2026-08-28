@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { Navigate, useParams } from "react-router-dom";
 import { getWorld } from "@/api/world";
 import { SEO } from "@/components/seo/SEO";
@@ -21,9 +22,15 @@ export default function SceneDetailRoutePage() {
   const [isLoading, setIsLoading] = useState(true);
   const { isGm } = useWorldRole(worldId, world);
 
+  // Reset during render rather than at the top of the effect below: this
+  // is state derived from the arguments, and doing it in the effect commits
+  // one render pairing the new key with the previous key's data.
+  useResetOnChange(worldId, () => {
+    setIsLoading(true);
+  });
+
   useEffect(() => {
     let active = true;
-    setIsLoading(true);
 
     getWorld(worldId)
       .then((result) => {

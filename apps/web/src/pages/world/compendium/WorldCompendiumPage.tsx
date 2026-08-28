@@ -63,9 +63,12 @@ export function WorldCompendiumPage({
   // presentation facets. `undefined` (no system, no facets block, or a failed
   // manifest fetch) means every classification renders its built-in default
   // label — the resolver is total, so this never needs a loading state.
-  const [abilityFacets, setAbilityFacets] = useState<
-    AbilityFacetsLookup | undefined
-  >(undefined);
+  // Kept with the system it was fetched for: which facets are in force is
+  // then derived during render, rather than reset from inside the effect.
+  const [loadedAbilityFacets, setLoadedAbilityFacets] = useState<{
+    gameSystemId: string;
+    facets: AbilityFacetsLookup | undefined;
+  } | null>(null);
   const { isGm } = useWorldRole(worldId, world);
 
   // Spec 021: the header blurb is GM-authored Markdown (a reserved lore
@@ -93,32 +96,37 @@ export function WorldCompendiumPage({
     };
   }, [worldId]);
 
+  const gameSystemId = world?.gameSystemId;
+  const abilityFacets =
+    gameSystemId && loadedAbilityFacets?.gameSystemId === gameSystemId
+      ? loadedAbilityFacets.facets
+      : undefined;
+
   useEffect(() => {
-    const gameSystemId = world?.gameSystemId;
     if (!gameSystemId) {
-      setAbilityFacets(undefined);
       return;
     }
     let active = true;
     getGameSystemManifest(gameSystemId)
       .then((manifest) => {
         if (active) {
-          setAbilityFacets(
-            manifest.abilityFacets as AbilityFacetsLookup | undefined,
-          );
+          setLoadedAbilityFacets({
+            gameSystemId,
+            facets: manifest.abilityFacets as AbilityFacetsLookup | undefined,
+          });
         }
       })
       .catch(() => {
         // A manifest fetch failure degrades to default labels rather than
         // breaking the tab.
         if (active) {
-          setAbilityFacets(undefined);
+          setLoadedAbilityFacets({ gameSystemId, facets: undefined });
         }
       });
     return () => {
       active = false;
     };
-  }, [world?.gameSystemId]);
+  }, [gameSystemId]);
 
   const selectedActor = useMemo(
     () => roster.find((actor) => actor.id === selectedActorId) ?? null,

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { Link } from "react-router-dom";
 import { createLoreEntry, getWorldLoreEntries } from "@/api/lore";
 import { COMPENDIUM_OVERVIEW_SLUG } from "@/api/compendiumOverview";
@@ -29,10 +30,16 @@ export function LoreCompendiumTab({ worldId, isGm }: LoreCompendiumTabProps) {
   const [newTitle, setNewTitle] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
-  useEffect(() => {
-    let active = true;
+  // Reset during render rather than at the top of the effect below: this
+  // is state derived from the arguments, and doing it in the effect commits
+  // one render pairing the new key with the previous key's data.
+  useResetOnChange(`${worldId}|${refreshTick}`, () => {
     setEntries(null);
     setError(null);
+  });
+
+  useEffect(() => {
+    let active = true;
 
     getWorldLoreEntries(worldId)
       .then((result) => {

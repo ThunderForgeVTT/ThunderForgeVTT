@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { Link } from "react-router-dom";
 import {
   createAbility,
@@ -65,7 +66,15 @@ export function AbilityCompendiumTab({
   const [newClassification, setNewClassification] =
     useState<AbilityClassification>("SPELL");
   const [isCreating, setIsCreating] = useState(false);
-  const [suggestion, setSuggestion] = useState<WorldAbilityRecord | null>(null);
+  // Stored against the name it was looked up for. Whether a suggestion is
+  // showing right now is then a render-time question ("is this still the
+  // name we asked about, and is it still long enough to ask?"), so the
+  // effect below never has to null it back out.
+  const [loadedSuggestion, setLoadedSuggestion] = useState<{
+    worldId: string;
+    query: string;
+    match: WorldAbilityRecord | null;
+  } | null>(null);
 
   const handleAdd = async () => {
     const name = newName.trim();
@@ -82,17 +91,23 @@ export function AbilityCompendiumTab({
       });
       setNewName("");
       setNewDescription("");
-      setSuggestion(null);
+      setLoadedSuggestion(null);
       setRefreshTick((current) => current + 1);
     } finally {
       setIsCreating(false);
     }
   };
 
-  useEffect(() => {
-    let active = true;
+  // Reset during render rather than at the top of the effect below: this
+  // is state derived from the arguments, and doing it in the effect commits
+  // one render pairing the new key with the previous key's data.
+  useResetOnChange(`${worldId}|${query}|${refreshTick}`, () => {
     setAbilities(null);
     setError(null);
+  });
+
+  useEffect(() => {
+    let active = true;
 
     getWorldAbilities(worldId, query || undefined)
       .then((result) => {
@@ -116,10 +131,18 @@ export function AbilityCompendiumTab({
 
   // FR-007: non-blocking "did you mean?" as the DM types — debounced, and it
   // never blocks handleAdd. Duplicate names are explicitly allowed (FR-006).
+  const suggestionQuery = newName.trim();
+  const suggestion =
+    isGm &&
+    suggestionQuery.length >= 2 &&
+    loadedSuggestion?.worldId === worldId &&
+    loadedSuggestion.query === suggestionQuery
+      ? loadedSuggestion.match
+      : null;
+
   useEffect(() => {
     const name = newName.trim();
     if (!isGm || name.length < 2) {
-      setSuggestion(null);
       return;
     }
     let active = true;
@@ -127,12 +150,16 @@ export function AbilityCompendiumTab({
       suggestAbilityName(worldId, name)
         .then((matches) => {
           if (active) {
-            setSuggestion(matches[0] ?? null);
+            setLoadedSuggestion({
+              worldId,
+              query: name,
+              match: matches[0] ?? null,
+            });
           }
         })
         .catch(() => {
           if (active) {
-            setSuggestion(null);
+            setLoadedSuggestion({ worldId, query: name, match: null });
           }
         });
     }, 300);

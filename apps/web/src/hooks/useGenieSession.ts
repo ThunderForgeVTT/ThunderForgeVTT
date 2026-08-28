@@ -15,6 +15,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { getWorldActors } from "@/api/actors";
 import {
   startGenieSessionEventSync,
@@ -109,6 +110,13 @@ export interface UseGenieSessionResult {
   incomingProposals: GenieTradeProposalRecord[];
 }
 
+// Stable empty results. The party/holdings/proposals above are derived, and
+// a fresh `[]` on every render would give every consumer a new identity to
+// react to each time.
+const NO_ACTORS: WorldActorRecord[] = [];
+const NO_HOLDINGS: GenieResourceHoldingRecord[] = [];
+const NO_PROPOSALS: GenieTradeProposalRecord[] = [];
+
 /** worldId may be undefined while the host page's world is still loading —
  * the hook simply won't fetch until it's set. currentUserId may be null
  * while auth is still resolving — myActor/holdings/proposals stay empty
@@ -118,26 +126,42 @@ export function useGenieSession(
   currentUserId: string | null | undefined,
 ): UseGenieSessionResult {
   const [session, setSession] = useState<GenieSessionRecord | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [sessionLoading, setSessionLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  const [myActor, setMyActor] = useState<WorldActorRecord | null>(null);
-  const [partyMembers, setPartyMembers] = useState<WorldActorRecord[]>([]);
-  const [myHoldings, setMyHoldings] = useState<GenieResourceHoldingRecord[]>(
-    [],
-  );
-  const [incomingProposals, setIncomingProposals] = useState<
-    GenieTradeProposalRecord[]
-  >([]);
+  // The party and the trade tables are stored against the inputs they were
+  // fetched for, so "whose actors are these / whose holdings are these" is
+  // answered during render. The effects below then only ever report a
+  // result: none of them has to blank the previous world's or previous
+  // player's data on the way in (react-hooks/set-state-in-effect).
+  const [loadedParty, setLoadedParty] = useState<{
+    key: string;
+    myActor: WorldActorRecord | null;
+    partyMembers: WorldActorRecord[];
+  } | null>(null);
+  const [loadedTrades, setLoadedTrades] = useState<{
+    key: string;
+    myHoldings: GenieResourceHoldingRecord[];
+    incomingProposals: GenieTradeProposalRecord[];
+  } | null>(null);
 
-  const refetch = useCallback(async () => {
-    if (!worldId) {
-      setLoading(false);
-      return;
-    }
-    try {
-      setLoading(true);
-      setError(null);
-      const result = await fetchGenieSession(worldId);
+  // With no world there is nothing to load, which is what the previous
+  // `if (!worldId) setLoading(false)` inside the fetch said — as a
+  // derivation rather than a state write.
+  const loading = worldId ? sessionLoading : false;
+
+  const partyKey =
+    worldId && currentUserId ? `${worldId}|${currentUserId}` : null;
+  const myActor =
+    partyKey && loadedParty?.key === partyKey ? loadedParty.myActor : null;
+  const partyMembers =
+    partyKey && loadedParty?.key === partyKey
+      ? loadedParty.partyMembers
+      : NO_ACTORS;
+
+  // The one place the ambiguous-null rule lives; every path that learns a
+  // new session record goes through it.
+  const applySessionResult = useCallback(
+    (result: GenieSessionRecord | null) => {
       setSession((prev) => {
         if (result) return result;
         // genieSession(worldId) only ever returns the *active* session by
@@ -154,21 +178,61 @@ export function useGenieSession(
         if (prev && prev.status !== "ACTIVE") return prev;
         return null;
       });
+    },
+    [],
+  );
+
+  const refetch = useCallback(async () => {
+    if (!worldId) {
+      return;
+    }
+    try {
+      setSessionLoading(true);
+      setError(null);
+      applySessionResult(await fetchGenieSession(worldId));
     } catch (err) {
       setError(err instanceof Error ? err : new Error(String(err)));
     } finally {
-      setLoading(false);
+      setSessionLoading(false);
     }
-  }, [worldId]);
+  }, [worldId, applySessionResult]);
+
+  // A different world starts over (see useResetOnChange). The fetch below
+  // reports into the same state; it does not reset it first.
+  useResetOnChange(worldId, () => {
+    setSessionLoading(true);
+    setError(null);
+  });
 
   useEffect(() => {
-    void refetch();
-  }, [refetch]);
+    if (!worldId) {
+      return;
+    }
+    let active = true;
+    fetchGenieSession(worldId)
+      .then((result) => {
+        if (active) {
+          applySessionResult(result);
+          setError(null);
+        }
+      })
+      .catch((err) => {
+        if (active) {
+          setError(err instanceof Error ? err : new Error(String(err)));
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setSessionLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [worldId, applySessionResult]);
 
   useEffect(() => {
-    if (!worldId || !currentUserId) {
-      setMyActor(null);
-      setPartyMembers([]);
+    if (!partyKey || !worldId || !currentUserId) {
       return;
     }
     let active = true;
@@ -185,8 +249,11 @@ export function useGenieSession(
         // e.g. the GM's own PC, played directly without a claim.
         const controllerId = (actor: WorldActorRecord) =>
           actor.claimedBy?.userId ?? actor.ownedBy;
-        setMyActor(pcs.find((a) => controllerId(a) === currentUserId) ?? null);
-        setPartyMembers(pcs.filter((a) => controllerId(a) !== currentUserId));
+        setLoadedParty({
+          key: partyKey,
+          myActor: pcs.find((a) => controllerId(a) === currentUserId) ?? null,
+          partyMembers: pcs.filter((a) => controllerId(a) !== currentUserId),
+        });
       })
       .catch((err) => {
         console.error("Failed to load world actors for resource trading:", err);
@@ -194,25 +261,54 @@ export function useGenieSession(
     return () => {
       active = false;
     };
-  }, [worldId, currentUserId]);
+  }, [partyKey, worldId, currentUserId]);
+
+  const tradesKey = session && myActor ? `${session.id}|${myActor.id}` : null;
+  const myHoldings =
+    tradesKey && loadedTrades?.key === tradesKey
+      ? loadedTrades.myHoldings
+      : NO_HOLDINGS;
+  const incomingProposals =
+    tradesKey && loadedTrades?.key === tradesKey
+      ? loadedTrades.incomingProposals
+      : NO_PROPOSALS;
 
   const refetchTrades = useCallback(async () => {
     if (!session || !myActor) {
-      setMyHoldings([]);
-      setIncomingProposals([]);
       return;
     }
     const [holdings, proposals] = await Promise.all([
       fetchGenieResourceHoldings(session.id, myActor.id),
       fetchGenieTradeProposals(myActor.id),
     ]);
-    setMyHoldings(holdings);
-    setIncomingProposals(proposals);
+    setLoadedTrades({
+      key: `${session.id}|${myActor.id}`,
+      myHoldings: holdings,
+      incomingProposals: proposals,
+    });
   }, [session, myActor]);
 
   useEffect(() => {
-    void refetchTrades();
-  }, [refetchTrades]);
+    if (!tradesKey || !session || !myActor) {
+      return;
+    }
+    let active = true;
+    void Promise.all([
+      fetchGenieResourceHoldings(session.id, myActor.id),
+      fetchGenieTradeProposals(myActor.id),
+    ]).then(([holdings, proposals]) => {
+      if (active) {
+        setLoadedTrades({
+          key: tradesKey,
+          myHoldings: holdings,
+          incomingProposals: proposals,
+        });
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [tradesKey, session, myActor]);
 
   // Live cross-client sync: a NOTIFY for this world's Genie session state
   // (wish pool/doom clock/puzzle clocks) or a resource trade re-runs the

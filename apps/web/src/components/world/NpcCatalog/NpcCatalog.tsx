@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { Link } from "react-router-dom";
 import { getWorldActors } from "@/api/actors";
 import { indexActors, searchActorIds } from "@/search/actorSearch";
@@ -25,10 +26,16 @@ export function NpcCatalog({ worldId, refreshKey }: NpcCatalogProps) {
   const [query, setQuery] = useState("");
   const [matchedIds, setMatchedIds] = useState<string[] | null>(null);
 
-  useEffect(() => {
-    let active = true;
+  // Reset during render rather than at the top of the effect below: this
+  // is state derived from the arguments, and doing it in the effect commits
+  // one render pairing the new key with the previous key's data.
+  useResetOnChange(`${worldId}|${refreshKey ?? ""}`, () => {
     setActors(null);
     setError(null);
+  });
+
+  useEffect(() => {
+    let active = true;
 
     getWorldActors(worldId)
       .then((result) => {

@@ -61,41 +61,64 @@ const FANTASY_SERVICES: readonly FantasyService[] = [
 
 type FetchState = "checking" | "ok" | "unreachable";
 
+/** Reachability check, split out of the hook so it writes no state: the
+ * effect below can then start the first poll without a setState of its own
+ * (react-hooks/set-state-in-effect). */
+async function fetchStatus(): Promise<{
+  services: ServiceStatus[] | null;
+  fetchState: FetchState;
+}> {
+  try {
+    const response = await fetch(STATUS_ENDPOINT, {
+      credentials: "omit",
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      throw new Error(`Status endpoint returned ${response.status}`);
+    }
+
+    const payload = (await response.json()) as StatusResponse;
+    return { services: payload.services, fetchState: "ok" };
+  } catch {
+    return { services: null, fetchState: "unreachable" };
+  }
+}
+
 function useStatusPoll() {
   const [services, setServices] = useState<ServiceStatus[] | null>(null);
   const [fetchState, setFetchState] = useState<FetchState>("checking");
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
 
-  const check = useCallback(async () => {
-    try {
-      const response = await fetch(STATUS_ENDPOINT, {
-        credentials: "omit",
-        cache: "no-store",
-      });
-
-      if (!response.ok) {
-        throw new Error(`Status endpoint returned ${response.status}`);
-      }
-
-      const payload = (await response.json()) as StatusResponse;
-      setServices(payload.services);
-      setFetchState("ok");
-    } catch {
-      setServices(null);
-      setFetchState("unreachable");
-    } finally {
+  const applyStatus = useCallback(
+    (result: { services: ServiceStatus[] | null; fetchState: FetchState }) => {
+      setServices(result.services);
+      setFetchState(result.fetchState);
       setLastChecked(new Date());
-    }
-  }, []);
+    },
+    [],
+  );
+
+  const check = useCallback(async () => {
+    applyStatus(await fetchStatus());
+  }, [applyStatus]);
 
   useEffect(() => {
-    void check();
+    let active = true;
+    void fetchStatus().then((result) => {
+      if (active) {
+        applyStatus(result);
+      }
+    });
     const interval = window.setInterval(
       () => void check(),
       REFRESH_INTERVAL_MS,
     );
-    return () => window.clearInterval(interval);
-  }, [check]);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [check, applyStatus]);
 
   return { services, fetchState, lastChecked, recheck: check };
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { createLoreEntry, getLoreEntry, updateLoreEntry } from "@/api/lore";
 import {
   COMPENDIUM_OVERVIEW_DEFAULT_CONTENT,
@@ -34,9 +35,15 @@ export function CompendiumOverviewSettingsCard({
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
+  // Reset during render rather than at the top of the effect below: this
+  // is state derived from the arguments, and doing it in the effect commits
+  // one render pairing the new key with the previous key's data.
+  useResetOnChange(worldId, () => {
+    setEntry(undefined);
+  });
+
   useEffect(() => {
     let active = true;
-    setEntry(undefined);
 
     getLoreEntry(worldId, COMPENDIUM_OVERVIEW_SLUG)
       .then((existing) => {

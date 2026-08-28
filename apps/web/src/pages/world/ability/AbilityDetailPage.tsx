@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import {
   deleteAbility,
@@ -72,19 +73,28 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isTogglingVisibility, setIsTogglingVisibility] = useState(false);
-  const [facets, setFacets] = useState<AbilityFacetsLookup | undefined>(
-    undefined,
-  );
+  // Kept with the system it was fetched for, so the facets in force are
+  // derived during render rather than reset from inside the effect below.
+  const [loadedFacets, setLoadedFacets] = useState<{
+    gameSystemId: string;
+    facets: AbilityFacetsLookup | undefined;
+  } | null>(null);
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [shareLinkId, setShareLinkId] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState(false);
 
   const { isGm: isDm } = useWorldRole(worldId, world);
 
-  useEffect(() => {
-    let active = true;
+  // Reset during render rather than at the top of the effect below: this
+  // is state derived from the arguments, and doing it in the effect commits
+  // one render pairing the new key with the previous key's data.
+  useResetOnChange(`${worldId}|${abilityId}`, () => {
     setIsLoading(true);
     setLoadError(null);
+  });
+
+  useEffect(() => {
+    let active = true;
 
     Promise.all([getWorld(worldId), getAbility(abilityId)])
       .then(([worldResponse, abilityResponse]) => {
@@ -117,28 +127,35 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
     };
   }, [worldId, abilityId]);
 
+  const gameSystemId = world?.gameSystemId;
+  const facets =
+    gameSystemId && loadedFacets?.gameSystemId === gameSystemId
+      ? loadedFacets.facets
+      : undefined;
+
   useEffect(() => {
-    const gameSystemId = world?.gameSystemId;
     if (!gameSystemId) {
-      setFacets(undefined);
       return;
     }
     let active = true;
     getGameSystemManifest(gameSystemId)
       .then((manifest) => {
         if (active) {
-          setFacets(manifest.abilityFacets as AbilityFacetsLookup | undefined);
+          setLoadedFacets({
+            gameSystemId,
+            facets: manifest.abilityFacets as AbilityFacetsLookup | undefined,
+          });
         }
       })
       .catch(() => {
         if (active) {
-          setFacets(undefined);
+          setLoadedFacets({ gameSystemId, facets: undefined });
         }
       });
     return () => {
       active = false;
     };
-  }, [world?.gameSystemId]);
+  }, [gameSystemId]);
 
   if (isLoading) {
     return <Loader fullScreen label="Loading ability" />;

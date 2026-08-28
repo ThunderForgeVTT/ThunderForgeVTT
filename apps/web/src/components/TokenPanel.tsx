@@ -69,9 +69,14 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
   // (createToken called with no `actorId`/`scale` override).
   const [npcActors, setNpcActors] = useState<WorldActorRecord[]>([]);
   const [newTokenActorId, setNewTokenActorId] = useState<string>("");
-  const [sizeCategories, setSizeCategories] = useState<
-    SizeCategoriesLookup | undefined
-  >();
+  // Stored with the system it was fetched for, so "which size categories
+  // apply right now" is derived during render instead of being reset from
+  // inside the effect below — a manifest from a previously-picked NPC's
+  // system can never be read as this one's.
+  const [loadedSizeCategories, setLoadedSizeCategories] = useState<{
+    gameSystemId: string;
+    categories: SizeCategoriesLookup | undefined;
+  } | null>(null);
 
   const selectedActor = npcActors.find((a) => a.id === newTokenActorId) ?? null;
   const { data: selectedActorSystemData } = useActorSystemData(
@@ -88,19 +93,27 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
       });
   }, [isOpen, worldId, isSceneOwner]);
 
+  const selectedGameSystemId = selectedActor?.gameSystemId;
+  const sizeCategories =
+    selectedGameSystemId &&
+    loadedSizeCategories?.gameSystemId === selectedGameSystemId
+      ? loadedSizeCategories.categories
+      : undefined;
+
   useEffect(() => {
-    const gameSystemId = selectedActor?.gameSystemId;
-    if (!gameSystemId) {
-      setSizeCategories(undefined);
+    if (!selectedGameSystemId) {
       return;
     }
     let active = true;
-    getGameSystemManifest(gameSystemId)
+    getGameSystemManifest(selectedGameSystemId)
       .then((manifest) => {
         if (active) {
-          setSizeCategories(
-            manifest.sizeCategories as SizeCategoriesLookup | undefined,
-          );
+          setLoadedSizeCategories({
+            gameSystemId: selectedGameSystemId,
+            categories: manifest.sizeCategories as
+              | SizeCategoriesLookup
+              | undefined,
+          });
         }
       })
       .catch((err) => {
@@ -108,12 +121,17 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
           "Failed to load game system manifest for token scale:",
           err,
         );
-        if (active) setSizeCategories(undefined);
+        if (active) {
+          setLoadedSizeCategories({
+            gameSystemId: selectedGameSystemId,
+            categories: undefined,
+          });
+        }
       });
     return () => {
       active = false;
     };
-  }, [selectedActor?.gameSystemId]);
+  }, [selectedGameSystemId]);
 
   /** The `scale` a new token defaults to given the currently-selected NPC
    * (if any) — `undefined` when no NPC is selected, so `createToken` falls

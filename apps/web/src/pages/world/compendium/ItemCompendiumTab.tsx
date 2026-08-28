@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { Link } from "react-router-dom";
 import { createItem, getWorldItems, suggestItemName } from "@/api/items";
 import { Button } from "@/components/ui/button/Button";
@@ -39,7 +40,15 @@ export function ItemCompendiumTab({
   const [newItemName, setNewItemName] = useState("");
   const [newItemDescription, setNewItemDescription] = useState("");
   const [isCreatingItem, setIsCreatingItem] = useState(false);
-  const [suggestion, setSuggestion] = useState<WorldItemRecord | null>(null);
+  // Stored against the name it was looked up for. Whether a suggestion is
+  // showing right now is then a render-time question ("is this still the
+  // name we asked about, and is it still long enough to ask?"), so the
+  // effect below never has to null it back out.
+  const [loadedSuggestion, setLoadedSuggestion] = useState<{
+    worldId: string;
+    query: string;
+    match: WorldItemRecord | null;
+  } | null>(null);
 
   const handleAddItem = async () => {
     const name = newItemName.trim();
@@ -55,17 +64,26 @@ export function ItemCompendiumTab({
       });
       setNewItemName("");
       setNewItemDescription("");
-      setSuggestion(null);
+      setLoadedSuggestion(null);
       setInternalRefreshTick((current) => current + 1);
     } finally {
       setIsCreatingItem(false);
     }
   };
 
+  // Reset during render rather than at the top of the effect below: this
+  // is state derived from the arguments, and doing it in the effect commits
+  // one render pairing the new key with the previous key's data.
+  useResetOnChange(
+    `${worldId}|${query}|${refreshKey ?? ""}|${internalRefreshTick}`,
+    () => {
+      setItems(null);
+      setError(null);
+    },
+  );
+
   useEffect(() => {
     let active = true;
-    setItems(null);
-    setError(null);
 
     getWorldItems(worldId, query || undefined)
       .then((result) => {
@@ -89,10 +107,18 @@ export function ItemCompendiumTab({
 
   // FR-020: non-blocking "did you mean?" nudge as the DM types a new
   // item's name — debounced, never blocks handleAddItem.
+  const suggestionQuery = newItemName.trim();
+  const suggestion =
+    isGm &&
+    suggestionQuery.length >= 2 &&
+    loadedSuggestion?.worldId === worldId &&
+    loadedSuggestion.query === suggestionQuery
+      ? loadedSuggestion.match
+      : null;
+
   useEffect(() => {
     const name = newItemName.trim();
     if (!isGm || name.length < 2) {
-      setSuggestion(null);
       return;
     }
     let active = true;
@@ -100,12 +126,16 @@ export function ItemCompendiumTab({
       suggestItemName(worldId, name)
         .then((matches) => {
           if (active) {
-            setSuggestion(matches[0] ?? null);
+            setLoadedSuggestion({
+              worldId,
+              query: name,
+              match: matches[0] ?? null,
+            });
           }
         })
         .catch(() => {
           if (active) {
-            setSuggestion(null);
+            setLoadedSuggestion({ worldId, query: name, match: null });
           }
         });
     }, 300);

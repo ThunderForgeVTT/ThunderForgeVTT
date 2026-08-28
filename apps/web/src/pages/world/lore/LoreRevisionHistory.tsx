@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   getLoreEntry,
@@ -34,10 +35,16 @@ export default function LoreRevisionHistory() {
   const [status, setStatus] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
 
-  useEffect(() => {
-    let active = true;
+  // Reset during render rather than at the top of the effect below: this
+  // is state derived from the arguments, and doing it in the effect commits
+  // one render pairing the new key with the previous key's data.
+  useResetOnChange(`${worldId}|${slug}`, () => {
     setEntry(undefined);
     setRevisions(null);
+  });
+
+  useEffect(() => {
+    let active = true;
 
     getLoreEntry(worldId, slug)
       .then((entryResult) => {

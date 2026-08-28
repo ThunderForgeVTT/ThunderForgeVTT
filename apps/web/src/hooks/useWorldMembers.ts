@@ -20,6 +20,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { getWorldMembers } from "@/api/worldMembers";
 import type { WorldMemberDoc } from "../db/collections/worldMembersCollection";
 import { sortMembersByRole } from "../db/collections/worldMembersCollection";
@@ -40,39 +41,78 @@ export function useWorldMembers(worldId: string): UseWorldMembersResult {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  const fetchMembers = useCallback(async () => {
+  // Deliberately writes no state: the mount/worldId effect below has to be
+  // able to call it without a synchronous setState
+  // (react-hooks/set-state-in-effect), and both callers then share one
+  // mapping/sorting path.
+  const fetchMembers = useCallback(async (): Promise<WorldMemberDoc[]> => {
+    const records = await getWorldMembers(worldId);
+
+    const docs: WorldMemberDoc[] = records
+      .filter((record) => isMemberRole(record.role))
+      .map((record) => ({
+        id: record.id,
+        world_id: record.worldId ?? worldId,
+        user_id: record.userId,
+        role: record.role as "Owner" | "GM" | "Player",
+        joined_at: record.joinedAt,
+        created_at: record.createdAt ?? record.joinedAt,
+        updated_at: record.updatedAt ?? record.joinedAt,
+        claimed_actor: record.claimedActor,
+      }));
+
+    // Sort by role hierarchy: Owner, GM, Player
+    return sortMembersByRole(docs);
+  }, [worldId]);
+
+  // A different world starts over: loading again, and no error carried over
+  // from the previous one. Done during render (see useResetOnChange) rather
+  // than at the top of the effect below.
+  useResetOnChange(worldId, () => {
+    setLoading(true);
+    setError(null);
+  });
+
+  useEffect(() => {
+    let active = true;
+    fetchMembers()
+      .then((docs) => {
+        if (active) {
+          setMembers(docs);
+          setError(null);
+        }
+      })
+      .catch((err) => {
+        if (active) {
+          setError(err instanceof Error ? err : new Error(String(err)));
+          setMembers([]);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setLoading(false);
+        }
+      });
+    // The `active` guard is new with this restructure and fixes a real race:
+    // before it, a slow response for a previous `worldId` could land after a
+    // faster one for the current world and overwrite it.
+    return () => {
+      active = false;
+    };
+  }, [fetchMembers]);
+
+  const refetch = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
-      setError(null);
-
-      const records = await getWorldMembers(worldId);
-
-      const docs: WorldMemberDoc[] = records
-        .filter((record) => isMemberRole(record.role))
-        .map((record) => ({
-          id: record.id,
-          world_id: record.worldId ?? worldId,
-          user_id: record.userId,
-          role: record.role as "Owner" | "GM" | "Player",
-          joined_at: record.joinedAt,
-          created_at: record.createdAt ?? record.joinedAt,
-          updated_at: record.updatedAt ?? record.joinedAt,
-          claimed_actor: record.claimedActor,
-        }));
-
-      // Sort by role hierarchy: Owner, GM, Player
-      setMembers(sortMembersByRole(docs));
+      setMembers(await fetchMembers());
     } catch (err) {
       setError(err instanceof Error ? err : new Error(String(err)));
       setMembers([]);
     } finally {
       setLoading(false);
     }
-  }, [worldId]);
-
-  useEffect(() => {
-    void fetchMembers();
   }, [fetchMembers]);
 
-  return { members, loading, error, refetch: fetchMembers };
+  return { members, loading, error, refetch };
 }
