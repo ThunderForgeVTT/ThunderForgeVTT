@@ -10,6 +10,7 @@ export const pageLoaders = {
   setupCallback: () => import("@/pages/setup/SetupCallbackPage"),
   counter: () => import("@/pages/counter/CounterPage"),
   welcome: () => import("@/pages/user/WelcomePage"),
+  storageSettings: () => import("@/pages/user/StorageSettingsPage"),
   worldList: () => import("@/pages/world/WorldListPage"),
   createWorld: () => import("@/pages/world/CreateWorldPage"),
   worldDashboard: () => import("@/pages/world/WorldDashboardPage"),

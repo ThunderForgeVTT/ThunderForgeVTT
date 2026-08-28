@@ -36,6 +36,7 @@ const SharedAbilityPage = lazy(pageLoaders.sharedAbility);
 const ItemDetailPage = lazy(pageLoaders.itemView);
 const SharedItemPage = lazy(pageLoaders.sharedItem);
 const WorldSystemSettingsPage = lazy(pageLoaders.worldSystemSettings);
+const StorageSettingsPage = lazy(pageLoaders.storageSettings);
 const JoinWorldPage = lazy(pageLoaders.joinWorld);
 const NotFoundPage = lazy(pageLoaders.notFound);
 
@@ -551,6 +552,18 @@ export default function AppRoutes({
           element={
             <RequireAuthenticated>
               {renderLazyPage(<SharedItemPage />, "Loading shared item")}
+            </RequireAuthenticated>
+          }
+        />
+        {/*
+          Spec 028 US5. Any signed-in user, not just an admin: the cache is on
+          their own machine and the disk space is theirs to reclaim.
+        */}
+        <Route
+          path="/settings/storage"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(<StorageSettingsPage />, "Loading storage settings")}
             </RequireAuthenticated>
           }
         />

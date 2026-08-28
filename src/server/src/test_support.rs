@@ -17,6 +17,23 @@ use crate::config::{Config, Directories};
 use crate::state::AppState;
 
 pub fn test_app_state() -> AppState {
+    // Load `.env` here, at the one place every database-backed test funnels
+    // through, because otherwise whether a test passes depends on **which
+    // other tests ran first**.
+    //
+    // `dotenvy::dotenv()` mutates the process environment, and a dozen test
+    // modules call it individually. A test that does not — this function's
+    // callers, until now — therefore finds `DATABASE_URL` set or unset purely
+    // according to whether some unrelated test in the same binary got there
+    // first. Run the whole suite and it usually passes; run one of these
+    // tests alone, or after a change reorders the binary, and it fails with
+    // `NotPresent`, which reads exactly like a misconfigured machine rather
+    // than like the ordering bug it is. Observed both ways in one afternoon.
+    //
+    // Idempotent and does not override anything already exported, so a CI
+    // machine setting `DATABASE_URL` directly keeps its value.
+    dotenvy::dotenv().ok();
+
     let database_url = std::env::var("DATABASE_URL")
         .expect("DATABASE_URL must be set to run spec-002 integration tests");
     let manager = ConnectionManager::<PgConnection>::new(database_url);
