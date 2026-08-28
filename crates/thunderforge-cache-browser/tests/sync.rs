@@ -142,3 +142,30 @@ fn empty_plan_means_everything_is_current() {
     assert!(outcome.plan.fetch.is_empty());
     assert!(outcome.plan.evict.is_empty());
 }
+
+#[test]
+fn peer_availability_is_read_from_the_plan_and_defaults_to_alone() {
+    // Spec 028 T086. `peerAvailable` reports *reachability*, so a plan in
+    // which any item carries it means somebody else is live. Its absence
+    // must read as "alone" rather than as "assume peers": the field is an
+    // optimization, and a client that guessed the optimistic answer would
+    // spend a round trip discovering nobody is there.
+    let with_peers = r#"{"data":{"worldSyncPlan":{
+        "fetch":[
+          {"id":"asset:2a3f6f2e-0f5e-4a1b-9c3d-8d0a1b2c3d4e",
+           "fingerprint":"0000000000000000000000000000000000000000000000000000000000000000",
+           "byteSize":1,"peerAvailable":false},
+          {"id":"asset:3a3f6f2e-0f5e-4a1b-9c3d-8d0a1b2c3d4e",
+           "fingerprint":"1111111111111111111111111111111111111111111111111111111111111111",
+           "byteSize":2,"peerAvailable":true}
+        ],"evict":[],"canonicalVersion":1}}}"#;
+    assert!(parse_sync_plan(with_peers).unwrap().peer_available);
+
+    let field_absent = r#"{"data":{"worldSyncPlan":{
+        "fetch":[
+          {"id":"asset:2a3f6f2e-0f5e-4a1b-9c3d-8d0a1b2c3d4e",
+           "fingerprint":"0000000000000000000000000000000000000000000000000000000000000000",
+           "byteSize":1}
+        ],"evict":[],"canonicalVersion":1}}}"#;
+    assert!(!parse_sync_plan(field_absent).unwrap().peer_available);
+}

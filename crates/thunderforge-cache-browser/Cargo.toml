@@ -68,6 +68,22 @@ web-sys = { version = "0.3.104", features = [
   "DomException",
   "Event",
   "EventTarget",
+  # WebRTC (T088). Peer-assisted distribution moves content-addressed bytes
+  # over a data channel; the SDP and ICE payloads themselves are opaque
+  # strings relayed by the server, so nothing here needs a media API. No
+  # STUN/TURN feature is listed because none is configured — see `peer.rs`.
+  "RtcPeerConnection",
+  "RtcConfiguration",
+  "RtcDataChannel",
+  "RtcDataChannelState",
+  "RtcDataChannelType",
+  "RtcDataChannelEvent",
+  "RtcSessionDescriptionInit",
+  "RtcSdpType",
+  "RtcIceCandidate",
+  "RtcIceCandidateInit",
+  "RtcPeerConnectionIceEvent",
+  "MessageEvent",
 ] }
 
 [dev-dependencies]

@@ -314,6 +314,12 @@ enum Origin {
     Cache,
     /// Fetched and verified against the server's promise, then stored.
     Network,
+    /// Supplied by another client and verified against the server's promise
+    /// before anything was done with it (FR-046). Indistinguishable in
+    /// outcome from [`Origin::Network`] by design — only faster, and only
+    /// sometimes (SC-013). Kept apart from it solely so the diagnostics can
+    /// say where the bytes came from.
+    Peer,
     /// Fetched, but the promise we held did not match. Rendered, not stored.
     NetworkUnverified,
 }
@@ -611,7 +617,7 @@ mod wasm {
     use thunderforge_cache_browser::opfs::{OpfsStore, UserScope};
     use thunderforge_cache_browser::outbox::OutboxStore;
     use thunderforge_cache_browser::{CacheSignal, IndexEntry, crypto};
-    use thunderforge_cache_browser::{locks, signal, sync};
+    use thunderforge_cache_browser::{locks, peer, signal, sync};
     use thunderforge_cache_core::delta::SyncPlan;
     use thunderforge_cache_core::{Fingerprint, ItemId, fingerprint};
     use uuid::Uuid;
@@ -856,9 +862,26 @@ mod wasm {
     /// The fallback every degradation lands on: fetch the same URL Bevy
     /// would have, verify it if we hold a promise, store it if it verifies.
     async fn fetch_and_deliver(request: &ResolveRequest, handles: Option<Rc<Handles>>) {
-        let Some(bytes) = fetch(&request.url).await else {
-            warn!(target: "cached_assets", "fetch failed for {}", request.url);
-            return;
+        // FR-044/FR-048. A peer is asked first and is never waited on: every
+        // way this can go wrong — no peer, a declining peer, a slow peer, a
+        // peer sending bytes that hash to something else — answers `None`
+        // and lands on exactly the fetch below, which is what this function
+        // did before peers existed. The bytes it does return have already
+        // passed `fingerprint::verify` inside `PeerDownload`; they are
+        // re-verified below with the network's, because one trust choke
+        // point is the rule and two callers of it is not a second one.
+        let from_peer = peer::try_fetch(request.fingerprint).await;
+        let peer_supplied = from_peer.is_some();
+
+        let bytes = match from_peer {
+            Some(bytes) => bytes,
+            None => match fetch(&request.url).await {
+                Some(bytes) => bytes,
+                None => {
+                    warn!(target: "cached_assets", "fetch failed for {}", request.url);
+                    return;
+                }
+            },
         };
 
         // The single sanctioned trust choke point. Nothing here compares a
@@ -878,12 +901,18 @@ mod wasm {
         // the bytes are delivered and not filed. This is the one branch here
         // that is not a failure: the user sees their content, and the store
         // is left holding what it already had rather than thrashing.
+        let origin = if peer_supplied {
+            Origin::Peer
+        } else {
+            Origin::Network
+        };
+
         if !may_store() {
             debug!(
                 target: "cached_assets",
                 "no room to cache {}; delivering without storing", request.url,
             );
-            deliver(request, bytes, Origin::Network);
+            deliver(request, bytes, origin);
             return;
         }
 
@@ -908,14 +937,20 @@ mod wasm {
                 .write_blob(request.world_id, &request.fingerprint, &bytes, &handles.key)
                 .await
             {
-                Ok(_) => record_index(&handles, request, bytes.len() as u64).await,
+                Ok(_) => {
+                    record_index(&handles, request, bytes.len() as u64).await;
+                    // Now held and verified, so it may be served on (T091).
+                    // After the store, never before: announcing it earlier
+                    // would promise a peer bytes that are not there yet.
+                    peer::note_stored(request.fingerprint);
+                }
                 Err(err) => {
                     warn!(target: "cached_assets", "could not cache {}: {err}", request.url);
                 }
             }
         }
 
-        deliver(request, bytes, Origin::Network);
+        deliver(request, bytes, origin);
     }
 
     /// Same-origin GET of the authenticated `/canvas-assets/{id}` route.
@@ -1027,6 +1062,92 @@ mod wasm {
         run_sync(world_id, user_id).await.to_string()
     }
 
+    /// Start peer-assisted distribution for one world (spec 028 T088–T091).
+    ///
+    /// **Only ever called once TypeScript has asked `isPeerTransferEnabled()`**
+    /// (`apps/web/src/services/peerTransfer.ts`). The gate is there and not
+    /// here on purpose: what the setting prevents is the *connection*, since
+    /// that is when a direct peer link reveals an IP address, so it has to be
+    /// consulted before any of this runs rather than before bytes move. The
+    /// honest way to guarantee "disabled means no connection was ever made"
+    /// is for this function not to be reached at all.
+    ///
+    /// `session_id` is a client-generated uuid minted per page load, and
+    /// `send_signal` is `(toSessionId, payload) => void` — TypeScript owns the
+    /// `graphql-ws` connection the signals ride (ADR-048), so the transport
+    /// stays there and the protocol stays here.
+    ///
+    /// Returns whether it started. `false` is not an error: it means the ids
+    /// did not parse, and the client is on server-only transfer, which is a
+    /// supported way to run.
+    #[wasm_bindgen::prelude::wasm_bindgen]
+    pub fn start_peer_transfer(
+        world_id: String,
+        session_id: String,
+        send_signal: js_sys::Function,
+    ) -> bool {
+        let Ok(world_uuid) = Uuid::parse_str(&world_id) else {
+            return false;
+        };
+        peer::enable(world_uuid, session_id, send_signal);
+
+        // What the serving half is allowed to read, and the only thing it can
+        // read. `read_blob` decrypts and verifies against the blob's own
+        // filename, so a `Some` here is content this client genuinely holds
+        // and has checked — which is exactly the precondition T091 puts on
+        // serving anything at all.
+        peer::set_provider(std::rc::Rc::new(move |fingerprint: Fingerprint| {
+            Box::pin(async move {
+                let handles = HANDLES.with(|slot| slot.borrow().clone())?;
+                handles
+                    .store
+                    .read_blob(world_uuid, &fingerprint, &handles.key)
+                    .await
+                    .ok()
+                    .flatten()
+            }) as std::pin::Pin<Box<dyn std::future::Future<Output = Option<Vec<u8>>>>>
+        }));
+        true
+    }
+
+    /// Stop peer transfer and close every channel (FR-049, FR-050).
+    ///
+    /// Called when the user turns the setting off, when the world closes, and
+    /// on unload. Idempotent.
+    #[wasm_bindgen::prelude::wasm_bindgen]
+    pub fn stop_peer_transfer() {
+        peer::disable();
+    }
+
+    /// Offer a connection to one session from the world's roster.
+    ///
+    /// The newcomer initiates, always: a client that has just joined queries
+    /// `peerSessions` and offers to each name it gets back. Nobody offers to a
+    /// newcomer, which makes offer glare structurally impossible instead of
+    /// something to resolve.
+    #[wasm_bindgen::prelude::wasm_bindgen]
+    pub async fn offer_to_peer(session_id: String) {
+        peer::connect_to(session_id).await;
+    }
+
+    /// Deliver one relayed signal. The server never interprets these, and
+    /// neither does anything between here and `RTCPeerConnection`.
+    #[wasm_bindgen::prelude::wasm_bindgen]
+    pub async fn receive_peer_signal(from_session_id: String, payload: String) {
+        peer::on_signal(from_session_id, payload).await;
+    }
+
+    /// What the FR-049 indicator should show, as the JSON object
+    /// `reportPeerTransferActivity` takes.
+    ///
+    /// Counters only — no peer identities, no addresses, no timings. The panel
+    /// exists to disclose that peer transfer is happening, not to describe who
+    /// is in the game (FR-052, FR-054).
+    #[wasm_bindgen::prelude::wasm_bindgen]
+    pub fn peer_transfer_activity() -> String {
+        peer::activity().to_json()
+    }
+
     /// Queue one edit made while disconnected (spec 028 US7, FR-037).
     ///
     /// `command` is the emitted world-store command as JSON text, stored
@@ -1063,10 +1184,7 @@ mod wasm {
         let Ok(outbox) = OutboxStore::open().await else {
             return serde_json::json!({ "queued": false, "reason": "no-store" }).to_string();
         };
-        match outbox
-            .append(world_uuid, local_uuid, &command, role)
-            .await
-        {
+        match outbox.append(world_uuid, local_uuid, &command, role).await {
             Ok(change) => serde_json::json!({
                 "queued": true,
                 "localId": change.local_id.to_string(),
@@ -1329,6 +1447,12 @@ mod wasm {
             // `sync::is_authorization_refusal` for how the two are told
             // apart.
             Err(thunderforge_cache_browser::sync::SyncError::Forbidden(reason)) => {
+                // FR-050, before the discard rather than after it. Serving is
+                // stopped by the same answer that revokes the content, and it
+                // is stopped first: a discard is several awaits long, and a
+                // peer asking during them would otherwise be served bytes
+                // this client has just been told it may not have.
+                peer::membership_lost();
                 let discarded = sync::discard_world(&handles.store, &index, world_uuid).await;
                 return_index(&handles, index);
 
@@ -1444,6 +1568,20 @@ mod wasm {
         }
 
         publish_fingerprints(&index, world_uuid, &outcome.plan).await;
+
+        // T089/T091, and the reason both live here rather than in the peer
+        // module: this is the only place the server's answer exists. What may
+        // be *asked for* is `plan.fetch` and nothing else; what may be
+        // *served* is what the index says is on disk, after the eviction,
+        // repair and budget passes above have had their say. Both are
+        // replaced wholesale on every sync, so a fingerprint the server has
+        // stopped listing stops being requestable and a blob just evicted
+        // stops being offered, without either needing its own invalidation.
+        peer::set_plan(&outcome.plan);
+        if let Ok(entries) = index.for_world(world_uuid).await {
+            peer::set_held(entries.into_iter().map(|(_, entry)| entry.fingerprint));
+        }
+
         return_index(&handles, index);
 
         let planned: Vec<(Uuid, Fingerprint, u64)> = outcome
@@ -1486,6 +1624,11 @@ mod wasm {
             "budgetQuotaUnknown": budget.unknown_quota,
             "prefetching": prefetching,
             "canonicalVersion": outcome.canonical_version,
+            // Reachability, not holdings: true iff someone else is live in
+            // this world. Reported for diagnostics and never used as a gate —
+            // every peer path already lands on the server when no channel is
+            // open, and this would be stale the moment somebody joins.
+            "peerAvailable": outcome.peer_available,
         })
     }
 
@@ -1600,9 +1743,16 @@ mod wasm {
                 continue;
             }
 
+            // FR-044. The prefetch is where peer transfer pays best: several
+            // clients open the same scene within seconds of each other and
+            // want the identical map. `None` is the server, as everywhere.
             let url = format!("{ASSET_URL_PREFIX}/{asset_id}.webp");
-            let Some(bytes) = fetch(&url).await else {
-                continue;
+            let bytes = match peer::try_fetch(fingerprint).await {
+                Some(bytes) => bytes,
+                None => match fetch(&url).await {
+                    Some(bytes) => bytes,
+                    None => continue,
+                },
             };
             let Some(mut index) = borrow_index(&handles).await else {
                 return;
@@ -1620,7 +1770,10 @@ mod wasm {
             return_index(&handles, index);
 
             match stored {
-                Ok(()) => spent = spent.saturating_add(bytes.len() as u64),
+                Ok(()) => {
+                    peer::note_stored(fingerprint);
+                    spent = spent.saturating_add(bytes.len() as u64);
+                }
                 Err(err) => {
                     warn!(target: "cached_assets", "could not prefetch {url}: {err}");
                 }

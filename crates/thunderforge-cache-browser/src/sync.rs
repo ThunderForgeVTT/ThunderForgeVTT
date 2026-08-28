@@ -57,6 +57,17 @@ pub struct SyncOutcome {
     /// produced our stored scene fingerprints invalidates every one of them,
     /// so this is checked rather than assumed.
     pub canonical_version: u32,
+    /// Whether anyone else is live in this world right now (T086's
+    /// `peerAvailable`).
+    ///
+    /// **Reachability, not holdings.** It says a peer exists, never that any
+    /// peer has the bytes — so it may be used to skip asking when this client
+    /// is alone, and a `false` must never suppress a server fetch. Reported
+    /// rather than acted on here: peer transfer already falls back to the
+    /// server whenever no channel is open, so gating on this would only add
+    /// a second way to say the same thing, and one that goes stale the
+    /// moment somebody joins mid-session.
+    pub peer_available: bool,
 }
 
 /// Why a sync could not be completed.
@@ -183,6 +194,7 @@ pub fn parse_sync_plan(body: &str) -> Result<SyncOutcome, SyncError> {
         as u32;
 
     let mut plan = SyncPlan::default();
+    let mut peer_available = false;
 
     for item in plan_json
         .get("fetch")
@@ -204,6 +216,10 @@ pub fn parse_sync_plan(body: &str) -> Result<SyncOutcome, SyncError> {
             .get("byteSize")
             .and_then(serde_json::Value::as_u64)
             .unwrap_or(0);
+        peer_available |= item
+            .get("peerAvailable")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
 
         plan.fetch.push(thunderforge_cache_core::delta::PlanItem {
             id,
@@ -227,6 +243,7 @@ pub fn parse_sync_plan(body: &str) -> Result<SyncOutcome, SyncError> {
     Ok(SyncOutcome {
         plan,
         canonical_version,
+        peer_available,
     })
 }
 
