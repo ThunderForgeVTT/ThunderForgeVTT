@@ -222,7 +222,9 @@ mod tests {
             reaped += router.reap();
         }
         stop.store(true, Ordering::Relaxed);
-        let added = subscriber.join().expect("the subscriber thread must not panic");
+        let added = subscriber
+            .join()
+            .expect("the subscriber thread must not panic");
 
         assert_eq!(
             reaped, 64,

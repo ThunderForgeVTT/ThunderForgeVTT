@@ -1421,7 +1421,9 @@ fn a_client_that_began_first_still_learns_who_the_game_master_is() {
 
     let answer = gm.on_message(
         "p-session",
-        AdjudicationMessage::Hello { user_id: player_user },
+        AdjudicationMessage::Hello {
+            user_id: player_user,
+        },
     );
     let frames = match answer {
         AdjudicationStep::Broadcast { frames, .. } => frames,
@@ -1444,7 +1446,9 @@ fn a_client_that_began_first_still_learns_who_the_game_master_is() {
         matches!(
             gm.on_message(
                 "p-session",
-                AdjudicationMessage::Hello { user_id: player_user },
+                AdjudicationMessage::Hello {
+                    user_id: player_user
+                },
             ),
             AdjudicationStep::Ignore
         ),
