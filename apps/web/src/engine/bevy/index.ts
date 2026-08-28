@@ -357,6 +357,23 @@ export interface WorldCacheSyncSummary {
   evicted?: number;
   blobsRemoved?: number;
   evictFailures?: number;
+  /**
+   * The FR-019 integrity pass, reported with the plan it rides with: index
+   * rows dropped because their blob was gone or unreadable, and orphaned
+   * blobs reclaimed. Surfaced because FR-051 asks the diagnostics view for
+   * "any integrity repairs performed" — a store that silently repaired
+   * itself is exactly the thing a user should be able to see happened.
+   */
+  rowsRepaired?: number;
+  blobsReclaimed?: number;
+  repairFailures?: number;
+  /**
+   * FR-024: even releasing everything permissible left no room, so the cache
+   * is serving what it holds and has stopped adding. Not a failure, but the
+   * one cache state that explains an otherwise inexplicable readout — a
+   * warm-looking world that keeps fetching.
+   */
+  budgetInsufficient?: boolean;
   /** Assets being pulled ahead of demand, in the background. */
   prefetching?: number;
   canonicalVersion?: number;

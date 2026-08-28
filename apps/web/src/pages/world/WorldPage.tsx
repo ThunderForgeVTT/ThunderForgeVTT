@@ -53,6 +53,7 @@ import {
   getPeerTransferState,
   subscribeToPeerTransfer,
 } from "@/services/peerTransfer";
+import { reportWorldCacheSync } from "@/services/worldCacheDiagnostics";
 import { PeerIndicator } from "@/components/diagnostics/PeerIndicator";
 import { EngineMonitor } from "@/components/diagnostics/EngineMonitor";
 
@@ -644,6 +645,11 @@ export default function WorldPage() {
         // diagnostic: what was held, fetched and evicted, never *which*
         // items. See `WorldCacheSyncSummary`.
         console.debug("[world-cache] sync", summary);
+        // And kept, so the diagnostics panel can report the repairs and
+        // evictions this open performed (FR-051). The sync happens once, on
+        // open; a panel opened later would otherwise have nothing to show
+        // and no way to get it without re-running the sync.
+        reportWorldCacheSync(summary);
       }),
     );
   }, [id, user?.id]);

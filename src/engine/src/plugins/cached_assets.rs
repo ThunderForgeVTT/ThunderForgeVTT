@@ -392,6 +392,146 @@ fn deliveries() -> &'static Mutex<Vec<Delivery>> {
     DELIVERIES.get_or_init(|| Mutex::new(Vec::new()))
 }
 
+/// Where this session's canvas-asset bytes came from, counted (FR-051).
+///
+/// # Why a tally exists at all when [`Origin`] was only ever logged
+///
+/// FR-051 asks the client to report the proportion served locally versus
+/// fetched, the bytes avoided, and how much came from a peer rather than the
+/// server. Every one of those is a count of deliveries by origin, and the
+/// origin was already known at the one point every delivery passes through —
+/// it was written to the debug log and then thrown away. A log is not a
+/// diagnostics view: SC-017 requires these confirmable during an ordinary
+/// session *without developer tooling*, and reading a console is exactly the
+/// developer tooling it rules out.
+///
+/// # Counts, never content
+///
+/// Eight integers, and deliberately nothing else. No asset ids, no
+/// fingerprints, no urls, no timings — the same restraint `peer_transfer_activity`
+/// keeps, for the same reason: FR-052 says this information stays on the
+/// user's machine, and the cheapest way to keep a promise about what is not
+/// transmitted is to never assemble the thing that would be worth
+/// transmitting.
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
+struct OriginTally {
+    cache_items: u64,
+    cache_bytes: u64,
+    network_items: u64,
+    network_bytes: u64,
+    peer_items: u64,
+    peer_bytes: u64,
+    unverified_items: u64,
+    unverified_bytes: u64,
+    /// Bytes pulled ahead of demand and filed, never handed to a caller.
+    ///
+    /// Kept apart from the served buckets above because it answers a
+    /// different half of FR-051. A prefetch is unambiguously *bytes
+    /// transferred* — the wire does not care that nobody was waiting — but
+    /// it is not an item *served*, so folding it into `network_items` would
+    /// quietly ruin the served-versus-fetched proportion that is the panel's
+    /// headline. Counting it nowhere is the worse error: SC-003 asks what a
+    /// changed asset cost to bring down, and on a warm world the prefetch is
+    /// usually the thing that brings it.
+    prefetched_items: u64,
+    prefetched_bytes: u64,
+    prefetched_peer_items: u64,
+    prefetched_peer_bytes: u64,
+}
+
+static ORIGIN_TALLY: OnceLock<Mutex<OriginTally>> = OnceLock::new();
+
+fn origin_tally() -> &'static Mutex<OriginTally> {
+    ORIGIN_TALLY.get_or_init(|| Mutex::new(OriginTally::default()))
+}
+
+/// Count one delivery. Called from the single point every delivery passes
+/// through, so no origin can be added later and quietly go uncounted.
+///
+/// A poisoned lock costs the diagnostics one delivery and nothing else; there
+/// is no branch anywhere that reads these numbers, so failing to record must
+/// never be allowed to affect the image the user is waiting for.
+fn record_delivery(origin: Origin, byte_len: u64) {
+    let Ok(mut tally) = origin_tally().lock() else {
+        return;
+    };
+    match origin {
+        Origin::Cache => {
+            tally.cache_items += 1;
+            tally.cache_bytes += byte_len;
+        }
+        Origin::Network => {
+            tally.network_items += 1;
+            tally.network_bytes += byte_len;
+        }
+        Origin::Peer => {
+            tally.peer_items += 1;
+            tally.peer_bytes += byte_len;
+        }
+        Origin::NetworkUnverified => {
+            tally.unverified_items += 1;
+            tally.unverified_bytes += byte_len;
+        }
+    }
+}
+
+/// Count one asset brought in ahead of demand.
+///
+/// Separate from [`record_delivery`] because a prefetch never reaches a
+/// caller: there is no `Origin` for it, only a source. `from_peer` mirrors
+/// the same distinction the delivery path draws, so the panel can keep
+/// saying how much came from a peer rather than the server.
+fn record_prefetch(from_peer: bool, byte_len: u64) {
+    let Ok(mut tally) = origin_tally().lock() else {
+        return;
+    };
+    if from_peer {
+        tally.prefetched_peer_items += 1;
+        tally.prefetched_peer_bytes += byte_len;
+    } else {
+        tally.prefetched_items += 1;
+        tally.prefetched_bytes += byte_len;
+    }
+}
+
+/// Forget the session's figures.
+///
+/// Called on sign-out for the same reason every other piece of session state
+/// is: the numbers describe what the *departing* session loaded, and leaving
+/// them on screen for whoever signs in next would attribute one person's
+/// activity to another — a small disclosure, but an unnecessary one.
+fn reset_origin_tally() {
+    if let Ok(mut tally) = origin_tally().lock() {
+        *tally = OriginTally::default();
+    }
+}
+
+/// The tally as the JSON object the diagnostics panel reads.
+///
+/// camelCase to match `sync_world_cache` and `peer_transfer_activity`, which
+/// are the two other things the TypeScript side parses out of this module.
+fn origin_tally_json() -> String {
+    let tally = origin_tally()
+        .lock()
+        .map(|guard| *guard)
+        .unwrap_or_default();
+    serde_json::json!({
+        "cacheItems": tally.cache_items,
+        "cacheBytes": tally.cache_bytes,
+        "networkItems": tally.network_items,
+        "networkBytes": tally.network_bytes,
+        "peerItems": tally.peer_items,
+        "peerBytes": tally.peer_bytes,
+        "unverifiedItems": tally.unverified_items,
+        "unverifiedBytes": tally.unverified_bytes,
+        "prefetchedItems": tally.prefetched_items,
+        "prefetchedBytes": tally.prefetched_bytes,
+        "prefetchedPeerItems": tally.prefetched_peer_items,
+        "prefetchedPeerBytes": tally.prefetched_peer_bytes,
+    })
+    .to_string()
+}
+
 /// Point the cache at a user and a world.
 ///
 /// `user_scope` is the value `UserScope` will confine every OPFS path to;
@@ -537,6 +677,7 @@ fn apply_control(cache: &mut CanvasAssetCache, control: Control) {
             // scratch and mints a fresh key instead of quietly reusing
             // handles the previous session opened.
             cache.readiness = Readiness::Unconfigured;
+            reset_origin_tally();
         }
     }
 }
@@ -1100,6 +1241,12 @@ mod wasm {
 
     /// Hand bytes back to the main thread for decoding.
     fn deliver(request: &ResolveRequest, bytes: Vec<u8>, origin: Origin) {
+        // Counted here rather than at the drain, because this is the point
+        // every path — hit, fetch, peer, unverified — actually funnels
+        // through. Counting at `drain_deliveries` would silently omit any
+        // delivery whose image failed to decode, and "the bytes crossed the
+        // wire" is the fact FR-051 reports on, not "the picture appeared".
+        super::record_delivery(origin, bytes.len() as u64);
         if let Ok(mut queue) = deliveries().lock() {
             queue.push(Delivery {
                 handle: request.handle.clone(),
@@ -1367,6 +1514,18 @@ mod wasm {
     #[wasm_bindgen::prelude::wasm_bindgen]
     pub fn peer_transfer_activity() -> String {
         peer::activity().to_json()
+    }
+
+    /// Where this session's canvas-asset bytes came from, as the JSON object
+    /// the cache diagnostics panel reads (FR-051).
+    ///
+    /// Counts and byte totals by origin, and nothing else — see
+    /// [`super::OriginTally`]. Zeroes are a truthful answer here, unlike in
+    /// `engine_stats`: a session that has loaded nothing really has loaded
+    /// nothing, and the panel needs to be able to say so.
+    #[wasm_bindgen::prelude::wasm_bindgen]
+    pub fn canvas_asset_origins() -> String {
+        super::origin_tally_json()
     }
 
     /// Queue one edit made while disconnected (spec 028 US7, FR-037).
@@ -2023,7 +2182,9 @@ mod wasm {
         // clients open the same scene within seconds of each other and
         // want the identical map. `None` is the server, as everywhere.
         let url = format!("{ASSET_URL_PREFIX}/{}.webp", item.asset_id);
-        let bytes = match peer::try_fetch(item.fingerprint).await {
+        let from_peer_bytes = peer::try_fetch(item.fingerprint).await;
+        let from_peer = from_peer_bytes.is_some();
+        let bytes = match from_peer_bytes {
             Some(bytes) => bytes,
             None => match fetch(&url).await {
                 Some(bytes) => bytes,
@@ -2048,6 +2209,10 @@ mod wasm {
         match stored {
             Ok(()) => {
                 peer::note_stored(item.fingerprint);
+                // Counted only once the bytes are actually filed, so the
+                // figure the panel shows is what the disk gained rather than
+                // what the wire carried into a failed write.
+                super::record_prefetch(from_peer, bytes.len() as u64);
                 bytes.len() as u64
             }
             Err(err) => {

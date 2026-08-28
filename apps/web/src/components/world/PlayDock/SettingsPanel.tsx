@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { MapImportTool } from "@/components/canvas-tools/MapImportTool";
+import { CachePanel } from "@/components/diagnostics/CachePanel";
 import { Switch } from "@/components/ui/switch";
 import {
   setEngineMonitorVisible,
@@ -134,6 +135,18 @@ export function SettingsPanel({
             onCheckedChange={setEngineMonitorVisible}
           />
         </label>
+      </section>
+
+      {/*
+        Spec 028 FR-051/SC-017. What the local cache did for *this* session,
+        which is why it is here on the world dock rather than on
+        `/settings/storage`: the figures live in the running engine, and a
+        settings page has no engine mounted. See `CachePanel` for the whole
+        argument. It sits under Display for the same reason that toggle does —
+        both are about this device and this screen, not about the world.
+      */}
+      <section className="border-t border-border pt-4">
+        <CachePanel />
       </section>
 
       <section className="border-t border-border pt-4">
