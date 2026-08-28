@@ -27,12 +27,14 @@
 //! cache correctness and permission revocation come out of one mechanism
 //! instead of two that can disagree.
 //!
-//! (The contract doc's summary table also lists "client claims an item it may
-//! not see" as *omitted from both lists*. `compute_plan` — already
-//! implemented and unit-tested in `thunderforge-cache-core`, including a test
-//! asserting exactly this — resolves that row as "evicted, identically to a
-//! deleted item". This module follows the shared implementation rather than
-//! re-deciding it; the non-disclosure guarantee holds either way.)
+//! (This note used to record a disagreement with the contract doc, which
+//! listed "client claims an item it may not see" as *omitted from both
+//! lists* while `compute_plan` resolved it as "evicted, identically to a
+//! deleted item". The contract has since been corrected to match, so there
+//! is nothing left to reconcile — kept only because the reasoning is worth
+//! having: an unauthorized item and a deleted one must be byte-identical in
+//! the response, or the difference between them tells the caller something
+//! about content they may not see.)
 //!
 //! # Authorization is redone on every call
 //!

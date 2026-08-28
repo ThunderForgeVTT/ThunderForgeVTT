@@ -148,7 +148,7 @@ No telemetry accompanies any of this (FR-052, FR-054).
 |---|---|
 | Peer sends mismatched bytes | Discard, do not retry that peer, fall back to server, count in diagnostics |
 | Peer sends unrequested content | Ignore entirely |
-| Peer disconnects mid-transfer | Fall back to server for the remainder; no partial store |
+| Peer disconnects mid-transfer | Discard the partial buffer and refetch the item entire from the server; no partial store |
 | No peers available | Server fetch, no user-visible difference |
 | Signaling unavailable | Peer transfer disabled for the session; everything else works |
 | Peer loses permission mid-transfer | Serving peer stops; requester falls back |

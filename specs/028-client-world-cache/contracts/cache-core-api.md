@@ -69,7 +69,7 @@ impl Manifest {
 /// Server side: what should this client fetch and discard?
 pub fn compute_plan(
     held: &[HeldItem],
-    authorized_current: &BTreeMap<ItemId, Option<Fingerprint>>,
+    authorized_current: &BTreeMap<ItemId, CurrentItem>,
 ) -> SyncPlan;
 ```
 
@@ -140,10 +140,9 @@ pub fn apply_outcomes(outbox: &mut Vec<QueuedChange>, outcomes: &[ReconcileOutco
 pub enum Role { GameMaster, Player }
 pub enum Winner { A, B }
 
-pub fn resolve(
-    a: (&QueuedChange, Role, ReconnectSeq),
-    b: (&QueuedChange, Role, ReconnectSeq),
-) -> Winner;
+pub struct Contender { pub role: Role, pub reconnect_seq: ReconnectSeq }
+
+pub fn resolve(a: Contender, b: Contender) -> Winner;
 ```
 
 **Contract**
@@ -152,6 +151,11 @@ pub fn resolve(
 - Same role ⇒ lower `ReconnectSeq` wins (FR-040a).
 - **Total**: every pair resolves. No ties, no `Option`, no "it depends".
 - Never reads a client-supplied timestamp (FR-040a).
+- **Corrected against the code 2026-08-28:** it never sees the change at
+  all. Passing `&QueuedChange` as this originally specified would have let a
+  future edit decide precedence on the *content* of an edit, which is
+  precisely the door FR-040a closes — the rule is about who and when, and a
+  function that cannot read the change cannot be talked into anything else.
 - Consumed by *both* sides: the server to decide, the client to predict what
   it will be told. Divergence between those two is exactly what this crate
   exists to prevent, so the client MUST NOT reimplement the rule locally
@@ -169,7 +173,22 @@ no browser, no database, no fixtures:
 - Canonical-version change invalidates every scene fingerprint.
 - `compute_plan` omits matched items, fetches `None`-fingerprinted items,
   evicts unknown items.
+
+**Corrected against the code 2026-08-28.** `CurrentItem` pairs the optional
+fingerprint with a `byte_size`, which the plan needs twice over: to budget a
+fetch before making it, and to check a peer's `OFFER` against the server's
+own figure so a hostile offer cannot be used as an allocation primitive. The
+earlier `Option<Fingerprint>` here described an argument that never shipped.
 - `plan_eviction` never touches the open world, even under pressure.
+- `admit_speculative(in_use, limit, incoming)` and `speculative_headroom`
+  were added for FR-071 after this contract was first written. They take no
+  index and no open world, deliberately: a gate that only ever refuses needs
+  neither, so there is no eviction list to return and no way for a later
+  edit to turn "short by 3MB" into "free 3MB". A `limit` of zero — a refused
+  storage estimate — reads as stop, which mirrors rather than contradicts
+  "a refused estimate evicts nothing": without a limit there is no way to
+  *demonstrate* room, and speculation is permitted only on room already
+  demonstrated.
 - `resolve` is total and antisymmetric across every role/order combination.
 - `apply_outcomes` surfaces every unmatched change.
 
