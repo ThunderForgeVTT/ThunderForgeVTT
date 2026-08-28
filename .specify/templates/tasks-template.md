@@ -157,6 +157,12 @@ Examples of foundational tasks (adjust based on your project):
 - [ ] TXXX [P] Additional unit tests (if requested) in tests/unit/
 - [ ] TXXX Security hardening
 - [ ] TXXX Run quickstart.md validation
+- [ ] TXXX Run `pnpm verify` (rustfmt, clippy, prettier, eslint) and fix what
+      it reports **in the code this feature added**. Keep it to that: a
+      repo-wide lint remediation folded into a feature phase buries the
+      feature work, and every line of it then has to be read to be sure
+      nothing behavioural slipped in. Wide passes get their own commit.
+      `pnpm verify:fix` rewrites what can be rewritten mechanically
 
 ---
 
