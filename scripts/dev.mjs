@@ -151,7 +151,15 @@ async function run() {
       // visible in `ps` to every other user on the machine — a credential
       // that grants ingress to this tunnel has no business being there.
       process.env.TUNNEL_TOKEN = token;
-      command = "cloudflared tunnel run";
+      // `env -u TUNNEL_HOSTNAME` because `TUNNEL_*` is cloudflared's own
+      // configuration namespace, and it reads TUNNEL_HOSTNAME as its
+      // `hostname` property. Left in place it logs "The property `hostname`
+      // in your configuration is ignored because you configured a Named
+      // Tunnel" on every start — noise that reads like a misconfiguration
+      // when nothing is wrong. Vite still needs the value for
+      // `server.allowedHosts`, so it is unset for this child only rather
+      // than renamed, which keeps one name in `.env` for one idea.
+      command = "env -u TUNNEL_HOSTNAME cloudflared tunnel run";
     } else {
       log(
         "dev",

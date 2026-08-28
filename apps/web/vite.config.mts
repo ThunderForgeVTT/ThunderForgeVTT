@@ -97,6 +97,15 @@ export default defineConfig({
   server: {
     host: "127.0.0.1",
     port: 5173,
+    // Fail rather than drift. Vite's default is to take the next free port
+    // when 5173 is busy, which is convenient alone and wrong here: the
+    // backend proxy, the e2e baseURL and a tunnel's ingress all name 5173,
+    // so a silent move to 5174 leaves the tunnel forwarding to nothing and
+    // surfaces later as an unrelated-looking error from whichever process
+    // notices first. Observed exactly that: a stale dev server held 5173,
+    // Vite moved, and the failure that reached the console was the backend
+    // panicking on its own port being in use.
+    strictPort: true,
     // Vite's DNS-rebinding protection rejects any request whose Host
     // header it doesn't recognize — including one forwarded through a
     // `cloudflared tunnel --url http://localhost:5173` quick tunnel
