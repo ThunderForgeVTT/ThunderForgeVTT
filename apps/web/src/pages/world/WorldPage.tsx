@@ -25,7 +25,10 @@ import {
   subscribeToWorldEvents,
   type LiveSyncState,
 } from "@/engine/world/sync";
-import { reconcileWorld } from "@/engine/world/sync/offlineQueue";
+import {
+  queueAdjudicatedChange,
+  reconcileWorld,
+} from "@/engine/world/sync/offlineQueue";
 import {
   startHeartbeat,
   subscribeToHeartbeat,
@@ -39,6 +42,17 @@ import {
   type SubmittedChange,
 } from "@/engine/world/sync/reconcile";
 import { ReconcileReport } from "@/components/world/ReconcileReport";
+import { ConnectionStatus } from "@/components/world/ConnectionStatus";
+import { reportSessionPeers } from "@/engine/world/sync/subscriptionClient";
+import {
+  beginPeerAdjudication,
+  endPeerAdjudication,
+  peerAdjudicationActive,
+} from "@/engine/bevy";
+import {
+  getPeerTransferState,
+  subscribeToPeerTransfer,
+} from "@/services/peerTransfer";
 import { PeerIndicator } from "@/components/diagnostics/PeerIndicator";
 import { EngineMonitor } from "@/components/diagnostics/EngineMonitor";
 
@@ -66,6 +80,7 @@ import { getWorld } from "@/api/world";
 import { getScene, getScenes } from "@/api/scenes";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorldRole } from "@/hooks/useWorldRole";
+import { useWorldMembers } from "@/hooks/useWorldMembers";
 import { WallTool } from "@/components/canvas-tools/WallTool";
 import { LightingTool } from "@/components/canvas-tools/LightingTool";
 import { ShapeTool } from "@/components/canvas-tools/ShapeTool";
@@ -1155,6 +1170,197 @@ export default function WorldPage() {
     };
   }, [id]);
 
+  /**
+   * The third connectivity state (spec 028 US7, T096, FR-055 to FR-059).
+   *
+   * This page is the only place that holds both halves of the question. Who
+   * was at the table — which is the peer roster as it stood while there was
+   * still a server to agree it with — and who is reachable now, which the
+   * peer indicator already counts. Neither half is enough alone: a count of
+   * open channels says nothing about who is missing, and a roster says
+   * nothing about who is still there.
+   *
+   * Whether the **Game Master** is among them is not answerable from counts
+   * at all, so it is not answered here. The peer fabric learns it from the
+   * channel that identifies itself as the user the server named, and reports
+   * it back through `peerAdjudicationActive` (FR-059).
+   *
+   * The safe direction is everywhere the same: not knowing reads as "no", and
+   * "no" is plain offline, where the outbox already handles everything.
+   */
+  const { members } = useWorldMembers(id);
+  const gmUserId = useMemo(() => {
+    const gm = members.find(
+      (member) => member.role === "Owner" || member.role === "GM",
+    );
+    return gm?.user_id ?? null;
+  }, [members]);
+
+  /**
+   * How many people were at the table while the server was still answering.
+   *
+   * The high-water mark of connected peers while live, and not the current
+   * count — the current count is exactly what an outage changes, so using it
+   * as the roster would make "everyone is here" true by definition and the
+   * full-connectivity rule meaningless.
+   *
+   * It errs high: somebody who legitimately left before the outage keeps the
+   * roster larger than the table really is, and adjudicated play is refused.
+   * That is the direction to err in. The cost is a session that falls back to
+   * plain offline; the cost of erring the other way is two halves of a
+   * partition both playing.
+   */
+  const tableSizeRef = useRef(0);
+
+  useEffect(() => {
+    if (!id || !user) return;
+    let cancelled = false;
+
+    /**
+     * Apply an adjudicated move to the scene.
+     *
+     * Provisional, and merged into the token as it stands rather than
+     * replacing it: the proposal carries only the fields it changed, because
+     * position, rotation and scale are the only fields it is allowed to carry
+     * (FR-060).
+     */
+    const applyAdjudicated = (changeJson: string) => {
+      try {
+        const change = JSON.parse(changeJson) as {
+          entityId?: string;
+          originUser?: string;
+          transform?: { x?: number; y?: number; rotation?: number; scale?: number };
+        };
+        const tokenId = change.entityId;
+        const transform = change.transform;
+        if (!tokenId || !transform) return;
+        const existing = worldStore.getState().tokens[tokenId];
+        if (!existing) return;
+        const adjudicated = {
+          type: "upsert_token" as const,
+          token: {
+            ...existing,
+            ...(transform.x !== undefined ? { x: transform.x } : {}),
+            ...(transform.y !== undefined ? { y: transform.y } : {}),
+            ...(transform.rotation !== undefined
+              ? { rotation: transform.rotation }
+              : {}),
+            ...(transform.scale !== undefined ? { scale: transform.scale } : {}),
+          },
+        };
+
+        // Dispatched as `sync`, not `ui`.
+        //
+        // This is an outcome arriving, not somebody authoring at this
+        // keyboard. Sending it as `ui` put it through the token mutation
+        // bridge, which — being disconnected — queued it by the ordinary
+        // offline path, as this client's own edit with no author on it. The
+        // attribution the whole of T102/T103 exists to carry was dropped
+        // exactly where it was created, and on a player's client the change
+        // was queued a second time by someone who must never submit it.
+        // `sync` also teaches the bridge this token's id, which is what
+        // stops a later drag of it reading as a first sighting.
+        worldStore.dispatch(adjudicated, "sync");
+
+        // Only the Game Master's client owes the server anything. Submission
+        // rides their session and the server checks the role (FR-061), so a
+        // player queueing this would be queueing a change it cannot submit
+        // and that nobody would ever drain.
+        if (id && gmUserId && user.id === gmUserId) {
+          void queueAdjudicatedChange({
+            worldId: id,
+            localId: crypto.randomUUID(),
+            kind: "move",
+            command: adjudicated,
+            // Whoever actually made the move. An origin we cannot read falls
+            // back to the submitter rather than to a guess at a third party:
+            // naming the wrong person is the one failure here that is worse
+            // than naming nobody, and the server treats "attributed to the
+            // submitter" as an ordinary unattributed change. Dropping it
+            // instead would lose the edit, which is the unrecoverable error.
+            originatorUserId:
+              typeof change.originUser === "string" ? change.originUser : user.id,
+          });
+        }
+      } catch {
+        // A change that does not parse is not a change. Nothing here is the
+        // record of anything, and the server will send the truth on
+        // reconnection regardless.
+      }
+    };
+
+    let adjudicating = false;
+
+    const publish = async () => {
+      if (cancelled) return;
+      const peers = getPeerTransferState();
+      // Peer transfer off means no peer connections were ever opened, which
+      // is what forfeits server-isolated play — exactly as the setting warns.
+      if (!peers.enabled) {
+        reportSessionPeers(null);
+        return;
+      }
+
+      const live = getLiveSyncState().status === "live";
+      if (live) {
+        tableSizeRef.current = Math.max(
+          tableSizeRef.current,
+          peers.connectedPeers,
+        );
+        if (adjudicating) {
+          // The server is the arbiter again. Everything adjudicated is now
+          // owed a submission, which is why this says *why* it is stopping
+          // rather than simply stopping (FR-062).
+          adjudicating = false;
+          void endPeerAdjudication(true);
+        }
+        reportSessionPeers({
+          expected: tableSizeRef.current,
+          reachable: peers.connectedPeers,
+          gmReachable: false,
+        });
+        return;
+      }
+
+      // Not live. Ask the fabric to start — it refuses unless there is a
+      // table to play with, and on a player's client it stays inactive until
+      // the Game Master's channel has said who it belongs to.
+      if (!adjudicating && gmUserId && tableSizeRef.current > 0) {
+        adjudicating = await beginPeerAdjudication(
+          user.id,
+          gmUserId,
+          applyAdjudicated,
+        );
+      }
+      const gmReachable = adjudicating ? await peerAdjudicationActive() : false;
+      if (cancelled) return;
+      reportSessionPeers({
+        expected: tableSizeRef.current,
+        reachable: peers.connectedPeers,
+        gmReachable,
+      });
+    };
+
+    void publish();
+    // Driven by the peer fabric's own reports rather than a poller of its
+    // own: the engine already refreshes those every second, and a second
+    // clock here would be a second answer to one question.
+    const unsubscribePeers = subscribeToPeerTransfer(() => {
+      void publish();
+    });
+    const unsubscribeSync = subscribeToLiveSyncState(() => {
+      void publish();
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribePeers();
+      unsubscribeSync();
+      reportSessionPeers(null);
+      if (adjudicating) void endPeerAdjudication(false);
+    };
+  }, [id, user, gmUserId, worldStore]);
+
   const wasLiveRef = useRef(false);
   useEffect(() => {
     // Read when the listener is actually attached, not during render: the
@@ -1576,45 +1782,15 @@ export default function WorldPage() {
                   </Button>
                 </div>
               ) : null}
-              {liveSyncState.status !== "live" ? (
-                // Spec 005 (FR-009/FR-009a): a persistent, non-blocking
-                // indicator — unlike sceneLoadState's centered overlay above,
-                // this must never block interaction with an already-loaded
-                // scene, and must never present a dead-end/terminal state:
-                // it just keeps showing "Reconnecting…" for as long as
-                // liveSyncState says so, since the underlying transport
-                // retries indefinitely.
-                <div
-                  data-testid="live-sync-reconnecting-indicator"
-                  data-sync-status={liveSyncState.status}
-                  style={{
-                    position: "absolute",
-                    top: "1rem",
-                    // Clear of the dock's icon rail (3rem) on the right.
-                    right: "4rem",
-                    zIndex: 1000,
-                    padding: "0.4rem 0.75rem",
-                    borderRadius: "0.375rem",
-                    background: "rgba(0, 0, 0, 0.75)",
-                    color: "white",
-                    fontSize: "0.8rem",
-                  }}
-                >
-                  {liveSyncState.status === "connecting"
-                    ? "Connecting…"
-                    : liveSyncState.status === "disconnected"
-                      ? // Spec 028 US7 (T073). What matters to say here is not
-                        // "something is wrong" — the user can see that — but
-                        // that their work is being kept and that they may
-                        // carry on. An indicator that only announced the
-                        // failure would leave someone guessing whether to stop
-                        // moving tokens, which is the opposite of the point.
-                        liveSyncState.browserOffline
-                        ? "Offline — your changes are saved here and will sync when you reconnect"
-                        : "Can't reach the server — your changes are saved here and will sync when it's back"
-                      : `Reconnecting… (attempt ${liveSyncState.attempt})`}
-                </div>
-              ) : null}
+              {/*
+                Spec 005 (FR-009/FR-009a) and spec 028 US7 (T097, FR-063,
+                SC-022): one connection surface, never two. The badge used to
+                be written inline here and has grown a third state, a second
+                line and a colour of its own — and the moment a second
+                indicator appears anywhere on this canvas, the two disagree
+                and the user believes whichever they happen to look at.
+              */}
+              <ConnectionStatus state={liveSyncState} />
               {/*
                 Spec 028 FR-049 (T092). The disclosure that peer transfer is
                 in use has to reach someone who is playing, not someone who

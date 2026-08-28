@@ -27,6 +27,8 @@
 
 import { createClient, type Client } from "graphql-ws";
 
+import { isHeartbeatOffline, subscribeToHeartbeat } from "./heartbeat";
+
 export interface WorldEventLike {
   /**
    * The server's `world_events.id` — monotonic, and the whole basis of the
@@ -72,12 +74,29 @@ export interface WorldEventLike {
  * Still not terminal, and still requires no manual action: the retry loop
  * runs unchanged underneath, and a successful connection returns to `live`
  * from here exactly as it does from `reconnecting`.
+ *
+ * # The third state (spec 028 US7, T096, FR-055)
+ *
+ * `server-isolated` is `disconnected` plus one fact: everyone else at the
+ * table is still reachable directly, and the Game Master is among them. Play
+ * may continue there, adjudicated by the GM's client
+ * (`crates/thunderforge-cache-browser/src/peer.rs`), and every change made is
+ * provisional until the server confirms it.
+ *
+ * It is a *narrowing* of `disconnected` and never a widening: losing the
+ * server always lands here first, and a client only ever moves on once it can
+ * see that the whole table is present. Losing any one participant, or the GM
+ * specifically, returns it to `disconnected` — which is plain offline, where
+ * the outbox already handles everything correctly. The rule is deliberately
+ * all-or-nothing: see `peerAdjudicationAvailable` for why a quorum is not
+ * good enough.
  */
 export type LiveSyncState =
   | { status: "connecting" }
   | { status: "live" }
   | { status: "reconnecting"; attempt: number }
-  | { status: "disconnected"; attempt: number; browserOffline: boolean };
+  | { status: "disconnected"; attempt: number; browserOffline: boolean }
+  | { status: "server-isolated"; attempt: number; peers: number };
 
 type LiveSyncStateListener = (state: LiveSyncState) => void;
 
@@ -139,18 +158,78 @@ export function lastSeenEventIdFor(worldId: string): number {
 const DISCONNECTED_AFTER_ATTEMPTS = 3;
 
 /**
- * Decide what to report, given what the socket and the browser each say.
+ * What this client can currently see of the rest of the table.
+ *
+ * Counts and one flag, never identities — the same restraint the peer
+ * indicator keeps (FR-052, FR-054). `expected` is the participant roster as
+ * it stood while there was still a server to agree it with; a client that
+ * cannot say who was there reports `null` and gets plain offline, which is
+ * the safe direction.
+ */
+export interface SessionPeers {
+  /** Participants other than this client, as of the last connected moment. */
+  expected: number;
+  /** How many of those have an open direct connection right now. */
+  reachable: number;
+  /** Whether the Game Master's client is among them, or is this client. */
+  gmReachable: boolean;
+}
+
+/**
+ * Whether peer-adjudicated play may run (FR-057 to FR-059).
+ *
+ * # Everyone, not a majority
+ *
+ * A quorum admits split-brain: two subsets each satisfying a majority, both
+ * making progress, two histories that cannot afterwards be merged without
+ * destroying somebody's work. Requiring *everyone* means at most one group is
+ * ever playing, so a second history never exists. It stops play more often
+ * and it never produces state that cannot be reconciled — and when a network
+ * splits a table in two, both halves stop. Neither wins.
+ *
+ * # The Game Master specifically, with no election
+ *
+ * If the GM is unreachable, play stops rather than promoting a replacement.
+ * A promotion is a second adjudicator in one session and the end of a single
+ * chain of authority, for a case that should simply stop.
+ *
+ * A table of one is not server-isolated. There is nobody to adjudicate among,
+ * and the ordinary offline path — queue and reconcile — is already right.
+ */
+export function peerAdjudicationAvailable(
+  peers: SessionPeers | null | undefined,
+): boolean {
+  if (!peers) return false;
+  if (peers.expected <= 0) return false;
+  return peers.reachable >= peers.expected && peers.gmReachable;
+}
+
+/**
+ * Decide what to report, given what the socket, the browser, the heartbeat
+ * and the peer fabric each say.
  *
  * Pure, and separated from the client wiring, because this is the part with a
  * judgement in it — everything around it is `graphql-ws` callbacks that
  * cannot be exercised without a socket. Kept total: every combination of
  * inputs names a state, so there is no path that leaves the UI showing a
  * stale one.
+ *
+ * `serverUnreachable` comes from the heartbeat (`./heartbeat.ts`) and from
+ * nowhere else. The socket cannot answer it — `graphql-ws` is lazy and drops
+ * its connection whenever nothing is subscribed, so a closed socket means
+ * "nothing is subscribed", not "this client is offline". Both signals are
+ * required before this reports peer-adjudicated play, because the one thing
+ * worse than stopping play early is continuing it on a connection this client
+ * only *believes* is gone.
  */
 export function connectivityFor(input: {
   hasConnectedOnce: boolean;
   attempt: number;
   browserOffline: boolean;
+  /** The heartbeat's verdict. Absent means "no reason to think so". */
+  serverUnreachable?: boolean;
+  /** What the peer fabric can see, or `null` when it cannot say. */
+  peers?: SessionPeers | null;
 }): LiveSyncState {
   // `navigator.onLine === false` is one of the few things a browser reports
   // that is worth believing immediately: there is no interface up, so no
@@ -158,6 +237,28 @@ export function connectivityFor(input: {
   // The converse is *not* true — `onLine` true means "an interface exists",
   // not "the server is reachable" — which is why the attempt count still
   // decides everything else.
+  // Server-isolated is a *narrowing* of being disconnected, so it is decided
+  // first and answers only where every one of its conditions holds: the
+  // heartbeat says the server is gone, every participant is reachable, and
+  // the Game Master is one of them. Anything less falls through to the
+  // ordinary judgement below and is plain offline.
+  //
+  // Deliberately ahead of the `browserOffline` check. `navigator.onLine`
+  // describes the route to the internet; open data channels to every person
+  // at the table are direct evidence of a working local network, and are
+  // worth more than the browser's opinion about a route this state does not
+  // need.
+  if (
+    input.hasConnectedOnce &&
+    input.serverUnreachable === true &&
+    peerAdjudicationAvailable(input.peers)
+  ) {
+    return {
+      status: "server-isolated",
+      attempt: input.attempt,
+      peers: input.peers?.reachable ?? 0,
+    };
+  }
   if (input.browserOffline) {
     return {
       status: "disconnected",
@@ -178,9 +279,25 @@ export function connectivityFor(input: {
   return { status: "reconnecting", attempt: input.attempt };
 }
 
-/** Whether edits should be queued rather than sent (US7). */
+/**
+ * Whether edits should be queued rather than sent (US7).
+ *
+ * True while server-isolated as well. Peer adjudication decides what happens
+ * at the table *now*; it is not a way of reaching the server, and every
+ * change made under it still has to be submitted, re-authorized and possibly
+ * rejected when the server comes back (FR-062). A change that skipped the
+ * outbox because peers had agreed it would be a change the server never hears
+ * about.
+ */
 export function isDisconnected(state: LiveSyncState = getLiveSyncState()): boolean {
-  return state.status === "disconnected";
+  return state.status === "disconnected" || state.status === "server-isolated";
+}
+
+/** Whether peer-adjudicated play is what is running right now (FR-057). */
+export function isServerIsolated(
+  state: LiveSyncState = getLiveSyncState(),
+): boolean {
+  return state.status === "server-isolated";
 }
 
 let client: Client | null = null;
@@ -223,6 +340,96 @@ const RECONNECT_MAX_DELAY_MS = 30000;
 let lastAttempt = 0;
 
 /**
+ * What the peer fabric last said about the rest of the table.
+ *
+ * `null` until something tells us, and `null` again when peer transfer is off
+ * — which is why turning it off forfeits server-isolated play, exactly as the
+ * setting warns (peer-protocol.md, "Privacy"). Reported rather than polled
+ * because the fabric that knows this lives in wasm and already publishes its
+ * state on a timer; a second poller here would be a second answer to the same
+ * question.
+ */
+let sessionPeers: SessionPeers | null = null;
+
+/**
+ * Tell this module what the peer fabric can currently see.
+ *
+ * Called from the world page, which is the only place that knows both halves:
+ * who the session had (the presence roster, taken while connected) and who is
+ * reachable now (the peer indicator's own counters).
+ */
+export function reportSessionPeers(peers: SessionPeers | null): void {
+  sessionPeers = peers;
+  refreshLiveSyncState();
+}
+
+/** The current judgement, from every signal there is. */
+function judge(): LiveSyncState {
+  return connectivityFor({
+    hasConnectedOnce,
+    attempt: lastAttempt,
+    browserOffline: browserIsOffline(),
+    serverUnreachable: isHeartbeatOffline(),
+    peers: sessionPeers,
+  });
+}
+
+/**
+ * Re-decide after something other than the socket changed — a heartbeat
+ * failing, a peer arriving or leaving.
+ *
+ * Narrow on purpose: it may only *enter* or *leave* `server-isolated`. The
+ * socket's own callbacks own every other transition, and a second writer for
+ * those would be two things deciding one value — the exact shape of the bug
+ * where a tab sat at `live` holding no connection.
+ */
+function refreshLiveSyncState(): void {
+  if (!hasConnectedOnce) return;
+  const next = judge();
+  if (next.status !== "server-isolated" && liveSyncState.status !== "server-isolated") {
+    return;
+  }
+  // Only on a real change. `setLiveSyncState` notifies unconditionally, and a
+  // listener that reacts by reporting peers — which the world page does, since
+  // a peer arriving is exactly when this needs re-deciding — would otherwise
+  // notify itself forever.
+  if (sameState(liveSyncState, next)) return;
+  setLiveSyncState(next);
+}
+
+/** Whether two judgements say the same thing. */
+function sameState(a: LiveSyncState, b: LiveSyncState): boolean {
+  if (a.status !== b.status) return false;
+  switch (a.status) {
+    case "reconnecting":
+      return a.attempt === (b as typeof a).attempt;
+    case "disconnected":
+      return (
+        a.attempt === (b as typeof a).attempt &&
+        a.browserOffline === (b as typeof a).browserOffline
+      );
+    case "server-isolated":
+      return (
+        a.attempt === (b as typeof a).attempt && a.peers === (b as typeof a).peers
+      );
+    default:
+      return true;
+  }
+}
+
+/**
+ * The heartbeat is the liveness signal, so it is also the trigger.
+ *
+ * Registered once, at module scope, next to the browser's own network events
+ * below and for the same reason: the socket's backoff can be mid-wait when
+ * the answer changes, and nobody would otherwise ask again for thirty
+ * seconds.
+ */
+subscribeToHeartbeat(() => {
+  refreshLiveSyncState();
+});
+
+/**
  * What the browser says about having a network at all.
  *
  * Guarded because `navigator.onLine` is absent in some contexts, and an
@@ -244,13 +451,11 @@ function browserIsOffline(): boolean {
 if (typeof window !== "undefined") {
   window.addEventListener("offline", () => {
     if (hasConnectedOnce) {
-      setLiveSyncState(
-        connectivityFor({
-          hasConnectedOnce,
-          attempt: lastAttempt,
-          browserOffline: true,
-        }),
-      );
+      // Through the same judgement as everything else: a machine that has
+      // lost its route to the internet may still have every peer at the table
+      // on the local network, and that case is `server-isolated`, not
+      // `disconnected`.
+      setLiveSyncState(judge());
     }
   });
   window.addEventListener("online", () => {
@@ -276,13 +481,7 @@ function getClient(): Client {
         // `reconnecting` with a confusing attempt count.
         lastAttempt = retries + 1;
         if (hasConnectedOnce) {
-          setLiveSyncState(
-            connectivityFor({
-              hasConnectedOnce,
-              attempt: lastAttempt,
-              browserOffline: browserIsOffline(),
-            }),
-          );
+          setLiveSyncState(judge());
         }
         const delayMs = Math.min(
           RECONNECT_BASE_DELAY_MS * 2 ** retries,
@@ -315,13 +514,7 @@ function getClient(): Client {
           // Reported as `reconnecting` rather than `disconnected` because
           // that is what it is at this instant — one drop, no failed attempt
           // yet. `retryWait` escalates it if the retries start failing.
-          setLiveSyncState(
-            connectivityFor({
-              hasConnectedOnce,
-              attempt: lastAttempt,
-              browserOffline: browserIsOffline(),
-            }),
-          );
+          setLiveSyncState(judge());
         },
       },
     });

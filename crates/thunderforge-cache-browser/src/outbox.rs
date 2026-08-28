@@ -120,7 +120,9 @@ mod wasm {
 
     impl OutboxStore {
         pub async fn open() -> Result<Self> {
-            Ok(Self { db: Db::open().await? })
+            Ok(Self {
+                db: Db::open().await?,
+            })
         }
 
         /// Every queued change, oldest first by sequence.
@@ -343,6 +345,9 @@ mod tests {
             outbox_key(Uuid::from_u128(5)),
             Uuid::from_u128(5).to_string()
         );
-        assert_ne!(outbox_key(Uuid::from_u128(5)), outbox_key(Uuid::from_u128(6)));
+        assert_ne!(
+            outbox_key(Uuid::from_u128(5)),
+            outbox_key(Uuid::from_u128(6))
+        );
     }
 }

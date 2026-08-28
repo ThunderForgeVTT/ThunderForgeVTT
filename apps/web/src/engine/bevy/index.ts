@@ -47,6 +47,27 @@ type BevyWasmModule = {
   offer_to_peer?: (sessionId: string) => Promise<void>;
   receive_peer_signal?: (fromSessionId: string, payload: string) => Promise<void>;
   peer_transfer_activity?: () => string;
+  /**
+   * Spec 028 (US7, T098/T100/T101). The peer-adjudication protocol, optional
+   * like every other cache entry point: a bundle without it means a lost
+   * server is plain offline, which is a supported way to run.
+   */
+  begin_peer_adjudication?: (
+    selfUserId: string,
+    gmUserId: string,
+    onApplied: (changeJson: string) => void,
+  ) => boolean;
+  peer_adjudication_active?: () => boolean;
+  peer_adjudication_server_returned?: () => void;
+  end_peer_adjudication?: () => void;
+  peer_adjudication_submissions?: () => string;
+  propose_token_transform?: (
+    entityId: string,
+    x?: number,
+    y?: number,
+    rotation?: number,
+    scale?: number,
+  ) => boolean;
 };
 
 let loadPromise: Promise<BevyWasmModule> | null = null;
@@ -641,6 +662,105 @@ export async function startPeerTransfer(worldId: string): Promise<boolean> {
     return true;
   } catch {
     stopPeerTransfer();
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Peer adjudication (spec 028 US7, T098/T100/T101, FR-057 to FR-062)
+// ---------------------------------------------------------------------------
+
+/**
+ * Ask the peer fabric to begin adjudicated play.
+ *
+ * **The caller decides the server is gone**, from the heartbeat and nothing
+ * else — this is signalling, not a second opinion about connectivity. What
+ * the fabric decides is the rest: whether there is a table to play with at
+ * all, and, on a player's client, whether the Game Master is among them,
+ * which is a thing no count on this side can answer (FR-059).
+ *
+ * Never throws. Every way it can fail — no bundle, no peers, peer transfer
+ * off — is plain offline, which is a path that already works.
+ */
+export async function beginPeerAdjudication(
+  selfUserId: string,
+  gmUserId: string,
+  onApplied: (changeJson: string) => void,
+): Promise<boolean> {
+  try {
+    const module = await getWasmModule();
+    return module.begin_peer_adjudication?.(selfUserId, gmUserId, onApplied) ?? false;
+  } catch {
+    return false;
+  }
+}
+
+/** Whether peer-adjudicated play is running right now. */
+export async function peerAdjudicationActive(): Promise<boolean> {
+  try {
+    const module = await getWasmModule();
+    return module.peer_adjudication_active?.() ?? false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The server is reachable again: stop adjudicating, and keep what was applied
+ * for submission (FR-062).
+ */
+export async function endPeerAdjudication(serverReturned: boolean): Promise<void> {
+  try {
+    const module = await getWasmModule();
+    if (serverReturned) {
+      module.peer_adjudication_server_returned?.();
+    } else {
+      module.end_peer_adjudication?.();
+    }
+  } catch {
+    // Nothing to stop, or no bundle to stop it in.
+  }
+}
+
+/**
+ * Everything applied while server-isolated, as JSON.
+ *
+ * Provisional, all of it. The Game Master's client submits these over its own
+ * authenticated session and the server confirms or rejects each one; its
+ * decision is final (FR-062).
+ */
+export async function peerAdjudicationSubmissions(): Promise<string> {
+  try {
+    const module = await getWasmModule();
+    return module.peer_adjudication_submissions?.() ?? "[]";
+  } catch {
+    return "[]";
+  }
+}
+
+/**
+ * Put one token movement to the table.
+ *
+ * Position, rotation and scale only, and there is no argument for anything
+ * else (FR-060). `false` means "not adjudicating — queue it in the outbox
+ * instead", which is the caller's single fall-back.
+ */
+export async function proposeTokenTransform(
+  entityId: string,
+  transform: { x?: number; y?: number; rotation?: number; scale?: number },
+): Promise<boolean> {
+  try {
+    const module = await getWasmModule();
+    return (
+      module.propose_token_transform?.(
+        entityId,
+        transform.x,
+        transform.y,
+        transform.rotation,
+        transform.scale,
+      ) ?? false
+    );
+  } catch {
     return false;
   }
 }

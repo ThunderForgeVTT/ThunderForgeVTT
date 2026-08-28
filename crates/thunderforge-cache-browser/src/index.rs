@@ -386,8 +386,14 @@ mod tests {
     #[test]
     fn budget_entries_carry_size_recency_and_world_through_unchanged() {
         let rows = vec![
-            (ItemId::CanvasAsset(Uuid::from_u128(7)), entry(1, 500, 3, 100)),
-            (ItemId::SceneState(Uuid::from_u128(8)), entry(2, 900, 1, 200)),
+            (
+                ItemId::CanvasAsset(Uuid::from_u128(7)),
+                entry(1, 500, 3, 100),
+            ),
+            (
+                ItemId::SceneState(Uuid::from_u128(8)),
+                entry(2, 900, 1, 200),
+            ),
         ];
 
         let translated = budget_entries(&rows);
@@ -409,8 +415,14 @@ mod tests {
     #[test]
     fn budget_entries_report_the_same_total_the_index_does() {
         let rows = vec![
-            (ItemId::CanvasAsset(Uuid::from_u128(1)), entry(1, 400, 1, 10)),
-            (ItemId::CanvasAsset(Uuid::from_u128(2)), entry(2, 600, 2, 10)),
+            (
+                ItemId::CanvasAsset(Uuid::from_u128(1)),
+                entry(1, 400, 1, 10),
+            ),
+            (
+                ItemId::CanvasAsset(Uuid::from_u128(2)),
+                entry(2, 600, 2, 10),
+            ),
         ];
 
         let from_index = total_bytes(&rows.iter().map(|(_, e)| *e).collect::<Vec<_>>());

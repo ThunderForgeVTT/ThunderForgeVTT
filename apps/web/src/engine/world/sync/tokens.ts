@@ -218,6 +218,41 @@ async function queueTokenEditWhileOffline(
   command: WorldCommand,
   isGameMaster: boolean,
 ): Promise<boolean> {
+  // Spec 028 US7 (T100/T101): while server-isolated, the move is also put to
+  // the table, where the Game Master's client adjudicates it and every other
+  // participant applies it — so the token moves on everybody's screen instead
+  // of only this one.
+  //
+  // **And it is queued regardless.** Adjudication is provisional: the server
+  // confirms or rejects every change on reconnection and its decision is
+  // final (FR-062), so a change that skipped the outbox because the table had
+  // agreed it would be a change the server never hears about. The proposal is
+  // an addition to the offline path, never a replacement for it.
+  //
+  // The fabric answers `false` for every reason there is — not isolated, no
+  // peers, peer transfer off, Game Master absent — and there is nothing to do
+  // about any of them here, which is why the result is not read.
+  // Not awaited, deliberately: the outbox write is what makes the edit
+  // durable, and putting a peer round trip in front of it would delay the one
+  // thing that must not be lost for the sake of the one thing that is
+  // provisional.
+  if (command.type === "upsert_token") {
+    const { token } = command;
+    void (async () => {
+      try {
+        const { proposeTokenTransform } = await import("@/engine/bevy");
+        await proposeTokenTransform(token.id, {
+          x: token.x,
+          y: token.y,
+          rotation: token.rotation,
+          scale: token.scale,
+        });
+      } catch {
+        // No engine bundle, or it refused. Offline, exactly as before.
+      }
+    })();
+  }
+
   const attempt = await queueEdit({
     worldId,
     localId: crypto.randomUUID(),
