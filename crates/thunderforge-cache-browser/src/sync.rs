@@ -252,8 +252,8 @@ pub fn sync_request_body(manifest: &Manifest) -> String {
 
 #[cfg(target_arch = "wasm32")]
 pub use wasm::{
-    ApplyOutcome, DiscardOutcome, RepairOutcome, apply_plan, canvas_fingerprints, discard_world,
-    manifest_for_open_world, record_fetched, repair_world,
+    ApplyOutcome, BudgetOutcome, DiscardOutcome, RepairOutcome, apply_plan, canvas_fingerprints,
+    discard_world, enforce_budget, manifest_for_open_world, record_fetched, repair_world,
 };
 
 /// The browser half of a sync: reading the manifest out of the index, and
@@ -267,6 +267,11 @@ pub use wasm::{
 /// involvement.
 #[cfg(target_arch = "wasm32")]
 mod wasm {
+    use std::collections::BTreeMap;
+
+    use wasm_bindgen::JsCast as _;
+
+    use thunderforge_cache_core::budget;
     use thunderforge_cache_core::delta::SyncPlan;
     use thunderforge_cache_core::manifest::Manifest;
     use thunderforge_cache_core::{Fingerprint, ItemId};
@@ -574,6 +579,178 @@ mod wasm {
         }
 
         outcome
+    }
+
+    /// What a budget pass found and released.
+    #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+    pub struct BudgetOutcome {
+        /// Bytes the browser says are available to this origin, halved and
+        /// capped by [`budget::limit_bytes`]. Zero when the platform will not
+        /// say, which is treated as "do not evict", not as "no room".
+        pub limit_bytes: u64,
+        /// Plaintext bytes the index accounts for, before this pass.
+        pub in_use_bytes: u64,
+        /// Index rows released.
+        pub evicted: usize,
+        /// Blob files deleted. Lower than `evicted` when two items share
+        /// content, since the file goes only with the last row naming it.
+        pub blobs_removed: usize,
+        /// Steps that hit a platform error, reported rather than swallowed.
+        pub failed: usize,
+        /// Even releasing everything permissible leaves too little room. The
+        /// caller fetches without storing (FR-024) — degraded, never failed.
+        pub insufficient: bool,
+        /// The platform declined to estimate, so no plan was made.
+        pub unknown_quota: bool,
+    }
+
+    /// Recompute the budget against the browser's *current* quota and release
+    /// what no longer fits (FR-022, FR-023).
+    ///
+    /// # Why this runs on every world open
+    ///
+    /// The quota is not a constant and is not ours. `navigator.storage
+    /// .estimate()` answers from whatever the browser presently thinks the
+    /// origin may have, and that figure moves — the disk fills, the user
+    /// clears other sites, the browser revises its per-origin share, or the
+    /// profile moves to a smaller machine. A budget computed once at install
+    /// would be a number about a machine that no longer exists.
+    ///
+    /// So the limit is derived fresh each open and the store is **shrunk**
+    /// when the quota has dropped. The asymmetry is deliberate: growing needs
+    /// no action, because a larger limit simply admits the next write, while
+    /// shrinking needs eviction or the store sits permanently over a limit
+    /// nothing will ever bring it under.
+    ///
+    /// # Why a refused estimate evicts nothing
+    ///
+    /// `estimate()` is absent in some contexts and can reject in others. The
+    /// tempting reading of "no answer" is zero, and zero would mean a limit
+    /// of zero, and a limit of zero means evict everything the user has —
+    /// destroying a working cache because a diagnostic API was unavailable.
+    /// `unknown_quota` says so and the pass does nothing, which leaves the
+    /// store exactly as it was: possibly over an unknown limit, which the
+    /// next successful estimate corrects.
+    ///
+    /// # Eviction is per victim world, not per open world
+    ///
+    /// Unlike [`apply_plan`], what this releases belongs to *other* worlds by
+    /// construction — FR-023 forbids touching the open one. Their blobs live
+    /// in their own directories and their writers take their own locks, so
+    /// the victims are grouped by world and each group is released under that
+    /// world's lock. Taking the open world's lock here would serialise
+    /// against the wrong tab entirely and protect nothing.
+    pub async fn enforce_budget(
+        store: &OpfsStore,
+        index: &IndexStore,
+        open_world: Uuid,
+        incoming_bytes: u64,
+    ) -> BudgetOutcome {
+        let mut outcome = BudgetOutcome::default();
+
+        let Some(quota) = storage_quota().await else {
+            outcome.unknown_quota = true;
+            return outcome;
+        };
+        let limit = budget::limit_bytes(quota);
+        outcome.limit_bytes = limit;
+
+        let Ok(rows) = index.all().await else {
+            outcome.failed += 1;
+            return outcome;
+        };
+        let entries = crate::index::budget_entries(&rows);
+        let plan = budget::plan_eviction(&entries, limit, incoming_bytes, open_world);
+        outcome.in_use_bytes = plan.in_use_bytes;
+        outcome.insufficient = plan.insufficient;
+
+        if plan.evict.is_empty() {
+            return outcome;
+        }
+
+        // Group first, then take one lock per world. `plan.evict` is ordered
+        // by the planner and that order is not grouped, so evicting in it
+        // directly would mean acquiring and releasing the same world's lock
+        // repeatedly, with other tabs free to interleave in the gaps.
+        let mut by_world: BTreeMap<Uuid, Vec<ItemId>> = BTreeMap::new();
+        for id in &plan.evict {
+            let Ok(Some(entry)) = index.get(*id).await else {
+                // The row went between planning and here — another tab, or a
+                // repair pass. Already absent is the postcondition.
+                continue;
+            };
+            by_world.entry(entry.world_id).or_default().push(*id);
+        }
+
+        for (world_id, ids) in by_world {
+            let _lock = locks::acquire_exclusive(
+                &locks::world_sync_lock(world_id),
+                locks::WORLD_LOCK_TIMEOUT_MS,
+            )
+            .await;
+
+            for id in ids {
+                let fingerprint = match index.get(id).await {
+                    Ok(Some(entry)) => Some(entry.fingerprint),
+                    Ok(None) => None,
+                    Err(_) => {
+                        outcome.failed += 1;
+                        continue;
+                    }
+                };
+
+                if index.remove(id).await.is_err() {
+                    outcome.failed += 1;
+                    continue;
+                }
+                outcome.evicted += 1;
+
+                let Some(fingerprint) = fingerprint else {
+                    continue;
+                };
+                // Deduplicated content: the file goes with the last row that
+                // names it, never with the first.
+                if still_referenced(index, world_id, &fingerprint).await {
+                    continue;
+                }
+                match store.remove_blob(world_id, &fingerprint).await {
+                    Ok(()) => outcome.blobs_removed += 1,
+                    Err(_) => outcome.failed += 1,
+                }
+            }
+        }
+
+        outcome
+    }
+
+    /// What the browser says this origin may store, in bytes.
+    ///
+    /// `None` when the platform will not answer — no `navigator.storage`, no
+    /// `estimate`, a rejected promise, or a result with no numeric `quota`.
+    /// Every one of those is "we do not know", and the caller must not read
+    /// any of them as "no space" (see [`enforce_budget`]).
+    async fn storage_quota() -> Option<u64> {
+        let navigator = crate::global_property("navigator").ok()?;
+        let storage =
+            js_sys::Reflect::get(&navigator, &wasm_bindgen::JsValue::from_str("storage")).ok()?;
+        if storage.is_undefined() || storage.is_null() {
+            return None;
+        }
+        let estimate =
+            js_sys::Reflect::get(&storage, &wasm_bindgen::JsValue::from_str("estimate")).ok()?;
+        let estimate: js_sys::Function = estimate.dyn_into().ok()?;
+        let promise = estimate.call0(&storage).ok()?;
+        let promise: js_sys::Promise = promise.dyn_into().ok()?;
+        let result = wasm_bindgen_futures::JsFuture::from(promise).await.ok()?;
+        let quota =
+            js_sys::Reflect::get(&result, &wasm_bindgen::JsValue::from_str("quota")).ok()?;
+        // `as_f64` rejects a missing or non-numeric quota, which is the same
+        // "we do not know" as the platform having no API at all.
+        let quota = quota.as_f64()?;
+        if !quota.is_finite() || quota < 0.0 {
+            return None;
+        }
+        Some(quota as u64)
     }
 
     /// Whether any surviving row in this world still points at a blob.

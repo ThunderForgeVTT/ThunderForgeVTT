@@ -30,7 +30,7 @@
 //! rule in this feature asks *when* something was read.
 
 use serde::{Deserialize, Serialize};
-use thunderforge_cache_core::{Fingerprint, ItemId};
+use thunderforge_cache_core::{Fingerprint, ItemId, budget};
 use thunderforge_opfs::store::BlobShape;
 use uuid::Uuid;
 
@@ -134,6 +134,34 @@ pub fn for_world(entries: &[IndexEntry], world_id: Uuid) -> Vec<IndexEntry> {
         .iter()
         .copied()
         .filter(|entry| entry.world_id == world_id)
+        .collect()
+}
+
+/// This index, as the budget planner sees it.
+///
+/// `thunderforge_cache_core::budget` is where "how much may be stored and what
+/// goes when it is full" lives, and it is pure so that the rules can be tested
+/// without a browser. It speaks its own [`budget::IndexEntry`], which carries
+/// the item id alongside the size and recency; this crate's row is keyed by
+/// that id instead. The translation is mechanical and belongs here, next to
+/// the rows, rather than being open-coded at the one call site — which is
+/// exactly how `missing_blobs` and `orphaned_blobs` ended up tested and
+/// uncalled for as long as they did (FR-019).
+///
+/// Sizes are plaintext bytes on both sides. That is not a coincidence to be
+/// relied on quietly: the stored blob is larger by a nonce and a GCM tag, and
+/// a budget accounting in ciphertext bytes while the server reports plaintext
+/// ones would be wrong by that constant times the item count, in the
+/// direction of storing less than allowed and never noticing.
+pub fn budget_entries(entries: &[(ItemId, IndexEntry)]) -> Vec<budget::IndexEntry> {
+    entries
+        .iter()
+        .map(|(id, entry)| budget::IndexEntry {
+            id: *id,
+            world_id: entry.world_id,
+            byte_size: entry.byte_size,
+            last_read_seq: entry.last_read.0,
+        })
         .collect()
 }
 
@@ -347,6 +375,56 @@ mod tests {
 
     fn entry(byte: u8, size: u64, seq: u64, world: u128) -> IndexEntry {
         IndexEntry::new(fp(byte), size, Uuid::from_u128(world), ReadSeq(seq))
+    }
+
+    /// The translation the budget planner depends on, checked field by field.
+    ///
+    /// Worth a test despite being four assignments: every field is a `u64` or
+    /// a `Uuid`, so transposing two of them compiles perfectly and produces an
+    /// eviction plan that plausibly evicts the wrong things. A size read as a
+    /// recency would make the largest item look the freshest.
+    #[test]
+    fn budget_entries_carry_size_recency_and_world_through_unchanged() {
+        let rows = vec![
+            (ItemId::CanvasAsset(Uuid::from_u128(7)), entry(1, 500, 3, 100)),
+            (ItemId::SceneState(Uuid::from_u128(8)), entry(2, 900, 1, 200)),
+        ];
+
+        let translated = budget_entries(&rows);
+
+        assert_eq!(translated.len(), 2);
+        assert_eq!(translated[0].id, ItemId::CanvasAsset(Uuid::from_u128(7)));
+        assert_eq!(translated[0].byte_size, 500);
+        assert_eq!(translated[0].last_read_seq, 3);
+        assert_eq!(translated[0].world_id, Uuid::from_u128(100));
+        assert_eq!(translated[1].id, ItemId::SceneState(Uuid::from_u128(8)));
+        assert_eq!(translated[1].byte_size, 900);
+        assert_eq!(translated[1].last_read_seq, 1);
+        assert_eq!(translated[1].world_id, Uuid::from_u128(200));
+    }
+
+    /// The sizes on both sides are plaintext, and a planner fed ciphertext
+    /// sizes would be wrong by a constant per item — in the direction of
+    /// storing less than allowed and never saying so.
+    #[test]
+    fn budget_entries_report_the_same_total_the_index_does() {
+        let rows = vec![
+            (ItemId::CanvasAsset(Uuid::from_u128(1)), entry(1, 400, 1, 10)),
+            (ItemId::CanvasAsset(Uuid::from_u128(2)), entry(2, 600, 2, 10)),
+        ];
+
+        let from_index = total_bytes(&rows.iter().map(|(_, e)| *e).collect::<Vec<_>>());
+        let from_budget: u64 = budget_entries(&rows).iter().map(|e| e.byte_size).sum();
+
+        assert_eq!(from_index, from_budget);
+        assert_eq!(from_index, 1000);
+    }
+
+    /// An empty index plans nothing rather than panicking on a max/sum of
+    /// nothing — the state every browser is in before its first world opens.
+    #[test]
+    fn budget_entries_of_an_empty_index_is_empty() {
+        assert!(budget_entries(&[]).is_empty());
     }
 
     #[test]

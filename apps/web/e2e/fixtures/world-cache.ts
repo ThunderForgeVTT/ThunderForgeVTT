@@ -41,6 +41,21 @@ export interface SyncSummary {
   blobsReclaimed?: number;
   unfinishedKept?: number;
   repairFailures?: number;
+  /**
+   * FR-022/FR-023/FR-024 budget pass, likewise.
+   *
+   * `budgetLimit` is half the browser's reported quota, capped; `budgetInUse`
+   * is plaintext bytes the index accounts for. `budgetQuotaUnknown` is the
+   * case worth naming: the platform declined to estimate, which is *not* the
+   * same as reporting no space and must not evict anything.
+   */
+  budgetLimit?: number;
+  budgetInUse?: number;
+  budgetEvicted?: number;
+  budgetBlobsRemoved?: number;
+  budgetFailures?: number;
+  budgetInsufficient?: boolean;
+  budgetQuotaUnknown?: boolean;
   prefetching?: number;
   reason?: string;
 }

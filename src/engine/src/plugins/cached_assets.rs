@@ -136,7 +136,7 @@ enum Readiness {
 /// not `Send + Sync`. The browser-side handles live in a thread-local in the
 /// wasm module below, because they cannot satisfy `Resource`'s bounds and
 /// pretending otherwise would mean unsafe impls over browser objects.
-#[derive(Resource, Default)]
+#[derive(Resource)]
 pub struct CanvasAssetCache {
     readiness: Readiness,
     /// The OPFS scope currently open, if any.
@@ -156,6 +156,14 @@ pub struct CanvasAssetCache {
     /// for that asset — not "not cached". The two are different: a fetch
     /// with nothing to verify against cannot safely be stored.
     fingerprints: HashMap<Uuid, Fingerprint>,
+    /// Whether a fetched blob may be written to disk (FR-024).
+    ///
+    /// Defaults to storing, so a browser that has never completed a budget
+    /// pass behaves exactly as it did before budgets existed. Only a pass
+    /// that actually reported `insufficient` turns it off, and the next pass
+    /// that finds room turns it back on — the flag is a fact about the last
+    /// measurement, never a latch.
+    storable: bool,
     /// Ids of images this module has already resolved, keyed by the identity
     /// they were resolved under.
     ///
@@ -167,6 +175,29 @@ pub struct CanvasAssetCache {
     /// again. Ownership of texture residency stays with
     /// `BackgroundTextureCache` (Constitution Principle I).
     issued: HashMap<(Uuid, Fingerprint), AssetId<Image>>,
+}
+
+/// Hand-written rather than derived for one field: `storable` must start
+/// `true`.
+///
+/// `bool::default()` is `false`, which here would mean "refuse to cache
+/// anything" — so a derived `Default` would silently disable the entire
+/// feature on every browser until a budget pass happened to enable it, and
+/// would disable it permanently on any browser whose quota cannot be
+/// estimated. The safe default for a *permission* to store is to have it,
+/// because the pre-budget behaviour was to always store and the budget can
+/// only ever take that away.
+impl Default for CanvasAssetCache {
+    fn default() -> Self {
+        Self {
+            readiness: Readiness::default(),
+            scope: None,
+            world_id: None,
+            fingerprints: HashMap::new(),
+            storable: true,
+            issued: HashMap::new(),
+        }
+    }
 }
 
 impl CanvasAssetCache {
@@ -316,6 +347,14 @@ enum Control {
     /// again — quietly undoing the eviction. Replacing the whole map is what
     /// makes revocation stick (FR-015).
     ReplaceFingerprints(Vec<(Uuid, Fingerprint)>),
+    /// Whether there is room to store anything at all (FR-024).
+    ///
+    /// Set from each budget pass. `true` means even releasing everything
+    /// permissible left too little room — the open world alone exceeds the
+    /// limit, which FR-023 forbids evicting — so the cache keeps serving what
+    /// it already holds and stops *adding*. Loads still succeed; they simply
+    /// come from the network and are not filed.
+    Storable(bool),
     /// The backing store finished opening: usable, or not on this browser.
     ///
     /// Decided off the main thread and applied here, because the resource is
@@ -452,6 +491,9 @@ fn apply_control(cache: &mut CanvasAssetCache, control: Control) {
             cache.issued.clear();
             cache.fingerprints.extend(entries);
         }
+        Control::Storable(storable) => {
+            cache.storable = storable;
+        }
         Control::Readiness(ready) => {
             cache.readiness = if ready {
                 Readiness::Ready
@@ -464,6 +506,11 @@ fn apply_control(cache: &mut CanvasAssetCache, control: Control) {
             cache.world_id = None;
             cache.fingerprints.clear();
             cache.issued.clear();
+            // Back to permissive with everything else: the previous session's
+            // budget verdict was about that session's store, and carrying a
+            // `false` across a sign-out would leave the next user unable to
+            // cache anything until their own first budget pass.
+            cache.storable = true;
             // Back to `Unconfigured` rather than `Unavailable`: the cache is
             // not broken, there is simply nobody signed in. A later
             // `Configure` — the same user signing back in, or a different one
@@ -552,7 +599,7 @@ use wasm::{open_backing_store, spawn_resolve};
 
 #[cfg(target_arch = "wasm32")]
 mod wasm {
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
     use std::future::Future;
     use std::pin::Pin;
     use std::rc::Rc;
@@ -599,6 +646,29 @@ mod wasm {
         static HANDLES: RefCell<Option<Rc<Handles>>> = const { RefCell::new(None) };
         static OPENING: RefCell<Option<(UserScope, PendingOpen)>> =
             const { RefCell::new(None) };
+        /// FR-024: whether a fetched blob may be written.
+        ///
+        /// Duplicated here rather than read off `CanvasAssetCache` because
+        /// the write happens in a `spawn_local` task, which has no access to
+        /// the Bevy world — the same reason `HANDLES` lives here. The
+        /// resource keeps its own copy for the main-thread side; both are set
+        /// from the one budget pass, so they cannot disagree about anything
+        /// except for the frame it takes the control queue to drain.
+        ///
+        /// Starts `true` for the reason the resource's does: the permission
+        /// to store is the pre-budget behaviour, and a budget can only take
+        /// it away.
+        static STORABLE: Cell<bool> = const { Cell::new(true) };
+    }
+
+    /// Record the latest budget verdict for the write path (FR-024).
+    fn set_storable(storable: bool) {
+        STORABLE.with(|flag| flag.set(storable));
+    }
+
+    /// Whether there is room to file what was just fetched.
+    fn may_store() -> bool {
+        STORABLE.with(|flag| flag.get())
     }
 
     /// Open OPFS and the session key, then mark the cache usable.
@@ -799,6 +869,20 @@ mod wasm {
                 request.url,
             );
             deliver(request, bytes, Origin::NetworkUnverified);
+            return;
+        }
+
+        // FR-024, the "fetch without storing" degradation. The budget pass
+        // found that even releasing everything permissible leaves no room, so
+        // the bytes are delivered and not filed. This is the one branch here
+        // that is not a failure: the user sees their content, and the store
+        // is left holding what it already had rather than thrashing.
+        if !may_store() {
+            debug!(
+                target: "cached_assets",
+                "no room to cache {}; delivering without storing", request.url,
+            );
+            deliver(request, bytes, Origin::Network);
             return;
         }
 
@@ -1167,6 +1251,49 @@ mod wasm {
             );
         }
 
+        // FR-022/FR-023, after the repair and before the prefetch — the only
+        // point in the pass where the index is both accurate and not yet
+        // about to grow. Running it before `repair_world` would plan against
+        // rows that are known lies, and running it after the prefetch would
+        // mean admitting bytes first and asking about the budget afterwards.
+        //
+        // `incoming` is what this open intends to add, so the limit is
+        // checked against where the store is *going*, not where it has been.
+        let incoming: u64 = outcome.plan.fetch.iter().map(|item| item.byte_size).sum();
+        let budget = sync::enforce_budget(&handles.store, &index, world_uuid, incoming).await;
+        if budget.evicted > 0 || budget.failed > 0 || budget.insufficient {
+            info!(
+                target: "cached_assets",
+                "budget pass: {} row(s) evicted, {} blob(s) removed, {} failure(s), \
+                 {}/{} bytes in use{}",
+                budget.evicted,
+                budget.blobs_removed,
+                budget.failed,
+                budget.in_use_bytes,
+                budget.limit_bytes,
+                if budget.insufficient {
+                    " (insufficient: fetching without storing)"
+                } else {
+                    ""
+                },
+            );
+        }
+        // FR-024. A store with no room keeps serving what it holds and stops
+        // adding; loads still succeed, from the network, unfiled. Published
+        // even when nothing was evicted, because the *recovery* direction
+        // matters as much: a pass that finds room again must turn storing
+        // back on.
+        set_storable(!budget.insufficient);
+        if let Ok(mut queue) = control_queue().lock() {
+            queue.push(Control::Storable(!budget.insufficient));
+        }
+        if budget.unknown_quota {
+            debug!(
+                target: "cached_assets",
+                "no storage estimate available; leaving the store as it is",
+            );
+        }
+
         publish_fingerprints(&index, world_uuid, &outcome.plan).await;
         return_index(&handles, index);
 
@@ -1201,6 +1328,13 @@ mod wasm {
             "blobsReclaimed": repaired.blobs_reclaimed,
             "unfinishedKept": repaired.unfinished_kept,
             "repairFailures": repaired.failed,
+            "budgetLimit": budget.limit_bytes,
+            "budgetInUse": budget.in_use_bytes,
+            "budgetEvicted": budget.evicted,
+            "budgetBlobsRemoved": budget.blobs_removed,
+            "budgetFailures": budget.failed,
+            "budgetInsufficient": budget.insufficient,
+            "budgetQuotaUnknown": budget.unknown_quota,
             "prefetching": prefetching,
             "canonicalVersion": outcome.canonical_version,
         })
@@ -1287,6 +1421,19 @@ mod wasm {
     /// happens, so bytes that are not what the server promised are never
     /// stored and never counted.
     async fn prefetch(handles: Rc<Handles>, world_id: Uuid, items: Vec<(Uuid, Fingerprint, u64)>) {
+        // FR-024. Prefetching into a store with no room is the worst version
+        // of this: it spends bandwidth on writes that cannot land, or that
+        // land only by evicting something equally wanted. Demand loads still
+        // work — they fetch and deliver without filing — so nothing here is
+        // lost except the speculation.
+        if !may_store() {
+            debug!(
+                target: "cached_assets",
+                "no room to cache; skipping the prefetch for this open",
+            );
+            return;
+        }
+
         let mut spent: u64 = 0;
         for (asset_id, fingerprint, byte_size) in items {
             if spent.saturating_add(byte_size) > PREFETCH_BUDGET_BYTES {
