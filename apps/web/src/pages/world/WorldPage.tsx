@@ -148,6 +148,13 @@ export default function WorldPage() {
   }, [user?.id]);
   const [world, setWorld] = useState<WorldRecord | null>(null);
   const [scenes, setScenes] = useState<SceneRecord[]>([]);
+  // Which world the scene list above has actually finished fetching for.
+  // `scenes` alone can't distinguish "still in flight" from "fetched and
+  // genuinely empty" — both look like `[]` — and the scene-load state
+  // below has to tell those apart.
+  const [scenesFetchedForWorld, setScenesFetchedForWorld] = useState<
+    string | null
+  >(null);
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
   // True once `bindWorldStore` has actually finished registering its
   // store subscription (the thing that forwards "sync"-sourced dispatches
@@ -336,11 +343,13 @@ export default function WorldPage() {
           return;
         }
         setScenes(response);
+        setScenesFetchedForWorld(id);
       })
       .catch((error) => {
         console.error("Failed to load world scenes:", error);
         if (active) {
           setScenes([]);
+          setScenesFetchedForWorld(id);
         }
       });
 
@@ -589,7 +598,28 @@ export default function WorldPage() {
   }, [id, worldStore, bridgeReady]);
 
   useEffect(() => {
-    if (!selectedScene || !bridgeReady) {
+    if (!bridgeReady) {
+      return;
+    }
+
+    // A player's `scenes` list legitimately does not contain the scene
+    // they are playing: `scenes(worldId:)` filters hidden scenes out for
+    // non-GMs (server graphql/queries/scene.rs, spec 022 FR-008) and a
+    // world's auto-created scene is hidden, while `selectedSceneId` comes
+    // from the world's unfiltered, server-authoritative `activeSceneId`.
+    // So `selectedScene` stays null for that whole session and the
+    // dispatch below never runs — which used to mean "background" was
+    // never marked, the pending set never emptied, and every player sat
+    // under a permanent "Loading scene…" overlay on a canvas that had in
+    // fact fully loaded. With no scene record there is no `backgroundUrl`
+    // for anything to load, so the resource is satisfied rather than
+    // pending — the same call the no-art case below makes. Gated on the
+    // scene list having settled for *this* world so a still-in-flight
+    // fetch is not mistaken for an absent scene.
+    if (!selectedScene) {
+      if (sceneId && scenesFetchedForWorld === id) {
+        markSceneResourceLoaded("background", sceneLoadGeneration);
+      }
       return;
     }
 
@@ -679,6 +709,8 @@ export default function WorldPage() {
     };
   }, [
     selectedScene,
+    sceneId,
+    scenesFetchedForWorld,
     worldStore,
     id,
     bridgeReady,
