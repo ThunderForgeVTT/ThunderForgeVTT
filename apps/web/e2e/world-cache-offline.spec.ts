@@ -316,31 +316,25 @@ async function waitForOnline(
 test.describe("Client world cache — playing on through a lost connection (US7)", () => {
   test.setTimeout(420_000);
 
-  // `fixme`, with the state of the investigation recorded — the scenario and
-  // its setup are worth keeping, and most of this path is now proven.
-  //
-  // **What works, measured.** Blocking the heartbeat puts the client offline
-  // deterministically (counted by refused beats, not a sleep). The drag then
-  // moves the token locally *and* leaves the server unchanged — which is the
-  // assertion that distinguishes "queued" from "sent anyway", and it passes,
-  // since HTTP is up throughout and a client that fired the mutation
-  // regardless would have written through. So queueing works end to end.
-  //
-  // **What does not.** On recovery, no `ReconcileQueuedChanges` request is
-  // ever made — verified by counting them at the route. The queue is written
-  // and never replayed. Since the queue-side assertions pass, the fault is
-  // between the heartbeat recovering and `reconcileWorld` submitting: either
-  // the recovery listener does not fire, or `readQueuedChanges` reads an
-  // empty outbox from a store the write went to under different conditions.
-  // Those are distinguishable in about ten minutes with the app open and a
-  // breakpoint, and not by another Playwright cycle — which is where this
-  // stopped rather than continuing to guess.
-  //
-  // Two theories were tested and eliminated on the way: closing every
-  // WebSocket (the page can hold none at all, and socket liveness is the
-  // wrong question — see `heartbeat.ts`), and a stale server binary missing
-  // the new mutations (restarted; no change).
-  test.fixme("a change made offline is applied on reconnect and reported (SC-015, T083)", async ({
+  /**
+   * The bug this test found, for anyone reading the history: the token
+   * mutation bridge seeded its engine-id map once, from the scene's tokens
+   * at start, and only ever extended it from its own `createToken` calls. A
+   * token created afterwards through the token panel — which calls the
+   * mutation directly — was therefore never in the map, so every later drag
+   * of it read as a *first sighting*, and FR-035a's "creations are not
+   * queued offline" branch swallowed an ordinary move. Nothing was queued,
+   * so there was nothing to replay and no `ReconcileQueuedChanges` request
+   * was ever made. The bridge now learns from `sync` dispatches, which is
+   * how the client hears about a token in the first place.
+   *
+   * Worth noting what nearly hid it: the "the server must not have it yet"
+   * assertion below passed throughout, and was read as proof that queueing
+   * worked. It is not — a silently dropped edit leaves the server unchanged
+   * too. The assertion separates "queued" from "sent anyway", and says
+   * nothing about "dropped".
+   */
+  test("a change made offline is applied on reconnect and reported (SC-015, T083)", async ({
     page,
   }) => {
     const link = severableLink(page);
@@ -391,7 +385,7 @@ test.describe("Client world cache — playing on through a lost connection (US7)
     await expect(page.getByTestId("reconcile-report")).toBeVisible({ timeout: 30_000 });
   });
 
-  test.fixme("a queued change against deleted content is discarded with an explanation (T085)", async ({
+  test("a queued change against deleted content is discarded with an explanation (T085)", async ({
     page,
   }) => {
     const link = severableLink(page);

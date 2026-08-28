@@ -251,8 +251,26 @@ export function startTokenMutationBridge(
     });
 
   const unsubscribe = worldStore.subscribe((event) => {
-    // Avoid reacting to our own confirmed dispatches.
+    // A `sync` dispatch is not ours to send anywhere — but it is how this
+    // client learns that a token exists server-side, and the map has to hear
+    // it. Seeding once at start left the map frozen at scene-load: a token
+    // created afterwards by the token panel (which calls `createToken`
+    // directly and tells the bridge nothing) or by another player was
+    // permanently unknown here, and every later drag of it read as a *first
+    // sighting*. Online that meant a GM's drag minted a duplicate row; while
+    // offline it meant FR-035a's "creations are not queued" branch swallowed
+    // an ordinary move, silently, so nothing was queued and there was
+    // nothing to replay on reconnect (T083's failure).
+    //
+    // Sync dispatches use the server `tokenId` as the engine id — see
+    // `tokenRecordToWorldToken` — so the mapping to record is the identity
+    // one, exactly as the start-up seed does it.
     if (event.source === "sync") {
+      if (event.command.type === "upsert_token") {
+        engineIdToTokenId.set(event.command.token.id, event.command.token.id);
+      } else if (event.command.type === "remove_token") {
+        engineIdToTokenId.delete(event.command.tokenId);
+      }
       return;
     }
 
