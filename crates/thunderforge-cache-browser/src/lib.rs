@@ -42,6 +42,7 @@ pub mod crypto;
 pub mod index;
 pub mod locks;
 pub mod opfs;
+pub mod outbox;
 pub mod signal;
 pub mod sync;
 

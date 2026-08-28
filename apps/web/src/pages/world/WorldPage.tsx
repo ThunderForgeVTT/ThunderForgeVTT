@@ -1293,6 +1293,7 @@ export default function WorldPage() {
                 // retries indefinitely.
                 <div
                   data-testid="live-sync-reconnecting-indicator"
+                  data-sync-status={liveSyncState.status}
                   style={{
                     position: "absolute",
                     top: "1rem",
@@ -1308,7 +1309,17 @@ export default function WorldPage() {
                 >
                   {liveSyncState.status === "connecting"
                     ? "Connecting…"
-                    : `Reconnecting… (attempt ${liveSyncState.attempt})`}
+                    : liveSyncState.status === "disconnected"
+                      ? // Spec 028 US7 (T073). What matters to say here is not
+                        // "something is wrong" — the user can see that — but
+                        // that their work is being kept and that they may
+                        // carry on. An indicator that only announced the
+                        // failure would leave someone guessing whether to stop
+                        // moving tokens, which is the opposite of the point.
+                        liveSyncState.browserOffline
+                        ? "Offline — your changes are saved here and will sync when you reconnect"
+                        : "Can't reach the server — your changes are saved here and will sync when it's back"
+                      : `Reconnecting… (attempt ${liveSyncState.attempt})`}
                 </div>
               ) : null}
               {isSceneOwner && sceneId ? (

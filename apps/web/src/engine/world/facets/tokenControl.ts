@@ -61,6 +61,77 @@ export interface TokenControlFacet {
   manipulate(intent: ManipulateIntent): Promise<IntentResult<ManipulateIntent>>;
 }
 
+/** What a facet operation is, for the purposes of the offline rule. */
+export type OfflineEditKind =
+  | "move"
+  | "rotate"
+  | "scale"
+  | "setArt"
+  | "create"
+  | "delete";
+
+/** Whether an edit may be made while disconnected, and why not if not. */
+export interface OfflineEditVerdict {
+  permitted: boolean;
+  /** User-facing, and only present on a refusal. */
+  explanation?: string;
+}
+
+/**
+ * The FR-035a rule: while disconnected, only a token's position, rotation and
+ * scale may change.
+ *
+ * # Why creation and deletion are refused rather than queued
+ *
+ * Not a limitation of the outbox — it would store them happily. The problem
+ * is that conflict resolution cannot settle them without destroying work.
+ * `conflict::resolve` decides *precedence*: when two edits touch the same
+ * thing, one wins. That is a complete answer for a position, because the
+ * loser's value is simply not used and nothing is lost that the user cannot
+ * see and redo. It is not an answer for a deletion racing an edit — the
+ * choices are to delete something someone was still working on, or to
+ * resurrect something someone deliberately removed, and both are wrong in a
+ * way the user cannot detect afterwards.
+ *
+ * So the boundary is drawn where precedence remains honest. Broader offline
+ * authoring needs a different mechanism than precedence, and the spec defers
+ * it explicitly rather than pretending this one stretches.
+ *
+ * Art is refused for a related reason and a second one: setting art points at
+ * an asset, and an asset chosen offline may not exist server-side at all when
+ * the change replays.
+ *
+ * Pure and total, so the rule is one testable statement rather than a
+ * condition repeated at each call site — which is how the two halves of a
+ * rule drift apart.
+ */
+export function offlineEditVerdict(kind: OfflineEditKind): OfflineEditVerdict {
+  switch (kind) {
+    case "move":
+    case "rotate":
+    case "scale":
+      return { permitted: true };
+    case "setArt":
+      return {
+        permitted: false,
+        explanation:
+          "Token art can't be changed while you're offline — the new art has to reach the server first. Moving, turning and resizing all still work.",
+      };
+    case "create":
+      return {
+        permitted: false,
+        explanation:
+          "New tokens can't be added while you're offline. Reconnect and it will only take a moment — moving, turning and resizing tokens all still work in the meantime.",
+      };
+    case "delete":
+      return {
+        permitted: false,
+        explanation:
+          "Tokens can't be deleted while you're offline, because there'd be no safe way to settle it if someone else edited the same token. Reconnect to delete it.",
+      };
+  }
+}
+
 /**
  * Resolves what `principal` may do to `token`.
  *

@@ -55,11 +55,29 @@ export interface WorldEventLike {
  * own retry loop (configured below with `retryAttempts: Infinity`) is
  * backing off before its next attempt — this persists indefinitely; there
  * is no dead-end/terminal state requiring manual action (FR-009a).
+ * `disconnected`: reconnection has been failing long enough, or the browser
+ * says there is no network at all, that this is worth telling the user about
+ * and worth queueing their edits for (spec 028 US7, T073).
+ *
+ * # Why `disconnected` is separate from `reconnecting`
+ *
+ * They are the same underlying situation and a different thing to say about
+ * it. A dropped frame reconnects in about a second, and announcing "you are
+ * offline" for it would train people to ignore the notice — so
+ * `reconnecting` stays quiet and optimistic. What US7 needs is the moment
+ * that stops being a blip, because that is when edits start going to the
+ * outbox instead of the wire and the user has to know their work is being
+ * held rather than sent.
+ *
+ * Still not terminal, and still requires no manual action: the retry loop
+ * runs unchanged underneath, and a successful connection returns to `live`
+ * from here exactly as it does from `reconnecting`.
  */
 export type LiveSyncState =
   | { status: "connecting" }
   | { status: "live" }
-  | { status: "reconnecting"; attempt: number };
+  | { status: "reconnecting"; attempt: number }
+  | { status: "disconnected"; attempt: number; browserOffline: boolean };
 
 type LiveSyncStateListener = (state: LiveSyncState) => void;
 
@@ -109,6 +127,62 @@ export function lastSeenEventIdFor(worldId: string): number {
   return lastSeenEventId.get(worldId) ?? 0;
 }
 
+/**
+ * Failed attempts before a drop is called a disconnection.
+ *
+ * The backoff is 1s, 2s, 4s..., so three attempts is roughly seven seconds of
+ * a connection that will not come back. Short enough that someone who has
+ * genuinely lost their network is told before they have made much work that
+ * needs queueing; long enough that a server restart or a laptop waking up
+ * resolves itself without ever having claimed the user was offline.
+ */
+const DISCONNECTED_AFTER_ATTEMPTS = 3;
+
+/**
+ * Decide what to report, given what the socket and the browser each say.
+ *
+ * Pure, and separated from the client wiring, because this is the part with a
+ * judgement in it — everything around it is `graphql-ws` callbacks that
+ * cannot be exercised without a socket. Kept total: every combination of
+ * inputs names a state, so there is no path that leaves the UI showing a
+ * stale one.
+ */
+export function connectivityFor(input: {
+  hasConnectedOnce: boolean;
+  attempt: number;
+  browserOffline: boolean;
+}): LiveSyncState {
+  // `navigator.onLine === false` is one of the few things a browser reports
+  // that is worth believing immediately: there is no interface up, so no
+  // amount of backoff will help and pretending to reconnect is a fiction.
+  // The converse is *not* true — `onLine` true means "an interface exists",
+  // not "the server is reachable" — which is why the attempt count still
+  // decides everything else.
+  if (input.browserOffline) {
+    return {
+      status: "disconnected",
+      attempt: input.attempt,
+      browserOffline: true,
+    };
+  }
+  if (!input.hasConnectedOnce) {
+    return { status: "connecting" };
+  }
+  if (input.attempt >= DISCONNECTED_AFTER_ATTEMPTS) {
+    return {
+      status: "disconnected",
+      attempt: input.attempt,
+      browserOffline: false,
+    };
+  }
+  return { status: "reconnecting", attempt: input.attempt };
+}
+
+/** Whether edits should be queued rather than sent (US7). */
+export function isDisconnected(state: LiveSyncState = getLiveSyncState()): boolean {
+  return state.status === "disconnected";
+}
+
 let client: Client | null = null;
 let liveSyncState: LiveSyncState = { status: "connecting" };
 let hasConnectedOnce = false;
@@ -145,6 +219,50 @@ export function subscribeToLiveSyncState(listener: LiveSyncStateListener): () =>
 const RECONNECT_BASE_DELAY_MS = 1000;
 const RECONNECT_MAX_DELAY_MS = 30000;
 
+/** How many consecutive retries the socket is currently into. */
+let lastAttempt = 0;
+
+/**
+ * What the browser says about having a network at all.
+ *
+ * Guarded because `navigator.onLine` is absent in some contexts, and an
+ * absent answer must read as "online" — assuming offline would queue edits
+ * that could have been sent.
+ */
+function browserIsOffline(): boolean {
+  return typeof navigator !== "undefined" && navigator.onLine === false;
+}
+
+/**
+ * React to the browser's own network events.
+ *
+ * Registered once, at module scope, because the socket's backoff can be
+ * mid-30-second-wait when a laptop's wifi drops — without this the UI would
+ * keep claiming "reconnecting" for half a minute after the machine knows
+ * perfectly well that there is no network.
+ */
+if (typeof window !== "undefined") {
+  window.addEventListener("offline", () => {
+    if (hasConnectedOnce) {
+      setLiveSyncState(
+        connectivityFor({
+          hasConnectedOnce,
+          attempt: lastAttempt,
+          browserOffline: true,
+        }),
+      );
+    }
+  });
+  window.addEventListener("online", () => {
+    // Not `live`: an interface coming back says nothing about the server
+    // being reachable. Report the retry that is about to happen and let the
+    // socket's own `connected` callback promote it.
+    if (hasConnectedOnce && liveSyncState.status === "disconnected") {
+      setLiveSyncState({ status: "reconnecting", attempt: lastAttempt });
+    }
+  });
+}
+
 function getClient(): Client {
   if (!client) {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -156,8 +274,15 @@ function getClient(): Client {
         // "reconnecting" (data-model.md) — a still-connecting first
         // handshake retrying stays in `connecting` rather than jumping to
         // `reconnecting` with a confusing attempt count.
+        lastAttempt = retries + 1;
         if (hasConnectedOnce) {
-          setLiveSyncState({ status: "reconnecting", attempt: retries + 1 });
+          setLiveSyncState(
+            connectivityFor({
+              hasConnectedOnce,
+              attempt: lastAttempt,
+              browserOffline: browserIsOffline(),
+            }),
+          );
         }
         const delayMs = Math.min(
           RECONNECT_BASE_DELAY_MS * 2 ** retries,
@@ -168,6 +293,7 @@ function getClient(): Client {
       on: {
         connected: () => {
           hasConnectedOnce = true;
+          lastAttempt = 0;
           setLiveSyncState({ status: "live" });
         },
         closed: () => {
