@@ -35,10 +35,23 @@
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { RollResolutionRecord } from "@/types/roll";
+import { discrepancyFor } from "@/engine/world/sync/discrepancies";
 import { discrepancyToShow } from "./rollDiscrepancy";
 
 export interface RollResultProps {
   resolution: RollResolutionRecord;
+  /**
+   * The server's roll record id, where the caller has one.
+   *
+   * A roll made live through `rollDice` has none, and needs none: a
+   * discrepancy is about a result a client *reported while it could not
+   * reach the server*, which is only ever discovered later, when the queue
+   * is reconciled. So the two paths are genuinely different objects, and
+   * the absence here is the honest answer rather than a gap — a live roll
+   * has nothing disclosed about it yet. Callers rendering a stored record
+   * pass its id and get the disclosure.
+   */
+  recordId?: string | null;
   /**
    * Whether the viewer is the Game Master. FR-067: the note exists for them
    * and for nobody else. Defaults to `false`, so a caller that has not
@@ -50,8 +63,27 @@ export interface RollResultProps {
   rolledBy?: string;
 }
 
-export function RollResult({ resolution, isGameMaster = false, rolledBy }: RollResultProps) {
-  const discrepancy = discrepancyToShow(resolution.discrepancy, isGameMaster);
+export function RollResult({
+  resolution,
+  isGameMaster = false,
+  rolledBy,
+  recordId,
+}: RollResultProps) {
+  // Two sources, one answer. A discrepancy may ride on the record itself,
+  // or — the ordinary case — arrive later on a reconcile outcome and wait in
+  // `discrepancies.ts` until someone looks at this roll. Both are the same
+  // disclosure and both go through the same refusals below.
+  const disclosed = discrepancyFor(recordId);
+  const discrepancy = discrepancyToShow(
+    resolution.discrepancy ??
+      (disclosed
+        ? {
+            claimedValue: disclosed.reportedValue,
+            determinedValue: disclosed.determinedValue,
+          }
+        : null),
+    isGameMaster,
+  );
 
   const total = (
     <strong data-testid="roll-result-total">{resolution.resultValue}</strong>

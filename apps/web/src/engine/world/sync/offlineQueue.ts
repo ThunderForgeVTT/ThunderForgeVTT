@@ -15,6 +15,7 @@
  */
 
 import { submitQueuedChanges } from "@/api/reconcile";
+import { noteDiscrepancy } from "./discrepancies";
 import {
   forgetReconciledChanges,
   queueOfflineChange,
@@ -280,7 +281,25 @@ async function drainQueue(
 
     let outcomes: ReconcileOutcome[];
     try {
-      outcomes = await submitQueuedChanges(worldId, queued);
+      outcomes = await submitQueuedChanges(
+        worldId,
+        queued.map((change) => {
+          const adjudication = readAdjudication(change.command);
+          return {
+            localId: change.localId,
+            command: change.command,
+            // Lifted out of the command and onto the input, because that is
+            // where the server reads it. Stamping it inside the command was
+            // enough to carry it across a page reload — the outbox is the
+            // only durable thing in the path — but the command is opaque to
+            // the server, so attribution left in there is attribution the
+            // role check never sees.
+            ...(adjudication
+              ? { attributedToUserId: adjudication.originatorUserId }
+              : {}),
+          };
+        }),
+      );
     } catch {
       // The call itself failed — a second disconnection, most likely. Nothing
       // was answered, so nothing is dropped, and this pass's changes go again
@@ -290,6 +309,16 @@ async function drainQueue(
       report.unanswered.push(...submitted);
       report.stillQueued.push(...submitted);
       return report;
+    }
+
+    // Disclosure is remembered before anything else is done with the
+    // outcomes, because it is independent of whether the change applied —
+    // the server flags and applies (FR-066), so a discrepancy must survive
+    // both the applied and the rejected path.
+    for (const outcome of outcomes) {
+      if (outcome.discrepancy) {
+        noteDiscrepancy(outcome.discrepancy.recordId, outcome.discrepancy);
+      }
     }
 
     const matched = matchOutcomes(submitted, outcomes);

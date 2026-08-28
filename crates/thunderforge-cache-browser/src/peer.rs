@@ -1714,7 +1714,30 @@ impl Adjudication {
                 // outcome is provisional, and still cannot submit one: the
                 // server checks the submitter's role, and that check is the
                 // one that binds (FR-061, ADR-052's trust model).
-                self.users.insert(from.to_string(), user_id);
+                // Answered in kind when it is news, and only then.
+                //
+                // `HELLO` is broadcast once, when a client begins. Two
+                // clients do not begin at the same instant, so the one that
+                // begins first announces itself to peers that are not
+                // listening yet and the frame is dropped — it has no
+                // adjudication to be delivered to. The later starter's own
+                // `HELLO` then lands fine, which left the pair in the exact
+                // asymmetry this closes: the Game Master knew the player,
+                // the player never learned the Game Master, and a player's
+                // client will not adjudicate until it has. Measured, with
+                // both clients severed and peers connected: the GM sat at
+                // `server-isolated` while the player sat at `reconnecting`
+                // indefinitely.
+                //
+                // Replying only on new information bounds it: two crossing
+                // greetings cost one reply each and then stop, because the
+                // second reply teaches nobody anything.
+                if self.users.insert(from.to_string(), user_id).is_none() {
+                    return AdjudicationStep::Broadcast {
+                        frames: vec![self.hello()],
+                        applied: None,
+                    };
+                }
             }
             return AdjudicationStep::Ignore;
         }

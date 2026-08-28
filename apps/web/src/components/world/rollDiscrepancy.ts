@@ -36,9 +36,16 @@ export interface RollDiscrepancy {
 export interface RollDiscrepancyRecord {
   claimedValue?: number | null;
   determinedValue?: number | null;
+  /**
+   * The server's own spelling on the reconcile outcome. Accepted here so the
+   * two ends cannot disagree about a name — they already did once, and the
+   * result was a value that travelled the whole way and then read as absent.
+   */
+  reportedValue?: number | null;
   /** Snake-cased alternates, for whichever spelling the field ships under. */
   claimed_value?: number | null;
   determined_value?: number | null;
+  reported_value?: number | null;
 }
 
 function finite(...candidates: (number | null | undefined)[]): number | null {
@@ -69,7 +76,12 @@ export function discrepancyToShow(
   if (!isGameMaster) return null;
   if (!record) return null;
 
-  const claimed = finite(record.claimedValue, record.claimed_value);
+  const claimed = finite(
+    record.claimedValue,
+    record.claimed_value,
+    record.reportedValue,
+    record.reported_value,
+  );
   const determined = finite(record.determinedValue, record.determined_value);
   // Either side missing means the comparison never happened — a timeout, a
   // parse failure, a version the server could not replay. Absence of evidence

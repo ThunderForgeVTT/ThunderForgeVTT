@@ -1,3 +1,4 @@
+import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import {
   registerAndCreateWorld,
@@ -10,6 +11,8 @@ import {
   createCanvasAsset,
   createScene,
   holdsFingerprint,
+  importMapBackground,
+  sceneBackgroundAssetId,
   openWorldAndSync,
   sceneIds,
   setSceneHidden,
@@ -31,6 +34,12 @@ import {
  * much as a performance one: this feature must not be able to do anything
  * while the application is closed.
  */
+
+/** A real map, so the open scene has art the engine actually loads. */
+const CHAMBER_MAP = path.resolve(
+  __dirname,
+  "../../../examples/maps/chamber-of-echoing-grief.dd2vtt",
+);
 
 /** Every service-worker registration this page holds, by scope. */
 async function serviceWorkerScopes(page: Page): Promise<string[]> {
@@ -140,7 +149,18 @@ test.describe("Client world cache — background prefetch (US8)", () => {
     const secondSceneId = await createScene(page, worldId, secondName);
     await setSceneHidden(page, secondSceneId, false);
     const speculativeId = await createCanvasAsset(page, worldId, secondSceneId, 45);
-    const demandId = await createCanvasAsset(page, worldId, firstSceneId, 46);
+
+    // The demand side has to be a scene *background*, not a pasted asset.
+    // This is the whole reason an earlier version of this test failed: only
+    // the background is loaded by the engine on every open, so a pasted
+    // asset on the open scene is never *demanded* at all — it is prefetched
+    // like everything else, and comparing two speculative fetches to each
+    // other tests nothing. `importMapBackground`'s own docstring says this.
+    await page.goto(`/world/${worldId}/play`);
+    await waitForEngineReady(page);
+    await importMapBackground(page, CHAMBER_MAP);
+    const demandId = await sceneBackgroundAssetId(page, worldId, firstSceneId);
+    expect(demandId, "the open scene needs a background to demand").toBeTruthy();
 
     // Recorded in arrival order, so the assertion is about precedence rather
     // than about how long anything took.

@@ -16,6 +16,12 @@ const RECONCILE_MUTATION = `
       applied
       reason
       supersededByRole
+      discrepancy {
+        userId
+        recordId
+        reportedValue
+        determinedValue
+      }
     }
   }
 `;
@@ -23,6 +29,17 @@ const RECONCILE_MUTATION = `
 export interface QueuedChangePayload {
   localId: string;
   command: unknown;
+  /**
+   * Who actually made this change, when it is not the person submitting it.
+   *
+   * Sent as its own input field rather than left inside the command, because
+   * the command is opaque to the server by design — it is replayed through
+   * the ordinary mutation path and nothing unpacks it. The attribution has
+   * to be somewhere the server *does* read, or FR-061's role check has
+   * nothing to check. Absent means "the submitter made it", which is the
+   * ordinary case and the safe reading.
+   */
+  attributedToUserId?: string;
 }
 
 /**

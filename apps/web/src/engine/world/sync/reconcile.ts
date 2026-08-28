@@ -41,6 +41,18 @@ export interface ReconcileOutcome {
   reason?: RejectionReason | null;
   /** Set when `reason` is `SUPERSEDED`: who won. */
   supersededByRole?: string | null;
+  /**
+   * Present only when the server independently determined this outcome and
+   * got a different answer (FR-064). It is disclosure, never a refusal —
+   * `applied` is decided separately and is unaffected by this field's
+   * presence, which is why it sits beside that flag rather than inside it.
+   */
+  discrepancy?: {
+    userId: string;
+    recordId: string;
+    reportedValue: number;
+    determinedValue: number;
+  } | null;
 }
 
 /** A change this client submitted, paired with what it touched. */

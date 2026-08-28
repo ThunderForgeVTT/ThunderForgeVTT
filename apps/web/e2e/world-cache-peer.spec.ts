@@ -10,6 +10,7 @@ import {
   createScene,
   holdsFingerprint,
   openWorldAndSync,
+  peerCounters,
   sceneIds,
   setSceneHidden,
   watchCacheSync,
@@ -32,25 +33,6 @@ import {
  * Only these prove it against a real one: real signaling, real SDP, real
  * chunked transfer over SCTP, and a real fall-back to the server underneath.
  */
-
-/** The peer module's own counters, as the app reports them. */
-async function peerCounters(page: Page): Promise<{
-  peers: number;
-  bytes: number;
-  failures: number;
-}> {
-  return page.evaluate(async () => {
-    const mod = (await import(
-      /* @vite-ignore */ "/src/services/peerTransfer.ts"
-    )) as typeof import("../src/services/peerTransfer");
-    const state = mod.getPeerTransferState();
-    return {
-      peers: state.connectedPeers,
-      bytes: state.bytesFromPeers,
-      failures: state.verificationFailures,
-    };
-  });
-}
 
 /**
  * Make every `CHUNK` this context sends carry the wrong bytes.

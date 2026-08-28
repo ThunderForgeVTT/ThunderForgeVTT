@@ -1388,3 +1388,66 @@ fn play_waits_until_the_game_master_is_known_to_be_here() {
     player.on_message("gm", AdjudicationMessage::Hello { user_id: gm_user() });
     assert!(player.is_adjudicating());
 }
+
+/// Two clients do not begin adjudicating at the same instant, and the
+/// greeting must survive that.
+///
+/// `HELLO` is broadcast once, at `begin`. Whoever begins first announces
+/// itself to peers that have no adjudication yet, and the frame is simply
+/// dropped. Before this was answered in kind the pair ended up in a stable
+/// asymmetry — measured in the browser with both clients severed and their
+/// data channel open, the Game Master sat at `server-isolated` while the
+/// player sat at `reconnecting` forever, because a player's client will not
+/// adjudicate until it knows which session the Game Master is speaking on.
+#[test]
+fn a_client_that_began_first_still_learns_who_the_game_master_is() {
+    let gm_user = Uuid::from_u128(0xC3);
+    let player_user = Uuid::from_u128(0xD4);
+
+    // The Game Master begins first. Its greeting goes out to a player that
+    // is not adjudicating yet, so nothing here receives it.
+    let mut gm = Adjudication::begin("gm-session", gm_user, gm_user, vec!["p-session".into()])
+        .expect("a table of two adjudicates");
+
+    // The player begins second and greets. The Game Master learns the
+    // player, and — the fix — says who it is in return.
+    let mut player =
+        Adjudication::begin("p-session", player_user, gm_user, vec!["gm-session".into()])
+            .expect("a table of two adjudicates");
+    assert!(
+        !player.is_adjudicating(),
+        "precondition: a player that has not heard from the Game Master must not adjudicate",
+    );
+
+    let answer = gm.on_message(
+        "p-session",
+        AdjudicationMessage::Hello { user_id: player_user },
+    );
+    let frames = match answer {
+        AdjudicationStep::Broadcast { frames, .. } => frames,
+        other => panic!("a new greeting must be answered, got {other:?}"),
+    };
+
+    for frame in &frames {
+        let message = AdjudicationMessage::decode(frame).expect("a greeting must decode");
+        player.on_message("gm-session", message);
+    }
+
+    assert!(
+        player.is_adjudicating(),
+        "the player must be adjudicating once the Game Master has answered",
+    );
+
+    // And it stops there: a greeting that teaches nothing new is not
+    // answered, so two clients cannot greet each other forever.
+    assert!(
+        matches!(
+            gm.on_message(
+                "p-session",
+                AdjudicationMessage::Hello { user_id: player_user },
+            ),
+            AdjudicationStep::Ignore
+        ),
+        "a repeated greeting must not be answered, or the two never stop",
+    );
+}
