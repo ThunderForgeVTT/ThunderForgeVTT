@@ -402,6 +402,14 @@ async fn main() {
     eprintln!("[Server] 🚀 Starting session cleanup task");
     session::spawn_session_cleanup_task(db_pool.clone());
 
+    // Spec 028 T125: fill in `content_hash` for assets written before the
+    // column existed. Paced deliberately and allowed to take as long as it
+    // takes — a NULL hash already means "the client must fetch this", so
+    // the system is correct the whole time this is unfinished, merely
+    // wasteful. Nothing waits on it.
+    eprintln!("[Server] 🚀 Starting canvas asset content-hash backfill task");
+    storage::backfill::spawn_content_hash_backfill_task(db_pool.clone());
+
     let schema = Schema::build(
         QueryRoot::default(),
         MutationRoot::default(),
