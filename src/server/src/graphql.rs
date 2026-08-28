@@ -93,7 +93,9 @@ pub mod mutations_shapes;
 pub use mutations_shapes::ShapeMutation;
 
 // Native canvas authoring: scene-scoped token mutations
+pub mod mutations_reconcile;
 pub mod mutations_tokens;
+pub use mutations_reconcile::ReconcileMutation;
 pub use mutations_tokens::TokenMutation;
 
 // Spec 002: canvas image asset storage (RustFS)
@@ -2610,6 +2612,7 @@ pub struct MutationRoot(
     ActorClaimMutation,
     ChatMutation,
     CombatMutation,
+    ReconcileMutation,
 );
 
 pub type AppSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;
