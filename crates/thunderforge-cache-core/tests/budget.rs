@@ -1,7 +1,10 @@
 //! Spec 028 T060: the budget rule, and the one it must never break.
 
 use thunderforge_cache_core::ItemId;
-use thunderforge_cache_core::budget::{IndexEntry, MAX_BUDGET_BYTES, limit_bytes, plan_eviction};
+use thunderforge_cache_core::budget::{
+    IndexEntry, MAX_BUDGET_BYTES, Speculation, admit_speculative, limit_bytes, plan_eviction,
+    speculative_headroom,
+};
 use uuid::Uuid;
 
 fn world(n: u128) -> Uuid {
@@ -126,4 +129,69 @@ fn eviction_plan_is_deterministic() {
     let a = plan_eviction(&index, 150, 100, world(1));
     let b = plan_eviction(&index, 150, 100, world(1));
     assert_eq!(a, b);
+}
+
+// --- T118 / FR-071: speculation stops, it never evicts -------------------
+
+#[test]
+fn speculative_content_is_admitted_only_into_room_that_is_already_spare() {
+    // 600 in use of 1000 leaves 400. Exactly 400 fits; one byte more does not.
+    assert_eq!(admit_speculative(600, 1000, 400), Speculation::Admit);
+    assert_eq!(admit_speculative(600, 1000, 401), Speculation::Stop);
+    assert_eq!(speculative_headroom(600, 1000), 400);
+}
+
+#[test]
+fn prefetching_stops_rather_than_evicting_a_world_it_could_have_freed() {
+    // The sharp one (FR-071). This index is *full* of releasable content: two
+    // cold worlds, neither of them open, exactly what `plan_eviction` exists
+    // to reclaim. A demand fetch of the same size would be admitted by
+    // releasing world 3 — and the speculative answer must still be Stop.
+    let index = vec![
+        entry(1, 1, 100, 9), // open world
+        entry(2, 2, 400, 1), // cold, releasable
+        entry(3, 3, 400, 2), // cold, releasable
+    ];
+    let in_use: u64 = index.iter().map(|e| e.byte_size).sum();
+    let limit = 1000;
+    let incoming = 300;
+
+    let demand = plan_eviction(&index, limit, incoming, world(1));
+    assert!(
+        !demand.evict.is_empty(),
+        "precondition: for a demand fetch this index has plenty to release"
+    );
+
+    assert_eq!(
+        admit_speculative(in_use, limit, incoming),
+        Speculation::Stop,
+        "speculative content must never displace content the user actually has"
+    );
+}
+
+#[test]
+fn a_refused_storage_estimate_stops_the_prefetch() {
+    // `enforce_budget` leaves `limit_bytes` at zero when the platform will
+    // not estimate, and evicts nothing. Speculation reads that same zero as
+    // Stop: room that cannot be demonstrated is not room. Demand loads are
+    // unaffected — they never consult this function.
+    assert_eq!(admit_speculative(0, 0, 1), Speculation::Stop);
+    assert_eq!(speculative_headroom(0, 0), 0);
+}
+
+#[test]
+fn a_store_already_over_its_limit_admits_nothing_speculative() {
+    // The quota shrank under a store that was legitimately filled. Eviction
+    // is the pass that fixes that; a prefetch must not add to it meanwhile,
+    // and must not report negative headroom by underflowing.
+    assert_eq!(admit_speculative(2000, 1000, 1), Speculation::Stop);
+    assert_eq!(speculative_headroom(2000, 1000), 0);
+}
+
+#[test]
+fn a_zero_byte_speculative_item_never_overflows_the_check() {
+    // Sizes come off the server's plan, so the arithmetic must survive one
+    // that is absurd rather than wrap into an accidental Admit.
+    assert_eq!(admit_speculative(u64::MAX, u64::MAX, 0), Speculation::Admit);
+    assert_eq!(admit_speculative(u64::MAX, u64::MAX, 1), Speculation::Stop);
 }

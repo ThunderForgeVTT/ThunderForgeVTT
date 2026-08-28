@@ -405,6 +405,12 @@ pub fn configure_canvas_asset_cache(user_scope: &str, world_id: &str) {
         warn!(target: "cached_assets", "ignoring cache config: {world_id} is not a uuid");
         return;
     };
+    // FR-073. The prefetcher runs in a spawned task with no access to the
+    // ECS, so the world it is confined to is recorded here, at the one point
+    // that always knows: every path that opens a world passes through this
+    // function, `run_sync` included.
+    #[cfg(target_arch = "wasm32")]
+    wasm::note_open_world(world_id);
     if let Ok(mut queue) = control_queue().lock() {
         queue.push(Control::Configure {
             scope: user_scope.to_owned(),
@@ -436,6 +442,13 @@ pub fn set_canvas_asset_fingerprints(json: &str) {
             ))
         })
         .collect();
+    // FR-070. A live update outranks speculation twice over: it is work the
+    // user is waiting on, and it means the plan an in-flight prefetch is
+    // draining no longer matches what the server would answer. Bumping the
+    // epoch stops that prefetch at its next step; the following sync builds a
+    // fresh queue from a fresh plan.
+    #[cfg(target_arch = "wasm32")]
+    wasm::note_live_update();
     if let Ok(mut queue) = control_queue().lock() {
         queue.push(Control::Fingerprints(entries));
     }
@@ -616,6 +629,7 @@ mod wasm {
     use thunderforge_cache_browser::index::IndexStore;
     use thunderforge_cache_browser::opfs::{OpfsStore, UserScope};
     use thunderforge_cache_browser::outbox::OutboxStore;
+    use thunderforge_cache_browser::prefetch::{PrefetchItem, PrefetchQueue, Pressure, Step};
     use thunderforge_cache_browser::{CacheSignal, IndexEntry, crypto};
     use thunderforge_cache_browser::{locks, peer, signal, sync};
     use thunderforge_cache_core::delta::SyncPlan;
@@ -666,6 +680,118 @@ mod wasm {
         /// to store is the pre-budget behaviour, and a budget can only take
         /// it away.
         static STORABLE: Cell<bool> = const { Cell::new(true) };
+        /// FR-073: the world the user currently has open.
+        ///
+        /// The prefetcher is a spawned task that outlives the sync which
+        /// started it, so it cannot read the open world off the ECS resource
+        /// — and must not assume the world it was created for is still the
+        /// one on screen. Set from `configure_canvas_asset_cache`, which
+        /// every world open passes through.
+        static OPEN_WORLD: Cell<Option<Uuid>> = const { Cell::new(None) };
+        /// FR-070/FR-072: which plan is current.
+        ///
+        /// Bumped by every sync and by every live fingerprint update. A
+        /// prefetch queue carries the epoch it was built under and stops when
+        /// it no longer matches, which is what keeps a superseded plan from
+        /// continuing to spend bandwidth on fingerprints the server has
+        /// already moved past.
+        static PLAN_EPOCH: Cell<u64> = const { Cell::new(0) };
+        /// FR-070: user-initiated loads outstanding right now.
+        ///
+        /// Incremented for the whole of a `resolve` — the cache read and any
+        /// network fetch behind it — because both are work somebody is
+        /// watching a blank canvas waiting for. The prefetcher does not go
+        /// through `resolve`, so it cannot count itself and yield to its own
+        /// traffic.
+        static DEMAND_IN_FLIGHT: Cell<usize> = const { Cell::new(0) };
+    }
+
+    /// Record which world is open (FR-073).
+    pub(super) fn note_open_world(world_id: Uuid) {
+        OPEN_WORLD.with(|slot| slot.set(Some(world_id)));
+    }
+
+    /// Mark every queued speculative plan stale (FR-070).
+    pub(super) fn note_live_update() {
+        PLAN_EPOCH.with(|epoch| epoch.set(epoch.get().wrapping_add(1)));
+    }
+
+    /// Take the next plan epoch, for a queue about to be built from a plan
+    /// that has just arrived.
+    fn begin_plan() -> u64 {
+        PLAN_EPOCH.with(|epoch| {
+            let next = epoch.get().wrapping_add(1);
+            epoch.set(next);
+            next
+        })
+    }
+
+    /// Counts one user-initiated load for as long as it is in flight.
+    ///
+    /// A guard rather than a pair of calls because the paths it wraps have
+    /// several early returns, and a demand fetch that returns early without
+    /// decrementing would leave the prefetcher yielding to a load that
+    /// finished minutes ago — a cache that silently never warms, which is
+    /// precisely the failure nobody notices.
+    struct DemandGuard;
+
+    impl DemandGuard {
+        fn new() -> Self {
+            DEMAND_IN_FLIGHT.with(|n| n.set(n.get().saturating_add(1)));
+            Self
+        }
+    }
+
+    impl Drop for DemandGuard {
+        fn drop(&mut self) {
+            DEMAND_IN_FLIGHT.with(|n| n.set(n.get().saturating_sub(1)));
+        }
+    }
+
+    /// Everything outside the queue that decides what it may do next.
+    ///
+    /// Every field is read at the moment it is asked for. That is the point:
+    /// all four of these move while a prefetch is draining, and a queue
+    /// deciding on a snapshot taken when the sync finished would be deciding
+    /// on a tab that no longer exists.
+    fn pressure(fallback_world: Uuid, in_use: u64, limit: u64) -> Pressure {
+        Pressure {
+            open_world: OPEN_WORLD.with(Cell::get).unwrap_or(fallback_world),
+            plan_epoch: PLAN_EPOCH.with(Cell::get),
+            demand_in_flight: DEMAND_IN_FLIGHT.with(Cell::get),
+            in_use_bytes: in_use,
+            limit_bytes: limit,
+            may_store: may_store(),
+        }
+    }
+
+    /// Hand the event loop back for `ms`, so nothing here occupies a turn the
+    /// active scene wanted.
+    ///
+    /// Reached through `js_sys::Reflect` rather than `web-sys` for the same
+    /// reason `cookie_value` is: this crate does not depend on `web-sys`, and
+    /// must not assume it is running on a `Window`. A scope with no
+    /// `setTimeout` resolves immediately rather than leaving the prefetch
+    /// task suspended forever on a promise nothing will settle.
+    async fn yield_for(ms: i32) {
+        use wasm_bindgen::JsCast;
+        use wasm_bindgen::JsValue;
+
+        let promise = js_sys::Promise::new(&mut |resolve, _reject| {
+            let global = js_sys::global();
+            match js_sys::Reflect::get(&global, &JsValue::from_str("setTimeout"))
+                .ok()
+                .and_then(|f| f.dyn_into::<js_sys::Function>().ok())
+            {
+                Some(set_timeout) => {
+                    let _ = set_timeout.call2(&global, &resolve, &JsValue::from_f64(f64::from(ms)));
+                }
+                None => {
+                    let _ = resolve.call0(&JsValue::NULL);
+                }
+            }
+        });
+        let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
     }
 
     /// Record the latest budget verdict for the write path (FR-024).
@@ -825,6 +951,12 @@ mod wasm {
     }
 
     async fn resolve(request: ResolveRequest) {
+        // FR-070. Held for the whole resolve, cache read included: the user
+        // is looking at an empty sprite until this finishes, and a prefetch
+        // that ran alongside it would be competing for the connection they
+        // are waiting on.
+        let _demand = DemandGuard::new();
+
         let Some(handles) = HANDLES.with(|slot| slot.borrow().clone()) else {
             // Configured but the store vanished. Not expected; still a
             // network fetch rather than a broken image.
@@ -1028,17 +1160,6 @@ mod wasm {
     /// from them.
     const ASSET_URL_PREFIX: &str = "/api/canvas-assets";
 
-    /// How much a single world open may pull ahead of demand.
-    ///
-    /// A cold world's plan lists every asset in it, and fetching all of them
-    /// eagerly is how the *next* visit becomes free (US1 scenario 3). But an
-    /// unbounded prefetch would let a large world spend more of this visit's
-    /// bandwidth than the visit itself needs, competing with the scene the
-    /// user is waiting on. Past the ceiling the remaining items are simply
-    /// left to the demand path, which caches them as they are used — slower
-    /// to warm, never wrong.
-    const PREFETCH_BUDGET_BYTES: u64 = 64 * 1024 * 1024;
-
     /// Bring the local cache into agreement with the server for one world,
     /// then point the read path at the result.
     ///
@@ -1135,6 +1256,106 @@ mod wasm {
     #[wasm_bindgen::prelude::wasm_bindgen]
     pub async fn receive_peer_signal(from_session_id: String, payload: String) {
         peer::on_signal(from_session_id, payload).await;
+    }
+
+    /// Begin peer-adjudicated play while the server is unreachable
+    /// (spec 028 T096/T098/T100, FR-057 to FR-059).
+    ///
+    /// **TypeScript decides that the server is gone**, from the heartbeat and
+    /// nothing else (`apps/web/src/engine/world/sync/heartbeat.ts`), for the
+    /// same reason the setting gate lives there: one liveness signal, asked in
+    /// one place. This side decides the rest — the roster is whoever has an
+    /// open channel at this moment, and play stops the instant any of them
+    /// goes.
+    ///
+    /// `gm_user` is the user the **server** named as Game Master, learned
+    /// while still connected; it is the only authority in the exchange that a
+    /// peer did not supply. `on_applied` is `(changeJson) => void`, how an
+    /// adjudicated move reaches the scene.
+    ///
+    /// Returns whether play started. `false` means plain offline, where the
+    /// outbox already handles everything correctly.
+    #[wasm_bindgen::prelude::wasm_bindgen]
+    pub fn begin_peer_adjudication(
+        self_user: String,
+        gm_user: String,
+        on_applied: js_sys::Function,
+    ) -> bool {
+        let (Ok(self_user), Ok(gm_user)) = (Uuid::parse_str(&self_user), Uuid::parse_str(&gm_user))
+        else {
+            return false;
+        };
+        peer::begin_adjudication(self_user, gm_user, on_applied)
+    }
+
+    /// Whether peer-adjudicated play is running this instant.
+    ///
+    /// The answer a player's client cannot work out for itself from counts:
+    /// it is only true once the Game Master's channel has identified itself
+    /// as the user the server named (FR-059).
+    #[wasm_bindgen::prelude::wasm_bindgen]
+    pub fn peer_adjudication_active() -> bool {
+        peer::adjudication_active()
+    }
+
+    /// The server is reachable again. Play stops and everything adjudicated
+    /// is owed a submission (FR-062).
+    #[wasm_bindgen::prelude::wasm_bindgen]
+    pub fn peer_adjudication_server_returned() {
+        peer::adjudication_server_returned();
+    }
+
+    /// Stop peer-adjudicated play: the world closed, or peer transfer was
+    /// turned off.
+    #[wasm_bindgen::prelude::wasm_bindgen]
+    pub fn end_peer_adjudication() {
+        peer::adjudication_end();
+    }
+
+    /// Everything applied while server-isolated, as JSON, for the Game
+    /// Master's client to submit over its own authenticated session.
+    ///
+    /// Provisional, all of it: the server re-authorizes every change and may
+    /// reject any of them, and its decision is final (FR-062).
+    #[wasm_bindgen::prelude::wasm_bindgen]
+    pub fn peer_adjudication_submissions() -> String {
+        peer::adjudication_submissions()
+    }
+
+    /// Put one token movement to the table (T100, T101).
+    ///
+    /// Position, rotation and scale, and there is no parameter for anything
+    /// else — creation, deletion and permission changes are not adjudicable
+    /// by peers under any circumstances (FR-060), which is enforced by the
+    /// shape of `TokenTransform` rather than by a check here.
+    ///
+    /// `false` is "adjudicated play is not running; queue it in the outbox
+    /// instead", which is the caller's single fall-back.
+    #[wasm_bindgen::prelude::wasm_bindgen]
+    pub fn propose_token_transform(
+        entity_id: String,
+        x: Option<f64>,
+        y: Option<f64>,
+        rotation: Option<f64>,
+        scale: Option<f64>,
+    ) -> bool {
+        let Ok(entity_id) = Uuid::parse_str(&entity_id) else {
+            return false;
+        };
+        let mut transform = peer::TokenTransform::default();
+        if let (Some(x), Some(y)) = (x, y) {
+            transform = transform.with_position(x, y);
+        }
+        if let Some(rotation) = rotation {
+            transform = transform.with_rotation(rotation);
+        }
+        if let Some(scale) = scale {
+            transform = transform.with_scale(scale);
+        }
+        if transform.is_empty() {
+            return false;
+        }
+        peer::adjudication_propose(entity_id, transform)
     }
 
     /// What the FR-049 indicator should show, as the JSON object
@@ -1584,24 +1805,25 @@ mod wasm {
 
         return_index(&handles, index);
 
-        let planned: Vec<(Uuid, Fingerprint, u64)> = outcome
-            .plan
-            .fetch
-            .iter()
-            .filter_map(|item| match item.id {
-                ItemId::CanvasAsset(asset_id) => Some((asset_id, item.fingerprint, item.byte_size)),
-                // Scene state has no byte route of its own; it arrives
-                // through the existing GraphQL scene load. Nothing to
-                // prefetch, and inventing a URL for it would be worse.
-                ItemId::SceneState(_) => None,
-            })
-            .collect();
-        let prefetching = planned.len();
+        // T116/FR-072. The queue is built from *this* caller's plan and
+        // nothing else — `PrefetchQueue::from_plan` is its only constructor,
+        // so the permission boundary the server drew around `outcome.plan` is
+        // the same one the prefetch runs inside. Stamping it with the world
+        // and the epoch is what lets it stop when either moves (FR-070,
+        // FR-073).
+        let epoch = begin_plan();
+        let queue = PrefetchQueue::from_plan(world_uuid, epoch, &outcome.plan);
+        let prefetching = queue.remaining();
 
         // Deliberately not awaited: warming the cache is the next visit's
         // benefit, and making this visit wait for it would trade the thing
         // the user is watching for a thing they are not.
-        spawn_local(prefetch(handles, world_uuid, planned));
+        spawn_local(prefetch(
+            handles,
+            queue,
+            budget.in_use_bytes,
+            budget.limit_bytes,
+        ));
 
         serde_json::json!({
             "status": "synced",
@@ -1704,79 +1926,133 @@ mod wasm {
         }
     }
 
-    /// Fetch planned canvas assets ahead of demand, up to the budget.
+    /// How long to stand aside when the user is loading something.
     ///
-    /// Sequential on purpose: a burst of parallel requests for a whole
-    /// world would contend with the scene load this is supposed to be
-    /// invisible to. Nothing here verifies by hand — `record_fetched` writes
-    /// through `OpfsStore::write_blob`, which is where the fingerprint check
-    /// happens, so bytes that are not what the server promised are never
-    /// stored and never counted.
-    async fn prefetch(handles: Rc<Handles>, world_id: Uuid, items: Vec<(Uuid, Fingerprint, u64)>) {
-        // FR-024. Prefetching into a store with no room is the worst version
-        // of this: it spends bandwidth on writes that cannot land, or that
-        // land only by evicting something equally wanted. Demand loads still
-        // work — they fetch and deliver without filing — so nothing here is
-        // lost except the speculation.
-        if !may_store() {
-            debug!(
-                target: "cached_assets",
-                "no room to cache; skipping the prefetch for this open",
-            );
-            return;
+    /// Long enough that a burst of demand fetches is not re-polled dozens of
+    /// times, short enough that a quiet moment is used rather than slept
+    /// through.
+    const PREFETCH_YIELD_MS: i32 = 250;
+
+    /// A breath between speculative fetches, so consecutive items cannot
+    /// occupy the connection back to back. This is the mechanism behind
+    /// SC-024: the active scene's requests interleave rather than queueing
+    /// behind a run of prefetches.
+    const PREFETCH_PACE_MS: i32 = 50;
+
+    /// How many consecutive yields before giving up on this visit.
+    ///
+    /// A tab that is loading something continuously for two minutes is not
+    /// going to hand the prefetcher a quiet moment, and a task that polls
+    /// forever is a leak with a timer attached. Stopping costs nothing: the
+    /// next sync builds a fresh queue, and everything unfetched is still
+    /// reachable on demand.
+    const PREFETCH_MAX_YIELDS: u32 = 480;
+
+    /// Fetch planned canvas assets ahead of demand (FR-069 – FR-073).
+    ///
+    /// Every decision here belongs to [`PrefetchQueue`], which is pure and
+    /// unit-tested natively; this function does the I/O it is told to and
+    /// reports back what actually landed. What is left is worth naming:
+    ///
+    /// - **Sequential, and paced.** A burst of parallel requests for a whole
+    ///   world would contend with the scene load this is supposed to be
+    ///   invisible to (FR-070, SC-024).
+    /// - **Nothing verified by hand.** `record_fetched` writes through
+    ///   `OpfsStore::write_blob`, which is where the fingerprint check
+    ///   happens, so bytes that are not what the server promised are never
+    ///   stored and never counted.
+    /// - **No Service Worker, no push, no background sync** (FR-073). This is
+    ///   an ordinary task in the open tab; it cannot outlive the page,
+    ///   because there is nothing here to outlive it with.
+    async fn prefetch(handles: Rc<Handles>, mut queue: PrefetchQueue, in_use: u64, limit: u64) {
+        let world_id = queue.world_id();
+        // The store's occupancy as of the budget pass, carried forward as
+        // this task stores things. Deliberately not re-read from the index
+        // each step: that is an IndexedDB scan per item, and the figure would
+        // still be a moment stale. It errs high — the eviction pass may have
+        // freed bytes since — and erring high is the safe direction for a
+        // check whose whole purpose is to stop early (FR-071).
+        let mut in_use = in_use;
+        let mut yields: u32 = 0;
+
+        loop {
+            match queue.step(&pressure(world_id, in_use, limit)) {
+                Step::Fetch(item) => {
+                    yields = 0;
+                    let stored = fetch_one(&handles, world_id, item).await;
+                    queue.record_stored(stored);
+                    in_use = in_use.saturating_add(stored);
+                    yield_for(PREFETCH_PACE_MS).await;
+                }
+                Step::Yield => {
+                    yields += 1;
+                    if yields > PREFETCH_MAX_YIELDS {
+                        debug!(
+                            target: "cached_assets",
+                            "prefetch stood aside for the whole visit; leaving the rest to demand",
+                        );
+                        return;
+                    }
+                    yield_for(PREFETCH_YIELD_MS).await;
+                }
+                Step::Stop(reason) => {
+                    debug!(target: "cached_assets", "prefetch finished: {reason:?}");
+                    return;
+                }
+            }
+        }
+    }
+
+    /// Fetch and store one speculative item. Returns the bytes stored, which
+    /// is zero for anything already held, unreachable, or refused — none of
+    /// which is a failure worth surfacing, and all of which must cost the
+    /// visit allowance nothing.
+    async fn fetch_one(handles: &Rc<Handles>, world_id: Uuid, item: PrefetchItem) -> u64 {
+        // Already on disk under this exact fingerprint — deduplicated
+        // content another item already brought in.
+        if handles
+            .store
+            .has_blob(world_id, &item.fingerprint)
+            .await
+            .unwrap_or(false)
+        {
+            return 0;
         }
 
-        let mut spent: u64 = 0;
-        for (asset_id, fingerprint, byte_size) in items {
-            if spent.saturating_add(byte_size) > PREFETCH_BUDGET_BYTES {
-                debug!(target: "cached_assets", "prefetch budget reached; leaving the rest to demand");
-                return;
-            }
-            // Already on disk under this exact fingerprint — deduplicated
-            // content another item already brought in.
-            if handles
-                .store
-                .has_blob(world_id, &fingerprint)
-                .await
-                .unwrap_or(false)
-            {
-                continue;
-            }
-
-            // FR-044. The prefetch is where peer transfer pays best: several
-            // clients open the same scene within seconds of each other and
-            // want the identical map. `None` is the server, as everywhere.
-            let url = format!("{ASSET_URL_PREFIX}/{asset_id}.webp");
-            let bytes = match peer::try_fetch(fingerprint).await {
+        // FR-044. The prefetch is where peer transfer pays best: several
+        // clients open the same scene within seconds of each other and
+        // want the identical map. `None` is the server, as everywhere.
+        let url = format!("{ASSET_URL_PREFIX}/{}.webp", item.asset_id);
+        let bytes = match peer::try_fetch(item.fingerprint).await {
+            Some(bytes) => bytes,
+            None => match fetch(&url).await {
                 Some(bytes) => bytes,
-                None => match fetch(&url).await {
-                    Some(bytes) => bytes,
-                    None => continue,
-                },
-            };
-            let Some(mut index) = borrow_index(&handles).await else {
-                return;
-            };
-            let stored = sync::record_fetched(
-                &handles.store,
-                &mut index,
-                &handles.key,
-                world_id,
-                ItemId::CanvasAsset(asset_id),
-                &fingerprint,
-                &bytes,
-            )
-            .await;
-            return_index(&handles, index);
+                None => return 0,
+            },
+        };
+        let Some(mut index) = borrow_index(handles).await else {
+            return 0;
+        };
+        let stored = sync::record_fetched(
+            &handles.store,
+            &mut index,
+            &handles.key,
+            world_id,
+            ItemId::CanvasAsset(item.asset_id),
+            &item.fingerprint,
+            &bytes,
+        )
+        .await;
+        return_index(handles, index);
 
-            match stored {
-                Ok(()) => {
-                    peer::note_stored(fingerprint);
-                    spent = spent.saturating_add(bytes.len() as u64);
-                }
-                Err(err) => {
-                    warn!(target: "cached_assets", "could not prefetch {url}: {err}");
-                }
+        match stored {
+            Ok(()) => {
+                peer::note_stored(item.fingerprint);
+                bytes.len() as u64
+            }
+            Err(err) => {
+                warn!(target: "cached_assets", "could not prefetch {url}: {err}");
+                0
             }
         }
     }

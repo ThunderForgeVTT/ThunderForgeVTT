@@ -44,6 +44,7 @@ pub mod locks;
 pub mod opfs;
 pub mod outbox;
 pub mod peer;
+pub mod prefetch;
 pub mod signal;
 pub mod sync;
 
@@ -57,6 +58,7 @@ use thunderforge_cache_core::IntegrityError;
 pub use crypto::{Envelope, EnvelopeError, KeyCreation, KeyEvent, KeyStep};
 pub use index::{IndexEntry, ReadSeq};
 pub use opfs::{BlobPath, PathError, UserScope};
+pub use prefetch::{PrefetchItem, PrefetchQueue, Pressure, Step, StopReason};
 pub use signal::CacheSignal;
 
 /// Why a cache operation failed outright.

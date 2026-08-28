@@ -117,3 +117,62 @@ pub fn plan_eviction(
     plan.insufficient = to_free > 0;
     plan
 }
+
+/// Whether speculative content may be admitted (FR-071).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Speculation {
+    /// The bytes fit in what is already spare. Fetch and store them.
+    Admit,
+    /// They do not fit. The prefetch stops here.
+    Stop,
+}
+
+/// May `incoming` speculative bytes be stored, given `in_use` of `limit`?
+///
+/// Speculative content is content nobody has asked for — prefetched ahead of
+/// a scene the user has not opened and may never open. FR-071 gives it a
+/// standing that is strictly below everything else in the store: it may use
+/// space that is spare, and it may not create space.
+///
+/// # Why this takes neither an index nor an open world
+///
+/// [`plan_eviction`] needs both, because releasing things is exactly what it
+/// does: it must know what is present in order to choose victims, and which
+/// world is protected in order to spare it. A speculation gate needs neither,
+/// because it never releases anything — and so the narrowest signature that
+/// can express the rule is also the one that *cannot* break it. There is no
+/// eviction list to return, no world to accidentally not protect, and no way
+/// for a future edit to turn "we are short by 3MB" into "so free 3MB". A
+/// prefetch that will not fit stops; the content the user actually has stays
+/// exactly where it is.
+///
+/// # A refused estimate stops the prefetch
+///
+/// A `limit` of zero is how the browser's declining to estimate reaches this
+/// function (`sync::enforce_budget` leaves `limit_bytes` at zero and evicts
+/// nothing). For eviction that must mean "do nothing", because acting on an
+/// unknown limit would destroy a working cache. Here it means [`Stop`], and
+/// the asymmetry is the same rule seen from both sides: without a limit we
+/// cannot show there is room, and speculation is only ever permitted on
+/// demonstrated room. Demand loads are unaffected — they fetch and store on
+/// their own account, and the user still gets everything they ask for.
+///
+/// The addition is checked rather than saturating: a saturating one turns an
+/// overflowing total into `u64::MAX`, which compares `<=` against a `u64::MAX`
+/// limit and admits. Sizes arrive from a `SyncPlan`, so an absurd one must
+/// fail closed rather than into the one answer this function is not allowed
+/// to give by accident.
+///
+/// [`Stop`]: Speculation::Stop
+pub fn admit_speculative(in_use: u64, limit: u64, incoming: u64) -> Speculation {
+    match in_use.checked_add(incoming) {
+        Some(total) if total <= limit => Speculation::Admit,
+        _ => Speculation::Stop,
+    }
+}
+
+/// Spare bytes a prefetch may draw on: what is left under the limit, never
+/// negative and never counting anything eviction *could* free.
+pub fn speculative_headroom(in_use: u64, limit: u64) -> u64 {
+    limit.saturating_sub(in_use)
+}
