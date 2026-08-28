@@ -858,6 +858,20 @@ fetch and without a loading state.
   loading state and issues no fetch for content already held.
 - **SC-024**: Prefetching never increases time-to-interactive for the active
   scene by more than 5%, measured with prefetch enabled versus disabled.
+  **NOT VERIFIED as written, 2026-08-28**, for the same reason SC-002 is not
+  met and stated here rather than quietly rescoped. Neither half of the
+  measurement is available: there is no "disabled" to compare against, since
+  prefetching has no off switch and inventing a user-facing setting to make a
+  test possible is the wrong way round; and 5% is far below the noise floor,
+  because time-to-interactive is still dominated by instantiating the engine
+  WASM bundle — the same domination that defeats SC-002 — so run-to-run
+  variance swamps the difference a few asset fetches make. T120 instead pins
+  the property the budget exists to protect, in a form the environment can
+  decide: the active scene's bytes are requested before any speculative byte
+  is. An implementation that fetched speculatively ahead of the open scene
+  fails that however fast it happened to be. The number becomes measurable
+  once engine startup stops dominating, which is the same precondition SC-002
+  is waiting on.
 - **SC-025**: No network activity attributable to this feature occurs while
   the application is closed, verified by automated test.
 - **SC-017**: The performance outcomes SC-001 through SC-003 can be
