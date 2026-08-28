@@ -29,6 +29,22 @@ The current objective is to get a proof of concept going with the Rust backend a
 - [Check out the discussions](https://github.com/ThunderForgeVTT/ThunderForgeVTT/discussions)
 - [Take a look at project progress](https://github.com/ThunderForgeVTT/ThunderForgeVTT/projects)
 
+## What connection you need
+
+Start from an **unmetered connection of at least 50 Mbps**.
+
+That number is **untested** — a starting recommendation rather than a
+measurement, and we would rather say so than let a guess pass for a
+requirement. Metered, capped and mobile connections are **not tested at all**
+and are out of scope for the MVP; the client deliberately fetches world
+content ahead of need, which is the right trade on an unmetered link and an
+open question on a metered one. Holding that back is planned, not built.
+
+**If you play on something slower, metered, or on mobile data, please tell us
+how it went.** Your experience is worth more than our estimate, and
+[the discussions](https://github.com/ThunderForgeVTT/ThunderForgeVTT/discussions)
+are where it can reach us.
+
 ### What features the PoC should include
 
 - Login screen, Basic authentication (argon2 for passwords)

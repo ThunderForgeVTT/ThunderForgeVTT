@@ -872,6 +872,13 @@ fetch and without a loading state.
   fails that however fast it happened to be. The number becomes measurable
   once engine startup stops dominating, which is the same precondition SC-002
   is waiting on.
+
+  A disabled mode is also the shape a **metered-connection** setting would
+  take, and that is deliberately **out of MVP scope** (see `MVP.md`): the
+  recommendation for now is an unmetered link of at least 50 Mbps, which is
+  itself untested and labelled as such. So this criterion is waiting on two
+  independent things — a control to measure against, and a
+  time-to-interactive that is not dominated by engine startup.
 - **SC-025**: No network activity attributable to this feature occurs while
   the application is closed, verified by automated test.
 - **SC-017**: The performance outcomes SC-001 through SC-003 can be

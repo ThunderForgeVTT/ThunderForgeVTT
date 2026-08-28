@@ -88,6 +88,28 @@ This section provides a high-level overview of the core objects and concepts tha
 
 ## Post-MVP
 
+- **Metered and constrained connections:** Explicitly **not in MVP scope**, and planned.
+  - Nothing in ThunderForge is currently tested against a metered, capped, or
+    slow connection. The client fetches world content ahead of need
+    (spec 028's cache and its background prefetch), which is the right trade
+    on an unmetered link and an untested one on a metered link. There is no
+    setting today to hold that back, and adding one is a real product
+    decision rather than a switch — it is on the list, not built.
+  - **Recommended baseline: an unmetered connection of at least 50 Mbps.**
+    This figure is **UNTESTED**. It is a starting recommendation, not a
+    measurement, and it is written that way deliberately: this document
+    already carries one number that drifted 16% before anyone noticed, and an
+    unlabelled guess is how that happens. Treat it as the number we would
+    start from, and expect it to move once it has been measured.
+  - What *has* been measured is the first load, and it bounds the guess from
+    below: 4.15MB brotli for the engine bundle (see the load-time entry
+    below), plus a world's art. Steady-state play is small — token moves and
+    dice, over one WebSocket.
+  - **If you play on something slower, on a metered link, or on mobile data,
+    we want to hear about it.** That evidence is worth more than our
+    estimate, and there is nowhere in this project it can come from except
+    people who actually did it:
+    [the discussions](https://github.com/ThunderForgeVTT/ThunderForgeVTT/discussions).
 - **Sharing and Federation:** Started for actors only.
   - Spec 010 added actor-level sharing: any actor can be shared via a link (`/shared/actor/:code`), previewed read-only by anyone, and deep-copied ("Copy to World") into one of the viewer's own worlds, fully independent of the source (including cascaded ability/item/lore data).
   - Not yet generalized to other content types (game systems, scenes, maps) — `specs/010-world-staging-actors/spec.md`'s Assumptions section explicitly flags this as expected future work, not built yet.
