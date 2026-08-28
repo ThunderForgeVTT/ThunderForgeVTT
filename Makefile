@@ -1,4 +1,4 @@
-.PHONY: dev dev-tunnel services-up services-down services-down-clean migrate build clean format help lint check-file-length test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean
+.PHONY: dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint check-file-length test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean
 
 # Loads DATABASE_URL (and anything else) from the repo-root .env for targets
 # that shell out to tools which don't read it themselves (diesel-cli).
@@ -15,6 +15,7 @@ help:
 	@echo "  make services-down    Stop postgres+rustfs, keep their data volumes"
 	@echo "  make services-down-clean  Stop postgres+rustfs and DELETE their data volumes"
 	@echo "  make migrate          Run pending Diesel migrations against DATABASE_URL"
+	@echo "  make seed             Seed local demo logins (admin/admin, user1/user1, user2/user2) + a ready-to-play world"
 	@echo "  make build            Production build (engine WASM + backend + frontend)"
 	@echo "  make clean            Remove build output (dist/)"
 	@echo "  make format           Run prettier + cargo fmt"
@@ -27,10 +28,10 @@ help:
 	@echo "                          25/50/100 ask for confirmation: y/N prompt on a TTY, otherwise CONFIRM=1 is required"
 	@echo "  make test-torture-clean  Remove orphaned tf-torture-* compose projects and apps/web/torture-results/"
 
-dev: services-up migrate
+dev: services-up migrate seed
 	pnpm dev
 
-dev-tunnel: services-up migrate
+dev-tunnel: services-up migrate seed
 	@command -v cloudflared >/dev/null 2>&1 || { \
 		echo "cloudflared not found. Install it: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/"; \
 		exit 1; \
@@ -59,6 +60,29 @@ migrate:
 		exit 1; \
 	}
 	cd src/server && diesel migration run
+
+# Local demo logins and a world that is ready to play, so a fresh clone can
+# be tested by a person instead of only by the e2e suite.
+#
+# The passwords are deliberately weaker than the application's own 12
+# character minimum, which is exactly why this is guarded. The seed writes
+# real Argon2id hashes straight into `users`, bypassing the registration
+# validation that would refuse "admin" outright — so it must never reach a
+# database anyone else can log into.
+#
+# Idempotent: every insert is keyed on a fixed UUID with ON CONFLICT DO
+# NOTHING, so `make dev` re-running it costs one no-op query per row.
+seed:
+	@command -v psql >/dev/null 2>&1 || { 		echo "psql not found — skipping the demo seed. Install postgresql-client to get local logins."; 		exit 0; 	}
+	@case "$(DATABASE_URL)" in 		*@localhost*|*@127.0.0.1*|*@postgres*|*@db*) ;; 		*) echo "Refusing to seed demo accounts into a non-local DATABASE_URL."; 		   echo "These passwords are below the app's own minimum and exist for local testing only."; 		   exit 1 ;; 	esac
+	@# A DATABASE_URL with no port does not mean the same thing to every tool.
+	@# diesel and the server fall back to 5432; a psql from a multi-cluster
+	@# install can default to 5433 and then report "connection refused" for a
+	@# database that is running perfectly well. Naming the port when the URL
+	@# omits one makes this agree with the application rather than with
+	@# whatever the local libpq was compiled to prefer.
+	@url="$(DATABASE_URL)"; 	case "$$url" in 		*@*:[0-9]*/*) ;; 		*) url=$$(printf '%s' "$$url" | sed -E 's#@([^:/@]+)/#@\1:5432/#') ;; 	esac; 	psql "$$url" -q -v ON_ERROR_STOP=1 -f src/server/seeds/demo_accounts.sql
+	@echo "Seeded: admin/admin (site admin), user1/user1 (GM), user2/user2 (player), with a world ready to play."
 
 build:
 	pnpm build
