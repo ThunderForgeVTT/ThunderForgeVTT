@@ -399,6 +399,14 @@ fn apply_one(
     // An ordinary world event, deliberately: other clients learn about a
     // reconciled change through the subscription they already have, with no
     // special path to keep in step with the normal one.
+    //
+    // `reconciled`, `by_user` and `by_role` are what make the
+    // `Applied → Superseded` case detectable on the client (FR-041). A player
+    // whose change applied at their own reconnect is long gone from that call
+    // by the time a GM reconnects and overrides it, so the only way they learn
+    // is this event — and to recognise it as *their* work being overridden
+    // rather than ordinary table activity, they need to know the change was a
+    // replay and that somebody else made it.
     let _ = record_world_event(
         conn,
         world_id,
@@ -406,6 +414,8 @@ fn apply_one(
         Some(serde_json::json!({
             "token_id": edit.token_id,
             "reconciled": true,
+            "by_user": user_id,
+            "by_role": role_name(role),
         })),
         user_id,
     );

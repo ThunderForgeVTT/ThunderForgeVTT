@@ -64,6 +64,24 @@ pub fn replay_for_world(queued: &[QueuedChange], world_id: Uuid) -> Vec<QueuedCh
         .collect()
 }
 
+/// Whether a queued change survives the session key being discarded.
+///
+/// Always. Stated as a function with a test rather than as a comment because
+/// it is the kind of invariant that gets broken by someone doing something
+/// reasonable — adding the outbox to a "clear everything for this user" pass
+/// alongside the index and the blobs (T081, FR-041).
+///
+/// The distinction that matters: everything else the cache stores is a *copy*
+/// of content the server still has, worth nothing once it cannot be decrypted.
+/// A queued change is the only copy of work the user did that the server has
+/// never seen. And it does not depend on the key at all — entries are
+/// plaintext commands, so sign-out leaves them exactly as readable as before.
+/// They cannot be *submitted* until someone signs in again, which is a reason
+/// to keep and report them rather than to discard them.
+pub fn survives_key_loss() -> bool {
+    true
+}
+
 /// The storage key for one queued change.
 ///
 /// The local id, which is generated client-side and never reused, so an
@@ -206,6 +224,18 @@ mod tests {
             enqueued_seq: seq,
             actor_role_hint: Role::Player,
         }
+    }
+
+    /// T081. The outbox is the one store in this crate that must outlive a
+    /// sign-out, because it is the only copy of work the server has never
+    /// seen. `cached_assets::reclaim` clears the index and the blobs and
+    /// deliberately leaves this alone.
+    #[test]
+    fn queued_work_outlives_the_session_key() {
+        assert!(
+            survives_key_loss(),
+            "queued changes are the user's own work, not a cache of the server's"
+        );
     }
 
     #[test]

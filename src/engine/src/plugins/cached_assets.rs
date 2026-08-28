@@ -1128,6 +1128,25 @@ mod wasm {
             },
             Err(err) => debug!(target: "cached_assets", "blob reclamation skipped: {err}"),
         }
+
+        // The outbox is deliberately NOT cleared here (spec 028 T081,
+        // FR-041).
+        //
+        // Everything above is *cache*: a copy of content the server still
+        // holds, worth nothing once the key is gone. The outbox is the
+        // opposite — it is the only copy of work the user did and the server
+        // has never seen. Reclaiming it would be the one deletion in this
+        // whole path that destroys something rather than freeing something.
+        //
+        // It also survives key loss on its own terms: entries are plaintext
+        // commands, not ciphertext, so discarding the session key leaves them
+        // as readable as they ever were. They simply cannot be *submitted*
+        // until somebody signs in again, which is a reason to keep them and
+        // report them, not a reason to drop them.
+        //
+        // Stated here rather than left to the absence of a call, because the
+        // next person adding a store to `ALL_STORES` and a matching `clear`
+        // to this function would be doing an obviously reasonable thing.
     }
 
     fn degraded(reason: &str) -> serde_json::Value {

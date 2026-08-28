@@ -31,6 +31,18 @@ export {
   type WorldEventLike,
   type LiveSyncState,
 } from "./subscriptionClient";
+export {
+  matchOutcomes,
+  parseReconciledEvent,
+  pruneApplied,
+  remainingAfterInterruption,
+  supersededBy,
+  SUPERSESSION_WINDOW_MS,
+  type AppliedChange,
+  type ReconcileOutcome,
+  type RejectionReason,
+  type SubmittedChange,
+} from "./reconcile";
 export { parseSceneLaunchedEvent } from "./scenes";
 export {
   applyGenieSessionWorldEvent,
