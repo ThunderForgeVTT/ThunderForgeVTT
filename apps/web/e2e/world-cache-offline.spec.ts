@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { WorldProbe } from "../src/engine/world/probe";
-import { uniqueSuffix } from "./fixtures/helpers";
+import { inviteAndJoinAsPlayer, uniqueSuffix } from "./fixtures/helpers";
 
 declare global {
   interface Window {
@@ -96,6 +96,41 @@ async function waitForEngineReady(page: Page): Promise<void> {
   }
 }
 
+/**
+ * Wait until token traffic goes quiet.
+ *
+ * `applyTokenWorldEvent` answers any token event by refetching *every*
+ * token on the scene and dispatching an upsert for each — so a scene still
+ * settling puts a token back where the server has it, on top of a local drag
+ * that has not been sent anywhere. Offline, that silently undoes the edit
+ * under test: the token ends up exactly where it started, which every
+ * convergence assertion afterwards reads as agreement. Two clients joining
+ * the same scene generate enough of that traffic to hit it reliably; one
+ * client does not, which is why T083 never saw it.
+ *
+ * The wait is on the traffic itself rather than on `scene-load-indicator`,
+ * which is a separate five-resource status that does not reliably reach
+ * "ready" here, and would be measuring something adjacent to the problem
+ * even if it did.
+ */
+async function waitForTokenTrafficToSettle(page: Page): Promise<void> {
+  const upserts = () =>
+    page.evaluate(
+      () =>
+        window.__worldProbe
+          ?.commands()
+          .filter((command) => command.type === "upsert_token").length ?? 0,
+    );
+  let last = await upserts();
+  let quiet = 0;
+  for (let i = 0; i < 40 && quiet < 3; i += 1) {
+    await page.waitForTimeout(1_000);
+    const now = await upserts();
+    quiet = now === last ? quiet + 1 : 0;
+    last = now;
+  }
+}
+
 async function canvasBox(page: Page): Promise<Box> {
   const canvas = page.locator("canvas");
   await canvas.scrollIntoViewIfNeeded();
@@ -154,6 +189,125 @@ async function dragCanvas(
   await page.waitForTimeout(500);
 }
 
+/**
+ * Aim points for a press, nearest first, relative to where the store says
+ * the token is.
+ *
+ * The store's position is not where the token is *drawn*, and the two clients
+ * in T084 do not even disagree with it in the same way. `snap_tokens_to_grid`
+ * moves every token to its cell centre inside the engine while the store keeps
+ * the unsnapped value it was handed — a panel-created token is stored at the
+ * world origin and drawn a cell-centre away from it, measured here at 63px on
+ * a 128px grid. The player's client has no scene grid at all: `scenes(worldId:)`
+ * filters hidden scenes out for non-GMs and a world's auto-created scene is
+ * hidden, so that session never receives `set_scene_grid`, does not snap, and
+ * hit-tests against the engine's fixed 96px token instead of a grid footprint.
+ * One centre-relative aim cannot be right for both, so the press is searched
+ * outward from each client's own reading until that client's engine says it
+ * grabbed the token.
+ *
+ * The lattice reaches a full grid cell in every direction, with a step inside
+ * the smaller of the two hit areas, so neither client's token can hide between
+ * two aim points.
+ */
+const AIM_OFFSETS: { dx: number; dy: number }[] = (() => {
+  const step = 32;
+  const reach = 128;
+  const points: { dx: number; dy: number }[] = [];
+  for (let dx = -reach; dx <= reach; dx += step) {
+    for (let dy = -reach; dy <= reach; dy += step) {
+      points.push({ dx, dy });
+    }
+  }
+  return points.sort((a, b) => a.dx * a.dx + a.dy * a.dy - (b.dx * b.dx + b.dy * b.dy));
+})();
+
+/**
+ * Drag a specific token by a screen delta, starting from wherever it
+ * actually is.
+ *
+ * A press on empty canvas is a *deselect*, and the drag then silently does
+ * nothing, which is the worst possible failure for this test: every
+ * convergence assertion afterwards compares the starting position with itself
+ * and passes. So the press is aimed by the probe and **confirmed, while the
+ * button is still down, by the selection it produced** — the engine picks its
+ * stack on `just_pressed` and reports it, so by the time the button is held
+ * the store already knows whether this press grabbed the right token. A press
+ * that grabbed nothing (or something else) is released without moving, and the
+ * next aim point is tried, so a mis-aimed press can never drag a bystander.
+ *
+ * World units map 1:1 to pixels at the default zoom, origin at the canvas
+ * centre, y pointing up — the same convention token-authoring.spec.ts
+ * documents and relies on. What that convention does not say, and what cost
+ * this test its drags, is that the engine snaps tokens after the store has
+ * recorded them: see `AIM_OFFSETS`.
+ */
+async function dragToken(
+  page: Page,
+  tokenId: string,
+  delta: { dx: number; dy: number },
+): Promise<void> {
+  const box = await canvasBox(page);
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+
+  // Rounds, because a token can be genuinely ungrabbable for a while: a scene
+  // still settling refetches every token and moves it out from under the
+  // press. Between rounds the position is read again and the search restarts.
+  for (let round = 0; round < 4; round += 1) {
+    const at = await tokenPosition(page, tokenId);
+    if (!at) throw new Error(`token ${tokenId} is not in this client's world store`);
+
+    for (const offset of AIM_OFFSETS) {
+      const from = { x: cx + at.x + offset.dx, y: cy - at.y + offset.dy };
+      if (
+        from.x < box.x + 8 ||
+        from.x > box.x + box.width - 8 ||
+        from.y < box.y + 8 ||
+        from.y > box.y + box.height - 8
+      ) {
+        continue;
+      }
+
+      await page.mouse.move(from.x, from.y);
+      await page.mouse.down();
+      // A press and a move coalesced into one frame make the engine compute a
+      // zero drag offset, and the token silently does not move. See
+      // dragCanvas. The same wait is what lets the selection this press
+      // produced reach the store before it is read.
+      await page.waitForTimeout(250);
+
+      const grabbed = await page.evaluate(
+        () => window.__worldProbe?.state().selectedTokenId ?? null,
+      );
+      if (grabbed !== tokenId) {
+        await page.mouse.up();
+        await page.waitForTimeout(80);
+        continue;
+      }
+
+      await page.mouse.move(from.x + delta.dx, from.y + delta.dy, { steps: 5 });
+      await page.waitForTimeout(250);
+      await page.mouse.up();
+      await page.waitForTimeout(600);
+
+      const moved = await tokenPosition(page, tokenId);
+      if (moved && (moved.x !== at.x || moved.y !== at.y)) return;
+      // Grabbed and still unmoved: the aim was right, so searching further out
+      // would only find the same token again. Re-read and start a new round.
+      break;
+    }
+
+    await page.waitForTimeout(2_000);
+  }
+
+  throw new Error(
+    `no press within a grid cell of ${tokenId} grabbed it, or every grab left it ` +
+      "where it started — the token is not being drawn where the store says, " +
+      "or a scene refetch is landing on top of it",
+  );
+}
+
 async function tokenPosition(
   page: Page,
   tokenId: string,
@@ -195,6 +349,61 @@ async function serverTokenPosition(
     },
     { scene: sceneId, token: tokenId },
   );
+}
+
+/** The signed-in user's own id, as the session endpoint reports it. */
+async function currentUserId(page: Page): Promise<string> {
+  const userId = await page.evaluate(async () => {
+    const res = await fetch("/api/authentication/session", {
+      credentials: "same-origin",
+    });
+    const body = (await res.json()) as {
+      session?: { user?: { id?: string } } | null;
+    };
+    return body.session?.user?.id ?? null;
+  });
+  if (!userId) throw new Error("no signed-in user");
+  return userId;
+}
+
+/**
+ * Hand a token to a player, as the Game Master.
+ *
+ * Not decoration: the server enforces `owner_user_id = requester` for a
+ * non-GM edit, at reconnect exactly as it does live, so a player replaying a
+ * move of a token nobody gave them is refused and the test would be
+ * measuring authorization rather than precedence.
+ */
+async function giveTokenTo(page: Page, tokenId: string, userId: string): Promise<void> {
+  const ok = await page.evaluate(
+    async ({ token, owner }) => {
+      const csrf = document.cookie
+        .split(";")
+        .map((part) => part.trim())
+        .find((part) => part.startsWith("csrf_token="))
+        ?.slice("csrf_token=".length);
+      const res = await fetch("/api/graphql", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "content-type": "application/json",
+          ...(csrf ? { "x-csrf-token": csrf } : {}),
+        },
+        body: JSON.stringify({
+          query: `mutation ($tokenId: UUID!, $input: GraphQLUpdateTokenInput!) {
+            updateToken(tokenId: $tokenId, input: $input) { tokenId ownerUserId }
+          }`,
+          variables: { tokenId: token, input: { ownerUserId: owner } },
+        }),
+      });
+      const body = (await res.json()) as {
+        data?: { updateToken?: { ownerUserId?: string | null } };
+      };
+      return body.data?.updateToken?.ownerUserId === owner;
+    },
+    { token: tokenId, owner: userId },
+  );
+  if (!ok) throw new Error("could not give the token to the player");
 }
 
 async function firstSceneId(page: Page, worldId: string): Promise<string> {
@@ -248,11 +457,17 @@ function severableLink(page: Page) {
   let severed = false;
   let blocked = 0;
   let delivered = 0;
+  let reconciles = 0;
   return {
     async install() {
       await page.route("**/api/graphql", async (route) => {
         const body = route.request().postData() ?? "";
         const isHeartbeat = body.includes("Heartbeat");
+        // Counted here rather than inferred from a side effect: "the queue
+        // was never submitted" and "the queue was submitted and refused"
+        // look identical from the token's position, and only the first is a
+        // client bug. Distinguishing them is what turned T083 around.
+        if (body.includes("ReconcileQueuedChanges")) reconciles += 1;
         if (severed && isHeartbeat) {
           blocked += 1;
           await route.abort("internetdisconnected");
@@ -274,6 +489,8 @@ function severableLink(page: Page) {
     blockedBeats: () => blocked,
     /** Beats that got through since the link was restored. */
     deliveredBeats: () => delivered,
+    /** `reconcileQueuedChanges` submissions this page has made. */
+    reconcileRequests: () => reconciles,
   };
 }
 
@@ -383,6 +600,144 @@ test.describe("Client world cache — playing on through a lost connection (US7)
       .not.toBe(before!.x);
 
     await expect(page.getByTestId("reconcile-report")).toBeVisible({ timeout: 30_000 });
+  });
+
+
+  /**
+   * SC-016: two people edit the same token with no connection, and the
+   * **player reconnects first**.
+   *
+   * The ordering is the entire test. A player who reconnects first has their
+   * change applied — legitimately, since at that moment nothing contradicts
+   * it — and only later does the Game Master come back with a conflicting
+   * edit that outranks it. So this is the `Applied → Superseded` path
+   * (FR-041), the one case where a change is reported as synced and then
+   * stops being true.
+   *
+   * There is no response left to carry that news: the player is long gone
+   * from their own reconcile call by the time the GM makes theirs. It can
+   * only reach them as an ordinary world event, which is why the server's
+   * token event grows `reconciled`/`by_user`/`by_role` (T079). Asserting
+   * only that the two clients converge would pass while the player is never
+   * told their work was overridden — and being told is the requirement.
+   */
+  test("a Game Master reconnecting after a player overrides them, and the player is told (SC-016, T084)", async ({
+    browser,
+  }) => {
+    // The invite flow writes to the clipboard, and a context without that
+    // permission throws before the new invite is stored — see
+    // scene-live-launch.spec.ts, which hit the same thing.
+    const gmContext = await browser.newContext({
+      permissions: ["clipboard-read", "clipboard-write"],
+    });
+    const gmPage = await gmContext.newPage();
+
+    await register(gmPage, "e2eogm");
+    const worldId = await createWorldAndPlay(gmPage, `E2E Offline Two ${uniqueSuffix()}`);
+    await waitForEngineReady(gmPage);
+    const sceneId = await firstSceneId(gmPage, worldId);
+    const tokenId = await createToken(gmPage);
+
+    const playerPage = await inviteAndJoinAsPlayer(browser, gmPage, worldId, "e2eopl");
+    await giveTokenTo(gmPage, tokenId, await currentUserId(playerPage));
+
+    // Both at the table, on the same scene, before either goes offline.
+    await gmPage.goto(`/world/${worldId}/play`);
+    await waitForEngineReady(gmPage);
+    await playerPage.goto(`/world/${worldId}/play`);
+    await waitForEngineReady(playerPage);
+    await waitForTokenTrafficToSettle(gmPage);
+    await waitForTokenTrafficToSettle(playerPage);
+
+    const before = await serverTokenPosition(gmPage, sceneId, tokenId);
+    expect(before, "the token should exist server-side before anyone drops").toBeTruthy();
+
+    const gmLink = severableLink(gmPage);
+    const playerLink = severableLink(playerPage);
+    await gmLink.install();
+    await playerLink.install();
+
+    gmLink.cut();
+    playerLink.cut();
+    await waitForOffline(gmPage, gmLink);
+    await waitForOffline(playerPage, playerLink);
+
+    // The same token, two different destinations, neither reaching the
+    // server. Only the heartbeat is severed, so each still holds a live
+    // subscription — which is what lets the player hear about the GM's
+    // replay later, and is also how a real outage of this shape behaves.
+    await dragToken(gmPage, tokenId, { dx: 200, dy: -140 });
+    await dragToken(playerPage, tokenId, { dx: -170, dy: 110 });
+
+    // Read the GM's position *now*. Once the player reconnects, the event
+    // from their applied change reaches this still-subscribed page and moves
+    // the token locally — so a reading taken later is the player's position,
+    // not the GM's, and the final assertion would be comparing the server
+    // against itself.
+    const gmIntent = await tokenPosition(gmPage, tokenId);
+    const playerIntent = await tokenPosition(playerPage, tokenId);
+    // Not merely "a token is there": each drag must actually have moved it.
+    // A drag that silently did nothing leaves the local and server positions
+    // equal, which makes every convergence assertion below pass by
+    // comparing the starting position with itself.
+    expect(gmIntent, "the GM's drag must move their own view").toBeTruthy();
+    expect(playerIntent, "the player's drag must move their own view").toBeTruthy();
+    expect(gmIntent!.x, "the GM's drag must actually move the token").not.toBe(before!.x);
+    expect(playerIntent!.x, "the player's drag must actually move the token").not.toBe(
+      before!.x,
+    );
+    expect(
+      (await serverTokenPosition(gmPage, sceneId, tokenId))!.x,
+      "neither edit may be written through while offline",
+    ).toBe(before!.x);
+
+    // The player comes back first, and wins for as long as nothing outranks
+    // them.
+    playerLink.restore();
+    await waitForOnline(playerPage, playerLink);
+    await expect
+      .poll(() => serverTokenPosition(playerPage, sceneId, tokenId).then((p) => p?.x), {
+        timeout: 90_000,
+        message: "the player's queued edit should be applied on their reconnect",
+      })
+      .toBeCloseTo(playerIntent!.x, 0);
+    expect(
+      playerLink.reconcileRequests(),
+      "the player should have submitted their queue on reconnect",
+    ).toBeGreaterThanOrEqual(1);
+    await expect(playerPage.getByTestId("reconcile-report")).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // Then the Game Master, whose edit outranks it (FR-040).
+    gmLink.restore();
+    await waitForOnline(gmPage, gmLink);
+    await expect
+      .poll(() => serverTokenPosition(gmPage, sceneId, tokenId).then((p) => p?.x), {
+        timeout: 90_000,
+        message: "a Game Master reconnecting later still wins",
+      })
+      .toBeCloseTo(gmIntent!.x, 0);
+
+    // Convergence, which is the easy half.
+    await expect
+      .poll(() => tokenPosition(playerPage, tokenId).then((p) => p?.x), {
+        timeout: 60_000,
+        message: "the player's own view should follow the server",
+      })
+      .toBeCloseTo(gmIntent!.x, 0);
+
+    // And the half that matters: the player is told, rather than left
+    // believing an edit stands that does not.
+    await expect(
+      playerPage.getByTestId("reconcile-superseded"),
+    ).toBeVisible({ timeout: 60_000 });
+    await expect(playerPage.getByTestId("reconcile-superseded")).toContainText(
+      "the Game Master",
+    );
+
+    await playerPage.context().close();
+    await gmContext.close();
   });
 
   test("a queued change against deleted content is discarded with an explanation (T085)", async ({

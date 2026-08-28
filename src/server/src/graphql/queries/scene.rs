@@ -70,12 +70,48 @@ pub async fn scene_impl(
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
+    // ...with one carve-out: the scene the world is *currently playing*.
+    //
+    // `hidden` is a rule about the scene table (FR-008's own words) — it
+    // keeps a GM's unfinished prep out of the Scenes section so nothing is
+    // spoiled. Launching a scene is the opposite act: it is the GM
+    // deliberately putting that scene in front of everyone, and spec 022 is
+    // explicit that Play "starts showing content as soon as a GM launches a
+    // scene". Filtering it here anyway did not hide anything — a player
+    // already loads its tokens, walls, lights and shapes, all of which gate
+    // on world access rather than on `hidden` — it only withheld the scene's
+    // own record, so a player's canvas got no map art and no grid while
+    // being asked to play on it. A world's auto-created scene is hidden by
+    // default (FR-003), so this was every player in every new world.
+    //
+    // Scoped to exactly one scene per world, chosen by the GM. Guessing a
+    // different hidden scene's id still gets nothing.
+    let active_scene_id = {
+        use crate::schema::worlds;
+        let mut lookup_conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+        tokio::task::spawn_blocking(move || {
+            worlds::table
+                .filter(worlds::id.eq(world_id))
+                .select(worlds::active_scene_id)
+                .first::<Option<uuid::Uuid>>(&mut lookup_conn)
+                .optional()
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| Error::new("Failed to load world"))?
+        .flatten()
+    };
+    let is_active_scene = active_scene_id == Some(scene_id);
+
     tokio::task::spawn_blocking(move || {
         use crate::schema::scenes;
         let mut query = scenes::table
             .filter(scenes::scene_id.eq(scene_id))
             .into_boxed();
-        if !is_dm {
+        if !is_dm && !is_active_scene {
             query = query.filter(scenes::hidden.eq(false));
         }
         query
@@ -496,6 +532,71 @@ mod tests {
         assert!(
             player_result.is_none(),
             "a non-DM must not be able to fetch a hidden scene's detail even by id (FR-008)"
+        );
+    }
+
+    /// The carve-out, and its edge.
+    ///
+    /// Two hidden scenes in one world, one of them launched. The launched
+    /// one must reach the player who is being asked to play on it — without
+    /// it their canvas has no map art and no grid — and the other must stay
+    /// exactly as hidden as it was, or "the active scene is readable" has
+    /// quietly become "any hidden scene is readable". Asserting only the
+    /// first half would pass on a change that removed the filter entirely.
+    #[tokio::test]
+    async fn a_player_may_read_the_scene_being_played_but_no_other_hidden_one() {
+        use crate::schema::{scenes, worlds};
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let player_id = insert_test_user(&mut conn);
+        crate::test_support::insert_test_world_member(&mut conn, world_id, player_id, "Player");
+
+        // Hidden is the default for a newly created scene (FR-003), which is
+        // why this is the ordinary case rather than an exotic one.
+        let played_scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        let prep_scene_id = uuid::Uuid::now_v7();
+        diesel::insert_into(scenes::table)
+            .values((
+                scenes::scene_id.eq(prep_scene_id),
+                scenes::world_id.eq(world_id),
+                scenes::name.eq("Unfinished Prep"),
+                scenes::type_.eq("battlemap"),
+                scenes::grid_size.eq(5),
+                scenes::grid_type.eq("square"),
+                scenes::width.eq(100),
+                scenes::height.eq(100),
+                scenes::owner_id.eq(owner_id),
+                scenes::hidden.eq(true),
+            ))
+            .execute(&mut conn)
+            .unwrap();
+        diesel::update(scenes::table.filter(scenes::scene_id.eq(played_scene_id)))
+            .set(scenes::hidden.eq(true))
+            .execute(&mut conn)
+            .unwrap();
+        diesel::update(worlds::table.filter(worlds::id.eq(world_id)))
+            .set(worlds::active_scene_id.eq(Some(played_scene_id)))
+            .execute(&mut conn)
+            .unwrap();
+        drop(conn);
+
+        let played = scene_impl(&state, player_id, false, played_scene_id)
+            .await
+            .expect("query should not error");
+        assert!(
+            played.is_some(),
+            "a player must be able to read the scene their world is playing, hidden or not",
+        );
+
+        let prep = scene_impl(&state, player_id, false, prep_scene_id)
+            .await
+            .expect("query should not error");
+        assert!(
+            prep.is_none(),
+            "every other hidden scene must stay hidden from a player (FR-008)",
         );
     }
 

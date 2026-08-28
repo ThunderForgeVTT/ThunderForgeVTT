@@ -53,6 +53,11 @@ type SceneQuery = {
  * Spec 022 (FR-001a): fetch one scene by id — the Scene detail gateway's
  * data source. Returns `null` for a stale/missing/hidden-from-this-caller
  * scene id (server-side filtering mirrors `getScenes`, see queries/scene.rs).
+ *
+ * With one carve-out, which is also why `WorldPage` calls this: a member may
+ * read the scene their world is *currently playing*, hidden or not. `hidden`
+ * keeps a GM's unfinished prep out of the Scenes table; it was never meant
+ * to withhold the map art and grid of the scene everyone is sitting on.
  */
 export function getScene(sceneId: string): Promise<SceneRecord | null> {
   return postGraphQL<SceneQuery>(

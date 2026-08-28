@@ -59,7 +59,7 @@ interface ReconcileReportState {
 import { useCanvasEngine } from "@/engine/bevy/useCanvasEngine";
 import { EngineLoader } from "@/components/engine/EngineLoader";
 import { getWorld } from "@/api/world";
-import { getScenes } from "@/api/scenes";
+import { getScene, getScenes } from "@/api/scenes";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import { WallTool } from "@/components/canvas-tools/WallTool";
@@ -293,8 +293,29 @@ export default function WorldPage() {
   const retrySceneLoad = useCallback(() => {
     setSceneLoadGeneration((generation) => generation + 1);
   }, []);
+  // The scene being played, fetched by id when the list does not carry it.
+  //
+  // `scenes(worldId:)` filters hidden scenes out for non-GMs (spec 022
+  // FR-008), while `sceneId` comes from the world's unfiltered
+  // `activeSceneId` — and a scene is hidden by default when created
+  // (FR-003). So a player playing a scene the GM never un-hid had a scene
+  // id and no scene record for the whole session, and the record is what
+  // carries the map art and the grid: their canvas silently had neither.
+  // The server now lets a member read the one scene their world is actually
+  // playing, and this is the fetch that asks for it.
+  const [activeSceneRecord, setActiveSceneRecord] = useState<SceneRecord | null>(
+    null,
+  );
+  // Which scene id we have finished trying to find a record for, whether or
+  // not we found one. The scene-load state below needs "we looked and there
+  // is nothing" — resolving on "we have not looked yet" would clear the
+  // loading overlay before the answer was known.
+  const [sceneRecordSettledFor, setSceneRecordSettledFor] = useState<
+    string | null
+  >(null);
   const selectedScene =
-    scenes.find((scene) => scene.sceneId === sceneId) ?? null;
+    scenes.find((scene) => scene.sceneId === sceneId) ??
+    (activeSceneRecord?.sceneId === sceneId ? activeSceneRecord : null);
 
   useEffect(() => {
     if (!id) {
@@ -357,6 +378,46 @@ export default function WorldPage() {
       active = false;
     };
   }, [id]);
+
+  // Only when the list came back without it — a GM's list already has every
+  // scene, so this is one extra request for players and none for a GM.
+  useEffect(() => {
+    if (!sceneId || scenesFetchedForWorld !== id) {
+      return;
+    }
+    if (scenes.some((scene) => scene.sceneId === sceneId)) {
+      setActiveSceneRecord(null);
+      setSceneRecordSettledFor(sceneId);
+      return;
+    }
+    if (activeSceneRecord?.sceneId === sceneId) {
+      return;
+    }
+
+    let active = true;
+    void getScene(sceneId)
+      .then((scene) => {
+        if (active && scene) {
+          setActiveSceneRecord(scene);
+        }
+      })
+      .catch((error) => {
+        // Non-fatal, and deliberately not an error to the user: the canvas
+        // still renders tokens, walls and lights, which load on their own.
+        // What is lost is the map art and the grid, and there is nothing
+        // for anyone to do about it here.
+        console.error("Failed to load the active scene:", error);
+      })
+      .finally(() => {
+        if (active) {
+          setSceneRecordSettledFor(sceneId);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [sceneId, scenes, scenesFetchedForWorld, id, activeSceneRecord]);
 
   // Spec 009: stabilized with useCallback — useCanvasEngine's mount effect
   // depends on this callback's identity (see useCanvasEngine.ts), so a
@@ -602,22 +663,26 @@ export default function WorldPage() {
       return;
     }
 
-    // A player's `scenes` list legitimately does not contain the scene
-    // they are playing: `scenes(worldId:)` filters hidden scenes out for
-    // non-GMs (server graphql/queries/scene.rs, spec 022 FR-008) and a
-    // world's auto-created scene is hidden, while `selectedSceneId` comes
-    // from the world's unfiltered, server-authoritative `activeSceneId`.
-    // So `selectedScene` stays null for that whole session and the
-    // dispatch below never runs — which used to mean "background" was
-    // never marked, the pending set never emptied, and every player sat
-    // under a permanent "Loading scene…" overlay on a canvas that had in
-    // fact fully loaded. With no scene record there is no `backgroundUrl`
-    // for anything to load, so the resource is satisfied rather than
-    // pending — the same call the no-art case below makes. Gated on the
-    // scene list having settled for *this* world so a still-in-flight
-    // fetch is not mistaken for an absent scene.
+    // No scene record at all, after we have finished looking for one.
+    //
+    // This used to be every player: `scenes(worldId:)` filters hidden
+    // scenes out for non-GMs (spec 022 FR-008) while `selectedSceneId`
+    // comes from the world's unfiltered `activeSceneId`, so `selectedScene`
+    // stayed null for the whole session, the dispatch below never ran, and
+    // "background" was never marked — the pending set never emptied and
+    // players sat under a permanent "Loading scene…" over a canvas that had
+    // in fact fully loaded. That is fixed at the source now: a member may
+    // read the scene their world is playing, and `activeSceneRecord` above
+    // fetches it. What remains is the genuine case — there really is no
+    // record to be had — where there is no `backgroundUrl` for anything to
+    // load, so the resource is satisfied rather than left pending, the same
+    // call the no-art branch below makes.
+    //
+    // Gated on having *finished looking*, not on the world's scene list
+    // arriving: resolving while the by-id fetch is still in flight would
+    // clear the overlay before the answer was known.
     if (!selectedScene) {
-      if (sceneId && scenesFetchedForWorld === id) {
+      if (sceneId && sceneRecordSettledFor === sceneId) {
         markSceneResourceLoaded("background", sceneLoadGeneration);
       }
       return;
@@ -710,7 +775,7 @@ export default function WorldPage() {
   }, [
     selectedScene,
     sceneId,
-    scenesFetchedForWorld,
+    sceneRecordSettledFor,
     worldStore,
     id,
     bridgeReady,
