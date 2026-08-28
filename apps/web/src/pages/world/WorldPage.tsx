@@ -25,11 +25,33 @@ import {
   subscribeToWorldEvents,
   type LiveSyncState,
 } from "@/engine/world/sync";
+import { reconcileWorld } from "@/engine/world/sync/offlineQueue";
 import {
-  reconcileWorld,
-  type ReconcileReport as OfflineReconcileReport,
-} from "@/engine/world/sync/offlineQueue";
+  parseReconciledEvent,
+  pruneApplied,
+  supersededBy,
+  type AppliedChange,
+  type ReconcileOutcome,
+  type SubmittedChange,
+} from "@/engine/world/sync/reconcile";
 import { ReconcileReport } from "@/components/world/ReconcileReport";
+
+/**
+ * What the reconcile panel is currently showing.
+ *
+ * `superseded` is not part of a reconcile *response* — it accumulates
+ * afterwards, from world events, as other clients reconnect and override what
+ * this one already applied. Keeping it in the same value is what lets one
+ * panel tell the whole story of an offline session rather than two competing
+ * notices appearing minutes apart.
+ */
+interface ReconcileReportState {
+  applied: SubmittedChange[];
+  rejected: { change: SubmittedChange; outcome: ReconcileOutcome }[];
+  unanswered: SubmittedChange[];
+  stillQueued: SubmittedChange[];
+  superseded: { change: SubmittedChange; byRole: string }[];
+}
 import { useCanvasEngine } from "@/engine/bevy/useCanvasEngine";
 import { EngineLoader } from "@/components/engine/EngineLoader";
 import { getWorld } from "@/api/world";
@@ -89,6 +111,37 @@ export default function WorldPage() {
   );
   const [worldState, setWorldState] = useState(() => worldStore.getState());
   const { user } = useAuth();
+  /**
+   * What this client applied at its own reconnect, still eligible to be
+   * superseded by a later one (spec 028 FR-041).
+   *
+   * A ref, not state: it is read inside a long-lived event loop that must not
+   * be torn down and rebuilt every time a change is applied — re-subscribing
+   * on each edit would drop events in the gap, which is the exact failure the
+   * catch-up exists to fix. Declared up here because that loop is defined
+   * above where these would otherwise sit.
+   */
+  const appliedRef = useRef<AppliedChange[]>([]);
+  /**
+   * The reconcile panel's contents. Declared alongside `appliedRef` because
+   * the world-event loop above updates both, and that loop is defined before
+   * this point in the component.
+   */
+  const [reconcileReport, setReconcileReport] =
+    useState<ReconcileReportState | null>(null);
+  /**
+   * This client's own user id, for telling its replays apart from everyone
+   * else's.
+   *
+   * Kept in sync from an effect rather than assigned during render: the loop
+   * that reads it outlives any single render, and closing over the value
+   * would pin it to whatever it was when the loop started — which, on a page
+   * that mounts before the session resolves, is `null` forever.
+   */
+  const userIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    userIdRef.current = user?.id ?? null;
+  }, [user?.id]);
   const [world, setWorld] = useState<WorldRecord | null>(null);
   const [scenes, setScenes] = useState<SceneRecord[]>([]);
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
@@ -803,6 +856,40 @@ export default function WorldPage() {
           if (launchedSceneId) {
             setSelectedSceneId(launchedSceneId);
           }
+
+          // Spec 028 FR-041, the `Applied → Superseded` case. A change this
+          // client applied at its own reconnect can be overridden minutes
+          // later by a Game Master reconnecting with a conflicting offline
+          // edit. There is no response left to carry that news — this client
+          // is long gone from that reconcile call — so it arrives here, as an
+          // ordinary world event, and is only recognisable as *supersession*
+          // because the event says it was a replay and says who made it.
+          const reconciled = parseReconciledEvent(event);
+          if (reconciled && userIdRef.current) {
+            const hits = supersededBy(
+              reconciled,
+              appliedRef.current,
+              userIdRef.current,
+            );
+            if (hits.length > 0) {
+              appliedRef.current = appliedRef.current.filter(
+                (change) => !hits.some((hit) => hit.localId === change.localId),
+              );
+              setReconcileReport((current) => ({
+                applied: current?.applied ?? [],
+                rejected: current?.rejected ?? [],
+                unanswered: current?.unanswered ?? [],
+                stillQueued: current?.stillQueued ?? [],
+                superseded: [
+                  ...(current?.superseded ?? []),
+                  ...hits.map((change) => ({
+                    change,
+                    byRole: reconciled.byRole,
+                  })),
+                ],
+              }));
+            }
+          }
         }
       } catch (error) {
         console.error("Scene-launch live-sync error:", error);
@@ -902,8 +989,7 @@ export default function WorldPage() {
   // not the catch-up, and not the scene refetch this ref was written for.
   // Being already `live` when we start listening is exactly what "has been
   // live once" means.
-  const [reconcileReport, setReconcileReport] =
-    useState<OfflineReconcileReport | null>(null);
+
   const wasLiveRef = useRef(false);
   useEffect(() => {
     // Read when the listener is actually attached, not during render: the
@@ -940,7 +1026,20 @@ export default function WorldPage() {
         if (wasLiveRef.current && worldIdNow) {
           void reconcileWorld(worldIdNow)
             .then((report) => {
-              if (report) setReconcileReport(report);
+              if (!report) return;
+              // Remember what applied, so a later Game Master reconnect can
+              // be recognised as overriding it. Pruned on the way in rather
+              // than on a timer: the list is only ever read here and when an
+              // event arrives, so there is nothing for a timer to be timely
+              // for.
+              appliedRef.current = [
+                ...pruneApplied(appliedRef.current, Date.now()),
+                ...report.applied.map((change) => ({
+                  ...change,
+                  appliedAt: Date.now(),
+                })),
+              ];
+              setReconcileReport({ ...report, superseded: [] });
             })
             .catch(() => {
               // Everything stays queued and goes again next reconnect. The
@@ -1368,7 +1467,7 @@ export default function WorldPage() {
                     // Supersession that happens *later* arrives as a world
                     // event, not in this report; the list here is what the
                     // reconcile call itself refused as superseded.
-                    superseded={[]}
+                    superseded={reconcileReport.superseded}
                     onDismiss={() => setReconcileReport(null)}
                   />
                 </div>
