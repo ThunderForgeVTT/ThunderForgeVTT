@@ -15,6 +15,7 @@ import {
   resolveSizeScale,
   type SizeCategoriesLookup,
 } from "../utils/sizeCategory";
+import { readString } from "../lib/systemData";
 import type { TokenRecord } from "../types/token";
 import type { WorldActorRecord } from "../types/actor";
 import "../styles/TokenPanel.scss";
@@ -139,9 +140,8 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
   const resolvedNewTokenScale: number | undefined = newTokenActorId
     ? resolveSizeScale(
         sizeCategories,
-        (selectedActorSystemData?.trait_data?.size_category as
-          | string
-          | undefined) ?? null,
+        readString(selectedActorSystemData?.trait_data, "size_category") ??
+          null,
       )
     : undefined;
   // Root cause of the primary-checkbox hang (spec 006 US2, found via

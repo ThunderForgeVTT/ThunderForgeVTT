@@ -21,6 +21,10 @@
  * Pathfinder 2e character stores DIFFERENT structure in SAME columns:
  *   ability_data: { "strength_mod": 0, "reflex_mod": 2, ... }
  *   etc.
+ *
+ * Hence `Record<string, unknown>` on every column below rather than
+ * `Record<string, any>`: nothing here can know what a given system stores,
+ * so a reader that wants a number has to check for one (lib/systemData.ts).
  */
 
 export interface WorldActorSystemDataDoc {
@@ -28,11 +32,11 @@ export interface WorldActorSystemDataDoc {
   actor_id: string;
   game_system_id: string;
 
-  ability_data?: Record<string, any>;
-  resource_data?: Record<string, any>;
-  proficiency_data?: Record<string, any>;
-  trait_data?: Record<string, any>;
-  spell_data?: Record<string, any>;
+  ability_data?: Record<string, unknown>;
+  resource_data?: Record<string, unknown>;
+  proficiency_data?: Record<string, unknown>;
+  trait_data?: Record<string, unknown>;
+  spell_data?: Record<string, unknown>;
 
   created_by: string;
   updated_by: string;
@@ -41,11 +45,11 @@ export interface WorldActorSystemDataDoc {
 
   _optimistic?: boolean;
   _lastServerData?: {
-    ability_data?: Record<string, any>;
-    resource_data?: Record<string, any>;
-    proficiency_data?: Record<string, any>;
-    trait_data?: Record<string, any>;
-    spell_data?: Record<string, any>;
+    ability_data?: Record<string, unknown>;
+    resource_data?: Record<string, unknown>;
+    proficiency_data?: Record<string, unknown>;
+    trait_data?: Record<string, unknown>;
+    spell_data?: Record<string, unknown>;
   };
 }
 

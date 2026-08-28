@@ -59,12 +59,15 @@ export interface ActorSystemData {
   actor_id: string;
   game_system_id: string;
 
-  // System-specific JSONB columns
-  ability_data?: Record<string, any>;
-  resource_data?: Record<string, any>;
-  proficiency_data?: Record<string, any>;
-  trait_data?: Record<string, any>;
-  spell_data?: Record<string, any>;
+  // System-specific JSONB columns. `unknown` values, not `any`: what these
+  // hold is decided by whichever game system the actor belongs to (dnd5e's
+  // `strength` and Pathfinder's `strength_mod` live in the same column), so
+  // a reader that wants a number has to check for one. See lib/systemData.ts.
+  ability_data?: Record<string, unknown>;
+  resource_data?: Record<string, unknown>;
+  proficiency_data?: Record<string, unknown>;
+  trait_data?: Record<string, unknown>;
+  spell_data?: Record<string, unknown>;
 
   // Metadata
   created_by: string;
@@ -75,7 +78,7 @@ export interface ActorSystemData {
   // Optimistic update metadata (set locally by useUpdateActorData while a
   // mutation is in flight; never sent to or read back from the server)
   _optimistic?: boolean;
-  _lastServerData?: Record<string, any>;
+  _lastServerData?: Record<string, unknown>;
 }
 
 /**
@@ -185,7 +188,7 @@ export function useActorSystemData(
 export function useActorAbilityData(
   actorId: string,
   gameSystemId: string,
-): Record<string, any> | null {
+): Record<string, unknown> | null {
   const { data } = useActorSystemData(actorId, gameSystemId);
   return data?.ability_data ?? null;
 }
@@ -196,7 +199,7 @@ export function useActorAbilityData(
 export function useActorProficiencyData(
   actorId: string,
   gameSystemId: string,
-): Record<string, any> | null {
+): Record<string, unknown> | null {
   const { data } = useActorSystemData(actorId, gameSystemId);
   return data?.proficiency_data ?? null;
 }
@@ -207,7 +210,7 @@ export function useActorProficiencyData(
 export function useActorResourceData(
   actorId: string,
   gameSystemId: string,
-): Record<string, any> | null {
+): Record<string, unknown> | null {
   const { data } = useActorSystemData(actorId, gameSystemId);
   return data?.resource_data ?? null;
 }
@@ -218,7 +221,7 @@ export function useActorResourceData(
 export function useActorTraitData(
   actorId: string,
   gameSystemId: string,
-): Record<string, any> | null {
+): Record<string, unknown> | null {
   const { data } = useActorSystemData(actorId, gameSystemId);
   return data?.trait_data ?? null;
 }
@@ -229,7 +232,7 @@ export function useActorTraitData(
 export function useActorSpellData(
   actorId: string,
   gameSystemId: string,
-): Record<string, any> | null {
+): Record<string, unknown> | null {
   const { data } = useActorSystemData(actorId, gameSystemId);
   return data?.spell_data ?? null;
 }

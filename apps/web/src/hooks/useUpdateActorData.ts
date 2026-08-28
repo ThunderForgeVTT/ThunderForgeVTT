@@ -31,8 +31,10 @@ import {
  * Mutation hook result
  */
 export interface UseUpdateActorDataResult {
-  /** Trigger mutation. Throws on validation error. */
-  mutate: (dataType: string, data: Record<string, any>) => Promise<void>;
+  /** Trigger mutation. Throws on validation error. The payload is whatever
+   * shape the loaded game system stores in that column — it is passed to the
+   * server unread, so `unknown` values are the honest type. */
+  mutate: (dataType: string, data: Record<string, unknown>) => Promise<void>;
 
   /** True while mutation is in flight */
   isPending: boolean;
@@ -56,7 +58,7 @@ export function useUpdateActorData(
   const [error, setError] = useState<Error | null>(null);
 
   const mutate = useCallback(
-    async (dataType: string, data: Record<string, any>) => {
+    async (dataType: string, data: Record<string, unknown>) => {
       try {
         setIsPending(true);
         setError(null);
@@ -129,7 +131,7 @@ export function useUpdateResourceData(actorId: string, gameSystemId: string) {
   );
 
   return {
-    updateResources: async (resources: Record<string, any>) =>
+    updateResources: async (resources: Record<string, unknown>) =>
       mutate("resource_data", resources),
     isPending,
     error,
@@ -146,7 +148,7 @@ export function useUpdateTraitData(actorId: string, gameSystemId: string) {
   );
 
   return {
-    updateTraits: async (traits: Record<string, any>) =>
+    updateTraits: async (traits: Record<string, unknown>) =>
       mutate("trait_data", traits),
     isPending,
     error,
@@ -163,7 +165,7 @@ export function useUpdateSpellData(actorId: string, gameSystemId: string) {
   );
 
   return {
-    updateSpells: async (spells: Record<string, any>) =>
+    updateSpells: async (spells: Record<string, unknown>) =>
       mutate("spell_data", spells),
     isPending,
     error,

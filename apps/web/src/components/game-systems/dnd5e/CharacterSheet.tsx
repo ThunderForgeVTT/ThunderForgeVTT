@@ -26,6 +26,12 @@ import { Container } from "@/components/ui/container/Container";
 import { Tabs } from "@/components/ui/tabs/Tabs";
 import { Card } from "@/components/ui/card/Card";
 import { cn } from "@/lib/utils";
+import {
+  booleanEntries,
+  numberEntries,
+  readNumber,
+  readString,
+} from "@/lib/systemData";
 import { useActorSystemData } from "@/hooks/useActorSystemData";
 import { useUpdateActorData } from "@/hooks/useUpdateActorData";
 import { useGameSystemManifest } from "@/contexts/GameSystemContext";
@@ -34,14 +40,39 @@ import { SkillsList } from "./SkillsList";
 
 /**
  * The slice of the `spell_data` JSONB column this sheet renders. That column
- * arrives untyped from the server (`Record<string, any>`), so the shape the
- * sheet actually depends on is written down once here instead of being
- * re-assumed at every use site.
+ * arrives open from the server (`Record<string, unknown>` — its shape is the
+ * loaded game system's business), so the shape the sheet actually depends on
+ * is written down once here instead of being re-assumed at every use site.
  */
 interface Dnd5eSpellData {
   spellcasting_ability?: string;
   spell_slots?: Record<string, number>;
   known_spells?: string[];
+}
+
+/**
+ * Narrow the open `spell_data` column to the three fields this sheet reads.
+ *
+ * Each field is checked on its own: a row holding a readable spellcasting
+ * ability but a malformed `spell_slots` still renders the ability. Anything
+ * unreadable is dropped, so the sheet falls through to its "no spell slots
+ * recorded" copy rather than rendering a stringified object.
+ */
+function toDnd5eSpellData(
+  raw: Record<string, unknown> | undefined,
+): Dnd5eSpellData {
+  const slots = raw?.spell_slots;
+  const known = raw?.known_spells;
+  return {
+    spellcasting_ability: readString(raw, "spellcasting_ability"),
+    spell_slots:
+      typeof slots === "object" && slots !== null && !Array.isArray(slots)
+        ? numberEntries(slots as Record<string, unknown>)
+        : undefined,
+    known_spells: Array.isArray(known)
+      ? known.filter((entry): entry is string => typeof entry === "string")
+      : undefined,
+  };
 }
 
 export interface CharacterSheetProps {
@@ -139,11 +170,19 @@ export function CharacterSheet({
     );
   }
 
+  // The raw columns are what gets written back: an update spreads the column
+  // it edits, and spreading a narrowed copy instead would silently delete
+  // every key this sheet cannot read (another system's fields, a newer
+  // field this build predates).
   const abilityData = actorData.ability_data ?? {};
   const proficiencyData = actorData.proficiency_data ?? {};
-  const resourceData = actorData.resource_data ?? {};
-  const traitData = actorData.trait_data ?? {};
-  const spellData: Dnd5eSpellData = actorData.spell_data ?? {};
+
+  // The narrowed views are what gets rendered.
+  const abilityScores = numberEntries(abilityData);
+  const proficiencies = booleanEntries(proficiencyData);
+  const resourceData = actorData.resource_data;
+  const traitData = actorData.trait_data;
+  const spellData = toDnd5eSpellData(actorData.spell_data);
 
   const handleUpdateAbility = async (abilityId: string, score: number) => {
     try {
@@ -166,7 +205,7 @@ export function CharacterSheet({
     }
   };
 
-  const dexModifier = Math.floor(((abilityData.dexterity ?? 10) - 10) / 2);
+  const dexModifier = Math.floor(((abilityScores.dexterity ?? 10) - 10) / 2);
 
   return (
     <Container className="grid gap-6 py-6">
@@ -201,7 +240,7 @@ export function CharacterSheet({
             content: (
               <div className="grid gap-4">
                 <AbilityScores
-                  data={abilityData}
+                  data={abilityScores}
                   editable={editable}
                   onUpdate={handleUpdateAbility}
                 />
@@ -214,7 +253,7 @@ export function CharacterSheet({
                         Hit Points
                       </span>
                       <span className="text-xl font-semibold">
-                        {resourceData.hp ?? 0}
+                        {readNumber(resourceData, "hp") ?? 0}
                       </span>
                     </div>
                     <div className="grid gap-1">
@@ -222,7 +261,7 @@ export function CharacterSheet({
                         Armor Class
                       </span>
                       <span className="text-xl font-semibold">
-                        {resourceData.ac ?? 10}
+                        {readNumber(resourceData, "ac") ?? 10}
                       </span>
                     </div>
                     <div className="grid gap-1">
@@ -230,7 +269,7 @@ export function CharacterSheet({
                         Speed
                       </span>
                       <span className="text-xl font-semibold">
-                        {resourceData.speed ?? 30} ft
+                        {readNumber(resourceData, "speed") ?? 30} ft
                       </span>
                     </div>
                     <div className="grid gap-1">
@@ -252,8 +291,8 @@ export function CharacterSheet({
             label: "Skills",
             content: (
               <SkillsList
-                abilityData={abilityData}
-                proficiencyData={proficiencyData}
+                abilityData={abilityScores}
+                proficiencyData={proficiencies}
                 editable={editable}
                 onToggleProficiency={handleToggleProficiency}
               />
@@ -270,23 +309,27 @@ export function CharacterSheet({
                   <div className="grid gap-1">
                     <span className="text-xs text-muted-foreground">Class</span>
                     <span className="font-medium">
-                      {traitData.class ?? "—"}
+                      {readString(traitData, "class") ?? "—"}
                     </span>
                   </div>
                   <div className="grid gap-1">
                     <span className="text-xs text-muted-foreground">Level</span>
-                    <span className="font-medium">{traitData.level ?? 1}</span>
+                    <span className="font-medium">
+                      {readNumber(traitData, "level") ?? 1}
+                    </span>
                   </div>
                   <div className="grid gap-1">
                     <span className="text-xs text-muted-foreground">Race</span>
-                    <span className="font-medium">{traitData.race ?? "—"}</span>
+                    <span className="font-medium">
+                      {readString(traitData, "race") ?? "—"}
+                    </span>
                   </div>
                   <div className="grid gap-1">
                     <span className="text-xs text-muted-foreground">
                       Background
                     </span>
                     <span className="font-medium">
-                      {traitData.background ?? "—"}
+                      {readString(traitData, "background") ?? "—"}
                     </span>
                   </div>
                   <div className="grid gap-1">
@@ -294,7 +337,7 @@ export function CharacterSheet({
                       Alignment
                     </span>
                     <span className="font-medium">
-                      {traitData.alignment ?? "—"}
+                      {readString(traitData, "alignment") ?? "—"}
                     </span>
                   </div>
                   <div className="grid gap-1">
@@ -302,7 +345,7 @@ export function CharacterSheet({
                       Experience
                     </span>
                     <span className="font-medium">
-                      {traitData.experience ?? 0}
+                      {readNumber(traitData, "experience") ?? 0}
                     </span>
                   </div>
                 </div>
