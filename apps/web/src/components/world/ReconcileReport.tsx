@@ -40,6 +40,23 @@ export interface ReconcileReportProps {
   unanswered: SubmittedChange[];
   /** Applied changes a later Game Master reconnect overrode. */
   superseded: { change: SubmittedChange; byRole: string }[];
+  /**
+   * Refusals of peer-adjudicated changes this client submitted for somebody
+   * else (spec 028 US7, T103, FR-062).
+   *
+   * A subset of `rejected`, listed separately because the sentence is a
+   * different one: the reader did not make these edits, another player did,
+   * and the Game Master's client submitted them because adjudication rides
+   * the GM's session (`contracts/peer-protocol.md`).
+   *
+   * The honest limit, recorded rather than hidden: this tells the **GM** whose
+   * work was refused. The player's own client has no reconcile response to
+   * read — it never submitted anything — so what reaches them directly is the
+   * revert, arriving as an ordinary token change. Telling them in words needs
+   * a server-side channel that does not exist yet, and the GM naming it at the
+   * table is what the design leans on meanwhile.
+   */
+  onBehalf?: { change: SubmittedChange; outcome: ReconcileOutcome }[];
   onDismiss: () => void;
 }
 
@@ -63,6 +80,7 @@ export function ReconcileReport({
   rejected,
   unanswered,
   superseded,
+  onBehalf = [],
   onDismiss,
 }: ReconcileReportProps) {
   const nothingToSay =
@@ -71,6 +89,12 @@ export function ReconcileReport({
     unanswered.length === 0 &&
     superseded.length === 0;
   if (nothingToSay) return null;
+
+  // `onBehalf` is drawn from `rejected`, so it is taken out here rather than
+  // listed twice — once anonymously and once with a name, which would read as
+  // twice as much having gone wrong.
+  const onBehalfIds = new Set(onBehalf.map((entry) => entry.change.localId));
+  const ownRejected = rejected.filter((entry) => !onBehalfIds.has(entry.change.localId));
 
   return (
     <section
@@ -107,11 +131,36 @@ export function ReconcileReport({
         </div>
       )}
 
-      {rejected.length > 0 && (
+      {onBehalf.length > 0 && (
+        <div className="grid gap-1" data-testid="reconcile-on-behalf">
+          <h3 className="text-xs font-medium">Refused for another player</h3>
+          <ul className="grid gap-1">
+            {onBehalf.map(({ change, outcome }) => (
+              <li
+                key={change.localId}
+                className="text-xs text-muted-foreground"
+                data-reason={outcome.reason ?? "UNKNOWN"}
+                data-originator={change.originatorUserId ?? ""}
+              >
+                {/* Peer adjudication is provisional and the server's decision
+                    is final (FR-062). It was a player's move, adjudicated at
+                    the table and submitted through this connection, and the
+                    server has now refused it — so the map no longer shows it,
+                    and the person it belonged to should be told. */}
+                A move you adjudicated for another player was not accepted.{" "}
+                {reasonSentence(outcome.reason, outcome.supersededByRole)} Their token is back
+                to where the server has it.
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {ownRejected.length > 0 && (
         <div className="grid gap-1" data-testid="reconcile-rejected">
           <h3 className="text-xs font-medium">Not applied</h3>
           <ul className="grid gap-1">
-            {rejected.map(({ change, outcome }) => (
+            {ownRejected.map(({ change, outcome }) => (
               <li
                 key={change.localId}
                 className="text-xs text-muted-foreground"

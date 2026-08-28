@@ -57,6 +57,8 @@ interface ReconcileReportState {
   unanswered: SubmittedChange[];
   stillQueued: SubmittedChange[];
   superseded: { change: SubmittedChange; byRole: string }[];
+  /** Peer-adjudicated refusals submitted for another player (spec 028 T103). */
+  onBehalf?: { change: SubmittedChange; outcome: ReconcileOutcome }[];
 }
 import { useCanvasEngine } from "@/engine/bevy/useCanvasEngine";
 import { EngineLoader } from "@/components/engine/EngineLoader";
@@ -1076,6 +1078,25 @@ export default function WorldPage() {
   useEffect(() => {
     idRef.current = id;
   }, [id]);
+  /**
+   * What a reconcile is allowed to do on this page (spec 028 US7, T103).
+   *
+   * `revert` is FR-062: a change the server refused must stop being shown, and
+   * the only authority on what to show instead is the server — so the revert
+   * is a re-read of the scene's tokens, the same one a reconnect already does,
+   * asked for at the moment it is required. `selfUserId` is what lets a
+   * refusal of a peer-adjudicated change name whose work it was.
+   */
+  const reconcileOptions = useMemo(
+    () => ({
+      selfUserId: user?.id,
+      revert: () => {
+        const currentSceneId = sceneIdRef.current;
+        return currentSceneId ? loadTokensIntoStore(worldStore, currentSceneId) : undefined;
+      },
+    }),
+    [user?.id, worldStore],
+  );
   // Only a transition into `live` *after* having already been live once
   // counts as a reconnect worth re-fetching for — the very first
   // `connecting` -> `live` transition on initial mount is already covered
@@ -1112,7 +1133,7 @@ export default function WorldPage() {
       // the user watches their offline work vanish and reappear.
       const worldIdNow = idRef.current;
       if (!worldIdNow) return;
-      void reconcileWorld(worldIdNow)
+      void reconcileWorld(worldIdNow, reconcileOptions)
         .then((report) => {
           if (!report) return;
           appliedRef.current = [
@@ -1168,7 +1189,7 @@ export default function WorldPage() {
         // truth and the user would watch their offline work vanish and then
         // reappear.
         if (wasLiveRef.current && worldIdNow) {
-          void reconcileWorld(worldIdNow)
+          void reconcileWorld(worldIdNow, reconcileOptions)
             .then((report) => {
               if (!report) return;
               // Remember what applied, so a later Game Master reconnect can
@@ -1626,6 +1647,7 @@ export default function WorldPage() {
                     // event, not in this report; the list here is what the
                     // reconcile call itself refused as superseded.
                     superseded={reconcileReport.superseded}
+                    onBehalf={reconcileReport.onBehalf}
                     onDismiss={() => setReconcileReport(null)}
                   />
                 </div>
@@ -1675,7 +1697,11 @@ export default function WorldPage() {
                   zIndex: 900,
                 }}
               >
-                <DiceRollerPanel worldId={id} engineReady={engineReady} />
+                <DiceRollerPanel
+                  worldId={id}
+                  engineReady={engineReady}
+                  isGameMaster={isSceneOwner}
+                />
               </div>
             </div>
           }

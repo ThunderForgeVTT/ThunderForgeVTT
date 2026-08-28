@@ -48,6 +48,11 @@ export interface SubmittedChange {
   localId: string;
   /** The token the command edits, for matching later supersession events. */
   tokenId: string;
+  /**
+   * Set only for a peer-adjudicated change made by somebody else (T103).
+   * Absent means the submitter made it — the ordinary offline case.
+   */
+  originatorUserId?: string;
 }
 
 /**
@@ -197,4 +202,125 @@ export function remainingAfterInterruption(
 ): SubmittedChange[] {
   const answered = new Set(outcomes.map((outcome) => outcome.localId));
   return submitted.filter((change) => !answered.has(change.localId));
+}
+
+// ---------------------------------------------------------------------------
+// Peer adjudication (spec 028 US7, T103/T104)
+// ---------------------------------------------------------------------------
+
+/**
+ * Who a peer-adjudicated change belongs to.
+ *
+ * While server-isolated, the Game Master's client adjudicates and — per
+ * `contracts/peer-protocol.md` — the submission rides the GM's authenticated
+ * session on reconnection. So the client holding the change in its outbox is
+ * often *not* the person who made it, and there is no other record of who did:
+ * the server sees the GM's credentials and nothing else.
+ *
+ * FR-062 requires the **originating** user be told when the server refuses one
+ * of these, so attribution has to survive everything the change survives —
+ * including a page reload, which throws away every in-memory map. The outbox
+ * is the only durable store in the path, so attribution is carried inside the
+ * stored command itself.
+ */
+export interface Adjudication {
+  /** The user whose action this was, which may not be the submitter. */
+  originatorUserId: string;
+}
+
+/**
+ * Where attribution rides in the stored command.
+ *
+ * Snake case to match the rest of the command wire shape, and a key the
+ * server's `UpsertTokenCommand` does not read: the command is replayed
+ * verbatim through the ordinary mutation path, which parses `type` and
+ * `token` and ignores everything else. So an attributed command is accepted
+ * by today's server exactly as an unattributed one is, and T102's role check
+ * has the field waiting for it when it lands.
+ */
+const ADJUDICATION_KEY = "adjudication";
+
+/**
+ * Stamp a command with the user it originated from.
+ *
+ * Returns the command unchanged if it is not an object — there is nothing to
+ * attribute, and inventing a wrapper would change the shape the server
+ * replays.
+ */
+export function attributeCommand(command: unknown, originatorUserId: string): unknown {
+  if (typeof command !== "object" || command === null || Array.isArray(command)) {
+    return command;
+  }
+  if (originatorUserId.length === 0) return command;
+  return {
+    ...(command as Record<string, unknown>),
+    [ADJUDICATION_KEY]: { originator_user_id: originatorUserId },
+  };
+}
+
+/**
+ * Read attribution back off a stored command, or `null` when there is none.
+ *
+ * Deliberately strict, and `null` on anything doubtful. The value decides
+ * whose name appears next to a refusal, and naming the wrong person is worse
+ * than naming nobody — the same reasoning FR-067a applies to discrepancies.
+ */
+export function readAdjudication(command: unknown): Adjudication | null {
+  if (typeof command !== "object" || command === null) return null;
+  const raw = (command as Record<string, unknown>)[ADJUDICATION_KEY];
+  if (typeof raw !== "object" || raw === null) return null;
+  const originator = (raw as { originator_user_id?: unknown }).originator_user_id;
+  if (typeof originator !== "string" || originator.length === 0) return null;
+  return { originatorUserId: originator };
+}
+
+/** A change the server refused, with the reason it gave. */
+export interface RejectedChange {
+  change: SubmittedChange;
+  outcome: ReconcileOutcome;
+}
+
+/**
+ * Split refusals by who has to be told.
+ *
+ * `own` is the ordinary Phase 9 case — this user made the edit, this user
+ * hears about it. `onBehalf` is the peer-adjudicated one: a Game Master
+ * submitted somebody else's change, so the refusal is news the GM has to
+ * carry, and the report names whose change it was rather than reporting an
+ * anonymous failure the GM cannot place.
+ *
+ * A change with no attribution counts as `own`. Attribution is only ever
+ * written for adjudicated changes, so its absence means the submitter made it.
+ */
+export function noticesFor(
+  rejected: RejectedChange[],
+  selfUserId: string,
+): { own: RejectedChange[]; onBehalf: RejectedChange[] } {
+  const own: RejectedChange[] = [];
+  const onBehalf: RejectedChange[] = [];
+  for (const entry of rejected) {
+    const originator = entry.change.originatorUserId;
+    if (!originator || originator === selfUserId) own.push(entry);
+    else onBehalf.push(entry);
+  }
+  return { own, onBehalf };
+}
+
+/**
+ * Which tokens a refusal leaves showing something the server did not agree to.
+ *
+ * FR-062 calls this "reverting locally", and the revert is a **re-read of the
+ * server's state**, not an undo of the client's own edit. The client cannot
+ * reconstruct what the token looked like before — offline play may have moved
+ * it several times, and a peer-adjudicated change may have originated on
+ * another machine entirely. What it can do is stop showing a position the
+ * server refused, and the only authority on what to show instead is the
+ * server.
+ */
+export function tokensToRevert(rejected: RejectedChange[]): string[] {
+  const seen = new Set<string>();
+  for (const entry of rejected) {
+    if (entry.change.tokenId.length > 0) seen.add(entry.change.tokenId);
+  }
+  return [...seen];
 }

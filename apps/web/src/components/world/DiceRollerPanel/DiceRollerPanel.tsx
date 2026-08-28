@@ -1,10 +1,17 @@
 import { useState } from "react";
 import { rollDice } from "@/api/roll";
 import { triggerDiceRollAnimation } from "@/engine/bevy";
+import { RollResult } from "@/components/world/RollResult";
 import type { RollResolutionRecord } from "@/types/roll";
 
 export interface DiceRollerPanelProps {
   worldId: string;
+  /**
+   * Whether the viewer is the Game Master (spec 028 FR-067). Only they see a
+   * note where the server determined a result differently; everyone else sees
+   * an ordinary roll, which is the point of the rule.
+   */
+  isGameMaster?: boolean;
   /** Whether the Bevy canvas is mounted — when it isn't, the result is
    * shown immediately rather than waiting on an animation that will
    * never play (FR-016). */
@@ -25,7 +32,11 @@ export interface DiceRollerPanelProps {
 // the two live in separate build targets with no shared config.
 const ANIMATION_REVEAL_MS = 1200;
 
-export function DiceRollerPanel({ worldId, engineReady }: DiceRollerPanelProps) {
+export function DiceRollerPanel({
+  worldId,
+  engineReady,
+  isGameMaster = false,
+}: DiceRollerPanelProps) {
   const [formula, setFormula] = useState("1d20");
   const [isRolling, setIsRolling] = useState(false);
   const [result, setResult] = useState<RollResolutionRecord | null>(null);
@@ -79,9 +90,14 @@ export function DiceRollerPanel({ worldId, engineReady }: DiceRollerPanelProps) 
       </div>
       {error ? <p data-testid="dice-roll-error">{error}</p> : null}
       {result ? (
-        <p data-testid="dice-roll-result">
-          {result.formula}: <strong>{result.resultValue}</strong>
-        </p>
+        <div data-testid="dice-roll-result">
+          {/*
+            Spec 028 T102a: the result renders through `RollResult`, which is
+            also where a value the server determined differently gets its quiet
+            note — for the Game Master only (FR-067).
+          */}
+          <RollResult resolution={result} isGameMaster={isGameMaster} />
+        </div>
       ) : null}
     </div>
   );

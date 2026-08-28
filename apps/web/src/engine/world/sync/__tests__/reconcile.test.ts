@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  attributeCommand,
   matchOutcomes,
+  noticesFor,
+  readAdjudication,
+  tokensToRevert,
   parseReconciledEvent,
   pruneApplied,
   remainingAfterInterruption,
@@ -164,5 +168,96 @@ describe("remainingAfterInterruption", () => {
     ];
 
     expect(remainingAfterInterruption(submitted, outcomes)).toEqual([]);
+  });
+});
+
+describe("attributeCommand / readAdjudication", () => {
+  /**
+   * The GM's client submits a peer-adjudicated change on the author's behalf,
+   * so the server sees the GM's credentials and nothing else. Attribution has
+   * to survive everything the change survives — a page reload included — and
+   * the outbox is the only durable store in the path.
+   */
+  it("carries the author inside the stored command, where a reload cannot lose it", () => {
+    const command = attributeCommand({ type: "upsert_token", token: { id: "t1" } }, "player-1");
+    expect(readAdjudication(command)).toEqual({ originatorUserId: "player-1" });
+  });
+
+  /**
+   * The server replays the command verbatim and parses `type` and `token`.
+   * Wrapping it, or moving anything, would make an attributed change a
+   * different kind of edit — which is the one thing reconciliation must never
+   * become.
+   */
+  it("leaves the parts the server replays untouched", () => {
+    const original = { type: "upsert_token", token: { id: "t1", x: 3 } };
+    const command = attributeCommand(original, "player-1") as Record<string, unknown>;
+    expect(command.type).toBe("upsert_token");
+    expect(command.token).toEqual({ id: "t1", x: 3 });
+  });
+
+  /** An ordinary offline edit has no author but the submitter, and no stamp. */
+  it("reads nothing off a command that was never attributed", () => {
+    expect(readAdjudication({ type: "upsert_token", token: { id: "t1" } })).toBeNull();
+  });
+
+  /**
+   * The value decides whose name appears next to a refusal. Naming the wrong
+   * person is worse than naming nobody, so anything malformed reads as no
+   * attribution rather than as a guess.
+   */
+  it("refuses to guess at a malformed stamp", () => {
+    expect(readAdjudication({ adjudication: { originator_user_id: "" } })).toBeNull();
+    expect(readAdjudication({ adjudication: { originator_user_id: 7 } })).toBeNull();
+    expect(readAdjudication({ adjudication: "player-1" })).toBeNull();
+    expect(readAdjudication(null)).toBeNull();
+    expect(readAdjudication("not a command")).toBeNull();
+  });
+});
+
+describe("noticesFor", () => {
+  const rejection = (localId: string, originatorUserId?: string) => ({
+    change: { localId, tokenId: "t1", ...(originatorUserId ? { originatorUserId } : {}) },
+    outcome: { localId, applied: false, reason: "PERMISSION_DENIED" as const },
+  });
+
+  /**
+   * The Game Master reads a refusal of somebody else's move, and the sentence
+   * has to be a different one: they did not make the edit, and an anonymous
+   * "your change was refused" is a report they cannot place.
+   */
+  it("separates what you did from what you submitted for somebody else", () => {
+    const result = noticesFor(
+      [rejection("a", "player-1"), rejection("b", "gm-1"), rejection("c")],
+      "gm-1",
+    );
+    expect(result.onBehalf.map((entry) => entry.change.localId)).toEqual(["a"]);
+    expect(result.own.map((entry) => entry.change.localId)).toEqual(["b", "c"]);
+  });
+});
+
+describe("tokensToRevert", () => {
+  const rejection = (localId: string, tokenId: string) => ({
+    change: { localId, tokenId },
+    outcome: { localId, applied: false, reason: "SUPERSEDED" as const },
+  });
+
+  /**
+   * The revert is a re-read of the server's state, so asking twice for the
+   * same token would fetch the same scene twice and dispatch it twice — visible
+   * as a flicker on the map at the exact moment the user is being told
+   * something went wrong.
+   */
+  it("asks once per token however many of its changes were refused", () => {
+    expect(tokensToRevert([rejection("a", "t1"), rejection("b", "t1"), rejection("c", "t2")]))
+      .toEqual(["t1", "t2"]);
+  });
+
+  /**
+   * A change whose token could not be read is not a licence to refetch
+   * everything — there is no token to put back.
+   */
+  it("skips a change with no token to put back", () => {
+    expect(tokensToRevert([rejection("a", "")])).toEqual([]);
   });
 });
