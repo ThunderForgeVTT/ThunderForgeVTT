@@ -526,6 +526,66 @@ export async function pasteCanvasImage(page: Page, seed: number): Promise<string
   return assetId!;
 }
 
+/** Scene names by id, for tests that have to drive the UI switcher. */
+export async function sceneNames(
+  page: Page,
+  worldId: string,
+): Promise<Map<string, string>> {
+  const res = await graphql<
+    GqlResult<{ scenes: { sceneId: string; name: string }[] }>
+  >(
+    page,
+    `
+      query ($worldId: UUID!) {
+        scenes(worldId: $worldId) {
+          sceneId
+          name
+        }
+      }
+    `,
+    { worldId },
+  );
+  expect(res.errors, `scenes query failed: ${JSON.stringify(res.errors)}`).toBe(
+    undefined,
+  );
+  return new Map((res.data?.scenes ?? []).map((s) => [s.sceneId, s.name]));
+}
+
+/**
+ * Reveal the PlayDock's Settings section, which is collapsed by default.
+ *
+ * Both the scene switcher and the map-import tool live in `SettingsPanel`,
+ * so on `/world/{id}/play` neither is in the DOM until this runs. Shared
+ * rather than repeated because the failure mode is identical and unhelpful
+ * either way: a locator that simply never resolves, which spends the whole
+ * test timeout before saying so.
+ */
+async function openSettingsDock(page: Page, testId: string): Promise<void> {
+  const target = page.locator(`[data-testid="${testId}"]:visible`).first();
+  if (await target.isVisible().catch(() => false)) return;
+  await page.getByTestId("world-dock-tab-settings").click();
+  await expect(target).toBeVisible({ timeout: 20_000 });
+}
+
+/**
+ * Select a scene through the switcher, the way a GM does.
+ *
+ * The UI, not a store dispatch, because the point of switching in these tests
+ * is to make the engine load that scene's art on a running page — which is
+ * the only moment the asset cache is actually consulted for a background (see
+ * `world-cache-repair.spec.ts` on `try_cached`). A dispatch would move the
+ * store without reproducing the load.
+ */
+export async function switchToScene(page: Page, name: string): Promise<void> {
+  await openSettingsDock(page, "scene-switcher");
+  // Both the staging page and the sidebar render a switcher; scope to the
+  // visible one (spec 009).
+  const switcher = page.locator('[data-testid="scene-switcher"]:visible');
+  await switcher.click({ timeout: 20_000 });
+  await page.getByRole("option", { name }).click({ timeout: 20_000 });
+  await expect(switcher).toContainText(name, { timeout: 20_000 });
+}
+
 /**
  * Import a map, giving the scene a **persistent background asset**.
  *
@@ -556,12 +616,11 @@ export async function pasteCanvasImage(page: Page, seed: number): Promise<string
  * gate `canvas-authoring.spec.ts` handles before creating a scene.
  */
 export async function importMapBackground(page: Page, filePath: string): Promise<void> {
+  await openSettingsDock(page, "map-import-tool");
   const tool = page.getByTestId("map-import-tool");
-  if (!(await tool.isVisible().catch(() => false))) {
-    await page.getByTestId("world-dock-tab-settings").click();
-    await expect(tool).toBeVisible({ timeout: 15_000 });
-  }
-  await tool.locator('input[type="file"]').setInputFiles(filePath);
+  await tool
+    .locator('input[type="file"]')
+    .setInputFiles(filePath, { timeout: 30_000 });
   await expect(page.getByTestId("map-import-success")).toBeVisible({
     timeout: 90_000,
   });

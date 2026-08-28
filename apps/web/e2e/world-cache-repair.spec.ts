@@ -4,6 +4,7 @@ import { registerAndCreateWorld, uniqueSuffix } from "./fixtures/helpers";
 import {
   assetFingerprint,
   countAssetRequests,
+  createScene,
   createCanvasAsset,
   holdsFingerprint,
   importMapBackground,
@@ -11,6 +12,8 @@ import {
   probeBlobs,
   sceneBackgroundAssetId,
   sceneIds,
+  sceneNames,
+  switchToScene,
   type SyncSummary,
   watchCacheSync,
   worldBlobs,
@@ -363,83 +366,72 @@ test.describe("Client world cache — repairing a divergent store (FR-019, SC-00
     expect(errors.stop(), "a repair must not surface an error to the user").toEqual([]);
   });
 
-  // Not `test.skip` — the code under test is believed correct and is
-  // natively tested; what is missing is a way to *reach* it from a browser.
-  // `fixme` keeps the scenario, the setup and the reasoning in the tree and
-  // out of the red, which is what T042 did while T045a was outstanding.
-  //
-  // **Why this cannot pass today.** `try_cached` (cached_assets.rs) declines
-  // to serve a load when the cache is not ready or when no fingerprint has
-  // been published for the asset, and on a fresh page load the scene
-  // background is *both*. Measured, in this order, from the browser console:
-  //
-  //     [net]    HEAD 200          <- WorldPage's reachability check
-  //     [net]    GET  404          <- Bevy asking for `.webp.meta`
-  //     [net]    GET  200          <- the background itself
-  //     [engine] canvas asset cache ready
-  //     [world-cache] sync {...}
-  //
-  // The sprite load is dispatched as soon as the scene state arrives, which
-  // is well before `sync_world_cache` resolves and `publish_fingerprints`
-  // fills `cache.fingerprints`. So the background is fetched over the network
-  // every open, the forged blob is never read, and — the tell that made this
-  // visible — the forged file is still on disk, byte for byte, afterwards. A
-  // read would have discarded it.
-  //
-  // The consequence is bigger than this test: **the scene background is
-  // stored by the prefetch and never read back**. It is the largest asset in
-  // a world, and for it the cache currently costs a write and saves nothing.
-  // SC-001's "0% asset bytes on a warm reopen" was measured on a world whose
-  // assets are never displayed, where the only traffic is the prefetch, so it
-  // did not cover this case.
-  //
-  // The read path *is* reachable — an asset loaded after the first sync
-  // completes (a scene switch within one session) finds `fingerprints`
-  // populated and `is_ready()` true. Re-pointing this test at a second scene
-  // switched to mid-session is the way to finish it. Whether the *background*
-  // should also be cache-served is a design question, not a test fix: making
-  // the load wait for readiness trades SC-002 (time to interactive) against
-  // SC-001 (bytes on reopen), and that is a call to make deliberately.
-  test.fixme("a blob that decrypts to the wrong content is discarded and refetched on read (T052, SC-005)", async ({
+  test("a blob that decrypts to the wrong content is discarded and refetched on read (T052, SC-005)", async ({
     page,
   }) => {
     const errors = watchPageErrors(page);
     const sync = watchCacheSync(page);
 
-    // Not `warmWorldWithAsset`, and the reason is the substance of this test.
-    // An asset uploaded through `uploadCanvasImage` is stored, planned and
-    // prefetched, but **nothing on the scene refers to it**, so the engine
-    // never loads it and `read_blob` is never called. Corrupting such a blob
-    // proves nothing: the damage is never looked at. The asset has to be one
-    // the engine actually loads, which means the scene background.
+    // # Why this test switches scenes instead of reloading
+    //
+    // Corrupting a blob proves nothing unless something reads it, and on a
+    // fresh page load nothing does. `try_cached` declines a load when the
+    // cache is not ready or when no fingerprint has been published for the
+    // asset, and at boot the scene background is **both**: the sprite load
+    // fires as soon as scene state arrives, well before `sync_world_cache`
+    // resolves and `publish_fingerprints` fills `cache.fingerprints`.
+    // Measured, in this order:
+    //
+    //     HEAD 200                   <- WorldPage's FR-013 reachability check
+    //     GET  404                   <- Bevy asking for `.webp.meta`
+    //     GET  200                   <- the background itself
+    //     canvas asset cache ready   <- too late
+    //
+    // A **mid-session scene switch** is the other case, and the one with
+    // coverage until now: by then `is_ready()` is true and the fingerprints
+    // are published, so the load goes through the cache. That is the only
+    // moment in the application where a cached blob is actually read back,
+    // which makes it the only place this can be tested — and the reason the
+    // read path had no browser coverage at all before this.
+    //
+    // The other two assets in this suite cannot stand in. An asset from
+    // `createCanvasAsset` is never displayed, and a pasted one is placed for
+    // its own session only (`upsert_canvas_image_asset` is never persisted).
     const worldId = await registerAndCreateWorld(
       page,
       `E2E Repair Corrupt ${uniqueSuffix()}`,
       "e2erepair",
     );
-    const scenes = await sceneIds(page, worldId);
-    expect(scenes.length, "a new world should have a scene").toBeGreaterThan(0);
+    const openingScene = (await sceneIds(page, worldId))[0];
+    expect(openingScene, "a new world should have a scene").toBeTruthy();
+    const switchedScene = await createScene(page, worldId, "Cached Scene");
 
     const first = await openWorldAndSync(page, worldId, sync);
     expect(first.status, JSON.stringify(first)).toBe("synced");
 
+    // Give the second scene art of its own, then leave it. The import goes
+    // into whichever scene is selected, so this has to be done from the UI
+    // and then undone.
+    const names = await sceneNames(page, worldId);
+    await switchToScene(page, names.get(switchedScene)!);
     await importMapBackground(page, CHAMBER_MAP);
-    const assetId = await sceneBackgroundAssetId(page, worldId, scenes[0]);
+    const assetId = await sceneBackgroundAssetId(page, worldId, switchedScene);
     const fingerprint = await assetFingerprint(page, assetId);
+    await switchToScene(page, names.get(openingScene)!);
 
-    // A reload before the damage, and not merely for tidiness: an asset
-    // created *after* the sync has run is not in that sync's plan, so no
-    // fingerprint has been published for it. The engine loads it over the
-    // network and deliberately does **not** store it — a fingerprint it
-    // cannot reproduce is one it could never invalidate against
-    // (`fetch_and_deliver`). The next open is the one that plans it, and
-    // therefore the one that caches it.
+    // A reload before the damage, for two reasons. An asset created *after*
+    // a sync is not in that sync's plan, so no fingerprint is published for
+    // it and `fetch_and_deliver` deliberately does not store what it fetched
+    // — a fingerprint it cannot reproduce is one it could never invalidate
+    // against. The next open both plans it and prefetches it. And landing on
+    // the *opening* scene means the switched scene's background is cached
+    // without ever having been loaded at boot.
     const planned = await reloadAndSync(page, sync);
     console.log(`[cache-repair] sync after importing: ${JSON.stringify(planned)}`);
     await expect
       .poll(() => holdsFingerprint(page, worldId, fingerprint), {
         timeout: 90_000,
-        message: "the background must be cached before its blob can be forged",
+        message: "the second scene's background must be cached before it is forged",
       })
       .toBe(true);
 
@@ -462,18 +454,10 @@ test.describe("Client world cache — repairing a divergent store (FR-019, SC-00
       "the forged blob must actually differ from what was stored",
     ).not.toBe(original);
 
-    // Nothing here is `repair_world`'s to find. The index and the disk agree
-    // perfectly — a row, and a file of exactly the name it points at — so the
-    // divergence is invisible to a directory listing and only reading the
-    // bytes can see it. Hence a repair count of zero, and the network as the
-    // place the recovery shows up.
+    // The read. No reload — the cache is ready in *this* page, which is the
+    // whole point, so switching scenes sends the load through `try_cached`.
     const requests = countAssetRequests(page, assetId);
-    const summary = await reloadAndSync(page, sync);
-    console.log(`[cache-repair] sync after forging: ${JSON.stringify(summary)}`);
-    expect(
-      summary.rowsRepaired ?? 0,
-      "the index and the disk agree; repair_world has nothing to find here",
-    ).toBe(0);
+    await switchToScene(page, names.get(switchedScene)!);
 
     await expect
       .poll(() => requests.count(), {
@@ -484,9 +468,8 @@ test.describe("Client world cache — repairing a divergent store (FR-019, SC-00
     requests.stop();
 
     // Self-healed, not merely survived: the bytes on disk are neither the
-    // forgery nor left absent, and the *next* open is warm again. A cache
-    // that refetched every time and never re-stored would satisfy the
-    // assertion above and fail this one.
+    // forgery nor left absent. A cache that discarded and never re-stored
+    // would satisfy the assertion above and fail this one.
     await expect
       .poll(
         async () => {
@@ -504,12 +487,18 @@ test.describe("Client world cache — repairing a divergent store (FR-019, SC-00
       )
       .toBe(true);
 
+    // And warm again, through the same door: reload onto the opening scene,
+    // wait for the cache, then switch. Zero GETs means this load was served
+    // out of OPFS — which is also the first proof in this suite that a
+    // cached blob is ever read back at all, rather than merely stored.
+    const reopened = await reloadAndSync(page, sync);
+    expect(reopened.status, JSON.stringify(reopened)).toBe("synced");
     const warm = countAssetRequests(page, assetId);
-    await reloadAndSync(page, sync);
+    await switchToScene(page, names.get(switchedScene)!);
     await page.waitForTimeout(5_000);
     expect(
       warm.stop(),
-      "once healed, reopening the world must serve this background from cache",
+      "the healed blob must serve the switched-to scene from cache",
     ).toBe(0);
 
     sync.stop();
