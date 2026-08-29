@@ -365,6 +365,12 @@ pub struct GraphQLCreateTokenInput {
     pub rotation: Option<f64>,
     pub scale: Option<f64>,
     pub metadata: Option<Json<serde_json::Value>>,
+    /// `character`, `npc`, `vehicle` or `object`. Omitted means `character`.
+    ///
+    /// An unrecognised value is rejected rather than stored: the column feeds
+    /// the renderer, and a kind nothing can draw would put an invisible or
+    /// mislabelled token on somebody's battle map.
+    pub token_type: Option<String>,
 }
 
 /// Input for updating an existing token's position/properties
@@ -386,6 +392,8 @@ pub struct GraphQLUpdateTokenInput {
     pub photo_url: MaybeUndefined<String>,
     pub health: Option<i32>,
     pub max_health: Option<i32>,
+    /// Reclassify a placed token. Omitted leaves the kind alone.
+    pub token_type: Option<String>,
 }
 
 // ========== Fog of War Management ==========

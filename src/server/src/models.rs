@@ -745,6 +745,12 @@ pub struct Token {
     pub photo_url: Option<String>,
     pub health: Option<i32>,
     pub max_health: Option<i32>,
+    /// What this token represents: `character`, `npc`, `vehicle`, `object`.
+    ///
+    /// Parsed through `thunderforge_canvas_core::TokenKind`, which is also
+    /// where its appearance is decided — a kind and how it reads on the board
+    /// are one decision, not two.
+    pub token_type: String,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
@@ -762,6 +768,8 @@ pub struct NewToken {
     pub photo_url: Option<String>,
     pub health: Option<i32>,
     pub max_health: Option<i32>,
+    /// `None` takes the column default, which is `character`.
+    pub token_type: Option<String>,
 }
 
 #[derive(AsChangeset, Debug, Clone, Serialize, Deserialize)]
@@ -785,6 +793,8 @@ pub struct TokenUpdate {
     pub photo_url: Option<Option<String>>,
     pub health: Option<i32>,
     pub max_health: Option<i32>,
+    /// `None` leaves the kind alone; `Some` reclassifies the token.
+    pub token_type: Option<String>,
 }
 
 // ========== Fog Mask Models (Phase 3.5) ==========

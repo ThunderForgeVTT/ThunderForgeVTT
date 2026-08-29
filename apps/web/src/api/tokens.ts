@@ -21,6 +21,7 @@ const TOKEN_FIELDS = `
   photoUrl
   health
   maxHealth
+  tokenType
 `;
 
 type TokensQuery = {

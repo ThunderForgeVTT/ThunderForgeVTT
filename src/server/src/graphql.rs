@@ -623,6 +623,8 @@ pub struct GraphQLToken {
     photo_url: Option<String>,
     health: Option<i32>,
     max_health: Option<i32>,
+    /// What this token represents: `character`, `npc`, `vehicle`, `object`.
+    token_type: String,
 }
 
 impl From<crate::models::Token> for GraphQLToken {
@@ -643,6 +645,7 @@ impl From<crate::models::Token> for GraphQLToken {
             photo_url: token.photo_url,
             health: token.health,
             max_health: token.max_health,
+            token_type: token.token_type,
         }
     }
 }

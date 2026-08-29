@@ -14,6 +14,12 @@ export type WorldToken = {
   photoUrl?: string | null;
   health?: number | null;
   maxHealth?: number | null;
+  /**
+   * What the token represents, deciding the colour the engine draws it in
+   * when it carries no art. Optional because older payloads predate it; the
+   * engine treats a missing value as `character`.
+   */
+  tokenType?: string | null;
 };
 
 export type DoorState = "none" | "open" | "closed";

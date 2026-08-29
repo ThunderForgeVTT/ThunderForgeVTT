@@ -45,6 +45,7 @@ use sync_test::*;
 use systems::*;
 use thunderforge_canvas_core::grid::Footprint;
 use thunderforge_canvas_core::measure::GridUnits;
+use thunderforge_canvas_core::token_kind::TokenKind;
 use thunderforge_canvas_core::vision::{Illumination, Rgb, VisionProfile};
 
 static ENGINE_STARTED: AtomicBool = AtomicBool::new(false);
@@ -128,6 +129,38 @@ struct WorldTokenPayload {
     /// almost no real token art is square.
     #[serde(default, rename = "photoUrl")]
     photo_url: Option<String>,
+    /// What this token represents, deciding the colour it is drawn in when
+    /// it has no art.
+    ///
+    /// Until this existed, a player character, a hostile NPC, the cart they
+    /// were escorting and a barrel all rendered in the same blue, and the
+    /// only way to tell them apart was to click one.
+    ///
+    /// `None` — an older payload — keeps the character colour, so nothing
+    /// that worked before changes.
+    #[serde(default, rename = "tokenType")]
+    token_type: Option<String>,
+}
+
+/// The colour a token is drawn in when it carries no art.
+///
+/// The kind and its appearance are decided together in
+/// `thunderforge_canvas_core::token_kind`, where the palette is tested for
+/// separation in lightness as well as hue — four colours that look distinct
+/// to whoever picked them can collapse into two for a viewer with a red-green
+/// deficiency, and a battle map is a bad place to discover that.
+///
+/// An unknown or absent kind falls back to `Character` rather than refusing
+/// to draw: a token you cannot see is worse than a token wearing the wrong
+/// colour, and the server already rejects unknown kinds on the way in, so
+/// reaching this fallback means an older payload rather than bad data.
+fn token_kind_color(token_type: &Option<String>) -> Color {
+    let kind = token_type
+        .as_deref()
+        .and_then(TokenKind::from_stored)
+        .unwrap_or_default();
+    let (r, g, b) = kind.fill();
+    Color::srgb(r, g, b)
 }
 
 /// Confirmed/authoritative wall state from the server (T008), matching
@@ -989,7 +1022,7 @@ fn apply_external_commands(
                         custom_size: None,
                         ..default()
                     },
-                    None => Sprite::from_color(Color::srgb(0.282, 0.565, 0.996), TOKEN_SIZE),
+                    None => Sprite::from_color(token_kind_color(&token.token_type), TOKEN_SIZE),
                 };
 
                 let entity = commands

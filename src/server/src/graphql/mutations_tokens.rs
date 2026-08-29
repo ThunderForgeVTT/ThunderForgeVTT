@@ -22,8 +22,10 @@ use crate::graphql::{
 use crate::scene_fingerprint::refresh_scene_fingerprint;
 use crate::world_events::{EVENT_CODE_TOKEN_CHANGED, record_world_event, world_id_for_scene};
 use async_graphql::MaybeUndefined;
+use thunderforge_canvas_core::token_kind::TokenKind;
 
 #[derive(Default)]
+
 pub struct TokenMutation;
 
 #[async_graphql::Object]
@@ -53,6 +55,13 @@ impl TokenMutation {
         let scale = input.scale.unwrap_or(1.0);
         let metadata = input.metadata.map(|j| j.0);
 
+        // Validated here rather than stored as given. This column feeds the
+        // renderer, so a kind nothing can draw is a token that appears
+        // mislabelled — or, in the fallback, silently identical to a player
+        // character. Rejecting an unknown value is the only point at which
+        // that is cheap to say.
+        let token_type = parse_token_kind(input.token_type.as_deref())?;
+
         let inserted_token = tokio::task::spawn_blocking(move || {
             use crate::schema::tokens;
 
@@ -75,6 +84,7 @@ impl TokenMutation {
                     tokens::rotation.eq(rotation),
                     tokens::scale.eq(scale),
                     tokens::metadata.eq(&metadata),
+                    tokens::token_type.eq(token_type.as_stored()),
                     tokens::created_at.eq(now),
                     tokens::updated_at.eq(now),
                 ))
@@ -145,6 +155,13 @@ impl TokenMutation {
             },
             health: input.health,
             max_health: input.max_health,
+            // Validated on the way in, exactly as on create: an unknown kind
+            // is refused rather than written, because the column decides how
+            // the token is drawn.
+            token_type: match input.token_type.as_deref() {
+                None => None,
+                Some(raw) => Some(parse_token_kind(Some(raw))?.as_stored().to_string()),
+            },
         };
         let setting_primary = input.is_primary == Some(true);
         let input_owner_user_id = input.owner_user_id;
@@ -458,6 +475,61 @@ impl TokenMutation {
 mod tests {
     use super::*;
     use diesel::PgConnection;
+
+    /// Every kind the client may send is accepted and stored verbatim.
+    #[test]
+    fn every_known_token_kind_is_accepted() {
+        for kind in TokenKind::ALL {
+            let parsed = parse_token_kind(Some(kind.as_stored()))
+                .unwrap_or_else(|e| panic!("{kind:?} should parse: {e:?}"));
+            assert_eq!(parsed, kind);
+        }
+    }
+
+    /// Omitting the field is the column default, not an error.
+    #[test]
+    fn an_absent_kind_is_the_default_rather_than_a_refusal() {
+        assert_eq!(parse_token_kind(None).unwrap(), TokenKind::Character);
+        assert_eq!(TokenKind::Character.as_stored(), "character");
+    }
+
+    /// An unknown kind is refused rather than stored.
+    ///
+    /// The alternative — falling back to a default — would put a token on the
+    /// board wearing the wrong meaning, and the Game Master would have no way
+    /// to tell. The error names the valid set so the caller can fix it.
+    #[test]
+    fn an_unknown_kind_is_refused_and_the_error_says_what_is_valid() {
+        let err = parse_token_kind(Some("dragon"))
+            .expect_err("an unknown kind must not be silently accepted");
+        let message = err.message;
+        assert!(
+            message.contains("dragon"),
+            "should name the bad value: {message}"
+        );
+        for kind in TokenKind::ALL {
+            assert!(
+                message.contains(kind.as_stored()),
+                "should list {}: {message}",
+                kind.as_stored()
+            );
+        }
+    }
+
+    /// Casing is not forgiven, deliberately.
+    ///
+    /// These are stored values, not user input — the client sends what the
+    /// schema says. Accepting "NPC" here would mean two spellings reaching
+    /// the column and the renderer having to know about both.
+    #[test]
+    fn kind_matching_is_exact() {
+        for wrong in ["NPC", "Character", "OBJECT", " npc"] {
+            assert!(
+                parse_token_kind(Some(wrong)).is_err(),
+                "{wrong:?} must be refused"
+            );
+        }
+    }
 
     /// Establishes a connection to the dev database configured via
     /// DATABASE_URL (same source main.rs uses). Skips (rather than fails)
@@ -882,6 +954,7 @@ mod tests {
                         photo_url,
                         health: None,
                         max_health: None,
+                        token_type: None,
                     })
                     .execute(conn)
             };
@@ -915,5 +988,24 @@ mod tests {
 
             Ok(())
         });
+    }
+}
+
+/// Turn a client-supplied kind into a [`TokenKind`], or refuse.
+///
+/// `None` means the caller did not ask, which is the column default. An
+/// unrecognised string is an error rather than a silent fallback: falling back
+/// would put a token on the board wearing the wrong meaning, and the Game
+/// Master would have no way to tell it had happened.
+fn parse_token_kind(raw: Option<&str>) -> GraphQLResult<TokenKind> {
+    match raw {
+        None => Ok(TokenKind::default()),
+        Some(value) => TokenKind::from_stored(value).ok_or_else(|| {
+            let known: Vec<&str> = TokenKind::ALL.iter().map(|k| k.as_stored()).collect();
+            Error::new(format!(
+                "Unknown token type {value:?}. Expected one of: {}",
+                known.join(", ")
+            ))
+        }),
     }
 }

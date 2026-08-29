@@ -665,6 +665,9 @@ fn apply_one(
         // able to write it back hours later.
         health: None,
         max_health: None,
+        // Same reasoning as health: what a token *is* is not something an
+        // offline client reclassifies. Only position and pose replay.
+        token_type: None,
     };
 
     let updated = diesel::update(tokens::table.filter(tokens::token_id.eq(edit.token_id)))

@@ -83,6 +83,9 @@ function tokenRecordToWorldToken(record: TokenRecord): WorldToken {
     photoUrl: record.photoUrl,
     health: record.health,
     maxHealth: record.maxHealth,
+    // What the token represents, which decides the colour the engine draws
+    // it in when it has no art. See `thunderforge_canvas_core::token_kind`.
+    tokenType: record.tokenType,
   };
 }
 

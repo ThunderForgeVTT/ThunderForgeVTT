@@ -310,6 +310,7 @@ diesel::table! {
         photo_url -> Nullable<Text>,
         health -> Nullable<Int4>,
         max_health -> Nullable<Int4>,
+        token_type -> Varchar,
     }
 }
 

@@ -69,6 +69,7 @@ once_cell = "1.21.4"
 # on what "current" means.
 thunderforge_authz = { path = "../../crates/thunderforge-authz" }
 thunderforge_cache_core = { path = "../../crates/thunderforge-cache-core" }
+thunderforge_canvas_core = { path = "../../crates/thunderforge-canvas-core" }
 thunderforge_pg = { path = "../../crates/thunderforge-pg" }
 thunderforge_pg_sockets = { path = "../../crates/thunderforge-pg-sockets" }
 thunderforge_presence = { path = "../../crates/thunderforge-presence" }

@@ -20,7 +20,26 @@ export interface TokenRecord {
   photoUrl: string | null;
   health: number | null;
   maxHealth: number | null;
+  /** What this token represents: `character`, `npc`, `vehicle` or `object`. */
+  tokenType: TokenType;
 }
+
+/**
+ * What a token represents on the board.
+ *
+ * Mirrors `thunderforge_canvas_core::token_kind::TokenKind`, which is also
+ * where each kind's colour is decided — the server rejects anything outside
+ * this set, so a value arriving here is always one of these four.
+ */
+export type TokenType = "character" | "npc" | "vehicle" | "object";
+
+/** Every kind, with the label a person sees. Order is the order shown. */
+export const TOKEN_TYPES: { value: TokenType; label: string }[] = [
+  { value: "character", label: "Character" },
+  { value: "npc", label: "NPC" },
+  { value: "vehicle", label: "Vehicle" },
+  { value: "object", label: "Object" },
+];
 
 export interface CreateTokenInput {
   sceneId: string;
@@ -35,6 +54,8 @@ export interface CreateTokenInput {
   photoUrl?: string;
   health?: number;
   maxHealth?: number;
+  /** Omitted means `character`, matching the column default. */
+  tokenType?: TokenType;
 }
 
 export interface UpdateTokenInput {
