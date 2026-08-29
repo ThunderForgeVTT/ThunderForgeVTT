@@ -17,6 +17,73 @@ import {
 let shuttingDown = false;
 
 /**
+ * Where each layer answers a readiness probe.
+ *
+ * The backend's health routes are registered on `api_router`, which
+ * `main.rs` nests under `/api` — so they live at `/api/readyz`, not
+ * `/readyz`. Getting that wrong is silent in the worst way: the probe reads
+ * a 404 as "not ready yet" and waits out its whole timeout before blaming
+ * a backend that was up the entire time.
+ */
+const BACKEND_URL = "http://127.0.0.1:30000/api";
+const FRONTEND_URL = "http://127.0.0.1:5173";
+
+/**
+ * Wait for one layer to report itself ready before starting the next.
+ *
+ * The dev stack used to start everything at once and hope. That is fine
+ * until something is slow or already running, and then the error that
+ * reaches the console belongs to whichever process noticed first rather
+ * than to the one that actually failed — a stale server holding a port
+ * surfaced as the *backend* panicking two screens after Vite had quietly
+ * moved to another port.
+ *
+ * So each layer is gated on the same signal an orchestrator would use:
+ * postgres on `pg_isready` (in the Makefile), the backend on its own
+ * `/readyz`, which checks the database rather than merely that the process
+ * is listening, and the frontend on answering an HTTP request at all. The
+ * tunnel goes last, because a tunnel to a server that is not up yet is the
+ * one failure that looks like a broken tunnel.
+ *
+ * `child` is watched while waiting: a process that exits during startup is
+ * reported as itself, immediately, instead of being waited out for the full
+ * timeout and blamed on a readiness check.
+ */
+async function waitUntilReady(name, url, child, timeoutMs = 180_000) {
+  const deadline = Date.now() + timeoutMs;
+  let exited = false;
+  child.once("exit", () => {
+    exited = true;
+  });
+
+  while (Date.now() < deadline) {
+    if (shuttingDown) return false;
+    if (exited) {
+      log("dev", `${name} exited before it became ready.`, process.stderr);
+      return false;
+    }
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(2_000) });
+      if (response.ok) {
+        log("dev", `${name} is ready.`);
+        return true;
+      }
+    } catch {
+      // Not up yet. Connection refused is the expected answer for most of
+      // this loop, so it is not worth logging until the deadline passes.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+
+  log(
+    "dev",
+    `${name} did not become ready within ${Math.round(timeoutMs / 1000)}s (${url}).`,
+    process.stderr,
+  );
+  return false;
+}
+
+/**
  * The two tunnel keys from the repo-root `.env`, if it has them.
  *
  * Deliberately not a general dotenv loader: everything else that needs the
@@ -83,20 +150,39 @@ async function run() {
   // specifically want to look at load performance.
   await ensureEngineBuild({ force: args.force, profile: engineProfile("dev") });
 
-  log("dev", "Starting frontend and backend...");
-  const frontend = spawnManaged("pnpm -F @thunderforge/web run dev", {
-    cwd: ROOT_DIR,
-    prefix: "frontend",
-  });
+  // Started in dependency order, each gated on the next being ready — the
+  // database is already waited for by the Makefile's `services-up`.
+  log("dev", "Starting backend...");
   const backend = spawnManaged("cargo run -p thunderforge", {
     cwd: ROOT_DIR,
     prefix: "backend",
   });
 
   const waits = [
-    waitForProcess(frontend, "frontend").then((result) => ({ name: "frontend", result })),
     waitForProcess(backend, "backend").then((result) => ({ name: "backend", result })),
   ];
+
+  // `/readyz` rather than `/healthz`: liveness only says the process is
+  // listening, while readiness says it can reach the database, which is what
+  // the frontend actually needs from it.
+  if (!(await waitUntilReady("backend", `${BACKEND_URL}/readyz`, backend))) {
+    await terminateChildren("SIGTERM");
+    process.exit(1);
+  }
+
+  log("dev", "Starting frontend...");
+  const frontend = spawnManaged("pnpm -F @thunderforge/web run dev", {
+    cwd: ROOT_DIR,
+    prefix: "frontend",
+  });
+  waits.push(
+    waitForProcess(frontend, "frontend").then((result) => ({ name: "frontend", result })),
+  );
+
+  if (!(await waitUntilReady("frontend", FRONTEND_URL, frontend))) {
+    await terminateChildren("SIGTERM");
+    process.exit(1);
+  }
 
   if (args.tunnel) {
     // Two kinds of tunnel, and which one you get depends on whether

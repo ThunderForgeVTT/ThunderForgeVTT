@@ -49,6 +49,15 @@ services-up:
 	@echo "Waiting for postgres to accept connections..."
 	@until docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
 	@echo "postgres is ready."
+	@# rustfs holds every uploaded map and token image. The backend starts
+	@# without it and then fails per-request, which reads as "the asset is
+	@# broken" rather than "the object store is not up yet" — so it is waited
+	@# for here, beside postgres, rather than discovered later. Any HTTP
+	@# answer means it is listening; a 403 from an unauthenticated probe is a
+	@# perfectly good sign of life.
+	@echo "Waiting for rustfs to accept connections..."
+	@i=0; until curl -s -o /dev/null --max-time 2 http://127.0.0.1:9000 || [ $$i -ge 60 ]; do 		i=$$((i+1)); sleep 1; 	done; 	if [ $$i -ge 60 ]; then 		echo "rustfs did not answer on :9000 after 60s — uploads and map imports will fail."; 		exit 1; 	fi
+	@echo "rustfs is ready."
 
 services-down:
 	docker compose stop
