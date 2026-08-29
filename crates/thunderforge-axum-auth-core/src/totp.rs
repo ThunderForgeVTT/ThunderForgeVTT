@@ -62,7 +62,9 @@ pub fn verify_totp_code_at(
     code: &str,
     unix_time: u64,
 ) -> Result<bool, String> {
-    Ok(totp_for(username, secret_base32)?.check(code, unix_time).is_some())
+    Ok(totp_for(username, secret_base32)?
+        .check(code, unix_time)
+        .is_some())
 }
 
 /// The code the secret produces at `unix_time`. Used to render the QR-code
@@ -72,7 +74,9 @@ pub fn generate_code_at(
     secret_base32: &str,
     unix_time: u64,
 ) -> Result<String, String> {
-    Ok(totp_for(username, secret_base32)?.generate(unix_time).to_string())
+    Ok(totp_for(username, secret_base32)?
+        .generate(unix_time)
+        .to_string())
 }
 
 #[cfg(test)]

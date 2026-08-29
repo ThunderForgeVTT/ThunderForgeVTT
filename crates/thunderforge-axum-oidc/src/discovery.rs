@@ -128,15 +128,14 @@ mod tests {
             let _ = parse_discovery_document(&body);
         }
 
-        /// Anything accepted has the three endpoints the flow cannot run
-        /// without.
+        /// Anything accepted agrees with itself: serde guarantees the
+        /// three endpoints are present, and the issuer a document states is
+        /// the issuer it matches.
         #[test]
-        fn anything_accepted_is_usable(body in ".{0,256}") {
+        fn anything_accepted_agrees_with_itself(body in ".{0,256}") {
             if let Ok(doc) = parse_discovery_document(&body) {
-                prop_assert!(!doc.issuer.is_empty() || doc.issuer.is_empty());
-                // Presence is what serde guarantees; emptiness is a provider
-                // bug we surface at the issuer check rather than here.
-                prop_assert!(!doc.issuer_matches("\u{0}unmatchable\u{0}"));
+                let own_issuer = doc.issuer.clone();
+                prop_assert!(doc.issuer_matches(&own_issuer));
             }
         }
 
@@ -154,8 +153,9 @@ mod tests {
                 userinfo_endpoint: None,
                 jwks_uri: None,
             };
+            let extended = format!("{issuer}{suffix}");
             prop_assert!(doc.issuer_matches(&issuer));
-            prop_assert!(!doc.issuer_matches(&format!("{issuer}{suffix}")));
+            prop_assert!(!doc.issuer_matches(&extended));
         }
 
         /// The discovery URL is derived, never guessed: whatever issuer goes

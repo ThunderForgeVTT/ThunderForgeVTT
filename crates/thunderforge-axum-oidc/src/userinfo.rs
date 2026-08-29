@@ -70,12 +70,18 @@ mod tests {
 
     #[test]
     fn a_non_string_identifier_is_refused() {
-        assert_eq!(extract_subject(&json!({ "id": 80351110224678912i64 })), None);
+        assert_eq!(
+            extract_subject(&json!({ "id": 80351110224678912i64 })),
+            None
+        );
     }
 
     #[test]
     fn a_body_that_is_not_json_yields_nothing_rather_than_erroring_out() {
-        assert_eq!(subject_from_userinfo_body("<html>502 Bad Gateway</html>"), None);
+        assert_eq!(
+            subject_from_userinfo_body("<html>502 Bad Gateway</html>"),
+            None
+        );
     }
 
     proptest! {

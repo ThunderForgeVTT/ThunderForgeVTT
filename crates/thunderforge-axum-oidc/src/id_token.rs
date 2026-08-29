@@ -118,7 +118,6 @@ pub fn email_from_id_token_unverified(id_token: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base64::Engine as _;
     use proptest::prelude::*;
 
     fn jwt(claims: &serde_json::Value) -> String {

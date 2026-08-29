@@ -33,10 +33,14 @@ pub struct TokenResponse {
 pub enum TokenParseError {
     /// The body was not JSON, or was JSON of the wrong shape.
     Malformed(String),
-    /// Parsed, but carried no `access_token` — a response we cannot proceed
-    /// from, and one that has to be distinguished from a transport failure so
-    /// an operator knows the problem is the provider's reply and not the
-    /// network.
+    /// Parsed, and carried an `access_token` that is the empty string.
+    ///
+    /// A *missing* `access_token` is a `Malformed` — serde stops there,
+    /// and the message it produces ("missing field `access_token`") is the
+    /// one `src/server` has always logged for that case. An **empty** one
+    /// deserializes cleanly and would otherwise be sent as a bearer token,
+    /// turning a broken token response into a confusing 401 from the
+    /// userinfo endpoint one step later.
     MissingAccessToken,
 }
 
@@ -107,11 +111,15 @@ mod tests {
     }
 
     #[test]
-    fn a_response_with_no_access_token_is_distinguishable_from_garbage() {
-        assert_eq!(
+    fn a_response_with_no_usable_access_token_is_refused() {
+        // An error body: serde reports the missing field, which is the
+        // wording the server has always surfaced for this.
+        assert!(matches!(
             parse_token_response(r#"{"error":"invalid_grant"}"#),
-            Err(TokenParseError::MissingAccessToken)
-        );
+            Err(TokenParseError::Malformed(_))
+        ));
+        // An empty one parses, and is caught here rather than becoming an
+        // empty `Authorization: Bearer` header.
         assert_eq!(
             parse_token_response(r#"{"access_token":""}"#),
             Err(TokenParseError::MissingAccessToken)
@@ -178,9 +186,8 @@ mod tests {
         leaf.prop_recursive(4, 32, 4, |inner| {
             prop_oneof![
                 proptest::collection::vec(inner.clone(), 0..4).prop_map(serde_json::Value::from),
-                proptest::collection::hash_map("[a-z_]{1,12}", inner, 0..4).prop_map(|m| {
-                    serde_json::Value::Object(m.into_iter().collect())
-                }),
+                proptest::collection::hash_map("[a-z_]{1,12}", inner, 0..4)
+                    .prop_map(|m| { serde_json::Value::Object(m.into_iter().collect()) }),
             ]
         })
     }

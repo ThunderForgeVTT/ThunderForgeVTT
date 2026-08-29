@@ -51,12 +51,18 @@ mod tests {
     fn a_missing_description_reads_as_unknown() {
         let err = provider_error_from_callback(Some("access_denied".to_string()), None)
             .expect("an error code makes this a failure");
-        assert_eq!(err.message(), "Provider returned error 'access_denied': unknown");
+        assert_eq!(
+            err.message(),
+            "Provider returned error 'access_denied': unknown"
+        );
     }
 
     #[test]
     fn a_callback_with_no_error_is_not_an_error() {
-        assert_eq!(provider_error_from_callback(None, Some("ignored".into())), None);
+        assert_eq!(
+            provider_error_from_callback(None, Some("ignored".into())),
+            None
+        );
     }
 
     proptest! {

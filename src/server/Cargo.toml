@@ -69,6 +69,14 @@ once_cell = "1.21.4"
 # on what "current" means.
 thunderforge_cache_core = { path = "../../crates/thunderforge-cache-core" }
 thunderforge_pg_sockets = { path = "../../crates/thunderforge-pg-sockets" }
+# The authentication rules, extracted so they can be tested (and proptested)
+# without a database, a request or a provider account behind them. The
+# handlers below stay here — they own `AppState`, Diesel and the cookie jar —
+# and call into these crates for every decision they make. Same reasoning as
+# the cache-core split, docs/CLIENT_WORLD_CACHE.md.
+thunderforge_axum_auth_core = { path = "../../crates/thunderforge-axum-auth-core" }
+thunderforge_axum_oauth = { path = "../../crates/thunderforge-axum-oauth" }
+thunderforge_axum_oidc = { path = "../../crates/thunderforge-axum-oidc" }
 reqwest = { version = "0.13.4", default-features = false, features = [
   "form",
   "json",

@@ -31,8 +31,21 @@ use diesel::prelude::*;
 use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use thunderforge_axum_auth_core::random::random_urlsafe;
+use thunderforge_axum_auth_core::session::{self, CookieSpec, csrf_cookie, session_cookie};
+use thunderforge_axum_auth_core::totp::verify_totp_code;
+use thunderforge_axum_oauth::authorize::{AuthorizeRequest, build_authorize_url};
+use thunderforge_axum_oauth::error::provider_error_from_callback;
+use thunderforge_axum_oauth::pkce::{code_challenge_from_verifier, generate_code_verifier};
+use thunderforge_axum_oauth::state::generate_state;
+// The token endpoint's reply, including the `id_token` this struct used to
+// drop on the floor — see `extract_provider_user_id_from_token`.
+use thunderforge_axum_oauth::token::TokenResponse as OAuthTokenResponse;
+use thunderforge_axum_oidc::id_token::subject_from_id_token_unverified;
+use thunderforge_axum_oidc::userinfo::{
+    extract_email as extract_provider_email, extract_subject as extract_provider_user_id,
+};
 use thunderforge_core::auth::Credentials;
-use totp_rs::{Algorithm, TOTP};
 use tower_cookies::cookie::SameSite;
 use tower_cookies::{Cookie, Cookies};
 use url::Url;
@@ -69,6 +82,12 @@ pub mod item_permissions;
 /// gating, username derivation for manual + OAuth-auto-provisioned
 /// accounts) split out of this module for focused unit testing.
 mod registration;
+
+/// The provider-wiring guarantee: every `ProviderKind` we declare is walked
+/// from env var to live authorization redirect. Test-only — read its module
+/// documentation for what it catches and why a crate split alone does not.
+#[cfg(test)]
+mod provider_wiring;
 
 use registration::{
     RegisterUserError, derive_bootstrap_username, ensure_registration_allowed, random_setup_code,
@@ -271,13 +290,6 @@ struct AuthSessionResponse {
     session: Option<SessionStateResponse>,
     login_two_factor_challenge_id: Option<uuid::Uuid>,
     requires_email_verification: bool,
-}
-
-#[derive(Debug, Deserialize)]
-struct OAuthTokenResponse {
-    access_token: String,
-    refresh_token: Option<String>,
-    expires_in: Option<i64>,
 }
 
 struct OAuthAuthorizationContext {
@@ -486,8 +498,8 @@ async fn admin_setup_oauth_start(
     let mut conn = state.db_pool.get().expect("Failed to get DB connection");
     let provider_key_clone = provider_key.clone();
     let now = Utc::now().naive_utc();
-    let state_token = random_urlsafe(32);
-    let code_verifier = random_urlsafe(48);
+    let state_token = generate_state();
+    let code_verifier = generate_code_verifier();
 
     let provider = tokio::task::spawn_blocking(move || {
         oauth_providers::table
@@ -542,8 +554,15 @@ async fn admin_setup_oauth_start(
     .expect("Failed to spawn blocking task")
     .expect("Failed to persist bootstrap oauth session");
 
-    let code_challenge = code_challenge_from_verifier(&code_verifier);
-    let mut url = Url::parse(&provider.authorization_url).map_err(|_| {
+    let authorization_url = build_authorize_url(&AuthorizeRequest {
+        authorization_url: &provider.authorization_url,
+        client_id: &provider_client_id,
+        redirect_uri: &request.redirect_uri,
+        scopes: &provider_scopes(&provider),
+        state: &state_token,
+        code_challenge: &code_challenge_from_verifier(&code_verifier),
+    })
+    .map_err(|_| {
         error_response(
             StatusCode::INTERNAL_SERVER_ERROR,
             "provider_misconfigured",
@@ -551,29 +570,9 @@ async fn admin_setup_oauth_start(
         )
     })?;
 
-    url.query_pairs_mut()
-        .append_pair("response_type", "code")
-        .append_pair("client_id", &provider_client_id)
-        .append_pair("redirect_uri", &request.redirect_uri)
-        .append_pair(
-            "scope",
-            &provider
-                .scopes
-                .iter()
-                .filter_map(|s| s.as_ref())
-                .cloned()
-                .collect::<Vec<String>>()
-                .join(" "),
-        )
-        .append_pair("state", &state_token)
-        .append_pair("code_challenge", &code_challenge)
-        .append_pair("code_challenge_method", "S256");
-
     Ok((
         StatusCode::OK,
-        Json(AdminSetupOAuthStartResponse {
-            authorization_url: url.to_string(),
-        }),
+        Json(AdminSetupOAuthStartResponse { authorization_url }),
     ))
 }
 
@@ -1389,8 +1388,8 @@ async fn oauth_start(
     let mut conn = state.db_pool.get().expect("Failed to get DB connection");
     let provider_key_clone = provider_key.clone();
     let now = Utc::now().naive_utc();
-    let state_token = random_urlsafe(32);
-    let code_verifier = random_urlsafe(48);
+    let state_token = generate_state();
+    let code_verifier = generate_code_verifier();
 
     let provider = tokio::task::spawn_blocking(move || {
         oauth_providers::table
@@ -1451,8 +1450,15 @@ async fn oauth_start(
     .expect("Failed to spawn blocking task")
     .expect("Failed to persist oauth authorization session");
 
-    let code_challenge = code_challenge_from_verifier(&code_verifier);
-    let mut url = Url::parse(&provider.authorization_url).map_err(|_| {
+    let authorization_url = build_authorize_url(&AuthorizeRequest {
+        authorization_url: &provider.authorization_url,
+        client_id: &provider_client_id,
+        redirect_uri: &query.redirect_uri,
+        scopes: &provider_scopes(&provider),
+        state: &state_token,
+        code_challenge: &code_challenge_from_verifier(&code_verifier),
+    })
+    .map_err(|_| {
         error_response(
             StatusCode::INTERNAL_SERVER_ERROR,
             "provider_misconfigured",
@@ -1460,25 +1466,7 @@ async fn oauth_start(
         )
     })?;
 
-    url.query_pairs_mut()
-        .append_pair("response_type", "code")
-        .append_pair("client_id", &provider_client_id)
-        .append_pair("redirect_uri", &query.redirect_uri)
-        .append_pair(
-            "scope",
-            &provider
-                .scopes
-                .iter()
-                .filter_map(|s| s.as_ref())
-                .cloned()
-                .collect::<Vec<String>>()
-                .join(" "),
-        )
-        .append_pair("state", &state_token)
-        .append_pair("code_challenge", &code_challenge)
-        .append_pair("code_challenge_method", "S256");
-
-    Ok(Redirect::temporary(url.as_str()))
+    Ok(Redirect::temporary(&authorization_url))
 }
 
 async fn oauth_callback(
@@ -1487,18 +1475,16 @@ async fn oauth_callback(
     cookies: Cookies,
     State(state): State<AppState>,
 ) -> (StatusCode, Json<OAuthResponse>) {
-    if let Some(err) = query.error {
+    // An `error` present means the provider refused, even if it also sent a
+    // `code`: redeeming that code would complete a login the provider just
+    // declined.
+    if let Some(provider_error) = provider_error_from_callback(query.error, query.error_description)
+    {
         return (
             StatusCode::BAD_REQUEST,
             Json(OAuthResponse {
                 status: "oauth_error",
-                message: format!(
-                    "Provider returned error '{}': {}",
-                    err,
-                    query
-                        .error_description
-                        .unwrap_or_else(|| "unknown".to_string())
-                ),
+                message: provider_error.message(),
                 challenge_id: None,
                 login_two_factor_challenge_id: None,
             }),
@@ -2424,23 +2410,28 @@ async fn fetch_userinfo(url: String, access_token: String) -> Result<serde_json:
         .map_err(|e| format!("Invalid userinfo response format: {e}"))
 }
 
-fn extract_provider_user_id(userinfo: &serde_json::Value) -> Option<String> {
-    ["sub", "id", "user_id"]
-        .iter()
-        .find_map(|key| userinfo.get(*key))
-        .and_then(|v| v.as_str().map(|s| s.to_string()))
-}
-
+/// The provider's user id, read out of the ID token instead of userinfo.
+///
+/// This used to be `let _ = token; None` — a stub. It is the `.or_else(...)`
+/// fallback for the case where the userinfo endpoint yields no subject, which
+/// is exactly what happens with an OpenID Connect provider that publishes
+/// identity only in the ID token, or none at all. With the stub in place such
+/// a provider could configure cleanly, redirect correctly, exchange its code
+/// successfully, and then fail every login with "identity_missing".
+///
+/// **The signature is not verified**, and that is deliberate and bounded:
+/// `token` here is the body of an HTTPS response to a request *we* made, to
+/// the provider's configured token endpoint, authenticated with our own
+/// client secret. TLS has already established who sent these bytes, which is
+/// why OpenID Connect Core §3.1.3.7 permits skipping signature validation for
+/// tokens obtained directly from the token endpoint. Every other origin — a
+/// token posted by a browser, forwarded by another service, or read out of a
+/// URL fragment — is attacker-chosen, and reading `sub` from one of those
+/// unverified would let the attacker choose whose account they log into. The
+/// `_unverified` suffix on the callee is there so a future call site from one
+/// of those places has to be written on purpose.
 fn extract_provider_user_id_from_token(token: &OAuthTokenResponse) -> Option<String> {
-    let _ = token;
-    None
-}
-
-fn extract_provider_email(userinfo: &serde_json::Value) -> Option<String> {
-    userinfo
-        .get("email")
-        .and_then(|v| v.as_str())
-        .map(|v| v.to_string())
+    subject_from_id_token_unverified(token.id_token.as_deref()?)
 }
 
 async fn issue_session_cookie(
@@ -2450,8 +2441,7 @@ async fn issue_session_cookie(
 ) -> Result<crate::models::UserSession, String> {
     let now = Utc::now().naive_utc();
     let session_id = uuid::Uuid::now_v7();
-    let session_ttl_days = 7;
-    let expires_at = now + chrono::Duration::days(session_ttl_days);
+    let expires_at = now + chrono::Duration::days(session::SESSION_TTL_DAYS);
     let new_session = NewUserSession {
         id: session_id,
         user_id,
@@ -2482,19 +2472,20 @@ async fn issue_session_cookie(
     .map_err(|_| "Failed to spawn blocking task".to_string())
     .and_then(|r| r.map_err(|_| "Failed to persist user session".to_string()))?;
 
-    let mut cookie = Cookie::new("session", session_id.to_string());
-    cookie.set_path("/");
-    cookie.set_http_only(true);
-    cookie.set_same_site(SameSite::Strict);
-    cookie.set_secure(state.config.secure_cookies);
-    cookies.private(&state.key).add(cookie);
-
-    let mut csrf_cookie = Cookie::new("csrf_token", uuid::Uuid::now_v7().to_string());
-    csrf_cookie.set_path("/");
-    csrf_cookie.set_http_only(false);
-    csrf_cookie.set_same_site(SameSite::Strict);
-    csrf_cookie.set_secure(state.config.secure_cookies);
-    cookies.add(csrf_cookie);
+    // The session cookie is encrypted (`.private`); the CSRF cookie is not,
+    // because the front end has to be able to read it back. Both shapes are
+    // decided in `thunderforge_axum_auth_core::session` so there is one place
+    // to look for "is HttpOnly set on that one?".
+    cookies
+        .private(&state.key)
+        .add(cookie_from_spec(session_cookie(
+            &session_id.to_string(),
+            state.config.secure_cookies,
+        )));
+    cookies.add(cookie_from_spec(csrf_cookie(
+        &uuid::Uuid::now_v7().to_string(),
+        state.config.secure_cookies,
+    )));
     Ok(crate::models::UserSession {
         id: session_id,
         user_id,
@@ -2612,27 +2603,6 @@ async fn verify_two_factor_for_user(
     let encryption_key = encryption_key_from_config_secret(&state.config.secret)?;
     let secret = decrypt_secret(&secret_encrypted, &encryption_key)?;
     verify_totp_code(&username, &secret, code)
-}
-
-fn verify_totp_code(username: &str, secret_base32: &str, code: &str) -> Result<bool, String> {
-    let secret = BASE32_NOPAD
-        .decode(secret_base32.as_bytes())
-        .map_err(|_| "Stored 2FA secret is not valid base32".to_string())?;
-    let totp = TOTP::new(
-        Algorithm::SHA1,
-        6,
-        1,
-        30,
-        secret,
-        Some("ThunderForge".to_string()),
-        username.to_string(),
-    )
-    .map_err(|e| format!("Failed to build TOTP verifier: {e}"))?;
-    // totp-rs 6.0 changed this from `Result<bool, _>` to `Option<u64>`: `Some`
-    // carries the matched time step so a caller can refuse to accept the same
-    // step twice, and there is no longer a fallible-clock error to surface.
-    // We only ask whether the code matched, so the step is dropped here.
-    Ok(totp.check_current(code).is_some())
 }
 
 fn decrypt_secret(ciphertext: &str, key: &[u8; 32]) -> Result<String, String> {
@@ -3131,18 +3101,6 @@ fn auth_session_error(
     )
 }
 
-fn code_challenge_from_verifier(verifier: &str) -> String {
-    let digest = Sha256::digest(verifier.as_bytes());
-    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(digest)
-}
-
-pub(super) fn random_urlsafe(len: usize) -> String {
-    let mut bytes = vec![0u8; len];
-    let mut rng = rand::rng();
-    rng.fill(&mut bytes[..]);
-    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
-}
-
 fn encryption_key_from_config_secret(secret_b64: &str) -> Result<[u8; 32], String> {
     let secret_bytes = general_purpose::STANDARD
         .decode(secret_b64)
@@ -3166,6 +3124,32 @@ fn encrypt_secret(plaintext: &str, key: &[u8; 32]) -> Result<String, String> {
     let nonce_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(nonce_bytes);
     let cipher_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(ciphertext);
     Ok(format!("v1.{nonce_b64}.{cipher_b64}"))
+}
+
+/// The provider's configured scopes, with the SQL nulls dropped.
+///
+/// `oauth_providers.scopes` is a `text[]`, so Diesel hands it back as
+/// `Vec<Option<String>>`. A null element is a row nobody meant to write, and
+/// forwarding it as an empty scope makes some providers reject the whole
+/// authorization request.
+fn provider_scopes(provider: &OAuthProvider) -> Vec<String> {
+    provider.scopes.iter().flatten().cloned().collect()
+}
+
+/// Turn a policy-level [`CookieSpec`] into the cookie the jar wants.
+///
+/// The single point where the rules in `thunderforge_axum_auth_core::session`
+/// become a real cookie. Anything that builds a `Cookie` for authentication
+/// by hand elsewhere has stepped around those rules.
+pub(crate) fn cookie_from_spec(spec: CookieSpec) -> Cookie<'static> {
+    let mut cookie = Cookie::new(spec.name, spec.value);
+    cookie.set_path(spec.path);
+    cookie.set_http_only(spec.http_only);
+    if spec.same_site_strict {
+        cookie.set_same_site(SameSite::Strict);
+    }
+    cookie.set_secure(spec.secure);
+    cookie
 }
 
 fn error_response(

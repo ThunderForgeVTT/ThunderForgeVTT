@@ -5,12 +5,14 @@
 //! rows by `crate::auth::materialize_env_oauth_providers` (research.md §3).
 
 use std::collections::BTreeMap;
-
-/// Preset provider names recognized by [`preset_for`]. Matched as a whole
-/// underscore-delimited segment (never a substring) against the first
-/// segment remaining after stripping a known field suffix — see
-/// [`split_provider_instance`].
-const KNOWN_PRESETS: &[&str] = &["DISCORD", "GITHUB", "GOOGLE", "KEYCLOAK"];
+// The set of providers we ship support for is a closed enum, not a list of
+// strings, and every fact about one is derived from it by an exhaustive
+// `match`. This file used to carry two independent string tables — a
+// `KNOWN_PRESETS` array and a `preset_for` match with a `_ => None` arm — and
+// nothing tied them together: adding a provider to one and not the other
+// compiled, shipped, and presented as a login button that silently was not
+// there. See `thunderforge_axum_oauth::provider_kind`.
+use thunderforge_axum_oauth::provider_kind::{Endpoints, ProviderKind};
 
 /// Field suffixes recognized on any `OAUTH_<PROVIDER>_[<INSTANCE>_]<FIELD>`
 /// env var. None is a suffix of another, so match order doesn't affect
@@ -112,76 +114,12 @@ fn match_field_suffix(rest: &str) -> Option<(&'static str, &str)> {
 fn split_provider_instance(remaining: &str) -> (String, String) {
     let mut segments = remaining.splitn(2, '_');
     if let Some(first) = segments.next()
-        && KNOWN_PRESETS.contains(&first)
+        && ProviderKind::from_env_segment(first).is_some()
     {
         let instance = segments.next().unwrap_or("").to_lowercase();
         return (first.to_string(), instance);
     }
     (remaining.to_string(), String::new())
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum PresetKind {
-    /// Fixed, well-known endpoints — no issuer URL needed.
-    Fixed {
-        authorization_url: &'static str,
-        token_url: &'static str,
-        userinfo_url: Option<&'static str>,
-        default_scopes: &'static [&'static str],
-    },
-    /// Self-hosted, OIDC-discovery-shaped preset — endpoints are derived
-    /// from an operator-supplied issuer/base URL (data-model.md).
-    IssuerDerived {
-        default_scopes: &'static [&'static str],
-    },
-}
-
-struct PresetTemplate {
-    display_name: &'static str,
-    kind: PresetKind,
-}
-
-fn preset_for(provider: &str) -> Option<PresetTemplate> {
-    match provider {
-        // URLs/scopes mirror src/server/migrations/
-        // 2026-05-02-021115-0002_seed_oauth_providers_and_credentials_fields
-        // exactly (research.md §2) — keep in sync if that migration's seed
-        // data ever changes.
-        "DISCORD" => Some(PresetTemplate {
-            display_name: "Discord",
-            kind: PresetKind::Fixed {
-                authorization_url: "https://discord.com/api/oauth2/authorize",
-                token_url: "https://discord.com/api/oauth2/token",
-                userinfo_url: Some("https://discord.com/api/users/@me"),
-                default_scopes: &["identify", "email"],
-            },
-        }),
-        "GOOGLE" => Some(PresetTemplate {
-            display_name: "Google",
-            kind: PresetKind::Fixed {
-                authorization_url: "https://accounts.google.com/o/oauth2/v2/auth",
-                token_url: "https://oauth2.googleapis.com/token",
-                userinfo_url: Some("https://openidconnect.googleapis.com/v1/userinfo"),
-                default_scopes: &["openid", "profile", "email"],
-            },
-        }),
-        "GITHUB" => Some(PresetTemplate {
-            display_name: "GitHub",
-            kind: PresetKind::Fixed {
-                authorization_url: "https://github.com/login/oauth/authorize",
-                token_url: "https://github.com/login/oauth/access_token",
-                userinfo_url: Some("https://api.github.com/user"),
-                default_scopes: &["read:user", "user:email"],
-            },
-        }),
-        "KEYCLOAK" => Some(PresetTemplate {
-            display_name: "Keycloak",
-            kind: PresetKind::IssuerDerived {
-                default_scopes: &["openid", "profile", "email"],
-            },
-        }),
-        _ => None,
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -229,36 +167,30 @@ pub fn resolve(parsed: &ParsedProviderInstance) -> Result<ResolvedProviderInstan
         .ok_or_else(|| missing("CLIENT_SECRET"))?;
 
     let (authorization_url, token_url, userinfo_url, scopes, default_display_name) =
-        if let Some(preset) = preset_for(&parsed.provider) {
-            match preset.kind {
-                PresetKind::Fixed {
-                    authorization_url,
-                    token_url,
-                    userinfo_url,
-                    default_scopes,
-                } => (
-                    authorization_url.to_string(),
-                    token_url.to_string(),
-                    userinfo_url.map(str::to_string),
-                    default_scopes.iter().map(|s| s.to_string()).collect(),
-                    preset.display_name.to_string(),
-                ),
-                PresetKind::IssuerDerived { default_scopes } => {
-                    let issuer = parsed
-                        .fields
-                        .issuer_url
-                        .clone()
-                        .ok_or_else(|| missing("ISSUER_URL"))?;
-                    let issuer = issuer.trim_end_matches('/');
-                    (
-                        format!("{issuer}/protocol/openid-connect/auth"),
-                        format!("{issuer}/protocol/openid-connect/token"),
-                        Some(format!("{issuer}/protocol/openid-connect/userinfo")),
-                        default_scopes.iter().map(|s| s.to_string()).collect(),
-                        preset.display_name.to_string(),
-                    )
+        if let Some(kind) = ProviderKind::from_env_segment(&parsed.provider) {
+            let preset = kind.preset();
+            // An issuer-derived preset (a self-hosted IdP) cannot resolve
+            // without the operator's base URL; a fixed one ignores it.
+            let issuer = match preset.endpoints {
+                Endpoints::Fixed { .. } => String::new(),
+                Endpoints::IssuerDerived => {
+                    parsed.fields.issuer_url.clone().ok_or_else(|| {
+                        missing(kind.required_issuer_field().unwrap_or("ISSUER_URL"))
+                    })?
                 }
-            }
+            };
+            let endpoints = kind.derive_endpoints(&issuer);
+            (
+                endpoints.authorization_url,
+                endpoints.token_url,
+                endpoints.userinfo_url,
+                preset
+                    .default_scopes
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
+                preset.display_name.to_string(),
+            )
         } else {
             // Generic/unlisted provider (research.md §4's edge-case rule):
             // only resolvable when the full endpoint set is present.

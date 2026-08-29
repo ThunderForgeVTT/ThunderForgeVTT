@@ -6,6 +6,14 @@
 use crate::schema::users;
 use crate::state::AppState;
 use diesel::prelude::*;
+// The rules with no database behind them live in
+// `thunderforge_axum_auth_core`, where they are proptested. What is left here
+// is the part that genuinely needs a connection: gating on admin setup, and
+// resolving a username against rows that already exist.
+pub(super) use thunderforge_axum_auth_core::password::{
+    derive_bootstrap_username, validate_registration_input,
+};
+pub(super) use thunderforge_axum_auth_core::random::random_setup_code;
 
 pub(super) async fn ensure_registration_allowed(state: &AppState) -> Result<(), String> {
     let mut conn = state
@@ -31,64 +39,10 @@ pub(super) async fn ensure_registration_allowed(state: &AppState) -> Result<(), 
     }
 }
 
-pub(super) fn validate_registration_input(
-    username: &str,
-    email: &str,
-    password: &str,
-) -> Result<(), String> {
-    if username.is_empty() || email.is_empty() || password.is_empty() {
-        return Err("Username, email, and password are required".to_string());
-    }
-
-    if username.len() < 3 || username.len() > 32 {
-        return Err("Username must be between 3 and 32 characters".to_string());
-    }
-
-    if !username
-        .chars()
-        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.'))
-    {
-        return Err("Username may only contain letters, numbers, '-', '_' and '.'".to_string());
-    }
-
-    if !email.contains('@') || email.starts_with('@') || email.ends_with('@') {
-        return Err("Email address is invalid".to_string());
-    }
-
-    if password.len() < 12 {
-        return Err("Password must be at least 12 characters long".to_string());
-    }
-
-    Ok(())
-}
-
 pub(super) enum RegisterUserError {
     UsernameTaken,
     EmailTaken,
     Storage,
-}
-
-pub(super) fn derive_bootstrap_username(
-    desired_username: Option<String>,
-    provider_email: &str,
-) -> String {
-    let candidate = desired_username
-        .map(|v| v.trim().to_string())
-        .filter(|v| !v.is_empty())
-        .unwrap_or_else(|| {
-            provider_email
-                .split('@')
-                .next()
-                .unwrap_or("admin")
-                .trim()
-                .to_string()
-        });
-
-    candidate
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_' || *c == '.')
-        .collect::<String>()
-        .to_lowercase()
 }
 
 /// Derives a username from an auto-provisioned OAuth user's email (ADR-011),
@@ -129,83 +83,12 @@ pub(super) fn unique_username_from_email_sync(
     Ok(format!("{base}-{}", uuid::Uuid::now_v7()))
 }
 
-pub(super) fn random_setup_code() -> String {
-    const CHARSET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    let mut bytes = [0u8; 12];
-    let mut rng = rand::rng();
-    rand::RngExt::fill(&mut rng, &mut bytes);
-
-    let token = bytes
-        .iter()
-        .map(|byte| CHARSET[*byte as usize % CHARSET.len()] as char)
-        .collect::<String>();
-
-    format!("{}-{}-{}", &token[0..4], &token[4..8], &token[8..12])
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{
-        derive_bootstrap_username, random_setup_code, unique_username_from_email_sync,
-        validate_registration_input,
-    };
+    use super::unique_username_from_email_sync;
     use crate::schema::users;
     use crate::test_support::test_app_state;
     use diesel::prelude::*;
-
-    #[test]
-    fn registration_validation_rejects_short_password() {
-        let result = validate_registration_input("wizard", "wizard@thunderforge.dev", "short");
-
-        assert_eq!(
-            result,
-            Err("Password must be at least 12 characters long".to_string())
-        );
-    }
-
-    #[test]
-    fn registration_validation_rejects_invalid_username() {
-        let result = validate_registration_input(
-            "bad name",
-            "wizard@thunderforge.dev",
-            "very-secure-password",
-        );
-
-        assert_eq!(
-            result,
-            Err("Username may only contain letters, numbers, '-', '_' and '.'".to_string())
-        );
-    }
-
-    #[test]
-    fn registration_validation_accepts_valid_input() {
-        let result = validate_registration_input(
-            "archmage.1",
-            "wizard@thunderforge.dev",
-            "very-secure-password",
-        );
-
-        assert_eq!(result, Ok(()));
-    }
-
-    #[test]
-    fn bootstrap_username_falls_back_to_email_local_part() {
-        let username = derive_bootstrap_username(None, "Grand.Magister+Admin@thunderforge.dev");
-
-        assert_eq!(username, "grand.magisteradmin");
-    }
-
-    #[test]
-    fn setup_code_uses_expected_fantasy_friendly_format() {
-        let code = random_setup_code();
-
-        assert_eq!(code.len(), 14);
-        assert!(
-            code.chars()
-                .all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '-')
-        );
-        assert_eq!(code.chars().filter(|ch| *ch == '-').count(), 2);
-    }
 
     /// ADR-011: auto-provisioned OAuth usernames derive from the email
     /// local part when it isn't already taken.

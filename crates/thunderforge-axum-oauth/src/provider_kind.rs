@@ -314,7 +314,8 @@ mod tests {
     #[test]
     fn a_trailing_slash_on_the_issuer_does_not_double_up() {
         let with = ProviderKind::Keycloak.derive_endpoints("https://idp.example.com/realms/main/");
-        let without = ProviderKind::Keycloak.derive_endpoints("https://idp.example.com/realms/main");
+        let without =
+            ProviderKind::Keycloak.derive_endpoints("https://idp.example.com/realms/main");
         assert_eq!(with, without);
         assert_eq!(
             without.authorization_url,

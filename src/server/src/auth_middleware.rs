@@ -3,7 +3,7 @@ use crate::models::UserSession;
 use crate::schema::{user_sessions, users};
 use crate::state::AppState;
 use axum::extract::{Request, State};
-use axum::http::{HeaderMap, Method, StatusCode};
+use axum::http::{HeaderMap, StatusCode};
 use axum::middleware::Next;
 use axum::response::IntoResponse;
 use axum::response::Response;
@@ -11,7 +11,10 @@ use chrono::Utc;
 use diesel::prelude::*;
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
-use tower_cookies::cookie::SameSite;
+// The CSRF rule itself lives in `thunderforge_axum_auth_core`, where it can be
+// proptested without a request; this file is only the place it is applied.
+use thunderforge_axum_auth_core::csrf::{csrf_token_matches, method_requires_csrf};
+use thunderforge_axum_auth_core::session::{CSRF_COOKIE_NAME, csrf_cookie};
 use tower_cookies::{Cookie, Cookies};
 
 #[derive(Clone, Debug)]
@@ -128,15 +131,11 @@ pub async fn require_csrf_for_session(
         ensure_csrf_cookie(&state, &cookies);
     }
 
-    let method = request.method().clone();
-    let needs_csrf = method == Method::POST
-        || method == Method::PUT
-        || method == Method::PATCH
-        || method == Method::DELETE;
+    let needs_csrf = method_requires_csrf(request.method().as_str());
 
     if has_session && needs_csrf {
         let csrf_cookie = cookies
-            .get("csrf_token")
+            .get(CSRF_COOKIE_NAME)
             .map(|c| c.value().to_string())
             .unwrap_or_default();
         let csrf_header = request
@@ -146,8 +145,7 @@ pub async fn require_csrf_for_session(
             .unwrap_or_default()
             .to_string();
 
-        if csrf_cookie.is_empty() || !secure_equals(csrf_cookie.as_bytes(), csrf_header.as_bytes())
-        {
+        if !csrf_token_matches(&csrf_cookie, &csrf_header) {
             return StatusCode::FORBIDDEN.into_response();
         }
     }
@@ -156,17 +154,14 @@ pub async fn require_csrf_for_session(
 }
 
 fn ensure_csrf_cookie(state: &AppState, cookies: &Cookies) {
-    if cookies.get("csrf_token").is_some() {
+    if cookies.get(CSRF_COOKIE_NAME).is_some() {
         return;
     }
 
-    let token = uuid::Uuid::now_v7().to_string();
-    let mut cookie = Cookie::new("csrf_token", token);
-    cookie.set_path("/");
-    cookie.set_http_only(false);
-    cookie.set_same_site(SameSite::Strict);
-    cookie.set_secure(state.config.secure_cookies);
-    cookies.add(cookie);
+    cookies.add(crate::auth::cookie_from_spec(csrf_cookie(
+        &uuid::Uuid::now_v7().to_string(),
+        state.config.secure_cookies,
+    )));
 }
 
 fn client_ip(headers: &HeaderMap) -> String {
@@ -185,17 +180,6 @@ fn client_ip(headers: &HeaderMap) -> String {
         .map(|v| v.trim().to_string())
         .filter(|v| !v.is_empty())
         .unwrap_or_else(|| "unknown".to_string())
-}
-
-fn secure_equals(a: &[u8], b: &[u8]) -> bool {
-    let mut diff = a.len() ^ b.len();
-    let max_len = std::cmp::max(a.len(), b.len());
-    for i in 0..max_len {
-        let av = *a.get(i).unwrap_or(&0);
-        let bv = *b.get(i).unwrap_or(&0);
-        diff |= (av ^ bv) as usize;
-    }
-    diff == 0
 }
 
 pub async fn require_authenticated_user(
@@ -449,23 +433,32 @@ mod tests {
     // --- csrf_token equality ---
 
     #[test]
-    fn secure_equals_matches_identical_bytes() {
-        assert!(secure_equals(b"same-token-value", b"same-token-value"));
+    /// The comparison itself is proptested in
+    /// `thunderforge_axum_auth_core::csrf`; what is asserted here is that
+    /// *this* middleware applies that rule and not a hand-rolled `==`.
+    fn csrf_check_accepts_a_matching_token_and_nothing_else() {
+        assert!(csrf_token_matches("same-token-value", "same-token-value"));
+        assert!(!csrf_token_matches("same-token-value", "different-value!"));
+        assert!(!csrf_token_matches("short", "a much longer value"));
     }
 
+    /// A request that sends neither cookie nor header must be refused, not
+    /// pass on `"" == ""`.
     #[test]
-    fn secure_equals_rejects_different_bytes() {
-        assert!(!secure_equals(b"same-token-value", b"different-value!"));
+    fn csrf_check_refuses_a_request_carrying_nothing() {
+        assert!(!csrf_token_matches("", ""));
+        assert!(!csrf_token_matches("", "nonempty"));
     }
 
+    /// Only the state-changing methods are gated, and all of them are.
     #[test]
-    fn secure_equals_rejects_different_lengths() {
-        assert!(!secure_equals(b"short", b"a much longer value"));
-    }
-
-    #[test]
-    fn secure_equals_rejects_empty_against_nonempty() {
-        assert!(!secure_equals(b"", b"nonempty"));
+    fn csrf_gating_covers_every_state_changing_method() {
+        for method in ["POST", "PUT", "PATCH", "DELETE"] {
+            assert!(method_requires_csrf(method), "{method} must be gated");
+        }
+        for method in ["GET", "HEAD", "OPTIONS"] {
+            assert!(!method_requires_csrf(method), "{method} must not be gated");
+        }
     }
 
     // --- client_ip ---

@@ -41,7 +41,9 @@ impl std::error::Error for InvalidAuthorizationUrl {}
 /// is written through `url`'s encoder rather than by string concatenation —
 /// a redirect URI or scope containing `&` would otherwise inject a parameter
 /// of the attacker's choosing into our own authorization request.
-pub fn build_authorize_url(request: &AuthorizeRequest<'_>) -> Result<String, InvalidAuthorizationUrl> {
+pub fn build_authorize_url(
+    request: &AuthorizeRequest<'_>,
+) -> Result<String, InvalidAuthorizationUrl> {
     let mut url = Url::parse(request.authorization_url).map_err(|_| InvalidAuthorizationUrl)?;
 
     url.query_pairs_mut()
