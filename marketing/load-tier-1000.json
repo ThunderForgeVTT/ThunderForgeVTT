@@ -1,0 +1,46 @@
+{
+  "generatedAt": "2026-08-29T21:45:48.494Z",
+  "generatedBy": "node scripts/marketing-metrics.mjs 1000",
+  "passed": true,
+  "tier": 1000,
+  "durationSeconds": 54,
+  "host": {
+    "cpuCores": 32,
+    "totalMemGiB": 31.3,
+    "platform": "Linux 7.1.5-76070105-generic"
+  },
+  "scenarios": [
+    {
+      "tier": 1000,
+      "project": "tf-torture-4784a0f3",
+      "pg": 55291,
+      "rustfs": 59291
+    },
+    {
+      "worlds": 1000,
+      "playersPerWorld": 10,
+      "subscribers": 10000,
+      "shards": 50,
+      "starved": 0,
+      "leaked": 0,
+      "distribution": "{\"1\":10000}"
+    },
+    {
+      "tier": 1000
+    }
+  ],
+  "containers": [
+    {
+      "role": "postgres",
+      "peakCpuPercent": 95.02,
+      "peakMemMiB": 178
+    },
+    {
+      "role": "object-store",
+      "peakCpuPercent": 1.47,
+      "peakMemMiB": 81.6
+    }
+  ],
+  "containerScope": "postgres and object store only; the backend runs on the host under cargo run and is not included",
+  "profile": "debug (cargo run); a release build is materially faster"
+}

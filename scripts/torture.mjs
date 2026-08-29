@@ -19,7 +19,7 @@ import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import process from "node:process";
 
-const TIERS = [5, 10, 25, 50, 100];
+const TIERS = [5, 10, 25, 50, 100, 250, 500, 1000];
 
 const requested = Number(process.argv[2] ?? "5");
 if (!TIERS.includes(requested)) {
@@ -57,9 +57,13 @@ function run(command, args, options = {}) {
 }
 
 const compose = (...args) =>
-  run("docker", ["compose", "-f", "compose.torture.yml", "-p", project, ...args], {
-    env: composeEnv,
-  });
+  run(
+    "docker",
+    ["compose", "-f", "compose.torture.yml", "-p", project, ...args],
+    {
+      env: composeEnv,
+    },
+  );
 
 async function waitForPostgres() {
   // Poll the container's own healthcheck rather than sleeping. A fixed sleep
@@ -68,8 +72,21 @@ async function waitForPostgres() {
     try {
       await run(
         "docker",
-        ["compose", "-f", "compose.torture.yml", "-p", project, "exec", "-T",
-         "postgres", "pg_isready", "-U", "postgres", "-d", "thunderforge"],
+        [
+          "compose",
+          "-f",
+          "compose.torture.yml",
+          "-p",
+          project,
+          "exec",
+          "-T",
+          "postgres",
+          "pg_isready",
+          "-U",
+          "postgres",
+          "-d",
+          "thunderforge",
+        ],
         { env: composeEnv, stdio: "ignore" },
       );
       return;
@@ -121,8 +138,18 @@ async function assertContainerRunning(service) {
   const state = await new Promise((resolve, reject) => {
     const child = spawn(
       "docker",
-      ["compose", "-f", "compose.torture.yml", "-p", project, "ps", "-a",
-       "--format", "{{.State}}", service],
+      [
+        "compose",
+        "-f",
+        "compose.torture.yml",
+        "-p",
+        project,
+        "ps",
+        "-a",
+        "--format",
+        "{{.State}}",
+        service,
+      ],
       { env: composeEnv, stdio: ["ignore", "pipe", "inherit"] },
     );
     let out = "";
@@ -146,7 +173,9 @@ const databaseUrl = `postgres://postgres:password@localhost:${pgPort}/thunderfor
 let started = false;
 let backendProcess = null;
 try {
-  console.log(`[torture] tier=${requested} project=${project} pg=${pgPort} rustfs=${rustfsPort}`);
+  console.log(
+    `[torture] tier=${requested} project=${project} pg=${pgPort} rustfs=${rustfsPort}`,
+  );
 
   await compose("up", "-d");
   started = true;
@@ -182,13 +211,28 @@ try {
   // a hash that cannot verify is the honest way to say so.
   await run(
     "docker",
-    ["compose", "-f", "compose.torture.yml", "-p", project, "exec", "-T",
-     "postgres", "psql", "-U", "postgres", "-d", "thunderforge", "-v",
-     "ON_ERROR_STOP=1", "-c",
-     "INSERT INTO users (id, username, password_hash, email, is_admin, " +
-     "created_at, updated_at) VALUES (gen_random_uuid(), 'torture-admin', " +
-     "'x-not-a-usable-hash', 'torture-admin@example.invalid', true, now(), now()) " +
-     "ON CONFLICT DO NOTHING;"],
+    [
+      "compose",
+      "-f",
+      "compose.torture.yml",
+      "-p",
+      project,
+      "exec",
+      "-T",
+      "postgres",
+      "psql",
+      "-U",
+      "postgres",
+      "-d",
+      "thunderforge",
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-c",
+      "INSERT INTO users (id, username, password_hash, email, is_admin, " +
+        "created_at, updated_at) VALUES (gen_random_uuid(), 'torture-admin', " +
+        "'x-not-a-usable-hash', 'torture-admin@example.invalid', true, now(), now()) " +
+        "ON CONFLICT DO NOTHING;",
+    ],
     { env: composeEnv },
   );
 
@@ -242,9 +286,30 @@ try {
   ]);
   console.log("[torture] backend is up");
 
+  // `TORTURE_SPECS` narrows the run to named specs.
+  //
+  // Above tier ~100 this stops being optional. `table-storm` and
+  // `authority-storm` open one *browser context* per participant, so a tier of
+  // 1000 asks for a thousand Chromium instances — which measures the machine,
+  // not the server. The other three open their sockets inside one page and
+  // scale to whatever the transport will bear, which is the thing worth
+  // knowing at that size.
+  const only = (process.env.TORTURE_SPECS ?? "").trim();
+  const specArgs = only
+    ? only.split(/\s+/).map((name) => `e2e/torture/${name}.torture.spec.ts`)
+    : [];
+  if (specArgs.length > 0) {
+    console.log(`[torture] restricted to: ${only}`);
+  }
+
   await run(
     "npx",
-    ["playwright", "test", "--config=playwright.torture.config.ts"],
+    [
+      "playwright",
+      "test",
+      "--config=playwright.torture.config.ts",
+      ...specArgs,
+    ],
     {
       cwd: "apps/web",
       env: stackEnv,
@@ -267,7 +332,7 @@ try {
     await compose("down", "-v", "--remove-orphans").catch(() => {
       console.error(
         `[torture] teardown failed — clean up by hand:\n` +
-        `  docker compose -f compose.torture.yml -p ${project} down -v`,
+          `  docker compose -f compose.torture.yml -p ${project} down -v`,
       );
     });
   }
