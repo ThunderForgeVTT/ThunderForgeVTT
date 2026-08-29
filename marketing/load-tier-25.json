@@ -1,0 +1,69 @@
+{
+  "generatedAt": "2026-08-29T06:12:35.616Z",
+  "generatedBy": "node scripts/marketing-metrics.mjs 25",
+  "passed": false,
+  "tier": 25,
+  "durationSeconds": 615,
+  "host": {
+    "cpuCores": 32,
+    "totalMemGiB": 31.3,
+    "platform": "Linux 7.1.5-76070105-generic"
+  },
+  "scenarios": [
+    {
+      "tier": 25,
+      "project": "tf-torture-862247dc",
+      "pg": 55364,
+      "rustfs": 59364
+    },
+    {
+      "players": 8,
+      "own": 32,
+      "ownRefused": 0,
+      "trespass": 32,
+      "trespassAllowed": 0,
+      "gm": 8,
+      "gmRefused": 0
+    },
+    {
+      "churn": "25x6",
+      "messages": 12,
+      "starved": 5,
+      "canaryHeard": "0/5",
+      "readyz": 200,
+      "errors": 0
+    },
+    {
+      "tables": 5,
+      "people": 30,
+      "expected": 3,
+      "shortfall": 30,
+      "leaked": 0
+    },
+    {
+      "writers": 25,
+      "writes": 75,
+      "delivered": 0,
+      "duplicates": 0,
+      "errors": 0
+    },
+    {
+      "tier": 25,
+      "--config": "playwright.torture.config.ts"
+    }
+  ],
+  "containers": [
+    {
+      "role": "postgres",
+      "peakCpuPercent": 11.94,
+      "peakMemMiB": 146.8
+    },
+    {
+      "role": "object-store",
+      "peakCpuPercent": 1.38,
+      "peakMemMiB": 89.7
+    }
+  ],
+  "containerScope": "postgres and object store only; the backend runs on the host under cargo run and is not included",
+  "profile": "debug (cargo run); a release build is materially faster"
+}

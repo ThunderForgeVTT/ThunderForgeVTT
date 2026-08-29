@@ -12,6 +12,7 @@
     "dev": "./scripts/dev.mjs",
     "format": "prettier --check \"{apps,src,scripts}/**/*.{ts,tsx,js,mjs,json,scss}\"; cargo fmt",
     "verify": "./scripts/verify.mjs",
+    "marketing:metrics": "./scripts/marketing-metrics.mjs",
     "verify:fix": "./scripts/verify.mjs --fix",
     "torture": "./scripts/torture.mjs",
     "torture:5": "./scripts/torture.mjs 5",
