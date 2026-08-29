@@ -1,302 +1,258 @@
-//! PostgreSQL LISTEN background task for real-time event distribution.
+//! Real-time event distribution: read `world_events`, wake the right clients.
 //!
-//! This module spawns a long-running async task that:
-//! 1. Establishes a PostgreSQL connection via tokio-postgres
-//! 2. Issues LISTEN world_events_channel
-//! 3. Broadcasts notifications to all subscribers via tokio::sync::broadcast
-//! 4. Auto-reconnects on connection loss
-//! 5. Tracks metrics and handles backpressure gracefully
+//! This module spawns a long-running async task that polls the event table
+//! and hands each new row to the per-world router, which fans it out to the
+//! sessions watching that world.
 //!
-//! Phase 4.9.A: Full pg_notify listener integration with backpressure handling
+//! # There is no `LISTEN` connection here any more
+//!
+//! There used to be one, and it did nothing. The task opened a dedicated
+//! `tokio-postgres` connection, issued `LISTEN world_events_channel`, logged
+//! "waiting for notifications…" — and then never read the notification
+//! stream. Every notification it asked for was decoded and dropped. The
+//! actual delivery mechanism was, and is, the 100ms poll below.
+//!
+//! So it cost a permanent Postgres backend and bought nothing, while the log
+//! line and the module name asserted a design that was not running. Naming
+//! the mechanism honestly matters more here than usual, because the thing
+//! being described is invisible when it breaks: events stay durable, HTTP
+//! keeps answering, and only the live nudges stop.
+//!
+//! Waking on `NOTIFY` instead of a timer is still worth doing — it would take
+//! delivery latency from a 100ms floor to commit time — and the crate docs in
+//! `thunderforge-pg-sockets` argue for it. It is a wake, not a delivery
+//! guarantee: a notification only reaches sessions listening at that instant,
+//! so the poll has to stay as the reconciliation net behind it either way.
+//! What is gone is the pretence that it was already wired up.
 
 use crate::models::WorldEvent;
 use crate::schema::world_events;
 use diesel::prelude::*;
 use diesel::r2d2::{self, ConnectionManager};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
-use thunderforge_pg_sockets::{RowStamp, SharedWorldRouter, settled_cursor};
+use thunderforge_pg::{DeliveryConfig, DeliveryMetrics, EventSink, EventSource, run_delivery};
+use thunderforge_pg_sockets::SharedWorldRouter;
 use tokio::sync::broadcast;
-use tokio::time::{sleep, timeout};
+use tokio::time::sleep;
 
 type DbPool = r2d2::Pool<ConnectionManager<diesel::PgConnection>>;
 
-/// Configuration for the PubSub backplane
-const LISTEN_CHANNEL: &str = "world_events_channel";
+/// What the relay needs from a row: an id and a commit time.
+///
+/// The trait lives in `thunderforge-pg-sockets` and the type lives here,
+/// which is the boundary that keeps the delivery rules testable without a
+/// schema, a pool or a database.
+impl thunderforge_pg_sockets::Stamped for WorldEvent {
+    fn stamp(&self) -> thunderforge_pg_sockets::RowStamp {
+        thunderforge_pg_sockets::RowStamp {
+            id: self.id,
+            created_at: self.created_at,
+        }
+    }
+}
 
 /// Events drained per 100ms poll. Generous relative to the old value of 10:
 /// the cursor makes truncation safe (anything left over is picked up on the
 /// next pass rather than lost), so this only needs to be large enough that a
 /// realistic burst clears in a pass or two.
 const POLL_BATCH_SIZE: i64 = 256;
-const RECONNECT_DELAY_MS: u64 = 1000;
-const RECONNECT_MAX_DELAY_MS: u64 = 30000;
-const BROADCAST_BUFFER_SIZE: usize = 10000;
-
-/// Backpressure thresholds
-const BACKPRESSURE_WARNING_THRESHOLD: usize = 8000; // 80% full
-const BACKPRESSURE_CRITICAL_THRESHOLD: usize = 9500; // 95% full
 const METRICS_LOG_INTERVAL_SECS: u64 = 10;
 
-/// Metrics for monitoring broadcast channel health
-#[derive(Debug, Clone)]
-struct BroadcastMetrics {
-    events_sent: Arc<AtomicU64>,
-    events_dropped: Arc<AtomicU64>,
-    subscriber_lagged_count: Arc<AtomicU64>,
+/// The pool, presented to the delivery loop as a source of rows.
+///
+/// Both calls block: `pool.get()` waits on a condvar and diesel's `load`
+/// blocks on a socket. The [`EventSource`] contract says so, which is what
+/// keeps the loop from ever running them on an async worker.
+struct PoolEventSource {
+    pool: DbPool,
 }
 
-/// Spawns a background task that listens to database events via PostgreSQL NOTIFY.
+impl EventSource for PoolEventSource {
+    type Row = WorldEvent;
+
+    fn poll(&self, after: i64) -> Result<Vec<WorldEvent>, String> {
+        poll_new_events_with_conn(&self.pool, after)
+    }
+
+    fn high_water(&self) -> Option<i64> {
+        current_max_event_id(&self.pool)
+    }
+}
+
+/// The per-world router, presented to the delivery loop as somewhere to put
+/// rows.
+struct RouterSink {
+    router: SharedWorldRouter<WorldEvent>,
+    /// Rate limit for the per-event line, which is far too chatty otherwise.
+    last_log: std::sync::Mutex<Instant>,
+}
+
+impl EventSink for RouterSink {
+    type Row = WorldEvent;
+
+    fn publish(&self, event: WorldEvent) -> usize {
+        let world_id = event.world_id;
+        let event_id = event.id;
+        let event_code = event.event_code;
+
+        // To that world's subscribers, and to nobody else. This used to be one
+        // `send` on a process-wide channel that woke every connected client in
+        // the system and let each of them discover the event was not theirs.
+        let count = self.router.publish(world_id, event);
+
+        if let Ok(mut last) = self.last_log.lock() {
+            let now = Instant::now();
+            if now.duration_since(*last) > Duration::from_secs(10) {
+                eprintln!(
+                    "[PubSub] 📢 Event id={event_id} code={event_code} world={world_id} \
+                     → {count} subscriber(s); {} world(s) currently routed",
+                    self.router.active_worlds()
+                );
+                *last = now;
+            }
+        }
+
+        count
+    }
+
+    // `reap` is deliberately NOT implemented here, so the delivery loop never
+    // calls it.
+    //
+    // Reaping is `DashMap::retain`, which takes a write lock on *every* shard
+    // in turn. Publishing takes a read lock on *one*. Putting the all-shards
+    // scan on the same task as delivery means any shard that is momentarily
+    // unavailable stops event delivery for the entire server — and delivery
+    // is the thing players notice. Housekeeping should never be able to do
+    // that, so it runs on its own task on its own schedule (see
+    // `spawn_channel_reaper`). Missing a reap costs an idle map entry until
+    // the next pass; missing delivery costs the game.
+}
+
+/// Spawns the background task that reads world events and wakes the sessions
+/// watching them.
 ///
-/// This task:
-/// - Establishes a dedicated PostgreSQL connection for LISTEN
-/// - Issues LISTEN on world_events_channel
-/// - Broadcasts notifications to all subscribers
-/// - Automatically recovers on connection loss with exponential backoff
-/// - Tracks metrics and logs periodically
+/// The loop itself lives in `thunderforge_pg::delivery`, where its failure
+/// modes — a poll that panics, hangs, or errors — are ordinary test cases
+/// rather than things you can only witness by running the whole stack under
+/// load. What stays here is the part that genuinely needs Postgres and the
+/// router: the two adapters above, and the reporting below.
 pub fn spawn_listen_task(pool: DbPool, router: SharedWorldRouter<WorldEvent>) {
-    let metrics = BroadcastMetrics {
-        events_sent: Arc::new(AtomicU64::new(0)),
-        events_dropped: Arc::new(AtomicU64::new(0)),
-        subscriber_lagged_count: Arc::new(AtomicU64::new(0)),
-    };
+    let metrics = Arc::new(DeliveryMetrics::default());
+    let source = Arc::new(PoolEventSource { pool });
+    let sink = Arc::new(RouterSink {
+        router,
+        last_log: std::sync::Mutex::new(Instant::now()),
+    });
 
-    let metrics_clone = metrics.clone();
+    spawn_metrics_reporter(metrics.clone());
+    spawn_channel_reaper(sink.router.clone());
 
-    // Spawn metrics reporter task
+    // Never signalled in the server; the loop runs for the life of the
+    // process. The channel exists so tests can stop it.
+    let (_stop_tx, stop_rx) = tokio::sync::watch::channel(false);
+    // Held forever, because dropping the sender would resolve the watch and
+    // stop delivery.
+    std::mem::forget(_stop_tx);
+
+    eprintln!("[Server] 🚀 Starting world-event delivery loop");
+    tokio::spawn(run_delivery(
+        source,
+        sink,
+        metrics,
+        DeliveryConfig::default(),
+        stop_rx,
+    ));
+}
+
+/// Drop world channels nobody is listening to, on their own schedule.
+///
+/// Every 5s rather than every 100ms: this is a scan of a map sized by *open*
+/// worlds, and doing it ten times a second bought nothing. More importantly it
+/// is off the delivery path entirely — see the note on `RouterSink`.
+fn spawn_channel_reaper(router: SharedWorldRouter<WorldEvent>) {
     tokio::spawn(async move {
-        let mut last_events_sent = 0u64;
-        let mut last_events_dropped = 0u64;
-        let mut last_lagged = 0u64;
+        loop {
+            sleep(Duration::from_secs(5)).await;
+            let reaped = router.reap();
+            if reaped > 0 {
+                eprintln!("[PubSub] 🧹 Released {reaped} idle world channel(s)");
+            }
+        }
+    });
+}
+
+/// Report the delivery counters every [`METRICS_LOG_INTERVAL_SECS`].
+fn spawn_metrics_reporter(metrics: Arc<DeliveryMetrics>) {
+    tokio::spawn(async move {
+        let mut last_sent = 0u64;
+        let mut last_dropped = 0u64;
+        let mut last_polls = 0u64;
 
         loop {
             sleep(Duration::from_secs(METRICS_LOG_INTERVAL_SECS)).await;
 
-            let events_sent = metrics_clone.events_sent.load(Ordering::Relaxed);
-            let events_dropped = metrics_clone.events_dropped.load(Ordering::Relaxed);
-            let lagged_count = metrics_clone
-                .subscriber_lagged_count
-                .load(Ordering::Relaxed);
+            let sent = metrics.sent.load(Ordering::Relaxed);
+            let dropped = metrics.dropped.load(Ordering::Relaxed);
+            let polls = metrics.polls.load(Ordering::Relaxed);
+            let cursor = metrics.cursor.load(Ordering::Relaxed);
+            let errors = metrics.errors.load(Ordering::Relaxed);
+            let panics = metrics.panics.load(Ordering::Relaxed);
+            let timeouts = metrics.timeouts.load(Ordering::Relaxed);
 
-            let sent_delta = events_sent.saturating_sub(last_events_sent);
-            let dropped_delta = events_dropped.saturating_sub(last_events_dropped);
-            let lagged_delta = lagged_count.saturating_sub(last_lagged);
+            let poll_delta = polls.saturating_sub(last_polls);
+
+            // The subscriber half of the same story, and the only place it is
+            // reported. Those numbers used to be a line per event per
+            // subscriber on the subscription's own task — a blocking write to
+            // a pipe, on the hot path, scaling with the thing it described.
+            // See `crate::graphql::subscription_metrics`.
+            let (sockets, subs_opened, subs_refused, subs_delivered, subs_lagged) =
+                crate::graphql::subscription_metrics::snapshot();
 
             eprintln!(
-                "[PubSub] 📊 Metrics [{}s]: sent={} (+{}), dropped={} (+{}), lagged={} (+{})",
+                "[PubSub] 📊 Metrics [{}s]: sent={} (+{}), dropped={} (+{}), polls={} (+{}), \
+                 cursor={}, errors={}, panics={}, timeouts={}, sockets={}, subs_open={}, \
+                 subs_refused={}, subs_delivered={}, subs_lagged={}",
                 METRICS_LOG_INTERVAL_SECS,
-                events_sent,
-                sent_delta,
-                events_dropped,
-                dropped_delta,
-                lagged_count,
-                lagged_delta
+                sent,
+                sent.saturating_sub(last_sent),
+                dropped,
+                dropped.saturating_sub(last_dropped),
+                polls,
+                poll_delta,
+                cursor,
+                errors,
+                panics,
+                timeouts,
+                sockets,
+                subs_opened,
+                subs_refused,
+                subs_delivered,
+                subs_lagged
             );
 
-            last_events_sent = events_sent;
-            last_events_dropped = events_dropped;
-            last_lagged = lagged_count;
-        }
-    });
-
-    tokio::spawn(async move {
-        let mut reconnect_delay = RECONNECT_DELAY_MS;
-
-        loop {
-            eprintln!("[PubSub] 🔄 Starting PostgreSQL LISTEN connection");
-
-            match run_listen_loop(&pool, &router, &metrics).await {
-                Ok(_) => {
-                    // Unexpected end, reset reconnect delay
-                    reconnect_delay = RECONNECT_DELAY_MS;
-                }
-                Err(e) => {
-                    eprintln!(
-                        "[PubSub] ❌ LISTEN loop failed: {}. Reconnecting in {}ms...",
-                        e, reconnect_delay
-                    );
-                    sleep(Duration::from_millis(reconnect_delay)).await;
-
-                    // Exponential backoff: double delay up to max
-                    reconnect_delay = (reconnect_delay * 2).min(RECONNECT_MAX_DELAY_MS);
-                }
-            }
-        }
-    });
-}
-
-/// Run the main LISTEN loop with a single PostgreSQL connection.
-///
-/// Returns Ok(()) if loop exits cleanly (shouldn't happen in production).
-/// Returns Err(String) if connection fails or LISTEN fails.
-async fn run_listen_loop(
-    pool: &DbPool,
-    router: &SharedWorldRouter<WorldEvent>,
-    metrics: &BroadcastMetrics,
-) -> Result<(), String> {
-    // Get database URL from environment
-    let db_url =
-        std::env::var("DATABASE_URL").map_err(|e| format!("DATABASE_URL not set: {}", e))?;
-
-    eprintln!(
-        "[PubSub] 📡 Connecting to PostgreSQL LISTEN on '{}'",
-        LISTEN_CHANNEL
-    );
-
-    // Create a dedicated tokio-postgres connection (not from pool)
-    let (_client, connection) = timeout(
-        Duration::from_secs(10),
-        tokio_postgres::connect(&db_url, tokio_postgres::tls::NoTls),
-    )
-    .await
-    .map_err(|_| "Connection timeout".to_string())?
-    .map_err(|e| format!("Failed to connect: {}", e))?;
-
-    // Spawn the connection handler in a separate task
-    tokio::spawn(async move {
-        if let Err(e) = connection.await {
-            eprintln!("[PubSub] ⚠️  Connection error: {}", e);
-        }
-    });
-
-    // Issue LISTEN on the channel to keep it active (connection kept alive for notifications)
-    _client
-        .execute(&format!("LISTEN {}", LISTEN_CHANNEL), &[])
-        .await
-        .map_err(|e| format!("LISTEN failed: {}", e))?;
-
-    eprintln!(
-        "[PubSub] ✅ LISTEN active on '{}', waiting for notifications...",
-        LISTEN_CHANNEL
-    );
-
-    // Use polling since true LISTEN/NOTIFY stream handling is complex in tokio-postgres
-    // We'll poll for events periodically while keeping the connection alive
-    // Start from the newest event that already exists, not from zero.
-    //
-    // The cursor is now a real `id > ?` bound, so a zero start would replay
-    // the entire world_events table to every connected client on boot. The
-    // previous "newest ten, skip duplicates" shape hid this: it could never
-    // reach backwards past ten rows. A listener is for what happens next;
-    // history is what the delta sync is for.
-    //
-    // The high-water mark is waited for, not guessed at.
-    //
-    // This used to be `unwrap_or(i64::MAX)`, with a comment saying a failure
-    // "starts from nothing yet and the first genuinely new event moves the
-    // cursor forward". That is not what `i64::MAX` does. No row can ever
-    // satisfy `id > i64::MAX`, so a single failed query at boot — a pool not
-    // yet warm, a database still starting — left this task polling forever
-    // and delivering **nothing, ever**, while logging a cheerful
-    // "Streaming events after id=9223372036854775807" and looking healthy.
-    //
-    // Falling back to 0 is not the answer either: it would replay the entire
-    // `world_events` table to every client. Both guesses are wrong, so this
-    // does not guess. The database being unavailable at startup is a
-    // transient condition and the honest response is to wait for it.
-    let mut last_event_id: i64 = loop {
-        // `None` is the failure case; an empty table answers `Some(0)`.
-        match current_max_event_id(pool) {
-            Some(id) => break id,
-            None => {
+            // A poll every 100ms is ~100 per interval. Zero does not mean
+            // "quiet", it means the delivery loop has stopped running — the
+            // whole backplane down while HTTP keeps answering and the process
+            // keeps looking healthy. Separating that from "nothing was
+            // written" once took attaching to a frozen process; now it is a
+            // line in the log.
+            if poll_delta == 0 {
                 eprintln!(
-                    "[PubSub] ⚠️  Cannot read the event high-water mark; retrying in 1s. \
-                     No events will be delivered until this succeeds."
+                    "[PubSub] 🛑 NO POLLS COMPLETED in the last {}s — real-time delivery is \
+                     STOPPED (cursor stuck at {}). Events are still being written and are still \
+                     durable; nothing will reach clients live until this recovers.",
+                    METRICS_LOG_INTERVAL_SECS, cursor
                 );
-                sleep(Duration::from_secs(1)).await;
             }
+
+            last_sent = sent;
+            last_dropped = dropped;
+            last_polls = polls;
         }
-    };
-    eprintln!("[PubSub] 📍 Streaming events after id={}", last_event_id);
-    let mut last_log_time = Instant::now();
-
-    // Ids already broadcast but not yet passed by the cursor.
-    //
-    // The cursor deliberately lags behind delivery (see `settled_cursor`), so
-    // each poll re-reads rows it has already sent. This is what stops them
-    // being sent twice. Bounded by the number of events inside one
-    // `COMMIT_GRACE` window and pruned every pass.
-    let mut delivered: std::collections::BTreeSet<i64> = std::collections::BTreeSet::new();
-
-    loop {
-        // Poll for new events every 100ms
-        match poll_new_events_with_conn(pool, last_event_id) {
-            Ok(events) => {
-                // The cursor advances only past rows old enough that nothing
-                // older can still be uncommitted — never simply to the last id
-                // seen, which is what used to lose an out-of-order commit.
-                let stamps: Vec<RowStamp> = events
-                    .iter()
-                    .map(|e| RowStamp {
-                        id: e.id,
-                        created_at: e.created_at,
-                    })
-                    .collect();
-                let settled =
-                    settled_cursor(&stamps, last_event_id, chrono::Utc::now().naive_utc());
-
-                for event in events {
-                    // Broadcast on first sight, whatever the cursor is doing.
-                    // Waiting for the row to settle would put `COMMIT_GRACE`
-                    // on every event's latency for a race that affects almost
-                    // none of them.
-                    if !delivered.insert(event.id) {
-                        continue;
-                    }
-
-                    let world_id = event.world_id;
-                    let event_id = event.id;
-                    let event_code = event.event_code;
-
-                    // To that world's subscribers, and to nobody else. This
-                    // used to be one `send` on a process-wide channel that
-                    // woke every connected client in the system and let each
-                    // of them decide the event was not theirs.
-                    let count = router.publish(world_id, event);
-                    metrics.events_sent.fetch_add(1, Ordering::Relaxed);
-
-                    if count == 0 {
-                        // Nobody has this world open. The ordinary case on a
-                        // busy server, and not a failure: the row is already
-                        // durable, and this is the live nudge, not the record.
-                        metrics.events_dropped.fetch_add(1, Ordering::Relaxed);
-                    }
-
-                    let now = Instant::now();
-                    if now.duration_since(last_log_time) > Duration::from_secs(10) {
-                        eprintln!(
-                            "[PubSub] 📢 Event id={event_id} code={event_code} world={world_id} \
-                             → {count} subscriber(s); {} world(s) currently routed",
-                            router.active_worlds()
-                        );
-                        last_log_time = now;
-                    }
-                }
-
-                // Only now, and only as far as the settled rule allows.
-                last_event_id = settled;
-                // Anything the cursor has passed can never come back in a
-                // future poll, so remembering it serves no purpose.
-                delivered = delivered.split_off(&(last_event_id + 1));
-
-                // Channels for worlds everyone has left. Cheap (one scan of a
-                // map sized by *open* worlds) and only worth doing when we
-                // were awake anyway.
-                let reaped = router.reap();
-                if reaped > 0 {
-                    eprintln!("[PubSub] 🧹 Released {reaped} idle world channel(s)");
-                }
-            }
-            Err(e) => {
-                eprintln!("[PubSub] ⚠️  Poll error: {}", e);
-                // Don't break on poll errors - continue retrying
-            }
-        }
-
-        // Short poll interval
-        sleep(Duration::from_millis(100)).await;
-    }
+    });
 }
 
 /// The highest event id currently recorded, or `None` if that cannot be read.
@@ -368,14 +324,7 @@ pub fn spawn_presence_listener_task(_broadcast_tx: broadcast::Sender<serde_json:
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_constants() {
-        assert_eq!(LISTEN_CHANNEL, "world_events_channel");
-        assert_eq!(RECONNECT_DELAY_MS, 1000);
-        assert_eq!(RECONNECT_MAX_DELAY_MS, 30000);
-        const { assert!(BROADCAST_BUFFER_SIZE > 1000) };
-    }
+    use thunderforge_pg_sockets::Relay;
 
     /// An event that takes a lower id but commits later must still be
     /// delivered.
@@ -430,35 +379,23 @@ mod tests {
         // One turn of the listener's loop, exactly as `run_listen_loop` does
         // it: poll, deliver everything seen, then advance the cursor only as
         // far as `settled_cursor` permits.
-        let mut cursor = start;
+        let mut relay = Relay::new(start);
         let mut delivered: Vec<(i64, i32)> = Vec::new();
-        let mut seen_ids = std::collections::BTreeSet::new();
-        let mut turn = |cursor: &mut i64,
-                        delivered: &mut Vec<(i64, i32)>,
-                        seen: &mut std::collections::BTreeSet<i64>| {
-            let events = poll_new_events_with_conn(&state.db_pool, *cursor).unwrap();
-            let stamps: Vec<RowStamp> = events
-                .iter()
-                .map(|e| RowStamp {
-                    id: e.id,
-                    created_at: e.created_at,
-                })
-                .collect();
-            let settled = settled_cursor(&stamps, *cursor, chrono::Utc::now().naive_utc());
-            for event in &events {
-                if seen.insert(event.id) && event.world_id == world_id {
+        let turn = |relay: &mut Relay, delivered: &mut Vec<(i64, i32)>| {
+            let events = poll_new_events_with_conn(&state.db_pool, relay.cursor()).unwrap();
+            for event in relay.absorb(events, chrono::Utc::now().naive_utc()) {
+                if event.world_id == world_id {
                     delivered.push((event.id, event.event_code));
                 }
             }
-            *cursor = settled;
         };
 
-        turn(&mut cursor, &mut delivered, &mut seen_ids);
+        turn(&mut relay, &mut delivered);
 
         // A commits late, with the lower id.
         a.batch_execute("COMMIT").unwrap();
 
-        turn(&mut cursor, &mut delivered, &mut seen_ids);
+        turn(&mut relay, &mut delivered);
 
         let codes: Vec<i32> = delivered.iter().map(|(_, code)| *code).collect();
         assert!(
@@ -477,63 +414,5 @@ mod tests {
             "a lagging cursor re-reads rows it has already sent, so each must \
              still be delivered exactly once; saw {codes:?}"
         );
-    }
-
-    #[test]
-    fn test_exponential_backoff() {
-        let mut delay = RECONNECT_DELAY_MS;
-        assert_eq!(delay, 1000);
-
-        delay = (delay * 2).min(RECONNECT_MAX_DELAY_MS);
-        assert_eq!(delay, 2000);
-
-        delay = (delay * 2).min(RECONNECT_MAX_DELAY_MS);
-        assert_eq!(delay, 4000);
-
-        // Keep increasing until we hit max
-        for _ in 0..20 {
-            delay = (delay * 2).min(RECONNECT_MAX_DELAY_MS);
-        }
-        assert_eq!(delay, RECONNECT_MAX_DELAY_MS);
-    }
-
-    #[test]
-    fn test_backpressure_thresholds() {
-        // Warning threshold at 80% (8000/10000)
-        assert_eq!(BACKPRESSURE_WARNING_THRESHOLD, 8000);
-        // Critical threshold at 95% (9500/10000)
-        assert_eq!(BACKPRESSURE_CRITICAL_THRESHOLD, 9500);
-        // Warning should be less than critical
-        const { assert!(BACKPRESSURE_WARNING_THRESHOLD < BACKPRESSURE_CRITICAL_THRESHOLD) };
-        // Both should be less than buffer size
-        const { assert!(BACKPRESSURE_CRITICAL_THRESHOLD < BROADCAST_BUFFER_SIZE) };
-    }
-
-    #[test]
-    fn test_metrics_creation() {
-        let metrics = BroadcastMetrics {
-            events_sent: Arc::new(AtomicU64::new(0)),
-            events_dropped: Arc::new(AtomicU64::new(0)),
-            subscriber_lagged_count: Arc::new(AtomicU64::new(0)),
-        };
-
-        assert_eq!(metrics.events_sent.load(Ordering::Relaxed), 0);
-        assert_eq!(metrics.events_dropped.load(Ordering::Relaxed), 0);
-        assert_eq!(metrics.subscriber_lagged_count.load(Ordering::Relaxed), 0);
-    }
-
-    #[test]
-    fn test_metrics_increment() {
-        let metrics = BroadcastMetrics {
-            events_sent: Arc::new(AtomicU64::new(0)),
-            events_dropped: Arc::new(AtomicU64::new(0)),
-            subscriber_lagged_count: Arc::new(AtomicU64::new(0)),
-        };
-
-        metrics.events_sent.fetch_add(1, Ordering::Relaxed);
-        assert_eq!(metrics.events_sent.load(Ordering::Relaxed), 1);
-
-        metrics.events_sent.fetch_add(5, Ordering::Relaxed);
-        assert_eq!(metrics.events_sent.load(Ordering::Relaxed), 6);
     }
 }

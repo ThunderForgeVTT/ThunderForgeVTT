@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-08-29T06:12:35.616Z",
+  "generatedAt": "2026-08-29T19:31:17.193Z",
   "generatedBy": "node scripts/marketing-metrics.mjs 25",
-  "passed": false,
+  "passed": true,
   "tier": 25,
-  "durationSeconds": 615,
+  "durationSeconds": 220,
   "host": {
     "cpuCores": 32,
     "totalMemGiB": 31.3,
@@ -12,9 +12,9 @@
   "scenarios": [
     {
       "tier": 25,
-      "project": "tf-torture-862247dc",
-      "pg": 55364,
-      "rustfs": 59364
+      "project": "tf-torture-a71d15e8",
+      "pg": 55024,
+      "rustfs": 59024
     },
     {
       "players": 8,
@@ -28,40 +28,48 @@
     {
       "churn": "25x6",
       "messages": 12,
-      "starved": 5,
-      "canaryHeard": "0/5",
+      "starved": 0,
+      "canaryHeard": "5/5",
       "readyz": 200,
       "errors": 0
+    },
+    {
+      "tier": 25,
+      "expected": 3,
+      "starved": 0,
+      "partial": 0,
+      "full": 25,
+      "errors": 0,
+      "distribution": "{\"3\":25}"
     },
     {
       "tables": 5,
       "people": 30,
       "expected": 3,
-      "shortfall": 30,
+      "shortfall": 0,
       "leaked": 0
     },
     {
       "writers": 25,
       "writes": 75,
-      "delivered": 0,
+      "delivered": 75,
       "duplicates": 0,
       "errors": 0
     },
     {
-      "tier": 25,
-      "--config": "playwright.torture.config.ts"
+      "tier": 25
     }
   ],
   "containers": [
     {
       "role": "postgres",
-      "peakCpuPercent": 11.94,
-      "peakMemMiB": 146.8
+      "peakCpuPercent": 9.94,
+      "peakMemMiB": 176.1
     },
     {
       "role": "object-store",
-      "peakCpuPercent": 1.38,
-      "peakMemMiB": 89.7
+      "peakCpuPercent": 0.09,
+      "peakMemMiB": 90.5
     }
   ],
   "containerScope": "postgres and object store only; the backend runs on the host under cargo run and is not included",

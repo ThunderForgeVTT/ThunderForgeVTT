@@ -63,6 +63,7 @@ pub fn test_app_state() -> AppState {
         directories: Directories::from(std::env::temp_dir().to_str().unwrap().to_string()),
         world_events: std::sync::Arc::new(thunderforge_pg_sockets::WorldRouter::new()),
         presence_sender,
+        presence: std::sync::Arc::new(thunderforge_presence::PresenceRegistry::new()),
         key: Key::generate(),
         db_pool,
         system_hooks: std::sync::Arc::new(tokio::sync::RwLock::new(

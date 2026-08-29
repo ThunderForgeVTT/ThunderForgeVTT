@@ -23,6 +23,15 @@ pub struct AppState {
     /// router delivers to one world's subscribers and nobody else.
     pub world_events: SharedWorldRouter<WorldEvent>,
     pub presence_sender: Sender<serde_json::Value>, // Phase 4.9.B.3: Presence changes
+    /// Who is at each table right now.
+    ///
+    /// In memory rather than in Postgres. Every connected client beats every
+    /// five seconds, and writing that to a table meant ~1,200 writes per
+    /// second at a thousand tables — six times what play itself generates, all
+    /// of it describing a fact that is worthless one beat later. See
+    /// `thunderforge_presence` for why in-memory is also the more correct
+    /// answer rather than merely the cheaper one.
+    pub presence: std::sync::Arc<thunderforge_presence::PresenceRegistry>,
     pub key: Key,
     pub db_pool: DbPool,
     pub system_hooks: std::sync::Arc<tokio::sync::RwLock<SystemHookRegistry>>,

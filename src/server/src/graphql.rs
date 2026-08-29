@@ -2305,43 +2305,110 @@ impl AdminMutation {
     }
 }
 
-/// Helper function to query current online players for a world (Phase 4.9.B.3)
-#[allow(dead_code)] // no resolver wires presence querying to this yet
-async fn query_players_online(
-    pool: &crate::state::DbPool,
-    world_id: uuid::Uuid,
-) -> Result<Vec<GraphQLPlayerPresence>, String> {
-    let mut conn = pool.get().map_err(|e| format!("Pool error: {}", e))?;
+/// Counters for the subscription hot path, kept instead of a log line per
+/// event.
+///
+/// # Why this is not just tidiness
+///
+/// `eprintln!` takes a lock and issues a **blocking** `write(2)`. When stderr
+/// is a pipe — which it is in every container, every CI harness and every
+/// `cargo run | tee` — a consumer that stops reading for a moment fills the
+/// 64KiB pipe buffer, and every one of those writes then blocks the thread it
+/// is on until the reader comes back. These writes were happening on the
+/// tokio worker threads that carry the subscriptions themselves, once per
+/// event **per subscriber**, so a single slow log reader could stall the
+/// whole fan-out at once.
+///
+/// That is not hypothetical: it is the mechanism behind the torture suite's
+/// worst run. `scripts/marketing-metrics.mjs` reads the run's output through
+/// a pipe and blocked its own event loop on a synchronous `docker stats`
+/// every two seconds. With one line per event per subscriber the pipe filled,
+/// the server's subscription tasks blocked in `write`, and 11 of 25
+/// subscribers received nothing at all — with no panic, no error and no
+/// timeout anywhere, because nothing was broken, only stopped. The identical
+/// tier run through a file instead of that pipe passed 5/5.
+///
+/// So the hot path counts and the periodic reporter in
+/// `network::listener` prints the totals once every ten seconds. Bounded log
+/// volume is the property that matters here, not brevity: a diagnostic that
+/// can stop delivery is worse than no diagnostic.
+pub mod subscription_metrics {
+    use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 
-    let players = tokio::task::spawn_blocking(move || {
-        use crate::schema::players_online;
-        use diesel::prelude::*;
+    /// Events handed to a subscriber's socket.
+    pub static DELIVERED: AtomicU64 = AtomicU64::new(0);
+    /// Subscriptions established.
+    pub static OPENED: AtomicU64 = AtomicU64::new(0);
+    /// Subscriptions refused (no app state, bad id, not a member).
+    pub static REFUSED: AtomicU64 = AtomicU64::new(0);
+    /// Events a subscriber lost by falling behind the broadcast buffer.
+    pub static LAGGED_EVENTS: AtomicU64 = AtomicU64::new(0);
+    /// WebSocket connections currently being served.
+    ///
+    /// Live rather than cumulative on purpose. "How many sockets are attached
+    /// right now" is the number that separates *the server stopped sending*
+    /// from *the clients went away*, and telling those two apart is what the
+    /// worst delivery investigation in this repository spent its time on.
+    pub static SOCKETS_OPEN: AtomicI64 = AtomicI64::new(0);
 
-        players_online::table
-            .filter(players_online::world_id.eq(world_id))
-            .select((
-                players_online::player_id,
-                players_online::world_id,
-                players_online::scene_id,
-                players_online::idle_duration_secs,
-            ))
-            .load::<(uuid::Uuid, uuid::Uuid, Option<uuid::Uuid>, i32)>(&mut conn)
-    })
-    .await
-    .map_err(|e| format!("Task error: {}", e))?
-    .map_err(|e| format!("Query error: {}", e))?;
+    static SINCE: std::sync::LazyLock<std::time::Instant> =
+        std::sync::LazyLock::new(std::time::Instant::now);
+    static LAST_LAG_LOG_MS: AtomicU64 = AtomicU64::new(0);
 
-    Ok(players
-        .into_iter()
-        .map(
-            |(player_id, world_id, scene_id, idle_secs)| GraphQLPlayerPresence {
-                player_id,
-                world_id,
-                scene_id,
-                idle_duration_secs: idle_secs,
-            },
+    /// Whether to print a lag line now, at most one every ten seconds.
+    ///
+    /// Lag is worth a sentence in the log — it means a client's view of the
+    /// world is wrong — but it is not worth one per event: a subscriber that
+    /// has wedged lags on *every* subsequent event, which is exactly the
+    /// runaway volume this module exists to prevent. The count in the
+    /// periodic report is the complete number; the line is there so somebody
+    /// grepping finds it at all.
+    pub fn should_log_lag() -> bool {
+        let now = SINCE.elapsed().as_millis() as u64;
+        let last = LAST_LAG_LOG_MS.load(Ordering::Relaxed);
+        if last != 0 && now.saturating_sub(last) < 10_000 {
+            return false;
+        }
+        LAST_LAG_LOG_MS
+            .compare_exchange(last, now.max(1), Ordering::Relaxed, Ordering::Relaxed)
+            .is_ok()
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        /// The cap has to hold for a subscriber that lags on every event.
+        ///
+        /// This is the shape that made the unrate-limited version dangerous:
+        /// a wedged client does not lag once, it lags on everything that
+        /// arrives afterwards, so "one line per lag" is one blocking write to
+        /// stderr per event for as long as it stays wedged — the same runaway
+        /// volume, arriving by a different door.
+        #[test]
+        fn the_lag_line_is_capped_however_many_times_lag_is_reported() {
+            // The first report is always worth printing; the flood behind it
+            // is not.
+            assert!(should_log_lag(), "the first lag must be findable");
+            let printed = (0..10_000).filter(|_| should_log_lag()).count();
+            assert_eq!(
+                printed, 0,
+                "ten thousand further lag reports inside the window must \
+                 print nothing; {printed} got through",
+            );
+        }
+    }
+
+    /// `(sockets_open, opened, refused, delivered, lagged_events)`.
+    pub fn snapshot() -> (i64, u64, u64, u64, u64) {
+        (
+            SOCKETS_OPEN.load(Ordering::Relaxed),
+            OPENED.load(Ordering::Relaxed),
+            REFUSED.load(Ordering::Relaxed),
+            DELIVERED.load(Ordering::Relaxed),
+            LAGGED_EVENTS.load(Ordering::Relaxed),
         )
-        .collect())
+    }
 }
 
 #[derive(Default)]
@@ -2441,10 +2508,20 @@ impl SubscriptionRoot {
             }
         };
 
-        eprintln!(
-            "[GraphQL Subscription] 🎮 New subscription for world_id={}, error={}",
-            world_id, has_error
-        );
+        // Counted, not logged. A subscription storm is 25 of these inside a
+        // second, and the churn test opens 155 — see `subscription_metrics`
+        // for why a line each is a way to stop delivery rather than a way to
+        // observe it. The refusal keeps its line: it is rare, and it is the
+        // one that someone has to be able to find.
+        if has_error {
+            subscription_metrics::REFUSED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            eprintln!(
+                "[GraphQL Subscription] 🚫 Refused a subscription to world_id={world_id}: \
+                 {error_msg}"
+            );
+        } else {
+            subscription_metrics::OPENED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
 
         // Create a combined stream that works for both cases
         // Return type is Pin<Box<dyn Stream>> for type erasure
@@ -2465,10 +2542,13 @@ impl SubscriptionRoot {
                             // per-subscriber half of a fan-out that woke every
                             // client in the process for every event and had
                             // each of them throw away what was not theirs.
-                            eprintln!(
-                                "[GraphQL Subscription] 📤 Sending event id={} to client",
-                                event.id
-                            );
+                            //
+                            // Counted rather than logged: this runs once per
+                            // event per subscriber, and `eprintln!` here is a
+                            // blocking write on the task that carries the
+                            // subscription. See `subscription_metrics`.
+                            subscription_metrics::DELIVERED
+                                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                             Some(Ok(GraphQLWorldEvent::from(event)))
                         }
                         // The only error `BroadcastStream` yields is
@@ -2489,12 +2569,24 @@ impl SubscriptionRoot {
                         // The client's recovery is the world sync it performs
                         // on open; there is no resync signal on this wire yet,
                         // which is precisely why the log has to be findable.
+                        //
+                        // Every one of them is counted; the line itself is
+                        // capped at one every ten seconds, because a wedged
+                        // subscriber lags on every event after the first and
+                        // an uncapped line here is a way to stall the very
+                        // fan-out it is reporting on.
                         Err(BroadcastStreamRecvError::Lagged(missed)) => {
-                            eprintln!(
-                                "[GraphQL Subscription] ⚠️  DROPPED {missed} event(s) for a \
-                                 subscriber of world {world_uuid}: it fell behind the broadcast \
-                                 buffer. Those events will never be delivered to it."
-                            );
+                            subscription_metrics::LAGGED_EVENTS
+                                .fetch_add(missed, std::sync::atomic::Ordering::Relaxed);
+                            if subscription_metrics::should_log_lag() {
+                                eprintln!(
+                                    "[GraphQL Subscription] ⚠️  DROPPED {missed} event(s) for a \
+                                     subscriber of world {world_uuid}: it fell behind the \
+                                     broadcast buffer. Those events will never be delivered to \
+                                     it. (Further lag lines are suppressed for 10s; the running \
+                                     total is in the [PubSub] metrics line.)"
+                                );
+                            }
                             None
                         }
                     }
@@ -2557,10 +2649,17 @@ impl SubscriptionRoot {
             (Some(app_state), Some(_)) => (false, "", Some(app_state.presence_sender.subscribe())),
         };
 
-        eprintln!(
-            "[GraphQL Subscription] 🎮 New presence subscription for world_id={}, error={}",
-            world_id, has_error
-        );
+        // Same reasoning as `world_events_created`: counted, not logged, and
+        // only the refusal is worth a line. See `subscription_metrics`.
+        if has_error {
+            subscription_metrics::REFUSED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            eprintln!(
+                "[GraphQL Subscription] 🚫 Refused a presence subscription to \
+                 world_id={world_id}: {error_msg}"
+            );
+        } else {
+            subscription_metrics::OPENED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
 
         if let (Some(rx), Some(world_id_uuid)) = (rx_opt, world_uuid) {
             // Success case: emit presence notifications
@@ -2570,8 +2669,16 @@ impl SubscriptionRoot {
                 tokio_stream::wrappers::BroadcastStream::new(rx).filter_map(move |result| {
                     match result {
                         Ok(_presence_event) => {
-                            eprintln!("[GraphQL Subscription] 📤 Presence updated");
-                            // For now, return an empty list (real implementation would query DB)
+                            subscription_metrics::DELIVERED
+                                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            // Still a stub. When this is wired up, read it
+                            // from `AppState::presence` — presence lives in
+                            // memory now, and the `players_online` table is
+                            // no longer written on each heartbeat. A helper
+                            // that queried that table used to sit below this
+                            // file, marked `#[allow(dead_code)]` and waiting
+                            // for a resolver; it was removed rather than left
+                            // pointing at a table nothing fills.
                             Some(Ok(GraphQLPlayersOnlineList {
                                 world_id: world_id_uuid,
                                 players: vec![],
@@ -2585,10 +2692,15 @@ impl SubscriptionRoot {
                         // is still the difference between "a blip" and "this
                         // client is minutes stale".
                         Err(BroadcastStreamRecvError::Lagged(missed)) => {
-                            eprintln!(
-                                "[GraphQL Subscription] ⚠️  DROPPED {missed} presence update(s) \
-                                 for a subscriber: it fell behind the broadcast buffer."
-                            );
+                            subscription_metrics::LAGGED_EVENTS
+                                .fetch_add(missed, std::sync::atomic::Ordering::Relaxed);
+                            if subscription_metrics::should_log_lag() {
+                                eprintln!(
+                                    "[GraphQL Subscription] ⚠️  DROPPED {missed} presence \
+                                     update(s) for a subscriber: it fell behind the broadcast \
+                                     buffer."
+                                );
+                            }
                             None
                         }
                     }

@@ -34,7 +34,7 @@
  * mistake as the bundle figure, made deliberately.
  */
 
-import { spawn, execFileSync } from "node:child_process";
+import { spawn, execFile } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
@@ -43,10 +43,25 @@ import path from "node:path";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const tier = process.argv[2] ?? "25";
 
-/** One `docker stats` reading for the containers this run created. */
+/** One `docker stats` reading for the containers this run created.
+ *
+ * Asynchronous, and that is not a style choice.
+ *
+ * This was `execFileSync`, on a 2s interval, in the same process that drains
+ * the run's stdout and stderr through a pipe. `docker stats --no-stream`
+ * takes the better part of a second, and for every one of those seconds this
+ * event loop did not read the pipe. A pipe holds 64KiB; the server on the
+ * other end writes to it with a blocking `write(2)`, so once it filled, the
+ * server's own threads stopped — inside the tasks carrying live subscriptions.
+ *
+ * The measurement was destroying the thing it measured, and doing it
+ * invisibly: the same tier run without this wrapper passed 5/5 in 3 minutes,
+ * and through it lost 11 of 25 subscribers and took 9.5. A load harness that
+ * perturbs the load is worse than no harness, because its numbers look real.
+ */
 function sampleContainers() {
-  try {
-    const out = execFileSync(
+  return new Promise((resolve) => {
+    execFile(
       "docker",
       [
         "stats",
@@ -55,25 +70,29 @@ function sampleContainers() {
         "{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}",
       ],
       { encoding: "utf8" },
+      (error, out) => {
+        if (error) {
+          // Docker not answering is not a reason to lose the run's own results.
+          resolve([]);
+          return;
+        }
+        const rows = [];
+        for (const line of out.split("\n")) {
+          const [name, cpu, mem] = line.split("\t");
+          // Only this harness's own containers. The dev stack's Postgres has the
+          // same image and a very similar name, and folding it in would report a
+          // number nobody could reproduce.
+          if (!name?.startsWith("tf-torture-")) continue;
+          rows.push({
+            name,
+            cpuPercent: Number.parseFloat(cpu),
+            memMiB: Number.parseFloat(mem),
+          });
+        }
+        resolve(rows);
+      },
     );
-    const rows = [];
-    for (const line of out.split("\n")) {
-      const [name, cpu, mem] = line.split("\t");
-      // Only this harness's own containers. The dev stack's Postgres has the
-      // same image and a very similar name, and folding it in would report a
-      // number nobody could reproduce.
-      if (!name?.startsWith("tf-torture-")) continue;
-      rows.push({
-        name,
-        cpuPercent: Number.parseFloat(cpu),
-        memMiB: Number.parseFloat(mem),
-      });
-    }
-    return rows;
-  } catch {
-    // Docker not answering is not a reason to lose the run's own results.
-    return [];
-  }
+  });
 }
 
 const peakByContainer = new Map();
@@ -117,25 +136,39 @@ const child = spawn("node", [path.join(ROOT, "scripts", "torture.mjs"), tier], {
   stdio: ["ignore", "pipe", "pipe"],
 });
 
-let output = "";
+// Collected in pieces rather than one growing string: `output += chunk` is
+// a fresh copy of everything so far on every chunk, and a tier-100 run emits
+// enough of them for that to become the reason the pipe is not being read.
+const output = [];
 child.stdout.on("data", (chunk) => {
   const text = String(chunk);
-  output += text;
+  output.push(text);
   process.stdout.write(text);
 });
 child.stderr.on("data", (chunk) => {
   const text = String(chunk);
-  output += text;
+  output.push(text);
   process.stderr.write(text);
 });
 
-const sampler = setInterval(() => recordPeaks(sampleContainers()), 2_000);
+// One sample in flight at a time. Overlapping `docker stats` calls would
+// queue up behind each other and turn a sampler into a second workload.
+let sampling = false;
+const sampler = setInterval(() => {
+  if (sampling) return;
+  sampling = true;
+  sampleContainers()
+    .then(recordPeaks)
+    .finally(() => {
+      sampling = false;
+    });
+}, 2_000);
 
 child.on("exit", (code) => {
   clearInterval(sampler);
   const finished = new Date();
 
-  const scenarios = parseScenarios(output);
+  const scenarios = parseScenarios(output.join(""));
   const containers = [...peakByContainer.entries()].map(([name, peak]) => ({
     // The random run id makes the raw name useless for comparing two runs.
     role: name.includes("postgres") ? "postgres" : "object-store",

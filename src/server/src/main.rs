@@ -113,6 +113,14 @@ async fn graphql_ws_handler(
 ) -> Response {
     ws.protocols(ALL_WEBSOCKET_PROTOCOLS)
         .on_upgrade(move |socket| async move {
+            // Counted, never logged per connection: a reconnect storm is
+            // hundreds of these in a second, and the point of the number is
+            // to say how many sockets are attached *now* — which is what
+            // separates "the server stopped sending" from "the clients went
+            // away". It is reported with the delivery counters every 10s.
+            use crate::graphql::subscription_metrics::SOCKETS_OPEN;
+            use std::sync::atomic::Ordering;
+            SOCKETS_OPEN.fetch_add(1, Ordering::Relaxed);
             GraphQLWebSocket::new(socket, schema, protocol)
                 .on_connection_init(move |_value| {
                     let auth_user = auth_user.clone();
@@ -124,6 +132,7 @@ async fn graphql_ws_handler(
                 })
                 .serve()
                 .await;
+            SOCKETS_OPEN.fetch_sub(1, Ordering::Relaxed);
         })
 }
 
@@ -355,14 +364,46 @@ async fn main() {
     let world_events: thunderforge_pg_sockets::SharedWorldRouter<_> =
         std::sync::Arc::new(thunderforge_pg_sockets::WorldRouter::new());
     let (presence_sender, _) = broadcast::channel(10000); // Phase 4.9.B.3: Presence changes
+    let presence = std::sync::Arc::new(thunderforge_presence::PresenceRegistry::new());
 
     let key = Key::from(&general_purpose::STANDARD.decode(&config.secret).unwrap());
 
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env");
     let manager = ConnectionManager::<PgConnection>::new(database_url);
+
+    // Sized on purpose, because the default is a number nobody chose.
+    //
+    // This used to be a bare `Pool::builder().build(manager)`, which takes
+    // r2d2's `max_size` of **10** — a figure unrelated to this workload,
+    // where nearly every database access runs inside `spawn_blocking` and
+    // holds a connection for its duration, and a single busy world can put a
+    // hundred of those in flight at once.
+    //
+    // The rules live in `thunderforge_pg::pool` so they can be tested as
+    // rules; this is only the wiring.
+    let sizing = thunderforge_pg::pool_sizing_from_env();
+
     let db_pool = Pool::builder()
+        .max_size(sizing.max_size)
+        // A few connections kept warm so early requests do not each pay for a
+        // handshake. Left unset, r2d2 instead opens `max_size` connections
+        // eagerly at startup — a surprising number of Postgres backends for a
+        // process that may be about to idle.
+        .min_idle(Some(sizing.min_idle))
+        // Fail in seconds rather than the default half-minute: a request that
+        // cannot get a connection is already in trouble, and making it wait
+        // 30s turns a small capacity problem into a timeout cascade whose
+        // cause has long since scrolled away.
+        .connection_timeout(std::time::Duration::from_secs(
+            sizing.connection_timeout_secs,
+        ))
         .build(manager)
         .expect("Failed to create DB pool.");
+
+    eprintln!(
+        "[Server] 🗄️  Database pool: max_size={} min_idle={} connection_timeout={}s",
+        sizing.max_size, sizing.min_idle, sizing.connection_timeout_secs
+    );
 
     // Spec 024, ADR-047: which `SessionAdjudicator` to use, read once at
     // startup — mirrors the `DATABASE_URL` fail-fast-at-boot convention
@@ -374,6 +415,7 @@ async fn main() {
         directories: directories.clone(),
         world_events: world_events.clone(),
         presence_sender: presence_sender.clone(),
+        presence: presence.clone(),
         key,
         db_pool: db_pool.clone(),
         system_hooks: std::sync::Arc::new(tokio::sync::RwLock::new(
@@ -393,6 +435,26 @@ async fn main() {
     // Spawn the PostgreSQL LISTEN background task
     eprintln!("[Server] 🚀 Starting PostgreSQL LISTEN background task");
     network::spawn_listen_task(db_pool.clone(), world_events);
+
+    // Drop presence for worlds everyone has left.
+    //
+    // `in_world` prunes people whenever somebody asks about a world, but a
+    // world nobody asks about again would hold its map forever. Own task, own
+    // schedule, deliberately far off any hot path: this walks every shard, and
+    // the event router established at some cost that an all-shards scan does
+    // not belong on the delivery path.
+    {
+        let presence = presence.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+                let dropped = presence.sweep(std::time::Instant::now());
+                if dropped > 0 {
+                    eprintln!("[Presence] 🧹 Released {dropped} empty world(s)");
+                }
+            }
+        });
+    }
 
     // Spawn the presence listener task (Phase 4.9.B.3)
     eprintln!("[Server] 🚀 Starting presence listener task");
