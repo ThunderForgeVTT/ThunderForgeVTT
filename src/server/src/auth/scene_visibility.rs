@@ -130,8 +130,17 @@ pub fn asset_scene_visible(
 
     // A scene id matching no row answers `false` — the safe way to be wrong
     // about a dangling reference.
+    //
+    // The decision itself is `thunderforge_authz`, where the eight-row truth
+    // table lives; this function's job is to load the two facts it needs.
     Ok(match row {
-        Some((hidden, active)) => !hidden || active == Some(scene_id),
+        Some((hidden, active)) => thunderforge_authz::scene_visible(
+            is_dm,
+            thunderforge_authz::Scene {
+                hidden,
+                is_world_active_scene: active == Some(scene_id),
+            },
+        ),
         None => false,
     })
 }

@@ -212,7 +212,11 @@ fn authorized_current(
         WorldMembershipError::NotAMember => WorldSyncPlanError::Forbidden,
         WorldMembershipError::Database(msg) => WorldSyncPlanError::Database(msg),
     })?;
-    let is_dm = is_admin || role == "Owner" || role == "GM";
+    let is_dm = thunderforge_authz::Actor {
+        role: thunderforge_authz::Role::from_stored(&role),
+        is_site_admin: is_admin,
+    }
+    .runs_the_world();
 
     // Per-object visibility (T034, ADR-050), via the rule stated in
     // `auth::scene_visibility` — the same module the byte route now asks, so

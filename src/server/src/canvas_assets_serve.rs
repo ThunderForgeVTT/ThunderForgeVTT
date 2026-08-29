@@ -124,7 +124,11 @@ async fn serve_canvas_asset(
         // Both run on the one connection this task holds: the second question
         // is only ever asked of someone the first already admitted.
         let role = require_world_member(&mut conn, user_id, world_id)?;
-        let is_dm = is_admin || role == "Owner" || role == "GM";
+        let is_dm = thunderforge_authz::Actor {
+            role: thunderforge_authz::Role::from_stored(&role),
+            is_site_admin: is_admin,
+        }
+        .runs_the_world();
         let visible = asset_scene_visible(&mut conn, is_dm, scene_id)
             .map_err(|e| WorldMembershipError::Database(e.to_string()))?;
         Ok::<bool, WorldMembershipError>(visible)

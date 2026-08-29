@@ -155,7 +155,9 @@ pub async fn my_actor_claim_impl(
             return Ok(None);
         };
 
-        if member.role == "Owner" || member.role == "GM" {
+        if thunderforge_authz::Role::from_stored(&member.role)
+            .is_some_and(thunderforge_authz::Role::runs_the_world)
+        {
             return Ok(None);
         }
 
@@ -217,7 +219,9 @@ fn require_no_existing_claim(
         .first::<WorldMember>(conn)
         .map_err(|_| "You are not a member of this world".to_string())?;
 
-    if member.role == "Owner" || member.role == "GM" {
+    if thunderforge_authz::Role::from_stored(&member.role)
+        .is_some_and(thunderforge_authz::Role::runs_the_world)
+    {
         return Err("The GM does not claim characters".to_string());
     }
 

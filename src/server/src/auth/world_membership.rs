@@ -23,6 +23,8 @@ use uuid::Uuid;
 
 use async_graphql::{Error, Result as GraphQLResult};
 
+use thunderforge_authz::{Actor, Role};
+
 use crate::schema::{world_members, worlds};
 use crate::state::AppState;
 
@@ -90,6 +92,31 @@ pub fn require_world_member(
     }
 }
 
+/// Resolve who this caller is in this world, as a value the rules understand.
+///
+/// The bridge between the database and `thunderforge_authz`: this is the only
+/// place a stored role string is turned into a [`Role`], so a spelling the
+/// crate does not recognise becomes "no role" exactly once rather than at
+/// every call site that used to compare strings by hand.
+pub fn actor_in_world(
+    conn: &mut PgConnection,
+    user_id: uuid::Uuid,
+    is_admin: bool,
+    world_id: uuid::Uuid,
+) -> Actor {
+    if is_admin {
+        return Actor::site_admin();
+    }
+    match require_world_member(conn, user_id, world_id) {
+        Ok(stored) => Actor {
+            role: Role::from_stored(&stored),
+            is_site_admin: false,
+        },
+        // Not a member, or the lookup failed. Either way, nobody.
+        Err(_) => Actor::stranger(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -153,13 +180,12 @@ pub async fn is_owner_of_world(
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
-    tokio::task::spawn_blocking(
-        move || match require_world_member(&mut conn, user_id, world_id) {
-            Ok(role) => Ok(role == "Owner"),
-            // Fail closed. A caller we cannot resolve is not an owner.
-            Err(_) => Ok(false),
-        },
-    )
+    tokio::task::spawn_blocking(move || {
+        // Fail closed twice over: an unresolvable caller is not an owner, and
+        // a role string this build does not recognise resolves to no role at
+        // all rather than to a default one.
+        Ok(actor_in_world(&mut conn, user_id, is_admin, world_id).owns_the_world())
+    })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
 }
@@ -179,12 +205,9 @@ pub async fn is_dm_of_world(
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
-    tokio::task::spawn_blocking(
-        move || match require_world_member(&mut conn, user_id, world_id) {
-            Ok(role) => Ok(role == "Owner" || role == "GM"),
-            Err(_) => Ok(false),
-        },
-    )
+    tokio::task::spawn_blocking(move || {
+        Ok(actor_in_world(&mut conn, user_id, is_admin, world_id).runs_the_world())
+    })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
 }
@@ -297,10 +320,7 @@ pub fn is_dm_of_scene(
         return Ok(true);
     }
 
-    Ok(match require_world_member(conn, user_id, world_id) {
-        Ok(role) => role == "Owner" || role == "GM",
-        Err(_) => false,
-    })
+    Ok(actor_in_world(conn, user_id, is_admin, world_id).runs_the_world())
 }
 
 #[cfg(test)]
