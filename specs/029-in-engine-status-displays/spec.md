@@ -65,18 +65,31 @@ this specification treats "the numbers reach the screen" as the whole job.
   compiled into the engine, which is what a later theming feature needs — but
   no theming UI, no user-authored themes, and no per-world palette ships here.
 
-### Deferred questions
+### Resolved 2026-08-29
 
-These are recorded rather than answered, because guessing would put a wrong
-answer in the contract:
+Both questions previously deferred here have been answered by the product
+owner, and both answers made the model simpler rather than more complicated.
 
-- **What happens to a resource whose current value exceeds its maximum**
-  (temporary hit points, over-shielding)? Clamp, overflow visually, or a
-  second segment? Needs a ruleset author's opinion, not an engineer's.
-- **Should a Game Master be able to override a single token's display**
-  (e.g. hide the bar on a boss mid-fight for dramatic effect)? Desirable,
-  but it interacts with the visibility rules below and should be designed
-  with them rather than bolted on.
+**A resource is a list of entries, not a current-and-maximum pair.** The
+question "what does a value above its maximum mean" turned out to be the
+wrong question. Overflow is not a value exceeding a bound; it is a _second
+entry_. A boss with three stages is three entries. Temporary hit points or a
+shield are an entry stacked above the base one. Damage depletes the topmost
+entry first.
+
+This is worth stating plainly because of what it removes: with entries, a
+value can never exceed its maximum, so the ambiguity has no way to be
+expressed rather than being detected and handled. A resource that declares
+`allowStacking: false` has exactly one entry, and a value above that entry's
+maximum is then an unambiguous error rather than a judgement call about
+clamping.
+
+**The Game Master controls disclosure per token, across four states.** Not
+a visible/hidden pair: hiding a bar entirely tells a player something too
+("the GM is concealing this one"), and showing an exact figure often tells
+them too much. The four states are set out in FR-013a and give the GM a range
+between those extremes — and in every one of them the GM continues to see the
+true value.
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -158,6 +171,35 @@ any data reaching the client carries the exact figure.
 3. **Given** I select a token I may not inspect, **When** the panel would
    open, **Then** it shows what I am entitled to and says the rest is not
    available, rather than showing blanks.
+
+---
+
+### User Story 3a - Choosing what the table gets to know (Priority: P2)
+
+As a Game Master, I set how much each token discloses — exact, present-but-
+unknown, a percentage, or a quarter band — and I change it mid-encounter
+without stopping play.
+
+**Why this priority**: The disclosure rules are P1 because they must not leak;
+the _control_ over them is P2 because a sensible default (players see their
+own exactly, NPCs chunked) covers most tables without anyone touching it.
+
+**Independent Test**: Set a boss token to chunked. As a player, confirm only a
+quarter band is visible and no exact figure reaches the client. Change it to
+visible mid-session; the player's view updates without a reload.
+
+**Acceptance Scenarios**:
+
+1. **Given** a token set to greyed, **When** a player views it, **Then** they
+   see that the resource exists and no indication of its value.
+2. **Given** a token set to chunked, **When** its value crosses a quarter
+   boundary, **Then** the player's display changes; within a quarter, it does
+   not.
+3. **Given** I change a token's state mid-encounter, **When** the change
+   lands, **Then** every player's view updates live and mine continues to show
+   the true value throughout.
+4. **Given** two tokens of the same creature, **When** I set different states
+   on each, **Then** they disclose differently.
 
 ---
 
@@ -246,9 +288,12 @@ the engine, so that a later theming feature has something to configure.
 
 ### Edge Cases
 
-- **A value above its maximum.** Temporary hit points and shields are real;
-  see the deferred question. Until answered, the contract must not silently
-  clamp in a way that loses the distinction.
+- **A value above its maximum.** Made unexpressible by FR-002a rather than
+  handled: overflow is a further entry, so there is no state to clamp. A value
+  that still exceeds its entry's maximum is a defect to report, not a
+  presentation problem to solve.
+- **An entry list on a resource that forbids stacking.** Rejected outright
+  (FR-002b), because silently merging two pools loses which was temporary.
 - **A value below zero.** Dying is a state many systems track; a bar must not
   render as negative width.
 - **A resource the system stopped declaring** while tokens still carry a
@@ -280,6 +325,20 @@ the engine, so that a later theming feature has something to configure.
 - **FR-002**: Each declared resource MUST carry an identifier, a
   human-readable label, and a presentation kind of either _bar_ (has a
   maximum) or _counter_ (does not).
+- **FR-002a**: A resource MUST be modelled as an **ordered list of entries**,
+  each with its own current value and maximum, rather than as a single
+  current-and-maximum pair. One entry is the ordinary case; several express a
+  multi-stage boss bar, a shield over health, or any other layered pool.
+- **FR-002b**: A declaration MUST state whether the resource allows more than
+  one entry (`allowStacking`). A resource that does not MUST be rejected if a
+  second entry is supplied, rather than silently merging or dropping it.
+- **FR-002c**: Depletion MUST consume the topmost entry first, and an entry
+  reduced to zero MUST remain in the list rather than being removed — a boss
+  on its last stage should still read as a boss on its _last_ stage, which
+  requires the spent ones to still be visible.
+- **FR-002d**: Because overflow is a further entry, a current value MUST
+  never exceed its own entry's maximum. Any such value is an error to report,
+  not a state to render.
 - **FR-003**: A declaration MUST specify display order; the engine MUST NOT
   impose one.
 - **FR-004**: A token's displayed resources MUST be derived from the system's
@@ -312,6 +371,33 @@ the engine, so that a later theming feature has something to configure.
 
 - **FR-013**: Coarsening or withholding a value MUST happen on the server.
   The client MUST NOT receive an exact value it is not entitled to display.
+- **FR-013a**: A Game Master MUST be able to set, per token and per resource,
+  one of four disclosure states. The Game Master always sees the true value
+  regardless of which is set; these govern what everybody else sees:
+  - **Visible** — the exact current and maximum, as the GM sees it.
+  - **Greyed** — the bar's _presence_ is disclosed and its value is not. The
+    viewer learns that the token has this resource and nothing more. This is
+    the honest form of "hidden": removing the bar entirely also discloses
+    something, because a token conspicuously lacking a bar every other token
+    has is itself a signal.
+  - **Percentage** — a proportion, without the underlying figures. A viewer
+    learns the creature is at 40% and not that it has 400 hit points.
+  - **Chunked** — the proportion rounded to quarters. The coarsest disclosure
+    that still communicates "hurt" versus "nearly dead".
+- **FR-013b**: The server MUST send only what the state permits. Percentage
+  MUST arrive as a proportion with no maximum attached; chunked MUST arrive as
+  a quarter index, not as a percentage the client rounds. A client that never
+  receives the figure cannot leak it.
+- **FR-013c**: Percentage discloses more than it appears to and MUST be
+  documented as such where a GM chooses it. A viewer who knows the damage they
+  dealt can divide it by the percentage change and recover the maximum, and
+  from then on reads exact values. Chunked resists this because a quarter
+  index rarely moves on a single hit. This is not a reason to withhold the
+  option — a GM may well want a readable boss fight — but it is a reason the
+  interface must not present the four states as merely four appearances.
+- **FR-013d**: Disclosure state MUST be per token, not per actor: two tokens
+  of the same creature in one scene may legitimately differ, and the GM sets
+  it on the one in front of the players.
 - **FR-014**: A coarse disclosure MUST be visually distinct from an exact
   one.
 - **FR-015**: Disclosure decisions MUST use the existing world-role and
@@ -365,10 +451,13 @@ the engine, so that a later theming feature has something to configure.
 
 - **ResourceDefinition**: what a system declares — identifier, label,
   presentation kind, order. Owned by the game system package.
-- **ResourceValue**: a token's current figure for a resource, plus its
-  maximum where one applies, plus whether it is exact or coarsened.
-- **DisclosureLevel**: exact, coarse, or withheld — decided server-side per
-  viewer and per resource.
+- **ResourceEntry**: one layer of a resource — a current value and its own
+  maximum. Ordered; depletion consumes the topmost first.
+- **ResourceValue**: a token's ordered list of entries for one resource, plus
+  the disclosure state it was rendered under.
+- **DisclosureState**: visible, greyed, percentage, or chunked. Set by the
+  Game Master per token and per resource; applied server-side, so the client
+  receives only what the state permits.
 - **TokenStatusDisplay**: the resolved set of values the engine draws for one
   token.
 - **PanelPlacement**: the viewer's chosen corner, persisted per viewer.
@@ -390,6 +479,10 @@ the engine, so that a later theming feature has something to configure.
 - **SC-005**: A malformed display declaration fails at compile time in the
   application, and an incompatible one is rejected at runtime with a reported
   error.
+- **SC-005a**: For every disclosure state other than visible, the exact figure
+  is absent from the payload reaching a non-GM client — verified on the wire.
+  A token set to chunked yields a quarter index and no percentage; one set to
+  percentage yields no maximum.
 - **SC-006**: The engine's interactive token capacity with status displays
   enabled is measured and stated; any reduction from the documented baseline
   is a recorded number rather than an unknown.
