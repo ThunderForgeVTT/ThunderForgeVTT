@@ -16,7 +16,7 @@ import {
   type SizeCategoriesLookup,
 } from "../utils/sizeCategory";
 import { readString } from "../lib/systemData";
-import type { TokenRecord } from "../types/token";
+import { TOKEN_TYPES, type TokenRecord, type TokenType } from "../types/token";
 import type { WorldActorRecord } from "../types/actor";
 import "../styles/TokenPanel.scss";
 
@@ -70,6 +70,13 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
   // (createToken called with no `actorId`/`scale` override).
   const [npcActors, setNpcActors] = useState<WorldActorRecord[]>([]);
   const [newTokenActorId, setNewTokenActorId] = useState<string>("");
+  // `null` means "whatever the NPC selection implies"; a value means the
+  // Game Master said otherwise. Keeping the two apart avoids the usual
+  // override-tracking flag: staging an NPC still defaults the kind to `npc`,
+  // and an explicit choice keeps winning even if the NPC selection changes
+  // underneath it.
+  const [newTokenTypeChoice, setNewTokenTypeChoice] =
+    useState<TokenType | null>(null);
   // Stored with the system it was fetched for, so "which size categories
   // apply right now" is derived during render instead of being reset from
   // inside the effect below — a manifest from a previously-picked NPC's
@@ -137,6 +144,16 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
   /** The `scale` a new token defaults to given the currently-selected NPC
    * (if any) — `undefined` when no NPC is selected, so `createToken` falls
    * back to the server's existing default rather than forcing a value. */
+  /**
+   * The kind a new token will be created as.
+   *
+   * Staging an NPC implies an NPC token — the same inference the column's
+   * backfill made for existing rows, so the two agree rather than each
+   * guessing separately.
+   */
+  const effectiveTokenType: TokenType =
+    newTokenTypeChoice ?? (newTokenActorId ? "npc" : "character");
+
   const resolvedNewTokenScale: number | undefined = newTokenActorId
     ? resolveSizeScale(
         sizeCategories,
@@ -192,10 +209,12 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
         // sizeCategory.ts) rather than the server's plain default.
         actorId: newTokenActorId || undefined,
         scale: resolvedNewTokenScale,
+        tokenType: effectiveTokenType,
       });
       setNewTokenHealth(undefined);
       setNewTokenMaxHealth(undefined);
       setNewTokenActorId("");
+      setNewTokenTypeChoice(null);
       setCreateDialogOpen(false);
       refresh();
     } catch (err) {
@@ -211,6 +230,7 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
     newTokenMaxHealth,
     newTokenActorId,
     resolvedNewTokenScale,
+    effectiveTokenType,
     refresh,
   ]);
 
@@ -532,6 +552,28 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
                         )}
                       </div>
                     )}
+
+                    <div className="form-group">
+                      <label htmlFor="token-type">Token type</label>
+                      <select
+                        id="token-type"
+                        data-testid="token-create-type-select"
+                        value={effectiveTokenType}
+                        onChange={(e) =>
+                          setNewTokenTypeChoice(e.target.value as TokenType)
+                        }
+                      >
+                        {TOKEN_TYPES.map((kind) => (
+                          <option key={kind.value} value={kind.value}>
+                            {kind.label}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="token-type-hint">
+                        Tokens without art are drawn in a distinct colour per
+                        type, so a crowded map can be read at a glance.
+                      </p>
+                    </div>
 
                     <div className="form-group">
                       <label htmlFor="token-health">Current Health</label>

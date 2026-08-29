@@ -329,6 +329,17 @@
   margin: 20px 0;
 }
 
+// Secondary explanation under a control: quieter than the label, still
+// legible against the parchment. Shared by the token-type picker and the
+// NPC scale hint, which had been rendering unstyled.
+.token-type-hint,
+.token-npc-scale-hint {
+  color: #6d4c41;
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 0;
+}
+
 .form-group {
   display: flex;
   flex-direction: column;
