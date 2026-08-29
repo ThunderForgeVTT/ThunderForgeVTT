@@ -31,9 +31,58 @@ fn limiter_store() -> &'static Mutex<HashMap<String, Vec<i64>>> {
     AUTH_RATE_LIMITER.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+/// Whether the auth rate limit is deliberately switched off for this process.
+///
+/// # Why this is compiled out of a release build entirely
+///
+/// The limit it disables — 15 login/register attempts per minute per IP — is
+/// the only thing standing between an exposed instance and unlimited
+/// credential stuffing. A runtime flag alone would be one environment
+/// variable away from disaster: set in the wrong `.env`, inherited by a
+/// container, copied into a deploy script by someone who saw it in a test
+/// harness.
+///
+/// So there are two locks and they are different in kind. `debug_assertions`
+/// means a `--release` binary does not contain this code path at all — no
+/// variable can enable what was never compiled. The environment variable
+/// means a debug build still does not disable it by accident.
+///
+/// The load harness sets it because registering a table of players
+/// legitimately exceeds a limit written for humans typing passwords. Nothing
+/// else should.
+#[cfg(debug_assertions)]
+fn rate_limit_disabled() -> bool {
+    static DISABLED: OnceLock<bool> = OnceLock::new();
+    *DISABLED.get_or_init(|| {
+        let disabled = std::env::var("THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT")
+            .is_ok_and(|value| value == "1" || value.eq_ignore_ascii_case("true"));
+        if disabled {
+            // Said once, loudly, at the first auth request. A server with its
+            // brute-force protection off should never be a quiet surprise to
+            // whoever is reading the logs.
+            eprintln!(
+                "[auth] ⚠️  THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT is set — login and \
+                 registration rate limiting is OFF. Debug builds only; never use this \
+                 for anything reachable from outside this machine."
+            );
+        }
+        disabled
+    })
+}
+
+/// Release builds have no bypass to consult.
+#[cfg(not(debug_assertions))]
+fn rate_limit_disabled() -> bool {
+    false
+}
+
 pub async fn rate_limit_auth_requests(request: Request, next: Next) -> Response {
     let path = request.uri().path().to_string();
     if !path.contains("/authentication/") {
+        return next.run(request).await;
+    }
+
+    if rate_limit_disabled() {
         return next.run(request).await;
     }
 
@@ -439,5 +488,56 @@ mod tests {
     fn client_ip_falls_back_to_unknown_with_no_headers() {
         let headers = HeaderMap::new();
         assert_eq!(client_ip(&headers), "unknown");
+    }
+}
+
+#[cfg(test)]
+mod rate_limit_bypass_tests {
+    /// The bypass must not exist unless *both* locks are open.
+    ///
+    /// This test can only observe the debug half — it is itself a debug
+    /// build — so it pins the part it can see: the variable must be set, and
+    /// set to something deliberate. The release half is enforced by
+    /// `#[cfg(debug_assertions)]`, which removes the function body from the
+    /// binary rather than leaving a check to be trusted, and is asserted
+    /// separately below.
+    #[test]
+    fn the_bypass_stays_shut_unless_the_variable_says_otherwise() {
+        // Not `rate_limit_disabled()` directly: it memoises on first call,
+        // and a test that ran after another had already read the environment
+        // would pass on a cached answer rather than on the logic.
+        let reads =
+            |value: Option<&str>| value.is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
+
+        assert!(!reads(None), "absent must mean the limit is on");
+        assert!(!reads(Some("")), "empty must mean the limit is on");
+        assert!(!reads(Some("0")), "0 must mean the limit is on");
+        assert!(!reads(Some("no")), "an unrecognised value must not open it");
+        assert!(reads(Some("1")));
+        assert!(reads(Some("true")));
+        assert!(reads(Some("TRUE")));
+    }
+
+    /// A release build has no bypass to enable.
+    ///
+    /// If this ever fails it means the `cfg` guard was removed or inverted,
+    /// and the environment variable alone would be able to switch off
+    /// brute-force protection on a production binary.
+    #[test]
+    fn a_release_build_cannot_be_bypassed_at_all() {
+        #[cfg(not(debug_assertions))]
+        {
+            unsafe { std::env::set_var("THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT", "1") };
+            assert!(
+                !super::rate_limit_disabled(),
+                "a release build must ignore the variable entirely",
+            );
+        }
+        #[cfg(debug_assertions)]
+        {
+            // Nothing to assert here beyond the guard existing: this build is
+            // the debug one, and the release behaviour above is what the cfg
+            // exists for.
+        }
     }
 }

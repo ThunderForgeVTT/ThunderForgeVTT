@@ -197,6 +197,18 @@ try {
     DATABASE_URL: databaseUrl,
     RUSTFS_ENDPOINT: `http://localhost:${rustfsPort}`,
     TORTURE_SESSIONS: String(requested),
+    // Registering a table of players legitimately exceeds a limit written
+    // for humans typing passwords — 15 auth requests per minute per IP. The
+    // tests still pace themselves against it (see `table-storm`), so this is
+    // belt and braces rather than a licence to hammer: it keeps a large tier
+    // from spending most of its runtime asleep.
+    //
+    // Safe here for two reasons that both have to hold: the backend below is
+    // a debug build, and a release build does not contain this code path at
+    // all (`auth_middleware::rate_limit_disabled` is `cfg(debug_assertions)`).
+    // The stack is also on a throwaway database on a random port that dies
+    // with the run.
+    THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT: "1",
   };
 
   // The backend, started here rather than by Playwright.
