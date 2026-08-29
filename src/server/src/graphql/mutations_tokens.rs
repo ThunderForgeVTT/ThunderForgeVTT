@@ -37,6 +37,7 @@ impl TokenMutation {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         let user_id = auth_user.user_id;
+        let is_admin = auth_user.is_admin;
         let mut conn = state
             .db_pool
             .get()
@@ -53,17 +54,14 @@ impl TokenMutation {
         let metadata = input.metadata.map(|j| j.0);
 
         let inserted_token = tokio::task::spawn_blocking(move || {
-            use crate::schema::{scenes, tokens};
+            use crate::schema::tokens;
 
-            // 🔐 Ownership: caller must own the parent scene before a token can be attached to it
-            let owns_scene = scenes::table
-                .filter(scenes::scene_id.eq(scene_id))
-                .filter(scenes::owner_id.eq(user_id))
-                .select(scenes::scene_id)
-                .first::<uuid::Uuid>(&mut conn)
-                .optional()?
-                .is_some();
-            if !owns_scene {
+            // 🔐 Authority to author content on a scene follows the world
+            // role — the Owner and any GM, never a Player — not who happened
+            // to create the scene. See `world_membership::is_dm_of_scene`.
+            if !crate::auth::world_membership::is_dm_of_scene(
+                &mut conn, user_id, is_admin, scene_id,
+            )? {
                 return Err(DieselError::NotFound);
             }
 
@@ -122,6 +120,7 @@ impl TokenMutation {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         let user_id = auth_user.user_id;
+        let is_admin = auth_user.is_admin;
         let mut conn = state
             .db_pool
             .get()
@@ -151,26 +150,36 @@ impl TokenMutation {
         let input_owner_user_id = input.owner_user_id;
 
         let updated_token = tokio::task::spawn_blocking(move || {
-            use crate::schema::{scenes, tokens};
+            use crate::schema::tokens;
 
             conn.transaction(|conn| {
+                // 🔐 Authority to author content on a scene follows the
+                // world role — the Owner and any GM, never a Player — not
+                // who happened to create the scene. See
+                // `world_membership::is_dm_of_scene`.
+                //
+                // It is checked once, up front, and the writes below key on
+                // `token_id` alone. Each write used to carry its own "scenes
+                // I own" subquery, which is how one rule came to be enforced
+                // in three places and be wrong in all of them.
+                let (existing_scene, existing_owner): (uuid::Uuid, Option<uuid::Uuid>) =
+                    tokens::table
+                        .filter(tokens::token_id.eq(token_id))
+                        .select((tokens::scene_id, tokens::owner_user_id))
+                        .first(conn)?;
+                if !crate::auth::world_membership::is_dm_of_scene(
+                    conn,
+                    user_id,
+                    is_admin,
+                    existing_scene,
+                )? {
+                    return Err(DieselError::NotFound);
+                }
+
                 if setting_primary {
-                    // Determine the (scene_id, owner_user_id) this update
-                    // will apply to: the input's owner_user_id if provided,
-                    // else the token's current one. Scoped to scenes this
-                    // caller owns, same as the update below.
-                    let (existing_scene, existing_owner): (uuid::Uuid, Option<uuid::Uuid>) =
-                        tokens::table
-                            .filter(tokens::token_id.eq(token_id))
-                            .filter(
-                                tokens::scene_id.eq_any(
-                                    scenes::table
-                                        .filter(scenes::owner_id.eq(user_id))
-                                        .select(scenes::scene_id),
-                                ),
-                            )
-                            .select((tokens::scene_id, tokens::owner_user_id))
-                            .first(conn)?;
+                    // Determine the owner this update will apply to: the
+                    // input's owner_user_id if provided, else the token's
+                    // current one.
                     let target_owner = input_owner_user_id.or(existing_owner);
 
                     if let Some(target_owner) = target_owner {
@@ -190,18 +199,10 @@ impl TokenMutation {
                     }
                 }
 
-                let token = diesel::update(
-                    tokens::table.filter(tokens::token_id.eq(token_id)).filter(
-                        tokens::scene_id.eq_any(
-                            scenes::table
-                                .filter(scenes::owner_id.eq(user_id))
-                                .select(scenes::scene_id),
-                        ),
-                    ),
-                )
-                .set(update_data)
-                .returning(crate::models::Token::as_returning())
-                .get_result(conn)?;
+                let token = diesel::update(tokens::table.filter(tokens::token_id.eq(token_id)))
+                    .set(update_data)
+                    .returning(crate::models::Token::as_returning())
+                    .get_result(conn)?;
 
                 refresh_scene_fingerprint(conn, token.scene_id, user_id);
 
@@ -234,38 +235,40 @@ impl TokenMutation {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         let user_id = auth_user.user_id;
+        let is_admin = auth_user.is_admin;
         let mut conn = state
             .db_pool
             .get()
             .map_err(|_| Error::new("Failed to get DB connection"))?;
 
         let deleted = tokio::task::spawn_blocking(move || {
-            use crate::schema::{scenes, tokens};
+            use crate::schema::tokens;
 
             // Look up the scene before deleting so we still have it for the NOTIFY payload.
             let scene_id = tokens::table
                 .filter(tokens::token_id.eq(token_id))
-                .filter(
-                    tokens::scene_id.eq_any(
-                        scenes::table
-                            .filter(scenes::owner_id.eq(user_id))
-                            .select(scenes::scene_id),
-                    ),
-                )
                 .select(tokens::scene_id)
                 .first::<uuid::Uuid>(&mut conn)
                 .optional()?;
 
-            let deleted_count = diesel::delete(
-                tokens::table.filter(tokens::token_id.eq(token_id)).filter(
-                    tokens::scene_id.eq_any(
-                        scenes::table
-                            .filter(scenes::owner_id.eq(user_id))
-                            .select(scenes::scene_id),
-                    ),
-                ),
-            )
-            .execute(&mut conn)?;
+            // 🔐 Authority to author content on a scene follows the world
+            // role — the Owner and any GM, never a Player — not who happened
+            // to create the scene. See `world_membership::is_dm_of_scene`.
+            let authorized = match scene_id {
+                Some(scene_id) => crate::auth::world_membership::is_dm_of_scene(
+                    &mut conn, user_id, is_admin, scene_id,
+                )?,
+                None => false,
+            };
+            if !authorized {
+                // Nothing was deleted, which is exactly what an unauthorized
+                // caller was told before — the refusal reads the same as
+                // "no such token" and leaks nothing either way.
+                return Ok(0);
+            }
+
+            let deleted_count = diesel::delete(tokens::table.filter(tokens::token_id.eq(token_id)))
+                .execute(&mut conn)?;
 
             if deleted_count > 0
                 && let Some(scene_id) = scene_id
@@ -466,135 +469,65 @@ mod tests {
         PgConnection::establish(&url).ok()
     }
 
-    /// Verifies the ownership filter `create_token`/`update_token`/
-    /// `delete_token` all share: a token attached to scene X can only be
-    /// mutated by a caller who owns scene X. Mirrors
-    /// `wall_mutations_are_scoped_to_scene_owner` in `mutations_walls.rs`.
-    /// Runs entirely inside a `test_transaction`, which Diesel always rolls
-    /// back, so it never leaves fixture rows behind.
+    /// The rule every token mutation (`create_token`/`update_token`/`delete_token`) now asks, in the one place they all ask
+    /// it: authority to author content on a scene is the caller's **world
+    /// role** — Owner or GM — not who happened to create the scene.
+    ///
+    /// This replaces `token_mutations_are_scoped_to_scene_owner`, which asserted the old rule faithfully.
+    /// That rule was the bug: two people both holding GM authority in one
+    /// world, writing to one scene, had exactly half the writes refused,
+    /// because whichever of them had not created the scene was refused every
+    /// time. Both directions of that break are asserted below, along with the
+    /// two answers that must stay refusals — a GM's new authority must not
+    /// leak down to Players or out to non-members.
+    ///
+    /// `move_own_token` is deliberately untouched by this and keeps its own,
+    /// stricter rule — see `move_own_token_filter_rejects_non_owner` below.
     #[test]
-    fn token_mutations_are_scoped_to_scene_owner() {
+    fn token_authority_follows_the_world_role_not_the_scene_creator() {
         let Some(mut conn) = try_connect() else {
             eprintln!(
-                "skipping token_mutations_are_scoped_to_scene_owner: no DATABASE_URL/dev DB reachable"
+                "skipping token_authority_follows_the_world_role_not_the_scene_creator: no DATABASE_URL/dev DB reachable"
             );
             return;
         };
 
         conn.test_transaction::<_, diesel::result::Error, _>(|conn| {
-            use crate::schema::{scenes, tokens, users, worlds};
+            use crate::auth::world_membership::is_dm_of_scene;
+            use crate::test_support::{
+                insert_test_scene_named, insert_test_user, insert_test_world,
+                insert_test_world_member,
+            };
 
-            let owner_id = uuid::Uuid::now_v7();
-            let intruder_id = uuid::Uuid::now_v7();
-            let world_id = uuid::Uuid::now_v7();
-            let scene_id = uuid::Uuid::now_v7();
-            let token_id = uuid::Uuid::now_v7();
-            let now = chrono::Utc::now().naive_utc();
+            let owner_id = insert_test_user(conn);
+            let world_id = insert_test_world(conn, owner_id);
 
-            for (id, username) in [
-                (owner_id, "token-test-owner"),
-                (intruder_id, "token-test-intruder"),
-            ] {
-                diesel::insert_into(users::table)
-                    .values((
-                        users::id.eq(id),
-                        users::username.eq(format!("{username}-{id}")),
-                        users::password_hash.eq("test-hash"),
-                        users::email.eq(format!("{username}-{id}@example.test")),
-                        users::created_at.eq(now),
-                        users::updated_at.eq(now),
-                    ))
-                    .execute(conn)?;
-            }
+            let gm_id = insert_test_user(conn);
+            insert_test_world_member(conn, world_id, gm_id, "GM");
+            let player_id = insert_test_user(conn);
+            insert_test_world_member(conn, world_id, player_id, "Player");
+            let stranger_id = insert_test_user(conn);
 
-            diesel::insert_into(worlds::table)
-                .values((
-                    worlds::id.eq(world_id),
-                    worlds::name.eq("Token Test World"),
-                    worlds::created_by.eq(owner_id),
-                    worlds::updated_by.eq(owner_id),
-                    worlds::created_at.eq(now),
-                    worlds::updated_at.eq(now),
-                ))
-                .execute(conn)?;
+            // Two scenes in the same world, created by two different people.
+            // Under the old rule each of them was an island.
+            let owners_scene = insert_test_scene_named(conn, world_id, owner_id, "Owner's Scene");
+            let gms_scene = insert_test_scene_named(conn, world_id, gm_id, "GM's Scene");
 
-            diesel::insert_into(scenes::table)
-                .values((
-                    scenes::scene_id.eq(scene_id),
-                    scenes::world_id.eq(world_id),
-                    scenes::name.eq("Token Test Scene"),
-                    scenes::type_.eq("battlemap"),
-                    scenes::grid_size.eq(32),
-                    scenes::grid_type.eq("square"),
-                    scenes::width.eq(1000),
-                    scenes::height.eq(1000),
-                    scenes::owner_id.eq(owner_id),
-                    scenes::created_at.eq(now),
-                    scenes::updated_at.eq(now),
-                ))
-                .execute(conn)?;
-
-            diesel::insert_into(tokens::table)
-                .values((
-                    tokens::token_id.eq(token_id),
-                    tokens::scene_id.eq(scene_id),
-                    tokens::x.eq(0.0),
-                    tokens::y.eq(0.0),
-                    tokens::rotation.eq(0.0),
-                    tokens::scale.eq(1.0),
-                    tokens::created_at.eq(now),
-                    tokens::updated_at.eq(now),
-                ))
-                .execute(conn)?;
-
-            // The intruder's ownership-scoped update query must match zero rows.
-            let intruder_update_count = diesel::update(
-                tokens::table.filter(tokens::token_id.eq(token_id)).filter(
-                    tokens::scene_id.eq_any(
-                        scenes::table
-                            .filter(scenes::owner_id.eq(intruder_id))
-                            .select(scenes::scene_id),
-                    ),
-                ),
-            )
-            .set(tokens::x.eq(99.0))
-            .execute(conn)?;
-            assert_eq!(
-                intruder_update_count, 0,
-                "a non-owner's update filter must not match another owner's token"
+            assert!(
+                is_dm_of_scene(conn, gm_id, false, owners_scene)?,
+                "a member promoted to GM must be able to edit tokens on a scene the Owner created"
             );
-
-            // The owner's identical filter must match exactly one row.
-            let owner_update_count = diesel::update(
-                tokens::table.filter(tokens::token_id.eq(token_id)).filter(
-                    tokens::scene_id.eq_any(
-                        scenes::table
-                            .filter(scenes::owner_id.eq(owner_id))
-                            .select(scenes::scene_id),
-                    ),
-                ),
-            )
-            .set(tokens::x.eq(99.0))
-            .execute(conn)?;
-            assert_eq!(
-                owner_update_count, 1,
-                "the scene owner's update filter must match their own token"
+            assert!(
+                is_dm_of_scene(conn, owner_id, false, gms_scene)?,
+                "the world's Owner must be able to edit tokens on a scene a GM created"
             );
-
-            // Same shape of check for delete.
-            let intruder_delete_count = diesel::delete(
-                tokens::table.filter(tokens::token_id.eq(token_id)).filter(
-                    tokens::scene_id.eq_any(
-                        scenes::table
-                            .filter(scenes::owner_id.eq(intruder_id))
-                            .select(scenes::scene_id),
-                    ),
-                ),
-            )
-            .execute(conn)?;
-            assert_eq!(
-                intruder_delete_count, 0,
-                "a non-owner's delete filter must not match another owner's token"
+            assert!(
+                !is_dm_of_scene(conn, player_id, false, owners_scene)?,
+                "a plain Player must not gain content authority from world membership"
+            );
+            assert!(
+                !is_dm_of_scene(conn, stranger_id, false, owners_scene)?,
+                "a non-member must not be able to edit tokens in this world at all"
             );
 
             Ok(())

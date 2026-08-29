@@ -27,6 +27,7 @@ impl LightSourceMutation {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         let user_id = auth_user.user_id;
+        let is_admin = auth_user.is_admin;
         let mut conn = state
             .db_pool
             .get()
@@ -45,17 +46,14 @@ impl LightSourceMutation {
         let metadata = input.metadata.map(|j| j.0);
 
         let inserted_light = tokio::task::spawn_blocking(move || {
-            use crate::schema::{light_sources, scenes};
+            use crate::schema::light_sources;
 
-            // 🔐 Ownership: caller must own the parent scene before a light can be attached to it
-            let owns_scene = scenes::table
-                .filter(scenes::scene_id.eq(scene_id))
-                .filter(scenes::owner_id.eq(user_id))
-                .select(scenes::scene_id)
-                .first::<uuid::Uuid>(&mut conn)
-                .optional()?
-                .is_some();
-            if !owns_scene {
+            // 🔐 Authority to author content on a scene follows the world
+            // role — the Owner and any GM, never a Player — not who happened
+            // to create the scene. See `world_membership::is_dm_of_scene`.
+            if !crate::auth::world_membership::is_dm_of_scene(
+                &mut conn, user_id, is_admin, scene_id,
+            )? {
                 return Err(DieselError::NotFound);
             }
 
@@ -114,6 +112,7 @@ impl LightSourceMutation {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         let user_id = auth_user.user_id;
+        let is_admin = auth_user.is_admin;
         let mut conn = state
             .db_pool
             .get()
@@ -132,22 +131,31 @@ impl LightSourceMutation {
         };
 
         let updated_light = tokio::task::spawn_blocking(move || {
-            use crate::schema::{light_sources, scenes};
+            use crate::schema::light_sources;
 
-            let light = diesel::update(
-                light_sources::table
-                    .filter(light_sources::light_id.eq(light_id))
-                    .filter(
-                        light_sources::scene_id.eq_any(
-                            scenes::table
-                                .filter(scenes::owner_id.eq(user_id))
-                                .select(scenes::scene_id),
-                        ),
-                    ),
-            )
-            .set(update_data)
-            .returning(crate::models::LightSource::as_returning())
-            .get_result(&mut conn)?;
+            // 🔐 Authority to author content on a scene follows the world
+            // role — the Owner and any GM, never a Player — not who happened
+            // to create the scene. See `world_membership::is_dm_of_scene`.
+            let scene_id = light_sources::table
+                .filter(light_sources::light_id.eq(light_id))
+                .select(light_sources::scene_id)
+                .first::<uuid::Uuid>(&mut conn)
+                .optional()?;
+            let authorized = match scene_id {
+                Some(scene_id) => crate::auth::world_membership::is_dm_of_scene(
+                    &mut conn, user_id, is_admin, scene_id,
+                )?,
+                None => false,
+            };
+            if !authorized {
+                return Err(DieselError::NotFound);
+            }
+
+            let light =
+                diesel::update(light_sources::table.filter(light_sources::light_id.eq(light_id)))
+                    .set(update_data)
+                    .returning(crate::models::LightSource::as_returning())
+                    .get_result(&mut conn)?;
 
             if let Ok(world_id) = world_id_for_scene(&mut conn, light.scene_id) {
                 let _ = record_world_event(
@@ -181,40 +189,41 @@ impl LightSourceMutation {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         let user_id = auth_user.user_id;
+        let is_admin = auth_user.is_admin;
         let mut conn = state
             .db_pool
             .get()
             .map_err(|_| Error::new("Failed to get DB connection"))?;
 
         let deleted = tokio::task::spawn_blocking(move || {
-            use crate::schema::{light_sources, scenes};
+            use crate::schema::light_sources;
 
             // Look up the scene before deleting so we still have it for the NOTIFY payload.
             let scene_id = light_sources::table
                 .filter(light_sources::light_id.eq(light_id))
-                .filter(
-                    light_sources::scene_id.eq_any(
-                        scenes::table
-                            .filter(scenes::owner_id.eq(user_id))
-                            .select(scenes::scene_id),
-                    ),
-                )
                 .select(light_sources::scene_id)
                 .first::<uuid::Uuid>(&mut conn)
                 .optional()?;
 
-            let deleted_count = diesel::delete(
-                light_sources::table
-                    .filter(light_sources::light_id.eq(light_id))
-                    .filter(
-                        light_sources::scene_id.eq_any(
-                            scenes::table
-                                .filter(scenes::owner_id.eq(user_id))
-                                .select(scenes::scene_id),
-                        ),
-                    ),
-            )
-            .execute(&mut conn)?;
+            // 🔐 Authority to author content on a scene follows the world
+            // role — the Owner and any GM, never a Player — not who happened
+            // to create the scene. See `world_membership::is_dm_of_scene`.
+            let authorized = match scene_id {
+                Some(scene_id) => crate::auth::world_membership::is_dm_of_scene(
+                    &mut conn, user_id, is_admin, scene_id,
+                )?,
+                None => false,
+            };
+            if !authorized {
+                // Nothing was deleted, which is what an unauthorized
+                // caller has always been told — the refusal reads the
+                // same as "no such light source" and leaks nothing either way.
+                return Ok(0);
+            }
+
+            let deleted_count =
+                diesel::delete(light_sources::table.filter(light_sources::light_id.eq(light_id)))
+                    .execute(&mut conn)?;
 
             if deleted_count > 0
                 && let Some(scene_id) = scene_id
@@ -258,143 +267,62 @@ mod tests {
         PgConnection::establish(&url).ok()
     }
 
-    /// Verifies the ownership filter `create_light_source`/
-    /// `update_light_source`/`delete_light_source` all share: a light
-    /// attached to scene X can only be mutated by a caller who owns scene
-    /// X. Runs entirely inside a `test_transaction`, which Diesel always
-    /// rolls back, so it never leaves fixture rows behind.
+    /// The rule every light-source mutation now asks, in the one place they all ask
+    /// it: authority to author content on a scene is the caller's **world
+    /// role** — Owner or GM — not who happened to create the scene.
+    ///
+    /// This replaces `light_source_mutations_are_scoped_to_scene_owner`, which asserted the old rule faithfully.
+    /// That rule was the bug: two people both holding GM authority in one
+    /// world, writing to one scene, had exactly half the writes refused,
+    /// because whichever of them had not created the scene was refused every
+    /// time. Both directions of that break are asserted below, along with the
+    /// two answers that must stay refusals — a GM's new authority must not
+    /// leak down to Players or out to non-members.
     #[test]
-    fn light_source_mutations_are_scoped_to_scene_owner() {
+    fn light_source_authority_follows_the_world_role_not_the_scene_creator() {
         let Some(mut conn) = try_connect() else {
             eprintln!(
-                "skipping light_source_mutations_are_scoped_to_scene_owner: no DATABASE_URL/dev DB reachable"
+                "skipping light_source_authority_follows_the_world_role_not_the_scene_creator: no DATABASE_URL/dev DB reachable"
             );
             return;
         };
 
         conn.test_transaction::<_, diesel::result::Error, _>(|conn| {
-            use crate::schema::{light_sources, scenes, users, worlds};
+            use crate::auth::world_membership::is_dm_of_scene;
+            use crate::test_support::{
+                insert_test_scene_named, insert_test_user, insert_test_world,
+                insert_test_world_member,
+            };
 
-            let owner_id = uuid::Uuid::now_v7();
-            let intruder_id = uuid::Uuid::now_v7();
-            let world_id = uuid::Uuid::now_v7();
-            let scene_id = uuid::Uuid::now_v7();
-            let light_id = uuid::Uuid::now_v7();
-            let now = chrono::Utc::now().naive_utc();
+            let owner_id = insert_test_user(conn);
+            let world_id = insert_test_world(conn, owner_id);
 
-            for (id, username) in [
-                (owner_id, "light-test-owner"),
-                (intruder_id, "light-test-intruder"),
-            ] {
-                diesel::insert_into(users::table)
-                    .values((
-                        users::id.eq(id),
-                        users::username.eq(format!("{username}-{id}")),
-                        users::password_hash.eq("test-hash"),
-                        users::email.eq(format!("{username}-{id}@example.test")),
-                        users::created_at.eq(now),
-                        users::updated_at.eq(now),
-                    ))
-                    .execute(conn)?;
-            }
+            let gm_id = insert_test_user(conn);
+            insert_test_world_member(conn, world_id, gm_id, "GM");
+            let player_id = insert_test_user(conn);
+            insert_test_world_member(conn, world_id, player_id, "Player");
+            let stranger_id = insert_test_user(conn);
 
-            diesel::insert_into(worlds::table)
-                .values((
-                    worlds::id.eq(world_id),
-                    worlds::name.eq("Light Test World"),
-                    worlds::created_by.eq(owner_id),
-                    worlds::updated_by.eq(owner_id),
-                    worlds::created_at.eq(now),
-                    worlds::updated_at.eq(now),
-                ))
-                .execute(conn)?;
+            // Two scenes in the same world, created by two different people.
+            // Under the old rule each of them was an island.
+            let owners_scene = insert_test_scene_named(conn, world_id, owner_id, "Owner's Scene");
+            let gms_scene = insert_test_scene_named(conn, world_id, gm_id, "GM's Scene");
 
-            diesel::insert_into(scenes::table)
-                .values((
-                    scenes::scene_id.eq(scene_id),
-                    scenes::world_id.eq(world_id),
-                    scenes::name.eq("Light Test Scene"),
-                    scenes::type_.eq("battlemap"),
-                    scenes::grid_size.eq(32),
-                    scenes::grid_type.eq("square"),
-                    scenes::width.eq(1000),
-                    scenes::height.eq(1000),
-                    scenes::owner_id.eq(owner_id),
-                    scenes::created_at.eq(now),
-                    scenes::updated_at.eq(now),
-                ))
-                .execute(conn)?;
-
-            diesel::insert_into(light_sources::table)
-                .values((
-                    light_sources::light_id.eq(light_id),
-                    light_sources::scene_id.eq(scene_id),
-                    light_sources::x.eq(0.0),
-                    light_sources::y.eq(0.0),
-                    light_sources::radius.eq(20.0),
-                    light_sources::intensity.eq(1.0),
-                    light_sources::casts_shadows.eq(true),
-                    light_sources::created_by.eq(owner_id),
-                    light_sources::updated_by.eq(owner_id),
-                    light_sources::created_at.eq(now),
-                    light_sources::updated_at.eq(now),
-                ))
-                .execute(conn)?;
-
-            // The intruder's ownership-scoped update query must match zero rows.
-            let intruder_update_count = diesel::update(
-                light_sources::table
-                    .filter(light_sources::light_id.eq(light_id))
-                    .filter(
-                        light_sources::scene_id.eq_any(
-                            scenes::table
-                                .filter(scenes::owner_id.eq(intruder_id))
-                                .select(scenes::scene_id),
-                        ),
-                    ),
-            )
-            .set(light_sources::intensity.eq(0.5))
-            .execute(conn)?;
-            assert_eq!(
-                intruder_update_count, 0,
-                "a non-owner's update filter must not match another owner's light source"
+            assert!(
+                is_dm_of_scene(conn, gm_id, false, owners_scene)?,
+                "a member promoted to GM must be able to edit lights on a scene the Owner created"
             );
-
-            // The owner's identical filter must match exactly one row.
-            let owner_update_count = diesel::update(
-                light_sources::table
-                    .filter(light_sources::light_id.eq(light_id))
-                    .filter(
-                        light_sources::scene_id.eq_any(
-                            scenes::table
-                                .filter(scenes::owner_id.eq(owner_id))
-                                .select(scenes::scene_id),
-                        ),
-                    ),
-            )
-            .set(light_sources::intensity.eq(0.5))
-            .execute(conn)?;
-            assert_eq!(
-                owner_update_count, 1,
-                "the scene owner's update filter must match their own light source"
+            assert!(
+                is_dm_of_scene(conn, owner_id, false, gms_scene)?,
+                "the world's Owner must be able to edit lights on a scene a GM created"
             );
-
-            // Same shape of check for delete.
-            let intruder_delete_count = diesel::delete(
-                light_sources::table
-                    .filter(light_sources::light_id.eq(light_id))
-                    .filter(
-                        light_sources::scene_id.eq_any(
-                            scenes::table
-                                .filter(scenes::owner_id.eq(intruder_id))
-                                .select(scenes::scene_id),
-                        ),
-                    ),
-            )
-            .execute(conn)?;
-            assert_eq!(
-                intruder_delete_count, 0,
-                "a non-owner's delete filter must not match another owner's light source"
+            assert!(
+                !is_dm_of_scene(conn, player_id, false, owners_scene)?,
+                "a plain Player must not gain content authority from world membership"
+            );
+            assert!(
+                !is_dm_of_scene(conn, stranger_id, false, owners_scene)?,
+                "a non-member must not be able to edit lights in this world at all"
             );
 
             Ok(())

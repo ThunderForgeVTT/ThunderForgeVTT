@@ -124,6 +124,46 @@ mod tests {
 /// or GM role (or is an admin). This is the single check every
 /// DM-only mutation in spec 010 (actor creation, ownership-block edits,
 /// share-link revocation) should call, per research.md §3.
+/// Whether this caller **owns** the world, as distinct from running it.
+///
+/// The three-tier model splits authority in two, and the split is the point:
+/// a Game Master carries every power over a world's *content* — tokens,
+/// scenes, walls, lights — while the things that end or transfer the world
+/// itself stay with the Owner. A co-GM invited to help run a campaign should
+/// be able to build the dungeon and should not be able to delete the
+/// campaign.
+///
+/// `is_dm_of_world` answers the first question. This answers the second, and
+/// they must not be confused: every caller of this one is a door that cannot
+/// be reopened once someone walks through it.
+///
+/// A site admin is treated as an owner, matching `is_dm_of_world`.
+pub async fn is_owner_of_world(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    world_id: Uuid,
+) -> GraphQLResult<bool> {
+    if is_admin {
+        return Ok(true);
+    }
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    tokio::task::spawn_blocking(
+        move || match require_world_member(&mut conn, user_id, world_id) {
+            Ok(role) => Ok(role == "Owner"),
+            // Fail closed. A caller we cannot resolve is not an owner.
+            Err(_) => Ok(false),
+        },
+    )
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+}
+
 pub async fn is_dm_of_world(
     state: &AppState,
     user_id: Uuid,
@@ -194,5 +234,144 @@ mod dm_tests {
             .expect("dm check should succeed");
 
         assert!(!is_dm, "a Player-role member must not count as DM");
+    }
+}
+
+// ============================================================================
+// Content authority: who may author what lives *on* a scene.
+//
+// The world's three-tier model (Owner / GM / Player) says a GM carries
+// authority over content. Until now the scene-scoped content mutations
+// (tokens, shapes, walls, lights, map import) never consulted it: they
+// authorized on `scenes.owner_id == caller` — the person who happened to
+// *create* the scene. A member promoted to GM therefore had no authority on
+// a scene the Owner made, and the Owner had none on a scene a GM made. Two
+// people both holding GM authority in one world, writing to one scene, saw
+// exactly half the writes refused.
+//
+// `is_dm_of_scene` is the same question `is_dm_of_world` answers, asked one
+// level down (from a scene, not a world) and synchronously, so it can run
+// inside the `spawn_blocking` closures the content mutations already use for
+// Diesel access. It delegates to `require_world_member` rather than
+// re-deriving the role, so there is still exactly one implementation of
+// "who is the DM here".
+//
+// Note the boundary this does NOT cross: world-level rights (deleting a
+// world, transferring ownership, changing world status) stay Owner-only and
+// are gated elsewhere. This function is about content on a scene.
+// ============================================================================
+
+/// Whether `user_id` may author content on `scene_id` — i.e. is the Owner or
+/// a GM of the world that scene belongs to (or a site admin).
+///
+/// Synchronous by design: every caller is inside a `spawn_blocking` closure
+/// holding a `&mut PgConnection` with no async available, exactly the
+/// situation `require_world_member` was made synchronous for.
+///
+/// Answers `false`, never an error, for a scene that does not exist and for
+/// a caller who is not a member. It also answers `false` if the membership
+/// lookup itself fails: this gate is fail-closed, and every call site turns
+/// `false` into the same "not found or not permitted" refusal, so a database
+/// hiccup can only deny a write, never grant one.
+pub fn is_dm_of_scene(
+    conn: &mut PgConnection,
+    user_id: Uuid,
+    is_admin: bool,
+    scene_id: Uuid,
+) -> Result<bool, diesel::result::Error> {
+    use crate::schema::scenes;
+
+    let world_id = scenes::table
+        .filter(scenes::scene_id.eq(scene_id))
+        .select(scenes::world_id)
+        .first::<Uuid>(conn)
+        .optional()?;
+
+    // A scene that does not exist has no world to be a DM of. Admins are no
+    // exception — there is nothing here to authorize against.
+    let Some(world_id) = world_id else {
+        return Ok(false);
+    };
+
+    if is_admin {
+        return Ok(true);
+    }
+
+    Ok(match require_world_member(conn, user_id, world_id) {
+        Ok(role) => role == "Owner" || role == "GM",
+        Err(_) => false,
+    })
+}
+
+#[cfg(test)]
+mod scene_dm_tests {
+    use super::*;
+    use crate::test_support::{
+        insert_test_scene, insert_test_user, insert_test_world, insert_test_world_member,
+        test_app_state,
+    };
+
+    /// The bug this whole change exists for: a member promoted to GM must
+    /// carry authority on a scene somebody *else* created. Before
+    /// `is_dm_of_scene`, content mutations asked `scenes.owner_id == caller`
+    /// and this answered "no".
+    #[test]
+    fn a_gm_is_dm_of_a_scene_the_owner_created() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        let gm_id = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world_id, gm_id, "GM");
+
+        assert!(is_dm_of_scene(&mut conn, gm_id, false, scene_id).unwrap());
+    }
+
+    /// The mirror image, and the half of the bug that was easy to miss: the
+    /// world's Owner must carry authority on a scene a GM created.
+    #[test]
+    fn the_owner_is_dm_of_a_scene_a_gm_created() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let gm_id = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world_id, gm_id, "GM");
+        let scene_id = insert_test_scene(&mut conn, world_id, gm_id);
+
+        assert!(is_dm_of_scene(&mut conn, owner_id, false, scene_id).unwrap());
+    }
+
+    /// Players gained nothing. A Player-role member of the same world is not
+    /// a content author — this is the assertion that keeps "GM authority"
+    /// from quietly becoming "member authority".
+    #[test]
+    fn a_player_is_not_dm_of_a_scene_in_their_world() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        let player_id = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world_id, player_id, "Player");
+
+        assert!(!is_dm_of_scene(&mut conn, player_id, false, scene_id).unwrap());
+    }
+
+    /// A stranger with no membership row at all is refused, and so is a
+    /// scene id that matches nothing — a dangling id must not become an
+    /// authorization hole.
+    #[test]
+    fn a_non_member_and_a_nonexistent_scene_are_both_refused() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        let stranger_id = insert_test_user(&mut conn);
+
+        assert!(!is_dm_of_scene(&mut conn, stranger_id, false, scene_id).unwrap());
+        assert!(!is_dm_of_scene(&mut conn, owner_id, true, Uuid::now_v7()).unwrap());
     }
 }

@@ -136,25 +136,30 @@ pub async fn shapes_impl(
     let world_id = get_world_id_from_scene(state, scene_id).await?;
     require_visible_world(state, user_id, is_admin, world_id).await?;
 
+    // DM-ness is resolved once, here, and moved into the blocking closure
+    // below — the same shape `world_sync_plan` uses, and the reason this is
+    // not an `is_dm_of_scene` call inside the closure: `world_id` is already
+    // in hand and we are still in async context.
+    //
+    // It used to ask whether the caller *created* the scene. That made a
+    // co-GM a player as far as shape visibility was concerned: they could
+    // author on the scene but could not see the GM-only shapes already on
+    // it, which is a worse failure than a plain refusal because it renders
+    // silently.
+    let is_dm =
+        crate::auth::world_membership::is_dm_of_world(state, user_id, is_admin, world_id).await?;
+
     let mut conn = state
         .db_pool
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
     tokio::task::spawn_blocking(move || {
-        use crate::schema::{scenes, shapes};
+        use crate::schema::shapes;
 
-        // The scene owner (GM) sees every shape; anyone else only sees
-        // shapes explicitly flagged visible to players.
-        let is_owner = scenes::table
-            .filter(scenes::scene_id.eq(scene_id))
-            .filter(scenes::owner_id.eq(user_id))
-            .select(scenes::scene_id)
-            .first::<uuid::Uuid>(&mut conn)
-            .optional()?
-            .is_some();
-
-        if is_owner {
+        // The DM (world Owner or GM) sees every shape; anyone else only
+        // sees shapes explicitly flagged visible to players.
+        if is_dm {
             shapes::table
                 .filter(shapes::scene_id.eq(scene_id))
                 .select(crate::models::Shape::as_select())
@@ -600,8 +605,11 @@ mod tests {
         );
     }
 
+    /// Renamed from `shapes_returns_every_shape_to_the_scene_owner`: the
+    /// fixture's `owner_id` is both the world's Owner and the scene's
+    /// creator, and it is the *world role* that now decides what they see.
     #[tokio::test]
-    async fn shapes_returns_every_shape_to_the_scene_owner() {
+    async fn shapes_returns_every_shape_to_the_worlds_owner() {
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -622,8 +630,40 @@ mod tests {
         );
     }
 
+    /// A GM who did not create the scene still sees the GM-only shapes on
+    /// it. This is the read side of the same break the content mutations
+    /// had: `shapes_impl` asked whether the caller *created* the scene, so a
+    /// co-GM could author shapes on a scene and not see the ones already
+    /// there — a silent wrong answer rather than a refusal.
     #[tokio::test]
-    async fn shapes_hides_gm_only_shapes_from_non_owner_participants() {
+    async fn shapes_returns_every_shape_to_a_gm_who_did_not_create_the_scene() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let gm_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        crate::test_support::insert_test_world_member(&mut conn, world_id, gm_id, "GM");
+        let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
+        insert_test_shape(&mut conn, scene_id, owner_id, true);
+        insert_test_shape(&mut conn, scene_id, owner_id, false);
+        drop(conn);
+
+        let shapes = shapes_impl(&state, gm_id, false, scene_id)
+            .await
+            .expect("a GM should be able to list shapes");
+
+        assert_eq!(
+            shapes.len(),
+            2,
+            "a GM must see GM-only shapes on a scene the Owner created"
+        );
+    }
+
+    /// Renamed from `shapes_hides_gm_only_shapes_from_non_owner_participants`:
+    /// what withholds the GM-only shapes is the caller's Player role, not
+    /// the fact that they did not create the scene.
+    #[tokio::test]
+    async fn shapes_hides_gm_only_shapes_from_players() {
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -642,7 +682,7 @@ mod tests {
         assert_eq!(
             shapes.len(),
             1,
-            "a non-owner participant must only see visible_to_players shapes (FR-009)"
+            "a Player must only see visible_to_players shapes (FR-009)"
         );
     }
 }

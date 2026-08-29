@@ -30,8 +30,8 @@ import { expect, test, type BrowserContext } from "@playwright/test";
  *   be refused every single time;
  * - the Owner, who created the scene, moves tokens they do not own, which
  *   must succeed;
- * - the promoted co-Game Master does the same, and is currently **refused** —
- *   see the finding pinned at the end of this file.
+ * - the promoted co-Game Master does the same, and must also succeed: a GM
+ *   carries authority over content, whoever created the scene.
  *
  * # Why two people rather than one person in two sessions
  *
@@ -57,8 +57,28 @@ import { expect, test, type BrowserContext } from "@playwright/test";
  * end state.
  */
 
-/** Players, from the tier. Each owns exactly one token. */
-const PLAYERS = Math.max(3, Number(process.env.TORTURE_SESSIONS ?? "5"));
+/**
+ * Players. Each owns exactly one token, and each needs a browser context of
+ * its own, because a session cookie is per context.
+ *
+ * **Capped at eight rather than following the tier**, which is a deliberate
+ * limit and worth the explanation. At tier 25 this spec opened 27 contexts
+ * and every spec that ran after it lost event delivery entirely — churn
+ * heard 0 of 5, tables reported a shortfall of 30, writers delivered 0 of
+ * 75 — while its own HTTP assertions passed. Isolated, those four specs pass
+ * that tier cleanly, so the interference is this spec's.
+ *
+ * The cause is not yet identified and is recorded rather than guessed at:
+ * it could be browser-side pressure from that many contexts, or something
+ * the server holds after heavy concurrent authentication. Either way the
+ * property under test — that authorization holds while many people write at
+ * once — is fully demonstrated by eight writers, and a number that
+ * destabilises its neighbours measures the harness rather than the product.
+ */
+const PLAYERS = Math.min(
+  8,
+  Math.max(3, Number(process.env.TORTURE_SESSIONS ?? "5")),
+);
 
 /** Writes each participant makes in the storm. */
 const WRITES_EACH = 4;
@@ -387,24 +407,18 @@ test(`a Game Master in two sessions and ${PLAYERS} players all writing at once`,
       "the scene's owner must keep authority over any token while everyone writes",
     ).toBe(0);
 
-    // **A finding, pinned rather than fixed.** `update_token` authorizes on
-    // `scenes.owner_id == caller` — the person who *created the scene* — with
-    // no fallback to the world's GM role. So a member promoted to GM has no
-    // token authority on a scene somebody else made, and neither would the
-    // Owner on a scene a GM created. The world's three-tier model says GM
-    // carries authority; token editing does not consult it.
-    //
-    // Asserted as it behaves today so the suite is honest and the day it
-    // changes someone has to come here and decide. Whether a co-GM *should*
-    // be able to move tokens is a product question, not a test's to answer.
+    // A co-GM carries the same authority over content as the Owner. This
+    // used to be refused — `update_token` gated on `scenes.owner_id`, the
+    // person who created the scene, never consulting the world role — and
+    // this test is what found it, by putting two authorities under load at
+    // once and watching exactly half the writes fail.
     const coGmRefused = gmResults.filter(
       (r, i) => i % 2 === 1 && r.errors,
     ).length;
     expect(
       coGmRefused,
-      "a promoted co-GM is currently refused token edits on a scene they did " +
-        "not create (update_token gates on scenes.owner_id, not on world role)",
-    ).toBe(gmResults.length / 2);
+      "a promoted co-GM must be able to edit content on a scene they did not create",
+    ).toBe(0);
 
     // The rule that reshaped this test, pinned where it will be noticed.
     // Signing in again revokes the previous session — deliberate, and

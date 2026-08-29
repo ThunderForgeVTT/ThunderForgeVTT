@@ -1327,6 +1327,22 @@ impl SceneMutation {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         let user_id = auth_user.user_id;
+
+        // Creating a scene had **no membership check at all**: any signed-in
+        // user could add a scene to any world by naming its id. Scene
+        // authoring is a Game Master power, so it takes the same gate every
+        // other content mutation takes.
+        if !crate::auth::world_membership::is_dm_of_world(
+            state,
+            user_id,
+            auth_user.is_admin,
+            input.world_id,
+        )
+        .await?
+        {
+            return Err(Error::new("Forbidden"));
+        }
+
         let mut conn = state
             .db_pool
             .get()
@@ -1424,6 +1440,7 @@ impl SceneMutation {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         let user_id = auth_user.user_id;
+        let is_admin = auth_user.is_admin;
         let mut conn = state
             .db_pool
             .get()
@@ -1433,6 +1450,17 @@ impl SceneMutation {
         let updated_scene = tokio::task::spawn_blocking(move || {
             use crate::schema::scenes;
             use diesel::prelude::*;
+
+            // 🔐 A scene is content, so editing one follows the world role:
+            // the Owner and any GM, not just whoever created the scene.
+            // `updateSceneHidden` and `launchScene` next door already gate
+            // this way — a GM who could hide and launch a scene but not
+            // rename it was the inconsistency, not the fix.
+            if !crate::auth::world_membership::is_dm_of_scene(
+                &mut conn, user_id, is_admin, scene_id,
+            )? {
+                return Err(diesel::result::Error::NotFound);
+            }
 
             // Spec 022 (FR-006): summaryRenderedHtml is derived from
             // summaryMarkdown at write time (not on read, unlike lore
@@ -1457,14 +1485,10 @@ impl SceneMutation {
                 preview_asset_id: None,
             };
 
-            diesel::update(
-                scenes::table
-                    .filter(scenes::scene_id.eq(scene_id))
-                    .filter(scenes::owner_id.eq(user_id)),
-            )
-            .set(update_data)
-            .returning(crate::models::Scene::as_returning())
-            .get_result(&mut conn)
+            diesel::update(scenes::table.filter(scenes::scene_id.eq(scene_id)))
+                .set(update_data)
+                .returning(crate::models::Scene::as_returning())
+                .get_result(&mut conn)
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -1515,6 +1539,7 @@ impl SceneMutation {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         let user_id = auth_user.user_id;
+        let is_admin = auth_user.is_admin;
         let mut conn = state
             .db_pool
             .get()
@@ -1523,12 +1548,21 @@ impl SceneMutation {
         let deleted = tokio::task::spawn_blocking(move || {
             use crate::schema::scenes;
             use diesel::prelude::*;
-            diesel::delete(
-                scenes::table
-                    .filter(scenes::scene_id.eq(scene_id))
-                    .filter(scenes::owner_id.eq(user_id)),
-            )
-            .execute(&mut conn)
+
+            // 🔐 Deleting a *scene* is a content act and follows the world
+            // role. Deleting the *world* — and every other world-level
+            // right — stays Owner-only and is gated elsewhere; a GM gains
+            // nothing here beyond authority over the content of the world
+            // they are running.
+            if !crate::auth::world_membership::is_dm_of_scene(
+                &mut conn, user_id, is_admin, scene_id,
+            )? {
+                // Same answer an unauthorized caller got before: nothing
+                // was deleted.
+                return Ok(0);
+            }
+
+            diesel::delete(scenes::table.filter(scenes::scene_id.eq(scene_id))).execute(&mut conn)
         })
         .await
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -1550,6 +1584,33 @@ impl SceneMutation {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         let user_id = auth_user.user_id;
+
+        // Fog is what a Game Master uses to decide what a table can see, and
+        // it had **no membership check at all** — any signed-in user could
+        // write a mask onto any scene by naming its id. Reveal is the
+        // dangerous direction: an attacker could uncover a map the GM was
+        // deliberately keeping hidden, which is a spoiler at best and, on a
+        // scene built around a secret, the whole session.
+        let scene_id = input.scene_id;
+        let is_admin = auth_user.is_admin;
+        {
+            let mut gate = state
+                .db_pool
+                .get()
+                .map_err(|_| Error::new("Failed to get DB connection"))?;
+            let permitted = tokio::task::spawn_blocking(move || {
+                crate::auth::world_membership::is_dm_of_scene(
+                    &mut gate, user_id, is_admin, scene_id,
+                )
+            })
+            .await
+            .map_err(|_| Error::new("Failed to spawn blocking task"))?
+            .unwrap_or(false);
+            if !permitted {
+                return Err(Error::new("Forbidden"));
+            }
+        }
+
         let mut conn = state
             .db_pool
             .get()
@@ -2108,6 +2169,27 @@ impl WorldMutation {
     ) -> GraphQLResult<GraphQLDeleteWorldPayload> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
+
+        // Owner only, and this was a real hole: the check below is world
+        // *membership*, so before this line existed any member — including a
+        // Player who had merely accepted an invite — could delete the whole
+        // world. Deleting is the one action with no way back, so it is the
+        // one that most needs the narrow gate.
+        //
+        // Checked before the world is loaded, so a non-owner learns nothing
+        // about a world they cannot act on beyond the fact of their own
+        // membership, which they already knew.
+        if !crate::auth::world_membership::is_owner_of_world(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            id,
+        )
+        .await?
+        {
+            return Err(Error::new("Forbidden"));
+        }
+
         let existing = load_visible_world_by_id(state, auth_user.user_id, false, id).await?;
 
         let Some(world) = existing else {

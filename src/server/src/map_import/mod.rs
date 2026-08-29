@@ -95,6 +95,7 @@ fn error_response(err: &MapImportError) -> (StatusCode, Json<serde_json::Value>)
 pub async fn import_uvtt_impl(
     state: &AppState,
     user_id: Uuid,
+    is_admin: bool,
     scene_id: Uuid,
     file_bytes: Vec<u8>,
 ) -> Result<ImportResult, MapImportError> {
@@ -112,7 +113,12 @@ pub async fn import_uvtt_impl(
 
     let db_pool = state.db_pool.clone();
 
-    // Ownership check (T026a) — we only need world_id back from this
+    // Authority check (T026a) — importing a map writes walls, doors, lights
+    // and a background onto a scene, so it is content authoring and follows
+    // the world role: the Owner and any GM may import onto any scene in
+    // their world, a Player or non-member onto none. It used to require
+    // `scenes.owner_id == caller`, which locked a co-GM out of every scene
+    // they had not personally created. We only need world_id back from this
     // (the scene's *existing* grid_size no longer matters: the import now
     // adopts the source file's own grid, below).
     let ownership_pool = db_pool.clone();
@@ -121,9 +127,11 @@ pub async fn import_uvtt_impl(
         let mut conn = ownership_pool
             .get()
             .map_err(|e| MapImportError::Io(format!("Failed to get DB connection: {e}")))?;
+        if !crate::auth::world_membership::is_dm_of_scene(&mut conn, user_id, is_admin, scene_id)? {
+            return Err(MapImportError::SceneNotOwned);
+        }
         scenes::table
             .filter(scenes::scene_id.eq(scene_id))
-            .filter(scenes::owner_id.eq(user_id))
             .select(scenes::world_id)
             .first::<Uuid>(&mut conn)
             .optional()?
@@ -360,7 +368,7 @@ async fn import_uvtt(
         return Err(error_response(&MapImportError::MissingFileField));
     };
 
-    let result = import_uvtt_impl(&state, user_id, scene_id, file_bytes)
+    let result = import_uvtt_impl(&state, user_id, auth_user.is_admin, scene_id, file_bytes)
         .await
         .map_err(|e| error_response(&e))?;
 
@@ -511,16 +519,20 @@ mod tests {
         assert_eq!(walls.len(), 1);
     }
 
-    /// T066: the import endpoint's ownership check (T026a) is the exact
-    /// same `scenes::table.filter(scene_id).filter(owner_id.eq(user_id))`
-    /// shape as `mutations_walls.rs`'s `wall_mutations_are_scoped_to_scene_owner`
-    /// — verified directly at the Diesel-query level (rather than through
-    /// the full Axum multipart handler) for the same reason that test
-    /// does: it's the actual authorization boundary, and a live-DB
-    /// `test_transaction` exercises it without needing HTTP/multipart
-    /// scaffolding.
+    /// T066: the import endpoint's authority check (T026a) is the same
+    /// `is_dm_of_scene` gate the token/wall/shape/light mutations use —
+    /// verified here at that gate rather than through the full Axum
+    /// multipart handler, for the same reason those tests do: it is the
+    /// actual authorization boundary, and a live-DB `test_transaction`
+    /// exercises it without HTTP/multipart scaffolding.
+    ///
+    /// This replaces `import_ownership_check_is_scoped_to_scene_owner`,
+    /// which asserted the old `scenes.owner_id == caller` rule. Importing a
+    /// map writes walls, doors, lights and a background onto a scene, so it
+    /// is content authoring: a co-GM must be able to do it on a scene they
+    /// did not create, and a Player still must not do it at all.
     #[test]
-    fn import_ownership_check_is_scoped_to_scene_owner() {
+    fn import_authority_follows_the_world_role_not_the_scene_creator() {
         use diesel::PgConnection;
 
         fn try_connect() -> Option<PgConnection> {
@@ -531,85 +543,47 @@ mod tests {
 
         let Some(mut conn) = try_connect() else {
             eprintln!(
-                "skipping import_ownership_check_is_scoped_to_scene_owner: no DATABASE_URL/dev DB reachable"
+                "skipping import_authority_follows_the_world_role_not_the_scene_creator: no DATABASE_URL/dev DB reachable"
             );
             return;
         };
 
         conn.test_transaction::<_, diesel::result::Error, _>(|conn| {
-            use crate::schema::{scenes, users, worlds};
+            use crate::auth::world_membership::is_dm_of_scene;
+            use crate::test_support::{
+                insert_test_scene_named, insert_test_user, insert_test_world,
+                insert_test_world_member,
+            };
 
-            let owner_id = uuid::Uuid::now_v7();
-            let intruder_id = uuid::Uuid::now_v7();
-            let world_id = uuid::Uuid::now_v7();
-            let scene_id = uuid::Uuid::now_v7();
-            let now = chrono::Utc::now().naive_utc();
+            let owner_id = insert_test_user(conn);
+            let world_id = insert_test_world(conn, owner_id);
 
-            for (id, username) in [
-                (owner_id, "import-test-owner"),
-                (intruder_id, "import-test-intruder"),
-            ] {
-                diesel::insert_into(users::table)
-                    .values((
-                        users::id.eq(id),
-                        users::username.eq(format!("{username}-{id}")),
-                        users::password_hash.eq("test-hash"),
-                        users::email.eq(format!("{username}-{id}@example.test")),
-                        users::created_at.eq(now),
-                        users::updated_at.eq(now),
-                    ))
-                    .execute(conn)?;
-            }
+            let gm_id = insert_test_user(conn);
+            insert_test_world_member(conn, world_id, gm_id, "GM");
+            let player_id = insert_test_user(conn);
+            insert_test_world_member(conn, world_id, player_id, "Player");
+            let stranger_id = insert_test_user(conn);
 
-            diesel::insert_into(worlds::table)
-                .values((
-                    worlds::id.eq(world_id),
-                    worlds::name.eq("Import Test World"),
-                    worlds::created_by.eq(owner_id),
-                    worlds::updated_by.eq(owner_id),
-                    worlds::created_at.eq(now),
-                    worlds::updated_at.eq(now),
-                ))
-                .execute(conn)?;
+            // Two scenes in the same world, created by two different people.
+            // Under the old rule each of them was an island.
+            let owners_scene = insert_test_scene_named(conn, world_id, owner_id, "Owner's Scene");
+            let gms_scene = insert_test_scene_named(conn, world_id, gm_id, "GM's Scene");
 
-            diesel::insert_into(scenes::table)
-                .values((
-                    scenes::scene_id.eq(scene_id),
-                    scenes::world_id.eq(world_id),
-                    scenes::name.eq("Import Test Scene"),
-                    scenes::type_.eq("battlemap"),
-                    scenes::grid_size.eq(32),
-                    scenes::grid_type.eq("square"),
-                    scenes::width.eq(1000),
-                    scenes::height.eq(1000),
-                    scenes::owner_id.eq(owner_id),
-                    scenes::created_at.eq(now),
-                    scenes::updated_at.eq(now),
-                ))
-                .execute(conn)?;
-
-            // Same query shape as import_uvtt's ownership check.
-            let intruder_result = scenes::table
-                .filter(scenes::scene_id.eq(scene_id))
-                .filter(scenes::owner_id.eq(intruder_id))
-                .select((scenes::grid_size, scenes::world_id))
-                .first::<(i32, uuid::Uuid)>(conn)
-                .optional()?;
             assert!(
-                intruder_result.is_none(),
-                "a non-owner's import ownership check must not match another owner's scene"
+                is_dm_of_scene(conn, gm_id, false, owners_scene)?,
+                "a member promoted to GM must be able to edit imported maps on a scene the Owner created"
             );
-
-            let owner_result = scenes::table
-                .filter(scenes::scene_id.eq(scene_id))
-                .filter(scenes::owner_id.eq(owner_id))
-                .select((scenes::grid_size, scenes::world_id))
-                .first::<(i32, uuid::Uuid)>(conn)
-                .optional()?;
-            assert_eq!(
-                owner_result,
-                Some((32, world_id)),
-                "the scene owner's import ownership check must match their own scene"
+            assert!(
+                is_dm_of_scene(conn, owner_id, false, gms_scene)?,
+                "the world's Owner must be able to edit imported maps on a scene a GM created"
+            );
+            assert!(
+                !is_dm_of_scene(conn, player_id, false, owners_scene)?,
+                "a plain Player must not gain content authority from world membership"
+            );
+            assert!(
+                !is_dm_of_scene(conn, stranger_id, false, owners_scene)?,
+                "a non-member must not be able to edit imported maps in this world at all"
             );
 
             Ok(())
@@ -832,7 +806,7 @@ mod tests {
                 .collect();
         expected_lights = sorted(expected_lights);
 
-        let result = import_uvtt_impl(&state, owner_id, scene_id, raw)
+        let result = import_uvtt_impl(&state, owner_id, false, scene_id, raw)
             .await
             .expect("import should succeed");
 
@@ -934,7 +908,7 @@ mod tests {
         drop(conn);
 
         let raw = read_fixture("dwarven-forge.dd2vtt");
-        import_uvtt_impl(&state, owner_id, scene_id, raw)
+        import_uvtt_impl(&state, owner_id, false, scene_id, raw)
             .await
             .expect("import should succeed");
 
@@ -1099,7 +1073,7 @@ mod tests {
         drop(conn);
 
         let raw = read_fixture(fixture_name);
-        let result = import_uvtt_impl(&state, owner_id, scene_id, raw)
+        let result = import_uvtt_impl(&state, owner_id, false, scene_id, raw)
             .await
             .unwrap_or_else(|e| panic!("{fixture_name} should import successfully: {e}"));
         result.warnings

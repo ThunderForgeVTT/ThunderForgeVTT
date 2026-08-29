@@ -112,13 +112,26 @@ pub fn insert_test_world(conn: &mut PgConnection, owner_id: Uuid) -> Uuid {
 }
 
 pub fn insert_test_scene(conn: &mut PgConnection, world_id: Uuid, owner_id: Uuid) -> Uuid {
+    insert_test_scene_named(conn, world_id, owner_id, "Test Scene")
+}
+
+/// `insert_test_scene` with an explicit name. Scene names are unique per
+/// world (`unique_scene_name_per_world`), so a test that needs two scenes in
+/// one world — e.g. one created by the Owner and one by a GM, to check that
+/// content authority does not follow the creator — must name them apart.
+pub fn insert_test_scene_named(
+    conn: &mut PgConnection,
+    world_id: Uuid,
+    owner_id: Uuid,
+    name: &str,
+) -> Uuid {
     use crate::schema::scenes;
     let id = Uuid::now_v7();
     diesel::insert_into(scenes::table)
         .values((
             scenes::scene_id.eq(id),
             scenes::world_id.eq(world_id),
-            scenes::name.eq("Test Scene"),
+            scenes::name.eq(name),
             scenes::type_.eq("battlemap"),
             scenes::grid_size.eq(5),
             scenes::grid_type.eq("square"),
