@@ -1,0 +1,33 @@
+[lints]
+workspace = true
+
+[package]
+name = "thunderforge_presence"
+version = "0.1.0"
+edition = "2024"
+repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
+license.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+# Who is at the table right now.
+#
+# Presence is the one piece of world state that is *only* ever about the
+# present moment, and it was the only one being written to Postgres on a timer:
+# every connected client upserted a row every five seconds, forever, whether
+# or not anybody was looking. At a thousand tables that is more database writes
+# than the game itself generates.
+#
+# It belongs in memory, and not merely because memory is cheaper. A presence
+# row that survives a restart is stale by definition — the client's socket died
+# with the process, but the row still claims they are online. An in-process
+# registry can only ever describe this process's live clients, which is the
+# thing presence is actually supposed to mean.
+#
+# No database, no clock of its own: callers pass the time in, so every expiry
+# boundary is an ordinary test case rather than something you wait fifteen
+# seconds to observe.
+[dependencies]
+dashmap = "6"
+uuid = { version = "1.26.0", features = ["serde"] }

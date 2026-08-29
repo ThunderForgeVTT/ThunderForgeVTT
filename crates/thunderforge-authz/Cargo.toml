@@ -1,0 +1,25 @@
+[lints]
+workspace = true
+
+[package]
+name = "thunderforge_authz"
+version = "0.1.0"
+edition = "2024"
+repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
+license.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+# Who may do what to a world, and who may see which scenes.
+#
+# Extracted from the server because these are decisions, not queries: a role,
+# an ownership fact and a scene flag go in, and an allow/deny comes out. They
+# had been welded to diesel and a live Postgres, so the only way to ask "may a
+# Player delete a world" was to stand up a database and try it — and three
+# holes survived exactly that gap, including `deleteWorld` being reachable by
+# any world member at all.
+#
+# No diesel, no schema, no pool. Every rule in here is a pure function over
+# plain values, so the whole permission matrix is enumerable in a unit test.
+[dependencies]

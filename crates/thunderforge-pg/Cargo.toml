@@ -1,0 +1,33 @@
+[lints]
+workspace = true
+
+[package]
+name = "thunderforge_pg"
+version = "0.1.0"
+edition = "2024"
+repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
+license.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+# The delivery loop that drives real-time world events, and the pool sizing
+# it runs against.
+#
+# Split out from the server for one reason: the loop's *failure* behaviour was
+# untestable. It lived in an async task welded to a connection pool, a
+# database and a timer, so the only way to ask "what happens when a poll
+# panics" was to run the whole stack under load and hope. A delivery freeze
+# hid in there and took a live investigation against a frozen process to
+# characterise.
+#
+# Nothing here knows what Postgres is. The loop is generic over a source it
+# polls and a sink it publishes to, so a test can hand it a source that
+# panics, hangs or errors on demand.
+[dependencies]
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+thunderforge_pg_sockets = { path = "../thunderforge-pg-sockets" }
+tokio = { version = "1", features = ["macros", "rt", "sync", "time"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "sync", "time", "test-util"] }

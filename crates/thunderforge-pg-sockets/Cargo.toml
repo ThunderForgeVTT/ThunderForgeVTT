@@ -24,3 +24,10 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 dashmap = "6"
 tokio = { version = "1", features = ["sync"] }
 uuid = { version = "1.26.0", features = ["serde"] }
+
+[dev-dependencies]
+# Only for the capacity measurements, which model the server's real
+# `WorldEvent` payload (it carries a `serde_json::Value`) so the memory and
+# fan-out numbers are about the thing that actually flows through the router.
+serde_json = "1"
+tokio = { version = "1", features = ["sync", "rt", "rt-multi-thread", "macros", "time"] }

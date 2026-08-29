@@ -67,8 +67,11 @@ once_cell = "1.21.4"
 # Spec 028 / ADR-052: the fingerprint, delta and conflict rules the client
 # also uses. Shared rather than reimplemented so the two sides cannot drift
 # on what "current" means.
+thunderforge_authz = { path = "../../crates/thunderforge-authz" }
 thunderforge_cache_core = { path = "../../crates/thunderforge-cache-core" }
+thunderforge_pg = { path = "../../crates/thunderforge-pg" }
 thunderforge_pg_sockets = { path = "../../crates/thunderforge-pg-sockets" }
+thunderforge_presence = { path = "../../crates/thunderforge-presence" }
 # The authentication rules, extracted so they can be tested (and proptested)
 # without a database, a request or a provider account behind them. The
 # handlers below stay here — they own `AppState`, Diesel and the cookie jar —
