@@ -1,0 +1,31 @@
+[lints]
+workspace = true
+
+[package]
+name = "thunderforge_axum_auth_core"
+version = "0.1.0"
+edition = "2024"
+repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
+license.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+# Deliberately no `axum`, `diesel`, `tower-cookies` or `reqwest` dependency.
+# This crate holds the credential and session *rules* — what counts as a
+# usable password, whether a TOTP code matches, what attributes a session
+# cookie must carry — and holds them without any of the state they are
+# applied to. That is what lets them be exercised by plain `cargo test`
+# (and by proptest) instead of only through a live HTTP handler with a
+# database behind it. The moment something here needs a connection pool, a
+# request, or a cookie jar, it belongs in `src/server` instead — that
+# boundary is this crate's entire value (same reasoning as the
+# `thunderforge-cache-core` split, docs/CLIENT_WORLD_CACHE.md).
+[dependencies]
+base64 = "0.23.1"
+data-encoding = "2.11.1"
+rand = "0.10.2"
+totp-rs = { version = "6.0.0", features = ["otpauth"] }
+
+[dev-dependencies]
+proptest = "1.11.0"

@@ -1,0 +1,29 @@
+[lints]
+workspace = true
+
+[package]
+name = "thunderforge_axum_oauth"
+version = "0.1.0"
+edition = "2024"
+repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
+license.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+# Deliberately no `axum`, `diesel` or `reqwest` dependency. The
+# authorization-code + PKCE flow is a sequence of pure transformations —
+# build a URL, compare a `state`, derive a challenge, parse a token response
+# — and every one of them is reachable here without a network round trip or
+# a provider account. `reqwest` stays in `src/server`, which owns the two
+# actual HTTP calls (token exchange and userinfo).
+[dependencies]
+base64 = "0.23.1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+sha2 = "0.11.0"
+url = "2.5.8"
+thunderforge_axum_auth_core = { path = "../thunderforge-axum-auth-core" }
+
+[dev-dependencies]
+proptest = "1.11.0"

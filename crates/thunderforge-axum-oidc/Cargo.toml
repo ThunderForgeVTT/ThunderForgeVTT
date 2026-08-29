@@ -1,0 +1,26 @@
+[lints]
+workspace = true
+
+[package]
+name = "thunderforge_axum_oidc"
+version = "0.1.0"
+edition = "2024"
+repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
+license.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+# OpenID Connect on top of `thunderforge_axum_oauth`: everything here reads a
+# document some third party wrote. Discovery metadata, an ID token, a
+# userinfo body — none of it is ours, all of it is attacker-influenceable in
+# the general case, and every parser here is therefore total by design and
+# proptested against arbitrary bytes. No `axum`, no `reqwest`: fetching is
+# the server's job, believing is this crate's.
+[dependencies]
+base64 = "0.23.1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+
+[dev-dependencies]
+proptest = "1.11.0"
