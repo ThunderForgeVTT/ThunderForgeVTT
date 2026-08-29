@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { readFileSync, readlinkSync } from "node:fs";
 import path from "node:path";
 
 import {
@@ -112,6 +113,92 @@ function readTunnelEnv() {
   return found;
 }
 
+/**
+ * Reclaim the ports this stack is about to bind, if a previous run left
+ * something on them.
+ *
+ * A leftover dev server is the single most common way to start the day, and
+ * the failure it produces is disproportionate: Vite refuses to bind, the
+ * backend refuses to bind, and the message that reaches the console belongs
+ * to whichever noticed first. Clearing the way is better than explaining it.
+ *
+ * **It will only kill something it can identify as ours.** A process holding
+ * 5173 that is not this repository's dev server is somebody else's work, and
+ * killing it would be a far worse failure than the one being fixed — so that
+ * case reports what is there and stops, rather than guessing. The check is
+ * the process's own working directory: our children run from this repo.
+ *
+ * SIGTERM first, and SIGKILL only for what is still there afterwards.
+ */
+async function reclaimPorts(ports) {
+  for (const { port, what } of ports) {
+    let pids = [];
+    try {
+      const listed = execFileSync("lsof", ["-ti", `tcp:${port}`, "-sTCP:LISTEN"], {
+        encoding: "utf8",
+      });
+      pids = listed.split("\n").map((line) => line.trim()).filter(Boolean);
+    } catch {
+      // lsof exits non-zero when nothing is listening, which is the good case.
+      continue;
+    }
+
+    for (const pid of pids) {
+      let owner = "";
+      try {
+        owner = readlinkSync(`/proc/${pid}/cwd`);
+      } catch {
+        // A process we cannot inspect is one we have no business killing.
+      }
+
+      if (!owner.startsWith(ROOT_DIR)) {
+        log(
+          "dev",
+          `Port ${port} (${what}) is held by pid ${pid}, which is not running from this ` +
+            `repository${owner ? ` (cwd: ${owner})` : ""}. Leaving it alone — stop it yourself ` +
+            "if it is safe to, then start again.",
+          process.stderr,
+        );
+        process.exit(1);
+      }
+
+      log("dev", `Reclaiming port ${port} (${what}) from a previous run, pid ${pid}.`);
+      try {
+        process.kill(Number(pid), "SIGTERM");
+      } catch {
+        continue;
+      }
+    }
+  }
+
+  // One grace period for everything, then insist. A process that ignores
+  // SIGTERM still has to let go of the port, or the next line fails for the
+  // same reason as before.
+  if (ports.length > 0) {
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    for (const { port } of ports) {
+      try {
+        const listed = execFileSync("lsof", ["-ti", `tcp:${port}`, "-sTCP:LISTEN"], {
+          encoding: "utf8",
+        });
+        for (const pid of listed.split("\n").map((l) => l.trim()).filter(Boolean)) {
+          let owner = "";
+          try {
+            owner = readlinkSync(`/proc/${pid}/cwd`);
+          } catch {
+            continue;
+          }
+          if (!owner.startsWith(ROOT_DIR)) continue;
+          log("dev", `pid ${pid} did not stop on SIGTERM; sending SIGKILL.`);
+          process.kill(Number(pid), "SIGKILL");
+        }
+      } catch {
+        // Nothing left listening. That is the whole point.
+      }
+    }
+  }
+}
+
 async function run() {
   const args = parseArgs(process.argv.slice(2), { allowOnlyWasm: false, allowTunnel: true });
 
@@ -148,6 +235,13 @@ async function run() {
   // The dev loop defaults to the fast profile: a seven-minute engine build
   // after every edit is not a dev loop. Set ENGINE_PROFILE=release when you
   // specifically want to look at load performance.
+  // Before the engine build, so a stale stack is cleared while the build is
+  // the thing taking time rather than after it.
+  await reclaimPorts([
+    { port: 5173, what: "frontend" },
+    { port: 30000, what: "backend" },
+  ]);
+
   await ensureEngineBuild({ force: args.force, profile: engineProfile("dev") });
 
   // Started in dependency order, each gated on the next being ready — the
