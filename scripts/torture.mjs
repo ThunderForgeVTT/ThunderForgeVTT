@@ -19,12 +19,39 @@ import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import process from "node:process";
 
+import { SCENARIOS, scenarioById, scenarioEnv } from "./torture-scenarios.mjs";
+
 const TIERS = [5, 10, 25, 50, 100, 250, 500, 1000];
 
-const requested = Number(process.argv[2] ?? "5");
+// Two ways in, and only one of them is reproducible.
+//
+// `--scenario <id>` is the supported one: a named entry in
+// `torture-scenarios.mjs` carrying its tier, its spec filter and its
+// environment, so the same name runs the same test every time and a report can
+// say what the result means. A bare tier still works for exploratory runs, but
+// anything worth repeating — or worth quoting — should be a scenario.
+const args = process.argv.slice(2);
+
+if (args.includes("--list")) {
+  console.log("Scenarios:\n");
+  for (const s of SCENARIOS) {
+    console.log(
+      `  ${s.id.padEnd(14)} ${s.title}  (tier ${s.tier}, ${s.runtime})`,
+    );
+    console.log(`  ${" ".repeat(14)} ${s.question}\n`);
+  }
+  process.exit(0);
+}
+
+const scenarioFlag = args.indexOf("--scenario");
+const scenario =
+  scenarioFlag >= 0 ? scenarioById(args[scenarioFlag + 1]) : null;
+
+const requested = scenario ? scenario.tier : Number(args[0] ?? "5");
 if (!TIERS.includes(requested)) {
   console.error(
-    `Unknown tier "${process.argv[2]}". Choose one of: ${TIERS.join(", ")}`,
+    `Unknown tier "${args[0]}". Choose one of: ${TIERS.join(", ")}, ` +
+      `or use --scenario <id> (--list to see them).`,
   );
   process.exit(2);
 }
@@ -241,6 +268,10 @@ try {
     DATABASE_URL: databaseUrl,
     RUSTFS_ENDPOINT: `http://localhost:${rustfsPort}`,
     TORTURE_SESSIONS: String(requested),
+    // A scenario's own settings win over anything inherited, so a run is
+    // determined by its name rather than by whatever happened to be exported
+    // in the shell that started it.
+    ...(scenario ? scenarioEnv(scenario) : {}),
     // Registering a table of players legitimately exceeds a limit written
     // for humans typing passwords — 15 auth requests per minute per IP. The
     // tests still pace themselves against it (see `table-storm`), so this is
@@ -294,7 +325,9 @@ try {
   // not the server. The other three open their sockets inside one page and
   // scale to whatever the transport will bear, which is the thing worth
   // knowing at that size.
-  const only = (process.env.TORTURE_SPECS ?? "").trim();
+  const only = (
+    scenario ? scenario.specs.join(" ") : (process.env.TORTURE_SPECS ?? "")
+  ).trim();
   const specArgs = only
     ? only.split(/\s+/).map((name) => `e2e/torture/${name}.torture.spec.ts`)
     : [];
