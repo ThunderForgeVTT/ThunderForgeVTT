@@ -29,7 +29,6 @@
 //! own it.
 
 use async_graphql::{Context, Object, SimpleObject};
-use diesel::prelude::*;
 use uuid::Uuid;
 
 use crate::auth::world_membership::require_world_member;
@@ -95,34 +94,18 @@ impl HeartbeatMutation {
         require_world_member(&mut conn, user_id, world_id)
             .map_err(|_| async_graphql::Error::new("Not a member of this world"))?;
 
-        use crate::schema::players_online;
-        let now = chrono::Utc::now().naive_utc();
-
-        // Upsert, because a heartbeat is the *only* thing that establishes
-        // presence now. Requiring a separate "connect" first would mean a
-        // client whose first beat lands after a server restart is invisible
-        // until it happens to reconnect a socket.
-        diesel::insert_into(players_online::table)
-            .values(&crate::models::NewPlayersOnline {
-                player_id: user_id,
-                world_id,
-                scene_id,
-                connected_at: now,
-                last_seen: now,
-                idle_duration_secs: 0,
-                created_at: now,
-                updated_at: now,
-            })
-            .on_conflict((players_online::player_id, players_online::world_id))
-            .do_update()
-            .set((
-                players_online::last_seen.eq(now),
-                players_online::scene_id.eq(scene_id),
-                players_online::idle_duration_secs.eq(0),
-                players_online::updated_at.eq(now),
-            ))
-            .execute(&mut conn)
-            .map_err(|e| async_graphql::Error::new(format!("Failed to record presence: {e}")))?;
+        // In memory, not in a row. A beat is a statement about *now*, and
+        // its answer is worthless one beat later — writing it to Postgres
+        // cost a WAL record, an index update and a dead tuple every five
+        // seconds per connected client, for a fact nothing durable needs.
+        //
+        // The membership check above deliberately still runs on every beat.
+        // Caching it would be the obvious next saving and is the wrong one:
+        // refusing a beat is how a client learns its access was revoked while
+        // it sat idle, and a cache would put a delay on exactly that.
+        state
+            .presence
+            .beat(world_id, user_id, scene_id, std::time::Instant::now());
 
         Ok(true)
     }
@@ -158,28 +141,15 @@ impl PresenceQuery {
         require_world_member(&mut conn, auth_user.user_id, world_id)
             .map_err(|_| async_graphql::Error::new("Not a member of this world"))?;
 
-        use crate::schema::players_online;
-        let rows: Vec<(Uuid, Option<Uuid>, chrono::NaiveDateTime)> = players_online::table
-            .filter(players_online::world_id.eq(world_id))
-            .select((
-                players_online::player_id,
-                players_online::scene_id,
-                players_online::last_seen,
-            ))
-            .load(&mut conn)
-            .map_err(|e| async_graphql::Error::new(format!("Failed to read presence: {e}")))?;
-
-        let now = chrono::Utc::now().naive_utc();
-        Ok(rows
+        Ok(state
+            .presence
+            .in_world(world_id, std::time::Instant::now())
             .into_iter()
-            .map(|(player_id, scene_id, last_seen)| {
-                let seconds = (now - last_seen).num_seconds().max(0);
-                GraphQLPresence {
-                    user_id: player_id,
-                    scene_id,
-                    seconds_since_seen: i32::try_from(seconds).unwrap_or(i32::MAX),
-                    connected: is_connected(seconds),
-                }
+            .map(|person| GraphQLPresence {
+                user_id: person.user_id,
+                scene_id: person.scene_id,
+                seconds_since_seen: i32::try_from(person.since_seen.as_secs()).unwrap_or(i32::MAX),
+                connected: person.connected,
             })
             .collect())
     }
@@ -208,54 +178,44 @@ mod tests {
         assert!(is_connected(-5));
     }
 
-    #[tokio::test]
-    async fn a_heartbeat_records_presence_and_a_second_one_refreshes_it() {
-        use crate::schema::players_online;
-        let state = crate::test_support::test_app_state();
-        let mut conn = state.db_pool.get().unwrap();
-        let owner = crate::test_support::insert_test_user(&mut conn);
-        let world = crate::test_support::insert_test_world(&mut conn, owner);
-        let scene = crate::test_support::insert_test_scene(&mut conn, world, owner);
-        let now = chrono::Utc::now().naive_utc();
+    /// A second beat refreshes one person rather than adding another.
+    ///
+    /// This replaces a test that stood in for the mutation's body by running
+    /// its `INSERT ... ON CONFLICT` by hand against a live database. It
+    /// asserted "a heartbeat must upsert, never accumulate" — a property of a
+    /// table that no longer holds presence. The property that matters is the
+    /// same one, and it is now about the registry the mutation actually
+    /// writes to, so it needs no database and takes microseconds.
+    #[test]
+    fn a_second_beat_refreshes_one_person_rather_than_adding_another() {
+        use std::time::{Duration, Instant};
 
-        // Stand in for the mutation's body, which needs a GraphQL context.
-        let beat = |conn: &mut PgConnection, at: chrono::NaiveDateTime| {
-            diesel::insert_into(players_online::table)
-                .values(&crate::models::NewPlayersOnline {
-                    player_id: owner,
-                    world_id: world,
-                    scene_id: Some(scene),
-                    connected_at: at,
-                    last_seen: at,
-                    idle_duration_secs: 0,
-                    created_at: at,
-                    updated_at: at,
-                })
-                .on_conflict((players_online::player_id, players_online::world_id))
-                .do_update()
-                .set((
-                    players_online::last_seen.eq(at),
-                    players_online::idle_duration_secs.eq(0),
-                ))
-                .execute(conn)
-                .expect("heartbeat should record presence");
-        };
+        let registry = thunderforge_presence::PresenceRegistry::new();
+        let world = Uuid::from_u128(1);
+        let player = Uuid::from_u128(2);
+        let scene = Uuid::from_u128(3);
+        let start = Instant::now();
 
-        // An old beat, then a fresh one. The second must *update* rather than
-        // insert a second row — a heartbeat every five seconds would
-        // otherwise grow the table without bound.
-        beat(&mut conn, now - chrono::Duration::seconds(120));
-        beat(&mut conn, now);
+        registry.beat(world, player, Some(scene), start);
+        let much_later = start + Duration::from_secs(120);
+        registry.beat(world, player, Some(scene), much_later);
 
-        let rows: Vec<chrono::NaiveDateTime> = players_online::table
-            .filter(players_online::world_id.eq(world))
-            .filter(players_online::player_id.eq(owner))
-            .select(players_online::last_seen)
-            .load(&mut conn)
-            .expect("presence should be readable");
+        let people = registry.in_world(world, much_later);
+        assert_eq!(people.len(), 1, "a beat must refresh, never accumulate");
+        assert!(people[0].connected, "the refreshed beat reads as present");
+        assert_eq!(people[0].scene_id, Some(scene));
+    }
 
-        assert_eq!(rows.len(), 1, "a heartbeat must upsert, never accumulate");
-        let age = (now - rows[0]).num_seconds();
-        assert!(is_connected(age), "the refreshed beat reads as present");
+    /// The registry's timeout and this module's `is_connected` must agree.
+    ///
+    /// Two thresholds for one rule, in two crates. They are the same number
+    /// today and nothing but this test would notice if one moved.
+    #[test]
+    fn the_timeout_is_the_same_on_both_sides_of_the_boundary() {
+        assert_eq!(
+            u64::try_from(PRESENCE_TIMEOUT_SECS).unwrap(),
+            thunderforge_presence::PRESENCE_TIMEOUT.as_secs(),
+            "the GraphQL layer and the registry must expire people together"
+        );
     }
 }
