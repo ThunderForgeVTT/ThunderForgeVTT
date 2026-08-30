@@ -1,0 +1,2 @@
+ALTER TABLE walls DROP COLUMN secret;
+ALTER TABLE walls DROP COLUMN locked;

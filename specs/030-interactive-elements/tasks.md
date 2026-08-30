@@ -35,11 +35,11 @@ server in `src/server/src/`, web app in `apps/web/src/`, end-to-end specs in
 
 **Purpose**: The decision record and the storage this feature adds.
 
-- [ ] T001 Write `docs/adrs/ADR-0NN-interaction-effect-contribution.md` recording the contribution seam — declarations in `thunderforge-canvas-core`, dispatch by Bevy event, and the three rejected alternatives from research §1 and §2. Constitution Principle IV requires this to land with the feature, not after it
-- [ ] T002 Create the Diesel migration for `interactives` in `src/server/migrations/` with paired `up.sql`/`down.sql`, per data-model.md, including `created_by`/`updated_by` provenance
-- [ ] T003 [P] Create the Diesel migration for `interaction_requests` in `src/server/migrations/` with paired `up.sql`/`down.sql`
-- [ ] T004 [P] Create the Diesel migration adding `locked` and `secret` to `walls` in `src/server/migrations/`, both `NOT NULL DEFAULT false` so every existing wall keeps its current behaviour
-- [ ] T005 Regenerate `src/server/src/schema.rs` from the migrations and confirm no unrelated table drifted
+- [X] T001 Write `docs/adrs/ADR-0NN-interaction-effect-contribution.md` recording the contribution seam — declarations in `thunderforge-canvas-core`, dispatch by Bevy event, and the three rejected alternatives from research §1 and §2. Constitution Principle IV requires this to land with the feature, not after it
+- [X] T002 Create the Diesel migration for `interactives` in `src/server/migrations/` with paired `up.sql`/`down.sql`, per data-model.md, including `created_by`/`updated_by` provenance
+- [X] T003 [P] Create the Diesel migration for `interaction_requests` in `src/server/migrations/` with paired `up.sql`/`down.sql`
+- [X] T004 [P] Create the Diesel migration adding `locked` and `secret` to `walls` in `src/server/migrations/`, both `NOT NULL DEFAULT false` so every existing wall keeps its current behaviour
+- [X] T005 Regenerate `src/server/src/schema.rs` from the migrations and confirm no unrelated table drifted
 
 ---
 
@@ -52,31 +52,31 @@ Every story plugs into this; none can start before it.
 
 ### The rules, where tests execute
 
-- [ ] T006 Create `crates/thunderforge-canvas-core/src/interaction.rs` with `EffectDeclaration` (id, label, description, subject_kinds, config), `SubjectKind`, `Trigger`, `Activation` and `FireMode`, all deriving ts-rs export to `apps/web/src/engine/sdk/`
-- [ ] T007 [P] Implement `EffectRegistry` assembly in `crates/thunderforge-canvas-core/src/interaction.rs`, taking contributed declaration sets and returning either a registry or a collision error
-- [ ] T008 [P] Test in `crates/thunderforge-canvas-core/src/interaction.rs` that two contributors declaring the same id fail at assembly rather than at first use — a collision found when a GM happens to author one of them is a collision found at the table (FR-042)
-- [ ] T009 [P] Test in `crates/thunderforge-canvas-core/src/interaction.rs` that an empty contribution set assembles successfully into an empty registry. A build with no subsystems must offer nothing, not fail (FR-039)
-- [ ] T010 Implement authoring validation in `crates/thunderforge-canvas-core/src/interaction.rs`: subject and geometry must agree with `subject_kind`, `Trigger::Enter` is valid only for a region, and effect config must validate against its declaration
-- [ ] T011 [P] Test the validation rules in `crates/thunderforge-canvas-core/src/interaction.rs`, including that a region carrying a subject reference and a door carrying none are both rejected rather than tolerated
-- [ ] T012 Implement activation resolution in `crates/thunderforge-canvas-core/src/interaction.rs` returning the tagged outcome from contracts/graphql.md — performed, requested, refused, unavailable, no-effect
-- [ ] T013 [P] Test activation resolution in `crates/thunderforge-canvas-core/src/interaction.rs` across every combination of activation mode, lock state, fire mode and viewer role. This is the truth table the server enforces; getting it right here is what makes the server a thin caller
+- [X] T006 Create `crates/thunderforge-canvas-core/src/interaction.rs` with `EffectDeclaration` (id, label, description, subject_kinds, config), `SubjectKind`, `Trigger`, `Activation` and `FireMode`, all deriving ts-rs export to `apps/web/src/engine/sdk/`
+- [X] T007 [P] Implement `EffectRegistry` assembly in `crates/thunderforge-canvas-core/src/interaction.rs`, taking contributed declaration sets and returning either a registry or a collision error
+- [X] T008 [P] Test in `crates/thunderforge-canvas-core/src/interaction.rs` that two contributors declaring the same id fail at assembly rather than at first use — a collision found when a GM happens to author one of them is a collision found at the table (FR-042)
+- [X] T009 [P] Test in `crates/thunderforge-canvas-core/src/interaction.rs` that an empty contribution set assembles successfully into an empty registry. A build with no subsystems must offer nothing, not fail (FR-039)
+- [X] T010 Implement authoring validation in `crates/thunderforge-canvas-core/src/interaction.rs`: subject and geometry must agree with `subject_kind`, `Trigger::Enter` is valid only for a region, and effect config must validate against its declaration
+- [X] T011 [P] Test the validation rules in `crates/thunderforge-canvas-core/src/interaction.rs`, including that a region carrying a subject reference and a door carrying none are both rejected rather than tolerated
+- [X] T012 Implement activation resolution in `crates/thunderforge-canvas-core/src/interaction.rs` returning the tagged outcome from contracts/graphql.md — performed, requested, refused, unavailable, no-effect
+- [X] T013 [P] Test activation resolution in `crates/thunderforge-canvas-core/src/interaction.rs` across every combination of activation mode, lock state, fire mode and viewer role. This is the truth table the server enforces; getting it right here is what makes the server a thin caller
 
 ### Doors as a shared rule
 
-- [ ] T014 Extend `crates/thunderforge-canvas-core/src/wall.rs` with `locked` and `secret`, and a function giving what a segment blocks from its door state and the wall's own blocking profile
-- [ ] T015 [P] Test the blocking rule in `crates/thunderforge-canvas-core/src/wall.rs`: open blocks neither; closed blocks exactly what the wall blocks, so a closed window stays see-through and a closed stone door does not (FR-008, FR-009)
-- [ ] T016 [P] Test in `crates/thunderforge-canvas-core/src/wall.rs` that lock is independent of state, so "open and not closeable by players" is expressible — the case a three-state model cannot represent (FR-010)
+- [X] T014 Extend `crates/thunderforge-canvas-core/src/wall.rs` with `locked` and `secret`, and a function giving what a segment blocks from its door state and the wall's own blocking profile
+- [X] T015 [P] Test the blocking rule in `crates/thunderforge-canvas-core/src/wall.rs`: open blocks neither; closed blocks exactly what the wall blocks, so a closed window stays see-through and a closed stone door does not (FR-008, FR-009)
+- [X] T016 [P] Test in `crates/thunderforge-canvas-core/src/wall.rs` that lock is independent of state, so "open and not closeable by players" is expressible — the case a three-state model cannot represent (FR-010)
 
 ### Server: persistence, authorization, dispatch
 
-- [ ] T017 Create `src/server/src/interaction.rs` assembling the registry from contributing modules and exposing it for validation
-- [ ] T018 Create `src/server/src/graphql/queries/interactives.rs` with `effectRegistry` and `interactives(sceneId)`, returning the GM authoring view and the reduced player view described in contracts/graphql.md
-- [ ] T019 Create `src/server/src/graphql/mutations_interactives.rs` with `createInteractive`, `updateInteractive`, `deleteInteractive` and `resetInteractive`, all refused for non-GMs at the data boundary (FR-005, Principle III)
-- [ ] T020 Implement `activateInteractive` in `src/server/src/graphql/mutations_interactives.rs` returning the tagged outcome, enforcing lock, GM-only and fire-mode server-side
-- [ ] T021 [P] Test in `src/server/src/graphql/mutations_interactives.rs` that a player cannot create, edit, delete or reset an interactive
-- [ ] T022 [P] Test in `src/server/src/interaction.rs` that an interactive whose `effect_id` is absent from the registry resolves to unavailable rather than being dispatched or deleted (FR-041)
-- [ ] T023 Register the new query and mutation roots in `src/server/src/graphql.rs`
-- [ ] T024 Emit interactive and door changes on the existing `worldEventsCreated` subscription with their own event codes in `src/server/src/graphql/mutations_interactives.rs`, reusing the transport walls and token status already use (FR-020)
+- [X] T017 Create `src/server/src/interaction.rs` assembling the registry from contributing modules and exposing it for validation
+- [X] T018 Create `src/server/src/graphql/queries/interactives.rs` with `effectRegistry` and `interactives(sceneId)`, returning the GM authoring view and the reduced player view described in contracts/graphql.md
+- [X] T019 Create `src/server/src/graphql/mutations_interactives.rs` with `createInteractive`, `updateInteractive`, `deleteInteractive` and `resetInteractive`, all refused for non-GMs at the data boundary (FR-005, Principle III)
+- [X] T020 Implement `activateInteractive` in `src/server/src/graphql/mutations_interactives.rs` returning the tagged outcome, enforcing lock, GM-only and fire-mode server-side
+- [X] T021 [P] Test in `src/server/src/graphql/mutations_interactives.rs` that a player cannot create, edit, delete or reset an interactive
+- [X] T022 [P] Test in `src/server/src/interaction.rs` that an interactive whose `effect_id` is absent from the registry resolves to unavailable rather than being dispatched or deleted (FR-041)
+- [X] T023 Register the new query and mutation roots in `src/server/src/graphql.rs`
+- [X] T024 Emit interactive and door changes on the existing `worldEventsCreated` subscription with their own event codes in `src/server/src/graphql/mutations_interactives.rs`, reusing the transport walls and token status already use (FR-020)
 
 ### Engine: the plugin that names no effect
 

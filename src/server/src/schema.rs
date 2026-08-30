@@ -122,6 +122,42 @@ diesel::table! {
 }
 
 diesel::table! {
+    interaction_requests (request_id) {
+        request_id -> Uuid,
+        interactive_id -> Uuid,
+        scene_id -> Uuid,
+        requested_by -> Uuid,
+        state -> Varchar,
+        decided_by -> Nullable<Uuid>,
+        decided_at -> Nullable<Timestamp>,
+        created_by -> Uuid,
+        updated_by -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    interactives (interactive_id) {
+        interactive_id -> Uuid,
+        scene_id -> Uuid,
+        subject_kind -> Varchar,
+        subject_ref -> Nullable<Uuid>,
+        geometry -> Nullable<Jsonb>,
+        effect_id -> Nullable<Varchar>,
+        effect_config -> Nullable<Jsonb>,
+        trigger -> Varchar,
+        activation -> Varchar,
+        fire_mode -> Varchar,
+        fired_at -> Nullable<Timestamp>,
+        created_by -> Uuid,
+        updated_by -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     light_sources (light_id) {
         light_id -> Uuid,
         scene_id -> Uuid,
@@ -387,6 +423,8 @@ diesel::table! {
         created_at -> Timestamp,
         updated_at -> Timestamp,
         door_state -> Text,
+        locked -> Bool,
+        secret -> Bool,
     }
 }
 
@@ -888,6 +926,9 @@ diesel::joinable!(admin_bootstrap_oauth_sessions -> oauth_providers (provider_id
 diesel::joinable!(canvas_image_assets -> worlds (world_id));
 diesel::joinable!(fog_masks -> scenes (scene_id));
 diesel::joinable!(fog_masks -> users (updated_by));
+diesel::joinable!(interaction_requests -> interactives (interactive_id));
+diesel::joinable!(interaction_requests -> scenes (scene_id));
+diesel::joinable!(interactives -> scenes (scene_id));
 diesel::joinable!(light_sources -> scenes (scene_id));
 diesel::joinable!(light_sources -> tokens (attached_token_id));
 diesel::joinable!(login_two_factor_challenges -> users (user_id));
@@ -981,6 +1022,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     content_moderation_actions,
     fog_masks,
     game_systems,
+    interaction_requests,
+    interactives,
     light_sources,
     login_two_factor_challenges,
     oauth_authorization_sessions,

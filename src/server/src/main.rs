@@ -19,6 +19,7 @@ mod config;
 mod db_types;
 mod errors;
 mod graphql;
+mod interaction; // Spec 030: the effect registry, and the rules the GraphQL layer obeys
 mod lore_assets_serve; // Spec 012: authenticated proxy for lore image assets (mirrors canvas_assets_serve)
 mod map_import;
 mod markdown; // Spec 012: lore wiki GFM rendering, [[link]] resolution, slug generation

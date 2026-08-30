@@ -81,6 +81,7 @@ pub mod share_codes;
 pub use mutations_invites::InviteMutation;
 
 // Phase 6: Wall mutations (vision-blocking scene geometry)
+pub mod mutations_interactives; // Spec 030: interactive elements
 pub mod mutations_walls;
 pub use mutations_walls::WallMutation;
 
@@ -2769,6 +2770,8 @@ pub struct QueryRoot(
     SceneQuery,
     queries::token_status::TokenStatusQuery,
     queries::token_attributes::TokenAttributesQuery,
+    // Spec 030: `effectRegistry` and `interactives(sceneId)`.
+    queries::interactives::InteractiveQuery,
     InviteQuery,
     AssetQuery,
     ActorQuery,
@@ -2815,6 +2818,8 @@ pub struct MutationRoot(
     WallMutation,
     LightSourceMutation,
     ShapeMutation,
+    // Spec 030: authoring, activation and approval for interactive elements.
+    mutations_interactives::InteractiveMutation,
     TokenMutation,
     AssetMutation,
     ActorMutation,

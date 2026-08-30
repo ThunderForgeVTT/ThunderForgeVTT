@@ -18,6 +18,7 @@ pub mod attributes;
 pub mod camera;
 pub mod frame_trace;
 pub mod grid;
+pub mod interaction;
 pub mod lighting;
 pub mod measure;
 pub mod movement;

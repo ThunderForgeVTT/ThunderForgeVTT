@@ -43,6 +43,35 @@ pub struct Wall {
     pub blocks_vision: bool,
     pub blocks_movement: bool,
     pub door_state: DoorState,
+    /// Who may change the door's state — not the state itself.
+    ///
+    /// Deliberately a separate flag rather than a third `DoorState`. As one
+    /// enum, "open, and players cannot close it" — a spiked-open portcullis —
+    /// becomes inexpressible, and opening a locked door forces a decision
+    /// about what happens to the lock that a separate flag never raises.
+    ///
+    /// A locked door refuses a player's state change and accepts the Game
+    /// Master's (FR-013).
+    pub locked: bool,
+    /// A door the players are not shown until it is revealed.
+    ///
+    /// Presentation only. Per the spec's decision the geometry still reaches
+    /// every client; it is the drawing that differs, because a player who
+    /// inspects their own client and announces a secret door has created a
+    /// table problem rather than found a security hole.
+    pub secret: bool,
+}
+
+/// What a segment blocks *right now*.
+///
+/// Returned as a pair rather than two calls because vision and movement are
+/// decided by the same rule and answering them separately invites the two
+/// from drifting apart — a closed window that stops arrows and light would be
+/// two lines of code away.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Blocking {
+    pub vision: bool,
+    pub movement: bool,
 }
 
 impl Wall {
@@ -87,6 +116,36 @@ impl Wall {
             return false;
         }
         self.blocks_movement
+    }
+
+    /// The definition FR-008 and FR-009 asked for.
+    ///
+    /// Open blocks neither. Closed — and a plain wall, which is the same
+    /// thing for this purpose — blocks exactly what the wall's own profile
+    /// says. Deriving the closed state from the profile rather than storing a
+    /// second set of flags is what keeps a closed window see-through and a
+    /// closed stone door not, with nothing to keep consistent.
+    ///
+    /// A closed door is therefore indistinguishable from a plain wall in what
+    /// it blocks. That is correct: the difference is that it can be opened.
+    pub fn blocking(&self) -> Blocking {
+        Blocking {
+            vision: self.currently_blocks_vision(),
+            movement: self.currently_blocks_movement(),
+        }
+    }
+
+    /// Whether this segment has been designated a door at all.
+    pub fn is_door(&self) -> bool {
+        self.door_state != DoorState::None
+    }
+
+    /// Whether `actor_is_gm` may change this door's state.
+    ///
+    /// The lock is the only thing that separates them; a Game Master is never
+    /// refused their own door.
+    pub fn may_change_state(&self, actor_is_gm: bool) -> bool {
+        self.is_door() && (actor_is_gm || !self.locked)
     }
 }
 
@@ -270,6 +329,8 @@ mod tests {
             blocks_vision: true,
             blocks_movement: false,
             door_state: DoorState::None,
+            locked: false,
+            secret: false,
         }
     }
 
@@ -526,5 +587,124 @@ mod tests {
     fn zero_length_wall_has_zero_length() {
         let w = wall("w1", 5.0, 5.0, 5.0, 5.0);
         assert_eq!(w.length(), 0.0);
+    }
+
+    // --- doors: what open, closed and locked actually mean ----------------
+
+    #[test]
+    fn a_closed_window_stays_see_through_and_a_closed_stone_door_does_not() {
+        // The whole reason closed blocking is *derived* from the wall's own
+        // profile rather than stored a second time. Two doors, same state,
+        // different materials, and nothing had to be kept consistent.
+        let mut window = wall("window", 0.0, 0.0, 10.0, 0.0);
+        window.blocks_vision = false;
+        window.blocks_movement = true;
+        window.door_state = DoorState::Closed;
+
+        let mut stone = wall("stone", 0.0, 0.0, 10.0, 0.0);
+        stone.blocks_vision = true;
+        stone.blocks_movement = true;
+        stone.door_state = DoorState::Closed;
+
+        assert_eq!(
+            window.blocking(),
+            Blocking {
+                vision: false,
+                movement: true
+            }
+        );
+        assert_eq!(
+            stone.blocking(),
+            Blocking {
+                vision: true,
+                movement: true
+            }
+        );
+    }
+
+    #[test]
+    fn an_open_door_blocks_neither_whatever_it_is_made_of() {
+        let mut door = wall("door", 0.0, 0.0, 10.0, 0.0);
+        door.blocks_vision = true;
+        door.blocks_movement = true;
+        door.door_state = DoorState::Open;
+
+        assert_eq!(
+            door.blocking(),
+            Blocking {
+                vision: false,
+                movement: false
+            }
+        );
+    }
+
+    #[test]
+    fn a_closed_door_is_indistinguishable_from_a_plain_wall_in_what_it_blocks() {
+        // Correct, and worth pinning: the difference is that it can be opened,
+        // not that it stops anything differently.
+        let mut plain = wall("plain", 0.0, 0.0, 10.0, 0.0);
+        plain.blocks_movement = true;
+        let mut door = plain.clone();
+        door.id = String::from("door");
+        door.door_state = DoorState::Closed;
+
+        assert_eq!(plain.blocking(), door.blocking());
+        assert!(!plain.is_door());
+        assert!(door.is_door());
+    }
+
+    #[test]
+    fn lock_is_independent_of_state_so_a_spiked_open_door_is_expressible() {
+        // The case a three-state Open/Closed/Locked enum cannot represent, and
+        // the reason `locked` is a separate flag (FR-010).
+        let mut portcullis = wall("portcullis", 0.0, 0.0, 10.0, 0.0);
+        portcullis.blocks_vision = true;
+        portcullis.blocks_movement = true;
+        portcullis.door_state = DoorState::Open;
+        portcullis.locked = true;
+
+        // Open, so it blocks nothing...
+        assert_eq!(
+            portcullis.blocking(),
+            Blocking {
+                vision: false,
+                movement: false
+            }
+        );
+        // ...and no player can shut it.
+        assert!(!portcullis.may_change_state(false));
+        assert!(portcullis.may_change_state(true));
+    }
+
+    #[test]
+    fn locking_changes_who_may_act_and_never_what_the_door_blocks() {
+        let mut door = wall("door", 0.0, 0.0, 10.0, 0.0);
+        door.blocks_vision = true;
+        door.blocks_movement = true;
+        door.door_state = DoorState::Closed;
+
+        let unlocked = door.blocking();
+        door.locked = true;
+        assert_eq!(door.blocking(), unlocked);
+    }
+
+    #[test]
+    fn a_plain_wall_has_no_state_for_anyone_to_change() {
+        let plain = wall("plain", 0.0, 0.0, 10.0, 0.0);
+        assert!(!plain.may_change_state(false));
+        // Not even the Game Master — there is no door here to open.
+        assert!(!plain.may_change_state(true));
+    }
+
+    #[test]
+    fn secret_is_presentation_and_touches_neither_blocking_nor_permission() {
+        let mut door = wall("door", 0.0, 0.0, 10.0, 0.0);
+        door.blocks_movement = true;
+        door.door_state = DoorState::Closed;
+
+        let before = door.blocking();
+        door.secret = true;
+        assert_eq!(door.blocking(), before);
+        assert!(door.may_change_state(false));
     }
 }

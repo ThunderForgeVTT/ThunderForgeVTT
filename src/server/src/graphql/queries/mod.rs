@@ -8,6 +8,7 @@ pub mod actor;
 pub mod admin;
 pub mod genie_session;
 pub mod healthcheck;
+pub mod interactives;
 pub mod inventory;
 pub mod invite;
 pub mod item;
