@@ -77,7 +77,11 @@ fn contributions_from_several_subsystems_are_the_union_of_what_is_compiled_in() 
         vec![decl("alpha.one", &[SubjectKind::Prop], vec![])],
         vec![
             decl("beta.one", &[SubjectKind::Door], vec![]),
-            decl("beta.two", &[SubjectKind::Prop, SubjectKind::Region], vec![]),
+            decl(
+                "beta.two",
+                &[SubjectKind::Prop, SubjectKind::Region],
+                vec![],
+            ),
         ],
     ])
     .expect("distinct ids");
@@ -168,10 +172,11 @@ fn a_door_carrying_no_subject_reference_is_rejected() {
         expected: SubjectKind::Door
     }));
     // And it is missing nothing else — geometry is correctly absent.
-    assert!(!errors.iter().any(|e| matches!(
-        e,
-        AuthoringError::GeometryShape { .. }
-    )));
+    assert!(
+        !errors
+            .iter()
+            .any(|e| matches!(e, AuthoringError::GeometryShape { .. }))
+    );
 }
 
 #[test]
@@ -232,12 +237,9 @@ fn an_effect_no_contributor_declares_is_refused_at_authoring_time() {
 
 #[test]
 fn an_effect_is_refused_on_a_subject_it_does_not_attach_to() {
-    let registry = EffectRegistry::assemble([vec![decl(
-        "thing.door_only",
-        &[SubjectKind::Door],
-        vec![],
-    )]])
-    .expect("one declaration");
+    let registry =
+        EffectRegistry::assemble([vec![decl("thing.door_only", &[SubjectKind::Door], vec![])]])
+            .expect("one declaration");
 
     let mut draft = prop_draft();
     draft.effect_id = Some(String::from("thing.door_only"));
@@ -361,9 +363,7 @@ fn a_reference_list_accepts_several_and_refuses_a_non_reference_among_them() {
         }],
     );
 
-    assert!(
-        validate_config(&declaration, &serde_json::json!({ "lights": ["a", "b"] })).is_empty()
-    );
+    assert!(validate_config(&declaration, &serde_json::json!({ "lights": ["a", "b"] })).is_empty());
     assert_eq!(
         validate_config(&declaration, &serde_json::json!({ "lights": ["a", 7] })),
         vec![AuthoringError::InvalidConfigField {

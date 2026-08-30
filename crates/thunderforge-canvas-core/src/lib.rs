@@ -20,6 +20,7 @@ pub mod frame_trace;
 pub mod grid;
 pub mod interaction;
 pub mod lighting;
+pub mod lore_link;
 pub mod measure;
 pub mod movement;
 pub mod movement_budget;

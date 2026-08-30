@@ -297,6 +297,53 @@ function reportSdkError(error: EngineSdkError): void {
   }
 }
 
+/**
+ * The engine asking for a lore entry to be opened.
+ *
+ * Spec 030, US1. The engine recognises the effect and resolves which entry it
+ * points at; opening a tab needs the application's URL structure, which is
+ * chrome and belongs on this side (Constitution Principle I).
+ */
+export interface OpenLoreEvent {
+  type: "openLore";
+  interactiveId: string;
+  entryId: string;
+}
+
+function asOpenLore(event: unknown): OpenLoreEvent | null {
+  if (typeof event !== "object" || event === null) return null;
+  const candidate = event as { type?: unknown };
+  return candidate.type === "openLore" ? (event as OpenLoreEvent) : null;
+}
+
+const openLoreListeners = new Set<(event: OpenLoreEvent) => void>();
+
+/**
+ * Be told when an interactive wants a lore page opened.
+ *
+ * A listener rather than a direct `window.open` here, because a popup blocker
+ * treats a call made outside a user gesture very differently from one made
+ * inside it — and only the component that handled the click knows which it is.
+ */
+export function onOpenLore(
+  listener: (event: OpenLoreEvent) => void,
+): () => void {
+  openLoreListeners.add(listener);
+  return () => {
+    openLoreListeners.delete(listener);
+  };
+}
+
+function reportOpenLore(event: OpenLoreEvent): void {
+  for (const listener of openLoreListeners) {
+    try {
+      listener(event);
+    } catch {
+      // One bad listener must not stop the others hearing about this.
+    }
+  }
+}
+
 export async function bindWorldStore(worldStore: WorldStore): Promise<void> {
   const module = await getWasmModule();
   boundWorldStore = worldStore;
@@ -314,6 +361,15 @@ export async function bindWorldStore(worldStore: WorldStore): Promise<void> {
         const sdkError = asSdkError(parsed);
         if (sdkError) {
           reportSdkError(sdkError);
+          return;
+        }
+
+        // Nor is a lore-open request a world command. It asks the
+        // application to do something, and dispatching it would put a
+        // command nothing reduces into the store.
+        const openLore = asOpenLore(parsed);
+        if (openLore) {
+          reportOpenLore(openLore);
           return;
         }
 
@@ -349,6 +405,22 @@ export async function bindWorldStore(worldStore: WorldStore): Promise<void> {
       JSON.stringify({ ...command, sdkVersion: SDK_VERSION }),
     );
   });
+}
+
+/**
+ * The world store this bridge is bound to, or `null`.
+ *
+ * Exists so a caller outside the React tree — chiefly an end-to-end test
+ * driving the same path the application does — can dispatch through the store
+ * the engine is actually listening to, rather than constructing a second one
+ * that nothing is wired to.
+ *
+ * Read-only. It hands back the store, which is already the application's own
+ * mutation surface; it does not add a way to reach the engine that the
+ * application itself lacks.
+ */
+export function getBoundWorldStore(): WorldStore | null {
+  return boundWorldStore;
 }
 
 export function setActiveWorld(worldId: string): void {

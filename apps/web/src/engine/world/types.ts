@@ -393,6 +393,64 @@ export type RemoveCanvasImageAssetCommand = {
   assetId: string;
 };
 
+// Spec 030: interactive elements.
+//
+// Confirmed state, dispatched after the server answered — the same shape as
+// upsert_wall/remove_wall and for the same reason: the engine draws what is
+// known, and the store is where "known" is decided.
+export type UpsertInteractiveCommand = {
+  type: "upsert_interactive";
+  interactive: WorldInteractive;
+};
+
+export type RemoveInteractiveCommand = {
+  type: "remove_interactive";
+  interactiveId: string;
+};
+
+/**
+ * Run an effect the server has already permitted.
+ *
+ * Not an intent: by the time this is dispatched, `activateInteractive` has
+ * returned `performed`. The engine applies it locally so the change is visible
+ * immediately rather than a round trip later, and is never a second authority
+ * on whether it was allowed (ADR-054).
+ */
+export type DispatchInteractionCommand = {
+  type: "dispatch_interaction";
+  interactiveId: string;
+  effectId: string;
+  effectConfig: Record<string, unknown> | null;
+};
+
+/**
+ * Whether movement counts as play (FR-032).
+ *
+ * A Game Master dragging a token while preparing a scene and one dragging it
+ * during play are the same gesture, so the engine has to be told which it is
+ * rather than guessing. It defaults to preparation: a trigger that fired while
+ * nobody was looking has already spent itself, and a table has no undo for
+ * that.
+ */
+export type SetScenePlayingCommand = {
+  type: "set_scene_playing";
+  playing: boolean;
+};
+
+/** One interactive, in the shape the engine's command boundary expects. */
+export type WorldInteractive = {
+  id: string;
+  subjectKind: string;
+  subjectRef: string | null;
+  geometry: unknown | null;
+  effectId: string | null;
+  effectConfig: Record<string, unknown> | null;
+  trigger: string;
+  canActivate: boolean;
+  fireMode: string | null;
+  fired: boolean;
+};
+
 export type WorldCommand =
   | SetWorldCommand
   | SetSceneBackgroundCommand
@@ -422,7 +480,11 @@ export type WorldCommand =
   | UpdateShapeCommand
   | DeleteShapeCommand
   | UpsertCanvasImageAssetCommand
-  | RemoveCanvasImageAssetCommand;
+  | RemoveCanvasImageAssetCommand
+  | UpsertInteractiveCommand
+  | RemoveInteractiveCommand
+  | DispatchInteractionCommand
+  | SetScenePlayingCommand;
 
 export type WorldStoreEvent = {
   command: WorldCommand;

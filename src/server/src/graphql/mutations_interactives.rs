@@ -788,10 +788,9 @@ mod tests {
                 .await
                 .expect("the Game Master places a table");
 
-        let result =
-            activate_interactive_impl(&t.state, t.player, false, created.interactive_id)
-                .await
-                .expect("clicking scenery is not an error");
+        let result = activate_interactive_impl(&t.state, t.player, false, created.interactive_id)
+            .await
+            .expect("clicking scenery is not an error");
         assert_eq!(result.outcome, "noEffect");
         assert!(result.reason.is_none());
 
@@ -812,7 +811,10 @@ mod tests {
         };
         let refused =
             activate_interactive_impl(&t.state, stranger, false, created.interactive_id).await;
-        assert!(refused.is_err(), "membership is checked before anything else");
+        assert!(
+            refused.is_err(),
+            "membership is checked before anything else"
+        );
 
         let _ = delete_interactive_impl(&t.state, t.gm, false, created.interactive_id).await;
     }

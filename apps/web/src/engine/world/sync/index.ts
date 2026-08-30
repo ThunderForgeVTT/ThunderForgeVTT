@@ -17,6 +17,12 @@ export {
   startShapeMutationBridge,
 } from "./shapes";
 export {
+  applyInteractiveWorldEvent,
+  refreshInteractives,
+  activateAndApply,
+  setScenePlaying,
+} from "./interactives";
+export {
   applyTokenWorldEvent,
   startTokenEventSync,
   loadTokensIntoStore,

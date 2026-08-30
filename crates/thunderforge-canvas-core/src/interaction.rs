@@ -307,14 +307,10 @@ impl EffectRegistry {
         for set in contributions {
             for declaration in set {
                 if !declaration.id.contains('.') {
-                    return Err(RegistryError::UnnamespacedId {
-                        id: declaration.id,
-                    });
+                    return Err(RegistryError::UnnamespacedId { id: declaration.id });
                 }
                 if declarations.contains_key(&declaration.id) {
-                    return Err(RegistryError::DuplicateId {
-                        id: declaration.id,
-                    });
+                    return Err(RegistryError::DuplicateId { id: declaration.id });
                 }
                 declarations.insert(declaration.id.clone(), declaration);
             }
@@ -390,9 +386,7 @@ impl RegionGeometry {
                 y,
                 width,
                 height,
-            } => {
-                point.x >= *x && point.x <= x + width && point.y >= *y && point.y <= y + height
-            }
+            } => point.x >= *x && point.x <= x + width && point.y >= *y && point.y <= y + height,
             RegionGeometry::Polygon { points } => {
                 if points.len() < 3 {
                     return false;
@@ -489,7 +483,10 @@ pub enum AuthoringError {
     /// No contributor declares this effect.
     UnknownEffect { id: String },
     /// This effect does not attach to this sort of subject.
-    WrongSubjectForEffect { id: String, subject_kind: SubjectKind },
+    WrongSubjectForEffect {
+        id: String,
+        subject_kind: SubjectKind,
+    },
     /// A required field was not filled in.
     MissingConfigField { key: String },
     /// A field held something its declaration does not accept.
@@ -647,9 +644,11 @@ pub fn validate_config(
                 .as_str()
                 .is_some_and(|v| options.iter().any(|o| o.value == v)),
             ConfigFieldKind::Reference { .. } => value.as_str().is_some_and(|v| !v.is_empty()),
-            ConfigFieldKind::ReferenceList { .. } => value
-                .as_array()
-                .is_some_and(|items| items.iter().all(|i| i.as_str().is_some_and(|s| !s.is_empty()))),
+            ConfigFieldKind::ReferenceList { .. } => value.as_array().is_some_and(|items| {
+                items
+                    .iter()
+                    .all(|i| i.as_str().is_some_and(|s| !s.is_empty()))
+            }),
         };
         if !ok {
             errors.push(AuthoringError::InvalidConfigField {

@@ -80,15 +80,15 @@ Every story plugs into this; none can start before it.
 
 ### Engine: the plugin that names no effect
 
-- [ ] T025 Create `src/engine/src/plugins/interaction.rs` with `InteractionPlugin` owning placement, hit-testing, permission resolution and `once` bookkeeping, and writing an activation event per contracts/engine-events.md
-- [ ] T026 Register `InteractionPlugin` in `src/engine/src/lib.rs` so it is independently addable and removable per Principle II
-- [ ] T027 Add the activation command and read surface to `src/engine/src/lib.rs`, exported through the typed SDK rather than hand-built JSON, following the pattern spec 029 established
+- [X] T025 Create `src/engine/src/plugins/interaction.rs` with `InteractionPlugin` owning placement, hit-testing, permission resolution and `once` bookkeeping, and writing an activation event per contracts/engine-events.md
+- [X] T026 Register `InteractionPlugin` in `src/engine/src/lib.rs` so it is independently addable and removable per Principle II
+- [X] T027 Add the activation command and read surface to `src/engine/src/lib.rs`, exported through the typed SDK rather than hand-built JSON, following the pattern spec 029 established
 
 ### Web: authoring driven by the registry
 
-- [ ] T028 [P] Create `apps/web/src/api/interactives.ts` with the registry, list, authoring, activation and approval calls
-- [ ] T029 [P] Create `apps/web/src/engine/world/sync/interactives.ts` applying interactive and door events into the world store
-- [ ] T030 Create `apps/web/src/components/InteractionAuthor/InteractionAuthor.tsx` building its effect list and its configuration form from the registry, never from a hard-coded list (FR-038)
+- [X] T028 [P] Create `apps/web/src/api/interactives.ts` with the registry, list, authoring, activation and approval calls
+- [X] T029 [P] Create `apps/web/src/engine/world/sync/interactives.ts` applying interactive and door events into the world store
+- [X] T030 Create `apps/web/src/components/InteractionAuthor/InteractionAuthor.tsx` building its effect list and its configuration form from the registry, never from a hard-coded list (FR-038)
 
 **Checkpoint**: The seam exists and offers nothing, because nothing has been contributed yet. That is the correct state and worth confirming before going further.
 
@@ -100,13 +100,13 @@ Every story plugs into this; none can start before it.
 
 **Independent Test**: Place a prop, attach a link, click as a player, observe the page open and the scene unchanged.
 
-- [ ] T031 [P] [US1] Contribute the `lore.open` declaration in `crates/thunderforge-canvas-core/src/interaction.rs` as the first contributor, referencing a lore entry by id rather than a URL (research §5)
-- [ ] T032 [P] [US1] Test in `crates/thunderforge-canvas-core/src/interaction.rs` that a link effect cannot be configured with a free-text address — the field does not accept one, which is what dissolves the hostile-destination edge case without an allowlist
-- [ ] T033 [US1] Handle `lore.open` in `src/engine/src/plugins/interaction.rs`'s contributor module or a dedicated `src/engine/src/plugins/lore_link.rs`, opening the target in a new tab without navigating the canvas away
-- [ ] T034 [US1] Support placing a prop in `apps/web/src/components/InteractionAuthor/InteractionAuthor.tsx` as a token of the existing `object` kind with no actor, reusing the placement pipeline rather than adding one (research §8)
-- [ ] T035 [US1] Verify every consumer of tokens tolerates a null actor, starting with `src/server/src/graphql/queries/token_status.rs`, and fix any that assume otherwise
-- [ ] T036 [US1] Ensure an interactive with no effect is silently inert rather than an error, in `src/server/src/graphql/mutations_interactives.rs` — scenery is legitimate (US1 scenario 3)
-- [ ] T037 [US1] End-to-end spec `apps/web/e2e/interactive-prop.spec.ts`: a GM places a prop and links a lore entry; a player clicks it and the page opens; a prop with no link does nothing; a non-member is offered no interactive at all
+- [X] T031 [P] [US1] Contribute the `lore.open` declaration in `crates/thunderforge-canvas-core/src/interaction.rs` as the first contributor, referencing a lore entry by id rather than a URL (research §5)
+- [X] T032 [P] [US1] Test in `crates/thunderforge-canvas-core/src/interaction.rs` that a link effect cannot be configured with a free-text address — the field does not accept one, which is what dissolves the hostile-destination edge case without an allowlist
+- [X] T033 [US1] Handle `lore.open` in `src/engine/src/plugins/interaction.rs`'s contributor module or a dedicated `src/engine/src/plugins/lore_link.rs`, opening the target in a new tab without navigating the canvas away
+- [X] T034 [US1] Support placing a prop in `apps/web/src/components/InteractionAuthor/InteractionAuthor.tsx` as a token of the existing `object` kind with no actor, reusing the placement pipeline rather than adding one (research §8)
+- [X] T035 [US1] Verify every consumer of tokens tolerates a null actor, starting with `src/server/src/graphql/queries/token_status.rs`, and fix any that assume otherwise
+- [X] T036 [US1] Ensure an interactive with no effect is silently inert rather than an error, in `src/server/src/graphql/mutations_interactives.rs` — scenery is legitimate (US1 scenario 3)
+- [X] T037 [US1] End-to-end spec `apps/web/e2e/interactive-prop.spec.ts`: a GM places a prop and links a lore entry; a player clicks it and the page opens; a prop with no link does nothing; a non-member is offered no interactive at all
 
 **Checkpoint**: The spine works end to end with exactly one contributor. Stop and validate here — this is the MVP.
 

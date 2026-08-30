@@ -48,6 +48,7 @@ fn contributions() -> Vec<Vec<EffectDeclaration>> {
         // Contributors are added here as their subsystems gain the ability to
         // be triggered. An empty list is a legitimate build: the seam then
         // offers nothing, which is correct rather than broken.
+        thunderforge_canvas_core::lore_link::effects(),
     ]
 }
 
@@ -312,6 +313,13 @@ mod tests {
     #[test]
     fn scenery_is_available_because_nothing_is_missing() {
         assert!(is_available(None));
+    }
+
+    #[test]
+    fn the_lore_contributor_is_in_this_build() {
+        assert!(is_available(Some(
+            thunderforge_canvas_core::lore_link::OPEN
+        )));
     }
 
     #[test]
