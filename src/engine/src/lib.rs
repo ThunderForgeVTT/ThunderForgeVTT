@@ -1086,6 +1086,10 @@ pub fn start(canvas_selector: &str) {
         // message type — deleting this line removes the effect and leaves
         // everything else working, which is the property US7 tests.
         .add_plugins(plugins::LoreLinkPlugin)
+        // Spec 030 US7: the contributor that exists only to be added and
+        // removed. Deleting this line and its file removes the capability and
+        // changes nothing else — which is the whole claim.
+        .add_plugins(plugins::SeamProbePlugin)
         // T040: light authoring (specs/001-bevy-canvas-authoring). Depends
         // on CanvasLayerPlugin (above) for the `CanvasLayers` resource, and
         // reads WallPlugin's `WallSet`/`is_visible` for occlusion.

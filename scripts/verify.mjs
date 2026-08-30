@@ -101,6 +101,18 @@ const steps = [
       ? ["pnpm", "run", "sdk:bindings"]
       : ["pnpm", "run", "sdk:check"],
   },
+  {
+    // Spec 030 T076. FR-039 says the interaction plugin owns no effect, and
+    // that is a claim a behavioural test cannot catch eroding until something
+    // has already broken. This catches it in the diff.
+    //
+    // Not affected by `--fix`: there is nothing mechanical to rewrite. A
+    // violation is either an effect that belongs in a contributor or a word in
+    // a comment, and both need a person.
+    name: "interaction seam",
+    cwd: ".",
+    command: ["node", "./scripts/check-interaction-seam.mjs"],
+  },
 ];
 
 const results = [];

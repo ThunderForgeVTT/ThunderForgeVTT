@@ -52,6 +52,11 @@ fn contributions() -> Vec<Vec<EffectDeclaration>> {
         thunderforge_canvas_core::wall::interaction_effects(),
         thunderforge_canvas_core::lighting::interaction_effects(),
         thunderforge_canvas_core::navigation::effects(),
+        // Spec 030 US7. A contributor that exists only to be added and
+        // removed; see its module docs. Compiled out with one line in
+        // `thunderforge-canvas-core`'s manifest, and nothing else changes.
+        #[cfg(feature = "seam-probe")]
+        thunderforge_canvas_core::seam_probe::effects(),
     ]
 }
 
@@ -415,6 +420,84 @@ mod tests {
         // FR-041. Detected by asking the registry — never by dispatching and
         // watching nothing happen, which an event cannot report.
         assert!(!is_available(Some("audio.play")));
+    }
+
+    #[test]
+    fn an_interactive_whose_subsystem_is_gone_is_unavailable_and_still_intact() {
+        // FR-041, at the server. Three separate claims, and the second and
+        // third are what stop a Game Master losing work:
+        //
+        //   1. It resolves to `Unavailable`, not to a refusal or an error.
+        //   2. Nothing about the row changes — it is not repaired, and it is
+        //      certainly not deleted.
+        //   3. Detection is a registry lookup, never "we dispatched and
+        //      nothing happened", which a fire-and-forget event cannot report.
+        let row = crate::models::Interactive {
+            interactive_id: Uuid::nil(),
+            scene_id: Uuid::nil(),
+            subject_kind: String::from("prop"),
+            subject_ref: Some(Uuid::nil()),
+            geometry: None,
+            // A build without audio, which is every build today.
+            effect_id: Some(String::from("audio.play")),
+            effect_config: Some(serde_json::json!({ "clip": "thunder" })),
+            trigger: String::from("click"),
+            activation: String::from("anyone"),
+            fire_mode: String::from("always"),
+            fired_at: None,
+            created_by: Uuid::nil(),
+            updated_by: Uuid::nil(),
+            created_at: chrono::Utc::now().naive_utc(),
+            updated_at: chrono::Utc::now().naive_utc(),
+        };
+        let before = row.clone();
+        let loaded = LoadedInteractive {
+            row,
+            subject_locked: false,
+        };
+
+        // Unavailable for everybody — the Game Master is not privileged into
+        // running something this build cannot perform.
+        assert_eq!(loaded.outcome(false), ActivationOutcome::Unavailable);
+        assert_eq!(loaded.outcome(true), ActivationOutcome::Unavailable);
+
+        // The stored configuration is untouched. Put the subsystem back and it
+        // works again with nothing to restore.
+        assert_eq!(loaded.row.effect_id, before.effect_id);
+        assert_eq!(loaded.row.effect_config, before.effect_config);
+    }
+
+    #[test]
+    fn performing_an_unknown_effect_changes_nothing_rather_than_erroring() {
+        // The other end of the same rule. If dispatch were ever reached for an
+        // absent contributor, it must be inert — an error here would turn a
+        // display state into a failure a Game Master has to clear.
+        let mut conn = crate::test_support::test_app_state()
+            .db_pool
+            .get()
+            .expect("a connection");
+        let performed = perform(
+            &mut conn,
+            "audio.play",
+            &serde_json::json!({ "clip": "thunder" }),
+            Uuid::now_v7(),
+        )
+        .expect("an unknown effect is not an error");
+        assert_eq!(performed, Performed::default());
+    }
+
+    #[test]
+    fn the_seam_probe_is_an_ordinary_member_of_the_registry() {
+        // US7. It is offered exactly the way a real contributor is, with no
+        // special case anywhere — otherwise its removal would prove nothing
+        // about what removing a real one costs.
+        assert!(is_available(Some(
+            thunderforge_canvas_core::seam_probe::ECHO
+        )));
+        let declaration = registry()
+            .get(thunderforge_canvas_core::seam_probe::ECHO)
+            .expect("contributed");
+        assert_eq!(declaration.namespace(), "probe");
     }
 
     #[test]

@@ -204,11 +204,11 @@ Every story plugs into this; none can start before it.
 
 **Independent Test**: Add a trivial contributor, confirm it becomes authorable and runs, and that removing it leaves everything else working.
 
-- [ ] T075 [US7] Add a deliberately trivial contributor behind a feature flag in `crates/thunderforge-canvas-core/src/interaction.rs` that does one observable thing and nothing else, existing only to be added and removed
-- [ ] T076 [P] [US7] Add a textual check to `scripts/verify.mjs` asserting that `src/engine/src/plugins/interaction.rs` does not contain "light", "door" or "sound". FR-039 written as a grep is a violation anyone can see, rather than a matter of judgement
-- [ ] T077 [P] [US7] Test in `crates/thunderforge-canvas-core/src/interaction.rs` that the registry assembled without the door and lighting contributors offers neither, and that authoring still works
-- [ ] T078 [US7] Confirm an interactive authored against an absent contributor is reported unavailable to the GM, is not deleted, and reaches players as nothing rather than as an error, in `src/server/src/interaction.rs` (FR-041)
-- [ ] T079 [US7] End-to-end spec `apps/web/e2e/interactive-contribution.spec.ts`: the trivial contributor appears as authorable and runs; with it absent nothing else breaks; and a scene authored against it loses no data
+- [X] T075 [US7] Add a deliberately trivial contributor behind a feature flag in `crates/thunderforge-canvas-core/src/interaction.rs` that does one observable thing and nothing else, existing only to be added and removed
+- [X] T076 [P] [US7] Add a textual check to `scripts/verify.mjs` asserting that `src/engine/src/plugins/interaction.rs` does not contain "light", "door" or "sound". FR-039 written as a grep is a violation anyone can see, rather than a matter of judgement
+- [X] T077 [P] [US7] Test in `crates/thunderforge-canvas-core/src/interaction.rs` that the registry assembled without the door and lighting contributors offers neither, and that authoring still works
+- [X] T078 [US7] Confirm an interactive authored against an absent contributor is reported unavailable to the GM, is not deleted, and reaches players as nothing rather than as an error, in `src/server/src/interaction.rs` (FR-041)
+- [X] T079 [US7] End-to-end spec `apps/web/e2e/interactive-contribution.spec.ts`: the trivial contributor appears as authorable and runs; with it absent nothing else breaks; and a scene authored against it loses no data
 
 **Checkpoint**: All stories independently functional, and the architecture claim is tested rather than asserted.
 

@@ -679,3 +679,132 @@ fn a_polygon_with_too_few_points_encloses_nothing_rather_than_panicking() {
     assert!(!sliver.contains(Vec2::new(5.0, 0.0)));
     assert!(!sliver.is_valid());
 }
+
+// ---------------------------------------------------------------------------
+// The seam itself (US7)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_registry_assembled_without_a_contributor_offers_nothing_of_theirs() {
+    // The removability claim, asserted rather than described. Nothing is
+    // stubbed and nothing is mocked: this assembles the real declaration sets
+    // and leaves two of them out.
+    use crate::{lighting, lore_link, navigation, wall};
+
+    let everything = EffectRegistry::assemble([
+        lore_link::effects(),
+        wall::interaction_effects(),
+        lighting::interaction_effects(),
+        navigation::effects(),
+    ])
+    .expect("the real build");
+    assert!(everything.contains(wall::SET_STATE));
+    assert!(everything.contains(lighting::TOGGLE));
+
+    // The same seam, with doors and lighting removed the way removing a plugin
+    // would remove them.
+    let without = EffectRegistry::assemble([lore_link::effects(), navigation::effects()])
+        .expect("a build with fewer subsystems is a legitimate build");
+
+    assert!(!without.contains(wall::SET_STATE));
+    assert!(!without.contains(wall::SET_LOCK));
+    assert!(!without.contains(wall::REVEAL));
+    assert!(!without.contains(lighting::TOGGLE));
+
+    // And what remains is untouched — not degraded, not partially wired.
+    assert!(without.contains(lore_link::OPEN));
+    assert!(without.contains(navigation::REQUEST_SCENE));
+    assert_eq!(
+        without.get(lore_link::OPEN),
+        everything.get(lore_link::OPEN),
+        "a contributor is not changed by which others are present"
+    );
+}
+
+#[test]
+fn authoring_still_works_with_every_contributor_removed() {
+    // The stronger half of FR-039. Not merely "the registry is empty" but
+    // "everything around it still functions", which is what a Game Master
+    // opening a scene in a stripped build would actually meet.
+    let registry =
+        EffectRegistry::assemble(Vec::<Vec<EffectDeclaration>>::new()).expect("no contributors");
+
+    // Scenery is still authorable, because scenery needs no contributor.
+    assert_eq!(validate_draft(&prop_draft(), &registry), Ok(()));
+    assert_eq!(validate_draft(&region_draft(), &registry), Ok(()));
+
+    // The shape rules still apply.
+    let mut wrong = region_draft();
+    wrong.subject_ref = Some(String::from("token-1"));
+    assert!(validate_draft(&wrong, &registry).is_err());
+
+    // And the activation table still answers, rather than falling through to
+    // something permissive.
+    let mut context = context();
+    context.has_effect = false;
+    assert_eq!(resolve_activation(context), ActivationOutcome::NoEffect);
+}
+
+#[test]
+fn an_interactive_authored_against_an_absent_contributor_is_unavailable_not_invalid() {
+    // FR-041, at the level where it is decided. The distinction matters: an
+    // *invalid* interactive would be something to repair or delete, and a Game
+    // Master would lose work because their build happens to lack a subsystem
+    // today. An *unavailable* one is a display state, and putting the
+    // subsystem back makes it work again with nothing to restore.
+    use crate::wall;
+
+    let registry = EffectRegistry::assemble([Vec::new()]).expect("empty");
+    assert!(
+        !registry.contains(wall::SET_STATE),
+        "the subsystem is not in this build"
+    );
+
+    // Detection is a registry lookup — never "we dispatched and nothing
+    // happened", which an event cannot report.
+    let context = ActivationContext {
+        actor_is_gm: false,
+        has_effect: true,
+        effect_available: registry.contains(wall::SET_STATE),
+        subject_locked: false,
+        activation: Activation::Anyone,
+        fire_mode: FireMode::Always,
+        has_fired: false,
+    };
+    assert_eq!(resolve_activation(context), ActivationOutcome::Unavailable);
+}
+
+#[test]
+fn the_probe_can_be_added_to_a_full_registry_without_disturbing_it() {
+    // What adding a new subsystem actually costs, measured: one more set in
+    // the list, and every other answer identical.
+    use crate::{lighting, lore_link, navigation, seam_probe, wall};
+
+    let before = EffectRegistry::assemble([
+        lore_link::effects(),
+        wall::interaction_effects(),
+        lighting::interaction_effects(),
+        navigation::effects(),
+    ])
+    .expect("without the probe");
+
+    let after = EffectRegistry::assemble([
+        lore_link::effects(),
+        wall::interaction_effects(),
+        lighting::interaction_effects(),
+        navigation::effects(),
+        seam_probe::effects(),
+    ])
+    .expect("with it");
+
+    assert_eq!(after.len(), before.len() + 1);
+    assert!(after.contains(seam_probe::ECHO));
+    for declaration in before.all() {
+        assert_eq!(
+            after.get(&declaration.id),
+            Some(declaration),
+            "adding a contributor changed {}",
+            declaration.id
+        );
+    }
+}
