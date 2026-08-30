@@ -64,7 +64,7 @@ the renderer.
 - [x] T009 Register `resource_display` in `crates/thunderforge-canvas-core/src/lib.rs` and re-export the public types
 - [x] T010 Derive `ts-rs` bindings on the wire types in `crates/thunderforge-canvas-core/src/resource_display.rs` and commit the generated output to `apps/web/src/engine/sdk/` (depends on T002, T009)
 - [x] T011 Attach the `Token` component to spawned token entities in `src/engine/src/systems/token.rs`, so `calculate_derived_stats` has input for the first time — see research §6
-- [ ] T012 Add a `TokenStatus` component to `src/engine/src/components.rs` and attach it in `src/engine/src/systems/token.rs` — **deferred into Phase 3 (US1) on purpose**: attaching a component with no consumer is the exact pattern this feature exists to remove, and it only earns its place once `status_display.rs` reads it (T018)
+- [x] T012 `TokenStatus` component added in `src/engine/src/plugins/status_display.rs` (beside its consumer rather than in `components.rs`, so the component and the system that reads it are one unit)
 - [x] T013 [P] Create migration `src/server/migrations/<timestamp>_create_token_resource_disclosure/{up,down}.sql` for the sparse per-token table with `created_by`/`updated_by` provenance, per data-model.md
 - [x] T014 [P] Write ADR in `docs/adrs/` covering the generated versioned SDK boundary replacing `apply_world_command`, and the ECS/React split for status presentation — Constitution IV gate, currently the one open item from [plan.md](./plan.md)'s re-check
 - [x] T015 Confirm `cargo check --target wasm32-unknown-unknown -p thunderforge_engine` passes after T011–T012; a native check on this crate is not a signal (Constitution V)
@@ -86,15 +86,15 @@ the renderer.
 
 ### Implementation for User Story 1
 
-- [ ] T018 [P] [US1] Create the Bevy plugin `src/engine/src/plugins/status_display.rs` drawing bar and counter geometry attached to token entities, addable/removable from the `App` builder without touching `TokenPlugin` internals (Constitution II)
-- [ ] T019 [US1] Register `StatusDisplayPlugin` in `src/engine/src/lib.rs` (depends on T018)
+- [x] T018 [P] [US1] Create the Bevy plugin `src/engine/src/plugins/status_display.rs` drawing bar and counter geometry attached to token entities, addable/removable from the `App` builder without touching `TokenPlugin` internals (Constitution II)
+- [x] T019 [US1] Register `StatusDisplayPlugin` in `src/engine/src/lib.rs` (depends on T018)
 - [ ] T020 [US1] Implement `setTokenStatus` and `clearTokenStatus` handling in `src/engine/src/lib.rs`'s command dispatch, per `contracts/engine-sdk.md`
 - [ ] T021 [US1] Implement the read surface `getTokenStatus` / `listTokenStatus` in `src/engine/src/lib.rs` — FR-021's testing surface, and how React observes state without becoming a second source of truth
 - [ ] T022 [P] [US1] Add a `tokenStatus(sceneId)` GraphQL query in `src/server/src/graphql/queries/` returning resolved status, `VISIBLE` only at this stage
 - [ ] T023 [US1] Carry status through the existing world-event path in `apps/web/src/engine/world/sync/tokens.ts` so changes reach the engine live (FR-009)
 - [ ] T024 [P] [US1] Build the corner panel component in `apps/web/src/components/StatusPanel/StatusPanel.tsx`, reading through the SDK read surface and computing nothing itself (Constitution I)
 - [ ] T025 [US1] Mount the panel in `apps/web/src/pages/world/WorldPage.tsx` and bind it to the current selection (depends on T024)
-- [ ] T026 [US1] Render a resource with no maximum as a labelled counter rather than a partially filled bar, in `src/engine/src/plugins/status_display.rs` (FR-002, US1 scenario 4)
+- [x] T026 [US1] Render a resource with no maximum as a labelled counter rather than a partially filled bar, in `src/engine/src/plugins/status_display.rs` (FR-002, US1 scenario 4)
 
 **Checkpoint**: A player sees their own character's vitals on the token and in the corner, live. This is the MVP.
 

@@ -33,8 +33,8 @@ use movement::PlayerControlled;
 use plugins::{
     BackgroundPlugin, CachedAssetsPlugin, CameraPlugin, CanvasLayerPlugin, DarknessPlugin,
     DiceRollPlugin, GridPlugin, LightingOverlayPlugin, LightingPlugin, RenderProbeEnabled,
-    RenderProbePlugin, ScenePlugin, SelectionPlugin, ShapePlugin, SystemRegistrationPlugin,
-    TokenPlugin, WallPlugin,
+    RenderProbePlugin, ScenePlugin, SelectionPlugin, ShapePlugin, StatusDisplayPlugin,
+    SystemRegistrationPlugin, TokenPlugin, WallPlugin,
 };
 use resources::{
     CameraManager, DoorState, GridSnapEnabled, GridVisible, IsGameMaster, LightSet,
@@ -709,6 +709,10 @@ pub fn start(canvas_selector: &str) {
         .add_plugins(TokenPlugin)
         .add_plugins(CameraPlugin)
         .add_plugins(SelectionPlugin) // Phase 4.7.E1: Token Selection
+        // Spec 029: bars and counters above tokens. Independently removable —
+        // taking this line out leaves every other plugin working, which is
+        // what Constitution II asks of a plugin.
+        .add_plugins(StatusDisplayPlugin)
         // Native canvas authoring (specs/001-bevy-canvas-authoring): shared
         // layer-ordering resource, must be added before Wall/Lighting/Shape
         // plugins so it exists when they build (Constitution Principle II)
