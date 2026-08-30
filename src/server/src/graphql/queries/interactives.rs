@@ -91,6 +91,20 @@ pub struct GraphQLInteractive {
     pub can_activate: bool,
 }
 
+/// One request awaiting a Game Master's decision.
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLInteractionRequest {
+    pub request_id: Uuid,
+    pub interactive_id: Uuid,
+    pub scene_id: Uuid,
+    pub requested_by: Uuid,
+    /// The player's display name, so the queue reads as people rather than ids.
+    pub requested_by_name: Option<String>,
+    /// What would run if it were approved, in the GM's language.
+    pub proposed: Option<String>,
+    pub created_at: chrono::NaiveDateTime,
+}
+
 #[derive(Default)]
 pub struct InteractiveQuery;
 
@@ -111,6 +125,83 @@ impl InteractiveQuery {
             .all()
             .map(declaration_to_graphql)
             .collect())
+    }
+
+    /// What is waiting on a decision in this scene. Game Master only.
+    ///
+    /// A player is not shown the queue. Their own outcome reaches them
+    /// directly, and the rest of it is a list of what other people asked for —
+    /// which is the Game Master's business and, at some tables, information
+    /// the GM is deliberately not sharing yet.
+    async fn pending_interaction_requests(
+        &self,
+        ctx: &Context<'_>,
+        scene_id: Uuid,
+    ) -> GraphQLResult<Vec<GraphQLInteractionRequest>> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        let user_id = auth_user.user_id;
+        let is_admin = auth_user.is_admin;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        tokio::task::spawn_blocking(move || {
+            use crate::schema::{interactives, users};
+
+            if !crate::auth::world_membership::is_dm_of_scene(
+                &mut conn, user_id, is_admin, scene_id,
+            )
+            .map_err(|_| Error::new("Failed to check permission"))?
+            {
+                return Err(Error::new("Only the Game Master sees the queue"));
+            }
+
+            let rows = crate::interaction::pending_for_scene(&mut conn, scene_id)
+                .map_err(|e| Error::new(format!("Failed to load requests: {e}")))?;
+
+            let mut out = Vec::with_capacity(rows.len());
+            for row in rows {
+                let requested_by_name: Option<String> = users::table
+                    .filter(users::id.eq(row.requested_by))
+                    .select(users::username)
+                    .first(&mut conn)
+                    .optional()
+                    .ok()
+                    .flatten();
+
+                // What the effect is, rather than which effect it is. A GM
+                // deciding mid-session should not have to translate
+                // `nav.request_scene` in their head.
+                let proposed = interactives::table
+                    .filter(interactives::interactive_id.eq(row.interactive_id))
+                    .select(interactives::effect_id)
+                    .first::<Option<String>>(&mut conn)
+                    .optional()
+                    .ok()
+                    .flatten()
+                    .flatten()
+                    .and_then(|id| {
+                        crate::interaction::registry()
+                            .get(&id)
+                            .map(|d| d.label.clone())
+                    });
+
+                out.push(GraphQLInteractionRequest {
+                    request_id: row.request_id,
+                    interactive_id: row.interactive_id,
+                    scene_id: row.scene_id,
+                    requested_by: row.requested_by,
+                    requested_by_name,
+                    proposed,
+                    created_at: row.created_at,
+                });
+            }
+            Ok(out)
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
     }
 
     /// Every interactive on a scene, as this viewer may know it.

@@ -24,6 +24,7 @@ pub mod lore_link;
 pub mod measure;
 pub mod movement;
 pub mod movement_budget;
+pub mod navigation;
 pub mod resource_display;
 pub mod shape;
 pub mod texture_budget;

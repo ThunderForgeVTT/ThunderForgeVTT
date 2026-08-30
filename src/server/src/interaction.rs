@@ -51,6 +51,7 @@ fn contributions() -> Vec<Vec<EffectDeclaration>> {
         thunderforge_canvas_core::lore_link::effects(),
         thunderforge_canvas_core::wall::interaction_effects(),
         thunderforge_canvas_core::lighting::interaction_effects(),
+        thunderforge_canvas_core::navigation::effects(),
     ]
 }
 

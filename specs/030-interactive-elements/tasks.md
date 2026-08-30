@@ -187,14 +187,14 @@ Every story plugs into this; none can start before it.
 
 **Independent Test**: Trigger a request as a player, approve and refuse it, confirm neither outcome moves anybody until the GM acts.
 
-- [ ] T067 [P] [US6] Contribute the `nav.request_scene` declaration in `crates/thunderforge-canvas-core/src/interaction.rs`, whose approved effect does nothing further until multi-scene navigation exists — the request and the decision are the parts this feature owns
-- [ ] T068 [US6] Implement the request lifecycle in `src/server/src/interaction.rs`: raise, approve, refuse, and cancel when the requester leaves or the interactive is deleted
-- [ ] T069 [US6] Add `approveRequest` and `refuseRequest` to `src/server/src/graphql/mutations_interactives.rs`, GM-only and never callable by the requester
-- [ ] T070 [P] [US6] Test in `src/server/src/interaction.rs` that approval re-checks permission at decision time, so a door locked after the request was raised stays locked
-- [ ] T071 [P] [US6] Test in `src/server/src/interaction.rs` that nothing expires a request into approval (FR-027). Silence is not consent
-- [ ] T072 [US6] Create `apps/web/src/components/ApprovalQueue/ApprovalQueue.tsx` showing pending requests with requester, interactive and proposed outcome, reachable from a second device
-- [ ] T073 [US6] Tell the requesting player the outcome, in `apps/web/src/components/ApprovalQueue/ApprovalQueue.tsx` and its player-side counterpart (FR-028)
-- [ ] T074 [US6] End-to-end spec `apps/web/e2e/interactive-approval.spec.ts` across two browsers: a request reaches the GM, refusing changes nothing, approving runs the effect, and doing nothing leaves it pending
+- [X] T067 [P] [US6] Contribute the `nav.request_scene` declaration in `crates/thunderforge-canvas-core/src/interaction.rs`, whose approved effect does nothing further until multi-scene navigation exists — the request and the decision are the parts this feature owns
+- [X] T068 [US6] Implement the request lifecycle in `src/server/src/interaction.rs`: raise, approve, refuse, and cancel when the requester leaves or the interactive is deleted
+- [X] T069 [US6] Add `approveRequest` and `refuseRequest` to `src/server/src/graphql/mutations_interactives.rs`, GM-only and never callable by the requester
+- [X] T070 [P] [US6] Test in `src/server/src/interaction.rs` that approval re-checks permission at decision time, so a door locked after the request was raised stays locked
+- [X] T071 [P] [US6] Test in `src/server/src/interaction.rs` that nothing expires a request into approval (FR-027). Silence is not consent
+- [X] T072 [US6] Create `apps/web/src/components/ApprovalQueue/ApprovalQueue.tsx` showing pending requests with requester, interactive and proposed outcome, reachable from a second device
+- [X] T073 [US6] Tell the requesting player the outcome, in `apps/web/src/components/ApprovalQueue/ApprovalQueue.tsx` and its player-side counterpart (FR-028)
+- [X] T074 [US6] End-to-end spec `apps/web/e2e/interactive-approval.spec.ts` across two browsers: a request reaches the GM, refusing changes nothing, approving runs the effect, and doing nothing leaves it pending
 
 ---
 

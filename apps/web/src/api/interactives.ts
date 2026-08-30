@@ -353,3 +353,85 @@ export function refusalNotice(result: ActivationResult): string | null {
       return null;
   }
 }
+
+/** One request awaiting the Game Master's decision. */
+export interface InteractionRequest {
+  requestId: string;
+  interactiveId: string;
+  sceneId: string;
+  requestedBy: string;
+  requestedByName: string | null;
+  /** What would run if it were approved, in the GM's language. */
+  proposed: string | null;
+  createdAt: string;
+}
+
+/**
+ * What is waiting on a decision. Game Master only.
+ *
+ * A player is not shown the queue. Their own outcome reaches them directly,
+ * and the rest is a list of what other people asked for — which at some tables
+ * is information the GM is deliberately not sharing yet.
+ */
+export async function getPendingRequests(
+  sceneId: string,
+): Promise<InteractionRequest[]> {
+  const payload = await postGraphQL<{
+    pendingInteractionRequests: InteractionRequest[];
+  }>(
+    `query ($sceneId: UUID!) {
+      pendingInteractionRequests(sceneId: $sceneId) {
+        requestId
+        interactiveId
+        sceneId
+        requestedBy
+        requestedByName
+        proposed
+        createdAt
+      }
+    }`,
+    { sceneId },
+  );
+  return payload?.pendingInteractionRequests ?? [];
+}
+
+const ACTIVATION_RESULT_FIELDS = `
+  outcome
+  reason
+  requestId
+  effectId
+  effectConfig
+  notices
+`;
+
+/**
+ * Approve a request, running the effect now.
+ *
+ * "Now" is the point: permission is re-checked at decision time, so a GM who
+ * locked the door after the request was raised has contradicted themselves and
+ * the lock wins.
+ */
+export async function approveRequest(
+  requestId: string,
+): Promise<ActivationResult> {
+  const payload = await postGraphQL<{ approveRequest: ActivationResult }>(
+    `mutation ($id: UUID!) {
+      approveRequest(requestId: $id) { ${ACTIVATION_RESULT_FIELDS} }
+    }`,
+    { id: requestId },
+  );
+  return payload.approveRequest;
+}
+
+/** Turn a request down. The requester is told (FR-028). */
+export async function refuseRequest(
+  requestId: string,
+): Promise<ActivationResult> {
+  const payload = await postGraphQL<{ refuseRequest: ActivationResult }>(
+    `mutation ($id: UUID!) {
+      refuseRequest(requestId: $id) { ${ACTIVATION_RESULT_FIELDS} }
+    }`,
+    { id: requestId },
+  );
+  return payload.refuseRequest;
+}

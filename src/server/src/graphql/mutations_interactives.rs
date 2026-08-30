@@ -188,6 +188,44 @@ impl InteractiveMutation {
         .await
     }
 
+    /// Run a request the Game Master has approved.
+    ///
+    /// The effect runs **now**, with the permission it has **now** — not the
+    /// permission it had when the player asked. A GM who locked the door after
+    /// the request was raised has contradicted themselves, and the lock wins.
+    async fn approve_request(
+        &self,
+        ctx: &Context<'_>,
+        request_id: Uuid,
+    ) -> GraphQLResult<GraphQLActivationResult> {
+        let auth_user = authenticated_user(ctx)?;
+        decide_request_impl(
+            app_state(ctx)?,
+            auth_user.user_id,
+            auth_user.is_admin,
+            request_id,
+            true,
+        )
+        .await
+    }
+
+    /// Turn a request down. The requester is told (FR-028).
+    async fn refuse_request(
+        &self,
+        ctx: &Context<'_>,
+        request_id: Uuid,
+    ) -> GraphQLResult<GraphQLActivationResult> {
+        let auth_user = authenticated_user(ctx)?;
+        decide_request_impl(
+            app_state(ctx)?,
+            auth_user.user_id,
+            auth_user.is_admin,
+            request_id,
+            false,
+        )
+        .await
+    }
+
     /// Make a wall a door, or stop it being one (FR-007). Game Master only.
     ///
     /// Designating also gives the door an interactive, so it can be opened by
@@ -786,6 +824,189 @@ fn merge(
     }
 }
 
+/// Approve or refuse one pending request.
+///
+/// # Why permission is re-checked here rather than trusted from the request
+///
+/// A request records that somebody *asked*. It does not record that they were
+/// allowed, and it must not: minutes may pass between the asking and the
+/// deciding, and a Game Master who locks a door and then approves a queued
+/// request to open it has contradicted themselves. The lock wins, because it
+/// is the more recent statement of what they want.
+///
+/// So approval re-runs the same resolution an activation runs, against the
+/// world as it is now. The requester is the actor, not the Game Master —
+/// otherwise approving would silently grant the requester the GM's
+/// permissions, which is the one thing an approval flow must never do.
+pub(crate) async fn decide_request_impl(
+    state: &crate::state::AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    request_id: Uuid,
+    approve: bool,
+) -> GraphQLResult<GraphQLActivationResult> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    tokio::task::spawn_blocking(move || {
+        use crate::schema::interaction_requests as r;
+
+        let (interactive_id, scene_id, requested_by, current_state): (Uuid, Uuid, Uuid, String) =
+            r::table
+                .filter(r::request_id.eq(request_id))
+                .select((r::interactive_id, r::scene_id, r::requested_by, r::state))
+                .first(&mut conn)
+                .map_err(|_| Error::new("Request not found"))?;
+
+        if !crate::auth::world_membership::is_dm_of_scene(&mut conn, user_id, is_admin, scene_id)
+            .map_err(|_| Error::new("Failed to check permission"))?
+        {
+            return Err(Error::new("Only the Game Master decides a request"));
+        }
+
+        // The requester does not decide their own request, even when the
+        // requester runs the world — a Game Master's own activation never
+        // queues in the first place, so a GM deciding one of their own means
+        // something has gone wrong upstream.
+        if requested_by == user_id {
+            return Err(Error::new("A request is not decided by whoever raised it"));
+        }
+
+        if current_state != crate::interaction::REQUEST_PENDING {
+            return Err(Error::new("That request has already been decided"));
+        }
+
+        let world_id = world_id_for_scene(&mut conn, scene_id)?;
+
+        if !approve {
+            crate::interaction::decide(
+                &mut conn,
+                request_id,
+                crate::interaction::REQUEST_REFUSED,
+                user_id,
+            )
+            .map_err(|e| Error::new(format!("Failed to refuse: {e}")))?;
+            announce_request(
+                &mut conn, world_id, scene_id, request_id, "refused", user_id,
+            );
+            return Ok(GraphQLActivationResult::from_outcome(
+                thunderforge_canvas_core::interaction::ActivationOutcome::Refused {
+                    reason: thunderforge_canvas_core::interaction::RefusalReason::GmOnly,
+                },
+            ));
+        }
+
+        // Re-resolve against the world as it is now, as the *requester*.
+        let loaded = crate::interaction::load(&mut conn, interactive_id)
+            .map_err(|_| Error::new("The interactive is gone"))?;
+        let requester_is_gm =
+            crate::auth::world_membership::actor_in_world(&mut conn, requested_by, false, world_id)
+                .runs_the_world();
+
+        // Approval is the permission being granted, so the approval mode
+        // itself no longer applies — anything *else* that would refuse it
+        // still does.
+        let mut context = loaded.context(requester_is_gm);
+        if context.activation == Activation::RequiresApproval {
+            context.activation = Activation::Anyone;
+        }
+        let outcome = thunderforge_canvas_core::interaction::resolve_activation(context);
+        let mut result = GraphQLActivationResult::from_outcome(outcome);
+
+        // Decided either way: a request the GM acted on does not stay pending
+        // because the world moved underneath it. They answered.
+        crate::interaction::decide(
+            &mut conn,
+            request_id,
+            crate::interaction::REQUEST_APPROVED,
+            user_id,
+        )
+        .map_err(|e| Error::new(format!("Failed to approve: {e}")))?;
+
+        if outcome == ActivationOutcome::Performed {
+            if loaded.fire_mode() == FireMode::Once
+                && !claim_firing(&mut conn, interactive_id, requested_by)?
+            {
+                result = GraphQLActivationResult::from_outcome(ActivationOutcome::Refused {
+                    reason: thunderforge_canvas_core::interaction::RefusalReason::AlreadyFired,
+                });
+            } else {
+                result.effect_id = loaded.row.effect_id.clone();
+                result.effect_config = loaded.row.effect_config.clone().map(Json);
+                if let Some(effect_id) = &loaded.row.effect_id {
+                    let performed = crate::interaction::perform(
+                        &mut conn,
+                        effect_id,
+                        loaded
+                            .row
+                            .effect_config
+                            .as_ref()
+                            .unwrap_or(&serde_json::Value::Null),
+                        loaded.row.scene_id,
+                    )
+                    .map_err(|e| Error::new(format!("Failed to perform effect: {e}")))?;
+                    result.notices = performed.notices.clone();
+                    if let Some(subject) = performed.door {
+                        let _ = record_world_event(
+                            &mut conn,
+                            world_id,
+                            crate::world_events::EVENT_CODE_DOOR_CHANGED,
+                            Some(serde_json::json!({
+                                "action": "changed",
+                                "wall_id": subject,
+                                "scene_id": scene_id,
+                            })),
+                            user_id,
+                        );
+                    }
+                    if performed.lights_changed {
+                        let _ = record_world_event(
+                            &mut conn,
+                            world_id,
+                            crate::world_events::EVENT_CODE_LIGHT_SOURCE_CHANGED,
+                            Some(serde_json::json!({
+                                "action": "updated",
+                                "scene_id": scene_id,
+                            })),
+                            user_id,
+                        );
+                    }
+                }
+            }
+        }
+
+        announce_request(
+            &mut conn, world_id, scene_id, request_id, "approved", user_id,
+        );
+        Ok(result)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+}
+
+fn announce_request(
+    conn: &mut PgConnection,
+    world_id: Uuid,
+    scene_id: Uuid,
+    request_id: Uuid,
+    action: &str,
+    user_id: Uuid,
+) {
+    let _ = record_world_event(
+        conn,
+        world_id,
+        EVENT_CODE_INTERACTION_REQUEST,
+        Some(serde_json::json!({
+            "action": action,
+            "request_id": request_id,
+            "scene_id": scene_id,
+        })),
+        user_id,
+    );
+}
+
 /// Which door property a GM-only mutation is setting.
 ///
 /// One function for both, because the authorization, the announcement and the
@@ -1281,6 +1502,176 @@ mod tests {
             .unwrap();
         assert_eq!(remaining, 0);
         assert_eq!(door_state_of(&t, wall_id), "none");
+    }
+
+    /// A door the player must ask about.
+    async fn a_gated_door(t: &Table) -> (Uuid, Uuid) {
+        let wall_id = a_wall(t);
+        let interactive_id = designate(t, wall_id).await;
+        update_interactive_impl(
+            &t.state,
+            t.gm,
+            false,
+            interactive_id,
+            GraphQLUpdateInteractiveInput {
+                geometry: None,
+                effect_id: None,
+                effect_config: None,
+                trigger: None,
+                activation: Some(String::from("requires_approval")),
+                fire_mode: None,
+                clear_effect: None,
+            },
+        )
+        .await
+        .expect("the Game Master gates it");
+        (wall_id, interactive_id)
+    }
+
+    #[tokio::test]
+    async fn a_request_never_expires_into_approval() {
+        // FR-027, and the reason there is no timeout anywhere in this file.
+        // Silence is not consent, and a queue that eventually says yes on the
+        // Game Master's behalf is a queue that decides things they did not.
+        let t = seat_a_table();
+        let (wall_id, interactive_id) = a_gated_door(&t).await;
+
+        let asked = activate_interactive_impl(&t.state, t.player, false, interactive_id)
+            .await
+            .expect("the player asks");
+        assert_eq!(asked.outcome, "requested");
+        assert!(asked.request_id.is_some());
+
+        // Nothing happened, and nothing will until somebody decides.
+        assert_eq!(door_state_of(&t, wall_id), "closed");
+
+        let mut conn = t.state.db_pool.get().unwrap();
+        let still_pending = crate::interaction::pending_for_scene(&mut conn, t.scene_id).unwrap();
+        assert_eq!(still_pending.len(), 1);
+        assert_eq!(still_pending[0].state, crate::interaction::REQUEST_PENDING);
+        drop(conn);
+
+        let _ = delete_interactive_impl(&t.state, t.gm, false, interactive_id).await;
+    }
+
+    #[tokio::test]
+    async fn approval_re_checks_permission_at_decision_time() {
+        // A Game Master who locks the door after the request was raised has
+        // contradicted themselves, and the lock wins — it is the more recent
+        // statement of what they want. Trusting the request's own moment would
+        // make approval a way to perform something currently forbidden.
+        let t = seat_a_table();
+        let (wall_id, interactive_id) = a_gated_door(&t).await;
+
+        let asked = activate_interactive_impl(&t.state, t.player, false, interactive_id)
+            .await
+            .expect("the player asks");
+        let request_id = asked.request_id.expect("raised");
+
+        set_door_flag_impl(&t.state, t.gm, false, wall_id, DoorFlag::Locked(true))
+            .await
+            .expect("and then the GM locks it");
+
+        let decided = decide_request_impl(&t.state, t.gm, false, request_id, true)
+            .await
+            .expect("the GM approves anyway");
+        assert_eq!(decided.outcome, "refused");
+        assert_eq!(decided.reason.as_deref(), Some("locked"));
+        assert_eq!(
+            door_state_of(&t, wall_id),
+            "closed",
+            "and the door did not move"
+        );
+
+        let _ = delete_interactive_impl(&t.state, t.gm, false, interactive_id).await;
+    }
+
+    #[tokio::test]
+    async fn approving_runs_the_effect_and_refusing_changes_nothing() {
+        let t = seat_a_table();
+        let (wall_id, interactive_id) = a_gated_door(&t).await;
+
+        // Refused first, so "nothing changed" is checked against a door that
+        // could have moved rather than one that never could.
+        let first = activate_interactive_impl(&t.state, t.player, false, interactive_id)
+            .await
+            .expect("asked");
+        decide_request_impl(&t.state, t.gm, false, first.request_id.unwrap(), false)
+            .await
+            .expect("refused");
+        assert_eq!(door_state_of(&t, wall_id), "closed");
+
+        let second = activate_interactive_impl(&t.state, t.player, false, interactive_id)
+            .await
+            .expect("asked again");
+        let approved = decide_request_impl(&t.state, t.gm, false, second.request_id.unwrap(), true)
+            .await
+            .expect("approved");
+        assert_eq!(approved.outcome, "performed");
+        assert_eq!(door_state_of(&t, wall_id), "open");
+
+        let _ = delete_interactive_impl(&t.state, t.gm, false, interactive_id).await;
+    }
+
+    #[tokio::test]
+    async fn a_player_cannot_decide_a_request_including_their_own() {
+        let t = seat_a_table();
+        let (_wall_id, interactive_id) = a_gated_door(&t).await;
+
+        let asked = activate_interactive_impl(&t.state, t.player, false, interactive_id)
+            .await
+            .expect("asked");
+        let request_id = asked.request_id.expect("raised");
+
+        assert!(
+            decide_request_impl(&t.state, t.player, false, request_id, true)
+                .await
+                .is_err(),
+            "a player approving their own request is the whole thing this gate prevents"
+        );
+
+        let _ = delete_interactive_impl(&t.state, t.gm, false, interactive_id).await;
+    }
+
+    #[tokio::test]
+    async fn a_decided_request_cannot_be_decided_again() {
+        // Two Game Masters clicking approve and refuse must not race into
+        // whichever transaction committed last.
+        let t = seat_a_table();
+        let (_wall_id, interactive_id) = a_gated_door(&t).await;
+
+        let asked = activate_interactive_impl(&t.state, t.player, false, interactive_id)
+            .await
+            .expect("asked");
+        let request_id = asked.request_id.expect("raised");
+
+        decide_request_impl(&t.state, t.gm, false, request_id, false)
+            .await
+            .expect("refused");
+        assert!(
+            decide_request_impl(&t.state, t.gm, false, request_id, true)
+                .await
+                .is_err(),
+            "a decision already made is not reopened by asking again"
+        );
+
+        let _ = delete_interactive_impl(&t.state, t.gm, false, interactive_id).await;
+    }
+
+    #[tokio::test]
+    async fn a_game_masters_own_activation_does_not_queue() {
+        // They are the person the queue exists to ask.
+        let t = seat_a_table();
+        let (wall_id, interactive_id) = a_gated_door(&t).await;
+
+        let performed = activate_interactive_impl(&t.state, t.gm, false, interactive_id)
+            .await
+            .expect("the GM acts");
+        assert_eq!(performed.outcome, "performed");
+        assert!(performed.request_id.is_none());
+        assert_eq!(door_state_of(&t, wall_id), "open");
+
+        let _ = delete_interactive_impl(&t.state, t.gm, false, interactive_id).await;
     }
 
     #[tokio::test]
