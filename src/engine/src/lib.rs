@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 
@@ -6,7 +6,7 @@ use bevy::asset::{AssetPlugin, UnapprovedPathMode};
 use bevy::prelude::*;
 use bevy::window::{Window, WindowPlugin, WindowResolution};
 use js_sys::Function;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use wasm_bindgen::prelude::*;
 
@@ -33,8 +33,8 @@ use movement::PlayerControlled;
 use plugins::{
     BackgroundPlugin, CachedAssetsPlugin, CameraPlugin, CanvasLayerPlugin, DarknessPlugin,
     DiceRollPlugin, GridPlugin, LightingOverlayPlugin, LightingPlugin, RenderProbeEnabled,
-    RenderProbePlugin, ScenePlugin, SelectionPlugin, ShapePlugin, StatusDisplayPlugin,
-    SystemRegistrationPlugin, TokenPlugin, WallPlugin,
+    RenderProbePlugin, ResolvedResource, ScenePlugin, SelectionPlugin, ShapePlugin,
+    StatusDisplayPlugin, SystemRegistrationPlugin, TokenPlugin, TokenStatus, WallPlugin,
 };
 use resources::{
     CameraManager, DoorState, GridSnapEnabled, GridVisible, IsGameMaster, LightSet,
@@ -46,6 +46,7 @@ use sync_test::*;
 use systems::*;
 use thunderforge_canvas_core::grid::Footprint;
 use thunderforge_canvas_core::measure::GridUnits;
+use thunderforge_canvas_core::resource_display::{Disclosed, ResourceDefinition};
 use thunderforge_canvas_core::token_kind::TokenKind;
 use thunderforge_canvas_core::vision::{Illumination, Rgb, VisionProfile};
 
@@ -178,6 +179,17 @@ fn token_kind_color(token_type: &Option<String>) -> Color {
     Color::srgb(r, g, b)
 }
 
+/// One resource on one token, as the server resolved it for this viewer.
+///
+/// `disclosed` is the tagged union from `thunderforge-canvas-core`, so the
+/// payload carries exactly the one field its state permits — an
+/// over-disclosing message does not deserialize.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct StatusResourcePayload {
+    pub definition: ResourceDefinition,
+    pub disclosed: Disclosed,
+}
+
 /// Confirmed/authoritative wall state from the server (T008), matching
 /// the `upsert_wall` inbound command's `wall` payload shape.
 #[derive(Debug, Clone, Deserialize)]
@@ -235,6 +247,17 @@ enum ExternalCommand {
         token: WorldTokenPayload,
     },
     RemoveToken {
+        token_id: String,
+    },
+    /// Spec 029: the resolved, already-entitlement-filtered status for one
+    /// token. The engine draws what it is given and cannot widen it — the
+    /// coarsening happened on the server, and a value this viewer may not see
+    /// never entered the process.
+    SetTokenStatus {
+        token_id: String,
+        resources: Vec<StatusResourcePayload>,
+    },
+    ClearTokenStatus {
         token_id: String,
     },
     UpsertWall {
@@ -401,6 +424,52 @@ pub(crate) struct EngineStatsSnapshot {
     pub shadow_quads: usize,
 }
 
+/// Everything currently displayed, keyed by token id.
+///
+/// Spec 029 FR-021. Mirrored here as each `set_token_status` is applied, so
+/// the state can be read back synchronously from JavaScript — an ECS query
+/// cannot be run from outside the schedule.
+///
+/// Two callers, and the second is the reason this is a supported surface
+/// rather than a debugging one:
+///
+/// 1. Tests assert what *would* be drawn without rendering a pixel, which
+///    matters because this crate's own tests never execute.
+/// 2. The React corner panel reads it, so the engine stays the single source
+///    of truth for resolved status and React observes rather than recomputes
+///    (Constitution I, ADR-053).
+///
+/// It is deliberately read-only. A debugging surface that can also mutate
+/// state becomes a way to write tests that pass against situations the
+/// application cannot reach.
+static TOKEN_STATUS: OnceLock<Mutex<BTreeMap<String, Vec<StatusResourcePayload>>>> =
+    OnceLock::new();
+
+pub(crate) fn token_status_slot() -> &'static Mutex<BTreeMap<String, Vec<StatusResourcePayload>>> {
+    TOKEN_STATUS.get_or_init(|| Mutex::new(BTreeMap::new()))
+}
+
+/// What the engine would draw for one token, as JSON, or `null`.
+#[wasm_bindgen]
+pub fn get_token_status(token_id: &str) -> String {
+    token_status_slot()
+        .lock()
+        .ok()
+        .and_then(|map| map.get(token_id).cloned())
+        .and_then(|resources| serde_json::to_string(&resources).ok())
+        .unwrap_or_else(|| "null".to_string())
+}
+
+/// Every token currently carrying status furniture, as JSON.
+#[wasm_bindgen]
+pub fn list_token_status() -> String {
+    token_status_slot()
+        .lock()
+        .ok()
+        .and_then(|map| serde_json::to_string(&*map).ok())
+        .unwrap_or_else(|| "{}".to_string())
+}
+
 pub(crate) fn engine_stats_slot() -> &'static Mutex<EngineStatsSnapshot> {
     ENGINE_STATS.get_or_init(|| Mutex::new(EngineStatsSnapshot::default()))
 }
@@ -469,6 +538,17 @@ fn parse_command(input: &str) -> Option<ExternalCommand> {
             Some(ExternalCommand::UpsertToken { token })
         }
         "remove_token" => Some(ExternalCommand::RemoveToken {
+            token_id: value.get("tokenId")?.as_str()?.to_owned(),
+        }),
+        "set_token_status" => {
+            let resources: Vec<StatusResourcePayload> =
+                serde_json::from_value(value.get("resources")?.clone()).ok()?;
+            Some(ExternalCommand::SetTokenStatus {
+                token_id: value.get("tokenId")?.as_str()?.to_owned(),
+                resources,
+            })
+        }
+        "clear_token_status" => Some(ExternalCommand::ClearTokenStatus {
             token_id: value.get("tokenId")?.as_str()?.to_owned(),
         }),
         "upsert_wall" => {
@@ -1106,6 +1186,39 @@ fn apply_external_commands(
             ExternalCommand::RemoveToken { token_id } => {
                 if let Some(entity) = token_entities.0.remove(&token_id) {
                     commands.entity(entity).despawn();
+                }
+            }
+            ExternalCommand::SetTokenStatus {
+                token_id,
+                resources,
+            } => {
+                // Setting the component is the whole application step; the
+                // plugin's `Changed<TokenStatus>` system redraws from there.
+                if let Some(&entity) = token_entities.0.get(&token_id) {
+                    if let Ok(mut slot) = token_status_slot().lock() {
+                        slot.insert(token_id.clone(), resources.clone());
+                    }
+                    commands.entity(entity).insert(TokenStatus {
+                        resources: resources
+                            .into_iter()
+                            .map(|r| ResolvedResource {
+                                definition: r.definition,
+                                disclosed: r.disclosed,
+                            })
+                            .collect(),
+                    });
+                }
+            }
+            ExternalCommand::ClearTokenStatus { token_id } => {
+                // An empty set rather than removing the component: the
+                // plugin's change detection is what clears the drawn geometry,
+                // and removing the component would leave the last bars on
+                // screen with nothing to trigger their removal.
+                if let Some(&entity) = token_entities.0.get(&token_id) {
+                    if let Ok(mut slot) = token_status_slot().lock() {
+                        slot.remove(&token_id);
+                    }
+                    commands.entity(entity).insert(TokenStatus::default());
                 }
             }
             ExternalCommand::UpsertWall { wall } => {
