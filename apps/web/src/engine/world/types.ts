@@ -23,6 +23,14 @@ export type WorldToken = {
    * engine treats a missing value as `character`.
    */
   tokenType?: string | null;
+  /**
+   * Attribute scores, keyed by the active system's own identifiers.
+   *
+   * Optional because most token events are positional and carry no sheet,
+   * and because a system may declare no attributes at all — both of which
+   * mean "leave this alone" rather than "clear it".
+   */
+  attributes?: Record<string, number> | null;
 };
 
 export type DoorState = "none" | "open" | "closed";

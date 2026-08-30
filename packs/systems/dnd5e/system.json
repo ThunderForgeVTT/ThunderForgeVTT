@@ -14,10 +14,10 @@
       "Do not use 'Dungeons & Dragons' as a product/module name or in marketing that implies Wizards of the Coast endorsement",
       "Do not include any attribution to Wizards of the Coast or its parents/affiliates beyond the exact attribution statement above (per the SRD's own Legal Information page)",
       "May use 'compatible with fifth edition' or '5E compatible' phrasing, but not the D&D trademark or logo itself",
-      "Do not reproduce or imply access to proprietary campaign lore, named characters, deities, or iconic monsters (e.g. Mind Flayers, Beholders) \u2014 these are excluded from the SRD",
+      "Do not reproduce or imply access to proprietary campaign lore, named characters, deities, or iconic monsters (e.g. Mind Flayers, Beholders) — these are excluded from the SRD",
       "Where the SRD renamed a legacy item to avoid trademark bleed (e.g. 'Mysterious Deck' instead of 'Deck of Many Things', 'Dragon Orb' instead of 'Orb of Dragonkind'), use the SRD's renamed term, not the proprietary legacy name"
     ],
-    "requiredUiPlacement": "Must be shown on the system selection screen and/or a permanent, easily accessible module settings/about tab \u2014 not buried in Terms of Service.",
+    "requiredUiPlacement": "Must be shown on the system selection screen and/or a permanent, easily accessible module settings/about tab — not buried in Terms of Service.",
     "sourceUrl": "https://creativecommons.org/licenses/by/4.0/"
   },
   "url": "https://github.com/ThunderForgeVTT/ThunderForgeVTT",
@@ -26,8 +26,12 @@
     "verified": "0.1.0",
     "maximum": "1.0.0"
   },
-  "esmodules": ["web/dist/index.js"],
-  "styles": ["web/dist/index.css"],
+  "esmodules": [
+    "web/dist/index.js"
+  ],
+  "styles": [
+    "web/dist/index.css"
+  ],
   "packages": {
     "server": "./server",
     "engine": "./engine",
@@ -110,50 +114,256 @@
   "abilities": {
     "strength": {
       "label": "Strength",
-      "abbreviation": "STR"
+      "abbreviation": "STR",
+      "order": 0
     },
     "dexterity": {
       "label": "Dexterity",
-      "abbreviation": "DEX"
+      "abbreviation": "DEX",
+      "order": 1
     },
     "constitution": {
       "label": "Constitution",
-      "abbreviation": "CON"
+      "abbreviation": "CON",
+      "order": 2
     },
     "intelligence": {
       "label": "Intelligence",
-      "abbreviation": "INT"
+      "abbreviation": "INT",
+      "order": 3
     },
     "wisdom": {
       "label": "Wisdom",
-      "abbreviation": "WIS"
+      "abbreviation": "WIS",
+      "order": 4
     },
     "charisma": {
       "label": "Charisma",
-      "abbreviation": "CHA"
+      "abbreviation": "CHA",
+      "order": 5
     }
   },
   "spellSlots": {
-    "1": [2, 0, 0, 0, 0, 0, 0, 0, 0],
-    "2": [3, 2, 0, 0, 0, 0, 0, 0, 0],
-    "3": [4, 3, 2, 0, 0, 0, 0, 0, 0],
-    "4": [4, 3, 3, 2, 0, 0, 0, 0, 0],
-    "5": [4, 4, 3, 3, 2, 0, 0, 0, 0],
-    "6": [4, 4, 3, 3, 3, 2, 0, 0, 0],
-    "7": [4, 4, 4, 3, 3, 3, 2, 0, 0],
-    "8": [4, 4, 4, 3, 3, 3, 3, 2, 0],
-    "9": [4, 4, 4, 4, 3, 3, 3, 3, 3],
-    "10": [5, 4, 4, 4, 3, 3, 3, 3, 3],
-    "11": [5, 4, 4, 4, 4, 3, 3, 3, 3],
-    "12": [5, 4, 4, 4, 4, 3, 3, 3, 3],
-    "13": [5, 4, 4, 4, 4, 4, 3, 3, 3],
-    "14": [5, 4, 4, 4, 4, 4, 3, 3, 3],
-    "15": [5, 4, 4, 4, 4, 4, 4, 3, 3],
-    "16": [5, 4, 4, 4, 4, 4, 4, 3, 3],
-    "17": [5, 5, 4, 4, 4, 4, 4, 4, 3],
-    "18": [5, 5, 4, 4, 4, 4, 4, 4, 3],
-    "19": [5, 5, 4, 4, 4, 4, 4, 4, 4],
-    "20": [5, 5, 4, 4, 4, 4, 4, 4, 4]
+    "1": [
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "2": [
+      3,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "3": [
+      4,
+      3,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "4": [
+      4,
+      3,
+      3,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "5": [
+      4,
+      4,
+      3,
+      3,
+      2,
+      0,
+      0,
+      0,
+      0
+    ],
+    "6": [
+      4,
+      4,
+      3,
+      3,
+      3,
+      2,
+      0,
+      0,
+      0
+    ],
+    "7": [
+      4,
+      4,
+      4,
+      3,
+      3,
+      3,
+      2,
+      0,
+      0
+    ],
+    "8": [
+      4,
+      4,
+      4,
+      3,
+      3,
+      3,
+      3,
+      2,
+      0
+    ],
+    "9": [
+      4,
+      4,
+      4,
+      4,
+      3,
+      3,
+      3,
+      3,
+      3
+    ],
+    "10": [
+      5,
+      4,
+      4,
+      4,
+      3,
+      3,
+      3,
+      3,
+      3
+    ],
+    "11": [
+      5,
+      4,
+      4,
+      4,
+      4,
+      3,
+      3,
+      3,
+      3
+    ],
+    "12": [
+      5,
+      4,
+      4,
+      4,
+      4,
+      3,
+      3,
+      3,
+      3
+    ],
+    "13": [
+      5,
+      4,
+      4,
+      4,
+      4,
+      4,
+      3,
+      3,
+      3
+    ],
+    "14": [
+      5,
+      4,
+      4,
+      4,
+      4,
+      4,
+      3,
+      3,
+      3
+    ],
+    "15": [
+      5,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      3,
+      3
+    ],
+    "16": [
+      5,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      3,
+      3
+    ],
+    "17": [
+      5,
+      5,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      3
+    ],
+    "18": [
+      5,
+      5,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      3
+    ],
+    "19": [
+      5,
+      5,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4
+    ],
+    "20": [
+      5,
+      5,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4
+    ]
   },
   "data_types": {
     "ability_data": {
@@ -224,7 +434,9 @@
           "label": "Temporary HP"
         }
       },
-      "required": ["max_hp"]
+      "required": [
+        "max_hp"
+      ]
     },
     "proficiency_data": {
       "description": "Skill proficiencies and saving throw proficiencies",
@@ -371,7 +583,10 @@
           "description": "Racial and class traits"
         }
       },
-      "required": ["class", "level"]
+      "required": [
+        "class",
+        "level"
+      ]
     },
     "spell_data": {
       "description": "Spellcasting information for casters",

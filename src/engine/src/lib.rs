@@ -27,7 +27,7 @@ pub mod transforms;
 // Phase 4.7.G2: Integration & E2E Tests
 mod integration_tests;
 
-use components::{DerivedStats, Token};
+use components::{DerivedStats, Token, TokenAttributes};
 use derived_data::*;
 use movement::PlayerControlled;
 use plugins::{
@@ -158,6 +158,13 @@ struct WorldTokenPayload {
     health: Option<i32>,
     #[serde(default, rename = "maxHealth")]
     max_health: Option<i32>,
+    /// The actor's attribute scores, keyed by the system's own identifiers.
+    ///
+    /// Optional because most `upsert_token` events are positional and carry
+    /// no sheet at all, and because a system may declare no attributes —
+    /// both of which mean "leave this alone" rather than "clear it".
+    #[serde(default)]
+    attributes: Option<std::collections::BTreeMap<String, i32>>,
 }
 
 /// The colour a token is drawn in when it carries no art.
@@ -833,7 +840,6 @@ pub fn start(canvas_selector: &str) {
         .insert_resource(network::WorldEventSubscription::new())
         .insert_resource(tracker)
         .insert_resource(CircularFlowTracer::new())
-        .insert_resource(SystemHooksRegistry { hooks: None })
         // Every asset this engine loads is a same-origin, server-authorized
         // URL under `/api/canvas-assets/...` (scene backgrounds and pasted
         // canvas images — see `systems/background.rs`, the only two
@@ -944,7 +950,7 @@ pub fn start(canvas_selector: &str) {
         // The live equivalents work on `Transform`:
         //   movement -> `systems::token_move::handle_token_movement_input`
         //   snapping -> `systems::token_grid::snap_tokens_to_grid`
-        .add_systems(Update, (calculate_derived_stats, calculate_ability_stats))
+        .add_systems(Update, calculate_derived_stats)
         .add_systems(
             Update,
             (
@@ -1266,15 +1272,20 @@ fn apply_external_commands(
                             is_visible: true,
                             health: token.health,
                             max_health: token.max_health,
-                            // Abilities stay empty here. The server does not
-                            // yet send them, and `calculate_ability_stats`
-                            // queries `Changed<TokenAbilities>`, so it will
-                            // continue to match nothing until spec 029's
-                            // resource declarations carry them. Filling this
-                            // with zeroes would be worse than leaving it
-                            // empty: derived values computed from invented
-                            // ability scores would be confidently wrong.
-                            abilities: Default::default(),
+                            // Populated from the payload where the server
+                            // sent them, empty where it did not. Empty means
+                            // "this sheet is not filled in", which is a
+                            // different claim from a sheet of zeroes — and in
+                            // every system shipping here a zero is a real and
+                            // punishing score.
+                            attributes: TokenAttributes(
+                                token
+                                    .attributes
+                                    .clone()
+                                    .unwrap_or_default()
+                                    .into_iter()
+                                    .collect(),
+                            ),
                             schema_version: 1,
                             is_selected: false,
                             is_hovered: false,

@@ -11,6 +11,7 @@
 
 mod adapters;
 mod admin;
+mod attributes; // Phase 8: a system's own attribute set, from its manifest
 mod auth;
 mod auth_middleware;
 mod canvas_assets_serve;

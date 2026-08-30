@@ -11,8 +11,12 @@
     "verified": "0.1.0",
     "maximum": "1.0.0"
   },
-  "esmodules": ["web/dist/index.js"],
-  "styles": ["web/dist/index.css"],
+  "esmodules": [
+    "web/dist/index.js"
+  ],
+  "styles": [
+    "web/dist/index.css"
+  ],
   "packages": {
     "server": "./server",
     "engine": "./engine",
@@ -21,15 +25,18 @@
   "abilities": {
     "might": {
       "label": "Might",
-      "abbreviation": "MGT"
+      "abbreviation": "MGT",
+      "order": 0
     },
     "cunning": {
       "label": "Cunning",
-      "abbreviation": "CUN"
+      "abbreviation": "CUN",
+      "order": 1
     },
     "spirit": {
       "label": "Spirit",
-      "abbreviation": "SPI"
+      "abbreviation": "SPI",
+      "order": 2
     }
   },
   "abilityFacets": {
@@ -55,16 +62,36 @@
     }
   },
   "wishPoints": {
-    "1": [2],
-    "2": [3],
-    "3": [4],
-    "4": [5],
-    "5": [6],
-    "6": [7],
-    "7": [8],
-    "8": [9],
-    "9": [10],
-    "10": [12]
+    "1": [
+      2
+    ],
+    "2": [
+      3
+    ],
+    "3": [
+      4
+    ],
+    "4": [
+      5
+    ],
+    "5": [
+      6
+    ],
+    "6": [
+      7
+    ],
+    "7": [
+      8
+    ],
+    "8": [
+      9
+    ],
+    "9": [
+      10
+    ],
+    "10": [
+      12
+    ]
   },
   "sizeCategories": {
     "diminutive": {
@@ -95,7 +122,7 @@
   "conditions": {
     "bound": {
       "label": "Bound",
-      "description": "The Genie's power is constrained by their vessel, a Patron's rule, or a captor's ward \u2014 wish-granting abilities are suppressed or restricted until the binding is broken."
+      "description": "The Genie's power is constrained by their vessel, a Patron's rule, or a captor's ward — wish-granting abilities are suppressed or restricted until the binding is broken."
     },
     "exposed": {
       "label": "Exposed",
@@ -136,7 +163,11 @@
           "label": "Spirit"
         }
       },
-      "required": ["might", "cunning", "spirit"]
+      "required": [
+        "might",
+        "cunning",
+        "spirit"
+      ]
     },
     "resource_data": {
       "description": "Wish Points and Health",
@@ -162,7 +193,10 @@
           "label": "Maximum Health"
         }
       },
-      "required": ["max_wish_points", "max_health"]
+      "required": [
+        "max_wish_points",
+        "max_health"
+      ]
     },
     "proficiency_data": {
       "description": "Trained skills",

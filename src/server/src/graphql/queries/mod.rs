@@ -15,6 +15,7 @@ pub mod lore;
 pub mod moderation;
 pub mod roll;
 pub mod scene;
+pub mod token_attributes;
 pub mod token_status;
 pub mod user;
 // The reconnect catch-up (`worldEventsSince`) — what a client missed while

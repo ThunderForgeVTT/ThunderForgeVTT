@@ -4,6 +4,8 @@
 //! All components are designed for WASM compatibility and follow the
 //! circular event-driven architecture pattern.
 
+use std::collections::BTreeMap;
+
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -55,8 +57,13 @@ pub struct Token {
     /// Maximum health
     pub max_health: Option<i32>,
 
-    /// Raw ability scores (from system or server)
-    pub abilities: TokenAbilities,
+    /// The actor's attribute scores, as the active game system declares them.
+    ///
+    /// Keyed by the system's own identifiers, because the engine has no
+    /// business knowing them: `might`/`cunning`/`spirit` for Genie,
+    /// `insight`/`prowess`/`resolve` for Blades, six D&D-shaped ones for 5e
+    /// and Pathfinder. Resolved server-side from the manifest.
+    pub attributes: TokenAttributes,
 
     /// Schema version for migrations
     pub schema_version: i32,
@@ -68,15 +75,31 @@ pub struct Token {
     pub is_hovered: bool,
 }
 
-/// Ability scores (D&D-style or system-specific)
-#[derive(Component, Clone, Debug, Serialize, Deserialize, Default)]
-pub struct TokenAbilities {
-    pub strength: Option<i32>,
-    pub dexterity: Option<i32>,
-    pub constitution: Option<i32>,
-    pub intelligence: Option<i32>,
-    pub wisdom: Option<i32>,
-    pub charisma: Option<i32>,
+/// Attribute scores, keyed by whatever the active system calls them.
+///
+/// This was six fixed fields — strength through charisma — which is one
+/// ruleset's character sheet compiled into a renderer. It could hold D&D 5e
+/// and Pathfinder 2e and could not hold either of the other two systems that
+/// already ship: Genie declares might, cunning and spirit; Blades in the Dark
+/// declares insight, prowess and resolve. What it stored for a Genie
+/// character was six `None`s.
+///
+/// A map cannot privilege a system it cannot name, which is the whole point.
+#[derive(Component, Clone, Debug, Serialize, Deserialize, Default, PartialEq)]
+pub struct TokenAttributes(pub BTreeMap<String, i32>);
+
+impl TokenAttributes {
+    /// One score by the system's own identifier, if the sheet carries it.
+    ///
+    /// `None` means unset, never zero — a zero is a real and often crippling
+    /// score, and an unfilled sheet is not the same claim as a filled-in one.
+    pub fn get(&self, id: &str) -> Option<i32> {
+        self.0.get(id).copied()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 /// Grid position of the token (x, y coordinates on the game board)
@@ -132,12 +155,6 @@ impl RollbackCache {
 /// Never transmitted over network; calculated locally to save bandwidth
 #[derive(Component, Clone, Debug, Default)]
 pub struct DerivedStats {
-    /// Calculated armor class (from system hook or base computation)
-    pub armor_class: Option<i32>,
-
-    /// Initiative modifier
-    pub initiative: Option<i32>,
-
     /// Health as percentage (0-100)
     pub health_percentage: Option<f32>,
 
@@ -147,11 +164,12 @@ pub struct DerivedStats {
     /// Is token at full health
     pub is_full_health: bool,
 
-    /// Movement speed (tiles per round)
+    /// Movement speed, once something declares it.
+    ///
+    /// Left unset rather than defaulted: it was a hard-coded 30 for every
+    /// token in every system, which is D&D's number presented as a fact
+    /// about Blades in the Dark.
     pub movement_speed: Option<i32>,
-
-    /// Proficiency bonus (D&D-style)
-    pub proficiency_bonus: Option<i32>,
 
     /// System-specific computed values (JSON)
     /// For extensibility with game systems
@@ -173,17 +191,17 @@ impl DerivedStats {
             stats.is_full_health = health >= max_health;
         }
 
-        // Base AC calculation (can be overridden by system hooks)
-        // Default: 10 + DEX modifier
-        if let Some(dex) = token.abilities.dexterity {
-            let dex_mod = (dex - 10) / 2;
-            stats.armor_class = Some(10 + dex_mod);
-            stats.initiative = Some(dex_mod);
-        }
-
-        // Default movement speed
-        stats.movement_speed = Some(30); // 30 feet = 5 tiles per round (D&D default)
-
+        // Nothing ability-derived is computed here any more.
+        //
+        // What used to sit here was `10 + (dex - 10) / 2` for armour class,
+        // the same expression for initiative, and a movement speed of 30 —
+        // D&D 5e's rules, in the engine, applied to every system including
+        // the two that have no dexterity to read. They computed only because
+        // nothing populated the scores they read, and were never displayed.
+        //
+        // Where system rules execute is an open question (see MVP.md Phase
+        // 8). Until it is answered, the honest value is absent rather than
+        // one ruleset's answer given to all of them.
         stats
     }
 }
