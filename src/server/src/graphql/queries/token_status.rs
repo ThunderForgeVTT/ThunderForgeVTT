@@ -194,6 +194,86 @@ impl TokenStatusQuery {
     }
 }
 
+/// Resolve one token for one viewer.
+///
+/// The single-token counterpart of the scene query. Extracted rather than
+/// duplicated so the mutation's response cannot drift from what the query
+/// would have returned for the same token — two resolvers answering the same
+/// question differently is the exact shape of a bug this project has shipped
+/// before.
+fn resolve_one_token(
+    conn: &mut diesel::PgConnection,
+    systems_dir: &str,
+    user_id: Uuid,
+    is_admin: bool,
+    scene_id: Uuid,
+    token_id: Uuid,
+) -> GraphQLResult<GraphQLTokenStatus> {
+    use crate::schema::{scenes, tokens, world_actor_system_data, world_actors, worlds};
+
+    let world_id: Uuid = scenes::table
+        .filter(scenes::scene_id.eq(scene_id))
+        .select(scenes::world_id)
+        .first(conn)
+        .map_err(|_| Error::new("Scene not found"))?;
+
+    let actor = crate::auth::world_membership::actor_in_world(conn, user_id, is_admin, world_id);
+    let runs_the_world = actor.runs_the_world();
+
+    let system_id: Option<String> = worlds::table
+        .filter(worlds::id.eq(world_id))
+        .select(worlds::game_system_id)
+        .first(conn)
+        .optional()
+        .map_err(|e| Error::new(format!("Failed to read world: {e}")))?
+        .flatten();
+
+    let declarations = match system_id.as_deref() {
+        Some(id) => declarations_for_system(systems_dir, id),
+        None => Vec::new(),
+    };
+
+    let (actor_id, owner): (Option<Uuid>, Option<Uuid>) = tokens::table
+        .filter(tokens::token_id.eq(token_id))
+        .select((tokens::actor_id, tokens::owner_user_id))
+        .first(conn)
+        .map_err(|_| Error::new("Token not found"))?;
+
+    let is_npc = match actor_id {
+        Some(id) => world_actors::table
+            .filter(world_actors::id.eq(id))
+            .select(world_actors::is_npc)
+            .first::<bool>(conn)
+            .unwrap_or(true),
+        None => true,
+    };
+
+    let stored: serde_json::Value = match actor_id {
+        Some(id) => world_actor_system_data::table
+            .filter(world_actor_system_data::actor_id.eq(id))
+            .select(world_actor_system_data::resource_data)
+            .first::<Option<serde_json::Value>>(conn)
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| serde_json::json!({})),
+        None => serde_json::json!({}),
+    };
+
+    let overrides = overrides_for_tokens(conn, &[token_id])
+        .map_err(|e| Error::new(format!("Failed to load disclosure: {e}")))?
+        .remove(&token_id)
+        .unwrap_or_default();
+
+    Ok(to_graphql(resolve_token(
+        token_id,
+        runs_the_world,
+        subject_for(user_id, is_npc, owner),
+        &declarations,
+        &stored,
+        &overrides,
+    )))
+}
+
 fn to_graphql(status: crate::status_display::TokenStatus) -> GraphQLTokenStatus {
     GraphQLTokenStatus {
         token_id: status.token_id,
@@ -243,5 +323,150 @@ fn to_graphql(status: crate::status_display::TokenStatus) -> GraphQLTokenStatus 
                 }
             })
             .collect(),
+    }
+}
+
+/// Which state a Game Master is setting.
+#[derive(async_graphql::Enum, Copy, Clone, Debug, Eq, PartialEq)]
+pub enum GraphQLDisclosureState {
+    Visible,
+    Greyed,
+    Percentage,
+    Chunked,
+}
+
+impl GraphQLDisclosureState {
+    fn as_stored(self) -> &'static str {
+        match self {
+            Self::Visible => "visible",
+            Self::Greyed => "greyed",
+            Self::Percentage => "percentage",
+            Self::Chunked => "chunked",
+        }
+    }
+}
+
+#[derive(async_graphql::InputObject, Debug, Clone)]
+pub struct SetTokenDisclosureInput {
+    pub token_id: Uuid,
+    pub resource_id: String,
+    pub state: GraphQLDisclosureState,
+}
+
+#[derive(Default)]
+pub struct TokenDisclosureMutation;
+
+#[Object]
+impl TokenDisclosureMutation {
+    /// Set how much one token discloses about one resource.
+    ///
+    /// Per **token**, not per actor: two tokens of the same creature can
+    /// legitimately differ, and the Game Master sets this on the one standing
+    /// in front of the players.
+    ///
+    /// Returns the caller's own resolved view, which is always exact — a Game
+    /// Master sees the truth regardless of what they have just hidden, because
+    /// they still have to run the fight. The response must therefore not be
+    /// mistaken for what a player will now see.
+    async fn set_token_disclosure(
+        &self,
+        ctx: &Context<'_>,
+        input: SetTokenDisclosureInput,
+    ) -> GraphQLResult<GraphQLTokenStatus> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        let user_id = auth_user.user_id;
+        let is_admin = auth_user.is_admin;
+        let systems_dir = state.directories.systems_dir.clone();
+
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        let resolved = tokio::task::spawn_blocking(move || {
+            use crate::schema::{token_resource_disclosure as trd, tokens};
+
+            // Authority to change what other people know follows the world
+            // role — Owner or Game Master, never a Player. Reuses
+            // `is_dm_of_scene` rather than adding a parallel check.
+            let scene_id: Uuid = tokens::table
+                .filter(tokens::token_id.eq(input.token_id))
+                .select(tokens::scene_id)
+                .first(&mut conn)
+                .map_err(|_| Error::new("Token not found"))?;
+
+            if !crate::auth::world_membership::is_dm_of_scene(
+                &mut conn, user_id, is_admin, scene_id,
+            )
+            .map_err(|e| Error::new(format!("Failed to check authority: {e}")))?
+            {
+                return Err(Error::new(
+                    "Only the Owner or a Game Master may change what a token discloses",
+                ));
+            }
+
+            let now = chrono::Utc::now().naive_utc();
+            diesel::insert_into(trd::table)
+                .values((
+                    trd::token_id.eq(input.token_id),
+                    trd::resource_id.eq(&input.resource_id),
+                    trd::state.eq(input.state.as_stored()),
+                    trd::created_by.eq(user_id),
+                    trd::updated_by.eq(user_id),
+                    trd::created_at.eq(now),
+                    trd::updated_at.eq(now),
+                ))
+                .on_conflict((trd::token_id, trd::resource_id))
+                .do_update()
+                .set((
+                    trd::state.eq(input.state.as_stored()),
+                    trd::updated_by.eq(user_id),
+                    trd::updated_at.eq(now),
+                ))
+                .execute(&mut conn)
+                .map_err(|e| Error::new(format!("Failed to store disclosure: {e}")))?;
+
+            // Tell connected clients. A player watching this token needs the
+            // change without reloading — a Game Master revealing a boss
+            // mid-fight cannot ask the table to refresh.
+            if let Ok(world_id) = crate::world_events::world_id_for_scene(&mut conn, scene_id) {
+                let _ = crate::world_events::record_world_event(
+                    &mut conn,
+                    world_id,
+                    crate::world_events::EVENT_CODE_TOKEN_DISCLOSURE_CHANGED,
+                    // The payload deliberately carries the token and nothing
+                    // else. What *changed* about it depends on who is asking,
+                    // so a client re-reads through the resolver that knows how
+                    // to coarsen rather than being handed a value here.
+                    Some(serde_json::json!({ "tokenId": input.token_id })),
+                    user_id,
+                );
+            }
+
+            Ok(scene_id)
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))??;
+
+        // The GM's own view of the token they just changed.
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+        let token_id = input.token_id;
+
+        tokio::task::spawn_blocking(move || {
+            resolve_one_token(
+                &mut conn,
+                &systems_dir,
+                user_id,
+                is_admin,
+                resolved,
+                token_id,
+            )
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
     }
 }

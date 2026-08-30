@@ -54,6 +54,14 @@ pub const EVENT_CODE_CHAT_MESSAGE: i32 = 17;
 /// from diffing it over the wire.
 pub const EVENT_CODE_COMBAT_CHANGED: i32 = 18;
 
+/// Spec 029: what a token discloses about a resource changed.
+///
+/// Distinct from `EVENT_CODE_TOKEN_CHANGED` because a value changing and a
+/// change in what may be *known* about a value are different facts, and a
+/// client reacts differently: the first moves a bar, the second can make one
+/// appear, vanish, or stop being an estimate.
+pub const EVENT_CODE_TOKEN_DISCLOSURE_CHANGED: i32 = 19;
+
 /// Record a world event to the audit trail and trigger NOTIFY for real-time sync.
 ///
 /// # Failures are logged here, not at the call sites

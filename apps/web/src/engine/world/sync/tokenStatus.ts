@@ -25,6 +25,17 @@ import type { WorldEventLike } from "./subscriptionClient";
 const EVENT_CODE_TOKEN_CHANGED = 14;
 
 /**
+ * What a token *discloses* changed — a Game Master revealing or hiding.
+ *
+ * Separate from a value change because they are different facts: one moves a
+ * bar, the other can make one appear, vanish, or stop being an estimate. Both
+ * land here because both mean "re-read", but a client that later wants to
+ * treat them differently has the distinction available rather than having to
+ * reintroduce it.
+ */
+const EVENT_CODE_TOKEN_DISCLOSURE_CHANGED = 19;
+
+/**
  * Re-read a scene's status and push it to the engine.
  *
  * Exported so a caller can prime the canvas on load without waiting for an
@@ -64,7 +75,10 @@ export async function applyTokenStatusWorldEvent(
   event: WorldEventLike,
 ): Promise<void> {
   const eventCode = event.event_code ?? event.eventCode;
-  if (eventCode !== EVENT_CODE_TOKEN_CHANGED) {
+  if (
+    eventCode !== EVENT_CODE_TOKEN_CHANGED &&
+    eventCode !== EVENT_CODE_TOKEN_DISCLOSURE_CHANGED
+  ) {
     return;
   }
 

@@ -152,16 +152,16 @@ the renderer.
 
 ### Tests for User Story 3a
 
-- [ ] T039 [P] [US3a] Test in `src/server/src/graphql/mutations_tokens.rs` that `setTokenDisclosure` requires `runs_the_world()` and refuses a Player
-- [ ] T040 [US3a] Test in `src/server/src/graphql/mutations_tokens.rs` that two tokens of the same actor can hold different states (FR-013d)
-- [ ] T041 [P] [US3a] Playwright scenario in `apps/web/e2e/status-display.spec.ts`: a GM changes state mid-session and a connected player's view updates without a reload
+- [x] T039 [P] [US3a] Test in `src/server/src/graphql/mutations_tokens.rs` that `setTokenDisclosure` requires `runs_the_world()` and refuses a Player
+- [x] T040 [US3a] Test in `src/server/src/graphql/mutations_tokens.rs` that two tokens of the same actor can hold different states (FR-013d)
+- [x] T041 [P] [US3a] Playwright scenario in `apps/web/e2e/status-display.spec.ts`: a GM changes state mid-session and a connected player's view updates without a reload
 
 ### Implementation for User Story 3a
 
-- [ ] T042 [US3a] Add the `TokenResourceDisclosure` model and schema entries in `src/server/src/models.rs` and `src/server/src/schema.rs` (depends on T013)
-- [ ] T043 [US3a] Implement `setTokenDisclosure` in `src/server/src/graphql/mutations_tokens.rs`, gated on `thunderforge_authz::Actor::runs_the_world()` — reuse, do not add a parallel check (Constitution III)
-- [ ] T044 [US3a] Add a disclosure-changed event code in `src/server/src/world_events.rs` and emit on change — a value change and a change in what may be _known_ are different facts a client may react to differently
-- [ ] T045 [US3a] Handle the new event code in `apps/web/src/engine/world/sync/tokens.ts` so displays appear and vanish live
+- [x] T042 [US3a] Add the `TokenResourceDisclosure` model and schema entries in `src/server/src/models.rs` and `src/server/src/schema.rs` (depends on T013)
+- [x] T043 [US3a] Implement `setTokenDisclosure` in `src/server/src/graphql/mutations_tokens.rs`, gated on `thunderforge_authz::Actor::runs_the_world()` — reuse, do not add a parallel check (Constitution III)
+- [x] T044 [US3a] Add a disclosure-changed event code in `src/server/src/world_events.rs` and emit on change — a value change and a change in what may be _known_ are different facts a client may react to differently
+- [x] T045 [US3a] Handle the new event code in `apps/web/src/engine/world/sync/tokens.ts` so displays appear and vanish live
 - [ ] T046 [US3a] Add the GM-facing disclosure control to `apps/web/src/components/TokenPanel.tsx`, presenting the four states with their differing safety made visible rather than as four interchangeable appearances (FR-013c)
 
 **Checkpoint**: A GM controls disclosure without stopping play
