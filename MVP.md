@@ -69,7 +69,17 @@ This section provides a high-level overview of the core objects and concepts tha
   - The application should enforce the rules of the game system loaded onto the world.
   - This includes basic mechanics like movement speed, considering actor specs.
   - This is where the Bevy engine should be utilized.
-  - Implemented: game system package install/manifest-serving pipeline (`src/server/src/systems.rs`), a system registry with at least one real system registered (D&D 5e), and derived-data/movement-speed plumbing in the engine (`src/engine/src/derived_data.rs`). **Missing/unverified**: full rule enforcement (e.g. movement actually gated by computed speed, actor specs driving in-engine behavior end-to-end) was not confirmed in this pass.
+  - Implemented: game system package install/manifest-serving pipeline (`src/server/src/systems.rs`), a system registry with several real systems registered (Genie, D&D 5e, Pathfinder 2e, Blades in the Dark), and derived-data plumbing in the engine (`src/engine/src/derived_data.rs`). **Missing**: full rule enforcement — movement is not gated by computed speed, and actor specs do not drive in-engine behaviour end to end.
+
+  **Read this before starting Phase 8** (found 2026-08-30, while checking what blocks per-viewer visibility). The obvious first task looks like "populate `TokenAbilities` from actor data, so `derived_data.rs` stops matching nothing". Doing that as written would entrench a bug rather than fix one.
+
+  `TokenAbilities` is six fixed fields — strength through charisma — and `derived_data.rs` computes on them with formulas its own comments label as D&D 5e: `compute_armor_class` is `10 + (dex - 10) / 2`, `compute_initiative` is the 5e dexterity modifier, `compute_movement_speed` ignores both its arguments and returns 30. That is one game system's rules compiled into the engine, which is the thing Principle I and spec 029's FR-001 both forbid, and it is currently harmless only because nothing populates it. Plumbing abilities through would make it load-bearing.
+
+  It also does not survive contact with the systems already registered. Blades in the Dark has no ability scores at all — it has action ratings (Hunt, Prowl, Skirmish), twelve of them, on a 0–3 scale. There is no dexterity to read and no AC to derive. A six-field struct cannot represent that, and a system-agnostic engine should not be trying to.
+
+  Spec 029 solved the same problem for resources and the answer should carry over: the **system manifest declares the field mapping**, the server resolves it against the actor's stored data, and the engine renders or applies what it is given while understanding none of it. `ResourceSource`/`EntrySource` in `crates/thunderforge-canvas-core/src/resource_display.rs` are the working precedent, and `packs/systems/*/system.json` already carries four systems' worth of declarations in that shape.
+
+  So Phase 8's real first task is deciding where system rules execute — server, engine, or declared data — not wiring six D&D fields into a struct that already exists. That decision is ADR-shaped (Principle IV).
 
 - [x] **Phase 9: Multiplayer** — Done
   - The owner of a world can invite other players via an invite code or a shareable link.
