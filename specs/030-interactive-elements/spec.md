@@ -44,6 +44,55 @@ arguments throughout:
   program. This is the difference between a tool that makes preparation
   faster and one that makes preparation a second job.
 
+## The Interaction Plugin Model
+
+The architectural heart of the feature, and the reason it is worth building as
+one thing rather than six.
+
+### Effects are contributed, not enumerated
+
+A fixed list would mean editing this feature every time a subsystem gains
+something worth triggering — precisely the coupling the project's plugin
+principle exists to prevent. Instead each subsystem **declares the effects it
+can perform**, and the authorable vocabulary is the union of what is present.
+
+A declaration carries what a Game Master needs in order to choose it, and what
+the product needs in order to store it: a stable identifier, a label and
+description in the GM's language, what kind of thing it targets, and what it
+needs configured.
+
+### What this feature is not allowed to know
+
+It must be possible to build the interaction feature with no lighting, no
+doors and no audio present and have it work — offering nothing, because
+nothing has been contributed. Concretely:
+
+- The interaction feature's own logic MUST NOT reference lights, doors or
+  sounds.
+- Subsystems MUST NOT call into its internals, nor it into theirs. An
+  activation is announced; whichever subsystem owns that effect responds.
+- Removing a subsystem MUST NOT break this feature, the scene, or any
+  interactive that does not use it.
+
+This is the discipline spec 029 applied to game systems, one level up: there
+the engine renders resources it cannot name; here it dispatches effects it
+cannot name.
+
+### What happens to an interactive whose subsystem is gone
+
+An authored interactive outlives its provider — a scene saved with a lighting
+trigger, opened in a build without lighting. It MUST become **unavailable and
+visibly so to the Game Master**, and MUST NOT be deleted, silently skipped, or
+surfaced to the table as an error. A prepared scene is work; losing part of it
+because a capability was absent for one session is not acceptable.
+
+### Why this is the right shape for what is coming
+
+Each named non-goal below — audio, multi-scene navigation, party tokens, space
+travel — is a subsystem that will want to be triggerable. Under this model each
+arrives by contributing effects, without reopening this feature. That is the
+return on building the seam now instead of a fixed list of six effects.
+
 ## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - A prop that opens something (Priority: P1)
@@ -228,6 +277,39 @@ acts.
 
 ---
 
+### User Story 7 - A new subsystem becomes triggerable (Priority: P3)
+
+Audio does not exist yet. When it is built, a Game Master should be able to
+attach a sound to a threshold without this feature being reopened, and without
+the audio work having to understand how interactives are placed, permitted or
+approved.
+
+**Why this priority**: It delivers no table-visible behaviour on its own,
+which is why it is last. It is nonetheless the reason the feature is shaped
+this way, and leaving it untested would mean discovering the seam does not
+work at the moment a second subsystem arrives — when it is most expensive to
+find out.
+
+**Independent Test**: Add a trivial effect provider that does something
+observable and nothing else. Confirm it becomes authorable, runs when
+triggered, and that removing it leaves every other interactive working.
+
+**Acceptance Scenarios**:
+
+1. **Given** a build with a new subsystem present, **When** a Game Master
+   authors an interactive, **Then** that subsystem's effects are offered
+   alongside the existing ones, with no change to this feature.
+2. **Given** a build with lighting absent, **When** a Game Master authors an
+   interactive, **Then** no lighting effect is offered, and everything else
+   works.
+3. **Given** a scene containing a lighting trigger, **When** it is opened in a
+   build without lighting, **Then** the Game Master is shown that the
+   interactive is unavailable, and it is neither deleted nor silently ignored.
+4. **Given** any subsystem, **When** its effect runs, **Then** it did not
+   require this feature to know what the effect does.
+
+---
+
 ### Edge Cases
 
 - **Two players click the same door in the same instant.** The door must end
@@ -272,6 +354,11 @@ acts.
 
 #### Doors
 
+Doors are a contributing subsystem under the model above, not part of the
+interaction core. What open, closed and locked _mean_ belongs with doors; the
+interaction feature only knows that something contributed an effect and that a
+Game Master chose it.
+
 - **FR-007**: A Game Master MUST be able to designate a segment of an existing
   wall as a door, without redrawing the wall.
 - **FR-008**: The product MUST define **open** as: the segment blocks neither
@@ -308,8 +395,34 @@ acts.
   around it.
 - **FR-020**: Every effect that changes the scene MUST reach every connected
   viewer without a reload.
-- **FR-021**: The effect vocabulary MUST be extensible by adding a named
-  effect, without changing how interactives are placed or triggered.
+- **FR-021**: The effect vocabulary MUST be the set of effects contributed by
+  subsystems present in the build, not a list held by this feature.
+
+#### The effect plugin seam
+
+- **FR-036**: A subsystem MUST be able to contribute one or more effects by
+  declaring them, without any change to this feature.
+- **FR-037**: An effect declaration MUST carry a stable identifier, a label
+  and description in a Game Master's language, what kind of thing it targets,
+  and what it needs configured.
+- **FR-038**: A Game Master MUST be offered exactly the effects contributed by
+  the current build — no effect that nothing can perform, and no effect hidden
+  behind a flag.
+- **FR-039**: This feature's own logic MUST NOT reference any specific effect,
+  target type or subsystem. Removing every contributing subsystem MUST leave a
+  feature that places interactives offering no effects, rather than a broken
+  one.
+- **FR-040**: Activation MUST be announced to whichever subsystem owns the
+  effect, rather than performed by this feature. Neither side may call into the
+  other's internals.
+- **FR-041**: An interactive whose contributing subsystem is absent MUST be
+  reported as unavailable to the Game Master, MUST NOT be deleted or rewritten,
+  and MUST NOT surface as an error to players.
+- **FR-042**: Two subsystems MUST NOT be able to contribute the same effect
+  identifier; a collision MUST be detected rather than silently resolved by
+  load order.
+- **FR-043**: An effect that fails while running MUST report to the Game
+  Master and MUST NOT prevent other interactives in the scene from working.
 
 #### Triggers and permission
 
@@ -392,6 +505,14 @@ acts.
   engine baseline.
 - **SC-008**: A Game Master reopening a session finds every door, secret and
   region in the state the table left it.
+- **SC-009**: A new effect can be contributed by a subsystem, and appear as
+  authorable, with no edit to the interaction feature. Demonstrated by adding
+  one.
+- **SC-010**: With every contributing subsystem removed, scenes still load,
+  interactives can still be placed, and no error reaches a player.
+- **SC-011**: A scene authored against a subsystem that is then removed loses
+  no authored data, and the Game Master can see exactly which interactives are
+  unavailable.
 
 ## Assumptions
 
@@ -409,10 +530,10 @@ acts.
   history the product needs to retain.
 - **A right-click already means "GM options" elsewhere in the canvas**, and
   this follows that convention rather than inventing a gesture.
-- **Existing per-viewer decisions carry over**: the project has already decided
-  that a player inspecting their own client to cheat is a table problem rather
-  than something to engineer against. Whether that extends to permanently
-  prepared secrets is asked below rather than assumed.
+- **Existing per-viewer decisions carry over, including for prepared
+  secrets.** A player inspecting their own client to find a secret door is a
+  table problem, not an engineering one — see Decisions. Secret geometry and
+  its metadata may travel to clients that do not draw it.
 
 ## Dependencies
 
@@ -425,11 +546,14 @@ acts.
 - **Live scene updates** exist — scene changes already reach connected clients
   without a reload, which FR-020 depends on.
 - **Sound and music do not exist anywhere in this project.** No audio is
-  loaded, stored, mixed or played. A threshold that plays a sound therefore
-  depends on a subsystem that has not been built.
+  loaded, stored, mixed or played. Under the plugin model this is not a
+  blocker: no audio subsystem means no sound effect is contributed, so none is
+  offered. The threshold trigger itself is built here; what it fires when audio
+  exists is contributed then.
 - **Multi-scene navigation does not exist.** There is no way to move a table
-  from one scene to another, so an effect that loads another scene has no
-  destination to reach.
+  from one scene to another. The same applies: this feature builds the request
+  and the Game Master's decision, and whatever performs the journey contributes
+  its effect when it exists.
 
 ## Out of Scope
 
@@ -455,36 +579,40 @@ reasonably expect to find in it:
 - **Inventory and loot.** A chest is an object that can be interactive. What is
   inside it, and moving that to a character, is a separate feature.
 
-## Open Questions
+## Decisions
 
-Two decisions that materially change scope and cannot be defaulted honestly.
+Both questions this spec opened have been answered.
 
-### Q1 — How protected is a prepared secret?
+### Secrets are protected by the table, not by the wire
 
-**Context**: The project decided, for token visibility, that a player who
-inspects their own client to find what is hidden is a problem for that table
-rather than something to engineer against. Applying that here means a secret
-door is sent to every client and hidden by the client that should not show it.
+A secret door is sent to every client and hidden by the client that should not
+draw it, exactly as token visibility was decided. Coordinates and metadata
+reaching a player who could dig them out is acceptable: if somebody opens
+their developer tools to announce "there's a secret door here", that is a
+problem for that table to have, not one for this product to engineer against.
 
-Secrets differ from stealth in one way that may or may not matter: stealth is
-transient and self-correcting, whereas a secret door is prepared content that,
-once spoiled, is spoiled permanently and cannot be re-hidden.
+The cost of the alternative is what settles it. Withholding prepared content
+per viewer means filtering scene data per viewer, which is the fan-out expense
+the visibility decision was taken to avoid — paid permanently, on every scene
+load, to frustrate somebody who has already decided to spoil their own game.
 
-| Option | Answer                                                | Implications                                                                                                                                    |
-| ------ | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| A      | Same as visibility — send it, hide it client-side     | Consistent with the existing decision, simplest, one live update path. A determined player can find every secret in a dungeon.                  |
-| B      | Withhold prepared secrets from clients until revealed | Prepared content stays prepared. Costs a per-viewer filter on scene data, which is the fan-out cost the visibility decision was taken to avoid. |
-| C      | Withhold only what the GM marks as protected          | The GM decides what is worth the cost. More to explain, and a default to choose.                                                                |
-| Custom | Provide your own answer                               |                                                                                                                                                 |
+This applies to every secret here: unrevealed doors, GM-only interactives, and
+the authoring view of what an interactive targets.
 
-### Q2 — What happens to effects whose subsystem does not exist?
+### The effect vocabulary is a plugin registry, not a fixed list
 
-**Context**: Two of the motivating cases — a threshold that plays a sound, and
-a region that loads another scene — need subsystems that have not been built.
+The question was what to do about effects whose subsystem does not exist —
+sound has no audio subsystem, scene transitions have no multi-scene
+navigation. Ship them dead, build the subsystem here, or defer them.
 
-| Option | Answer                                                 | Implications                                                                                                                                                          |
-| ------ | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A      | Scope this spec to effects that fully work; defer both | Nothing ships dead. A GM never authors something that does nothing. Two of the motivating cases wait.                                                                 |
-| B      | Include a minimal audio subsystem here                 | The sound case works end to end. Materially widens the spec — asset storage, playback, per-viewer volume are their own feature.                                       |
-| C      | Allow authoring them now, marked unavailable           | The model is proven complete. Risks a GM preparing a scene around a trigger that silently does nothing at the table, which is the failure this project keeps finding. |
-| Custom | Provide your own answer                                |                                                                                                                                                                       |
+The answer removes the question rather than choosing between those. **Effects
+are contributed by the subsystems that perform them.** This feature owns
+placing, triggering, permission and dispatch; it owns no effect at all.
+Lighting contributes the effect that toggles lights. Doors contribute open,
+close, lock and reveal. When audio is built it contributes a play-sound
+effect, and nothing here changes.
+
+So a Game Master can only ever author an effect that something is present to
+perform. Sound is not authorable today because nothing offers it — not because
+it is disabled, and not because it silently does nothing. That last one is the
+failure this project keeps finding, and this shape does not have it.
