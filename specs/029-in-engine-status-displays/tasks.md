@@ -90,7 +90,7 @@ the renderer.
 - [x] T019 [US1] Register `StatusDisplayPlugin` in `src/engine/src/lib.rs` (depends on T018)
 - [x] T020 [US1] Implement `setTokenStatus` and `clearTokenStatus` handling in `src/engine/src/lib.rs`'s command dispatch, per `contracts/engine-sdk.md`
 - [x] T021 [US1] Implement the read surface `getTokenStatus` / `listTokenStatus` in `src/engine/src/lib.rs` — FR-021's testing surface, and how React observes state without becoming a second source of truth
-- [ ] T022 [P] [US1] Add a `tokenStatus(sceneId)` GraphQL query in `src/server/src/graphql/queries/` returning resolved status, `VISIBLE` only at this stage
+- [x] T022 [P] [US1] Add a `tokenStatus(sceneId)` GraphQL query in `src/server/src/graphql/queries/` returning resolved status, `VISIBLE` only at this stage
 - [ ] T023 [US1] Carry status through the existing world-event path in `apps/web/src/engine/world/sync/tokens.ts` so changes reach the engine live (FR-009)
 - [ ] T024 [P] [US1] Build the corner panel component in `apps/web/src/components/StatusPanel/StatusPanel.tsx`, reading through the SDK read surface and computing nothing itself (Constitution I)
 - [ ] T025 [US1] Mount the panel in `apps/web/src/pages/world/WorldPage.tsx` and bind it to the current selection (depends on T024)
@@ -134,8 +134,8 @@ the renderer.
 
 ### Implementation for User Story 3
 
-- [ ] T034 [US3] Apply disclosure server-side in the `tokenStatus` resolver in `src/server/src/graphql/queries/`, using the canvas-core helpers from T008 (depends on T030)
-- [ ] T035 [US3] Emit only the field the state permits in `src/server/src/graphql/` — the GraphQL type carries `entries`/`proportion`/`quarter` as mutually exclusive optionals, per `contracts/graphql-disclosure.md`
+- [x] T034 [US3] Apply disclosure server-side in the `tokenStatus` resolver in `src/server/src/graphql/queries/`, using the canvas-core helpers from T008 (depends on T030)
+- [x] T035 [US3] Emit only the field the state permits in `src/server/src/graphql/` — the GraphQL type carries `entries`/`proportion`/`quarter` as mutually exclusive optionals, per `contracts/graphql-disclosure.md`
 - [ ] T036 [US3] Render a coarse disclosure visibly differently from an exact one in `src/engine/src/plugins/status_display.rs` (FR-014), so nobody mistakes an estimate for a reading
 - [ ] T037 [US3] Ensure the panel in `apps/web/src/components/StatusPanel/StatusPanel.tsx` states what is unavailable rather than showing blanks (US3 scenario 3)
 - [ ] T038 [US3] Audit that no animation, ordering or sizing differs by withheld value in `src/engine/src/plugins/status_display.rs` (FR-016)

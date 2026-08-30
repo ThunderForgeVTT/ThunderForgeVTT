@@ -2767,6 +2767,7 @@ pub struct QueryRoot(
     UserQuery,
     AdminQuery,
     SceneQuery,
+    queries::token_status::TokenStatusQuery,
     InviteQuery,
     AssetQuery,
     ActorQuery,
