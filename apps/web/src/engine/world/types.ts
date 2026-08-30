@@ -1,3 +1,6 @@
+import type { Disclosed } from "@/engine/sdk/Disclosed";
+import type { ResourceDefinition } from "@/engine/sdk/ResourceDefinition";
+
 export type EngineCommandSource = "bevy" | "ui" | "sync";
 
 export type WorldToken = {
@@ -145,6 +148,24 @@ export type UpsertTokenCommand = {
 
 export type RemoveTokenCommand = {
   type: "remove_token";
+  tokenId: string;
+};
+
+// Spec 029: a token's resources, already reduced by the server to what this
+// viewer may see. The shapes come from `@/engine/sdk`, which is generated from
+// the Rust definitions — a hand-written mirror here is exactly what that
+// generation exists to replace.
+export type SetTokenStatusCommand = {
+  type: "set_token_status";
+  tokenId: string;
+  resources: {
+    definition: ResourceDefinition;
+    disclosed: Disclosed;
+  }[];
+};
+
+export type ClearTokenStatusCommand = {
+  type: "clear_token_status";
   tokenId: string;
 };
 
@@ -370,6 +391,8 @@ export type WorldCommand =
   | SetSceneGridCommand
   | UpsertTokenCommand
   | RemoveTokenCommand
+  | SetTokenStatusCommand
+  | ClearTokenStatusCommand
   | SelectTokenCommand
   | SelectTokensCommand
   | UpsertWallCommand

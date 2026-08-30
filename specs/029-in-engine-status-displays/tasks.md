@@ -91,8 +91,8 @@ the renderer.
 - [x] T020 [US1] Implement `setTokenStatus` and `clearTokenStatus` handling in `src/engine/src/lib.rs`'s command dispatch, per `contracts/engine-sdk.md`
 - [x] T021 [US1] Implement the read surface `getTokenStatus` / `listTokenStatus` in `src/engine/src/lib.rs` — FR-021's testing surface, and how React observes state without becoming a second source of truth
 - [x] T022 [P] [US1] Add a `tokenStatus(sceneId)` GraphQL query in `src/server/src/graphql/queries/` returning resolved status, `VISIBLE` only at this stage
-- [ ] T023 [US1] Carry status through the existing world-event path in `apps/web/src/engine/world/sync/tokens.ts` so changes reach the engine live (FR-009)
-- [ ] T024 [P] [US1] Build the corner panel component in `apps/web/src/components/StatusPanel/StatusPanel.tsx`, reading through the SDK read surface and computing nothing itself (Constitution I)
+- [x] T023 [US1] Carry status through the existing world-event path in `apps/web/src/engine/world/sync/tokens.ts` so changes reach the engine live (FR-009)
+- [x] T024 [P] [US1] Build the corner panel component in `apps/web/src/components/StatusPanel/StatusPanel.tsx`, reading through the SDK read surface and computing nothing itself (Constitution I)
 - [ ] T025 [US1] Mount the panel in `apps/web/src/pages/world/WorldPage.tsx` and bind it to the current selection (depends on T024)
 - [x] T026 [US1] Render a resource with no maximum as a labelled counter rather than a partially filled bar, in `src/engine/src/plugins/status_display.rs` (FR-002, US1 scenario 4)
 

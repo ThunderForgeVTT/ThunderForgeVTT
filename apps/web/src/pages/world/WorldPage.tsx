@@ -45,6 +45,10 @@ import { ReconcileReport } from "@/components/world/ReconcileReport";
 import { ConnectionStatus } from "@/components/world/ConnectionStatus";
 import { reportSessionPeers } from "@/engine/world/sync/subscriptionClient";
 import {
+  applyTokenStatusWorldEvent,
+  refreshTokenStatus,
+} from "@/engine/world/sync/tokenStatus";
+import {
   beginPeerAdjudication,
   endPeerAdjudication,
   peerAdjudicationActive,
@@ -1072,6 +1076,12 @@ export default function WorldPage() {
       return;
     }
 
+    // Prime before the stream opens: the first paint should already carry
+    // bars rather than waiting for something to change.
+    void refreshTokenStatus(worldStore, sceneId).catch((error) => {
+      console.error("Failed to load token status:", error);
+    });
+
     // Not an AbortController + in-loop flag check: a `for await` loop
     // only re-checks anything between events, so if the world goes quiet
     // (no new events) the loop hangs forever awaiting the next one and
@@ -1095,6 +1105,7 @@ export default function WorldPage() {
             applyTokenWorldEvent(worldStore, sceneId, event),
             applyShapeWorldEvent(worldStore, sceneId, event),
             applyLightWorldEvent(worldStore, sceneId, event),
+            applyTokenStatusWorldEvent(worldStore, sceneId, event),
           ]);
         }
       } catch (error) {
