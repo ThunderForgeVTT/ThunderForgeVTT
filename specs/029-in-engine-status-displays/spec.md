@@ -532,3 +532,66 @@ direction, and segment rendering rather than a fraction.
   because this feature is their first consumer.
 - Persisting the viewer's panel corner is a per-viewer convenience and does
   not need to survive on another device.
+
+## Follow-up: per-viewer visibility and conditions
+
+Raised 2026-08-30 from play-testing the engine, and deliberately **not** built
+here. Recorded now because it is the same shape as this spec's disclosure work
+and will be tempting to bolt onto it.
+
+Two mechanics, one underlying problem: a token holding a torch, and a token
+that some viewers can see and others cannot — a stealth roll against a DC that
+one player's passive Perception beats and another's does not.
+
+### Why it belongs with disclosure and not beside it
+
+Disclosure coarsens a token's **values** per viewer. Visibility coarsens its
+**existence** per viewer. The rule this spec settled carries over unchanged and
+is the non-negotiable part: the server resolves per viewer and never sends what
+that viewer may not know. `status-disclosure.spec.ts` asserts on the payload
+rather than the screen for exactly this reason — a client that received the
+value and chose not to draw it fails the promise, and a modified client sees
+everything. Shipping a token with `visible: false` would be that bug, at the
+scale of the whole board.
+
+The model wants to be `Disclosed` one level up: `Seen { token }`,
+`Inferred { last_known_position }` for "you saw it a beat ago" or "you heard
+something", and `Unseen` where nothing is sent at all. The GM always resolves
+to `Seen`, with a marker that the table's view differs — the role `configured`
+already plays for disclosure.
+
+### What is genuinely new, and harder
+
+- **The live event stream.** Disclosure coarsens a query response. Visibility
+  has to coarsen the subscription feed: a token moving where three of five
+  players can see it fans out three ways plus the GM's. Today that is one
+  broadcast. This lands on the delivery loop, and it is a per-viewer fan-out
+  cost rather than a filter that can be added at the edge.
+- **Absence is information.** A player whose updates for a token simply stop
+  learns something from the silence. "Went invisible" and "left the scene" must
+  not be distinguishable, and neither must the timing of when updates ceased.
+  This is the part to get wrong on paper rather than at a table.
+- **Conditions must be declared by the system, not known by the engine.** The
+  FR-001 lesson, which this spec paid for twice. 5e's binary invisible is not
+  Blades' hidden is not Pathfinder 2e's observed/concealed/hidden/undetected.
+  PF2e is the right target: it is already a graded ladder and maps onto a
+  tagged union directly, and 5e is then the degenerate case.
+- **A light is not hidden by its bearer.** In 5e, turning invisible does not
+  hide your torch. So an attached light's visibility must resolve independently
+  of the token carrying it — the light staying put while its carrier vanishes
+  is correct behaviour, not a bug. This constraint only appears because both
+  features exist, which is the argument for speccing them together.
+
+### Dependency
+
+Contested perception needs passive scores, and `Token.abilities` is spawned
+empty because the server does not send them (see `docs/status-displays.md`).
+That is the same actor-to-token plumbing MVP Phase 8 requires, so the two want
+sequencing together rather than in either order alone.
+
+### Already built
+
+Token-attached light sources are largely in place: `WorldLightPayload` carries
+`attachedTokenId` and `systems/lighting.rs` resolves a light's position from
+its bearer. What is missing is the interface to attach one and the rules layer
+around it — not the engine seam.
