@@ -83,7 +83,11 @@ This section provides a high-level overview of the core objects and concepts tha
 
   Spec 029 solved the same problem for resources and the answer should carry over: the **system manifest declares the field mapping**, the server resolves it against the actor's stored data, and the engine renders or applies what it is given while understanding none of it. `ResourceSource`/`EntrySource` in `crates/thunderforge-canvas-core/src/resource_display.rs` are the working precedent, and `packs/systems/*/system.json` already carries four systems' worth of declarations in that shape.
 
-  So Phase 8's real first task is deciding where system rules execute — server, engine, or declared data — not wiring six D&D fields into a struct that already exists. That decision is ADR-shaped (Principle IV).
+  **Done (2026-08-30).** Attributes are now manifest-declared, resolved server-side against the actor's sheet, and carried as `id -> value` pairs the engine does not interpret — `TokenAttributes`, a map, replacing the six fields. The 5e formulas were removed rather than fed. `tokenAttributes(sceneId)` exposes them; `apps/web/e2e/token-attributes.spec.ts` proves all four declaring systems resolve their own sets under their own names.
+
+  **Correction to what this note previously said.** It claimed deciding where system rules execute was an open, ADR-shaped question. For server-side rules it is not: `packs/systems/*/server/` are workspace crates with `validators.rs`, registered into a validator registry in `src/server/src/systems.rs`, and they are already enforcing real per-system rules — Pathfinder 2e rejects an ability value outside `-5..=10` because it stores modifiers where D&D 5e stores raw scores. Eight systems have pack crates. The mechanism exists and works.
+
+  What is genuinely still open is narrower: (a) engine-side rules, since `packs/systems/*/engine/` crates cannot be loaded into a running wasm engine the way server crates link into the binary, and (b) whether validation is the same thing as enforcement — rejecting a bad score is not the same as gating movement on a computed speed. `src/engine/src/systems/core.rs` still declares a `GameSystem` trait with `ability_names()`, one stub implementation, nothing depending on it, duplicating a list the manifests now own; that is the piece to resolve, and it is smaller than "where do rules execute".
 
 - [x] **Phase 9: Multiplayer** — Done
   - The owner of a world can invite other players via an invite code or a shareable link.
