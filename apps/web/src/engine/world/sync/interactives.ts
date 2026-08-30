@@ -7,6 +7,7 @@ import {
 import type { WorldStore } from "../store";
 import type { WorldInteractive } from "../types";
 import type { WorldEventLike } from "./subscriptionClient";
+import { onInteractionTriggered } from "@/engine/bevy";
 
 /**
  * Getting interactives onto the canvas, and keeping them current.
@@ -141,4 +142,32 @@ export function setScenePlaying(
   playing: boolean,
 ): void {
   worldStore.dispatch({ type: "set_scene_playing", playing }, "sync");
+}
+
+/**
+ * Turn engine-detected triggers into the same activation a click makes.
+ *
+ * Spec 030, US5. The engine notices a token crossed into a region and reports
+ * it; this asks the server, which decides. That is one path rather than two:
+ * whether a crossing is permitted, whether a `once` has already spent itself,
+ * and whether it needs approval are the same questions a click raises, and
+ * answering them twice in two places is how the two answers drift.
+ *
+ * Returns a function that stops listening.
+ */
+export function startTriggerBridge(
+  worldStore: WorldStore,
+  onOutcome?: (result: ActivationResult) => void,
+): () => void {
+  return onInteractionTriggered((event) => {
+    void activateAndApply(worldStore, event.interactiveId)
+      .then((result) => onOutcome?.(result))
+      .catch((error: unknown) => {
+        // A crossing the server refused to answer at all. Left in the console
+        // rather than surfaced: a player who walked somewhere did not ask for
+        // anything, and telling them a request failed would be reporting an
+        // error for an action they never took.
+        console.error("Failed to resolve a triggered interaction:", error);
+      });
+  });
 }

@@ -33,7 +33,12 @@ use serde::{Deserialize, Serialize};
 
 use thunderforge_canvas_core::interaction::{RegionGeometry, entries_for};
 
-use crate::components::Token;
+// The identity component the command loop actually attaches to a token
+// entity. Not `components::Token`, which is a richer shape nothing on the
+// canvas currently carries — querying that would compile happily and match no
+// entity at all, which is the quietest possible way for entry detection to
+// never fire.
+use crate::TokenIdentity;
 
 /// One activation, on its way to whichever subsystem performs it.
 ///
@@ -216,16 +221,15 @@ fn detect_entries(
     playing: Res<ScenePlaying>,
     mut interactives: ResMut<Interactives>,
     mut previous: ResMut<PreviousPositions>,
-    mut pending: ResMut<PendingActivations>,
-    tokens: Query<(&Token, &Transform)>,
+    tokens: Query<(&TokenIdentity, &Transform)>,
 ) {
     let mut seen: BTreeSet<String> = BTreeSet::new();
     let mut crossed: Vec<String> = Vec::new();
 
     for (token, transform) in &tokens {
         let current = transform.translation.truncate();
-        seen.insert(token.id.clone());
-        let before = previous.0.insert(token.id.clone(), current);
+        seen.insert(token.0.clone());
+        let before = previous.0.insert(token.0.clone(), current);
 
         // A token appearing for the first time has not crossed anything. It
         // was placed, and placement is not movement — otherwise loading a
@@ -252,19 +256,32 @@ fn detect_entries(
         if interactive.once && interactive.fired {
             continue;
         }
-        let Some(effect_id) = interactive.effect_id.clone() else {
-            continue;
-        };
-        let activation = InteractionActivated {
-            interactive_id: interactive.id.clone(),
-            effect_id,
-            config: interactive.config.clone(),
-            subject_ref: interactive.subject_ref.clone(),
-        };
-        if let Some(entry) = interactives.entries.get_mut(&id) {
+
+        // Reported, not performed.
+        //
+        // A crossing is a *trigger*, and the server decides what a trigger
+        // does: whether the actor was permitted, whether a `once` has already
+        // spent itself, whether it needs approval first. Dispatching here
+        // would make the engine a second authority on all three, and the one
+        // that disagrees is always the one people believe (Principle III).
+        //
+        // The application turns this into the same activation a click makes,
+        // and the permitted effect comes back through the same command a
+        // click's does — so there is one path, not two.
+        crate::emit_event(serde_json::json!({
+            "type": "interactionTriggered",
+            "interactiveId": interactive.id,
+            "trigger": "enter",
+        }));
+
+        // Marked locally only for a `once`, and only to stop the same crossing
+        // being reported twice while the round trip is outstanding. The server
+        // holds the real answer and will send it back.
+        if interactive.once
+            && let Some(entry) = interactives.entries.get_mut(&id)
+        {
             entry.fired = true;
         }
-        pending.0.push(activation);
     }
 }
 

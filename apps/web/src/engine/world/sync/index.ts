@@ -21,6 +21,7 @@ export {
   refreshInteractives,
   activateAndApply,
   setScenePlaying,
+  startTriggerBridge,
 } from "./interactives";
 export {
   applyTokenWorldEvent,

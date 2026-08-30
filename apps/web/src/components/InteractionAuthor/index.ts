@@ -7,3 +7,5 @@ export { DoorControls } from "./DoorControls";
 export type { DoorControlsProps } from "./DoorControls";
 export { ActivationNotice } from "./ActivationNotice";
 export type { ActivationNoticeProps } from "./ActivationNotice";
+export { RegionDraw } from "./RegionDraw";
+export type { RegionDrawProps, RectRegion } from "./RegionDraw";

@@ -170,14 +170,14 @@ Every story plugs into this; none can start before it.
 
 **Independent Test**: Define a region, move a token across its boundary, observe the effect fire exactly once.
 
-- [ ] T059 [P] [US5] Implement region containment and entry detection in `crates/thunderforge-canvas-core/src/interaction.rs`, comparing previous against current containment
-- [ ] T060 [P] [US5] Test in `crates/thunderforge-canvas-core/src/interaction.rs` that entry fires once per crossing and never while moving _within_ a region (FR-030)
-- [ ] T061 [P] [US5] Test in `crates/thunderforge-canvas-core/src/interaction.rs` that overlapping regions both fire in a stable order, so a double-region crossing is reproducible rather than arbitrary
-- [ ] T062 [US5] Wire entry detection into token movement in `src/engine/src/plugins/interaction.rs`
-- [ ] T063 [US5] Add an explicit scene-mode signal in `src/engine/src/lib.rs` so preparation movement does not fire regions. A GM dragging a token in preparation and in play is the same gesture, so this cannot be inferred (FR-032, research §6)
-- [ ] T064 [US5] Implement `fire_mode` once-tracking and `resetInteractive` in `src/server/src/graphql/mutations_interactives.rs` (FR-031)
-- [ ] T065 [US5] Add region drawing to `apps/web/src/components/InteractionAuthor/InteractionAuthor.tsx`, visible to the GM while editing and never to players
-- [ ] T066 [US5] End-to-end spec `apps/web/e2e/interactive-regions.spec.ts`: crossing fires once, moving within does not re-fire, a once-region does not fire for a second token, and GM preparation movement fires nothing
+- [X] T059 [P] [US5] Implement region containment and entry detection in `crates/thunderforge-canvas-core/src/interaction.rs`, comparing previous against current containment
+- [X] T060 [P] [US5] Test in `crates/thunderforge-canvas-core/src/interaction.rs` that entry fires once per crossing and never while moving _within_ a region (FR-030)
+- [X] T061 [P] [US5] Test in `crates/thunderforge-canvas-core/src/interaction.rs` that overlapping regions both fire in a stable order, so a double-region crossing is reproducible rather than arbitrary
+- [X] T062 [US5] Wire entry detection into token movement in `src/engine/src/plugins/interaction.rs`
+- [X] T063 [US5] Add an explicit scene-mode signal in `src/engine/src/lib.rs` so preparation movement does not fire regions. A GM dragging a token in preparation and in play is the same gesture, so this cannot be inferred (FR-032, research §6)
+- [X] T064 [US5] Implement `fire_mode` once-tracking and `resetInteractive` in `src/server/src/graphql/mutations_interactives.rs` (FR-031)
+- [X] T065 [US5] Add region drawing to `apps/web/src/components/InteractionAuthor/InteractionAuthor.tsx`, visible to the GM while editing and never to players
+- [X] T066 [US5] End-to-end spec `apps/web/e2e/interactive-regions.spec.ts`: crossing fires once, moving within does not re-fire, a once-region does not fire for a second token, and GM preparation movement fires nothing
 
 ---
 

@@ -344,6 +344,52 @@ function reportOpenLore(event: OpenLoreEvent): void {
   }
 }
 
+/**
+ * The engine reporting that something was triggered without being clicked.
+ *
+ * Spec 030, US5. A token crossed into a region. The engine detects it because
+ * it is the only thing that knows both where the token was and where it is
+ * now — and it *reports* rather than performs, because whether the crossing is
+ * permitted is the server's decision (Principle III, ADR-054).
+ */
+export interface InteractionTriggeredEvent {
+  type: "interactionTriggered";
+  interactiveId: string;
+  trigger: "enter";
+}
+
+function asInteractionTriggered(
+  event: unknown,
+): InteractionTriggeredEvent | null {
+  if (typeof event !== "object" || event === null) return null;
+  const candidate = event as { type?: unknown };
+  return candidate.type === "interactionTriggered"
+    ? (event as InteractionTriggeredEvent)
+    : null;
+}
+
+const triggerListeners = new Set<(event: InteractionTriggeredEvent) => void>();
+
+/** Be told when the engine detected a trigger that nobody clicked. */
+export function onInteractionTriggered(
+  listener: (event: InteractionTriggeredEvent) => void,
+): () => void {
+  triggerListeners.add(listener);
+  return () => {
+    triggerListeners.delete(listener);
+  };
+}
+
+function reportInteractionTriggered(event: InteractionTriggeredEvent): void {
+  for (const listener of triggerListeners) {
+    try {
+      listener(event);
+    } catch {
+      // One bad listener must not stop the others hearing about this.
+    }
+  }
+}
+
 export async function bindWorldStore(worldStore: WorldStore): Promise<void> {
   const module = await getWasmModule();
   boundWorldStore = worldStore;
@@ -370,6 +416,14 @@ export async function bindWorldStore(worldStore: WorldStore): Promise<void> {
         const openLore = asOpenLore(parsed);
         if (openLore) {
           reportOpenLore(openLore);
+          return;
+        }
+
+        // Nor is a detected trigger. It asks the application to go and ask
+        // the server, and it is not a change to world state.
+        const triggered = asInteractionTriggered(parsed);
+        if (triggered) {
+          reportInteractionTriggered(triggered);
           return;
         }
 
