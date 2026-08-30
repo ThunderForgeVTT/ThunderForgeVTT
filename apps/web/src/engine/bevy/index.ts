@@ -1,3 +1,8 @@
+import {
+  asSdkError,
+  SDK_VERSION,
+  type EngineSdkError,
+} from "@/engine/sdk/commands";
 import { createClient, type Client } from "graphql-ws";
 
 import { postGraphQL } from "../../api/graphqlClient";
@@ -256,6 +261,42 @@ export async function mountEngine(
   }
 }
 
+/**
+ * Everyone listening for commands the engine refused.
+ *
+ * A refusal that reaches nobody is indistinguishable from the silent drop the
+ * SDK version stamp exists to retire, so the report needs somewhere to land.
+ * Listeners are notified; they cannot inject, which keeps this an observation
+ * surface rather than a way to fake engine failures in a test.
+ */
+const sdkErrorListeners = new Set<(error: EngineSdkError) => void>();
+
+/** Subscribe to SDK errors. Returns the unsubscribe. */
+export function onSdkError(
+  listener: (error: EngineSdkError) => void,
+): () => void {
+  sdkErrorListeners.add(listener);
+  return () => {
+    sdkErrorListeners.delete(listener);
+  };
+}
+
+function reportSdkError(error: EngineSdkError): void {
+  // Logged as well as dispatched: a bundle drift that nobody has subscribed
+  // to still needs to be visible to whoever is looking at the console.
+  console.error(
+    `[engine sdk] ${error.code}: ${error.message}`,
+    error.command ?? "",
+  );
+  for (const listener of sdkErrorListeners) {
+    try {
+      listener(error);
+    } catch {
+      // One bad listener must not stop the others hearing about this.
+    }
+  }
+}
+
 export async function bindWorldStore(worldStore: WorldStore): Promise<void> {
   const module = await getWasmModule();
   boundWorldStore = worldStore;
@@ -263,8 +304,20 @@ export async function bindWorldStore(worldStore: WorldStore): Promise<void> {
   if (!bevyCallbackRegistered && module.set_event_callback) {
     module.set_event_callback((payload: string) => {
       try {
-        const command = JSON.parse(payload) as WorldCommand;
-        boundWorldStore?.dispatch(command, "bevy");
+        const parsed: unknown = JSON.parse(payload);
+
+        // An SDK error is the engine reporting a command it refused. It is
+        // emitted on the same channel as world events but it is not one:
+        // dispatching it would put a command the store has never heard of
+        // into world state, which is worse than the silent drop this
+        // reporting exists to retire.
+        const sdkError = asSdkError(parsed);
+        if (sdkError) {
+          reportSdkError(sdkError);
+          return;
+        }
+
+        boundWorldStore?.dispatch(parsed as WorldCommand, "bevy");
       } catch {
         // Ignore malformed payloads from the wasm layer.
       }
@@ -286,8 +339,15 @@ export async function bindWorldStore(worldStore: WorldStore): Promise<void> {
       return;
     }
 
+    // Stamped centrally rather than at each call site. A version remembered
+    // on most commands and forgotten on one leaves exactly one path failing
+    // silently, which is the hardest kind of gap to find — and the engine
+    // treats an absent version as "no claim" rather than as agreement, so a
+    // missed stamp would not even be reported.
     const command: WorldCommand = event.command;
-    module.apply_world_command(JSON.stringify(command));
+    module.apply_world_command(
+      JSON.stringify({ ...command, sdkVersion: SDK_VERSION }),
+    );
   });
 }
 

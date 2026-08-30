@@ -199,12 +199,12 @@ the renderer.
 
 ### Tests for User Story 5
 
-- [ ] T054 [P] [US5] Vitest in `apps/web/src/components/StatusPanel/__tests__/placement.test.ts` for persistence and for the no-selection case showing no stale values
+- [x] T054 [P] [US5] Vitest in `apps/web/src/components/StatusPanel/__tests__/placement.test.ts` for persistence and for the no-selection case showing no stale values
 
 ### Implementation for User Story 5
 
-- [ ] T055 [US5] Add corner selection and persistence to `apps/web/src/components/StatusPanel/StatusPanel.tsx` (FR-011)
-- [ ] T056 [US5] Clear the panel on deselection in `apps/web/src/components/StatusPanel/StatusPanel.tsx` so a previous token's values never linger (FR-012)
+- [x] T055 [US5] Add corner selection and persistence to `apps/web/src/components/StatusPanel/StatusPanel.tsx` (FR-011)
+- [x] T056 [US5] Clear the panel on deselection in `apps/web/src/components/StatusPanel/StatusPanel.tsx` so a previous token's values never linger (FR-012)
 
 **Checkpoint**: The panel sits where the viewer wants it
 
@@ -218,17 +218,17 @@ the renderer.
 
 ### Tests for User Story 6
 
-- [ ] T057 [P] [US6] Compile-fail fixture in `apps/web/src/engine/sdk/__tests__/` proving a wrong field name or type is rejected by `tsc`
-- [ ] T058 [P] [US6] Test in `src/engine/src/lib.rs` that a version mismatch applies nothing and reports through the event callback
-- [ ] T059 [P] [US6] Test in `src/engine/src/lib.rs` that a rejected command leaves prior display state intact — a bad update must not blank a display that was correct
+- [x] T057 [P] [US6] Compile-fail fixture in `apps/web/src/engine/sdk/__tests__/` proving a wrong field name or type is rejected by `tsc`
+- [x] T058 [P] [US6] Test in `src/engine/src/lib.rs` that a version mismatch applies nothing and reports through the event callback
+- [x] T059 [P] [US6] Test in `src/engine/src/lib.rs` that a rejected command leaves prior display state intact — a bad update must not blank a display that was correct
 
 ### Implementation for User Story 6
 
-- [ ] T060 [US6] Add the `sdkVersion` envelope and mismatch rejection in `src/engine/src/lib.rs` per research §4
-- [ ] T061 [US6] Implement the `EngineSdkError` reporting path in `src/engine/src/lib.rs` for every code in `contracts/engine-sdk.md`; silent discard is not acceptable (FR-020)
-- [ ] T062 [US6] Write typed command wrappers in `apps/web/src/engine/sdk/commands.ts` over the generated types, so no caller hand-builds JSON
-- [ ] T063 [US6] Migrate the existing `apply_world_command` call sites for status commands in `apps/web/src/engine/world/sync/` onto the wrappers (depends on T062)
-- [ ] T064 [US6] Wire the generation-diff check from T003 into CI
+- [x] T060 [US6] Add the `sdkVersion` envelope and mismatch rejection in `src/engine/src/lib.rs` per research §4
+- [x] T061 [US6] Implement the `EngineSdkError` reporting path in `src/engine/src/lib.rs` for every code in `contracts/engine-sdk.md`; silent discard is not acceptable (FR-020)
+- [x] T062 [US6] Write typed command wrappers in `apps/web/src/engine/sdk/commands.ts` over the generated types, so no caller hand-builds JSON
+- [x] T063 [US6] Migrate the existing `apply_world_command` call sites for status commands in `apps/web/src/engine/world/sync/` onto the wrappers (depends on T062)
+- [x] T064 [US6] Wire the generation-diff check from T003 into CI
 
 **Checkpoint**: The boundary is typed and its failures are loud
 
@@ -270,8 +270,8 @@ the renderer.
 
 - [ ] T069 Measure engine capacity with status displays enabled via `apps/web/e2e/engine-limits.spec.ts` (`--workers=1`) and record the figure against the 3,200-sprite baseline — SC-006 requires a **stated** number; an unmeasured cost is the failure, a measured reduction is not
 - [ ] T070 [P] Optimise off-screen tokens to skip full display cost in `src/engine/src/plugins/status_display.rs` (FR-026)
-- [ ] T071 [P] Document the feature in `docs/` including the four disclosure states and the note that percentage discloses more than it appears to
-- [ ] T072 [P] Update `MVP.md` Phase 5 with the verified outcome, replacing the stale "unverified" note now that stats demonstrably reach the screen
+- [x] T071 [P] Document the feature in `docs/` including the four disclosure states and the note that percentage discloses more than it appears to
+- [x] T072 [P] Update `MVP.md` Phase 5 with the verified outcome, replacing the stale "unverified" note now that stats demonstrably reach the screen
 - [ ] T073 Run `specs/029-in-engine-status-displays/quickstart.md` end to end, including the manual step comparing `GREYED` against a resource genuinely at zero — that one is worth doing by eye, because a design that renders them alike passes every automated check while misleading every player
 - [ ] T074 Run `pnpm verify` (rustfmt, clippy, prettier, eslint) and fix what it reports **in the code this feature added**. Keep it to that: a repo-wide lint pass folded into a feature phase buries the feature work. `pnpm verify:fix` rewrites what can be rewritten mechanically
 

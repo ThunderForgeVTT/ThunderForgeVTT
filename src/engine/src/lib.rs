@@ -707,11 +707,84 @@ pub fn set_event_callback(callback: Function) {
 
 #[wasm_bindgen]
 pub fn apply_world_command(json_command: &str) {
-    if let Some(command) = parse_command(json_command)
-        && let Ok(mut queue) = external_command_queue().lock()
-    {
-        queue.push(command);
+    // A command that cannot be understood is now *reported*, where it used to
+    // be dropped.
+    //
+    // Silent discard is the failure mode this boundary is being hardened
+    // against (spec 029 FR-020): the engine deserialized what it recognised
+    // and ignored the rest, so a renamed or mistyped field produced a display
+    // that never appeared — with no error, no warning, and nothing to attach a
+    // debugger to. Three bugs in this feature alone had that shape.
+    match classify_command(json_command) {
+        Ok(command) => {
+            if let Ok(mut queue) = external_command_queue().lock() {
+                queue.push(command);
+            }
+        }
+        Err(error) => emit_event(serde_json::json!({
+            "type": "sdkError",
+            "code": error.code,
+            "message": error.message,
+            "command": error.command,
+        })),
     }
+}
+
+/// The SDK contract version both sides ship under.
+///
+/// A single integer, deliberately. The engine and the application are built
+/// into one bundle, so there is no independent release cadence for semantic
+/// versioning to describe — this exists to catch a *stale* bundle, which is
+/// precisely the case the old boundary failed silently on.
+pub const SDK_VERSION: u32 = 1;
+
+/// Why a command could not be accepted.
+struct SdkError {
+    code: &'static str,
+    message: String,
+    command: Option<String>,
+}
+
+/// Parse and version-check one command.
+fn classify_command(input: &str) -> Result<ExternalCommand, SdkError> {
+    let value: Value = serde_json::from_str(input).map_err(|e| SdkError {
+        code: "malformed",
+        message: format!("Command is not valid JSON: {e}"),
+        command: None,
+    })?;
+
+    let command_type = value
+        .get("type")
+        .and_then(|t| t.as_str())
+        .map(str::to_owned);
+
+    // Version is optional so every existing caller keeps working; when it is
+    // given and disagrees, nothing is applied. Partial application of a
+    // command from a bundle that does not share this contract is worse than
+    // refusing it, because the half that succeeded is invisible.
+    if let Some(declared) = value.get("sdkVersion").and_then(|v| v.as_u64())
+        && declared != u64::from(SDK_VERSION)
+    {
+        return Err(SdkError {
+            code: "versionMismatch",
+            message: format!(
+                "Command declares SDK version {declared}; this engine speaks {SDK_VERSION}. \
+                 Nothing was applied."
+            ),
+            command: command_type,
+        });
+    }
+
+    parse_command(input).ok_or_else(|| SdkError {
+        code: "malformed",
+        message: match &command_type {
+            Some(name) => format!(
+                "Command {name:?} could not be read — a field is missing or has the wrong type."
+            ),
+            None => "Command has no `type`.".to_string(),
+        },
+        command: command_type,
+    })
 }
 
 #[wasm_bindgen]

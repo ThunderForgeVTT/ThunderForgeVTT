@@ -86,6 +86,21 @@ const steps = [
       ? ["pnpm", "exec", "eslint", ".", "--ext", ".ts,.tsx", "--fix"]
       : ["pnpm", "exec", "eslint", ".", "--ext", ".ts,.tsx", "--max-warnings=0"],
   },
+  {
+    // Spec 029 T064. The TypeScript SDK types are generated from the Rust
+    // types by ts-rs, and a generated file that has drifted from its source
+    // is worse than no generated file: the compiler goes on cheerfully
+    // checking callers against a contract the engine no longer speaks, which
+    // is precisely the silent-drift failure the typed SDK exists to retire.
+    //
+    // `--fix` regenerates; a plain run only reports, so the gate cannot
+    // quietly rewrite the tree it is meant to be checking.
+    name: "sdk bindings",
+    cwd: ".",
+    command: fix
+      ? ["pnpm", "run", "sdk:bindings"]
+      : ["pnpm", "run", "sdk:check"],
+  },
 ];
 
 const results = [];

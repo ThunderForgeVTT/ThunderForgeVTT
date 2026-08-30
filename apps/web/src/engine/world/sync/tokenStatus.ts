@@ -1,6 +1,7 @@
 import { getTokenStatus } from "@/api/tokenStatus";
 import type { WorldStore } from "../store";
 import type { WorldEventLike } from "./subscriptionClient";
+import type { StatusCommand } from "@/engine/sdk/commands";
 
 /**
  * Getting each token's resources onto the canvas, and keeping them current.
@@ -48,12 +49,13 @@ export async function refreshTokenStatus(
   const statuses = await getTokenStatus(sceneId);
 
   for (const status of statuses) {
+    const command: StatusCommand = {
+      type: "set_token_status",
+      tokenId: status.tokenId,
+      resources: status.resources,
+    };
     worldStore.dispatch(
-      {
-        type: "set_token_status",
-        tokenId: status.tokenId,
-        resources: status.resources,
-      },
+      command,
       // `sync`, not `ui`: this is confirmed server state arriving, not a local
       // intent to be echoed back as a mutation. Dispatching it as `ui` would
       // put it through the offline queue, which once cost this codebase an
