@@ -38,10 +38,10 @@ the renderer.
 
 **Purpose**: Establish the type-generation pipeline before anything depends on it
 
-- [ ] T001 Add `ts-rs` as a dependency of `crates/thunderforge-canvas-core/Cargo.toml`
-- [ ] T002 Verify `ts-rs` output for `Option<T>` and `f32` payload fields against the shapes in `specs/029-in-engine-status-displays/contracts/engine-sdk.md`, and record the finding in `specs/029-in-engine-status-displays/research.md` §2 — this is the open follow-up that decides whether `ts-rs` survives as the choice
-- [ ] T003 [P] Add a `pnpm` script that regenerates SDK types and fails on a non-empty `git diff`, per research §3
-- [ ] T004 [P] Create the generated-output directory `apps/web/src/engine/sdk/` with a README stating the file is generated, which command regenerates it, and that hand-edits will be overwritten
+- [x] T001 Add `ts-rs` as a dependency of `crates/thunderforge-canvas-core/Cargo.toml`
+- [x] T002 Verify `ts-rs` output for `Option<T>` and `f32` payload fields against the shapes in `specs/029-in-engine-status-displays/contracts/engine-sdk.md`, and record the finding in `specs/029-in-engine-status-displays/research.md` §2 — this is the open follow-up that decides whether `ts-rs` survives as the choice
+- [x] T003 [P] Add a `pnpm` script that regenerates SDK types and fails on a non-empty `git diff`, per research §3
+- [x] T004 [P] Create the generated-output directory `apps/web/src/engine/sdk/` with a README stating the file is generated, which command regenerates it, and that hand-edits will be overwritten
 
 **Checkpoint**: Types can be generated and drift is detectable
 
@@ -57,17 +57,17 @@ the renderer.
 > T011–T012 share `systems/token.rs`. T013 and T014 touch nothing else and
 > can run alongside any of them.
 
-- [ ] T005 [P] Create `crates/thunderforge-canvas-core/src/resource_display.rs` with `ResourceDefinition`, `ResourceEntry`, `ResourceKind` and `DisclosureState` per [data-model.md](./data-model.md)
-- [ ] T006 Write executing tests in `crates/thunderforge-canvas-core/src/resource_display.rs` for the entry rules: ordering, depletion consuming the highest index first, a spent entry remaining in the list, and rejection of a second entry when `allowStacking` is false
-- [ ] T007 Implement quarter-band arithmetic in `crates/thunderforge-canvas-core/src/resource_display.rs` with tests covering exactly 25%, exactly zero, a spent top entry, and a multi-entry pool
-- [ ] T008 Implement disclosure application (entries → the one field each state permits) in `crates/thunderforge-canvas-core/src/resource_display.rs`, with a test asserting each state yields exactly one of `entries`/`proportion`/`quarter` and never two
-- [ ] T009 Register `resource_display` in `crates/thunderforge-canvas-core/src/lib.rs` and re-export the public types
-- [ ] T010 Derive `ts-rs` bindings on the wire types in `crates/thunderforge-canvas-core/src/resource_display.rs` and commit the generated output to `apps/web/src/engine/sdk/` (depends on T002, T009)
-- [ ] T011 Attach the `Token` component to spawned token entities in `src/engine/src/systems/token.rs`, so `calculate_derived_stats` has input for the first time — see research §6
-- [ ] T012 Add a `TokenStatus` component to `src/engine/src/components.rs` and attach it alongside `Token` in `src/engine/src/systems/token.rs` (depends on T011)
-- [ ] T013 [P] Create migration `src/server/migrations/<timestamp>_create_token_resource_disclosure/{up,down}.sql` for the sparse per-token table with `created_by`/`updated_by` provenance, per data-model.md
-- [ ] T014 [P] Write ADR in `docs/adrs/` covering the generated versioned SDK boundary replacing `apply_world_command`, and the ECS/React split for status presentation — Constitution IV gate, currently the one open item from [plan.md](./plan.md)'s re-check
-- [ ] T015 Confirm `cargo check --target wasm32-unknown-unknown -p thunderforge_engine` passes after T011–T012; a native check on this crate is not a signal (Constitution V)
+- [x] T005 [P] Create `crates/thunderforge-canvas-core/src/resource_display.rs` with `ResourceDefinition`, `ResourceEntry`, `ResourceKind` and `DisclosureState` per [data-model.md](./data-model.md)
+- [x] T006 Write executing tests in `crates/thunderforge-canvas-core/src/resource_display.rs` for the entry rules: ordering, depletion consuming the highest index first, a spent entry remaining in the list, and rejection of a second entry when `allowStacking` is false
+- [x] T007 Implement quarter-band arithmetic in `crates/thunderforge-canvas-core/src/resource_display.rs` with tests covering exactly 25%, exactly zero, a spent top entry, and a multi-entry pool
+- [x] T008 Implement disclosure application (entries → the one field each state permits) in `crates/thunderforge-canvas-core/src/resource_display.rs`, with a test asserting each state yields exactly one of `entries`/`proportion`/`quarter` and never two
+- [x] T009 Register `resource_display` in `crates/thunderforge-canvas-core/src/lib.rs` and re-export the public types
+- [x] T010 Derive `ts-rs` bindings on the wire types in `crates/thunderforge-canvas-core/src/resource_display.rs` and commit the generated output to `apps/web/src/engine/sdk/` (depends on T002, T009)
+- [x] T011 Attach the `Token` component to spawned token entities in `src/engine/src/systems/token.rs`, so `calculate_derived_stats` has input for the first time — see research §6
+- [ ] T012 Add a `TokenStatus` component to `src/engine/src/components.rs` and attach it in `src/engine/src/systems/token.rs` — **deferred into Phase 3 (US1) on purpose**: attaching a component with no consumer is the exact pattern this feature exists to remove, and it only earns its place once `status_display.rs` reads it (T018)
+- [x] T013 [P] Create migration `src/server/migrations/<timestamp>_create_token_resource_disclosure/{up,down}.sql` for the sparse per-token table with `created_by`/`updated_by` provenance, per data-model.md
+- [x] T014 [P] Write ADR in `docs/adrs/` covering the generated versioned SDK boundary replacing `apply_world_command`, and the ECS/React split for status presentation — Constitution IV gate, currently the one open item from [plan.md](./plan.md)'s re-check
+- [x] T015 Confirm `cargo check --target wasm32-unknown-unknown -p thunderforge_engine` passes after T011–T012; a native check on this crate is not a signal (Constitution V)
 
 **Checkpoint**: Rules are tested, types are generated, the derived-stat systems finally have input, and the ADR gate is closed
 

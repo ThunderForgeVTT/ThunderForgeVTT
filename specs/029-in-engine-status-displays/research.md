@@ -70,11 +70,30 @@ rather than a silent no-op. `ts-rs` emits that directly from the enum.
 
 - _`specta`._ Comparable output, smaller ecosystem, no existing use here.
 
-**Follow-up required before implementation**: confirm `ts-rs` generates
-acceptable output for the payload types that carry `Option<T>` and `f32`, and
-that the generated file can be committed and checked in CI (a generated file
-that is not verified against its source is the drift problem wearing a
-different hat).
+**Verified 2026-08-29 (T002)**: `ts-rs` 12.0.1 produces what the decision
+assumed, and one thing it did not.
+
+The discriminated union is exactly right — a tagged Rust enum emits
+`{ "disclosure": "visible", entries: … } | { "disclosure": "greyed" } | …`,
+which narrows on the tag and is the property the whole choice rested on. Rust
+doc comments carry through into TSDoc, so the disclosure warnings travel with
+the type rather than living only in this repository.
+
+`f32` becomes `number`, as expected. **`Option<T>` becomes `T | null`, not an
+optional field** — `max: number | null`, not `max?: number`. That is stricter
+than the contract draft assumed: the field must be present and explicitly
+null rather than omittable. Stricter is the right direction here, so the
+contract was corrected to match the generator rather than the generator
+bent to match the contract.
+
+Worth noting how that surfaced: a hand-written contract and a generated type
+disagreed within minutes of each other, which is the drift this feature exists
+to end, caught by the mechanism that ends it.
+
+**Export location**: `TS_RS_EXPORT_DIR` is set to
+`apps/web/src/engine/sdk/` by the regeneration script, so the bindings land
+where the application imports them rather than in a `bindings/` directory
+beside the crate.
 
 ---
 

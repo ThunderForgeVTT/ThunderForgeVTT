@@ -75,10 +75,12 @@ does not compute disclosure; it draws what it is given.
 ```ts
 type DisclosureState = "visible" | "greyed" | "percentage" | "chunked";
 
+// Generated. `Option<T>` becomes `T | null` — present and explicitly null,
+// not omittable. Verified against ts-rs 12.0.1 output (research §2).
 interface ResourceEntry {
   current: number;
-  max?: number;
-  label?: string;
+  max: number | null;
+  label: string | null;
 }
 
 type ResolvedResource =

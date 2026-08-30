@@ -27,6 +27,7 @@ pub mod transforms;
 // Phase 4.7.G2: Integration & E2E Tests
 mod integration_tests;
 
+use components::{DerivedStats, Token};
 use derived_data::*;
 use movement::PlayerControlled;
 use plugins::{
@@ -140,6 +141,20 @@ struct WorldTokenPayload {
     /// that worked before changes.
     #[serde(default, rename = "tokenType")]
     token_type: Option<String>,
+    /// Current and maximum for the token's primary pool.
+    ///
+    /// The web client has been sending these since spec 004
+    /// (`WorldToken.health` / `.maxHealth`) and this struct did not
+    /// deserialize them, so they were dropped at the boundary — the same
+    /// shape of gap as `photo_url` before it was wired, and as the `Token`
+    /// component that was never attached.
+    ///
+    /// Spec 029 gives them a consumer: they populate `Token`, which
+    /// `calculate_derived_stats` finally has input from.
+    #[serde(default)]
+    health: Option<i32>,
+    #[serde(default, rename = "maxHealth")]
+    max_health: Option<i32>,
 }
 
 /// The colour a token is drawn in when it carries no art.
@@ -1025,8 +1040,61 @@ fn apply_external_commands(
                     None => Sprite::from_color(token_kind_color(&token.token_type), TOKEN_SIZE),
                 };
 
+                // The `Token` and `DerivedStats` components go on here, and
+                // this is the first time in the project's history that they
+                // have.
+                //
+                // `calculate_derived_stats` queries `(&Token, &mut
+                // DerivedStats)` and has been registered in the frame loop the
+                // whole time, matching nothing — no spawned entity carried
+                // `Token`, and the only construction of that type anywhere was
+                // a unit test. It recomputed nothing, every frame, for nobody.
+                //
+                // Spec 029 is the first consumer of what it computes, so
+                // attaching the components and drawing the result are one
+                // piece of work: doing either alone leaves the dead end where
+                // it is.
+                let kind = token
+                    .token_type
+                    .as_deref()
+                    .and_then(TokenKind::from_stored)
+                    .unwrap_or_default();
+                let (r, g, b) = kind.fill();
+
                 let entity = commands
-                    .spawn((sprite, transform, TokenIdentity(token.id.clone())))
+                    .spawn((
+                        sprite,
+                        transform,
+                        TokenIdentity(token.id.clone()),
+                        Token {
+                            id: token.id.clone(),
+                            world_id: String::new(),
+                            scene_id: String::new(),
+                            token_type: kind.as_stored().to_string(),
+                            label: token.label.clone(),
+                            base_x: token.x as i32,
+                            base_y: token.y as i32,
+                            size_x: 1,
+                            size_y: 1,
+                            color: Color::srgb(r, g, b),
+                            is_visible: true,
+                            health: token.health,
+                            max_health: token.max_health,
+                            // Abilities stay empty here. The server does not
+                            // yet send them, and `calculate_ability_stats`
+                            // queries `Changed<TokenAbilities>`, so it will
+                            // continue to match nothing until spec 029's
+                            // resource declarations carry them. Filling this
+                            // with zeroes would be worse than leaving it
+                            // empty: derived values computed from invented
+                            // ability scores would be confidently wrong.
+                            abilities: Default::default(),
+                            schema_version: 1,
+                            is_selected: false,
+                            is_hovered: false,
+                        },
+                        DerivedStats::default(),
+                    ))
                     .id();
 
                 token_entities.0.insert(token.id, entity);
