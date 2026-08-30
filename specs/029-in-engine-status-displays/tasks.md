@@ -108,13 +108,13 @@ the renderer.
 
 ### Tests for User Story 2
 
-- [ ] T027 [P] [US2] Playwright scenario in `apps/web/e2e/status-display.spec.ts`: several tokens display concurrently for a GM, and a token the viewer may not inspect shows nothing rather than an empty bar
+- [x] T027 [P] [US2] Playwright scenario in `apps/web/e2e/status-display.spec.ts`: several tokens display concurrently for a GM, and a token the viewer may not inspect shows nothing rather than an empty bar
 
 ### Implementation for User Story 2
 
-- [ ] T028 [US2] Support concurrent per-token displays across a scene in `src/engine/src/plugins/status_display.rs`, with per-entity state rather than a single active token
-- [ ] T029 [US2] Render "not disclosed" distinguishably from "at zero" in `src/engine/src/plugins/status_display.rs` (FR-008) — absence of knowledge and knowledge of absence are different facts and must not look alike
-- [ ] T030 [US2] Extend `tokenStatus(sceneId)` in `src/server/src/graphql/queries/` to resolve every token in a scene for the requesting viewer
+- [x] T028 [US2] Support concurrent per-token displays across a scene in `src/engine/src/plugins/status_display.rs`, with per-entity state rather than a single active token
+- [x] T029 [US2] Render "not disclosed" distinguishably from "at zero" in `src/engine/src/plugins/status_display.rs` (FR-008) — absence of knowledge and knowledge of absence are different facts and must not look alike
+- [x] T030 [US2] Extend `tokenStatus(sceneId)` in `src/server/src/graphql/queries/` to resolve every token in a scene for the requesting viewer
 
 **Checkpoint**: A GM reads the whole board at a glance
 

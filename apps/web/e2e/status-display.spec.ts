@@ -100,13 +100,13 @@ test("a Genie character's health and wish points reach the token and the panel",
   }>(
     page,
     `
-      query ($worldId: UUID!) {
-        world(worldId: $worldId) {
+      query ($id: UUID!) {
+        world(id: $id) {
           activeSceneId
         }
       }
     `,
-    { worldId },
+    { id: worldId },
   );
   const [firstScene] = await sceneIds(page, worldId);
   const sceneId = active.data?.world?.activeSceneId ?? firstScene;
