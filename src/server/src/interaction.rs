@@ -50,6 +50,7 @@ fn contributions() -> Vec<Vec<EffectDeclaration>> {
         // offers nothing, which is correct rather than broken.
         thunderforge_canvas_core::lore_link::effects(),
         thunderforge_canvas_core::wall::interaction_effects(),
+        thunderforge_canvas_core::lighting::interaction_effects(),
     ]
 }
 
@@ -101,24 +102,76 @@ pub fn is_available(effect_id: Option<&str>) -> bool {
 /// nothing more; it does not know what any of them do, which is why adding one
 /// is a line here plus a module, never an edit to the rules.
 ///
-/// Returns the subject that changed, so the caller can announce it. `Ok(None)`
-/// means nothing durable happened, which covers both an effect that lives
-/// entirely in the client (opening a lore page) and one that asked for
-/// something that no longer makes sense.
+/// Returns what changed, so the caller can announce it. A default answer means
+/// nothing durable happened, which covers both an effect that lives entirely in
+/// the client (opening a lore page) and one that asked for something that no
+/// longer makes sense.
 pub fn perform(
     conn: &mut PgConnection,
     effect_id: &str,
     config: &serde_json::Value,
     scene_id: Uuid,
-) -> Result<Option<Uuid>, diesel::result::Error> {
+) -> Result<Performed, diesel::result::Error> {
     if crate::door_effects::handles(effect_id) {
-        return crate::door_effects::perform(conn, effect_id, config, scene_id);
+        let wall = crate::door_effects::perform(conn, effect_id, config, scene_id)?;
+        return Ok(Performed {
+            door: wall,
+            lights_changed: false,
+            notices: Vec::new(),
+        });
+    }
+    if crate::light_effects::handles(effect_id) {
+        let switched = crate::light_effects::perform(conn, effect_id, config, scene_id)?;
+        let notices = if switched.missing.is_empty() {
+            Vec::new()
+        } else {
+            // Reported rather than pruned. Pruning would edit a Game Master's
+            // authored configuration as a side effect of a player's click, and
+            // they may be about to put the lamp back.
+            vec![format!(
+                "{} of the lights this switch names {} no longer in the scene. The rest still work.",
+                switched.missing.len(),
+                if switched.missing.len() == 1 {
+                    "is"
+                } else {
+                    "are"
+                }
+            )]
+        };
+        return Ok(Performed {
+            door: None,
+            lights_changed: !switched.changed.is_empty(),
+            notices,
+        });
     }
     // An effect nobody performs server-side is not an error. `lore.open`
     // changes nothing that outlives the click, and asking the server to record
     // that somebody read a page would be a surveillance surface with no
     // purpose.
-    Ok(None)
+    Ok(Performed::default())
+}
+
+/// What a performed effect changed, so the caller knows what to announce.
+///
+/// Named facts rather than a bare id, because the two subsystems here change
+/// different things and a client reacts differently: a door re-resolves vision
+/// and movement, and a light re-resolves shadows.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Performed {
+    /// The wall that changed, if one did.
+    pub door: Option<Uuid>,
+    /// Whether any light changed.
+    pub lights_changed: bool,
+    /// Things the Game Master should know about, in their own language.
+    ///
+    /// Chiefly: this switch names something that is no longer in the scene.
+    /// The rest of it still ran, and the GM is told about the part that did
+    /// not — because a switch that silently does four fifths of its job is
+    /// how a GM concludes the whole thing is broken (US3 scenario 3, FR-019).
+    ///
+    /// Never shown to a player. It is a note about the *authoring*, and a
+    /// player has no use for it and no way to act on it.
+    pub notices: Vec<String>,
 }
 
 /// An interactive and everything the activation decision depends on.

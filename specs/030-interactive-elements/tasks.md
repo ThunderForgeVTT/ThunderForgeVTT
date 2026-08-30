@@ -140,11 +140,11 @@ Every story plugs into this; none can start before it.
 
 **Independent Test**: Place a switch, associate lights, click as a player, see the lights change for everybody.
 
-- [ ] T049 [P] [US3] Contribute the `light.toggle` declaration from `crates/thunderforge-canvas-core/src/lighting.rs`
-- [ ] T050 [US3] Handle `light.toggle` in `src/engine/src/plugins/lighting.rs`, toggling through that plugin's existing systems so shadows re-resolve
-- [ ] T051 [US3] Show the light association while editing and hide it from players, in `apps/web/src/components/InteractionAuthor/InteractionAuthor.tsx` (US3 scenario 1)
-- [ ] T052 [US3] Report a deleted associated light to the GM while still toggling the rest, in `src/server/src/interaction.rs` — a broken association must not silently make a switch dead (US3 scenario 3, FR-019)
-- [ ] T053 [US3] End-to-end spec `apps/web/e2e/interactive-lighting.spec.ts`: a player activates a switch and both viewers see the lighting change
+- [X] T049 [P] [US3] Contribute the `light.toggle` declaration from `crates/thunderforge-canvas-core/src/lighting.rs`
+- [X] T050 [US3] Handle `light.toggle` in `src/engine/src/plugins/lighting.rs`, toggling through that plugin's existing systems so shadows re-resolve
+- [X] T051 [US3] Show the light association while editing and hide it from players, in `apps/web/src/components/InteractionAuthor/InteractionAuthor.tsx` (US3 scenario 1)
+- [X] T052 [US3] Report a deleted associated light to the GM while still toggling the rest, in `src/server/src/interaction.rs` — a broken association must not silently make a switch dead (US3 scenario 3, FR-019)
+- [X] T053 [US3] End-to-end spec `apps/web/e2e/interactive-lighting.spec.ts`: a player activates a switch and both viewers see the lighting change
 
 **Checkpoint**: A second independent contributor exists, which is the first real evidence the seam is a seam.
 

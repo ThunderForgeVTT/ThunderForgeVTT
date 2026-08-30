@@ -91,6 +91,14 @@ export interface ActivationResult {
   requestId: string | null;
   effectId: string | null;
   effectConfig: Record<string, unknown> | null;
+  /**
+   * Things the Game Master should know about what just ran.
+   *
+   * Always empty for a player. These are notes about the *authoring* — a
+   * switch naming a lamp that has been deleted — and a player has no use for
+   * one and no way to act on it.
+   */
+  notices: string[];
 }
 
 const INTERACTIVE_FIELDS = `
@@ -230,6 +238,7 @@ export async function activateInteractive(
         requestId
         effectId
         effectConfig
+        notices
       }
     }`,
     { id: interactiveId },

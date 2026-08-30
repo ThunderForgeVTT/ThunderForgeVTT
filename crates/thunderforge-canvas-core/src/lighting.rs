@@ -36,6 +36,120 @@ impl LightSource {
     }
 }
 
+// ---------------------------------------------------------------------------
+// What lighting contributes to the interaction seam (spec 030)
+// ---------------------------------------------------------------------------
+
+/// The effect id this subsystem owns.
+pub const TOGGLE: &str = "light.toggle";
+
+/// What a light reference points at.
+pub const LIGHT: &str = "light";
+
+/// The configuration key naming which lights.
+pub const LIGHTS_KEY: &str = "lights";
+
+/// The configuration key saying which way.
+pub const MODE_KEY: &str = "mode";
+
+/// What lighting contributes to the interaction registry.
+///
+/// Declared here, beside lights, so the interaction core stays free of them —
+/// the same arrangement doors use, and the reason adding a third subsystem is
+/// a module rather than an edit to the rules.
+pub fn interaction_effects() -> Vec<crate::interaction::EffectDeclaration> {
+    use crate::interaction::{
+        ChoiceOption, ConfigField, ConfigFieldKind, EffectDeclaration, SubjectKind,
+    };
+
+    vec![EffectDeclaration {
+        id: TOGGLE.to_string(),
+        label: String::from("Turn lights on or off"),
+        description: String::from("Switches one or more lights in this scene."),
+        subject_kinds: vec![SubjectKind::Prop, SubjectKind::Door, SubjectKind::Region],
+        config: vec![
+            ConfigField {
+                key: LIGHTS_KEY.to_string(),
+                label: String::from("Which lights"),
+                // A list, because "the lights in this room" is one switch and
+                // several lamps. One reference per lamp would mean one lever
+                // per lamp, which is not what a wall switch is.
+                kind: ConfigFieldKind::ReferenceList {
+                    of: LIGHT.to_string(),
+                },
+                required: true,
+            },
+            ConfigField {
+                key: MODE_KEY.to_string(),
+                label: String::from("Set them to"),
+                kind: ConfigFieldKind::Choice {
+                    options: vec![
+                        ChoiceOption {
+                            value: String::from("on"),
+                            label: String::from("On"),
+                        },
+                        ChoiceOption {
+                            value: String::from("off"),
+                            label: String::from("Off"),
+                        },
+                        ChoiceOption {
+                            value: String::from("toggle"),
+                            label: String::from("The other way"),
+                        },
+                    ],
+                },
+                required: true,
+            },
+        ],
+    }]
+}
+
+/// Which lights a configured `light.toggle` names.
+pub fn lights_of(config: &serde_json::Value) -> Vec<&str> {
+    config
+        .get(LIGHTS_KEY)
+        .and_then(|v| v.as_array())
+        .map(|items| items.iter().filter_map(|i| i.as_str()).collect())
+        .unwrap_or_default()
+}
+
+/// What a light should be after the effect, given where it is now.
+///
+/// `None` means the configuration asked for nothing recognisable, which is
+/// reported rather than guessed at — a switch that did something arbitrary
+/// would be worse than one that did nothing.
+pub fn requested_on(config: &serde_json::Value, currently_on: bool) -> Option<bool> {
+    match config.get(MODE_KEY)?.as_str()? {
+        "on" => Some(true),
+        "off" => Some(false),
+        "toggle" => Some(!currently_on),
+        _ => None,
+    }
+}
+
+/// Where a switched-off light remembers how bright it was.
+///
+/// A light is off when its intensity is zero, so switching one off would
+/// otherwise destroy the only record of how bright it had been — and a lever
+/// pulled twice would leave the room at a brightness nobody chose. Stashed in
+/// the light's existing metadata rather than in a new column, because it is
+/// bookkeeping for one feature and not a property of a light.
+pub const PRIOR_INTENSITY_KEY: &str = "priorIntensity";
+
+/// The intensity to restore when switching a light back on.
+///
+/// Falls back to full rather than to nothing: a light with no remembered
+/// intensity has never been switched off by this feature, and turning it on to
+/// zero would look exactly like the switch being broken.
+pub fn intensity_to_restore(metadata: Option<&serde_json::Value>) -> f32 {
+    metadata
+        .and_then(|m| m.get(PRIOR_INTENSITY_KEY))
+        .and_then(serde_json::Value::as_f64)
+        .map(|v| v as f32)
+        .filter(|v| *v > 0.0)
+        .unwrap_or(1.0)
+}
+
 /// One reversible light edit, pushed onto `LightSet`'s undo stack whenever
 /// a confirmed edit is applied locally. Undo re-issues the inverse as a
 /// normal outbound mutation (research.md §4), mirroring `WallEdit` exactly.
@@ -255,5 +369,61 @@ mod tests {
             .map(|l| l.id.as_str())
             .collect();
         assert_eq!(ids, vec!["l2"]);
+    }
+
+    // --- what lighting contributes ----------------------------------------
+
+    #[test]
+    fn the_declaration_is_namespaced_and_assembles() {
+        use crate::interaction::EffectRegistry;
+
+        let registry = EffectRegistry::assemble([interaction_effects()]).expect("one contributor");
+        assert_eq!(registry.get(TOGGLE).expect("declared").namespace(), "light");
+    }
+
+    #[test]
+    fn a_switch_names_several_lights_because_a_room_has_several_lamps() {
+        let config = serde_json::json!({ "lights": ["a", "b", "c"], "mode": "off" });
+        assert_eq!(lights_of(&config), vec!["a", "b", "c"]);
+        assert_eq!(lights_of(&serde_json::json!({})), Vec::<&str>::new());
+    }
+
+    #[test]
+    fn toggle_means_the_other_way_and_an_explicit_mode_does_not() {
+        let toggle = serde_json::json!({ "mode": "toggle" });
+        assert_eq!(requested_on(&toggle, true), Some(false));
+        assert_eq!(requested_on(&toggle, false), Some(true));
+
+        let on = serde_json::json!({ "mode": "on" });
+        assert_eq!(requested_on(&on, true), Some(true));
+        assert_eq!(requested_on(&on, false), Some(true));
+    }
+
+    #[test]
+    fn an_unrecognised_mode_asks_for_nothing() {
+        assert_eq!(
+            requested_on(&serde_json::json!({ "mode": "dim" }), true),
+            None
+        );
+    }
+
+    #[test]
+    fn a_light_switched_off_remembers_how_bright_it_was() {
+        // Without this, a lever pulled twice leaves the room at a brightness
+        // nobody chose — the off state is intensity zero, which destroys the
+        // only record there was.
+        let metadata = serde_json::json!({ "priorIntensity": 0.6 });
+        assert!((intensity_to_restore(Some(&metadata)) - 0.6).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn a_light_with_nothing_remembered_comes_back_full_rather_than_dark() {
+        // Turning a light on to zero looks exactly like the switch being
+        // broken, which is the one outcome worth ruling out.
+        assert!((intensity_to_restore(None) - 1.0).abs() < f32::EPSILON);
+        assert!(
+            (intensity_to_restore(Some(&serde_json::json!({ "priorIntensity": 0.0 }))) - 1.0).abs()
+                < f32::EPSILON
+        );
     }
 }

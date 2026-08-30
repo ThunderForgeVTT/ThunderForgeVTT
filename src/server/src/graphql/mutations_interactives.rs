@@ -81,6 +81,12 @@ pub struct GraphQLActivationResult {
     /// optimistically. Present only when the effect actually ran.
     pub effect_id: Option<String>,
     pub effect_config: Option<Json<serde_json::Value>>,
+    /// Things the Game Master should know about what just ran.
+    ///
+    /// Empty for a player, always. These are notes about the *authoring* — a
+    /// switch naming a lamp that has been deleted — and a player has no use
+    /// for one and no way to act on it.
+    pub notices: Vec<String>,
 }
 
 impl GraphQLActivationResult {
@@ -98,6 +104,7 @@ impl GraphQLActivationResult {
             request_id: None,
             effect_id: None,
             effect_config: None,
+            notices: Vec::new(),
         }
     }
 }
@@ -558,9 +565,9 @@ pub(crate) async fn activate_interactive_impl(
                         loaded.row.scene_id,
                     )
                     .map_err(|e| Error::new(format!("Failed to perform effect: {e}")))?,
-                    None => None,
+                    None => crate::interaction::Performed::default(),
                 };
-                if let Some(subject) = changed_subject {
+                if let Some(subject) = changed_subject.door {
                     let _ = record_world_event(
                         &mut conn,
                         world_id,
@@ -568,6 +575,25 @@ pub(crate) async fn activate_interactive_impl(
                         Some(serde_json::json!({
                             "action": "changed",
                             "wall_id": subject,
+                            "scene_id": loaded.row.scene_id,
+                        })),
+                        user_id,
+                    );
+                }
+                if runs_the_world {
+                    result.notices = changed_subject.notices.clone();
+                }
+                if changed_subject.lights_changed {
+                    // The existing light code, reused rather than replaced.
+                    // A switch changing lighting and a Game Master editing a
+                    // lamp are the same fact to a client: re-read the scene's
+                    // lights and re-resolve shadows.
+                    let _ = record_world_event(
+                        &mut conn,
+                        world_id,
+                        crate::world_events::EVENT_CODE_LIGHT_SOURCE_CHANGED,
+                        Some(serde_json::json!({
+                            "action": "updated",
                             "scene_id": loaded.row.scene_id,
                         })),
                         user_id,
