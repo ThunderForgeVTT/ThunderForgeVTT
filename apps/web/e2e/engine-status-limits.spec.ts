@@ -236,13 +236,49 @@ async function sampleSteadyState(
  */
 async function addTokens(
   page: Page,
+  worldId: string,
   sceneId: string,
   count: number,
   alreadyThere: number,
   actorId: string | null,
 ): Promise<void> {
+  // Populate from a page that is not running the engine. Creating a thousand
+  // tokens while the canvas is open means a thousand live-sync arrivals into a
+  // running engine, and the application answers that by reloading itself —
+  // which lands here as "execution context was destroyed" and loses the run.
+  // It would also fold the cost of arrival into a figure meant to describe
+  // steady state, which is the thing this file is at pains not to do.
+  await page.goto(`/world/${worldId}/staging`);
+
+  // The grid is laid out for the level being built, not for the chunk, so a
+  // board grown in pieces occupies the same space as one created at once.
+  const side = Math.ceil(Math.sqrt(count + alreadyThere));
+
+  // In chunks, so no single evaluate is long enough for a reload to land in
+  // the middle of it and take the whole level with it.
+  const CHUNK = 200;
+  for (let done = 0; done < count; done += CHUNK) {
+    await addTokenChunk(
+      page,
+      sceneId,
+      Math.min(CHUNK, count - done),
+      alreadyThere + done,
+      side,
+      actorId,
+    );
+  }
+}
+
+async function addTokenChunk(
+  page: Page,
+  sceneId: string,
+  count: number,
+  alreadyThere: number,
+  side: number,
+  actorId: string | null,
+): Promise<void> {
   await page.evaluate(
-    async ({ scene, howMany, offset, actor }) => {
+    async ({ scene, howMany, offset, side: gridSide, actor }) => {
       const csrf = document.cookie
         .split(";")
         .map((part) => part.trim())
@@ -252,11 +288,10 @@ async function addTokens(
       // Spread across a grid rather than stacked on the origin: a pile of
       // coincident sprites is not the same rendering problem as a populated
       // map, and it is even less so once each token draws bars above itself.
-      const side = Math.ceil(Math.sqrt(howMany + offset));
       const create = async (i: number) => {
         const n = i + offset;
-        const x = ((n % side) - side / 2) * 140;
-        const y = (Math.floor(n / side) - side / 2) * 140;
+        const x = ((n % gridSide) - gridSide / 2) * 140;
+        const y = (Math.floor(n / gridSide) - gridSide / 2) * 140;
         const res = await fetch("/api/graphql", {
           method: "POST",
           credentials: "same-origin",
@@ -293,7 +328,13 @@ async function addTokens(
         );
       }
     },
-    { scene: sceneId, howMany: count, offset: alreadyThere, actor: actorId },
+    {
+      scene: sceneId,
+      howMany: count,
+      offset: alreadyThere,
+      side,
+      actor: actorId,
+    },
   );
 }
 
@@ -389,7 +430,7 @@ async function sweepIn(page: Page, condition: Condition): Promise<Sample[]> {
   let created = 0;
   for (const level of LEVELS) {
     const started = Date.now();
-    await addTokens(page, sceneId, level - created, created, actorId);
+    await addTokens(page, worldId, sceneId, level - created, created, actorId);
     created = level;
     const populatedInMs = Date.now() - started;
 
