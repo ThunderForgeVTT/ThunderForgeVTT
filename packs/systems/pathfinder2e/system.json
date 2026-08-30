@@ -43,24 +43,78 @@
     }
   },
   "skills": {
-    "acrobatics": { "ability": "dexterity", "label": "Acrobatics" },
-    "arcana": { "ability": "intelligence", "label": "Arcana" },
-    "athletics": { "ability": "strength", "label": "Athletics" },
-    "crafting": { "ability": "intelligence", "label": "Crafting" },
-    "deception": { "ability": "charisma", "label": "Deception" },
-    "diplomacy": { "ability": "charisma", "label": "Diplomacy" },
-    "intimidation": { "ability": "charisma", "label": "Intimidation" },
-    "lore": { "ability": "intelligence", "label": "Lore" },
-    "medicine": { "ability": "wisdom", "label": "Medicine" },
-    "nature": { "ability": "wisdom", "label": "Nature" },
-    "occultism": { "ability": "intelligence", "label": "Occultism" },
-    "performance": { "ability": "charisma", "label": "Performance" },
-    "religion": { "ability": "wisdom", "label": "Religion" },
-    "society": { "ability": "intelligence", "label": "Society" },
-    "stealth": { "ability": "dexterity", "label": "Stealth" },
-    "survival": { "ability": "wisdom", "label": "Survival" },
-    "thievery": { "ability": "dexterity", "label": "Thievery" },
-    "perception": { "ability": "wisdom", "label": "Perception" }
+    "acrobatics": {
+      "ability": "dexterity",
+      "label": "Acrobatics"
+    },
+    "arcana": {
+      "ability": "intelligence",
+      "label": "Arcana"
+    },
+    "athletics": {
+      "ability": "strength",
+      "label": "Athletics"
+    },
+    "crafting": {
+      "ability": "intelligence",
+      "label": "Crafting"
+    },
+    "deception": {
+      "ability": "charisma",
+      "label": "Deception"
+    },
+    "diplomacy": {
+      "ability": "charisma",
+      "label": "Diplomacy"
+    },
+    "intimidation": {
+      "ability": "charisma",
+      "label": "Intimidation"
+    },
+    "lore": {
+      "ability": "intelligence",
+      "label": "Lore"
+    },
+    "medicine": {
+      "ability": "wisdom",
+      "label": "Medicine"
+    },
+    "nature": {
+      "ability": "wisdom",
+      "label": "Nature"
+    },
+    "occultism": {
+      "ability": "intelligence",
+      "label": "Occultism"
+    },
+    "performance": {
+      "ability": "charisma",
+      "label": "Performance"
+    },
+    "religion": {
+      "ability": "wisdom",
+      "label": "Religion"
+    },
+    "society": {
+      "ability": "intelligence",
+      "label": "Society"
+    },
+    "stealth": {
+      "ability": "dexterity",
+      "label": "Stealth"
+    },
+    "survival": {
+      "ability": "wisdom",
+      "label": "Survival"
+    },
+    "thievery": {
+      "ability": "dexterity",
+      "label": "Thievery"
+    },
+    "perception": {
+      "ability": "wisdom",
+      "label": "Perception"
+    }
   },
   "coreCheck": "1d20+modifier",
   "legal": {
@@ -167,5 +221,53 @@
         }
       }
     }
-  }
+  },
+  "resources": [
+    {
+      "id": "hitPoints",
+      "label": "Hit Points",
+      "kind": "bar",
+      "order": 0,
+      "allowStacking": true,
+      "source": {
+        "slot": "resourceData",
+        "entries": [
+          {
+            "current": "current_hp",
+            "max": "max_hp"
+          }
+        ]
+      }
+    },
+    {
+      "id": "focusPoints",
+      "label": "Focus",
+      "kind": "counter",
+      "order": 1,
+      "allowStacking": false,
+      "source": {
+        "slot": "resourceData",
+        "entries": [
+          {
+            "current": "focus_points"
+          }
+        ]
+      }
+    },
+    {
+      "id": "heroPoints",
+      "label": "Hero Points",
+      "kind": "counter",
+      "order": 2,
+      "allowStacking": false,
+      "source": {
+        "slot": "resourceData",
+        "entries": [
+          {
+            "current": "hero_points"
+          }
+        ]
+      }
+    }
+  ]
 }

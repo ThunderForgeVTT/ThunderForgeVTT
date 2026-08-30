@@ -23,6 +23,18 @@ current: string,
  */
 max: string | null, 
 /**
+ * A maximum fixed by the rules rather than stored per character.
+ *
+ * Blades in the Dark caps stress at nine and trauma at four; neither is
+ * written into a character's data because neither varies. Without this,
+ * such a pool could only be shown as a bare count — losing the thing a
+ * player most needs to see, which is how close to the cap they are.
+ *
+ * `max` wins when both are given: a stored value is about *this*
+ * character, and a literal is about everyone.
+ */
+maxValue: number | null, 
+/**
  * Name for this layer, shown when there is more than one.
  */
 label: string | null, 

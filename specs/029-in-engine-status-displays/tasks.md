@@ -176,16 +176,16 @@ the renderer.
 
 ### Tests for User Story 4
 
-- [ ] T047 [P] [US4] Test in `crates/pack_system_spec/src/lib.rs` that a manifest declaring resources validates, and that a `counter` with `allowStacking: true` is rejected
-- [ ] T048 [P] [US4] Playwright scenario in `apps/web/e2e/status-display.spec.ts` covering a three-resource system and a two-resource system with no engine rebuild between them
+- [x] T047 [P] [US4] Test in `crates/pack_system_spec/src/lib.rs` that a manifest declaring resources validates, and that a `counter` with `allowStacking: true` is rejected
+- [x] T048 [P] [US4] Playwright scenario in `apps/web/e2e/status-display.spec.ts` covering a three-resource system and a two-resource system with no engine rebuild between them
 
 ### Implementation for User Story 4
 
 - [x] T049 [P] [US4] Extend the system manifest schema in `crates/pack_system_spec/src/lib.rs` with `ResourceDefinition[]`
 - [x] T050 [P] [US4] Declare resources for the bundled systems in `packs/systems/*/server/`, starting with `dnd5e`
-- [ ] T051 [US4] Serve declarations through the existing manifest pipeline in `src/server/src/systems.rs` (depends on T049)
-- [ ] T052 [US4] Implement `setResourceDefinitions` handling in `src/engine/src/lib.rs`, rejecting duplicate ids and counters that allow stacking, reported through the event callback
-- [ ] T053 [US4] Draw nothing at all — not an empty container — for a system declaring no resources, in `src/engine/src/plugins/status_display.rs` (FR-007)
+- [x] T051 [US4] Serve declarations through the existing manifest pipeline in `src/server/src/systems.rs` (depends on T049)
+- [x] T052 [US4] Implement `setResourceDefinitions` handling in `src/engine/src/lib.rs`, rejecting duplicate ids and counters that allow stacking, reported through the event callback
+- [x] T053 [US4] Draw nothing at all — not an empty container — for a system declaring no resources, in `src/engine/src/plugins/status_display.rs` (FR-007)
 
 **Checkpoint**: The engine is system-agnostic in fact, not just in intent
 

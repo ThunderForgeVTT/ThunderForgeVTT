@@ -90,6 +90,16 @@ pub struct EntrySource {
     /// size is whatever was granted — temporary hit points have no maximum of
     /// their own.
     pub max: Option<String>,
+    /// A maximum fixed by the rules rather than stored per character.
+    ///
+    /// Blades in the Dark caps stress at nine and trauma at four; neither is
+    /// written into a character's data because neither varies. Without this,
+    /// such a pool could only be shown as a bare count — losing the thing a
+    /// player most needs to see, which is how close to the cap they are.
+    ///
+    /// `max` wins when both are given: a stored value is about *this*
+    /// character, and a literal is about everyone.
+    pub max_value: Option<i32>,
     /// Name for this layer, shown when there is more than one.
     pub label: Option<String>,
     /// Skip this entry when the field is missing or zero.
@@ -133,7 +143,7 @@ pub fn entries_from(slot: &serde_json::Value, source: &ResourceSource) -> Vec<Re
         }
         built.push(ResourceEntry {
             current,
-            max: entry.max.as_deref().and_then(read),
+            max: entry.max.as_deref().and_then(read).or(entry.max_value),
             label: entry.label.clone(),
         });
     }
@@ -553,6 +563,7 @@ mod tests {
                 current: "current_health".into(),
                 max: Some("max_health".into()),
                 label: None,
+                max_value: None,
                 optional: false,
             }],
         }
@@ -572,12 +583,14 @@ mod tests {
                     current: "current_hp".into(),
                     max: Some("max_hp".into()),
                     label: None,
+                    max_value: None,
                     optional: false,
                 },
                 EntrySource {
                     current: "temporary_hp".into(),
                     max: None,
                     label: Some("Temporary".into()),
+                    max_value: None,
                     optional: true,
                 },
             ],
@@ -643,6 +656,67 @@ mod tests {
     fn a_non_numeric_field_is_ignored_rather_than_guessed_at() {
         let stored = serde_json::json!({ "current_health": "lots", "max_health": 12 });
         assert!(entries_from(&stored, &genie_health()).is_empty());
+    }
+
+    /// Blades in the Dark caps stress at nine, and no character stores that
+    /// nine anywhere — it is a rule, not data.
+    #[test]
+    fn a_maximum_fixed_by_the_rules_still_makes_a_bar() {
+        let stress = ResourceSource {
+            slot: "resourceData".into(),
+            entries: vec![EntrySource {
+                current: "stress".into(),
+                max: None,
+                max_value: Some(9),
+                label: None,
+                optional: false,
+            }],
+        };
+        let stored = serde_json::json!({ "stress": 6 });
+        let entries = entries_from(&stored, &stress);
+
+        assert_eq!(entries[0].current, 6);
+        assert_eq!(entries[0].max, Some(9), "the cap comes from the rules");
+        // And it is therefore a proportion rather than a bare count, which is
+        // the thing a player actually needs: how close to nine they are.
+        assert_eq!(quarter(&entries), Some(2));
+    }
+
+    #[test]
+    fn a_stored_maximum_beats_a_rules_maximum() {
+        // A stored value describes *this* character; a literal describes
+        // everyone. When a system offers both, the specific one wins.
+        let source = ResourceSource {
+            slot: "resourceData".into(),
+            entries: vec![EntrySource {
+                current: "current_hp".into(),
+                max: Some("max_hp".into()),
+                max_value: Some(10),
+                label: None,
+                optional: false,
+            }],
+        };
+        let stored = serde_json::json!({ "current_hp": 30, "max_hp": 40 });
+        assert_eq!(entries_from(&stored, &source)[0].max, Some(40));
+    }
+
+    /// A counter has no maximum from either source, and must stay a count.
+    #[test]
+    fn a_counter_with_no_maximum_anywhere_reports_no_proportion() {
+        let coin = ResourceSource {
+            slot: "resourceData".into(),
+            entries: vec![EntrySource {
+                current: "coin".into(),
+                max: None,
+                max_value: None,
+                label: None,
+                optional: false,
+            }],
+        };
+        let entries = entries_from(&serde_json::json!({ "coin": 3 }), &coin);
+        assert_eq!(entries[0].current, 3);
+        assert_eq!(entries[0].max, None);
+        assert_eq!(proportion(&entries), None, "a count is not a fraction");
     }
 
     // --- the derived default ---------------------------------------------

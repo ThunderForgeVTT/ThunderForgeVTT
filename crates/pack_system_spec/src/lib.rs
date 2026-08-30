@@ -118,6 +118,13 @@ pub struct EntrySourceSpec {
     /// Absent for a layer with no maximum of its own — temporary hit points
     /// are granted, not capped.
     pub max: Option<String>,
+    /// A maximum fixed by the rules rather than stored per character.
+    ///
+    /// Blades in the Dark caps stress at nine and trauma at four, and neither
+    /// is written into a character's data because neither varies. Without
+    /// this, such a pool could only be drawn as a bare count — losing the one
+    /// thing a player needs from it, which is how close to the cap they are.
+    pub max_value: Option<i32>,
     pub label: Option<String>,
     /// Skip when the field is missing or zero, so an absent layer is absent
     /// rather than an empty bar on every character.
@@ -223,6 +230,7 @@ mod tests {
                 entries: vec![EntrySourceSpec {
                     current: "current_hp".into(),
                     max: Some("max_hp".into()),
+                    max_value: None,
                     label: None,
                     optional: false,
                 }],
@@ -238,7 +246,7 @@ mod tests {
         let source = spec.get("source").unwrap();
         assert!(source.get("slot").is_some());
         let entry = &source.get("entries").unwrap()[0];
-        for field in ["current", "max", "label", "optional"] {
+        for field in ["current", "max", "maxValue", "label", "optional"] {
             assert!(entry.get(field).is_some(), "entry missing {field}");
         }
     }

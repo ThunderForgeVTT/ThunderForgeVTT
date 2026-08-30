@@ -34,18 +34,54 @@
     }
   },
   "skills": {
-    "hunt": { "ability": "insight", "label": "Hunt" },
-    "study": { "ability": "insight", "label": "Study" },
-    "survey": { "ability": "insight", "label": "Survey" },
-    "tinker": { "ability": "insight", "label": "Tinker" },
-    "finesse": { "ability": "prowess", "label": "Finesse" },
-    "prowl": { "ability": "prowess", "label": "Prowl" },
-    "skirmish": { "ability": "prowess", "label": "Skirmish" },
-    "wreck": { "ability": "prowess", "label": "Wreck" },
-    "attune": { "ability": "resolve", "label": "Attune" },
-    "command": { "ability": "resolve", "label": "Command" },
-    "consort": { "ability": "resolve", "label": "Consort" },
-    "sway": { "ability": "resolve", "label": "Sway" }
+    "hunt": {
+      "ability": "insight",
+      "label": "Hunt"
+    },
+    "study": {
+      "ability": "insight",
+      "label": "Study"
+    },
+    "survey": {
+      "ability": "insight",
+      "label": "Survey"
+    },
+    "tinker": {
+      "ability": "insight",
+      "label": "Tinker"
+    },
+    "finesse": {
+      "ability": "prowess",
+      "label": "Finesse"
+    },
+    "prowl": {
+      "ability": "prowess",
+      "label": "Prowl"
+    },
+    "skirmish": {
+      "ability": "prowess",
+      "label": "Skirmish"
+    },
+    "wreck": {
+      "ability": "prowess",
+      "label": "Wreck"
+    },
+    "attune": {
+      "ability": "resolve",
+      "label": "Attune"
+    },
+    "command": {
+      "ability": "resolve",
+      "label": "Command"
+    },
+    "consort": {
+      "ability": "resolve",
+      "label": "Consort"
+    },
+    "sway": {
+      "ability": "resolve",
+      "label": "Sway"
+    }
   },
   "actionRoll": {
     "formula": "(rating)d6kh1",
@@ -128,5 +164,54 @@
         }
       }
     }
-  }
+  },
+  "resources": [
+    {
+      "id": "stress",
+      "label": "Stress",
+      "kind": "bar",
+      "order": 0,
+      "allowStacking": false,
+      "source": {
+        "slot": "resourceData",
+        "entries": [
+          {
+            "current": "stress",
+            "maxValue": 9
+          }
+        ]
+      }
+    },
+    {
+      "id": "trauma",
+      "label": "Trauma",
+      "kind": "bar",
+      "order": 1,
+      "allowStacking": false,
+      "source": {
+        "slot": "resourceData",
+        "entries": [
+          {
+            "current": "trauma",
+            "maxValue": 4
+          }
+        ]
+      }
+    },
+    {
+      "id": "coin",
+      "label": "Coin",
+      "kind": "counter",
+      "order": 2,
+      "allowStacking": false,
+      "source": {
+        "slot": "resourceData",
+        "entries": [
+          {
+            "current": "coin"
+          }
+        ]
+      }
+    }
+  ]
 }

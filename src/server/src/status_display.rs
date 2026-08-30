@@ -233,6 +233,7 @@ mod tests {
                     current: "current_health".into(),
                     max: Some("max_health".into()),
                     label: None,
+                    max_value: None,
                     optional: false,
                 }],
             },
