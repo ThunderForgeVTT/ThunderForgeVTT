@@ -290,9 +290,17 @@ pnpm sdk:check        # regenerate and fail if the committed output differs
 ```
 
 The generated files are committed so the web application builds without a Rust
-toolchain; `sdk:check` in CI is what keeps that from silently rotting. The
-shapes are generated; the typed wrappers application code actually calls are
-hand-written beside them.
+toolchain; `sdk:check` is what keeps that from silently rotting, and it runs as
+a step of `pnpm verify` — this repo has no separate CI workflow, so `verify` is
+the gate. It is scoped by the `ts-rs` marker to the files ts-rs actually owns,
+because the same directory holds hand-written wrappers, and failing those with
+the advice "run `pnpm sdk:bindings`" would be a gate nobody could satisfy.
+
+The shapes are generated; the typed wrappers application code actually calls
+are hand-written beside them, together with a compile-fail fixture whose value
+is entirely in its `@ts-expect-error` lines — each one fails the build if the
+error it expects stops happening, so loosening these types turns the fixture
+red instead of quietly re-permitting the drift.
 
 The reason is the failure mode of the alternative. `apply_world_command(json)`
 deserializes what it recognises and ignores the rest, so a renamed or mistyped
@@ -343,14 +351,56 @@ The panel follows **selection**, not ownership, and is cleared on deselection
 rather than retaining the last token's numbers, which would be actively
 misleading mid-fight.
 
+## Appearance
+
+Colours, sizes and spacing are supplied by the application. The documented
+default set lives in exactly one place — `DisplayAppearance::default()` in
+`crates/thunderforge-canvas-core/src/resource_display.rs` — and the engine
+holds it as a Bevy resource that `set_display_appearance` replaces.
+
+Overrides are **partial and cumulative**. Every field is optional and an absent
+field means "leave this alone", so an application wanting taller bars does not
+restate the palette. That matters more than it sounds: an application forced to
+restate values it does not care about pins those values to whatever the
+defaults were the day it was written, and they never improve again. Successive
+overrides fold onto what is currently in effect rather than onto the defaults —
+the wrong version is indistinguishable for a single call and silently discards
+the first of any two.
+
+### The palette is indexed by order, not by name
+
+The Nth resource a system declares gets the Nth colour. Keying it by resource
+id would smuggle back exactly the knowledge the engine is not allowed to have,
+and would fall back to grey for every system that names things differently,
+which is most of them. Declaration order is the only thing available that is
+both stable and controlled by the system author.
+
+It wraps rather than running out. A system declaring six resources gets two
+repeated colours, which a viewer can still read positionally; returning grey
+past the fourth would make those resources indistinguishable from ones being
+withheld, which means something entirely different.
+
+### The palette is tested, not eyeballed
+
+Every pair must separate in perceived lightness as well as hue, on the same
+thresholds already applied to token kinds — one standard for everything drawn
+on the canvas. Roughly one man in twelve has a red-green deficiency, and a
+health bar and a stamina bar that collapse for them collapse mid-fight.
+
+That test earned its place immediately. The violet first chosen for the fourth
+slot sat 0.043 from the red against a 0.05 threshold. It looked fine. It is now
+clearly darker. The withheld grey is checked against every palette entry
+separately, because that is the pair that matters most: a coarsened bar that
+reads as a real fill hands a player a number that was deliberately withheld.
+
 ## What this does not do
 
 Stated because the gaps matter more than the features:
 
-- **No theming.** Appearance is shaped so a later theming feature has something
-  to configure — the constants live in one place in the status-display plugin —
-  but there is no theming UI, no user-authored themes, and no per-world
-  palette.
+- **No theming UI.** Appearance is now supplied by the application rather than
+  compiled into the engine (see below), but there is no theming interface, no
+  user-authored themes, and no per-world palette. What exists is the seam a
+  theming feature would use, not the feature.
 - **No editing from the panel.** This feature displays; it does not mutate. The
   read surface is read-only on purpose, because a debugging surface that can
   also write becomes a way to write tests that pass against situations the
