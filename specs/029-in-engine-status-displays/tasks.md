@@ -181,8 +181,8 @@ the renderer.
 
 ### Implementation for User Story 4
 
-- [ ] T049 [P] [US4] Extend the system manifest schema in `crates/pack_system_spec/src/lib.rs` with `ResourceDefinition[]`
-- [ ] T050 [P] [US4] Declare resources for the bundled systems in `packs/systems/*/server/`, starting with `dnd5e`
+- [x] T049 [P] [US4] Extend the system manifest schema in `crates/pack_system_spec/src/lib.rs` with `ResourceDefinition[]`
+- [x] T050 [P] [US4] Declare resources for the bundled systems in `packs/systems/*/server/`, starting with `dnd5e`
 - [ ] T051 [US4] Serve declarations through the existing manifest pipeline in `src/server/src/systems.rs` (depends on T049)
 - [ ] T052 [US4] Implement `setResourceDefinitions` handling in `src/engine/src/lib.rs`, rejecting duplicate ids and counters that allow stacking, reported through the event callback
 - [ ] T053 [US4] Draw nothing at all — not an empty container — for a system declaring no resources, in `src/engine/src/plugins/status_display.rs` (FR-007)

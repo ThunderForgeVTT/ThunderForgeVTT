@@ -58,6 +58,40 @@ pub struct SystemManifest {
     pub manifest: Option<String>,
     pub download: Option<String>,
     pub legal: SystemManifestLegal,
+    /// The resources this system tracks and wants drawn on tokens.
+    ///
+    /// Spec 029. Optional, and an empty or absent list means the system's
+    /// tokens carry no bars at all — which is the correct behaviour for a
+    /// system that does not track pools, not a gap to fill with a default.
+    /// The engine holds no built-in notion of "health"; hard-coding the first
+    /// system's vocabulary would make every system after it a special case.
+    #[serde(default)]
+    pub resources: Vec<SystemResource>,
+}
+
+/// One resource a system declares, mirroring
+/// `thunderforge_canvas_core::resource_display::ResourceDefinition`.
+///
+/// Deliberately duplicated rather than imported: this crate is the manifest
+/// *schema*, published to system authors and validated against JSON they
+/// write by hand, and coupling it to an engine type would drag the engine's
+/// dependency graph into every pack that only wants to describe itself. The
+/// two are kept honest by a test asserting the field names match.
+#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemResource {
+    /// Stable identifier, e.g. `health`. Unique within a system.
+    pub id: String,
+    /// What a person reads, e.g. "Hit Points".
+    pub label: String,
+    /// `bar` (has a maximum) or `counter` (does not).
+    pub kind: String,
+    /// Display order. The engine imposes none.
+    pub order: i32,
+    /// Whether more than one entry is permitted — a shield over health, or a
+    /// multi-stage boss. A counter must not allow stacking.
+    #[serde(default)]
+    pub allow_stacking: bool,
 }
 
 /// Generates the JSON schema for the `SystemManifest` struct.

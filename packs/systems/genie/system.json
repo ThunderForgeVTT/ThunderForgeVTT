@@ -11,12 +11,8 @@
     "verified": "0.1.0",
     "maximum": "1.0.0"
   },
-  "esmodules": [
-    "web/dist/index.js"
-  ],
-  "styles": [
-    "web/dist/index.css"
-  ],
+  "esmodules": ["web/dist/index.js"],
+  "styles": ["web/dist/index.css"],
   "packages": {
     "server": "./server",
     "engine": "./engine",
@@ -59,36 +55,16 @@
     }
   },
   "wishPoints": {
-    "1": [
-      2
-    ],
-    "2": [
-      3
-    ],
-    "3": [
-      4
-    ],
-    "4": [
-      5
-    ],
-    "5": [
-      6
-    ],
-    "6": [
-      7
-    ],
-    "7": [
-      8
-    ],
-    "8": [
-      9
-    ],
-    "9": [
-      10
-    ],
-    "10": [
-      12
-    ]
+    "1": [2],
+    "2": [3],
+    "3": [4],
+    "4": [5],
+    "5": [6],
+    "6": [7],
+    "7": [8],
+    "8": [9],
+    "9": [10],
+    "10": [12]
   },
   "sizeCategories": {
     "diminutive": {
@@ -160,11 +136,7 @@
           "label": "Spirit"
         }
       },
-      "required": [
-        "might",
-        "cunning",
-        "spirit"
-      ]
+      "required": ["might", "cunning", "spirit"]
     },
     "resource_data": {
       "description": "Wish Points and Health",
@@ -190,10 +162,7 @@
           "label": "Maximum Health"
         }
       },
-      "required": [
-        "max_wish_points",
-        "max_health"
-      ]
+      "required": ["max_wish_points", "max_health"]
     },
     "proficiency_data": {
       "description": "Trained skills",
@@ -233,5 +202,21 @@
         }
       }
     }
-  }
+  },
+  "resources": [
+    {
+      "id": "health",
+      "label": "Health",
+      "kind": "bar",
+      "order": 0,
+      "allowStacking": true
+    },
+    {
+      "id": "wishPoints",
+      "label": "Wish Points",
+      "kind": "bar",
+      "order": 1,
+      "allowStacking": false
+    }
+  ]
 }

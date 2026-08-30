@@ -145,10 +145,35 @@ column is unstructured, unindexed and unconstrained, and this is
 authorization-bearing data that Principle III requires be enforced at the data
 boundary with real provenance.
 
-**Open**: what the world-level default should be. A sensible starting point is
-_players see their own tokens exactly, and everything else chunked_, but
-whether that default lives in the world, the game system, or both is a product
-question rather than a technical one, and is deliberately not settled here.
+**Resolved 2026-08-29**: there is no world-level default setting, because the
+default **derives from the actor**.
+
+A token is bound to an actor, and the actor already knows what it is —
+`world_actors.actor_type` distinguishes a player character from an NPC, and
+ownership says whose character it is. So the default falls out of data that
+exists rather than from a setting somebody has to find and configure:
+
+- **Your own character** — exact. You always know your own hit points.
+- **Another player's character** — exact. Party members share this at a table.
+- **An NPC** — chunked. Readable enough to play ("that ogre is nearly dead")
+  without handing out figures the Game Master is entitled to keep.
+
+An explicit `token_resource_disclosure` row still overrides, which is what the
+GM control in US3a writes. The derived value is the floor, not a ceiling.
+
+This is better than a configurable default for a reason worth stating: a
+setting has to be discovered, and a table that never finds it plays under
+whatever we guessed. A derived default is correct for a table that never
+configures anything, which is most tables. It is also the third time this
+feature has taken the same shape — the `token_type` backfill reads
+`actor_type`, and the creation picker defaults to `npc` when staging an NPC.
+Three inferences agreeing is a sign the actor is the right authority.
+
+**Consequence for the engine binding**: the token's presentation is driven by
+the actor behind it rather than configured on the token. That is the
+difference between a board of interchangeable pieces and a board where each
+piece is a character, and it is why this lands here rather than as a settings
+screen.
 
 ---
 

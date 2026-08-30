@@ -210,6 +210,44 @@ pub fn quarter(entries: &[ResourceEntry]) -> Option<u8> {
     })
 }
 
+/// What a token is, as far as disclosure is concerned.
+///
+/// Derived from the actor behind the token rather than configured on it —
+/// see [`default_disclosure`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TokenSubject {
+    /// A player character belonging to the person looking at it.
+    OwnCharacter,
+    /// A player character belonging to somebody else at the table.
+    PartyCharacter,
+    /// Anyone the Game Master runs.
+    NonPlayerCharacter,
+}
+
+/// How much a token discloses when nobody has said otherwise.
+///
+/// **There is no world-level default setting**, and that is the design rather
+/// than an omission. A token is bound to an actor, and the actor already
+/// records what it is; deriving the answer from data that exists beats a
+/// setting somebody has to discover, because a table that never finds the
+/// setting plays under whatever we guessed, while a derived default is
+/// correct for a table that configures nothing — which is most tables.
+///
+/// - Your own character is exact. You always know your own hit points.
+/// - Another player's character is exact. A party shares this at a table.
+/// - An NPC is chunked: readable enough to play — "that ogre is nearly dead" —
+///   without handing out figures the Game Master is entitled to keep.
+///
+/// An explicit per-token override still wins. This is the floor, not a
+/// ceiling, and a Game Master who wants a boss fully visible or fully greyed
+/// says so and is obeyed.
+pub fn default_disclosure(subject: TokenSubject) -> DisclosureState {
+    match subject {
+        TokenSubject::OwnCharacter | TokenSubject::PartyCharacter => DisclosureState::Visible,
+        TokenSubject::NonPlayerCharacter => DisclosureState::Chunked,
+    }
+}
+
 /// Reduce a set of entries to what `state` permits a viewer to see.
 ///
 /// This is the function the server calls. Everything it returns is safe to put
@@ -435,6 +473,59 @@ mod tests {
             !percentage.contains("250"),
             "percentage must not carry the maximum: {percentage}"
         );
+    }
+
+    // --- the derived default ---------------------------------------------
+
+    #[test]
+    fn a_player_reads_their_own_character_exactly() {
+        assert_eq!(
+            default_disclosure(TokenSubject::OwnCharacter),
+            DisclosureState::Visible
+        );
+    }
+
+    #[test]
+    fn party_members_read_each_other_exactly() {
+        // A table shares this. Coarsening it would make the party worse at
+        // coordinating than four people sitting round an actual table.
+        assert_eq!(
+            default_disclosure(TokenSubject::PartyCharacter),
+            DisclosureState::Visible
+        );
+    }
+
+    #[test]
+    fn an_npc_is_chunked_rather_than_exact_or_hidden() {
+        // Chunked rather than greyed: a board where every NPC bar is blank is
+        // a board that gives players nothing, and they will ask the GM for the
+        // number instead — which is worse than telling them a quarter band.
+        assert_eq!(
+            default_disclosure(TokenSubject::NonPlayerCharacter),
+            DisclosureState::Chunked
+        );
+    }
+
+    /// The default never discloses more than the GM could have chosen.
+    #[test]
+    fn no_derived_default_is_more_revealing_than_visible() {
+        for subject in [
+            TokenSubject::OwnCharacter,
+            TokenSubject::PartyCharacter,
+            TokenSubject::NonPlayerCharacter,
+        ] {
+            let state = default_disclosure(subject);
+            assert!(
+                matches!(
+                    state,
+                    DisclosureState::Visible
+                        | DisclosureState::Chunked
+                        | DisclosureState::Percentage
+                        | DisclosureState::Greyed
+                ),
+                "{subject:?} produced an unexpected state"
+            );
+        }
     }
 
     #[test]
