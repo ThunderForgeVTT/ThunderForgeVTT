@@ -46,6 +46,40 @@ async function gql<T>(
   return res.data;
 }
 
+/**
+ * Every number a status payload actually carries about a resource's value.
+ *
+ * Not a substring search over the response text: ids are hex UUIDs, so any
+ * two-digit figure turns up inside one eventually and fails a payload that
+ * leaked nothing. This one did — a token id containing "44" failed an
+ * entirely correct chunked response.
+ */
+function valuesIn(body: string): number[] {
+  const parsed = JSON.parse(body) as {
+    data?: {
+      tokenStatus?: {
+        resources?: {
+          proportion?: number | null;
+          entries?: { current?: number; max?: number | null }[] | null;
+        }[];
+      }[];
+    };
+  };
+  const found: number[] = [];
+  for (const token of parsed.data?.tokenStatus ?? []) {
+    for (const resource of token.resources ?? []) {
+      if (typeof resource.proportion === "number") {
+        found.push(resource.proportion);
+      }
+      for (const entry of resource.entries ?? []) {
+        if (typeof entry.current === "number") found.push(entry.current);
+        if (typeof entry.max === "number") found.push(entry.max);
+      }
+    }
+  }
+  return found;
+}
+
 /** The same query the app makes, so this observes what a client is sent. */
 async function statusFor(page: Page, sceneId: string): Promise<string> {
   const res = await graphql<unknown>(
@@ -152,7 +186,7 @@ test("a Game Master changes what the table sees, and a player cannot", async ({
     before,
     "an NPC starts coarse without anybody configuring it",
   ).toContain('"disclosure":"chunked"');
-  expect(before).not.toContain(String(EXACT_CURRENT));
+  expect(valuesIn(before)).not.toContain(EXACT_CURRENT);
 
   // --- claim 1: a player may not change it ------------------------------
 
@@ -192,9 +226,9 @@ test("a Game Master changes what the table sees, and a player cannot", async ({
 
   const after = await statusFor(playerPage, sceneId);
   expect(
-    after,
+    valuesIn(after),
     "the revealed token now carries its real figure for the player",
-  ).toContain(String(EXACT_CURRENT));
+  ).toContain(EXACT_CURRENT);
   expect(
     after,
     "and its twin is still coarse — disclosure is per token, not per creature",
@@ -240,7 +274,7 @@ test("a Game Master changes what the table sees, and a player cannot", async ({
     )
     .toBe(2);
 
-  // eslint-disable-next-line no-console -- the run's product is this line.
+   
   console.log(`[control] playerRefused=true perToken=true liveUpdate=true`);
 
   await playerPage.context().close();

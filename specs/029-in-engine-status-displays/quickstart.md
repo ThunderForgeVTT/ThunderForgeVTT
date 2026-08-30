@@ -62,20 +62,32 @@ A native `cargo check` on this crate always fails and is not a signal
 ### 4. Server resolution and authorization
 
 ```bash
-cargo test -p thunderforge disclosure
+cargo test -p thunderforge status_display
 ```
 
 Covers: a GM sees `VISIBLE` regardless of stored state; a player gets the
-stored state or the world default; a non-GM cannot call
-`setTokenDisclosure`; the sparse table stores no row for the default.
+stored state or the world default; an explicit override beats the derived
+one; an unrecognised stored state falls back rather than guessing; a
+resource the actor stores nothing for is not displayed.
+
+> This filter used to read `disclosure`, which matches no test in this crate
+> and so passed by selecting nothing. Running the quickstart is what found
+> it. A filter that selects zero tests reports success, which is the worst
+> possible failure mode for a check whose whole job is to be trusted — prefer
+> a module name you can see in the source over a word that describes the
+> subject.
 
 ### 5. The wire, which is where the real assertion lives
 
 ```bash
-cargo test -p thunderforge disclosure_payload
+cargo test -p thunderforge no_coarse_resolution_carries_the_exact_figure
+cd apps/web && npx playwright test e2e/status-disclosure.spec.ts --workers=1
 ```
 
-**This is the test that matters.** For every state other than `VISIBLE`,
+**These are the tests that matter.** The first asserts it at the resolver;
+the second asserts it on the wire, by intercepting the actual GraphQL
+response in a player's browser. Both are needed: the resolver test says the
+rule is right, and only the browser test says it survives the whole way out. For every state other than `VISIBLE`,
 assert the exact figure is **absent from the payload** reaching a non-GM
 client:
 
@@ -94,6 +106,14 @@ different place.
 
 ```bash
 cd apps/web && npx playwright test e2e/status-display.spec.ts
+```
+
+```bash
+# and the rest of the suite this feature added
+npx playwright test e2e/status-disclosure.spec.ts e2e/status-many-tokens.spec.ts \
+  e2e/status-gm-control.spec.ts e2e/status-systems.spec.ts \
+  e2e/status-placement.spec.ts e2e/status-sdk.spec.ts \
+  e2e/status-appearance.spec.ts --workers=1
 ```
 
 - A player opens a world; their character's token carries a bar; the corner

@@ -66,6 +66,41 @@ async function setResources(
   }
 }
 
+/**
+ * Every number a status payload actually carries about a resource's value.
+ *
+ * Deliberately not a substring search over the response body: ids are hex
+ * UUIDs, so any two-digit figure appears in one sooner or later and fails a
+ * payload that leaked nothing at all. What matters is whether a *value*
+ * field carries the figure, so those are what get collected.
+ */
+function numbersInStatus(body: string): number[] {
+  const parsed = JSON.parse(body) as {
+    data?: {
+      tokenStatus?: {
+        resources?: {
+          proportion?: number | null;
+          quarter?: number | null;
+          entries?: { current?: number; max?: number | null }[] | null;
+        }[];
+      }[];
+    };
+  };
+  const found: number[] = [];
+  for (const token of parsed.data?.tokenStatus ?? []) {
+    for (const resource of token.resources ?? []) {
+      if (typeof resource.proportion === "number")
+        found.push(resource.proportion);
+      if (typeof resource.quarter === "number") found.push(resource.quarter);
+      for (const entry of resource.entries ?? []) {
+        if (typeof entry.current === "number") found.push(entry.current);
+        if (typeof entry.max === "number") found.push(entry.max);
+      }
+    }
+  }
+  return found;
+}
+
 /** Capture the `tokenStatus` response body this page receives. */
 function captureStatusPayload(page: Page): Promise<string> {
   return new Promise((resolve) => {
@@ -191,14 +226,21 @@ test("a player is never sent an NPC's exact figures, while the GM is", async ({
   const playerBody = await playerPayload;
 
   // The assertion this whole feature exists for.
+  //
+  // Checked against the *value-bearing fields*, not against the raw response
+  // text. Searching the whole body for "37" also searches the token's UUID,
+  // and a uuid containing those two digits fails a payload that is entirely
+  // correct — which is precisely what happened, and would have gone on
+  // happening at random for as long as this feature exists.
+  const leaked = numbersInStatus(playerBody);
   expect(
-    playerBody,
-    `the player's payload must not contain the exact current value: ${playerBody}`,
-  ).not.toContain(String(NPC_CURRENT));
+    leaked,
+    `the player's payload must not carry the exact current value: ${playerBody}`,
+  ).not.toContain(NPC_CURRENT);
   expect(
-    playerBody,
+    leaked,
     "nor the maximum, which is what makes a percentage recoverable",
-  ).not.toContain(String(NPC_MAX));
+  ).not.toContain(NPC_MAX);
   expect(
     playerBody,
     "and it must be coarsened rather than simply omitted",
@@ -207,7 +249,7 @@ test("a player is never sent an NPC's exact figures, while the GM is", async ({
   // 37 of 250 is inside the first quarter.
   expect(playerBody).toContain('"quarter":0');
 
-  // eslint-disable-next-line no-console -- the run's product is this line.
+   
   console.log(
     `[disclosure] gm=visible(${NPC_CURRENT}/${NPC_MAX}) player=chunked(quarter) leaked=none`,
   );
