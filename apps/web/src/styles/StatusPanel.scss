@@ -1,0 +1,124 @@
+// Spec 029: the selected token's resources, in a screen corner.
+//
+// Fixed-position and deliberately narrow: this sits over a map somebody is
+// reading, so it earns its space by being small and legible rather than
+// prominent.
+
+.status-panel {
+  position: fixed;
+  z-index: 1040; // Below dialogs (1060), above the canvas.
+  min-width: 13rem;
+  max-width: 18rem;
+  padding: 0.75rem 0.9rem;
+  background: rgba(20, 16, 12, 0.88);
+  border: 1px solid rgba(214, 178, 122, 0.35);
+  border-radius: 6px;
+  color: #f2e8d8;
+  font-size: 0.875rem;
+  backdrop-filter: blur(3px);
+  pointer-events: auto;
+
+  &--top-left {
+    top: 5rem;
+    left: 1rem;
+  }
+  &--top-right {
+    top: 5rem;
+    right: 1rem;
+  }
+  &--bottom-left {
+    bottom: 1rem;
+    left: 1rem;
+  }
+  &--bottom-right {
+    bottom: 1rem;
+    right: 1rem;
+  }
+}
+
+.status-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.status-panel__title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.status-panel__corner select {
+  background: rgba(0, 0, 0, 0.35);
+  color: inherit;
+  border: 1px solid rgba(214, 178, 122, 0.3);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.25rem;
+}
+
+.status-panel__resources {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.status-panel__resource {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.15rem 0.5rem;
+
+  dt {
+    font-size: 0.75rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: rgba(242, 232, 216, 0.7);
+  }
+
+  dd {
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+}
+
+// An estimate must not read like a measurement. Italic and dimmed, so a
+// glance distinguishes "2 of 4" from "17 / 40" without reading the number.
+.status-panel__value--approximate {
+  font-style: italic;
+  font-weight: 500;
+  color: rgba(242, 232, 216, 0.72);
+}
+
+.status-panel__track {
+  grid-column: 1 / -1;
+  height: 6px;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.status-panel__fill {
+  height: 100%;
+  background: #c8552f;
+  transition: width 160ms ease;
+}
+
+// Hatched rather than solid, so a coarse bar is visibly coarse even to
+// someone who cannot rely on the colour difference.
+.status-panel__fill--approximate {
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(200, 85, 47, 0.85) 0 4px,
+    rgba(200, 85, 47, 0.45) 4px 8px
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-panel__fill {
+    transition: none;
+  }
+}

@@ -4,7 +4,21 @@
 
 **Created**: 2026-08-29
 
-**Status**: Draft
+**Status**: Complete — closed 2026-08-30
+
+**Outcome**: All 74 tasks done. Bars and counters above tokens, a corner panel
+whose placement survives a reload, four disclosure states resolved per viewer
+on the server, application-supplied appearance, and a typed engine SDK that
+reports what it refuses instead of dropping it. Four game systems declare
+their own resources and the engine understands none of them.
+
+Capacity was measured rather than assumed (SC-006): 3,200 tokens at 30fps with
+displays enabled — the same figure as with none — at a sprite delta of 964,
+after off-screen culling took it from 16,003 sprites and 20fps. Figures are
+generated into `marketing/engine-status-capacity.json`, never transcribed.
+
+F001 (clocks) is deliberately unbuilt and needs its own spec; the follow-up on
+per-viewer visibility and conditions records a decision, not outstanding work.
 
 **Input**: User description: "Offer a model for health bars and other types of bars or on-screen counters — some might be a health bar above a token, some might be health, stamina and mana, some might be health and energy. From a selected token we should be able to display that token's bars and counters in a corner, configurable. Eventually we want theming and more advanced UI/UX features around in-engine content and controls. Cover the player's and the GM's perspective, and focus the work on the engine itself so it provides a robust TypeScript interface we can then work into the instantiation."
 
@@ -463,6 +477,34 @@ the engine, so that a later theming feature has something to configure.
 - **PanelPlacement**: the viewer's chosen corner, persisted per viewer.
 - **DisplayAppearance**: application-supplied presentation values.
 
+## Follow-up: clocks
+
+Raised 2026-08-30 while declaring Blades in the Dark, and deliberately **not**
+built here.
+
+Blades runs on progress clocks — a heist's alarm filling segment by segment —
+and Genie has puzzle and doom clocks of its own. They look like a bar and are
+not one, in a way that matters:
+
+- A clock **fills toward an event**. A resource **depletes toward zero**. The
+  same rendering means opposite things, so a red nearly-full bar reads as
+  "nearly dead" for health and "about to go badly" for a doom clock — which
+  happens to work, and works by accident rather than by design.
+- A clock is **not owned by a token**. It belongs to the situation: the
+  heist, the scene, the session. Everything in this feature hangs off an
+  actor behind a token, and a clock has neither.
+- A clock's segments are **discrete and named**, not a proportion. Four of
+  six is not 67%; it is four segments, and the count is the point.
+
+So the honest question is whether a clock is a resource with inverted
+semantics or a different thing that happens to look like a bar. Declaring one
+as a resource to make it fit would be the mistake this feature has twice
+avoided — inventing a fixture that suits the model instead of describing a
+ruleset as it is.
+
+Worth its own spec. It would need a home that is not a token, a fill
+direction, and segment rendering rather than a fraction.
+
 ## Success Criteria _(mandatory)_
 
 ### Measurable Outcomes
@@ -504,3 +546,79 @@ the engine, so that a later theming feature has something to configure.
   because this feature is their first consumer.
 - Persisting the viewer's panel corner is a per-viewer convenience and does
   not need to survive on another device.
+
+## Follow-up: per-viewer visibility and conditions
+
+Raised 2026-08-30 from play-testing the engine, and deliberately **not** built
+here. Recorded now because it is the same shape as this spec's disclosure work
+and will be tempting to bolt onto it.
+
+Two mechanics, one underlying problem: a token holding a torch, and a token
+that some viewers can see and others cannot — a stealth roll against a DC that
+one player's passive Perception beats and another's does not.
+
+### Decided: the client hides it, and cheating is a table problem
+
+A player who opens devtools to find a hidden token is a problem for that
+table, not for this codebase. Guarding against it costs real complexity and
+buys nothing a group could not solve by talking to each other. So visibility
+is resolved **client-side**: everyone receives the scene, and each client
+renders what its viewer is entitled to see.
+
+This is a deliberate departure from how this spec treats resource values, and
+the two are not in tension — they are different bets about the same trade.
+Disclosure coarsens server-side because a coarsened figure is _cheap_ to
+compute per viewer and rides an existing query. Visibility client-side because
+the alternative is per-viewer fan-out on the live feed, which is not cheap at
+all. Nothing here retracts the disclosure behaviour already built; it is
+finished, tested, and costs nothing to keep.
+
+### What the decision removes
+
+Both of the genuinely hard problems, which is why it is worth taking:
+
+- **The subscription feed stays one broadcast.** A token moving where three of
+  five players can see it is still one event to everyone. There is no
+  per-viewer fan-out, so this feature does not land on the delivery loop at
+  all.
+- **Timing leaks stop mattering.** Everyone receives everything, so there is no
+  silence to read meaning into and no need to make "went invisible"
+  indistinguishable from "left the scene" — the distinction is never carried by
+  the absence of traffic.
+
+### What is still real
+
+The rest of the design survives, because none of it was about cheating:
+
+- **Per-viewer render state.** The GM sees a hidden token ghosted; the table
+  sees nothing. That is the `Disclosed` shape applied to rendering rather than
+  to payloads — `Seen`, `Inferred { last_known_position }` for "you heard
+  something", `Unseen` — resolved in the client from the viewer's role and
+  perception against the token's state.
+- **Conditions must be declared by the system, not known by the engine.** The
+  FR-001 lesson this spec paid for twice. 5e's binary invisible is not Blades'
+  hidden is not Pathfinder 2e's observed/concealed/hidden/undetected. PF2e is
+  the right target: it is already a graded ladder and maps onto a tagged union
+  directly, and 5e is then the degenerate case.
+- **A light is not hidden by its bearer.** In 5e, turning invisible does not
+  hide your torch. An attached light's visibility resolves independently of the
+  token carrying it — the light staying put while its carrier vanishes is
+  correct behaviour, not a bug. This constraint only appears because both
+  features exist, which is the argument for speccing them together.
+- **Contested perception is still a real computation.** A stealth roll against
+  a DC that one viewer's passive beats and another's does not still has to be
+  evaluated per viewer; the decision changes _where_, not _whether_.
+
+### Dependency
+
+Contested perception needs passive scores, and `Token.abilities` is spawned
+empty because the server does not send them (see `docs/status-displays.md`).
+That is the same actor-to-token plumbing MVP Phase 8 requires, so the two want
+sequencing together rather than in either order alone.
+
+### Already built
+
+Token-attached light sources are largely in place: `WorldLightPayload` carries
+`attachedTokenId` and `systems/lighting.rs` resolves a light's position from
+its bearer. What is missing is the interface to attach one and the rules layer
+around it — not the engine seam.

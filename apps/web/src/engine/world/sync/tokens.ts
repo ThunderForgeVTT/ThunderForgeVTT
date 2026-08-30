@@ -50,6 +50,7 @@ import {
   moveOwnToken,
   updateToken,
 } from "@/api/tokens";
+import { getTokenAttributes } from "@/api/tokenAttributes";
 import type { TokenRecord, UpdateTokenInput } from "@/types/token";
 import type { WorldStore } from "../store";
 import type { WorldCommand, WorldToken } from "../types";
@@ -131,10 +132,22 @@ export async function applyTokenWorldEvent(
 
   // created/updated: the notify payload doesn't carry the full token, so
   // re-fetch the scene's tokens rather than reconstructing one from it.
-  const tokens = await getTokens(sceneId);
+  // Fetched together so a token and its scores arrive in one dispatch. Two
+  // separate paths would reintroduce the ordering problem spec 029 had to
+  // solve for status, where whichever arrived first was dropped.
+  const [tokens, attributes] = await Promise.all([
+    getTokens(sceneId),
+    getTokenAttributes(sceneId),
+  ]);
   for (const token of tokens) {
     worldStore.dispatch(
-      { type: "upsert_token", token: tokenRecordToWorldToken(token) },
+      {
+        type: "upsert_token",
+        token: {
+          ...tokenRecordToWorldToken(token),
+          attributes: attributes[token.tokenId] ?? null,
+        },
+      },
       "sync",
     );
   }
@@ -178,10 +191,22 @@ export async function loadTokensIntoStore(
   worldStore: WorldStore,
   sceneId: string,
 ): Promise<void> {
-  const tokens = await getTokens(sceneId);
+  // Fetched together so a token and its scores arrive in one dispatch. Two
+  // separate paths would reintroduce the ordering problem spec 029 had to
+  // solve for status, where whichever arrived first was dropped.
+  const [tokens, attributes] = await Promise.all([
+    getTokens(sceneId),
+    getTokenAttributes(sceneId),
+  ]);
   for (const token of tokens) {
     worldStore.dispatch(
-      { type: "upsert_token", token: tokenRecordToWorldToken(token) },
+      {
+        type: "upsert_token",
+        token: {
+          ...tokenRecordToWorldToken(token),
+          attributes: attributes[token.tokenId] ?? null,
+        },
+      },
       "sync",
     );
   }

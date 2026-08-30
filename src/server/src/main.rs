@@ -11,6 +11,7 @@
 
 mod adapters;
 mod admin;
+mod attributes; // Phase 8: a system's own attribute set, from its manifest
 mod auth;
 mod auth_middleware;
 mod canvas_assets_serve;
@@ -32,6 +33,7 @@ mod schema; // Add this line
 mod serve;
 mod session; // Phase 4.9.B.2: Session lifecycle management
 mod state;
+mod status_display; // Spec 029: resolving what each viewer is told
 mod storage; // Spec 002: RustFS canvas image asset storage
 mod system_hooks;
 mod systems;

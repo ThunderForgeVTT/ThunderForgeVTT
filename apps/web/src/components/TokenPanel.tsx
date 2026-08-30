@@ -17,6 +17,8 @@ import {
 } from "../utils/sizeCategory";
 import { readString } from "../lib/systemData";
 import { TOKEN_TYPES, type TokenRecord, type TokenType } from "../types/token";
+import { TokenDisclosureControl } from "./TokenDisclosureControl";
+import { getTokenStatus, type TokenStatus } from "@/api/tokenStatus";
 import type { WorldActorRecord } from "../types/actor";
 import "../styles/TokenPanel.scss";
 
@@ -179,9 +181,19 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
   // mutation/refetch cycle) lets the checkbox enable itself the instant
   // there's a non-empty value, well before Tab is ever pressed.
   const [ownerDrafts, setOwnerDrafts] = useState<Record<string, string>>({});
+  // token id -> resource id -> what the table sees.
+  const [disclosure, setDisclosure] = useState<TokenStatus[]>([]);
 
   const refresh = useCallback(() => {
     if (!sceneId) return;
+    // What the table currently sees, per token per resource. Fetched rather
+    // than assumed: a control showing a guessed state would tell a Game Master
+    // their players are under a setting nobody chose.
+    void getTokenStatus(sceneId)
+      .then(setDisclosure)
+      .catch((err) => {
+        console.error("Failed to load token disclosure:", err);
+      });
     getTokens(sceneId)
       .then(setTokens)
       .catch((err) => {
@@ -482,6 +494,23 @@ export const TokenPanel: React.FC<TokenPanelProps> = ({
                               />
                               Primary token for this owner
                             </label>
+
+                            {/* Spec 029: what this token discloses. Only
+                             * shown for tokens bound to an actor, because a
+                             * token with no creature behind it has no
+                             * resources to disclose. */}
+                            {disclosure
+                              .find((s) => s.tokenId === token.tokenId)
+                              ?.resources.filter((r) => r.configured !== null)
+                              .map((resource) => (
+                                <TokenDisclosureControl
+                                  key={resource.definition.id}
+                                  tokenId={token.tokenId}
+                                  resourceId={resource.definition.id}
+                                  resourceLabel={resource.definition.label}
+                                  current={resource.configured!}
+                                />
+                              ))}
                           </div>
                         )}
 

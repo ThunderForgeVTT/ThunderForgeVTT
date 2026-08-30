@@ -461,3 +461,37 @@
     background: #c99a37;
   }
 }
+
+// Spec 029: the Game Master's disclosure control.
+//
+// The hint below the select is not decoration — the four states differ in how
+// much they give away, and `percentage` is recoverable in a way `chunked` is
+// not. A control that showed only four labels would invite picking the leaky
+// one for a reason the safer one serves nearly as well.
+.token-disclosure {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(139, 69, 19, 0.25);
+
+  label {
+    color: #3e2723;
+    font-size: 12px;
+    font-weight: 600;
+  }
+}
+
+.token-disclosure-hint {
+  color: #6d4c41;
+  font-size: 11px;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.token-disclosure-error {
+  color: #a3341f;
+  font-size: 11px;
+  margin: 0;
+}

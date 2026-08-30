@@ -1,0 +1,271 @@
+{
+  "generatedAt": "2026-08-30T09:08:40.583Z",
+  "generatedBy": "node scripts/status-capacity-metrics.mjs 2",
+  "measures": "spec 029 SC-006 — engine token capacity with in-engine status displays enabled, against the same board with none",
+  "passed": true,
+  "durationSeconds": 374,
+  "engine": {
+    "pkgSum": "5ea671dfc1f82a23445462e19b6bdbd52f345091941fbc3bb96834f8fa894a34",
+    "builtAt": "2026-08-30T08:55:03.708Z"
+  },
+  "host": {
+    "cpuCores": 32,
+    "totalMemGiB": 31.3,
+    "platform": "Linux 7.1.5-76070105-generic"
+  },
+  "runs": [
+    {
+      "run": 1,
+      "passed": true,
+      "levels": [
+        400,
+        800,
+        1600,
+        3200
+      ],
+      "interactiveFps": 30,
+      "absent": [
+        {
+          "condition": "displays-absent",
+          "displays": false,
+          "tokens": 400,
+          "fps": 60,
+          "frameTimeMs": 16.6,
+          "sprites": 403,
+          "shadowQuads": 0,
+          "displayed": 0,
+          "samples": 20
+        },
+        {
+          "condition": "displays-absent",
+          "displays": false,
+          "tokens": 800,
+          "fps": 60,
+          "frameTimeMs": 16.6,
+          "sprites": 804,
+          "shadowQuads": 0,
+          "displayed": 0,
+          "samples": 20
+        },
+        {
+          "condition": "displays-absent",
+          "displays": false,
+          "tokens": 1600,
+          "fps": 60,
+          "frameTimeMs": 16.7,
+          "sprites": 1605,
+          "shadowQuads": 0,
+          "displayed": 0,
+          "samples": 20
+        },
+        {
+          "condition": "displays-absent",
+          "displays": false,
+          "tokens": 3200,
+          "fps": 30,
+          "frameTimeMs": 33.3,
+          "sprites": 3206,
+          "shadowQuads": 0,
+          "displayed": 0,
+          "samples": 20
+        }
+      ],
+      "enabled": [
+        {
+          "condition": "displays-enabled",
+          "displays": true,
+          "tokens": 400,
+          "fps": 60,
+          "frameTimeMs": 16.7,
+          "sprites": 711,
+          "shadowQuads": 0,
+          "displayed": 400,
+          "samples": 20
+        },
+        {
+          "condition": "displays-enabled",
+          "displays": true,
+          "tokens": 800,
+          "fps": 61,
+          "frameTimeMs": 16.5,
+          "sprites": 1352,
+          "shadowQuads": 0,
+          "displayed": 800,
+          "samples": 20
+        },
+        {
+          "condition": "displays-enabled",
+          "displays": true,
+          "tokens": 1600,
+          "fps": 60,
+          "frameTimeMs": 16.8,
+          "sprites": 2329,
+          "shadowQuads": 0,
+          "displayed": 1600,
+          "samples": 19
+        },
+        {
+          "condition": "displays-enabled",
+          "displays": true,
+          "tokens": 3200,
+          "fps": 30,
+          "frameTimeMs": 33.3,
+          "sprites": 4170,
+          "shadowQuads": 0,
+          "displayed": 3200,
+          "samples": 20
+        }
+      ],
+      "capacityAbsent": 3200,
+      "capacityEnabled": 3200,
+      "anchor": 3200,
+      "anchorSpriteDelta": 964,
+      "anchorFrameTimeDeltaMs": 0
+    },
+    {
+      "run": 2,
+      "passed": true,
+      "levels": [
+        400,
+        800,
+        1600,
+        3200
+      ],
+      "interactiveFps": 30,
+      "absent": [
+        {
+          "condition": "displays-absent",
+          "displays": false,
+          "tokens": 400,
+          "fps": 60,
+          "frameTimeMs": 16.7,
+          "sprites": 403,
+          "shadowQuads": 0,
+          "displayed": 0,
+          "samples": 20
+        },
+        {
+          "condition": "displays-absent",
+          "displays": false,
+          "tokens": 800,
+          "fps": 60,
+          "frameTimeMs": 16.6,
+          "sprites": 804,
+          "shadowQuads": 0,
+          "displayed": 0,
+          "samples": 20
+        },
+        {
+          "condition": "displays-absent",
+          "displays": false,
+          "tokens": 1600,
+          "fps": 59,
+          "frameTimeMs": 16.9,
+          "sprites": 1605,
+          "shadowQuads": 0,
+          "displayed": 0,
+          "samples": 20
+        },
+        {
+          "condition": "displays-absent",
+          "displays": false,
+          "tokens": 3200,
+          "fps": 60,
+          "frameTimeMs": 16.7,
+          "sprites": 3206,
+          "shadowQuads": 0,
+          "displayed": 0,
+          "samples": 19
+        }
+      ],
+      "enabled": [
+        {
+          "condition": "displays-enabled",
+          "displays": true,
+          "tokens": 400,
+          "fps": 60,
+          "frameTimeMs": 16.7,
+          "sprites": 711,
+          "shadowQuads": 0,
+          "displayed": 400,
+          "samples": 20
+        },
+        {
+          "condition": "displays-enabled",
+          "displays": true,
+          "tokens": 800,
+          "fps": 60,
+          "frameTimeMs": 16.6,
+          "sprites": 1352,
+          "shadowQuads": 0,
+          "displayed": 800,
+          "samples": 20
+        },
+        {
+          "condition": "displays-enabled",
+          "displays": true,
+          "tokens": 1600,
+          "fps": 61,
+          "frameTimeMs": 16.5,
+          "sprites": 2329,
+          "shadowQuads": 0,
+          "displayed": 1600,
+          "samples": 19
+        },
+        {
+          "condition": "displays-enabled",
+          "displays": true,
+          "tokens": 3200,
+          "fps": 30,
+          "frameTimeMs": 33.2,
+          "sprites": 4170,
+          "shadowQuads": 0,
+          "displayed": 3200,
+          "samples": 20
+        }
+      ],
+      "capacityAbsent": 3200,
+      "capacityEnabled": 3200,
+      "anchor": 3200,
+      "anchorSpriteDelta": 964,
+      "anchorFrameTimeDeltaMs": 16.5
+    }
+  ],
+  "summary": {
+    "levels": [
+      400,
+      800,
+      1600,
+      3200
+    ],
+    "interactiveFps": 30,
+    "capacityAbsentPerRun": [
+      3200,
+      3200
+    ],
+    "capacityEnabledPerRun": [
+      3200,
+      3200
+    ],
+    "capacityAbsent": 3200,
+    "capacityEnabled": 3200,
+    "anchor": 3200,
+    "anchorFrameTimeMs": {
+      "absent": [
+        33.3,
+        16.7
+      ],
+      "enabled": [
+        33.3,
+        33.2
+      ]
+    },
+    "anchorSpriteDelta": 964,
+    "anchorBarSpritesPerToken": [
+      0.3,
+      0.3
+    ]
+  },
+  "note": "frame time is floored and quantised by vsync on this host — a level lands on 16.7ms, 33.3ms or 50ms and nothing between — so equal frame times mean both conditions finished inside the same refresh interval, not that the work was identical. Capacity is read as the largest level still holding the interactive frame rate.",
+  "profile": "vite dev server and a debug backend; the engine wasm is the built pkg"
+}

@@ -58,6 +58,78 @@ pub struct SystemManifest {
     pub manifest: Option<String>,
     pub download: Option<String>,
     pub legal: SystemManifestLegal,
+    /// The resources this system tracks and wants drawn on tokens.
+    ///
+    /// Spec 029. Optional, and an empty or absent list means the system's
+    /// tokens carry no bars at all — which is the correct behaviour for a
+    /// system that does not track pools, not a gap to fill with a default.
+    /// The engine holds no built-in notion of "health"; hard-coding the first
+    /// system's vocabulary would make every system after it a special case.
+    #[serde(default)]
+    pub resources: Vec<SystemResource>,
+}
+
+/// One resource a system declares, mirroring
+/// `thunderforge_canvas_core::resource_display::ResourceDefinition`.
+///
+/// Deliberately duplicated rather than imported: this crate is the manifest
+/// *schema*, published to system authors and validated against JSON they
+/// write by hand, and coupling it to an engine type would drag the engine's
+/// dependency graph into every pack that only wants to describe itself. The
+/// two are kept honest by a test asserting the field names match.
+#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemResource {
+    /// Stable identifier, e.g. `health`. Unique within a system.
+    pub id: String,
+    /// What a person reads, e.g. "Hit Points".
+    pub label: String,
+    /// `bar` (has a maximum) or `counter` (does not).
+    pub kind: String,
+    /// Display order. The engine imposes none.
+    pub order: i32,
+    /// Whether more than one entry is permitted — a shield over health, or a
+    /// multi-stage boss. A counter must not allow stacking.
+    #[serde(default)]
+    pub allow_stacking: bool,
+    /// Where this resource's numbers live in the system's stored actor data.
+    ///
+    /// Without this the server would have to know each system's field names,
+    /// and every new ruleset would need server changes before its tokens could
+    /// show anything — the coupling FR-001 exists to prevent.
+    pub source: ResourceSourceSpec,
+}
+
+/// Which stored slot a resource reads, and which fields make up its entries.
+#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceSourceSpec {
+    /// `resourceData`, `traitData`, and so on.
+    pub slot: String,
+    /// Ordered. Index 0 is the base pool; later entries stack above it.
+    pub entries: Vec<EntrySourceSpec>,
+}
+
+/// One layer's field mapping.
+#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct EntrySourceSpec {
+    pub current: String,
+    /// Absent for a layer with no maximum of its own — temporary hit points
+    /// are granted, not capped.
+    pub max: Option<String>,
+    /// A maximum fixed by the rules rather than stored per character.
+    ///
+    /// Blades in the Dark caps stress at nine and trauma at four, and neither
+    /// is written into a character's data because neither varies. Without
+    /// this, such a pool could only be drawn as a bare count — losing the one
+    /// thing a player needs from it, which is how close to the cap they are.
+    pub max_value: Option<i32>,
+    pub label: Option<String>,
+    /// Skip when the field is missing or zero, so an absent layer is absent
+    /// rather than an empty bar on every character.
+    #[serde(default)]
+    pub optional: bool,
 }
 
 /// Generates the JSON schema for the `SystemManifest` struct.
@@ -137,6 +209,47 @@ pub fn validate_legal_content(instance: &serde_json::Value) -> Result<(), String
 
 #[cfg(test)]
 mod tests {
+
+    /// The manifest schema and the engine's model describe the same thing in
+    /// two crates, and they must not drift.
+    ///
+    /// They are deliberately duplicated: this crate is the schema published to
+    /// system authors and validated against hand-written JSON, and depending
+    /// on the engine's crate would drag its graph into every pack that only
+    /// wants to describe itself. The cost of that choice is this test.
+    #[test]
+    fn the_resource_spec_matches_the_engine_model_field_for_field() {
+        let spec = serde_json::to_value(SystemResource {
+            id: "health".into(),
+            label: "Health".into(),
+            kind: "bar".into(),
+            order: 0,
+            allow_stacking: true,
+            source: ResourceSourceSpec {
+                slot: "resourceData".into(),
+                entries: vec![EntrySourceSpec {
+                    current: "current_hp".into(),
+                    max: Some("max_hp".into()),
+                    max_value: None,
+                    label: None,
+                    optional: false,
+                }],
+            },
+        })
+        .expect("serialises");
+
+        // These names are the contract. A rename on either side without the
+        // other is a manifest that validates and then displays nothing.
+        for field in ["id", "label", "kind", "order", "allowStacking", "source"] {
+            assert!(spec.get(field).is_some(), "missing {field}");
+        }
+        let source = spec.get("source").unwrap();
+        assert!(source.get("slot").is_some());
+        let entry = &source.get("entries").unwrap()[0];
+        for field in ["current", "max", "maxValue", "label", "optional"] {
+            assert!(entry.get(field).is_some(), "entry missing {field}");
+        }
+    }
     use super::*;
 
     #[test]

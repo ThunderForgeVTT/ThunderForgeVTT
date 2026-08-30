@@ -1,4 +1,9 @@
-import { expect, test, type BrowserContext } from "@playwright/test";
+import {
+  expect,
+  test,
+  type Browser,
+  type BrowserContext,
+} from "@playwright/test";
 
 /**
  * Concurrent authority: a Game Master and their players all writing at once.
@@ -162,7 +167,7 @@ async function gql<T>(
 
 /** Register a fresh user in this context; returns their id. */
 async function signUp(
-  browser: Parameters<typeof test>[1] extends never ? never : any,
+  browser: Browser,
   baseURL: string,
   username: string,
 ): Promise<BrowserContext> {

@@ -2767,6 +2767,8 @@ pub struct QueryRoot(
     UserQuery,
     AdminQuery,
     SceneQuery,
+    queries::token_status::TokenStatusQuery,
+    queries::token_attributes::TokenAttributesQuery,
     InviteQuery,
     AssetQuery,
     ActorQuery,
@@ -2801,6 +2803,7 @@ pub struct QueryRoot(
 
 #[derive(MergedObject, Default)]
 pub struct MutationRoot(
+    queries::token_status::TokenDisclosureMutation,
     WorldMutation,
     UserDataMutation,
     AdminMutation,

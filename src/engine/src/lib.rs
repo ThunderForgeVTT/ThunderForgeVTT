@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 
@@ -6,7 +6,7 @@ use bevy::asset::{AssetPlugin, UnapprovedPathMode};
 use bevy::prelude::*;
 use bevy::window::{Window, WindowPlugin, WindowResolution};
 use js_sys::Function;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use wasm_bindgen::prelude::*;
 
@@ -27,13 +27,14 @@ pub mod transforms;
 // Phase 4.7.G2: Integration & E2E Tests
 mod integration_tests;
 
+use components::{DerivedStats, Token, TokenAttributes};
 use derived_data::*;
 use movement::PlayerControlled;
 use plugins::{
     BackgroundPlugin, CachedAssetsPlugin, CameraPlugin, CanvasLayerPlugin, DarknessPlugin,
     DiceRollPlugin, GridPlugin, LightingOverlayPlugin, LightingPlugin, RenderProbeEnabled,
-    RenderProbePlugin, ScenePlugin, SelectionPlugin, ShapePlugin, SystemRegistrationPlugin,
-    TokenPlugin, WallPlugin,
+    RenderProbePlugin, ResolvedResource, ScenePlugin, SelectionPlugin, ShapePlugin,
+    StatusDisplayPlugin, SystemRegistrationPlugin, TokenPlugin, TokenStatus, WallPlugin,
 };
 use resources::{
     CameraManager, DoorState, GridSnapEnabled, GridVisible, IsGameMaster, LightSet,
@@ -45,6 +46,9 @@ use sync_test::*;
 use systems::*;
 use thunderforge_canvas_core::grid::Footprint;
 use thunderforge_canvas_core::measure::GridUnits;
+use thunderforge_canvas_core::resource_display::{
+    AppearanceOverride, Disclosed, ResourceDefinition,
+};
 use thunderforge_canvas_core::token_kind::TokenKind;
 use thunderforge_canvas_core::vision::{Illumination, Rgb, VisionProfile};
 
@@ -140,6 +144,27 @@ struct WorldTokenPayload {
     /// that worked before changes.
     #[serde(default, rename = "tokenType")]
     token_type: Option<String>,
+    /// Current and maximum for the token's primary pool.
+    ///
+    /// The web client has been sending these since spec 004
+    /// (`WorldToken.health` / `.maxHealth`) and this struct did not
+    /// deserialize them, so they were dropped at the boundary — the same
+    /// shape of gap as `photo_url` before it was wired, and as the `Token`
+    /// component that was never attached.
+    ///
+    /// Spec 029 gives them a consumer: they populate `Token`, which
+    /// `calculate_derived_stats` finally has input from.
+    #[serde(default)]
+    health: Option<i32>,
+    #[serde(default, rename = "maxHealth")]
+    max_health: Option<i32>,
+    /// The actor's attribute scores, keyed by the system's own identifiers.
+    ///
+    /// Optional because most `upsert_token` events are positional and carry
+    /// no sheet at all, and because a system may declare no attributes —
+    /// both of which mean "leave this alone" rather than "clear it".
+    #[serde(default)]
+    attributes: Option<std::collections::BTreeMap<String, i32>>,
 }
 
 /// The colour a token is drawn in when it carries no art.
@@ -161,6 +186,17 @@ fn token_kind_color(token_type: &Option<String>) -> Color {
         .unwrap_or_default();
     let (r, g, b) = kind.fill();
     Color::srgb(r, g, b)
+}
+
+/// One resource on one token, as the server resolved it for this viewer.
+///
+/// `disclosed` is the tagged union from `thunderforge-canvas-core`, so the
+/// payload carries exactly the one field its state permits — an
+/// over-disclosing message does not deserialize.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct StatusResourcePayload {
+    pub definition: ResourceDefinition,
+    pub disclosed: Disclosed,
 }
 
 /// Confirmed/authoritative wall state from the server (T008), matching
@@ -221,6 +257,27 @@ enum ExternalCommand {
     },
     RemoveToken {
         token_id: String,
+    },
+    /// Spec 029: the resolved, already-entitlement-filtered status for one
+    /// token. The engine draws what it is given and cannot widen it — the
+    /// coarsening happened on the server, and a value this viewer may not see
+    /// never entered the process.
+    SetTokenStatus {
+        token_id: String,
+        resources: Vec<StatusResourcePayload>,
+    },
+    ClearTokenStatus {
+        token_id: String,
+    },
+    /// Spec 029 FR-022: presentation values come from the application.
+    ///
+    /// Carries an *override*, not a complete appearance, so an application
+    /// that wants a different bar height does not have to restate the whole
+    /// palette — and, more importantly, does not silently freeze the rest of
+    /// the appearance at whatever the defaults happened to be on the day it
+    /// was written.
+    SetDisplayAppearance {
+        override_values: AppearanceOverride,
     },
     UpsertWall {
         wall: WorldWallPayload,
@@ -386,6 +443,52 @@ pub(crate) struct EngineStatsSnapshot {
     pub shadow_quads: usize,
 }
 
+/// Everything currently displayed, keyed by token id.
+///
+/// Spec 029 FR-021. Mirrored here as each `set_token_status` is applied, so
+/// the state can be read back synchronously from JavaScript — an ECS query
+/// cannot be run from outside the schedule.
+///
+/// Two callers, and the second is the reason this is a supported surface
+/// rather than a debugging one:
+///
+/// 1. Tests assert what *would* be drawn without rendering a pixel, which
+///    matters because this crate's own tests never execute.
+/// 2. The React corner panel reads it, so the engine stays the single source
+///    of truth for resolved status and React observes rather than recomputes
+///    (Constitution I, ADR-053).
+///
+/// It is deliberately read-only. A debugging surface that can also mutate
+/// state becomes a way to write tests that pass against situations the
+/// application cannot reach.
+static TOKEN_STATUS: OnceLock<Mutex<BTreeMap<String, Vec<StatusResourcePayload>>>> =
+    OnceLock::new();
+
+pub(crate) fn token_status_slot() -> &'static Mutex<BTreeMap<String, Vec<StatusResourcePayload>>> {
+    TOKEN_STATUS.get_or_init(|| Mutex::new(BTreeMap::new()))
+}
+
+/// What the engine would draw for one token, as JSON, or `null`.
+#[wasm_bindgen]
+pub fn get_token_status(token_id: &str) -> String {
+    token_status_slot()
+        .lock()
+        .ok()
+        .and_then(|map| map.get(token_id).cloned())
+        .and_then(|resources| serde_json::to_string(&resources).ok())
+        .unwrap_or_else(|| "null".to_string())
+}
+
+/// Every token currently carrying status furniture, as JSON.
+#[wasm_bindgen]
+pub fn list_token_status() -> String {
+    token_status_slot()
+        .lock()
+        .ok()
+        .and_then(|map| serde_json::to_string(&*map).ok())
+        .unwrap_or_else(|| "{}".to_string())
+}
+
 pub(crate) fn engine_stats_slot() -> &'static Mutex<EngineStatsSnapshot> {
     ENGINE_STATS.get_or_init(|| Mutex::new(EngineStatsSnapshot::default()))
 }
@@ -456,6 +559,28 @@ fn parse_command(input: &str) -> Option<ExternalCommand> {
         "remove_token" => Some(ExternalCommand::RemoveToken {
             token_id: value.get("tokenId")?.as_str()?.to_owned(),
         }),
+        "set_token_status" => {
+            let resources: Vec<StatusResourcePayload> =
+                serde_json::from_value(value.get("resources")?.clone()).ok()?;
+            Some(ExternalCommand::SetTokenStatus {
+                token_id: value.get("tokenId")?.as_str()?.to_owned(),
+                resources,
+            })
+        }
+        "clear_token_status" => Some(ExternalCommand::ClearTokenStatus {
+            token_id: value.get("tokenId")?.as_str()?.to_owned(),
+        }),
+        "set_display_appearance" => {
+            // An absent `appearance` is an empty override, not an error: it
+            // is a no-op, and treating it as malformed would report a fault
+            // for a command that asked for nothing.
+            let raw = value
+                .get("appearance")
+                .cloned()
+                .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+            let override_values: AppearanceOverride = serde_json::from_value(raw).ok()?;
+            Some(ExternalCommand::SetDisplayAppearance { override_values })
+        }
         "upsert_wall" => {
             let wall_value = value.get("wall")?.clone();
             let wall: WorldWallPayload = serde_json::from_value(wall_value).ok()?;
@@ -612,11 +737,84 @@ pub fn set_event_callback(callback: Function) {
 
 #[wasm_bindgen]
 pub fn apply_world_command(json_command: &str) {
-    if let Some(command) = parse_command(json_command)
-        && let Ok(mut queue) = external_command_queue().lock()
-    {
-        queue.push(command);
+    // A command that cannot be understood is now *reported*, where it used to
+    // be dropped.
+    //
+    // Silent discard is the failure mode this boundary is being hardened
+    // against (spec 029 FR-020): the engine deserialized what it recognised
+    // and ignored the rest, so a renamed or mistyped field produced a display
+    // that never appeared — with no error, no warning, and nothing to attach a
+    // debugger to. Three bugs in this feature alone had that shape.
+    match classify_command(json_command) {
+        Ok(command) => {
+            if let Ok(mut queue) = external_command_queue().lock() {
+                queue.push(command);
+            }
+        }
+        Err(error) => emit_event(serde_json::json!({
+            "type": "sdkError",
+            "code": error.code,
+            "message": error.message,
+            "command": error.command,
+        })),
     }
+}
+
+/// The SDK contract version both sides ship under.
+///
+/// A single integer, deliberately. The engine and the application are built
+/// into one bundle, so there is no independent release cadence for semantic
+/// versioning to describe — this exists to catch a *stale* bundle, which is
+/// precisely the case the old boundary failed silently on.
+pub const SDK_VERSION: u32 = 1;
+
+/// Why a command could not be accepted.
+struct SdkError {
+    code: &'static str,
+    message: String,
+    command: Option<String>,
+}
+
+/// Parse and version-check one command.
+fn classify_command(input: &str) -> Result<ExternalCommand, SdkError> {
+    let value: Value = serde_json::from_str(input).map_err(|e| SdkError {
+        code: "malformed",
+        message: format!("Command is not valid JSON: {e}"),
+        command: None,
+    })?;
+
+    let command_type = value
+        .get("type")
+        .and_then(|t| t.as_str())
+        .map(str::to_owned);
+
+    // Version is optional so every existing caller keeps working; when it is
+    // given and disagrees, nothing is applied. Partial application of a
+    // command from a bundle that does not share this contract is worse than
+    // refusing it, because the half that succeeded is invisible.
+    if let Some(declared) = value.get("sdkVersion").and_then(|v| v.as_u64())
+        && declared != u64::from(SDK_VERSION)
+    {
+        return Err(SdkError {
+            code: "versionMismatch",
+            message: format!(
+                "Command declares SDK version {declared}; this engine speaks {SDK_VERSION}. \
+                 Nothing was applied."
+            ),
+            command: command_type,
+        });
+    }
+
+    parse_command(input).ok_or_else(|| SdkError {
+        code: "malformed",
+        message: match &command_type {
+            Some(name) => format!(
+                "Command {name:?} could not be read — a field is missing or has the wrong type."
+            ),
+            None => "Command has no `type`.".to_string(),
+        },
+        command: command_type,
+    })
 }
 
 #[wasm_bindgen]
@@ -642,7 +840,6 @@ pub fn start(canvas_selector: &str) {
         .insert_resource(network::WorldEventSubscription::new())
         .insert_resource(tracker)
         .insert_resource(CircularFlowTracer::new())
-        .insert_resource(SystemHooksRegistry { hooks: None })
         // Every asset this engine loads is a same-origin, server-authorized
         // URL under `/api/canvas-assets/...` (scene backgrounds and pasted
         // canvas images — see `systems/background.rs`, the only two
@@ -694,6 +891,10 @@ pub fn start(canvas_selector: &str) {
         .add_plugins(TokenPlugin)
         .add_plugins(CameraPlugin)
         .add_plugins(SelectionPlugin) // Phase 4.7.E1: Token Selection
+        // Spec 029: bars and counters above tokens. Independently removable —
+        // taking this line out leaves every other plugin working, which is
+        // what Constitution II asks of a plugin.
+        .add_plugins(StatusDisplayPlugin)
         // Native canvas authoring (specs/001-bevy-canvas-authoring): shared
         // layer-ordering resource, must be added before Wall/Lighting/Shape
         // plugins so it exists when they build (Constitution Principle II)
@@ -749,7 +950,7 @@ pub fn start(canvas_selector: &str) {
         // The live equivalents work on `Transform`:
         //   movement -> `systems::token_move::handle_token_movement_input`
         //   snapping -> `systems::token_grid::snap_tokens_to_grid`
-        .add_systems(Update, (calculate_derived_stats, calculate_ability_stats))
+        .add_systems(Update, calculate_derived_stats)
         .add_systems(
             Update,
             (
@@ -942,6 +1143,11 @@ fn apply_external_commands(
     // asset server is part of `DefaultPlugins`, not a plugin this crate can
     // choose to leave out.
     asset_server: Res<AssetServer>,
+    // `Appearance` only exists once `StatusDisplayPlugin` is registered, same
+    // graceful-degradation rationale as `wall_set` above. An appearance
+    // command with no status plugin to apply it to is a no-op rather than a
+    // fault: nothing is being displayed for it to affect.
+    appearance: Option<ResMut<plugins::status_display::Appearance>>,
 ) {
     let drained = if let Ok(mut queue) = external_command_queue().lock() {
         queue.drain(..).collect::<Vec<_>>()
@@ -950,6 +1156,7 @@ fn apply_external_commands(
     };
 
     let mut wall_set = wall_set;
+    let mut appearance = appearance;
     let mut light_set = light_set;
     let mut shape_set = shape_set;
     let mut background = background;
@@ -1025,15 +1232,143 @@ fn apply_external_commands(
                     None => Sprite::from_color(token_kind_color(&token.token_type), TOKEN_SIZE),
                 };
 
+                // The `Token` and `DerivedStats` components go on here, and
+                // this is the first time in the project's history that they
+                // have.
+                //
+                // `calculate_derived_stats` queries `(&Token, &mut
+                // DerivedStats)` and has been registered in the frame loop the
+                // whole time, matching nothing — no spawned entity carried
+                // `Token`, and the only construction of that type anywhere was
+                // a unit test. It recomputed nothing, every frame, for nobody.
+                //
+                // Spec 029 is the first consumer of what it computes, so
+                // attaching the components and drawing the result are one
+                // piece of work: doing either alone leaves the dead end where
+                // it is.
+                let kind = token
+                    .token_type
+                    .as_deref()
+                    .and_then(TokenKind::from_stored)
+                    .unwrap_or_default();
+                let (r, g, b) = kind.fill();
+
                 let entity = commands
-                    .spawn((sprite, transform, TokenIdentity(token.id.clone())))
+                    .spawn((
+                        sprite,
+                        transform,
+                        TokenIdentity(token.id.clone()),
+                        Token {
+                            id: token.id.clone(),
+                            world_id: String::new(),
+                            scene_id: String::new(),
+                            token_type: kind.as_stored().to_string(),
+                            label: token.label.clone(),
+                            base_x: token.x as i32,
+                            base_y: token.y as i32,
+                            size_x: 1,
+                            size_y: 1,
+                            color: Color::srgb(r, g, b),
+                            is_visible: true,
+                            health: token.health,
+                            max_health: token.max_health,
+                            // Populated from the payload where the server
+                            // sent them, empty where it did not. Empty means
+                            // "this sheet is not filled in", which is a
+                            // different claim from a sheet of zeroes — and in
+                            // every system shipping here a zero is a real and
+                            // punishing score.
+                            attributes: TokenAttributes(
+                                token
+                                    .attributes
+                                    .clone()
+                                    .unwrap_or_default()
+                                    .into_iter()
+                                    .collect(),
+                            ),
+                            schema_version: 1,
+                            is_selected: false,
+                            is_hovered: false,
+                        },
+                        DerivedStats::default(),
+                    ))
                     .id();
+
+                // A token arriving after its status adopts it here, which is
+                // the other half of the ordering fix above.
+                if let Ok(slot) = token_status_slot().lock()
+                    && let Some(resources) = slot.get(&token.id)
+                {
+                    commands.entity(entity).insert(TokenStatus {
+                        resources: resources
+                            .iter()
+                            .map(|r| ResolvedResource {
+                                definition: r.definition.clone(),
+                                disclosed: r.disclosed.clone(),
+                            })
+                            .collect(),
+                    });
+                }
 
                 token_entities.0.insert(token.id, entity);
             }
             ExternalCommand::RemoveToken { token_id } => {
                 if let Some(entity) = token_entities.0.remove(&token_id) {
                     commands.entity(entity).despawn();
+                }
+            }
+            ExternalCommand::SetTokenStatus {
+                token_id,
+                resources,
+            } => {
+                // Setting the component is the whole application step; the
+                // plugin's `Changed<TokenStatus>` system redraws from there.
+                // Recorded first, and unconditionally.
+                //
+                // Status routinely arrives before the token it describes: the
+                // client fetches it as the scene opens while tokens are still
+                // being loaded. Dropping it when the entity is missing made
+                // bars appear or not depending on which request won, which is
+                // the kind of bug that reproduces once in ten runs and gets
+                // called flaky. The slot is the record; the component is a
+                // projection of it, applied when there is something to apply
+                // it to (see `apply_pending_token_status`).
+                if let Ok(mut slot) = token_status_slot().lock() {
+                    slot.insert(token_id.clone(), resources.clone());
+                }
+
+                if let Some(&entity) = token_entities.0.get(&token_id) {
+                    commands.entity(entity).insert(TokenStatus {
+                        resources: resources
+                            .into_iter()
+                            .map(|r| ResolvedResource {
+                                definition: r.definition,
+                                disclosed: r.disclosed,
+                            })
+                            .collect(),
+                    });
+                }
+            }
+            ExternalCommand::ClearTokenStatus { token_id } => {
+                // An empty set rather than removing the component: the
+                // plugin's change detection is what clears the drawn geometry,
+                // and removing the component would leave the last bars on
+                // screen with nothing to trigger their removal.
+                if let Some(&entity) = token_entities.0.get(&token_id) {
+                    if let Ok(mut slot) = token_status_slot().lock() {
+                        slot.remove(&token_id);
+                    }
+                    commands.entity(entity).insert(TokenStatus::default());
+                }
+            }
+            ExternalCommand::SetDisplayAppearance { override_values } => {
+                // Folded onto whatever is current, not onto the defaults —
+                // so two overrides in a row accumulate rather than the second
+                // silently discarding the first.
+                if let Some(appearance) = appearance.as_deref_mut() {
+                    let mut next = appearance.0.clone();
+                    override_values.apply_to(&mut next);
+                    appearance.0 = next;
                 }
             }
             ExternalCommand::UpsertWall { wall } => {

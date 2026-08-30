@@ -294,6 +294,19 @@ diesel::table! {
 }
 
 diesel::table! {
+    token_resource_disclosure (id) {
+        id -> Uuid,
+        token_id -> Uuid,
+        resource_id -> Varchar,
+        state -> Varchar,
+        created_by -> Uuid,
+        updated_by -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     tokens (token_id) {
         token_id -> Uuid,
         scene_id -> Uuid,
@@ -889,6 +902,7 @@ diesel::joinable!(scene_state_fingerprints -> scenes (scene_id));
 diesel::joinable!(scene_state_fingerprints -> users (updated_by));
 diesel::joinable!(scenes -> users (owner_id));
 diesel::joinable!(shapes -> scenes (scene_id));
+diesel::joinable!(token_resource_disclosure -> tokens (token_id));
 diesel::joinable!(tokens -> scenes (scene_id));
 diesel::joinable!(tokens -> users (owner_user_id));
 diesel::joinable!(user_oauth_accounts -> oauth_providers (provider_id));
@@ -978,6 +992,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     scene_state_fingerprints,
     scenes,
     shapes,
+    token_resource_disclosure,
     tokens,
     user_oauth_accounts,
     user_sessions,

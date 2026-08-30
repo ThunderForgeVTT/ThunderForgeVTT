@@ -14,12 +14,15 @@
 //! reimplementing the logic — the engine crate is the ECS/rendering
 //! shell, this crate is the tested core underneath it.
 
+pub mod attributes;
 pub mod camera;
 pub mod frame_trace;
 pub mod grid;
 pub mod lighting;
 pub mod measure;
 pub mod movement;
+pub mod movement_budget;
+pub mod resource_display;
 pub mod shape;
 pub mod texture_budget;
 pub mod token_art;

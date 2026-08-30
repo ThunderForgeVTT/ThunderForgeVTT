@@ -203,3 +203,41 @@ Stated because the gaps matter more than the passes:
   the same user from one address. That measures what a _connection_ costs the
   fan-out path — the question being asked — but it is not a thousand strangers
   on a thousand networks, and nothing here should be quoted as though it were.
+
+## Proposed: camera storm (pan and zoom under lighting)
+
+Raised 2026-08-30, immediately after status displays gained off-screen
+culling. Not built yet.
+
+Every scenario here so far scales _quantity_ — more sessions, more writers,
+more tokens. This one holds quantity almost fixed and moves the **camera**: a
+handful of tokens on screen, several lights, and a viewer panning and zooming
+continuously. What it measures is stutter rather than throughput.
+
+### Why it is worth having
+
+Status displays cull off-screen tokens, which is what took a 3,200-token board
+from 20fps back to 30 and cut the sprite delta from 12,800 to 964. The cull is
+re-evaluated when the camera moves, because otherwise a token panned into view
+would stay bare — for a token standing still, for ever.
+
+That means panning is now the one input that can repaint on-screen bars
+repeatedly, and it is the path with no coverage. A camera at rest jitters in
+the low bits, so the redraw is gated behind an 8-unit tolerance to stop float
+noise repainting every frame. **That tolerance is reasoned, not measured.** Too
+tight and a still camera churns; too loose and bars visibly lag a fast pan.
+Only a scenario that actually moves the camera can tell which.
+
+Lighting belongs in the same scenario rather than a separate one: lights are
+the other thing that redraws on camera movement, and the interesting question
+is whether the two interact — a cost that appears only when both are moving is
+exactly the kind that survives two separate green tests.
+
+### What it should report
+
+Frame-time **distribution**, not a mean. A pan that averages 30fps while
+dropping one frame in twenty feels broken, and an average hides that
+completely; the 99th percentile and the worst single frame are the figures
+that correspond to what somebody notices. Sprite and geometry churn per second
+is the other one worth recording, since that is the mechanism a regression here
+would work through.
