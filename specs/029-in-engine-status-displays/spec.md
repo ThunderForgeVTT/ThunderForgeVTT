@@ -543,44 +543,57 @@ Two mechanics, one underlying problem: a token holding a torch, and a token
 that some viewers can see and others cannot — a stealth roll against a DC that
 one player's passive Perception beats and another's does not.
 
-### Why it belongs with disclosure and not beside it
+### Decided: the client hides it, and cheating is a table problem
 
-Disclosure coarsens a token's **values** per viewer. Visibility coarsens its
-**existence** per viewer. The rule this spec settled carries over unchanged and
-is the non-negotiable part: the server resolves per viewer and never sends what
-that viewer may not know. `status-disclosure.spec.ts` asserts on the payload
-rather than the screen for exactly this reason — a client that received the
-value and chose not to draw it fails the promise, and a modified client sees
-everything. Shipping a token with `visible: false` would be that bug, at the
-scale of the whole board.
+A player who opens devtools to find a hidden token is a problem for that
+table, not for this codebase. Guarding against it costs real complexity and
+buys nothing a group could not solve by talking to each other. So visibility
+is resolved **client-side**: everyone receives the scene, and each client
+renders what its viewer is entitled to see.
 
-The model wants to be `Disclosed` one level up: `Seen { token }`,
-`Inferred { last_known_position }` for "you saw it a beat ago" or "you heard
-something", and `Unseen` where nothing is sent at all. The GM always resolves
-to `Seen`, with a marker that the table's view differs — the role `configured`
-already plays for disclosure.
+This is a deliberate departure from how this spec treats resource values, and
+the two are not in tension — they are different bets about the same trade.
+Disclosure coarsens server-side because a coarsened figure is _cheap_ to
+compute per viewer and rides an existing query. Visibility client-side because
+the alternative is per-viewer fan-out on the live feed, which is not cheap at
+all. Nothing here retracts the disclosure behaviour already built; it is
+finished, tested, and costs nothing to keep.
 
-### What is genuinely new, and harder
+### What the decision removes
 
-- **The live event stream.** Disclosure coarsens a query response. Visibility
-  has to coarsen the subscription feed: a token moving where three of five
-  players can see it fans out three ways plus the GM's. Today that is one
-  broadcast. This lands on the delivery loop, and it is a per-viewer fan-out
-  cost rather than a filter that can be added at the edge.
-- **Absence is information.** A player whose updates for a token simply stop
-  learns something from the silence. "Went invisible" and "left the scene" must
-  not be distinguishable, and neither must the timing of when updates ceased.
-  This is the part to get wrong on paper rather than at a table.
+Both of the genuinely hard problems, which is why it is worth taking:
+
+- **The subscription feed stays one broadcast.** A token moving where three of
+  five players can see it is still one event to everyone. There is no
+  per-viewer fan-out, so this feature does not land on the delivery loop at
+  all.
+- **Timing leaks stop mattering.** Everyone receives everything, so there is no
+  silence to read meaning into and no need to make "went invisible"
+  indistinguishable from "left the scene" — the distinction is never carried by
+  the absence of traffic.
+
+### What is still real
+
+The rest of the design survives, because none of it was about cheating:
+
+- **Per-viewer render state.** The GM sees a hidden token ghosted; the table
+  sees nothing. That is the `Disclosed` shape applied to rendering rather than
+  to payloads — `Seen`, `Inferred { last_known_position }` for "you heard
+  something", `Unseen` — resolved in the client from the viewer's role and
+  perception against the token's state.
 - **Conditions must be declared by the system, not known by the engine.** The
-  FR-001 lesson, which this spec paid for twice. 5e's binary invisible is not
-  Blades' hidden is not Pathfinder 2e's observed/concealed/hidden/undetected.
-  PF2e is the right target: it is already a graded ladder and maps onto a
-  tagged union directly, and 5e is then the degenerate case.
+  FR-001 lesson this spec paid for twice. 5e's binary invisible is not Blades'
+  hidden is not Pathfinder 2e's observed/concealed/hidden/undetected. PF2e is
+  the right target: it is already a graded ladder and maps onto a tagged union
+  directly, and 5e is then the degenerate case.
 - **A light is not hidden by its bearer.** In 5e, turning invisible does not
-  hide your torch. So an attached light's visibility must resolve independently
-  of the token carrying it — the light staying put while its carrier vanishes
-  is correct behaviour, not a bug. This constraint only appears because both
+  hide your torch. An attached light's visibility resolves independently of the
+  token carrying it — the light staying put while its carrier vanishes is
+  correct behaviour, not a bug. This constraint only appears because both
   features exist, which is the argument for speccing them together.
+- **Contested perception is still a real computation.** A stealth roll against
+  a DC that one viewer's passive beats and another's does not still has to be
+  evaluated per viewer; the decision changes _where_, not _whether_.
 
 ### Dependency
 
