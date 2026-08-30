@@ -44,12 +44,19 @@ renderer.
 ### 2. The seam, without a table
 
 ```bash
-cargo test -p thunderforge_canvas_core registry_
+cargo test -p thunderforge_canvas_core assembl
 ```
 
 Two contributors declaring the same identifier must fail at assembly, not at
 first use. A collision found when a Game Master happens to author one of them
 is a collision found at the table.
+
+The filter is `assembl`, not `registry_`, and the difference is not cosmetic:
+`registry_` matches two removability tests and **not** the collision test this
+step exists for. A filter that quietly matches the wrong tests reports a green
+run for a check that never happened — the same trap spec 029's quickstart fell
+into, where `cargo test -p thunderforge disclosure` matched nothing at all and
+two steps had been verifying air. Always read the count.
 
 ### 3. The engine compiles for the target it runs on
 
@@ -121,11 +128,25 @@ point they are expensive to fix:
 ### 7. Capacity
 
 ```bash
-cd apps/web && npx playwright test e2e/engine-limits.spec.ts --workers=1
+cd apps/web && npx playwright test e2e/engine-interaction-limits.spec.ts --workers=1
 ```
 
-SC-007 asks that 50 interactives cost nothing measurable against the documented
-baseline. Unlike status displays — which are per-token and were measured
+A sibling of `engine-limits.spec.ts` rather than a level inside it, following
+the shape `engine-status-limits.spec.ts` established: it sweeps one axis twice,
+with and without the feature, in the same session — so the answer is a _cost_
+rather than a frame time next to a stale baseline recorded on a different
+build.
+
+SC-007 asks that 50 interactives cost nothing measurable.
+
+Measured, 2026-08-30: 200 moving tokens, 50 region interactives. Absent
+17.1ms/58fps, present 17.0ms/59fps, ratio **0.994** — both on the vsync floor.
+
+Two details keep that honest. The tokens are _moved_ while sampling, because
+entry detection returns immediately when position has not changed and a still
+board would report zero cost for a feature that never ran. And all 50 are
+regions rather than props: a prop costs one map entry and nothing per frame, so
+50 regions is the worst case 50 interactives can be. Unlike status displays — which are per-token and were measured
 costing 4 sprites each — interactives are event-driven and rare, so the expected
 answer is "no measurable change". **Measure it anyway**: an expected result that
 was never checked is an assumption, and spec 029's capacity work only found its
@@ -134,6 +155,30 @@ real cost because somebody ran it.
 ---
 
 ## Manual walkthrough
+
+Also driven, so it can be re-run:
+
+```bash
+node specs/030-interactive-elements/walkthrough.mjs
+```
+
+It registers two accounts against a running stack and performs the eight steps
+below as a Game Master and a player, checking at each one what a pair of eyes
+would. Doing it by hand is still worth it the first time — the script cannot
+tell you whether a door _looks_ like a door — but it means the sequence is
+repeatable and its two hardest steps are not left to memory.
+
+Last run, 2026-08-30:
+
+```
+step 2  offers 7 effects, 0 of them sound
+step 3  designated, starts CLOSED
+step 4  player click -> performed
+step 5  player click -> refused/locked shown as "It is locked."
+step 6  GM click -> performed
+step 7  player: secret=true blocksVision=true (geometry arrives; drawing does not)
+step 8  after reveal: player secret=false, GM secret=false
+```
 
 1. As **user1** (GM), open the seeded world and place a prop — a book.
 2. Attach a lore entry. Confirm the authoring panel offers only effects this

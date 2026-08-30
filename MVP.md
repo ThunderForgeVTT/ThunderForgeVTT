@@ -102,6 +102,50 @@ This section provides a high-level overview of the core objects and concepts tha
   - The DM can promote other players to owner.
   - Implemented: a fixed three-tier role model (Owner/GM/Player) via `world_members`, with an `updateMemberRole` mutation that lets an Owner/GM change any member's role — including promoting someone to Owner. Spec 010 added a real, per-object permissions layer on top of this: every actor now has an "ownership block" (`world_actor_permissions`) letting the DM grant any world member Viewer/Editor/Owner on any actor (PC or NPC), with the DM implicitly retaining full control regardless of the block's contents and a default-Viewer fallback for members with no explicit grant. This is enforced server-side (`auth/actor_permissions.rs`, gating `updateActorSystemData` and `moveOwnToken`), with a DM-only editing UI at `/world/:id/actor/:id/edit`. **Missing**: this per-actor model is not yet a general "policy" system — there is still no "trusted player"/"assistant DM" world-wide role beyond the fixed three, and no equivalent ownership-block mechanism for other content types (scenes, maps, items) yet. The vestigial `policies`/`permission_grants` schema table remains dead code as before. (Same class of gap as documented in `docs/SECURITY_RBAC.md`.)
 
+### Interactive elements — spec 030
+
+Things on a scene that respond: a prop that opens a lore entry, a lever that
+switches lights, a door that opens, closes and locks, a region that fires when
+a token crosses it, and a request the Game Master must approve. See
+`docs/interactive-elements.md`.
+
+The framing runs through the whole feature, and it is the same one ADR-051
+records: this is **not** a way to run a game without a Game Master. Every
+trigger is something a GM placed, configured and chose to allow, and anything
+consequential stays gated on their approval.
+
+**What it delivers.** Doors gained a definition — open blocks neither, closed
+blocks exactly what the wall's own profile says, and `locked` is a separate
+property governing who may change the state rather than a third state. Props
+are tokens of the existing `object` kind with no actor, so there is no second
+placement pipeline. All seven user stories are proven end to end
+(`apps/web/e2e/interactive-*.spec.ts`), including the two rules most likely to
+be implemented only in a UI: a player cannot open a locked door, and a request
+never expires into approval.
+
+**How it is built.** One plugin owns placing, triggering, permission and
+dispatch, and owns no effect at all; every effect is contributed by the
+subsystem that performs it. Adding a triggerable capability is a declaration, a
+line in a list, and one plugin with one system — never an edit to the core.
+`scripts/check-interaction-seam.mjs`, in `pnpm verify`, asserts that core names
+none of "light", "door" or "sound", so the coupling this design forbids is
+greppable rather than a matter of judgement. The decision is
+`docs/adrs/20260830-054-interaction_effect_contribution_seam.md`.
+
+**What it deliberately does not deliver:**
+
+- **Sound.** No audio subsystem exists, so nothing declares a sound effect and
+  none is offered. That is the contribution seam working rather than a gap in
+  it: when audio is built it contributes `audio.play` and nothing else changes.
+- **Multi-scene navigation.** `nav.request_scene` raises a request, the GM
+  approves or refuses it, and the requester is told — and then nothing moves
+  anybody, because there is nothing yet to move them with. The request and the
+  decision are the parts this feature owns, and they work today.
+- **Party tokens.** A token the GM controls that the whole party sees and
+  follows — a ship, a caravan — for scenes that are world maps rather than
+  tactical play. Named in the spec so the model does not preclude it; not
+  built.
+
 ## Post-MVP
 
 - **Metered and constrained connections:** Explicitly **not in MVP scope**, and planned.
