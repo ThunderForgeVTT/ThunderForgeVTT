@@ -275,5 +275,33 @@
         ]
       }
     }
-  ]
+  ],
+  "movement": {
+    "walk": {
+      "label": "Speed",
+      "source": "speed_walk",
+      "default": 25,
+      "order": 0
+    },
+    "fly": {
+      "label": "Fly Speed",
+      "source": "speed_fly",
+      "order": 1
+    },
+    "swim": {
+      "label": "Swim Speed",
+      "source": "speed_swim",
+      "order": 2
+    },
+    "climb": {
+      "label": "Climb Speed",
+      "source": "speed_climb",
+      "order": 3
+    },
+    "burrow": {
+      "label": "Burrow Speed",
+      "source": "speed_burrow",
+      "order": 4
+    }
+  }
 }

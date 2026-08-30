@@ -270,5 +270,13 @@
         ]
       }
     }
-  ]
+  ],
+  "movement": {
+    "stride": {
+      "label": "Stride",
+      "source": "stride",
+      "default": 6,
+      "order": 0
+    }
+  }
 }

@@ -4,13 +4,12 @@ import type { EntrySource } from "./EntrySource";
 /**
  * Where a whole resource's entries come from.
  */
-export type ResourceSource = {
-  /**
-   * Which stored slot to read: `resourceData`, `traitData`, and so on.
-   */
-  slot: string;
-  /**
-   * Ordered. Index 0 is the base pool; later entries stack above it.
-   */
-  entries: Array<EntrySource>;
-};
+export type ResourceSource = { 
+/**
+ * Which stored slot to read: `resourceData`, `traitData`, and so on.
+ */
+slot: string, 
+/**
+ * Ordered. Index 0 is the base pool; later entries stack above it.
+ */
+entries: Array<EntrySource>, };

@@ -19,8 +19,9 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use thunderforge_canvas_core::attributes::{AttributeDeclaration, attributes_from};
+use thunderforge_canvas_core::movement_budget::{MovementDeclaration, speeds_from};
 
-use crate::attributes::attribute_declarations_for_system;
+use crate::attributes::{attribute_declarations_for_system, movement_declarations_for_system};
 use crate::graphql::{app_state, authenticated_user};
 
 /// One attribute score.
@@ -34,11 +35,28 @@ pub struct GraphQLAttribute {
     pub value: i32,
 }
 
-/// Every attribute one token carries.
+/// One movement speed, in the scene's spoken units.
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLSpeed {
+    /// The system's own identifier — `walk`, `fly`, `stride`.
+    pub id: String,
+    /// Systems disagree even where ids match: Pathfinder calls its ground
+    /// speed simply "Speed".
+    pub label: String,
+    pub value: f64,
+}
+
+/// What a token's sheet says about it.
 #[derive(SimpleObject, Debug, Clone)]
 pub struct GraphQLTokenAttributes {
     pub token_id: Uuid,
     pub attributes: Vec<GraphQLAttribute>,
+    /// Only the movement types this creature actually has.
+    ///
+    /// An absent type means it cannot move that way at all, which is a
+    /// different claim from a speed of zero (it can, but is currently
+    /// prevented) — so absent types are omitted rather than sent as zeroes.
+    pub speeds: Vec<GraphQLSpeed>,
 }
 
 #[derive(Default)]
@@ -99,7 +117,15 @@ impl TokenAttributesQuery {
                 // A world with no system has no attribute set. Not an error.
                 None => Vec::new(),
             };
-            if declarations.is_empty() {
+            let movement: Vec<MovementDeclaration> = match system_id.as_deref() {
+                Some(id) => movement_declarations_for_system(&systems_dir, id),
+                None => Vec::new(),
+            };
+
+            // A system may declare movement but no attributes, or the
+            // reverse — Blades measures no movement at all. Only bail when
+            // it declares neither.
+            if declarations.is_empty() && movement.is_empty() {
                 return Ok(Vec::new());
             }
 
@@ -135,9 +161,27 @@ impl TokenAttributesQuery {
                 };
 
                 let resolved = attributes_from(data, &declarations);
-                if resolved.is_empty() {
+                let speeds = speeds_from(data, &movement);
+                if resolved.is_empty() && speeds.is_empty() {
                     continue;
                 }
+
+                // Labels come from the declarations; the resolved speeds
+                // carry only ids and values.
+                let labelled: Vec<GraphQLSpeed> = {
+                    let mut ordered: Vec<&MovementDeclaration> = movement.iter().collect();
+                    ordered.sort_by_key(|d| d.order);
+                    ordered
+                        .into_iter()
+                        .filter_map(|declaration| {
+                            speeds.get(&declaration.id).map(|value| GraphQLSpeed {
+                                id: declaration.id.clone(),
+                                label: declaration.label.clone(),
+                                value: value as f64,
+                            })
+                        })
+                        .collect()
+                };
 
                 out.push(GraphQLTokenAttributes {
                     token_id,
@@ -150,6 +194,7 @@ impl TokenAttributesQuery {
                             value: a.value,
                         })
                         .collect(),
+                    speeds: labelled,
                 });
             }
 

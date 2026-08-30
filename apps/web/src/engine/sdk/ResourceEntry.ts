@@ -3,14 +3,12 @@
 /**
  * One layer of a resource: a pool with its own maximum.
  */
-export type ResourceEntry = {
-  current: number;
-  /**
-   * Absent for a counter, which has no maximum to be a proportion of.
-   */
-  max: number | null;
-  /**
-   * Optional name for this layer — "Shield", "Stage 2".
-   */
-  label: string | null;
-};
+export type ResourceEntry = { current: number, 
+/**
+ * Absent for a counter, which has no maximum to be a proportion of.
+ */
+max: number | null, 
+/**
+ * Optional name for this layer — "Shield", "Stage 2".
+ */
+label: string | null, };

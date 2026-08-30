@@ -21,6 +21,7 @@ pub mod grid;
 pub mod lighting;
 pub mod measure;
 pub mod movement;
+pub mod movement_budget;
 pub mod resource_display;
 pub mod shape;
 pub mod texture_budget;

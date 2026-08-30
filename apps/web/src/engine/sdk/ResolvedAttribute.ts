@@ -3,9 +3,4 @@
 /**
  * An attribute resolved for one actor.
  */
-export type ResolvedAttribute = {
-  id: string;
-  label: string;
-  abbreviation: string | null;
-  value: number;
-};
+export type ResolvedAttribute = { id: string, label: string, abbreviation: string | null, value: number, };

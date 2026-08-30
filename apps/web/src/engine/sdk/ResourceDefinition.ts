@@ -8,16 +8,12 @@ import type { ResourceKind } from "./ResourceKind";
  * points, another health/stamina/mana, a third health/energy. Hard-coding the
  * first would make every system after it a special case.
  */
-export type ResourceDefinition = {
-  id: string;
-  label: string;
-  kind: ResourceKind;
-  /**
-   * Display order. The engine imposes none.
-   */
-  order: number;
-  /**
-   * Whether more than one entry is permitted.
-   */
-  allowStacking: boolean;
-};
+export type ResourceDefinition = { id: string, label: string, kind: ResourceKind, 
+/**
+ * Display order. The engine imposes none.
+ */
+order: number, 
+/**
+ * Whether more than one entry is permitted.
+ */
+allowStacking: boolean, };

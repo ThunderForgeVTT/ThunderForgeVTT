@@ -31,13 +31,19 @@ interface SystemCase {
   stored: Record<string, number>;
   /** Attribute ids expected back, in declared order. */
   expect: string[];
+  /** Speed ids expected back, in declared order. */
+  expectSpeeds: string[];
+  /** What the ground speed should read, once resolved. */
+  groundSpeed: number | null;
 }
 
 const SYSTEMS: SystemCase[] = [
   {
     systemId: "genie",
-    stored: { might: 5, cunning: 3, spirit: 4 },
+    stored: { might: 5, cunning: 3, spirit: 4, stride: 8 },
     expect: ["might", "cunning", "spirit"],
+    expectSpeeds: ["stride"],
+    groundSpeed: 8,
   },
   {
     systemId: "dnd5e",
@@ -48,6 +54,10 @@ const SYSTEMS: SystemCase[] = [
       intelligence: 8,
       wisdom: 13,
       charisma: 10,
+      // A winged creature: it has a fly speed, and the sheet says its walk
+      // is 40 rather than the declared default of 30.
+      speed_walk: 40,
+      speed_fly: 80,
     },
     expect: [
       "strength",
@@ -57,6 +67,9 @@ const SYSTEMS: SystemCase[] = [
       "wisdom",
       "charisma",
     ],
+    // Declared order, and *only* the two it has — no swim, climb or burrow.
+    expectSpeeds: ["walk", "fly"],
+    groundSpeed: 40,
   },
   {
     systemId: "pathfinder2e",
@@ -72,7 +85,11 @@ const SYSTEMS: SystemCase[] = [
       intelligence: 0,
       wisdom: 3,
       charisma: -1,
+      // Nothing stored: the ground speed must come from the declared
+      // default, which for Pathfinder is 25 and not D&D's 30.
     },
+    expectSpeeds: ["walk"],
+    groundSpeed: 25,
     expect: [
       "strength",
       "dexterity",
@@ -88,6 +105,10 @@ const SYSTEMS: SystemCase[] = [
     // "treat falsy as unset" implementation deletes it.
     stored: { insight: 2, prowess: 0, resolve: 3 },
     expect: ["insight", "prowess", "resolve"],
+    // Blades measures no movement at all — position there is fictional.
+    // An empty list is the correct answer, not a gap to fill.
+    expectSpeeds: [],
+    groundSpeed: null,
   },
 ];
 
@@ -185,6 +206,7 @@ for (const system of SYSTEMS) {
       tokenAttributes: {
         tokenId: string;
         attributes: { id: string; label: string; value: number }[];
+        speeds: { id: string; label: string; value: number }[];
       }[];
     }>(
       page,
@@ -192,6 +214,7 @@ for (const system of SYSTEMS) {
         tokenAttributes(sceneId: $sceneId) {
           tokenId
           attributes { id label value }
+          speeds { id label value }
         }
       }`,
       { sceneId },
@@ -208,10 +231,22 @@ for (const system of SYSTEMS) {
       "the system's own attributes, in the order it declared them",
     ).toEqual(system.expect);
 
+    // Only the declared attributes. `stored` also carries speed fields, which
+    // are resolved separately and must not appear here — if a speed ever
+    // showed up as an attribute, that would be the manifest's two blocks
+    // bleeding into each other.
     const values = Object.fromEntries(
       row!.attributes.map((a) => [a.id, a.value]),
     );
-    expect(values).toEqual(system.stored);
+    for (const id of system.expect) {
+      expect(values[id], `${id} must carry its stored value`).toBe(
+        system.stored[id],
+      );
+    }
+    expect(
+      Object.keys(values).sort(),
+      "no speed field may leak into the attribute list",
+    ).toEqual([...system.expect].sort());
 
     // Every attribute carries a label somebody can read.
     for (const attribute of row!.attributes) {
@@ -221,11 +256,23 @@ for (const system of SYSTEMS) {
       ).toBeGreaterThan(0);
     }
 
+    expect(
+      row!.speeds.map((s) => s.id),
+      "only the movement types this creature has, in declared order",
+    ).toEqual(system.expectSpeeds);
+
+    if (system.groundSpeed !== null) {
+      expect(
+        row!.speeds[0].value,
+        "the ground speed, from the sheet or the system's own default",
+      ).toBe(system.groundSpeed);
+    }
+
      
     console.log(
-      `[attributes] ${system.systemId} count=${row!.attributes.length} ids=${row!.attributes
-        .map((a) => a.id)
-        .join(",")}`,
+      `[attributes] ${system.systemId} attrs=${row!.attributes.length} speeds=${
+        row!.speeds.map((s) => `${s.id}:${s.value}`).join(",") || "none"
+      }`,
     );
   });
 }

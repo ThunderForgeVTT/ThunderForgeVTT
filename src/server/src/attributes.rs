@@ -21,6 +21,7 @@
 //! execute is a larger question and is not settled here.
 
 use thunderforge_canvas_core::attributes::AttributeDeclaration;
+use thunderforge_canvas_core::movement_budget::MovementDeclaration;
 
 /// The attributes a system declares, in declaration order.
 ///
@@ -93,6 +94,65 @@ pub fn declarations_from_manifest(manifest: &serde_json::Value) -> Vec<Attribute
                     .map(|o| o as usize)
                     .unwrap_or(index),
             }
+        })
+        .collect()
+}
+
+/// The movement types a system declares, in declaration order.
+///
+/// A system that declares none has none — Blades in the Dark measures no
+/// movement at all, because position there is fictional rather than gridded.
+/// Inventing a walk speed for it would be this file deciding another
+/// ruleset's rules.
+pub fn movement_declarations_for_system(
+    systems_dir: &str,
+    system_id: &str,
+) -> Vec<MovementDeclaration> {
+    let path = std::path::Path::new(systems_dir)
+        .join(system_id)
+        .join("system.json");
+
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    let Ok(manifest) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return Vec::new();
+    };
+    movement_from_manifest(&manifest)
+}
+
+/// Split out so it can be tested without a filesystem.
+pub fn movement_from_manifest(manifest: &serde_json::Value) -> Vec<MovementDeclaration> {
+    let Some(block) = manifest.get("movement").and_then(|m| m.as_object()) else {
+        return Vec::new();
+    };
+
+    block
+        .iter()
+        .enumerate()
+        .map(|(index, (id, raw))| MovementDeclaration {
+            id: id.clone(),
+            label: raw
+                .get("label")
+                .and_then(|l| l.as_str())
+                .unwrap_or(id)
+                .to_string(),
+            source: raw
+                .get("source")
+                .and_then(|s| s.as_str())
+                .unwrap_or(id)
+                .to_string(),
+            default: raw
+                .get("default")
+                .and_then(|d| d.as_f64())
+                .map(|d| d as f32),
+            // Same trap as attributes: without an explicit order these
+            // alphabetise, because serde_json objects are BTreeMaps here.
+            order: raw
+                .get("order")
+                .and_then(|o| o.as_u64())
+                .map(|o| o as usize)
+                .unwrap_or(index),
         })
         .collect()
 }
@@ -249,5 +309,65 @@ mod tests {
         assert_eq!(declared.len(), 1);
         assert_eq!(declared[0].label, "grit");
         assert_eq!(declared[0].source, "grit");
+    }
+
+    /// What each shipping system says about movement, including the one that
+    /// says nothing.
+    #[test]
+    fn movement_declarations_match_each_system() {
+        let genie = movement_declarations_for_system(&packs(), "genie");
+        assert_eq!(genie.len(), 1, "Genie measures one abstract stride");
+        assert_eq!(genie[0].id, "stride");
+        assert_eq!(genie[0].default, Some(6.0));
+
+        for d20 in ["dnd5e", "pathfinder2e"] {
+            let declared = movement_declarations_for_system(&packs(), d20);
+            let mut ids: Vec<&str> = declared.iter().map(|d| d.id.as_str()).collect();
+            ids.sort_unstable();
+            assert_eq!(ids, vec!["burrow", "climb", "fly", "swim", "walk"]);
+
+            // Only the ground speed defaults. Anything else would hand wings
+            // to every creature whose sheet omits them.
+            for declaration in &declared {
+                if declaration.id == "walk" {
+                    assert!(declaration.default.is_some(), "{d20} walk needs a default");
+                } else {
+                    assert!(
+                        declaration.default.is_none(),
+                        "{d20}/{} must not default",
+                        declaration.id
+                    );
+                }
+            }
+        }
+
+        assert!(
+            movement_declarations_for_system(&packs(), "blades_in_the_dark").is_empty(),
+            "Blades measures no movement, and that is a statement rather than a gap"
+        );
+    }
+
+    /// Pathfinder's ground speed is 25 and it does not call it "Walk".
+    #[test]
+    fn a_system_may_name_and_scale_its_ground_speed_its_own_way() {
+        let pf = movement_declarations_for_system(&packs(), "pathfinder2e");
+        let walk = pf.iter().find(|d| d.id == "walk").expect("a ground speed");
+        assert_eq!(walk.label, "Speed");
+        assert_eq!(walk.default, Some(25.0));
+
+        let dnd = movement_declarations_for_system(&packs(), "dnd5e");
+        let dnd_walk = dnd.iter().find(|d| d.id == "walk").expect("a ground speed");
+        assert_eq!(dnd_walk.label, "Walk");
+        assert_eq!(dnd_walk.default, Some(30.0));
+    }
+
+    #[test]
+    fn movement_declarations_are_ordered_explicitly() {
+        for system in ["genie", "dnd5e", "pathfinder2e"] {
+            let declared = movement_declarations_for_system(&packs(), system);
+            let mut orders: Vec<usize> = declared.iter().map(|d| d.order).collect();
+            orders.sort_unstable();
+            assert_eq!(orders, (0..declared.len()).collect::<Vec<_>>());
+        }
     }
 }

@@ -11,38 +11,37 @@
  * system would need server changes to be displayed, and the engine would
  * accumulate one special case per ruleset.
  */
-export type EntrySource = {
-  /**
-   * Field holding this entry's current value.
-   */
-  current: string;
-  /**
-   * Field holding its maximum. Absent for a counter, or for a layer whose
-   * size is whatever was granted — temporary hit points have no maximum of
-   * their own.
-   */
-  max: string | null;
-  /**
-   * A maximum fixed by the rules rather than stored per character.
-   *
-   * Blades in the Dark caps stress at nine and trauma at four; neither is
-   * written into a character's data because neither varies. Without this,
-   * such a pool could only be shown as a bare count — losing the thing a
-   * player most needs to see, which is how close to the cap they are.
-   *
-   * `max` wins when both are given: a stored value is about *this*
-   * character, and a literal is about everyone.
-   */
-  maxValue: number | null;
-  /**
-   * Name for this layer, shown when there is more than one.
-   */
-  label: string | null;
-  /**
-   * Skip this entry when the field is missing or zero.
-   *
-   * Temporary hit points are usually absent, and an ever-present empty
-   * "Temporary" layer would be visual noise on every character in the game.
-   */
-  optional: boolean;
-};
+export type EntrySource = { 
+/**
+ * Field holding this entry's current value.
+ */
+current: string, 
+/**
+ * Field holding its maximum. Absent for a counter, or for a layer whose
+ * size is whatever was granted — temporary hit points have no maximum of
+ * their own.
+ */
+max: string | null, 
+/**
+ * A maximum fixed by the rules rather than stored per character.
+ *
+ * Blades in the Dark caps stress at nine and trauma at four; neither is
+ * written into a character's data because neither varies. Without this,
+ * such a pool could only be shown as a bare count — losing the thing a
+ * player most needs to see, which is how close to the cap they are.
+ *
+ * `max` wins when both are given: a stored value is about *this*
+ * character, and a literal is about everyone.
+ */
+maxValue: number | null, 
+/**
+ * Name for this layer, shown when there is more than one.
+ */
+label: string | null, 
+/**
+ * Skip this entry when the field is missing or zero.
+ *
+ * Temporary hit points are usually absent, and an ever-present empty
+ * "Temporary" layer would be visual noise on every character in the game.
+ */
+optional: boolean, };

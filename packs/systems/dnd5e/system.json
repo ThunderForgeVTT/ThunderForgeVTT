@@ -692,5 +692,33 @@
         ]
       }
     }
-  ]
+  ],
+  "movement": {
+    "walk": {
+      "label": "Walk",
+      "source": "speed_walk",
+      "default": 30,
+      "order": 0
+    },
+    "fly": {
+      "label": "Fly",
+      "source": "speed_fly",
+      "order": 1
+    },
+    "swim": {
+      "label": "Swim",
+      "source": "speed_swim",
+      "order": 2
+    },
+    "climb": {
+      "label": "Climb",
+      "source": "speed_climb",
+      "order": 3
+    },
+    "burrow": {
+      "label": "Burrow",
+      "source": "speed_burrow",
+      "order": 4
+    }
+  }
 }
