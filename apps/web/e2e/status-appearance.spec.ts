@@ -121,7 +121,6 @@ test("the application supplies appearance values, partially and cumulatively", a
     })
     .toBeGreaterThan(0);
 
-   
   console.log(
     `[appearance] accepted=${sent} refusedValid=0 misspellingReported=true`,
   );

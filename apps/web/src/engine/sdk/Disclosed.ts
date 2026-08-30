@@ -9,4 +9,8 @@ import type { ResourceEntry } from "./ResourceEntry";
  * rather than forbidden by a rule somebody has to remember — and on the
  * TypeScript side this generates a discriminated union that narrows.
  */
-export type Disclosed = { "disclosure": "visible", entries: Array<ResourceEntry>, } | { "disclosure": "greyed" } | { "disclosure": "percentage", proportion: number, } | { "disclosure": "chunked", quarter: number, };
+export type Disclosed =
+  | { disclosure: "visible"; entries: Array<ResourceEntry> }
+  | { disclosure: "greyed" }
+  | { disclosure: "percentage"; proportion: number }
+  | { disclosure: "chunked"; quarter: number };

@@ -296,6 +296,5 @@ test("a refused command leaves a correct display exactly as it was", async ({
     "a refused command must not alter a display that was already correct",
   ).toBe(before);
 
-   
   console.log(`[sdk] refusedAgainstLiveToken=${sent} displayUnchanged=true`);
 });
