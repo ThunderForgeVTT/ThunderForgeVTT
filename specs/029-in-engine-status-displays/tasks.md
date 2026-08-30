@@ -128,9 +128,9 @@ the renderer.
 
 ### Tests for User Story 3
 
-- [ ] T031 [P] [US3] Wire-level test in `src/server/src/graphql/` asserting that for `GREYED`, `PERCENTAGE` and `CHUNKED` the exact figure is absent from the payload reaching a non-GM client — SC-004/SC-005a. Assert on the payload, never the screen
-- [ ] T032 [P] [US3] Test in `src/server/src/graphql/` that a GM and a player subscribed to the same scene receive **different** payloads for the same token
-- [ ] T033 [P] [US3] Test in `src/server/src/graphql/` that `PERCENTAGE` carries no maximum and `CHUNKED` carries a quarter index rather than a proportion (FR-013b)
+- [x] T031 [P] [US3] Wire-level test — landed as `apps/web/e2e/status-disclosure.spec.ts`, asserting the real browser payload rather than a resolver return, plus the resolver-level guard in `src/server/src/status_display.rs` asserting that for `GREYED`, `PERCENTAGE` and `CHUNKED` the exact figure is absent from the payload reaching a non-GM client — SC-004/SC-005a. Assert on the payload, never the screen
+- [x] T032 [P] [US3] Test in `src/server/src/graphql/` that a GM and a player subscribed to the same scene receive **different** payloads for the same token
+- [x] T033 [P] [US3] Test in `src/server/src/graphql/` that `PERCENTAGE` carries no maximum and `CHUNKED` carries a quarter index rather than a proportion (FR-013b)
 
 ### Implementation for User Story 3
 
