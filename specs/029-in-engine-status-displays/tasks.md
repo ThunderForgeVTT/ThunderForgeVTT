@@ -242,13 +242,13 @@ the renderer.
 
 ### Tests for User Story 7
 
-- [ ] T065 [P] [US7] Test in `crates/thunderforge-canvas-core/src/resource_display.rs` that the default palette is distinguishable in perceived lightness as well as hue (FR-024, SC-007) — mirroring the existing token-kind palette test, because a red bar and a green bar are the same bar to many viewers
+- [x] T065 [P] [US7] Test in `crates/thunderforge-canvas-core/src/resource_display.rs` that the default palette is distinguishable in perceived lightness as well as hue (FR-024, SC-007) — mirroring the existing token-kind palette test, because a red bar and a green bar are the same bar to many viewers
 
 ### Implementation for User Story 7
 
-- [ ] T066 [US7] Implement `setDisplayAppearance` with partial override semantics in `src/engine/src/lib.rs`
-- [ ] T067 [US7] Define the documented default appearance in exactly one place in `crates/thunderforge-canvas-core/src/resource_display.rs` (FR-023)
-- [ ] T068 [US7] Consume appearance values in `src/engine/src/plugins/status_display.rs` rather than compiled-in constants (FR-022)
+- [x] T066 [US7] Implement `setDisplayAppearance` with partial override semantics in `src/engine/src/lib.rs`
+- [x] T067 [US7] Define the documented default appearance in exactly one place in `crates/thunderforge-canvas-core/src/resource_display.rs` (FR-023)
+- [x] T068 [US7] Consume appearance values in `src/engine/src/plugins/status_display.rs` rather than compiled-in constants (FR-022)
 
 **Checkpoint**: Theming has a surface to attach to
 

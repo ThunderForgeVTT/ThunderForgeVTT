@@ -346,6 +346,161 @@ pub fn disclose(entries: &[ResourceEntry], state: DisclosureState) -> Disclosed 
     }
 }
 
+/// A colour as linear-ish sRGB components in 0.0–1.0, matching `token_kind`.
+pub type Rgb = (f32, f32, f32);
+
+/// Everything about how a status display *looks*, in one place.
+///
+/// FR-022 says the engine must not compile these in, and FR-023 says the
+/// documented default set exists exactly once. Both point at the same
+/// structure: the engine reads values from here and the application may
+/// replace any of them, rather than each drawing site carrying its own
+/// constant that nobody can find later.
+///
+/// # Why the palette is indexed by order and not by name
+///
+/// Nothing here knows what "health" means, and it must not — FR-001 is that
+/// the engine renders what a system declares and understands none of it. A
+/// palette keyed by resource id would smuggle that knowledge back in and
+/// would silently fall back to grey for every system that names things
+/// differently, which is most of them.
+///
+/// So the Nth resource a system declares gets the Nth colour. That makes the
+/// colour a property of the *declaration order* a system author controls,
+/// which is the only thing available that is both stable and meaningful.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DisplayAppearance {
+    /// The unfilled part of a bar, drawn behind the fill.
+    pub track: Rgb,
+    /// Opacity of the track, so a bar sits over artwork without hiding it.
+    pub track_alpha: f32,
+    /// Fill for a resource whose real value the viewer is not being told.
+    ///
+    /// Deliberately desaturated and mid-grey: a coarsened bar should read as
+    /// "not telling you" rather than as a fifth resource type.
+    pub undisclosed: Rgb,
+    /// Fill colours, taken in declaration order and wrapped if a system
+    /// declares more resources than there are slots.
+    pub palette: Vec<Rgb>,
+    /// Height of one bar, in world units.
+    pub bar_height: f32,
+    /// Vertical gap between stacked bars.
+    pub bar_gap: f32,
+    /// Distance from the token's centre to the first bar.
+    pub first_bar_offset: f32,
+}
+
+/// How many distinct fills the default palette offers before wrapping.
+///
+/// Four, matching the token-kind palette, and for the same reason: past
+/// roughly this many, a set cannot keep every pair separated in lightness as
+/// well as hue, and a palette that promises a distinction it cannot deliver
+/// is worse than one that repeats honestly.
+pub const DEFAULT_PALETTE_LEN: usize = 4;
+
+impl Default for DisplayAppearance {
+    fn default() -> Self {
+        Self {
+            // Near-black, so the track reads as absence rather than as a
+            // colour competing with the fill.
+            track: (0.06, 0.07, 0.09),
+            track_alpha: 0.78,
+            undisclosed: (0.42, 0.45, 0.50),
+            palette: vec![
+                // Deep red. The first resource a system declares is the one
+                // it considers most urgent, and red is where the eye goes.
+                (0.784, 0.208, 0.216),
+                // Blue, and much lighter — so the first pair, which is the
+                // pair most tokens actually show, separates by lightness
+                // before hue is considered at all.
+                (0.282, 0.565, 0.996),
+                // Green, lighter still. Far from the red in hue and from the
+                // blue in luma, which is the harder of the two constraints.
+                (0.463, 0.827, 0.427),
+                // Violet, and the darkest — by a clear margin, not a narrow
+                // one. Deliberately not amber: amber sits close to the green
+                // in perceived lightness. The first violet tried here was
+                // lighter and failed the separation test against the red by
+                // 0.007, which is exactly the kind of near-miss that gets
+                // eyeballed as fine and is not.
+                (0.35, 0.16, 0.60),
+            ],
+            bar_height: 10.0,
+            bar_gap: 3.0,
+            first_bar_offset: 8.0,
+        }
+    }
+}
+
+impl DisplayAppearance {
+    /// The fill for the resource at `order`, wrapping rather than running out.
+    ///
+    /// Wrapping is the honest failure: a system declaring six resources gets
+    /// two repeated colours, which a viewer can still read positionally.
+    /// Returning grey past the fourth would make the fifth and sixth
+    /// indistinguishable from a resource that is being withheld, which means
+    /// something entirely different.
+    pub fn fill_for(&self, order: usize) -> Rgb {
+        if self.palette.is_empty() {
+            return self.undisclosed;
+        }
+        self.palette[order % self.palette.len()]
+    }
+}
+
+/// Perceived lightness of a colour, 0.0–1.0.
+///
+/// Rec. 709 luma, matching `token_kind::TokenKind::luma`. A plain channel
+/// average calls amber and slate equally light and they are nothing alike.
+pub fn luma((r, g, b): Rgb) -> f32 {
+    0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+/// A partial appearance, as the application sends it.
+///
+/// Every field optional and every absent field meaning "leave this alone".
+/// The alternative — a full appearance — makes the application responsible
+/// for repeating values it does not care about, which is how a caller ends
+/// up pinning a default it never chose and never updates.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AppearanceOverride {
+    pub track: Option<Rgb>,
+    pub track_alpha: Option<f32>,
+    pub undisclosed: Option<Rgb>,
+    pub palette: Option<Vec<Rgb>>,
+    pub bar_height: Option<f32>,
+    pub bar_gap: Option<f32>,
+    pub first_bar_offset: Option<f32>,
+}
+
+impl AppearanceOverride {
+    /// Fold this override onto an existing appearance.
+    pub fn apply_to(&self, base: &mut DisplayAppearance) {
+        if let Some(track) = self.track {
+            base.track = track;
+        }
+        if let Some(alpha) = self.track_alpha {
+            base.track_alpha = alpha;
+        }
+        if let Some(undisclosed) = self.undisclosed {
+            base.undisclosed = undisclosed;
+        }
+        if let Some(palette) = &self.palette {
+            base.palette = palette.clone();
+        }
+        if let Some(height) = self.bar_height {
+            base.bar_height = height;
+        }
+        if let Some(gap) = self.bar_gap {
+            base.bar_gap = gap;
+        }
+        if let Some(offset) = self.first_bar_offset {
+            base.first_bar_offset = offset;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -776,5 +931,155 @@ mod tests {
     fn the_tag_is_the_discriminant_so_the_shape_is_self_describing() {
         let json = serde_json::to_string(&Disclosed::Greyed).unwrap();
         assert_eq!(json, r#"{"disclosure":"greyed"}"#);
+    }
+
+    /// The property the default palette exists for (FR-024, SC-007).
+    ///
+    /// Two bars that look alike are worse than one bar, because they promise
+    /// a distinction they do not deliver — and unlike token kinds, these sit
+    /// stacked and touching, where a viewer compares them directly. Roughly
+    /// one man in twelve has a red-green deficiency; a health bar and a
+    /// stamina bar that collapse for them collapse in the middle of a fight.
+    ///
+    /// Deliberately the same thresholds as `token_kind`, so one standard
+    /// governs everything drawn on the canvas rather than each feature
+    /// inventing its own idea of "different enough".
+    #[test]
+    fn every_pair_in_the_default_palette_is_distinguishable() {
+        fn separation(a: Rgb, b: Rgb) -> f32 {
+            let (dr, dg, db) = (a.0 - b.0, a.1 - b.1, a.2 - b.2);
+            dr * dr + dg * dg + db * db
+        }
+
+        let palette = DisplayAppearance::default().palette;
+        assert_eq!(palette.len(), DEFAULT_PALETTE_LEN);
+
+        for (i, a) in palette.iter().enumerate() {
+            for (j, b) in palette.iter().enumerate().skip(i + 1) {
+                let rgb_gap = separation(*a, *b);
+                assert!(
+                    rgb_gap > 0.05,
+                    "slots {i} and {j} are too close in colour ({rgb_gap:.3})"
+                );
+
+                let luma_gap = (luma(*a) - luma(*b)).abs();
+                assert!(
+                    luma_gap > 0.05,
+                    "slots {i} and {j} differ by only {luma_gap:.3} in \
+                     lightness — they would collapse for a viewer who cannot \
+                     use hue"
+                );
+            }
+        }
+    }
+
+    /// The withheld colour must not read as one of the real ones.
+    ///
+    /// This is the pair that matters most and that the loop above does not
+    /// cover: a coarsened bar says "you are not being told this", and if it
+    /// looks like a resource fill then the player reads a value that was
+    /// deliberately withheld as a real one.
+    #[test]
+    fn the_undisclosed_fill_is_not_mistakable_for_a_resource() {
+        let appearance = DisplayAppearance::default();
+        for (i, colour) in appearance.palette.iter().enumerate() {
+            let gap = (luma(*colour) - luma(appearance.undisclosed)).abs();
+            assert!(
+                gap > 0.04,
+                "slot {i} is within {gap:.3} lightness of the withheld fill"
+            );
+        }
+    }
+
+    /// A system may declare more resources than the palette has slots.
+    #[test]
+    fn the_palette_wraps_rather_than_running_out() {
+        let appearance = DisplayAppearance::default();
+        assert_eq!(appearance.fill_for(0), appearance.fill_for(4));
+        assert_eq!(appearance.fill_for(1), appearance.fill_for(5));
+        // And never silently becomes the withheld colour, which would mean
+        // something else entirely.
+        for order in 0..12 {
+            assert_ne!(appearance.fill_for(order), appearance.undisclosed);
+        }
+    }
+
+    /// An application may legitimately clear the palette; that must not panic.
+    #[test]
+    fn an_empty_palette_falls_back_instead_of_panicking() {
+        let appearance = DisplayAppearance {
+            palette: Vec::new(),
+            ..DisplayAppearance::default()
+        };
+        assert_eq!(appearance.fill_for(0), appearance.undisclosed);
+    }
+
+    /// The property partial overrides exist for.
+    ///
+    /// The wrong implementation folds each override onto the *defaults*
+    /// rather than onto what is currently in effect. It is indistinguishable
+    /// from the right one for a single call, and silently discards the first
+    /// of any two — so an application that sets its palette at startup and
+    /// its bar height later would lose the palette, with nothing to explain
+    /// where it went.
+    #[test]
+    fn successive_overrides_accumulate_rather_than_replacing() {
+        let mut appearance = DisplayAppearance::default();
+        let default_palette = appearance.palette.clone();
+
+        AppearanceOverride {
+            bar_height: Some(14.0),
+            ..Default::default()
+        }
+        .apply_to(&mut appearance);
+
+        AppearanceOverride {
+            bar_gap: Some(6.0),
+            ..Default::default()
+        }
+        .apply_to(&mut appearance);
+
+        assert_eq!(appearance.bar_height, 14.0, "the first override survived");
+        assert_eq!(appearance.bar_gap, 6.0, "and the second applied");
+        assert_eq!(
+            appearance.palette, default_palette,
+            "a field nobody mentioned must be left alone, not reset"
+        );
+    }
+
+    /// An empty override asks for nothing and must change nothing.
+    #[test]
+    fn an_empty_override_is_a_no_op() {
+        let mut appearance = DisplayAppearance::default();
+        AppearanceOverride::default().apply_to(&mut appearance);
+        assert_eq!(appearance, DisplayAppearance::default());
+    }
+
+    /// Every field must actually be wired through.
+    ///
+    /// A field added to the struct and forgotten in `apply_to` compiles
+    /// perfectly and is simply ignored for ever — the exact silent-drop
+    /// failure this spec exists to retire, reintroduced one field at a time.
+    #[test]
+    fn every_field_of_an_override_reaches_the_appearance() {
+        let mut appearance = DisplayAppearance::default();
+        AppearanceOverride {
+            track: Some((0.1, 0.2, 0.3)),
+            track_alpha: Some(0.5),
+            undisclosed: Some((0.4, 0.5, 0.6)),
+            palette: Some(vec![(0.7, 0.8, 0.9)]),
+            bar_height: Some(11.0),
+            bar_gap: Some(2.0),
+            first_bar_offset: Some(20.0),
+        }
+        .apply_to(&mut appearance);
+
+        assert_eq!(appearance.track, (0.1, 0.2, 0.3));
+        assert_eq!(appearance.track_alpha, 0.5);
+        assert_eq!(appearance.undisclosed, (0.4, 0.5, 0.6));
+        assert_eq!(appearance.palette, vec![(0.7, 0.8, 0.9)]);
+        assert_eq!(appearance.bar_height, 11.0);
+        assert_eq!(appearance.bar_gap, 2.0);
+        assert_eq!(appearance.first_bar_offset, 20.0);
     }
 }

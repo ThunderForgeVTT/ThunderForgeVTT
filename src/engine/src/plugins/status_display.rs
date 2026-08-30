@@ -28,37 +28,46 @@
 use bevy::prelude::*;
 
 use crate::TOKEN_SIZE;
-use thunderforge_canvas_core::resource_display::{Disclosed, ResourceDefinition};
-
-/// Height of one bar, in world units.
-const BAR_HEIGHT: f32 = 10.0;
+use thunderforge_canvas_core::resource_display::{
+    Disclosed, DisplayAppearance, ResourceDefinition, Rgb,
+};
 
 /// Width of a bar, matched to the token so the two read as one object.
+///
+/// Not part of `DisplayAppearance` on purpose: it is derived from the token,
+/// so an application overriding it could only ever make bars that no longer
+/// line up with what they describe.
 const BAR_WIDTH: f32 = TOKEN_SIZE.x;
-
-/// Gap between stacked bars.
-const BAR_GAP: f32 = 3.0;
-
-/// How far above the token's centre the first bar sits.
-const FIRST_BAR_OFFSET: f32 = TOKEN_SIZE.y / 2.0 + 8.0;
 
 /// Drawn above the token sprite, below any selection furniture.
 const BAR_Z: f32 = 5.0;
 
-/// The track a bar's fill sits in. Dark and mostly opaque, so a nearly-empty
-/// bar still reads as a bar rather than disappearing into the map.
-const TRACK_COLOR: Color = Color::srgba(0.06, 0.07, 0.09, 0.78);
-
-/// Fill for a resource whose value this viewer is not entitled to know.
+/// The appearance every status display is drawn with.
 ///
-/// Deliberately mid-grey and deliberately *not* empty: an empty bar says "at
-/// zero", which is a different and much more actionable claim than "you have
-/// not been told". Rendering the two alike would leak by implication — a
-/// player would read a withheld boss as nearly dead.
-const UNDISCLOSED_COLOR: Color = Color::srgba(0.42, 0.45, 0.50, 0.85);
+/// FR-022: these values are supplied by the application rather than compiled
+/// in here, and FR-023: the documented default set lives in exactly one
+/// place, which is `DisplayAppearance::default()` in canvas-core. This
+/// resource is that set until the application replaces it.
+///
+/// A Bevy resource rather than a static, so `setDisplayAppearance` can change
+/// it at runtime and the next redraw picks it up without a restart.
+#[derive(Resource, Debug, Clone, Deref)]
+pub struct Appearance(pub DisplayAppearance);
 
-/// Default fill when the application supplies no palette.
-const DEFAULT_FILL: Color = Color::srgb(0.784, 0.208, 0.216);
+impl Default for Appearance {
+    fn default() -> Self {
+        Self(DisplayAppearance::default())
+    }
+}
+
+/// Turn a canvas-core colour into a Bevy one.
+///
+/// The two crates deliberately do not share a colour type: canvas-core is
+/// compiled by the server as well, and it has no business depending on a
+/// rendering engine to describe a shade of red.
+fn rgb_to_color((r, g, b): Rgb, alpha: f32) -> Color {
+    Color::srgba(r, g, b, alpha)
+}
 
 /// What a token currently displays, as resolved by the server.
 ///
@@ -85,7 +94,8 @@ pub struct StatusDisplayPlugin;
 
 impl Plugin for StatusDisplayPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, redraw_changed_status);
+        app.init_resource::<Appearance>()
+            .add_systems(Update, redraw_changed_status);
     }
 }
 
@@ -122,10 +132,21 @@ fn fill_of(disclosed: &Disclosed) -> (f32, bool) {
 /// This runs only on `Changed<TokenStatus>`, so it is not a per-frame cost.
 fn redraw_changed_status(
     mut commands: Commands,
-    changed: Query<(Entity, &TokenStatus), Changed<TokenStatus>>,
+    tokens: Query<(Entity, Ref<TokenStatus>)>,
     existing: Query<(Entity, &ChildOf), With<StatusGeometry>>,
+    appearance: Res<Appearance>,
 ) {
-    for (token_entity, status) in changed.iter() {
+    // A change to the appearance has to repaint bars that are already on
+    // screen. Keying only on `Changed<TokenStatus>` would leave every
+    // existing token wearing the old palette until something else happened
+    // to it — so the new colours would appear to work when demonstrated on
+    // a fresh scene and do nothing in a session already in progress.
+    let repaint_everything = appearance.is_changed();
+
+    for (token_entity, status) in tokens.iter() {
+        if !repaint_everything && !status.is_changed() {
+            continue;
+        }
         // Clear what this plugin drew last time, and nothing else.
         for (geometry, parent) in existing.iter() {
             if parent.parent() == token_entity {
@@ -143,14 +164,19 @@ fn redraw_changed_status(
         // The system's declared order, not ours.
         ordered.sort_by_key(|r| r.definition.order);
 
+        let first_bar_offset = TOKEN_SIZE.y / 2.0 + appearance.first_bar_offset;
+        let bar_height = appearance.bar_height;
+        let track_color = rgb_to_color(appearance.track, appearance.track_alpha);
+        let undisclosed_color = rgb_to_color(appearance.undisclosed, 0.85);
+
         for (row, resource) in ordered.iter().enumerate() {
-            let y = FIRST_BAR_OFFSET + row as f32 * (BAR_HEIGHT + BAR_GAP);
+            let y = first_bar_offset + row as f32 * (bar_height + appearance.bar_gap);
             let (fraction, disclosed) = fill_of(&resource.disclosed);
 
             // The track.
             commands.entity(token_entity).with_children(|parent| {
                 parent.spawn((
-                    Sprite::from_color(TRACK_COLOR, Vec2::new(BAR_WIDTH, BAR_HEIGHT)),
+                    Sprite::from_color(track_color, Vec2::new(BAR_WIDTH, bar_height)),
                     Transform::from_xyz(0.0, y, BAR_Z),
                     StatusGeometry,
                 ));
@@ -159,10 +185,13 @@ fn redraw_changed_status(
                     return;
                 }
 
+                // Indexed by the row this resource occupies, which is the
+                // system's declared order — the engine still knows nothing
+                // about what any of these resources mean.
                 let fill_color = if disclosed {
-                    DEFAULT_FILL
+                    rgb_to_color(appearance.fill_for(row), 1.0)
                 } else {
-                    UNDISCLOSED_COLOR
+                    undisclosed_color
                 };
                 let width = BAR_WIDTH * fraction;
                 // Left-aligned inside the track: a bar that shrinks toward
@@ -170,7 +199,7 @@ fn redraw_changed_status(
                 let x = -(BAR_WIDTH - width) / 2.0;
 
                 parent.spawn((
-                    Sprite::from_color(fill_color, Vec2::new(width, BAR_HEIGHT)),
+                    Sprite::from_color(fill_color, Vec2::new(width, bar_height)),
                     Transform::from_xyz(x, y, BAR_Z + 0.1),
                     StatusGeometry,
                 ));

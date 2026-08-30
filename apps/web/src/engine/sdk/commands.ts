@@ -34,10 +34,41 @@ export interface StatusResource {
   disclosed: Disclosed;
 }
 
+/** A colour as sRGB components in 0.0–1.0. */
+export type Rgb = [number, number, number];
+
+/**
+ * A partial appearance for status displays.
+ *
+ * Every field optional, and an absent field means "leave this alone" rather
+ * than "reset this to the default". That distinction is the whole point: an
+ * application that only wants taller bars should not have to restate the
+ * palette, because restating it pins those colours to whatever the defaults
+ * happened to be the day the call was written, and they then never improve.
+ *
+ * The documented default set lives in exactly one place —
+ * `DisplayAppearance::default()` in `thunderforge-canvas-core` — and this
+ * folds onto whatever is currently in effect, so successive overrides
+ * accumulate instead of each one discarding the last.
+ */
+export interface AppearanceOverride {
+  /** The unfilled part of a bar. */
+  track?: Rgb;
+  trackAlpha?: number;
+  /** Fill for a resource the viewer is not being told the value of. */
+  undisclosed?: Rgb;
+  /** Fills taken in the system's declared order, wrapping if it runs out. */
+  palette?: Rgb[];
+  barHeight?: number;
+  barGap?: number;
+  firstBarOffset?: number;
+}
+
 /** Every status command, discriminated on `type`. */
 export type StatusCommand =
   | { type: "set_token_status"; tokenId: string; resources: StatusResource[] }
-  | { type: "clear_token_status"; tokenId: string };
+  | { type: "clear_token_status"; tokenId: string }
+  | { type: "set_display_appearance"; appearance: AppearanceOverride };
 
 /** What the engine reports when it cannot accept a command. */
 export interface EngineSdkError {

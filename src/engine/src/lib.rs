@@ -46,7 +46,9 @@ use sync_test::*;
 use systems::*;
 use thunderforge_canvas_core::grid::Footprint;
 use thunderforge_canvas_core::measure::GridUnits;
-use thunderforge_canvas_core::resource_display::{Disclosed, ResourceDefinition};
+use thunderforge_canvas_core::resource_display::{
+    AppearanceOverride, Disclosed, DisplayAppearance, ResourceDefinition,
+};
 use thunderforge_canvas_core::token_kind::TokenKind;
 use thunderforge_canvas_core::vision::{Illumination, Rgb, VisionProfile};
 
@@ -259,6 +261,16 @@ enum ExternalCommand {
     },
     ClearTokenStatus {
         token_id: String,
+    },
+    /// Spec 029 FR-022: presentation values come from the application.
+    ///
+    /// Carries an *override*, not a complete appearance, so an application
+    /// that wants a different bar height does not have to restate the whole
+    /// palette — and, more importantly, does not silently freeze the rest of
+    /// the appearance at whatever the defaults happened to be on the day it
+    /// was written.
+    SetDisplayAppearance {
+        override_values: AppearanceOverride,
     },
     UpsertWall {
         wall: WorldWallPayload,
@@ -551,6 +563,17 @@ fn parse_command(input: &str) -> Option<ExternalCommand> {
         "clear_token_status" => Some(ExternalCommand::ClearTokenStatus {
             token_id: value.get("tokenId")?.as_str()?.to_owned(),
         }),
+        "set_display_appearance" => {
+            // An absent `appearance` is an empty override, not an error: it
+            // is a no-op, and treating it as malformed would report a fault
+            // for a command that asked for nothing.
+            let raw = value
+                .get("appearance")
+                .cloned()
+                .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+            let override_values: AppearanceOverride = serde_json::from_value(raw).ok()?;
+            Some(ExternalCommand::SetDisplayAppearance { override_values })
+        }
         "upsert_wall" => {
             let wall_value = value.get("wall")?.clone();
             let wall: WorldWallPayload = serde_json::from_value(wall_value).ok()?;
@@ -1114,6 +1137,11 @@ fn apply_external_commands(
     // asset server is part of `DefaultPlugins`, not a plugin this crate can
     // choose to leave out.
     asset_server: Res<AssetServer>,
+    // `Appearance` only exists once `StatusDisplayPlugin` is registered, same
+    // graceful-degradation rationale as `wall_set` above. An appearance
+    // command with no status plugin to apply it to is a no-op rather than a
+    // fault: nothing is being displayed for it to affect.
+    appearance: Option<ResMut<plugins::status_display::Appearance>>,
 ) {
     let drained = if let Ok(mut queue) = external_command_queue().lock() {
         queue.drain(..).collect::<Vec<_>>()
@@ -1122,6 +1150,7 @@ fn apply_external_commands(
     };
 
     let mut wall_set = wall_set;
+    let mut appearance = appearance;
     let mut light_set = light_set;
     let mut shape_set = shape_set;
     let mut background = background;
@@ -1319,6 +1348,16 @@ fn apply_external_commands(
                         slot.remove(&token_id);
                     }
                     commands.entity(entity).insert(TokenStatus::default());
+                }
+            }
+            ExternalCommand::SetDisplayAppearance { override_values } => {
+                // Folded onto whatever is current, not onto the defaults —
+                // so two overrides in a row accumulate rather than the second
+                // silently discarding the first.
+                if let Some(appearance) = appearance.as_deref_mut() {
+                    let mut next = appearance.0.clone();
+                    override_values.apply_to(&mut next);
+                    appearance.0 = next;
                 }
             }
             ExternalCommand::UpsertWall { wall } => {
