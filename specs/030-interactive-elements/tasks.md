@@ -156,11 +156,11 @@ Every story plugs into this; none can start before it.
 
 **Independent Test**: Prepare a secret door, confirm players are not shown a door, trigger the reveal, confirm it becomes usable and stays revealed.
 
-- [ ] T054 [P] [US4] Contribute the `door.reveal` declaration from `crates/thunderforge-canvas-core/src/wall.rs`
-- [ ] T055 [US4] Draw a secret door distinguishably for the GM and not at all for players, in `src/engine/src/plugins/wall.rs`. Per the spec's decision the geometry still reaches every client; it is the drawing that differs
-- [ ] T056 [US4] Handle `door.reveal` in `src/engine/src/plugins/wall.rs`, persisting the revelation so it survives a reload (US4 scenario 4)
-- [ ] T057 [US4] Add `setDoorSecret` to `src/server/src/graphql/mutations_interactives.rs`, GM-only
-- [ ] T058 [US4] End-to-end spec `apps/web/e2e/interactive-secrets.spec.ts`: a player sees no door, a GM does, a reveal makes it a normal door for both, and it is still revealed after a reload
+- [X] T054 [P] [US4] Contribute the `door.reveal` declaration from `crates/thunderforge-canvas-core/src/wall.rs`
+- [X] T055 [US4] Draw a secret door distinguishably for the GM and not at all for players, in `src/engine/src/plugins/wall.rs`. Per the spec's decision the geometry still reaches every client; it is the drawing that differs
+- [X] T056 [US4] Handle `door.reveal` in `src/engine/src/plugins/wall.rs`, persisting the revelation so it survives a reload (US4 scenario 4)
+- [X] T057 [US4] Add `setDoorSecret` to `src/server/src/graphql/mutations_interactives.rs`, GM-only
+- [X] T058 [US4] End-to-end spec `apps/web/e2e/interactive-secrets.spec.ts`: a player sees no door, a GM does, a reveal makes it a normal door for both, and it is still revealed after a reload
 
 ---
 

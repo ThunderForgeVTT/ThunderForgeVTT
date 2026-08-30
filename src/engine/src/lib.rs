@@ -901,6 +901,28 @@ pub fn dispatched_effects() -> String {
         .unwrap_or_else(|| "[]".to_string())
 }
 
+/// Which walls the engine is currently drawing, as JSON.
+///
+/// Read-only observation. It exists because "a player is not shown a secret
+/// door" is a claim about drawing and nothing else can answer it: the geometry
+/// is deliberately sent to every client (a wall that did not arrive would also
+/// stop blocking vision), so a payload check would prove the opposite of what
+/// is wanted.
+#[wasm_bindgen]
+pub fn drawn_wall_ids() -> String {
+    drawn_walls_slot()
+        .lock()
+        .ok()
+        .and_then(|walls| serde_json::to_string(&*walls).ok())
+        .unwrap_or_else(|| "[]".to_string())
+}
+
+static DRAWN_WALLS: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
+
+pub(crate) fn drawn_walls_slot() -> &'static Mutex<Vec<String>> {
+    DRAWN_WALLS.get_or_init(|| Mutex::new(Vec::new()))
+}
+
 static INTERACTIVE_SNAPSHOT: OnceLock<Mutex<Vec<Value>>> = OnceLock::new();
 static DISPATCHED_EFFECTS: OnceLock<Mutex<Vec<Value>>> = OnceLock::new();
 

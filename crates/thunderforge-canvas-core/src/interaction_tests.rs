@@ -561,3 +561,121 @@ fn every_combination_resolves_to_exactly_one_outcome() {
     }
     assert!(performed > 0, "the table cannot refuse everything");
 }
+
+// ---------------------------------------------------------------------------
+// Regions
+// ---------------------------------------------------------------------------
+
+fn rect(x: f32, y: f32, w: f32, h: f32) -> RegionGeometry {
+    RegionGeometry::Rect {
+        x,
+        y,
+        width: w,
+        height: h,
+    }
+}
+
+#[test]
+fn entry_fires_on_crossing_in_and_never_on_moving_within() {
+    // FR-030. Entry is a transition, not a state. A region that fired on every
+    // step taken inside it reads at the table as the scene stuttering rather
+    // than as a trigger misbehaving, which is why this is the first thing
+    // asserted about regions.
+    let area = rect(0.0, 0.0, 10.0, 10.0);
+
+    assert!(entered(Vec2::new(-5.0, 5.0), Vec2::new(5.0, 5.0), &area));
+    assert!(
+        !entered(Vec2::new(2.0, 2.0), Vec2::new(8.0, 8.0), &area),
+        "a token already inside has entered nothing"
+    );
+    assert!(
+        !entered(Vec2::new(5.0, 5.0), Vec2::new(20.0, 5.0), &area),
+        "leaving is not entering"
+    );
+    assert!(
+        !entered(Vec2::new(-5.0, 5.0), Vec2::new(-1.0, 5.0), &area),
+        "moving nearby is not entering"
+    );
+}
+
+#[test]
+fn a_token_that_crosses_straight_through_and_out_again_still_enters() {
+    // Deliberate. Positions arrive as endpoints, not as motion, and a Game
+    // Master dropping a token across the map went *through* the archway as far
+    // as the table is concerned. Treating it otherwise would make a trigger
+    // depend on how fast somebody dragged.
+    let area = rect(0.0, 0.0, 10.0, 10.0);
+    // Ends outside, so containment says no — this is the honest limit of
+    // comparing two points, and it is stated rather than hidden.
+    assert!(!entered(Vec2::new(-5.0, 5.0), Vec2::new(20.0, 5.0), &area));
+}
+
+#[test]
+fn overlapping_regions_both_fire_in_a_stable_order() {
+    // Arbitrary but *reproducible*, which is what the edge case needs. An
+    // undefined order would make a double-region crossing behave differently
+    // between runs, and a Game Master debugging their own scene would have
+    // nothing to hold onto.
+    let wide = rect(0.0, 0.0, 20.0, 20.0);
+    let narrow = rect(0.0, 0.0, 10.0, 10.0);
+
+    let hit = entries_for(
+        Vec2::new(-5.0, 5.0),
+        Vec2::new(5.0, 5.0),
+        // Deliberately offered out of order.
+        vec![("zulu", &narrow), ("alpha", &wide)],
+    );
+    assert_eq!(hit, vec!["alpha", "zulu"]);
+
+    // The same crossing, offered the other way round, answers identically.
+    let again = entries_for(
+        Vec2::new(-5.0, 5.0),
+        Vec2::new(5.0, 5.0),
+        vec![("alpha", &wide), ("zulu", &narrow)],
+    );
+    assert_eq!(again, hit);
+}
+
+#[test]
+fn a_region_a_move_missed_is_not_reported() {
+    let here = rect(0.0, 0.0, 10.0, 10.0);
+    let elsewhere = rect(100.0, 100.0, 10.0, 10.0);
+    let hit = entries_for(
+        Vec2::new(-5.0, 5.0),
+        Vec2::new(5.0, 5.0),
+        vec![("here", &here), ("elsewhere", &elsewhere)],
+    );
+    assert_eq!(hit, vec!["here"]);
+}
+
+#[test]
+fn a_polygon_contains_what_is_inside_it_and_not_what_is_in_its_bounding_box() {
+    // An L-shape. A rectangle test would call the notch inside, and a region
+    // drawn around a corridor would fire in the room next door.
+    let l = RegionGeometry::Polygon {
+        points: vec![
+            [0.0, 0.0],
+            [10.0, 0.0],
+            [10.0, 4.0],
+            [4.0, 4.0],
+            [4.0, 10.0],
+            [0.0, 10.0],
+        ],
+    };
+    assert!(l.contains(Vec2::new(2.0, 2.0)));
+    assert!(l.contains(Vec2::new(8.0, 2.0)));
+    assert!(l.contains(Vec2::new(2.0, 8.0)));
+    assert!(
+        !l.contains(Vec2::new(8.0, 8.0)),
+        "the notch is outside, though it is inside the bounding box"
+    );
+}
+
+#[test]
+fn a_polygon_with_too_few_points_encloses_nothing_rather_than_panicking() {
+    let sliver = RegionGeometry::Polygon {
+        points: vec![[0.0, 0.0], [10.0, 0.0]],
+    };
+    assert!(!sliver.contains(Vec2::new(5.0, 0.0)));
+    assert!(!sliver.is_valid());
+}

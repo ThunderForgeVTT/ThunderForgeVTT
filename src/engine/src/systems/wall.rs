@@ -658,6 +658,22 @@ pub(crate) fn sync_wall_visuals(
         }
     }
 
+    // Publish what is actually on screen, for observation only.
+    //
+    // The claim "a player is not shown a secret door" is about *drawing*, and
+    // every other way to check it is a proxy: the geometry is deliberately
+    // sent to every client, so a payload assertion would prove the opposite of
+    // what is wanted, and a screenshot proves only that something was painted.
+    // This is the one place that knows.
+    //
+    // Read-only, like `get_token_status`. An observation surface that could
+    // also mutate becomes a way to write tests that pass against situations
+    // the application cannot reach.
+    if let Ok(mut slot) = crate::drawn_walls_slot().lock() {
+        *slot = wall_entities.0.keys().cloned().collect();
+        slot.sort_unstable();
+    }
+
     // GM-only endpoint handles for the selected wall (rebuilt each pass;
     // wall counts here are small enough that this isn't a hot path).
     for entity in handle_query.iter() {
