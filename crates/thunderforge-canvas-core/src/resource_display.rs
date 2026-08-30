@@ -501,6 +501,83 @@ impl AppearanceOverride {
     }
 }
 
+/// How much a value is being trusted to the viewer, for drawing purposes.
+///
+/// Three states rather than a boolean, because there are three genuinely
+/// different things to say and a boolean can only carry two. An exact figure
+/// and an estimate are both *values*, so a boolean groups them — and then a
+/// bar showing "somewhere in the second quarter" is drawn identically to one
+/// showing 47 of 90, which is FR-014's failure exactly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Precision {
+    /// The real figure.
+    Exact,
+    /// A band or a proportion — real information, but not a reading.
+    Coarse,
+    /// No value at all.
+    Withheld,
+}
+
+/// The fill a bar is drawn with, given its resource colour and how precise the
+/// figure behind it is.
+///
+/// A coarse bar keeps enough of its resource colour to stay identifiable —
+/// which bar this is remains legible — while sitting visibly closer to the
+/// withheld grey, so it does not read as a measurement. Blending rather than a
+/// separate palette because a second palette would need the same
+/// pair-separation guarantees as the first, and would then have to stay in
+/// step with it for ever.
+pub fn fill_for_precision(base: Rgb, undisclosed: Rgb, precision: Precision) -> Rgb {
+    /// How far a coarse fill sits toward the withheld colour.
+    ///
+    /// Far enough to be unmistakable side by side, not so far that two
+    /// coarse bars of different resources become the same bar.
+    const COARSE_BLEND: f32 = 0.45;
+
+    match precision {
+        Precision::Exact => base,
+        Precision::Withheld => undisclosed,
+        Precision::Coarse => (
+            base.0 + (undisclosed.0 - base.0) * COARSE_BLEND,
+            base.1 + (undisclosed.1 - base.1) * COARSE_BLEND,
+            base.2 + (undisclosed.2 - base.2) * COARSE_BLEND,
+        ),
+    }
+}
+
+/// How full a bar is drawn, and how precise the figure behind it is.
+///
+/// # Why this cannot leak a withheld value (FR-016)
+///
+/// Not by discipline, but by construction. `Disclosed` is a tagged union whose
+/// coarse variants *do not carry* the exact figure: `Greyed` holds nothing at
+/// all, `Chunked` holds only a quarter index, `Percentage` only a proportion.
+/// So there is no exact value in scope here to leak into a width, an order or
+/// a size — the audit FR-016 asks for is answered by the type rather than by
+/// reading the renderer and hoping.
+///
+/// That is the argument for coarsening on the server and shipping the reduced
+/// form, rather than shipping the figure with a flag saying how much to show.
+pub fn bar_fill(disclosed: &Disclosed) -> (f32, Precision) {
+    match disclosed {
+        Disclosed::Visible { entries } => (proportion(entries).unwrap_or(0.0), Precision::Exact),
+        // Coarse, not exact. Both carry real information and neither is a
+        // reading, and drawing them like one is FR-014's failure: a player
+        // cannot tell an estimate from a measurement, so they act on the
+        // estimate as though it were one.
+        Disclosed::Percentage { proportion } => (proportion.clamp(0.0, 1.0), Precision::Coarse),
+        // A quarter index is drawn at the *bottom* of its band, so a token in
+        // the 1-4 band never looks half full. Reading a coarse bar as more
+        // precise than it is would defeat the point of coarsening it.
+        Disclosed::Chunked { quarter } => {
+            ((*quarter as f32 / 4.0).clamp(0.0, 1.0), Precision::Coarse)
+        }
+        // Full regardless of the real figure, which is the point: a withheld
+        // bar whose width varied would leak the value it is withholding.
+        Disclosed::Greyed => (1.0, Precision::Withheld),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1081,5 +1158,125 @@ mod tests {
         assert_eq!(appearance.bar_height, 11.0);
         assert_eq!(appearance.bar_gap, 2.0);
         assert_eq!(appearance.first_bar_offset, 20.0);
+    }
+
+    /// FR-014: an estimate must not be mistakable for a reading.
+    ///
+    /// The bug this replaces was quiet and complete: percentage and chunked
+    /// both reported themselves as "disclosed", so a bar showing "somewhere in
+    /// the second quarter" was drawn in exactly the same colour, at a width
+    /// derived from the band, as one showing a real figure. A player had no
+    /// way to tell an estimate from a measurement.
+    #[test]
+    fn a_coarse_fill_is_distinguishable_from_an_exact_one() {
+        fn separation(a: Rgb, b: Rgb) -> f32 {
+            let (dr, dg, db) = (a.0 - b.0, a.1 - b.1, a.2 - b.2);
+            dr * dr + dg * dg + db * db
+        }
+
+        let appearance = DisplayAppearance::default();
+        for (i, base) in appearance.palette.iter().enumerate() {
+            let exact = fill_for_precision(*base, appearance.undisclosed, Precision::Exact);
+            let coarse = fill_for_precision(*base, appearance.undisclosed, Precision::Coarse);
+
+            let gap = (luma(exact) - luma(coarse)).abs() + separation(exact, coarse);
+            assert!(
+                gap > 0.02,
+                "slot {i}: a coarse fill is only {gap:.4} from its exact one — \
+                 an estimate would read as a measurement"
+            );
+        }
+    }
+
+    /// And still identifiable as the resource it belongs to.
+    ///
+    /// The opposite failure, and just as bad: if every coarse bar collapsed
+    /// toward the same grey, a player could no longer tell which resource was
+    /// being estimated — so coarsening health would look like coarsening mana.
+    #[test]
+    fn coarse_fills_remain_distinguishable_from_each_other() {
+        fn separation(a: Rgb, b: Rgb) -> f32 {
+            let (dr, dg, db) = (a.0 - b.0, a.1 - b.1, a.2 - b.2);
+            dr * dr + dg * dg + db * db
+        }
+
+        let appearance = DisplayAppearance::default();
+        let coarse: Vec<Rgb> = appearance
+            .palette
+            .iter()
+            .map(|c| fill_for_precision(*c, appearance.undisclosed, Precision::Coarse))
+            .collect();
+
+        for (i, a) in coarse.iter().enumerate() {
+            for (j, b) in coarse.iter().enumerate().skip(i + 1) {
+                let gap = separation(*a, *b);
+                assert!(
+                    gap > 0.01,
+                    "coarse slots {i} and {j} are only {gap:.4} apart — \
+                     coarsening would hide which resource is which"
+                );
+            }
+        }
+    }
+
+    /// A withheld fill is the withheld colour, whatever resource it belongs to.
+    #[test]
+    fn a_withheld_fill_does_not_depend_on_the_resource() {
+        let appearance = DisplayAppearance::default();
+        for base in &appearance.palette {
+            assert_eq!(
+                fill_for_precision(*base, appearance.undisclosed, Precision::Withheld),
+                appearance.undisclosed,
+                "a withheld bar that kept its resource colour would say which \
+                 resource is being hidden, and how many there are"
+            );
+        }
+    }
+
+    /// FR-016, stated as a property rather than an audit.
+    ///
+    /// A withheld bar is drawn full whatever is behind it. There is nothing to
+    /// vary it *with* — `Greyed` carries no value — so this asserts the shape
+    /// the guarantee rests on rather than sampling a few figures and hoping.
+    #[test]
+    fn a_withheld_bar_is_the_same_bar_whatever_it_hides() {
+        let (fraction, precision) = bar_fill(&Disclosed::Greyed);
+        assert_eq!(fraction, 1.0);
+        assert_eq!(precision, Precision::Withheld);
+    }
+
+    /// A coarse bar reports itself as coarse, at every band.
+    #[test]
+    fn every_coarse_band_is_reported_as_coarse() {
+        for quarter in 0..=4u8 {
+            let (fraction, precision) = bar_fill(&Disclosed::Chunked { quarter });
+            assert_eq!(
+                precision,
+                Precision::Coarse,
+                "quarter {quarter} must not claim to be a reading"
+            );
+            assert!((0.0..=1.0).contains(&fraction));
+        }
+
+        for proportion in [0.0, 0.33, 1.0, 2.5, -1.0] {
+            let (fraction, precision) = bar_fill(&Disclosed::Percentage { proportion });
+            assert_eq!(precision, Precision::Coarse);
+            assert!(
+                (0.0..=1.0).contains(&fraction),
+                "a proportion outside 0-1 must be clamped, not drawn past the track"
+            );
+        }
+    }
+
+    /// A quarter is drawn at the bottom of its band, never the top.
+    ///
+    /// Drawing quarter 1 as half-full would tell a player more than the band
+    /// contains, which is the coarsening undone at the last step.
+    #[test]
+    fn a_quarter_never_reads_as_more_than_its_band() {
+        for quarter in 0..=4u8 {
+            let (fraction, _) = bar_fill(&Disclosed::Chunked { quarter });
+            assert_eq!(fraction, quarter as f32 / 4.0);
+        }
     }
 }

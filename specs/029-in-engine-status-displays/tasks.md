@@ -81,7 +81,7 @@ the renderer.
 
 ### Tests for User Story 1
 
-- [ ] T016 [P] [US1] Vitest for the SDK command wrappers in `apps/web/src/engine/sdk/__tests__/commands.test.ts` — a well-formed `setTokenStatus` is accepted, a malformed one fails to type-check (compile-fail fixture)
+- [x] T016 [P] [US1] Vitest for the SDK command wrappers in `apps/web/src/engine/sdk/__tests__/commands.test.ts` — a well-formed `setTokenStatus` is accepted, a malformed one fails to type-check (compile-fail fixture)
 - [x] T017 [P] [US1] Playwright scenario in `apps/web/e2e/status-display.spec.ts`: a player's token shows a bar on load, and it updates without a reload when the value changes elsewhere
 
 ### Implementation for User Story 1
@@ -136,9 +136,9 @@ the renderer.
 
 - [x] T034 [US3] Apply disclosure server-side in the `tokenStatus` resolver in `src/server/src/graphql/queries/`, using the canvas-core helpers from T008 (depends on T030)
 - [x] T035 [US3] Emit only the field the state permits in `src/server/src/graphql/` — the GraphQL type carries `entries`/`proportion`/`quarter` as mutually exclusive optionals, per `contracts/graphql-disclosure.md`
-- [ ] T036 [US3] Render a coarse disclosure visibly differently from an exact one in `src/engine/src/plugins/status_display.rs` (FR-014), so nobody mistakes an estimate for a reading
-- [ ] T037 [US3] Ensure the panel in `apps/web/src/components/StatusPanel/StatusPanel.tsx` states what is unavailable rather than showing blanks (US3 scenario 3)
-- [ ] T038 [US3] Audit that no animation, ordering or sizing differs by withheld value in `src/engine/src/plugins/status_display.rs` (FR-016)
+- [x] T036 [US3] Render a coarse disclosure visibly differently from an exact one in `src/engine/src/plugins/status_display.rs` (FR-014), so nobody mistakes an estimate for a reading
+- [x] T037 [US3] Ensure the panel in `apps/web/src/components/StatusPanel/StatusPanel.tsx` states what is unavailable rather than showing blanks (US3 scenario 3)
+- [x] T038 [US3] Audit that no animation, ordering or sizing differs by withheld value in `src/engine/src/plugins/status_display.rs` (FR-016)
 
 **Checkpoint**: Disclosure holds at the wire, not just on screen. All P1 stories complete.
 

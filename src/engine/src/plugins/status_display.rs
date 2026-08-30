@@ -29,7 +29,7 @@ use bevy::prelude::*;
 
 use crate::TOKEN_SIZE;
 use thunderforge_canvas_core::resource_display::{
-    Disclosed, DisplayAppearance, ResourceDefinition, Rgb,
+    Disclosed, DisplayAppearance, Precision, ResourceDefinition, Rgb, bar_fill, fill_for_precision,
 };
 
 /// Width of a bar, matched to the token so the two read as one object.
@@ -99,36 +99,6 @@ impl Plugin for StatusDisplayPlugin {
     }
 }
 
-/// How full a bar should be drawn, 0.0–1.0, and whether that is a real
-/// reading or a stand-in for "not disclosed".
-///
-/// Separated from the drawing so the mapping is a value decision rather than
-/// something buried in transform arithmetic — and so a reader can check the
-/// one line that matters: a withheld resource never produces a fill derived
-/// from its actual value, because this function is not given one.
-fn fill_of(disclosed: &Disclosed) -> (f32, bool) {
-    match disclosed {
-        Disclosed::Visible { entries } => {
-            let fraction =
-                thunderforge_canvas_core::resource_display::proportion(entries).unwrap_or(0.0);
-            (fraction, true)
-        }
-        Disclosed::Percentage { proportion } => (proportion.clamp(0.0, 1.0), true),
-        // A quarter index is drawn at the *bottom* of its band, so a token in
-        // the 1-4 band never looks half full. Reading a coarse bar as more
-        // precise than it is would defeat the point of coarsening it.
-        Disclosed::Chunked { quarter } => ((*quarter as f32 / 4.0).clamp(0.0, 1.0), true),
-        // No value, and none is invented. The bar is drawn full in the
-        // undisclosed colour so its presence is visible and its state is not.
-        Disclosed::Greyed => (1.0, false),
-    }
-}
-
-/// Rebuild a token's bars whenever its status changes.
-///
-/// Despawn-and-rebuild rather than mutating in place: the number of bars
-/// changes when a system's declarations change or a viewer's entitlement
-/// does, and a diffing update would be more code to get the same picture.
 /// The world-space rectangle the camera can see, widened enough to cover a
 /// token's bars.
 ///
@@ -156,7 +126,14 @@ fn visible_region(
     })
 }
 
-/// This runs only on `Changed<TokenStatus>`, so it is not a per-frame cost.
+/// Rebuild a token's bars whenever its status changes.
+///
+/// Despawn-and-rebuild rather than mutating in place: the number of bars
+/// changes when a system's declarations change or a viewer's entitlement
+/// does, and a diffing update would be more code to get the same picture.
+///
+/// This runs only on `Changed<TokenStatus>` and camera movement, so it is not
+/// a per-frame cost.
 fn redraw_changed_status(
     mut commands: Commands,
     tokens: Query<(Entity, Ref<TokenStatus>, &Transform)>,
@@ -233,11 +210,10 @@ fn redraw_changed_status(
         let first_bar_offset = TOKEN_SIZE.y / 2.0 + appearance.first_bar_offset;
         let bar_height = appearance.bar_height;
         let track_color = rgb_to_color(appearance.track, appearance.track_alpha);
-        let undisclosed_color = rgb_to_color(appearance.undisclosed, 0.85);
 
         for (row, resource) in ordered.iter().enumerate() {
             let y = first_bar_offset + row as f32 * (bar_height + appearance.bar_gap);
-            let (fraction, disclosed) = fill_of(&resource.disclosed);
+            let (fraction, precision) = bar_fill(&resource.disclosed);
 
             // The track.
             commands.entity(token_entity).with_children(|parent| {
@@ -254,11 +230,14 @@ fn redraw_changed_status(
                 // Indexed by the row this resource occupies, which is the
                 // system's declared order — the engine still knows nothing
                 // about what any of these resources mean.
-                let fill_color = if disclosed {
-                    rgb_to_color(appearance.fill_for(row), 1.0)
-                } else {
-                    undisclosed_color
-                };
+                let fill_color = rgb_to_color(
+                    fill_for_precision(appearance.fill_for(row), appearance.undisclosed, precision),
+                    if precision == Precision::Withheld {
+                        0.85
+                    } else {
+                        1.0
+                    },
+                );
                 let width = BAR_WIDTH * fraction;
                 // Left-aligned inside the track: a bar that shrinks toward
                 // its centre is unreadable at a glance.
@@ -271,47 +250,5 @@ fn redraw_changed_status(
                 ));
             });
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use thunderforge_canvas_core::resource_display::ResourceEntry;
-
-    // NOTE: these compile but do not execute — the engine crate has no test
-    // runner for wasm32 (Constitution V). They are kept because they document
-    // the intended mapping and will run the day a runner exists; the rules
-    // they touch are covered by executing tests in
-    // `thunderforge-canvas-core::resource_display`.
-
-    fn entries(current: i32, max: i32) -> Vec<ResourceEntry> {
-        vec![ResourceEntry {
-            current,
-            max: Some(max),
-            label: None,
-        }]
-    }
-
-    #[test]
-    fn a_visible_resource_fills_by_its_real_proportion() {
-        let (fraction, disclosed) = fill_of(&Disclosed::Visible {
-            entries: entries(30, 100),
-        });
-        assert!((fraction - 0.3).abs() < 0.001);
-        assert!(disclosed);
-    }
-
-    #[test]
-    fn a_greyed_resource_is_drawn_full_and_marked_undisclosed() {
-        let (fraction, disclosed) = fill_of(&Disclosed::Greyed);
-        assert_eq!(fraction, 1.0, "presence is shown");
-        assert!(!disclosed, "and its state is not");
-    }
-
-    #[test]
-    fn a_chunked_resource_is_drawn_at_the_bottom_of_its_band() {
-        let (fraction, _) = fill_of(&Disclosed::Chunked { quarter: 1 });
-        assert!((fraction - 0.25).abs() < 0.001);
     }
 }

@@ -47,7 +47,7 @@ use systems::*;
 use thunderforge_canvas_core::grid::Footprint;
 use thunderforge_canvas_core::measure::GridUnits;
 use thunderforge_canvas_core::resource_display::{
-    AppearanceOverride, Disclosed, DisplayAppearance, ResourceDefinition,
+    AppearanceOverride, Disclosed, ResourceDefinition,
 };
 use thunderforge_canvas_core::token_kind::TokenKind;
 use thunderforge_canvas_core::vision::{Illumination, Rgb, VisionProfile};
