@@ -80,12 +80,10 @@ test("a Genie character's health and wish points reach the token and the panel",
   // possible description of what went wrong.
   page.on("console", (message) => {
     if (message.type() === "error") {
-      // eslint-disable-next-line no-console
       console.log(`[browser] ${message.text()}`);
     }
   });
   page.on("pageerror", (error) => {
-    // eslint-disable-next-line no-console
     console.log(`[browser] uncaught: ${error.message}`);
   });
 

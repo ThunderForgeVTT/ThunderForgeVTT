@@ -261,7 +261,6 @@ for (const system of SYSTEMS) {
       ).toBe(2);
     }
 
-    // eslint-disable-next-line no-console -- the run's product is this line.
     console.log(
       `[systems] ${system.systemId} resources=${reading.ids.join(",")} first=${reading.current}/${reading.max}`,
     );

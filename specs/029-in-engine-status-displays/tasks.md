@@ -273,7 +273,7 @@ the renderer.
 - [x] T071 [P] Document the feature in `docs/` including the four disclosure states and the note that percentage discloses more than it appears to
 - [x] T072 [P] Update `MVP.md` Phase 5 with the verified outcome, replacing the stale "unverified" note now that stats demonstrably reach the screen
 - [x] T073 Run `specs/029-in-engine-status-displays/quickstart.md` end to end, including the manual step comparing `GREYED` against a resource genuinely at zero — that one is worth doing by eye, because a design that renders them alike passes every automated check while misleading every player
-- [ ] T074 Run `pnpm verify` (rustfmt, clippy, prettier, eslint) and fix what it reports **in the code this feature added**. Keep it to that: a repo-wide lint pass folded into a feature phase buries the feature work. `pnpm verify:fix` rewrites what can be rewritten mechanically
+- [x] T074 Run `pnpm verify` (rustfmt, clippy, prettier, eslint) and fix what it reports **in the code this feature added**. Keep it to that: a repo-wide lint pass folded into a feature phase buries the feature work. `pnpm verify:fix` rewrites what can be rewritten mechanically
 
 ---
 

@@ -177,7 +177,6 @@ test("a Game Master sees every token's own resources at once", async ({
     CREATURES.map((c) => ({ current: c.current, max: c.max })),
   );
 
-  // eslint-disable-next-line no-console -- the run's product is this line.
   console.log(
     `[board] tokens=${CREATURES.length} concurrent=true readings=${readings
       .map((r) => `${r?.current}/${r?.max}`)

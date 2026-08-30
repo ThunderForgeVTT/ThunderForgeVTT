@@ -249,7 +249,6 @@ test("a player is never sent an NPC's exact figures, while the GM is", async ({
   // 37 of 250 is inside the first quarter.
   expect(playerBody).toContain('"quarter":0');
 
-   
   console.log(
     `[disclosure] gm=visible(${NPC_CURRENT}/${NPC_MAX}) player=chunked(quarter) leaked=none`,
   );

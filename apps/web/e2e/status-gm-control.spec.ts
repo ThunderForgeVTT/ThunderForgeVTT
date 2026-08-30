@@ -274,7 +274,6 @@ test("a Game Master changes what the table sees, and a player cannot", async ({
     )
     .toBe(2);
 
-   
   console.log(`[control] playerRefused=true perToken=true liveUpdate=true`);
 
   await playerPage.context().close();
