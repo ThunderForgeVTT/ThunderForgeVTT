@@ -162,7 +162,7 @@ the renderer.
 - [x] T043 [US3a] Implement `setTokenDisclosure` in `src/server/src/graphql/mutations_tokens.rs`, gated on `thunderforge_authz::Actor::runs_the_world()` — reuse, do not add a parallel check (Constitution III)
 - [x] T044 [US3a] Add a disclosure-changed event code in `src/server/src/world_events.rs` and emit on change — a value change and a change in what may be _known_ are different facts a client may react to differently
 - [x] T045 [US3a] Handle the new event code in `apps/web/src/engine/world/sync/tokens.ts` so displays appear and vanish live
-- [ ] T046 [US3a] Add the GM-facing disclosure control to `apps/web/src/components/TokenPanel.tsx`, presenting the four states with their differing safety made visible rather than as four interchangeable appearances (FR-013c)
+- [x] T046 [US3a] Add the GM-facing disclosure control to `apps/web/src/components/TokenPanel.tsx`, presenting the four states with their differing safety made visible rather than as four interchangeable appearances (FR-013c)
 
 **Checkpoint**: A GM controls disclosure without stopping play
 
@@ -251,6 +251,18 @@ the renderer.
 - [ ] T068 [US7] Consume appearance values in `src/engine/src/plugins/status_display.rs` rather than compiled-in constants (FR-022)
 
 **Checkpoint**: Theming has a surface to attach to
+
+---
+
+## Follow-up (not this feature)
+
+- [ ] F001 Spec clocks separately — Blades' progress clocks and Genie's
+      puzzle/doom clocks fill toward an event rather than depleting toward
+      zero, belong to a situation rather than to a token, and are counted in
+      discrete named segments rather than as a proportion. See the
+      "Follow-up: clocks" section of [spec.md](./spec.md). Declaring one as a
+      token resource to make it fit would be the fixture-shaped mistake this
+      feature twice avoided.
 
 ---
 

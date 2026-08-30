@@ -1,5 +1,6 @@
 import { postGraphQL } from "./graphqlClient";
 import type { Disclosed } from "@/engine/sdk/Disclosed";
+import type { DisclosureState } from "@/engine/sdk/DisclosureState";
 import type { ResourceDefinition } from "@/engine/sdk/ResourceDefinition";
 
 /**
@@ -27,6 +28,8 @@ interface WireResource {
     | null;
   proportion: number | null;
   quarter: number | null;
+  /** What the table sees. Present only for someone who runs the world. */
+  configured: string | null;
 }
 
 interface WireTokenStatus {
@@ -37,7 +40,12 @@ interface WireTokenStatus {
 /** A token's resources in the shape the engine command expects. */
 export interface TokenStatus {
   tokenId: string;
-  resources: { definition: ResourceDefinition; disclosed: Disclosed }[];
+  resources: {
+    definition: ResourceDefinition;
+    disclosed: Disclosed;
+    /** What the table sees, when this viewer is entitled to know. */
+    configured: DisclosureState | null;
+  }[];
 }
 
 const TOKEN_STATUS_QUERY = `
@@ -52,6 +60,7 @@ const TOKEN_STATUS_QUERY = `
         entries { current max label }
         proportion
         quarter
+        configured
       }
     }
   }
@@ -120,8 +129,29 @@ export async function getTokenStatus(sceneId: string): Promise<TokenStatus[]> {
             allowStacking: false,
           },
           disclosed,
+          configured: (resource.configured as DisclosureState | null) ?? null,
         },
       ];
     }),
   }));
+}
+
+/**
+ * Set what one token discloses about one resource.
+ *
+ * Refused by the server for anyone who does not run the world, which is where
+ * that rule belongs — this function does not check, so there is no second
+ * opinion to drift from the first.
+ */
+export async function setTokenDisclosure(
+  tokenId: string,
+  resourceId: string,
+  state: DisclosureState,
+): Promise<void> {
+  await postGraphQL(
+    `mutation ($input: SetTokenDisclosureInput!) {
+      setTokenDisclosure(input: $input) { tokenId }
+    }`,
+    { input: { tokenId, resourceId, state: state.toUpperCase() } },
+  );
 }

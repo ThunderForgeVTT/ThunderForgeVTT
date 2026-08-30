@@ -49,6 +49,14 @@ pub struct GraphQLResolvedResource {
     pub proportion: Option<f64>,
     /// Populated only when `disclosure` is `chunked`. 0-4.
     pub quarter: Option<i32>,
+    /// What everyone who does not run the world sees for this resource.
+    ///
+    /// Present only for a viewer who *does* run it. A Game Master's own
+    /// `disclosure` is always `visible`, so it cannot tell them what the table
+    /// is under — and a control that guessed would show a setting nobody is
+    /// actually playing with. Absent for a player, who has no business knowing
+    /// which of the four states they are being shown through.
+    pub configured: Option<String>,
 }
 
 #[derive(SimpleObject, Debug, Clone)]
@@ -184,7 +192,7 @@ impl TokenStatusQuery {
                 if resolved.resources.is_empty() {
                     continue;
                 }
-                out.push(to_graphql(resolved));
+                out.push(to_graphql(resolved, runs_the_world));
             }
 
             Ok(out)
@@ -264,17 +272,23 @@ fn resolve_one_token(
         .remove(&token_id)
         .unwrap_or_default();
 
-    Ok(to_graphql(resolve_token(
-        token_id,
+    Ok(to_graphql(
+        resolve_token(
+            token_id,
+            runs_the_world,
+            subject_for(user_id, is_npc, owner),
+            &declarations,
+            &stored,
+            &overrides,
+        ),
         runs_the_world,
-        subject_for(user_id, is_npc, owner),
-        &declarations,
-        &stored,
-        &overrides,
-    )))
+    ))
 }
 
-fn to_graphql(status: crate::status_display::TokenStatus) -> GraphQLTokenStatus {
+fn to_graphql(
+    status: crate::status_display::TokenStatus,
+    runs_the_world: bool,
+) -> GraphQLTokenStatus {
     GraphQLTokenStatus {
         token_id: status.token_id,
         resources: status
@@ -320,6 +334,15 @@ fn to_graphql(status: crate::status_display::TokenStatus) -> GraphQLTokenStatus 
                     entries,
                     proportion,
                     quarter,
+                    configured: runs_the_world.then(|| {
+                        match resource.configured {
+                            thunderforge_canvas_core::resource_display::DisclosureState::Visible => "visible",
+                            thunderforge_canvas_core::resource_display::DisclosureState::Greyed => "greyed",
+                            thunderforge_canvas_core::resource_display::DisclosureState::Percentage => "percentage",
+                            thunderforge_canvas_core::resource_display::DisclosureState::Chunked => "chunked",
+                        }
+                        .to_string()
+                    }),
                 }
             })
             .collect(),

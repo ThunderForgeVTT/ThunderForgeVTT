@@ -42,7 +42,15 @@ pub struct TokenStatus {
 #[derive(Debug, Clone)]
 pub struct ResolvedResource {
     pub definition: ResourceDefinition,
+    /// What *this* viewer sees.
     pub disclosed: Disclosed,
+    /// What everyone who does not run the world sees.
+    ///
+    /// A Game Master's own view is always exact, so `disclosed` cannot tell
+    /// them what they have hidden from the table — and a control that guessed
+    /// would show a setting the table is not under. This carries the answer
+    /// so the two are never confused.
+    pub configured: DisclosureState,
 }
 
 /// A resource declaration plus where to read it, as a system's manifest gives
@@ -142,20 +150,27 @@ pub fn resolve_token(
         // everybody else. This is the only branch that ignores the override,
         // and it must stay that way: a GM who has hidden a boss from the table
         // still needs to run the fight.
+        // What the table is under, whoever is asking. Computed first so the
+        // Game Master's exact view below cannot be mistaken for it.
+        let configured = overrides
+            .get(&declared.definition.id)
+            .copied()
+            .unwrap_or_else(|| {
+                thunderforge_canvas_core::resource_display::default_disclosure(subject)
+            });
+
+        // The Game Master sees the truth regardless — they still have to run
+        // the fight. This is the only branch that ignores `configured`.
         let state = if viewer_runs_the_world {
             DisclosureState::Visible
         } else {
-            overrides
-                .get(&declared.definition.id)
-                .copied()
-                .unwrap_or_else(|| {
-                    thunderforge_canvas_core::resource_display::default_disclosure(subject)
-                })
+            configured
         };
 
         resources.push(ResolvedResource {
             definition: declared.definition.clone(),
             disclosed: disclose(&entries, state),
+            configured,
         });
     }
 

@@ -463,6 +463,34 @@ the engine, so that a later theming feature has something to configure.
 - **PanelPlacement**: the viewer's chosen corner, persisted per viewer.
 - **DisplayAppearance**: application-supplied presentation values.
 
+## Follow-up: clocks
+
+Raised 2026-08-30 while declaring Blades in the Dark, and deliberately **not**
+built here.
+
+Blades runs on progress clocks — a heist's alarm filling segment by segment —
+and Genie has puzzle and doom clocks of its own. They look like a bar and are
+not one, in a way that matters:
+
+- A clock **fills toward an event**. A resource **depletes toward zero**. The
+  same rendering means opposite things, so a red nearly-full bar reads as
+  "nearly dead" for health and "about to go badly" for a doom clock — which
+  happens to work, and works by accident rather than by design.
+- A clock is **not owned by a token**. It belongs to the situation: the
+  heist, the scene, the session. Everything in this feature hangs off an
+  actor behind a token, and a clock has neither.
+- A clock's segments are **discrete and named**, not a proportion. Four of
+  six is not 67%; it is four segments, and the count is the point.
+
+So the honest question is whether a clock is a resource with inverted
+semantics or a different thing that happens to look like a bar. Declaring one
+as a resource to make it fit would be the mistake this feature has twice
+avoided — inventing a fixture that suits the model instead of describing a
+ruleset as it is.
+
+Worth its own spec. It would need a home that is not a token, a fill
+direction, and segment rendering rather than a fraction.
+
 ## Success Criteria _(mandatory)_
 
 ### Measurable Outcomes
