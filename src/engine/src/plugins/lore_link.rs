@@ -30,7 +30,11 @@ pub struct LoreLinkPlugin;
 
 impl Plugin for LoreLinkPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, open_requested_entries);
+        // Registered here as well as in `InteractionPlugin`. `add_message` is
+        // idempotent, and a contributor that could only be added after the
+        // seam would not be independently addable (Principle II).
+        app.add_message::<InteractionActivated>()
+            .add_systems(Update, open_requested_entries);
     }
 }
 

@@ -181,6 +181,64 @@ impl InteractiveMutation {
         .await
     }
 
+    /// Make a wall a door, or stop it being one (FR-007). Game Master only.
+    ///
+    /// Designating also gives the door an interactive, so it can be opened by
+    /// clicking it without the Game Master having to author one — a door
+    /// nobody can touch is not what "designate a door" means to anybody.
+    async fn set_door_designation(
+        &self,
+        ctx: &Context<'_>,
+        wall_id: Uuid,
+        is_door: bool,
+    ) -> GraphQLResult<bool> {
+        let auth_user = authenticated_user(ctx)?;
+        set_door_designation_impl(
+            app_state(ctx)?,
+            auth_user.user_id,
+            auth_user.is_admin,
+            wall_id,
+            is_door,
+        )
+        .await
+    }
+
+    /// Lock or unlock a door (FR-013). Game Master only.
+    async fn set_door_lock(
+        &self,
+        ctx: &Context<'_>,
+        wall_id: Uuid,
+        locked: bool,
+    ) -> GraphQLResult<bool> {
+        let auth_user = authenticated_user(ctx)?;
+        set_door_flag_impl(
+            app_state(ctx)?,
+            auth_user.user_id,
+            auth_user.is_admin,
+            wall_id,
+            DoorFlag::Locked(locked),
+        )
+        .await
+    }
+
+    /// Hide or reveal a secret door. Game Master only.
+    async fn set_door_secret(
+        &self,
+        ctx: &Context<'_>,
+        wall_id: Uuid,
+        secret: bool,
+    ) -> GraphQLResult<bool> {
+        let auth_user = authenticated_user(ctx)?;
+        set_door_flag_impl(
+            app_state(ctx)?,
+            auth_user.user_id,
+            auth_user.is_admin,
+            wall_id,
+            DoorFlag::Secret(secret),
+        )
+        .await
+    }
+
     /// The one mutation a player calls.
     ///
     /// Every refusal is decided at the server, from stored state. A client
@@ -484,6 +542,38 @@ pub(crate) async fn activate_interactive_impl(
                 }
                 result.effect_id = loaded.row.effect_id.clone();
                 result.effect_config = loaded.row.effect_config.clone().map(Json);
+
+                // The authoritative half. The engine applies the same change
+                // locally for responsiveness, but a door that only swung in
+                // one browser is a door that closes again on reload.
+                let changed_subject = match &loaded.row.effect_id {
+                    Some(effect_id) => crate::interaction::perform(
+                        &mut conn,
+                        effect_id,
+                        loaded
+                            .row
+                            .effect_config
+                            .as_ref()
+                            .unwrap_or(&serde_json::Value::Null),
+                        loaded.row.scene_id,
+                    )
+                    .map_err(|e| Error::new(format!("Failed to perform effect: {e}")))?,
+                    None => None,
+                };
+                if let Some(subject) = changed_subject {
+                    let _ = record_world_event(
+                        &mut conn,
+                        world_id,
+                        crate::world_events::EVENT_CODE_DOOR_CHANGED,
+                        Some(serde_json::json!({
+                            "action": "changed",
+                            "wall_id": subject,
+                            "scene_id": loaded.row.scene_id,
+                        })),
+                        user_id,
+                    );
+                }
+
                 let _ = record_world_event(
                     &mut conn,
                     world_id,
@@ -670,6 +760,173 @@ fn merge(
     }
 }
 
+/// Which door property a GM-only mutation is setting.
+///
+/// One function for both, because the authorization, the announcement and the
+/// shape are identical and two copies would be two things to keep right.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum DoorFlag {
+    Locked(bool),
+    Secret(bool),
+}
+
+pub(crate) async fn set_door_flag_impl(
+    state: &crate::state::AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    wall_id: Uuid,
+    flag: DoorFlag,
+) -> GraphQLResult<bool> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    tokio::task::spawn_blocking(move || {
+        use crate::schema::walls;
+
+        let scene_id: Uuid = walls::table
+            .filter(walls::wall_id.eq(wall_id))
+            .select(walls::scene_id)
+            .first(&mut conn)?;
+
+        if !crate::auth::world_membership::is_dm_of_scene(&mut conn, user_id, is_admin, scene_id)? {
+            return Err(DieselError::NotFound);
+        }
+
+        let now = Utc::now().naive_utc();
+        match flag {
+            DoorFlag::Locked(locked) => {
+                diesel::update(walls::table.filter(walls::wall_id.eq(wall_id)))
+                    .set((
+                        walls::locked.eq(locked),
+                        walls::updated_by.eq(user_id),
+                        walls::updated_at.eq(now),
+                    ))
+                    .execute(&mut conn)?;
+            }
+            DoorFlag::Secret(secret) => {
+                diesel::update(walls::table.filter(walls::wall_id.eq(wall_id)))
+                    .set((
+                        walls::secret.eq(secret),
+                        walls::updated_by.eq(user_id),
+                        walls::updated_at.eq(now),
+                    ))
+                    .execute(&mut conn)?;
+            }
+        }
+
+        announce_door(&mut conn, scene_id, wall_id, user_id);
+        Ok(true)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to change the door (not found or not yours)"))
+}
+
+pub(crate) async fn set_door_designation_impl(
+    state: &crate::state::AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    wall_id: Uuid,
+    is_door: bool,
+) -> GraphQLResult<bool> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    tokio::task::spawn_blocking(move || {
+        use crate::schema::{interactives, walls};
+        use thunderforge_canvas_core::wall::{DoorState, SET_STATE, STATE_KEY, TARGET_KEY};
+
+        let scene_id: Uuid = walls::table
+            .filter(walls::wall_id.eq(wall_id))
+            .select(walls::scene_id)
+            .first(&mut conn)?;
+
+        if !crate::auth::world_membership::is_dm_of_scene(&mut conn, user_id, is_admin, scene_id)? {
+            return Err(DieselError::NotFound);
+        }
+
+        let now = Utc::now().naive_utc();
+        // A newly designated door starts closed, because a door drawn on a map
+        // is a door in a wall — a wall that turned into a hole the moment it
+        // became a door would change what the room does.
+        let next = if is_door {
+            DoorState::Closed
+        } else {
+            DoorState::None
+        };
+        diesel::update(walls::table.filter(walls::wall_id.eq(wall_id)))
+            .set((
+                walls::door_state.eq(next.as_str()),
+                walls::updated_by.eq(user_id),
+                walls::updated_at.eq(now),
+            ))
+            .execute(&mut conn)?;
+
+        if is_door {
+            let already: i64 = interactives::table
+                .filter(interactives::subject_ref.eq(wall_id))
+                .count()
+                .get_result(&mut conn)?;
+            if already == 0 {
+                // Toggle, targeting itself: clicking the door does what a
+                // person at a door does.
+                let config = serde_json::json!({
+                    TARGET_KEY: wall_id.to_string(),
+                    STATE_KEY: "toggle",
+                });
+                diesel::insert_into(interactives::table)
+                    .values((
+                        interactives::interactive_id.eq(Uuid::now_v7()),
+                        interactives::scene_id.eq(scene_id),
+                        interactives::subject_kind.eq("door"),
+                        interactives::subject_ref.eq(wall_id),
+                        interactives::effect_id.eq(SET_STATE),
+                        interactives::effect_config.eq(&config),
+                        interactives::trigger.eq("click"),
+                        interactives::activation.eq("anyone"),
+                        interactives::fire_mode.eq("always"),
+                        interactives::created_by.eq(user_id),
+                        interactives::updated_by.eq(user_id),
+                        interactives::created_at.eq(now),
+                        interactives::updated_at.eq(now),
+                    ))
+                    .execute(&mut conn)?;
+            }
+        } else {
+            // Undesignating removes what the designation created. A door on a
+            // wall that is no longer a door is not a thing.
+            diesel::delete(interactives::table.filter(interactives::subject_ref.eq(wall_id)))
+                .execute(&mut conn)?;
+        }
+
+        announce_door(&mut conn, scene_id, wall_id, user_id);
+        Ok(true)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to designate the door (not found or not yours)"))
+}
+
+fn announce_door(conn: &mut PgConnection, scene_id: Uuid, wall_id: Uuid, user_id: Uuid) {
+    if let Ok(world_id) = world_id_for_scene(conn, scene_id) {
+        let _ = record_world_event(
+            conn,
+            world_id,
+            crate::world_events::EVENT_CODE_DOOR_CHANGED,
+            Some(serde_json::json!({
+                "action": "changed",
+                "wall_id": wall_id,
+                "scene_id": scene_id,
+            })),
+            user_id,
+        );
+    }
+}
+
 /// Assemble a registry from an explicit contribution set.
 ///
 /// Exposed for the seam's own tests (US7), which need to build a registry
@@ -832,6 +1089,172 @@ mod tests {
             refused.is_err(),
             "no audio subsystem exists, so nothing may be authored against it"
         );
+    }
+
+    /// A wall on the table's scene, closed and unlocked.
+    fn a_wall(t: &Table) -> Uuid {
+        use crate::schema::walls;
+        let mut conn = t.state.db_pool.get().unwrap();
+        let wall_id = Uuid::now_v7();
+        let now = Utc::now().naive_utc();
+        diesel::insert_into(walls::table)
+            .values((
+                walls::wall_id.eq(wall_id),
+                walls::scene_id.eq(t.scene_id),
+                walls::x1.eq(0.0f64),
+                walls::y1.eq(0.0f64),
+                walls::x2.eq(100.0f64),
+                walls::y2.eq(0.0f64),
+                walls::blocks_vision.eq(true),
+                walls::blocks_movement.eq(true),
+                walls::door_state.eq("closed"),
+                walls::created_by.eq(t.gm),
+                walls::updated_by.eq(t.gm),
+                walls::created_at.eq(now),
+                walls::updated_at.eq(now),
+            ))
+            .execute(&mut conn)
+            .expect("insert wall");
+        wall_id
+    }
+
+    fn door_state_of(t: &Table, wall_id: Uuid) -> String {
+        use crate::schema::walls;
+        let mut conn = t.state.db_pool.get().unwrap();
+        walls::table
+            .filter(walls::wall_id.eq(wall_id))
+            .select(walls::door_state)
+            .first(&mut conn)
+            .expect("wall exists")
+    }
+
+    /// The interactive `setDoorDesignation` creates for a door.
+    async fn designate(t: &Table, wall_id: Uuid) -> Uuid {
+        use crate::schema::interactives;
+        set_door_designation_impl(&t.state, t.gm, false, wall_id, true)
+            .await
+            .expect("the Game Master designates a door");
+        let mut conn = t.state.db_pool.get().unwrap();
+        interactives::table
+            .filter(interactives::subject_ref.eq(wall_id))
+            .select(interactives::interactive_id)
+            .first(&mut conn)
+            .expect("designating a door gives it an interactive")
+    }
+
+    #[tokio::test]
+    async fn a_player_cannot_open_a_locked_door_at_the_server() {
+        // The rule most likely to be implemented by not drawing the button.
+        // A screen test would pass against a server that happily performs the
+        // change when asked directly, which is why this asks directly.
+        let t = seat_a_table();
+        let wall_id = a_wall(&t);
+        let interactive_id = designate(&t, wall_id).await;
+
+        // Unlocked: the player opens it, and the change is durable.
+        let opened = activate_interactive_impl(&t.state, t.player, false, interactive_id)
+            .await
+            .expect("an unlocked door opens");
+        assert_eq!(opened.outcome, "performed");
+        assert_eq!(door_state_of(&t, wall_id), "open");
+
+        set_door_flag_impl(&t.state, t.gm, false, wall_id, DoorFlag::Locked(true))
+            .await
+            .expect("the Game Master locks it");
+
+        let refused = activate_interactive_impl(&t.state, t.player, false, interactive_id)
+            .await
+            .expect("a refusal is an outcome, not an error");
+        assert_eq!(refused.outcome, "refused");
+        assert_eq!(refused.reason.as_deref(), Some("locked"));
+        // And nothing moved. A refusal that still performed the effect would
+        // pass an outcome assertion and fail the table.
+        assert_eq!(door_state_of(&t, wall_id), "open");
+
+        let _ = delete_interactive_impl(&t.state, t.gm, false, interactive_id).await;
+    }
+
+    #[tokio::test]
+    async fn a_game_master_can_still_change_a_locked_door() {
+        // FR-013. The lock is theirs; it is not a rule against them.
+        let t = seat_a_table();
+        let wall_id = a_wall(&t);
+        let interactive_id = designate(&t, wall_id).await;
+
+        set_door_flag_impl(&t.state, t.gm, false, wall_id, DoorFlag::Locked(true))
+            .await
+            .expect("locked");
+
+        let performed = activate_interactive_impl(&t.state, t.gm, false, interactive_id)
+            .await
+            .expect("the Game Master opens their own locked door");
+        assert_eq!(performed.outcome, "performed");
+        assert_eq!(door_state_of(&t, wall_id), "open");
+
+        let _ = delete_interactive_impl(&t.state, t.gm, false, interactive_id).await;
+    }
+
+    #[tokio::test]
+    async fn a_player_cannot_lock_designate_or_reveal_a_door() {
+        let t = seat_a_table();
+        let wall_id = a_wall(&t);
+
+        assert!(
+            set_door_designation_impl(&t.state, t.player, false, wall_id, true)
+                .await
+                .is_err(),
+            "a player must not designate a door"
+        );
+        assert!(
+            set_door_flag_impl(&t.state, t.player, false, wall_id, DoorFlag::Locked(true))
+                .await
+                .is_err(),
+            "a player must not lock a door"
+        );
+        assert!(
+            set_door_flag_impl(&t.state, t.player, false, wall_id, DoorFlag::Secret(true))
+                .await
+                .is_err(),
+            "a player must not hide a door"
+        );
+    }
+
+    #[tokio::test]
+    async fn toggling_a_door_twice_returns_it_to_where_it_started() {
+        let t = seat_a_table();
+        let wall_id = a_wall(&t);
+        let interactive_id = designate(&t, wall_id).await;
+
+        assert_eq!(door_state_of(&t, wall_id), "closed");
+        let _ = activate_interactive_impl(&t.state, t.player, false, interactive_id).await;
+        assert_eq!(door_state_of(&t, wall_id), "open");
+        let _ = activate_interactive_impl(&t.state, t.player, false, interactive_id).await;
+        assert_eq!(door_state_of(&t, wall_id), "closed");
+
+        let _ = delete_interactive_impl(&t.state, t.gm, false, interactive_id).await;
+    }
+
+    #[tokio::test]
+    async fn undesignating_a_door_takes_its_interactive_with_it() {
+        // A door on a wall that is no longer a door is not a thing, and an
+        // interactive left behind would be a click that does nothing.
+        use crate::schema::interactives;
+        let t = seat_a_table();
+        let wall_id = a_wall(&t);
+        designate(&t, wall_id).await;
+
+        set_door_designation_impl(&t.state, t.gm, false, wall_id, false)
+            .await
+            .expect("undesignated");
+
+        let mut conn = t.state.db_pool.get().unwrap();
+        let remaining: i64 = interactives::table
+            .filter(interactives::subject_ref.eq(wall_id))
+            .count()
+            .get_result(&mut conn)
+            .unwrap();
+        assert_eq!(remaining, 0);
+        assert_eq!(door_state_of(&t, wall_id), "none");
     }
 
     #[tokio::test]

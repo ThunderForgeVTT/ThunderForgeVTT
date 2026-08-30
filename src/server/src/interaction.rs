@@ -49,6 +49,7 @@ fn contributions() -> Vec<Vec<EffectDeclaration>> {
         // be triggered. An empty list is a legitimate build: the seam then
         // offers nothing, which is correct rather than broken.
         thunderforge_canvas_core::lore_link::effects(),
+        thunderforge_canvas_core::wall::interaction_effects(),
     ]
 }
 
@@ -85,6 +86,39 @@ pub fn is_available(effect_id: Option<&str>) -> bool {
         None => true,
         Some(id) => registry().contains(id),
     }
+}
+
+/// Perform an effect that changes stored state, authoritatively.
+///
+/// # Why this exists beside the registry rather than inside it
+///
+/// The engine dispatches locally so a change is visible immediately, and the
+/// server is the authority on whether it happened at all. Every effect whose
+/// result outlives the frame — a door swinging, a lock turning, a secret being
+/// revealed — has to be written here or a reload would undo it.
+///
+/// Each contributor performs its own. This function is a list of them and
+/// nothing more; it does not know what any of them do, which is why adding one
+/// is a line here plus a module, never an edit to the rules.
+///
+/// Returns the subject that changed, so the caller can announce it. `Ok(None)`
+/// means nothing durable happened, which covers both an effect that lives
+/// entirely in the client (opening a lore page) and one that asked for
+/// something that no longer makes sense.
+pub fn perform(
+    conn: &mut PgConnection,
+    effect_id: &str,
+    config: &serde_json::Value,
+    scene_id: Uuid,
+) -> Result<Option<Uuid>, diesel::result::Error> {
+    if crate::door_effects::handles(effect_id) {
+        return crate::door_effects::perform(conn, effect_id, config, scene_id);
+    }
+    // An effect nobody performs server-side is not an error. `lore.open`
+    // changes nothing that outlives the click, and asking the server to record
+    // that somebody read a page would be a surveillance surface with no
+    // purpose.
+    Ok(None)
 }
 
 /// An interactive and everything the activation decision depends on.

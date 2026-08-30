@@ -118,17 +118,17 @@ Every story plugs into this; none can start before it.
 
 **Independent Test**: Designate a door, open and close it as a player, watch vision and movement change, lock it as GM and confirm the player's click stops working.
 
-- [ ] T038 [P] [US2] Contribute `door.set_state` and `door.set_lock` declarations from `crates/thunderforge-canvas-core/src/wall.rs`, keeping door knowledge with doors rather than in the interaction core (FR-039)
-- [ ] T039 [US2] Add `setDoorDesignation` and `setDoorLock` to `src/server/src/graphql/mutations_interactives.rs`, GM-only
-- [ ] T040 [US2] Route player door-state changes through `activateInteractive` in `src/server/src/graphql/mutations_interactives.rs` so there is one authorization path rather than two
-- [ ] T041 [P] [US2] Test in `src/server/src/graphql/mutations_interactives.rs` that a player cannot open a locked door **at the server**. This is the rule most likely to be implemented by hiding a button, and a screen test would pass against a server that performs it when asked directly
-- [ ] T042 [P] [US2] Test in `src/server/src/graphql/mutations_interactives.rs` that a GM can change a locked door's state (FR-013)
-- [ ] T043 [US2] Handle the door effects in `src/engine/src/plugins/wall.rs`, setting state through the wall plugin's existing systems rather than reaching into geometry
-- [ ] T044 [US2] Draw a door distinguishably from a plain wall in `src/engine/src/plugins/wall.rs`, and re-resolve vision and movement when its state changes
-- [ ] T045 [US2] Add the GM secondary-interaction menu offering shut and lock in `apps/web/src/components/InteractionAuthor/InteractionAuthor.tsx`, following the canvas's existing right-click convention (FR-023)
-- [ ] T046 [US2] Tell a player their click failed because the door is locked, in `apps/web/src/components/InteractionAuthor/InteractionAuthor.tsx`. Silence is indistinguishable from the product being broken (FR-014)
-- [ ] T047 [US2] Resolve concurrent activation to a single state in `src/server/src/graphql/mutations_interactives.rs`, so two players clicking one door do not diverge (SC-005)
-- [ ] T048 [US2] End-to-end spec `apps/web/e2e/interactive-doors.spec.ts` across two browsers: designate, open, close, watch vision change without a reload, lock as GM, confirm the player is refused and told, confirm the GM is not
+- [X] T038 [P] [US2] Contribute `door.set_state` and `door.set_lock` declarations from `crates/thunderforge-canvas-core/src/wall.rs`, keeping door knowledge with doors rather than in the interaction core (FR-039)
+- [X] T039 [US2] Add `setDoorDesignation` and `setDoorLock` to `src/server/src/graphql/mutations_interactives.rs`, GM-only
+- [X] T040 [US2] Route player door-state changes through `activateInteractive` in `src/server/src/graphql/mutations_interactives.rs` so there is one authorization path rather than two
+- [X] T041 [P] [US2] Test in `src/server/src/graphql/mutations_interactives.rs` that a player cannot open a locked door **at the server**. This is the rule most likely to be implemented by hiding a button, and a screen test would pass against a server that performs it when asked directly
+- [X] T042 [P] [US2] Test in `src/server/src/graphql/mutations_interactives.rs` that a GM can change a locked door's state (FR-013)
+- [X] T043 [US2] Handle the door effects in `src/engine/src/plugins/wall.rs`, setting state through the wall plugin's existing systems rather than reaching into geometry
+- [X] T044 [US2] Draw a door distinguishably from a plain wall in `src/engine/src/plugins/wall.rs`, and re-resolve vision and movement when its state changes
+- [X] T045 [US2] Add the GM secondary-interaction menu offering shut and lock in `apps/web/src/components/InteractionAuthor/InteractionAuthor.tsx`, following the canvas's existing right-click convention (FR-023)
+- [X] T046 [US2] Tell a player their click failed because the door is locked, in `apps/web/src/components/InteractionAuthor/InteractionAuthor.tsx`. Silence is indistinguishable from the product being broken (FR-014)
+- [X] T047 [US2] Resolve concurrent activation to a single state in `src/server/src/graphql/mutations_interactives.rs`, so two players clicking one door do not diverge (SC-005)
+- [X] T048 [US2] End-to-end spec `apps/web/e2e/interactive-doors.spec.ts` across two browsers: designate, open, close, watch vision change without a reload, lock as GM, confirm the player is refused and told, confirm the GM is not
 
 **Checkpoint**: Doors work, and were built as a contributor rather than as part of the core.
 

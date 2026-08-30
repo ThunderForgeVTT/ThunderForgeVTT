@@ -505,6 +505,12 @@ pub struct GraphQLWall {
     blocks_vision: bool,
     blocks_movement: bool,
     door_state: GraphQLDoorState,
+    /// Spec 030: who may change the door's state, not the state itself.
+    locked: bool,
+    /// Spec 030: not drawn for players until revealed. Presentation only —
+    /// the geometry reaches every client, because a door that did not arrive
+    /// would also stop blocking vision and movement.
+    secret: bool,
     metadata: Option<Json<serde_json::Value>>,
     created_by: uuid::Uuid,
     updated_by: uuid::Uuid,
@@ -524,6 +530,8 @@ impl From<crate::models::Wall> for GraphQLWall {
             blocks_vision: wall.blocks_vision,
             blocks_movement: wall.blocks_movement,
             door_state: GraphQLDoorState::from_db_str(&wall.door_state),
+            locked: wall.locked,
+            secret: wall.secret,
             metadata: wall.metadata.map(Json),
             created_by: wall.created_by,
             updated_by: wall.updated_by,

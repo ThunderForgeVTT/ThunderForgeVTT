@@ -17,6 +17,7 @@ mod auth_middleware;
 mod canvas_assets_serve;
 mod config;
 mod db_types;
+mod door_effects; // Spec 030: doors, as a contributor to the interaction seam
 mod errors;
 mod graphql;
 mod interaction; // Spec 030: the effect registry, and the rules the GraphQL layer obeys

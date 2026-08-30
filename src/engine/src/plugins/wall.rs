@@ -2,8 +2,8 @@ use bevy::prelude::*;
 
 use crate::resources::{IsGameMaster, SelectedWall, WallSet};
 use crate::systems::wall::{
-    handle_wall_input, handle_wall_keyboard_toggles, handle_wall_undo, init_wall_systems_resources,
-    sync_wall_visuals,
+    handle_door_effects, handle_wall_input, handle_wall_keyboard_toggles, handle_wall_undo,
+    init_wall_systems_resources, sync_wall_visuals,
 };
 
 /// Wires up wall authoring (T011-T014): the `WallSet` resource, GM-only
@@ -25,7 +25,12 @@ impl Plugin for WallPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<WallSet>()
             .init_resource::<SelectedWall>()
-            .init_resource::<IsGameMaster>();
+            .init_resource::<IsGameMaster>()
+            // Registered here as well as in `InteractionPlugin`, and
+            // `add_message` is idempotent. A contributor that could only be
+            // added *after* the seam would not be independently addable, and
+            // Principle II asks for plugins that are.
+            .add_message::<crate::plugins::interaction::InteractionActivated>();
 
         init_wall_systems_resources(app);
 
@@ -35,6 +40,12 @@ impl Plugin for WallPlugin {
                 handle_wall_input,
                 handle_wall_keyboard_toggles,
                 handle_wall_undo,
+                // Spec 030: doors, contributed to the interaction seam. Reads
+                // the activation message; nothing in the interaction plugin
+                // knows this system exists (FR-039, FR-040). Placed before
+                // `sync_wall_visuals` so a door that opened this frame is
+                // drawn open this frame.
+                handle_door_effects,
                 sync_wall_visuals,
             )
                 .chain(),

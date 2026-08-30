@@ -1,7 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
+  freshCredentials,
   graphql,
   inviteAndJoinAsPlayer,
+  register,
   registerAndCreateWorld,
   uniqueSuffix,
   waitForEngineReady,
@@ -338,8 +340,11 @@ test("a Game Master places a book and a player who clicks it gets the page", asy
 
   const strangerContext = await browser.newContext();
   const strangerPage = await strangerContext.newPage();
-  const { register, freshCredentials } = await import("./fixtures/helpers");
-  await register(strangerPage, freshCredentials(`stranger${suffix}`));
+  // `freshCredentials` appends its own unique suffix, so the prefix stays
+  // short — a username carrying two suffixes exceeds the field's limit and
+  // fails as a registration that never navigates, which reads like a broken
+  // page rather than a name that was too long.
+  await register(strangerPage, freshCredentials("outsider"));
 
   const refused = await graphql<{ errors?: { message: string }[] }>(
     strangerPage,

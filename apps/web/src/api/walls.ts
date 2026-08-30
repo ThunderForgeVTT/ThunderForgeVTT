@@ -15,6 +15,8 @@ const WALL_FIELDS = `
   blocksVision
   blocksMovement
   doorState
+  locked
+  secret
   metadata
   createdBy
   updatedBy

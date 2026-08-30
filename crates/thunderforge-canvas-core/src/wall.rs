@@ -149,6 +149,137 @@ impl Wall {
     }
 }
 
+// ---------------------------------------------------------------------------
+// What doors contribute to the interaction seam (spec 030)
+// ---------------------------------------------------------------------------
+
+/// Set a door open or closed.
+pub const SET_STATE: &str = "door.set_state";
+/// Lock or unlock a door.
+pub const SET_LOCK: &str = "door.set_lock";
+/// Reveal a secret door.
+pub const REVEAL: &str = "door.reveal";
+
+/// What a door reference points at.
+pub const WALL: &str = "wall";
+/// The configuration key naming the door.
+pub const TARGET_KEY: &str = "target";
+/// The configuration key carrying the desired state.
+pub const STATE_KEY: &str = "state";
+/// The configuration key carrying the desired lock.
+pub const LOCKED_KEY: &str = "locked";
+
+/// What doors contribute to the interaction registry.
+///
+/// Declared *here*, beside doors, rather than in `crate::interaction`. That is
+/// the whole point of the seam: doors are the effect most tempting to build
+/// into the interaction core, because they are the most obviously spatial
+/// thing on a map. `scripts/verify.mjs` greps that core for the word so the
+/// temptation is visible rather than a matter of judgement (FR-039).
+pub fn interaction_effects() -> Vec<crate::interaction::EffectDeclaration> {
+    use crate::interaction::{
+        ChoiceOption, ConfigField, ConfigFieldKind, EffectDeclaration, SubjectKind,
+    };
+
+    let target = |required: bool| ConfigField {
+        key: TARGET_KEY.to_string(),
+        label: String::from("Which door"),
+        kind: ConfigFieldKind::Reference {
+            of: WALL.to_string(),
+        },
+        required,
+    };
+
+    vec![
+        EffectDeclaration {
+            id: SET_STATE.to_string(),
+            label: String::from("Open or close a door"),
+            description: String::from("Swings a door, or toggles whichever way it is now."),
+            // A lever on the wall, the door itself, or a threshold the party
+            // crosses — all three are things a Game Master reaches for.
+            subject_kinds: vec![SubjectKind::Prop, SubjectKind::Door, SubjectKind::Region],
+            config: vec![
+                target(true),
+                ConfigField {
+                    key: STATE_KEY.to_string(),
+                    label: String::from("Set it to"),
+                    kind: ConfigFieldKind::Choice {
+                        options: vec![
+                            ChoiceOption {
+                                value: String::from("open"),
+                                label: String::from("Open"),
+                            },
+                            ChoiceOption {
+                                value: String::from("closed"),
+                                label: String::from("Closed"),
+                            },
+                            // The commonest case, and the one a single lever
+                            // wants: whatever it is now, make it the other.
+                            ChoiceOption {
+                                value: String::from("toggle"),
+                                label: String::from("The other way"),
+                            },
+                        ],
+                    },
+                    required: true,
+                },
+            ],
+        },
+        EffectDeclaration {
+            id: SET_LOCK.to_string(),
+            label: String::from("Lock or unlock a door"),
+            description: String::from("Changes who may open it, not whether it is open."),
+            subject_kinds: vec![SubjectKind::Prop, SubjectKind::Door],
+            config: vec![
+                target(true),
+                ConfigField {
+                    key: LOCKED_KEY.to_string(),
+                    label: String::from("Locked"),
+                    kind: ConfigFieldKind::Boolean,
+                    required: true,
+                },
+            ],
+        },
+        EffectDeclaration {
+            id: REVEAL.to_string(),
+            label: String::from("Reveal a secret door"),
+            description: String::from("Shows the table a door that was not drawn for them."),
+            subject_kinds: vec![SubjectKind::Prop, SubjectKind::Door, SubjectKind::Region],
+            config: vec![target(true)],
+        },
+    ]
+}
+
+/// What a configured door effect points at.
+pub fn target_of(config: &serde_json::Value) -> Option<&str> {
+    config.get(TARGET_KEY)?.as_str()
+}
+
+/// What state a `door.set_state` asks for, resolved against where it is now.
+///
+/// `toggle` is resolved here rather than by the caller so that "the other way"
+/// means the same thing everywhere — and so that a lever wired to a door that
+/// is already open does the obvious thing rather than nothing.
+pub fn requested_state(config: &serde_json::Value, current: DoorState) -> Option<DoorState> {
+    match config.get(STATE_KEY)?.as_str()? {
+        "open" => Some(DoorState::Open),
+        "closed" => Some(DoorState::Closed),
+        "toggle" => Some(match current {
+            DoorState::Open => DoorState::Closed,
+            // A wall that is not a door has nothing to toggle, but a toggle
+            // aimed at one is a misconfiguration rather than a reason to
+            // invent a state — closed is what "not open" means.
+            DoorState::Closed | DoorState::None => DoorState::Open,
+        }),
+        _ => None,
+    }
+}
+
+/// Whether a `door.set_lock` asks for locked or unlocked.
+pub fn requested_lock(config: &serde_json::Value) -> Option<bool> {
+    config.get(LOCKED_KEY)?.as_bool()
+}
+
 /// One reversible wall edit, pushed onto `WallSet`'s undo stack whenever a
 /// confirmed edit is applied locally. Undo re-issues the inverse as a
 /// normal outbound mutation (research.md §4) rather than a special
@@ -706,5 +837,81 @@ mod tests {
         door.secret = true;
         assert_eq!(door.blocking(), before);
         assert!(door.may_change_state(false));
+    }
+
+    // --- what doors contribute --------------------------------------------
+
+    #[test]
+    fn the_declarations_are_namespaced_and_assemble() {
+        use crate::interaction::EffectRegistry;
+
+        let registry = EffectRegistry::assemble([interaction_effects()]).expect("one contributor");
+        assert_eq!(registry.len(), 3);
+        for declaration in registry.all() {
+            assert_eq!(declaration.namespace(), "door");
+        }
+    }
+
+    #[test]
+    fn only_a_lock_effect_may_be_put_on_something_that_cannot_be_crossed() {
+        // `door.set_lock` is deliberately not offered on a region. Locking a
+        // door by walking past it is a thing no Game Master asked for, and
+        // offering it would put a footgun in the authoring form.
+        let effects = interaction_effects();
+        let lock = effects.iter().find(|e| e.id == SET_LOCK).expect("declared");
+        assert!(
+            !lock
+                .subject_kinds
+                .contains(&crate::interaction::SubjectKind::Region)
+        );
+    }
+
+    #[test]
+    fn toggle_means_the_other_way_from_wherever_it_is() {
+        let toggle = serde_json::json!({ "state": "toggle" });
+        assert_eq!(
+            requested_state(&toggle, DoorState::Open),
+            Some(DoorState::Closed)
+        );
+        assert_eq!(
+            requested_state(&toggle, DoorState::Closed),
+            Some(DoorState::Open)
+        );
+    }
+
+    #[test]
+    fn an_explicit_state_ignores_where_the_door_is_now() {
+        // A lever that says "open" opens it, and pulling it twice does not
+        // close it. That is the difference between "open" and "toggle", and a
+        // Game Master chose which one they wanted.
+        let open = serde_json::json!({ "state": "open" });
+        assert_eq!(
+            requested_state(&open, DoorState::Open),
+            Some(DoorState::Open)
+        );
+        assert_eq!(
+            requested_state(&open, DoorState::Closed),
+            Some(DoorState::Open)
+        );
+    }
+
+    #[test]
+    fn an_unrecognised_state_asks_for_nothing_rather_than_guessing() {
+        assert_eq!(
+            requested_state(&serde_json::json!({ "state": "ajar" }), DoorState::Closed),
+            None
+        );
+        assert_eq!(
+            requested_state(&serde_json::json!({}), DoorState::Closed),
+            None
+        );
+    }
+
+    #[test]
+    fn a_target_and_a_lock_read_back() {
+        let config = serde_json::json!({ "target": "w-1", "locked": true });
+        assert_eq!(target_of(&config), Some("w-1"));
+        assert_eq!(requested_lock(&config), Some(true));
+        assert_eq!(requested_lock(&serde_json::json!({})), None);
     }
 }

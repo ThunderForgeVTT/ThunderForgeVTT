@@ -260,3 +260,87 @@ export function placeProp(
 ): Promise<TokenRecord> {
   return createToken({ sceneId, x, y, tokenType: "object", photoUrl });
 }
+
+/**
+ * Make a wall a door, or stop it being one (FR-007).
+ *
+ * Designating also gives the door an interactive, so clicking it opens it
+ * without the Game Master having to author one — a door nobody can touch is
+ * not what "designate a door" means to anybody.
+ */
+export async function setDoorDesignation(
+  wallId: string,
+  isDoor: boolean,
+): Promise<boolean> {
+  const payload = await postGraphQL<{ setDoorDesignation: boolean }>(
+    `mutation ($wallId: UUID!, $isDoor: Boolean!) {
+      setDoorDesignation(wallId: $wallId, isDoor: $isDoor)
+    }`,
+    { wallId, isDoor },
+  );
+  return payload?.setDoorDesignation ?? false;
+}
+
+/** Change who may open a door, not whether it is open (FR-013). */
+export async function setDoorLock(
+  wallId: string,
+  locked: boolean,
+): Promise<boolean> {
+  const payload = await postGraphQL<{ setDoorLock: boolean }>(
+    `mutation ($wallId: UUID!, $locked: Boolean!) {
+      setDoorLock(wallId: $wallId, locked: $locked)
+    }`,
+    { wallId, locked },
+  );
+  return payload?.setDoorLock ?? false;
+}
+
+/** Hide a door from the table, or show it. */
+export async function setDoorSecret(
+  wallId: string,
+  secret: boolean,
+): Promise<boolean> {
+  const payload = await postGraphQL<{ setDoorSecret: boolean }>(
+    `mutation ($wallId: UUID!, $secret: Boolean!) {
+      setDoorSecret(wallId: $wallId, secret: $secret)
+    }`,
+    { wallId, secret },
+  );
+  return payload?.setDoorSecret ?? false;
+}
+
+/**
+ * What to tell somebody whose activation did not run.
+ *
+ * `null` for an outcome that needs nothing said. Silence for a *refusal* is
+ * indistinguishable from the product being broken, which is the whole reason
+ * the outcome is tagged rather than boolean (FR-014) — but silence for a
+ * performed effect is correct, because the effect is the feedback.
+ */
+export function refusalNotice(result: ActivationResult): string | null {
+  switch (result.outcome) {
+    case "performed":
+      return null;
+    case "requested":
+      return "Asked the GM. Nothing happens until they say so.";
+    case "unavailable":
+      // Not a failure the player caused, and not one they can do anything
+      // about. Saying so beats a click that appears to do nothing.
+      return "This does not work in this session.";
+    case "noEffect":
+      return null;
+    case "refused":
+      switch (result.reason) {
+        case "locked":
+          return "It is locked.";
+        case "gmOnly":
+          return "Only the GM can do this.";
+        case "alreadyFired":
+          return "This has already happened.";
+        default:
+          return "That did not work.";
+      }
+    default:
+      return null;
+  }
+}

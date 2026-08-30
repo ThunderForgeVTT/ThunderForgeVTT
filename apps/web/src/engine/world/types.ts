@@ -47,6 +47,15 @@ export type WorldWall = {
   blocksVision: boolean;
   blocksMovement: boolean;
   doorState: DoorState;
+  /**
+   * Spec 030: who may change the state.
+   *
+   * Optional so a payload written before this existed still constructs — and
+   * `false` is what every wall was, so a stale sender keeps working.
+   */
+  locked?: boolean;
+  /** Spec 030: not drawn for players until revealed. */
+  secret?: boolean;
 };
 
 // Confirmed light source state, as it exists in the world store (mirrors
