@@ -92,6 +92,37 @@ pub struct SystemResource {
     /// multi-stage boss. A counter must not allow stacking.
     #[serde(default)]
     pub allow_stacking: bool,
+    /// Where this resource's numbers live in the system's stored actor data.
+    ///
+    /// Without this the server would have to know each system's field names,
+    /// and every new ruleset would need server changes before its tokens could
+    /// show anything — the coupling FR-001 exists to prevent.
+    pub source: ResourceSourceSpec,
+}
+
+/// Which stored slot a resource reads, and which fields make up its entries.
+#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceSourceSpec {
+    /// `resourceData`, `traitData`, and so on.
+    pub slot: String,
+    /// Ordered. Index 0 is the base pool; later entries stack above it.
+    pub entries: Vec<EntrySourceSpec>,
+}
+
+/// One layer's field mapping.
+#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct EntrySourceSpec {
+    pub current: String,
+    /// Absent for a layer with no maximum of its own — temporary hit points
+    /// are granted, not capped.
+    pub max: Option<String>,
+    pub label: Option<String>,
+    /// Skip when the field is missing or zero, so an absent layer is absent
+    /// rather than an empty bar on every character.
+    #[serde(default)]
+    pub optional: bool,
 }
 
 /// Generates the JSON schema for the `SystemManifest` struct.
@@ -171,6 +202,46 @@ pub fn validate_legal_content(instance: &serde_json::Value) -> Result<(), String
 
 #[cfg(test)]
 mod tests {
+
+    /// The manifest schema and the engine's model describe the same thing in
+    /// two crates, and they must not drift.
+    ///
+    /// They are deliberately duplicated: this crate is the schema published to
+    /// system authors and validated against hand-written JSON, and depending
+    /// on the engine's crate would drag its graph into every pack that only
+    /// wants to describe itself. The cost of that choice is this test.
+    #[test]
+    fn the_resource_spec_matches_the_engine_model_field_for_field() {
+        let spec = serde_json::to_value(SystemResource {
+            id: "health".into(),
+            label: "Health".into(),
+            kind: "bar".into(),
+            order: 0,
+            allow_stacking: true,
+            source: ResourceSourceSpec {
+                slot: "resourceData".into(),
+                entries: vec![EntrySourceSpec {
+                    current: "current_hp".into(),
+                    max: Some("max_hp".into()),
+                    label: None,
+                    optional: false,
+                }],
+            },
+        })
+        .expect("serialises");
+
+        // These names are the contract. A rename on either side without the
+        // other is a manifest that validates and then displays nothing.
+        for field in ["id", "label", "kind", "order", "allowStacking", "source"] {
+            assert!(spec.get(field).is_some(), "missing {field}");
+        }
+        let source = spec.get("source").unwrap();
+        assert!(source.get("slot").is_some());
+        let entry = &source.get("entries").unwrap()[0];
+        for field in ["current", "max", "label", "optional"] {
+            assert!(entry.get(field).is_some(), "entry missing {field}");
+        }
+    }
     use super::*;
 
     #[test]

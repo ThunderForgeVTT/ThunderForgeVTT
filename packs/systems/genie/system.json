@@ -209,14 +209,32 @@
       "label": "Health",
       "kind": "bar",
       "order": 0,
-      "allowStacking": true
+      "allowStacking": false,
+      "source": {
+        "slot": "resourceData",
+        "entries": [
+          {
+            "current": "current_health",
+            "max": "max_health"
+          }
+        ]
+      }
     },
     {
       "id": "wishPoints",
       "label": "Wish Points",
       "kind": "bar",
       "order": 1,
-      "allowStacking": false
+      "allowStacking": false,
+      "source": {
+        "slot": "resourceData",
+        "entries": [
+          {
+            "current": "current_wish_points",
+            "max": "max_wish_points"
+          }
+        ]
+      }
     }
   ]
 }

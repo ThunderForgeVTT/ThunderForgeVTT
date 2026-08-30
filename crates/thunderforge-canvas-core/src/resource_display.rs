@@ -71,6 +71,75 @@ pub struct ResourceEntry {
     pub label: Option<String>,
 }
 
+/// Where one entry's numbers come from in a system's stored actor data.
+///
+/// The server reads a system's JSONB slot and pulls the named fields. It never
+/// learns what "health" means — only that this resource's first entry takes
+/// its current from `current_hp` and its maximum from `max_hp`.
+///
+/// That indirection is the whole point of FR-001. Without it, every new game
+/// system would need server changes to be displayed, and the engine would
+/// accumulate one special case per ruleset.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[serde(rename_all = "camelCase")]
+pub struct EntrySource {
+    /// Field holding this entry's current value.
+    pub current: String,
+    /// Field holding its maximum. Absent for a counter, or for a layer whose
+    /// size is whatever was granted — temporary hit points have no maximum of
+    /// their own.
+    pub max: Option<String>,
+    /// Name for this layer, shown when there is more than one.
+    pub label: Option<String>,
+    /// Skip this entry when the field is missing or zero.
+    ///
+    /// Temporary hit points are usually absent, and an ever-present empty
+    /// "Temporary" layer would be visual noise on every character in the game.
+    #[serde(default)]
+    pub optional: bool,
+}
+
+/// Where a whole resource's entries come from.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../../apps/web/src/engine/sdk/")]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceSource {
+    /// Which stored slot to read: `resourceData`, `traitData`, and so on.
+    pub slot: String,
+    /// Ordered. Index 0 is the base pool; later entries stack above it.
+    pub entries: Vec<EntrySource>,
+}
+
+/// Build a resource's entries from a system's stored actor data.
+///
+/// `slot` is the decoded JSON for the column named by [`ResourceSource::slot`].
+/// A field that is absent, non-numeric, or zero on an optional entry yields no
+/// entry rather than a zeroed one — see [`EntrySource::optional`].
+pub fn entries_from(slot: &serde_json::Value, source: &ResourceSource) -> Vec<ResourceEntry> {
+    let read = |name: &str| -> Option<i32> {
+        slot.get(name)
+            .and_then(|v| v.as_i64())
+            .and_then(|n| i32::try_from(n).ok())
+    };
+
+    let mut built = Vec::new();
+    for entry in &source.entries {
+        let Some(current) = read(&entry.current) else {
+            continue;
+        };
+        if entry.optional && current == 0 {
+            continue;
+        }
+        built.push(ResourceEntry {
+            current,
+            max: entry.max.as_deref().and_then(read),
+            label: entry.label.clone(),
+        });
+    }
+    built
+}
+
 /// Why a set of entries could not be accepted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EntryError {
@@ -473,6 +542,107 @@ mod tests {
             !percentage.contains("250"),
             "percentage must not carry the maximum: {percentage}"
         );
+    }
+
+    // --- reading entries out of a system's stored data --------------------
+
+    fn genie_health() -> ResourceSource {
+        ResourceSource {
+            slot: "resourceData".into(),
+            entries: vec![EntrySource {
+                current: "current_health".into(),
+                max: Some("max_health".into()),
+                label: None,
+                optional: false,
+            }],
+        }
+    }
+
+    /// D&D 5e's shape, and the reason `allowStacking` has a real caller.
+    ///
+    /// That system represents temporary hit points by letting `current_hp`
+    /// exceed `max_hp` — its own validator notes the case and permits it. That
+    /// is precisely the "value above its maximum" ambiguity the entry model
+    /// removes: temp HP is a second layer, not an overflowing first one.
+    fn dnd5e_hit_points() -> ResourceSource {
+        ResourceSource {
+            slot: "resourceData".into(),
+            entries: vec![
+                EntrySource {
+                    current: "current_hp".into(),
+                    max: Some("max_hp".into()),
+                    label: None,
+                    optional: false,
+                },
+                EntrySource {
+                    current: "temporary_hp".into(),
+                    max: None,
+                    label: Some("Temporary".into()),
+                    optional: true,
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn a_single_pool_reads_its_two_named_fields() {
+        let stored = serde_json::json!({ "current_health": 7, "max_health": 12 });
+        let entries = entries_from(&stored, &genie_health());
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].current, 7);
+        assert_eq!(entries[0].max, Some(12));
+    }
+
+    #[test]
+    fn temporary_hit_points_become_a_second_entry_rather_than_an_overflow() {
+        let stored = serde_json::json!({
+            "current_hp": 20, "max_hp": 20, "temporary_hp": 5
+        });
+        let entries = entries_from(&stored, &dnd5e_hit_points());
+
+        assert_eq!(entries.len(), 2, "base pool plus the temporary layer");
+        assert_eq!(entries[1].current, 5);
+        assert_eq!(entries[1].max, None, "granted, not capped");
+        assert_eq!(entries[1].label.as_deref(), Some("Temporary"));
+
+        // And the combination is legal, where `current 25 / max 20` was not.
+        let definition = bar("hp", true);
+        assert_eq!(validate_entries(&definition, &entries), Ok(()));
+    }
+
+    #[test]
+    fn an_absent_optional_layer_produces_no_entry() {
+        let stored = serde_json::json!({ "current_hp": 14, "max_hp": 20 });
+        let entries = entries_from(&stored, &dnd5e_hit_points());
+
+        assert_eq!(
+            entries.len(),
+            1,
+            "no empty Temporary layer on every character"
+        );
+    }
+
+    #[test]
+    fn a_zeroed_optional_layer_is_also_omitted() {
+        let stored = serde_json::json!({
+            "current_hp": 14, "max_hp": 20, "temporary_hp": 0
+        });
+        assert_eq!(entries_from(&stored, &dnd5e_hit_points()).len(), 1);
+    }
+
+    #[test]
+    fn a_missing_required_field_yields_no_entry_rather_than_a_zero() {
+        // A zero would draw an empty bar, which claims the creature is at
+        // zero — a far stronger statement than "this system stored nothing".
+        let stored = serde_json::json!({ "max_health": 12 });
+        assert!(entries_from(&stored, &genie_health()).is_empty());
+    }
+
+    #[test]
+    fn a_non_numeric_field_is_ignored_rather_than_guessed_at() {
+        let stored = serde_json::json!({ "current_health": "lots", "max_health": 12 });
+        assert!(entries_from(&stored, &genie_health()).is_empty());
     }
 
     // --- the derived default ---------------------------------------------

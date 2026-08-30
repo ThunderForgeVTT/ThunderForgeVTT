@@ -14,10 +14,10 @@
       "Do not use 'Dungeons & Dragons' as a product/module name or in marketing that implies Wizards of the Coast endorsement",
       "Do not include any attribution to Wizards of the Coast or its parents/affiliates beyond the exact attribution statement above (per the SRD's own Legal Information page)",
       "May use 'compatible with fifth edition' or '5E compatible' phrasing, but not the D&D trademark or logo itself",
-      "Do not reproduce or imply access to proprietary campaign lore, named characters, deities, or iconic monsters (e.g. Mind Flayers, Beholders) — these are excluded from the SRD",
+      "Do not reproduce or imply access to proprietary campaign lore, named characters, deities, or iconic monsters (e.g. Mind Flayers, Beholders) \u2014 these are excluded from the SRD",
       "Where the SRD renamed a legacy item to avoid trademark bleed (e.g. 'Mysterious Deck' instead of 'Deck of Many Things', 'Dragon Orb' instead of 'Orb of Dragonkind'), use the SRD's renamed term, not the proprietary legacy name"
     ],
-    "requiredUiPlacement": "Must be shown on the system selection screen and/or a permanent, easily accessible module settings/about tab — not buried in Terms of Service.",
+    "requiredUiPlacement": "Must be shown on the system selection screen and/or a permanent, easily accessible module settings/about tab \u2014 not buried in Terms of Service.",
     "sourceUrl": "https://creativecommons.org/licenses/by/4.0/"
   },
   "url": "https://github.com/ThunderForgeVTT/ThunderForgeVTT",
@@ -34,32 +34,104 @@
     "web": "./web"
   },
   "skills": {
-    "acrobatics": { "ability": "dexterity", "label": "Acrobatics" },
-    "animal_handling": { "ability": "wisdom", "label": "Animal Handling" },
-    "arcana": { "ability": "intelligence", "label": "Arcana" },
-    "athletics": { "ability": "strength", "label": "Athletics" },
-    "deception": { "ability": "charisma", "label": "Deception" },
-    "history": { "ability": "intelligence", "label": "History" },
-    "insight": { "ability": "wisdom", "label": "Insight" },
-    "intimidation": { "ability": "charisma", "label": "Intimidation" },
-    "investigation": { "ability": "intelligence", "label": "Investigation" },
-    "medicine": { "ability": "wisdom", "label": "Medicine" },
-    "nature": { "ability": "intelligence", "label": "Nature" },
-    "perception": { "ability": "wisdom", "label": "Perception" },
-    "performance": { "ability": "charisma", "label": "Performance" },
-    "persuasion": { "ability": "charisma", "label": "Persuasion" },
-    "religion": { "ability": "intelligence", "label": "Religion" },
-    "sleight_of_hand": { "ability": "dexterity", "label": "Sleight of Hand" },
-    "stealth": { "ability": "dexterity", "label": "Stealth" },
-    "survival": { "ability": "wisdom", "label": "Survival" }
+    "acrobatics": {
+      "ability": "dexterity",
+      "label": "Acrobatics"
+    },
+    "animal_handling": {
+      "ability": "wisdom",
+      "label": "Animal Handling"
+    },
+    "arcana": {
+      "ability": "intelligence",
+      "label": "Arcana"
+    },
+    "athletics": {
+      "ability": "strength",
+      "label": "Athletics"
+    },
+    "deception": {
+      "ability": "charisma",
+      "label": "Deception"
+    },
+    "history": {
+      "ability": "intelligence",
+      "label": "History"
+    },
+    "insight": {
+      "ability": "wisdom",
+      "label": "Insight"
+    },
+    "intimidation": {
+      "ability": "charisma",
+      "label": "Intimidation"
+    },
+    "investigation": {
+      "ability": "intelligence",
+      "label": "Investigation"
+    },
+    "medicine": {
+      "ability": "wisdom",
+      "label": "Medicine"
+    },
+    "nature": {
+      "ability": "intelligence",
+      "label": "Nature"
+    },
+    "perception": {
+      "ability": "wisdom",
+      "label": "Perception"
+    },
+    "performance": {
+      "ability": "charisma",
+      "label": "Performance"
+    },
+    "persuasion": {
+      "ability": "charisma",
+      "label": "Persuasion"
+    },
+    "religion": {
+      "ability": "intelligence",
+      "label": "Religion"
+    },
+    "sleight_of_hand": {
+      "ability": "dexterity",
+      "label": "Sleight of Hand"
+    },
+    "stealth": {
+      "ability": "dexterity",
+      "label": "Stealth"
+    },
+    "survival": {
+      "ability": "wisdom",
+      "label": "Survival"
+    }
   },
   "abilities": {
-    "strength": { "label": "Strength", "abbreviation": "STR" },
-    "dexterity": { "label": "Dexterity", "abbreviation": "DEX" },
-    "constitution": { "label": "Constitution", "abbreviation": "CON" },
-    "intelligence": { "label": "Intelligence", "abbreviation": "INT" },
-    "wisdom": { "label": "Wisdom", "abbreviation": "WIS" },
-    "charisma": { "label": "Charisma", "abbreviation": "CHA" }
+    "strength": {
+      "label": "Strength",
+      "abbreviation": "STR"
+    },
+    "dexterity": {
+      "label": "Dexterity",
+      "abbreviation": "DEX"
+    },
+    "constitution": {
+      "label": "Constitution",
+      "abbreviation": "CON"
+    },
+    "intelligence": {
+      "label": "Intelligence",
+      "abbreviation": "INT"
+    },
+    "wisdom": {
+      "label": "Wisdom",
+      "abbreviation": "WIS"
+    },
+    "charisma": {
+      "label": "Charisma",
+      "abbreviation": "CHA"
+    }
   },
   "spellSlots": {
     "1": [2, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -87,21 +159,70 @@
     "ability_data": {
       "description": "Base ability scores for D&D 5e (standard 1-20 range)",
       "properties": {
-        "strength": { "type": "integer", "min": 1, "max": 20, "label": "Strength" },
-        "dexterity": { "type": "integer", "min": 1, "max": 20, "label": "Dexterity" },
-        "constitution": { "type": "integer", "min": 1, "max": 20, "label": "Constitution" },
-        "intelligence": { "type": "integer", "min": 1, "max": 20, "label": "Intelligence" },
-        "wisdom": { "type": "integer", "min": 1, "max": 20, "label": "Wisdom" },
-        "charisma": { "type": "integer", "min": 1, "max": 20, "label": "Charisma" }
+        "strength": {
+          "type": "integer",
+          "min": 1,
+          "max": 20,
+          "label": "Strength"
+        },
+        "dexterity": {
+          "type": "integer",
+          "min": 1,
+          "max": 20,
+          "label": "Dexterity"
+        },
+        "constitution": {
+          "type": "integer",
+          "min": 1,
+          "max": 20,
+          "label": "Constitution"
+        },
+        "intelligence": {
+          "type": "integer",
+          "min": 1,
+          "max": 20,
+          "label": "Intelligence"
+        },
+        "wisdom": {
+          "type": "integer",
+          "min": 1,
+          "max": 20,
+          "label": "Wisdom"
+        },
+        "charisma": {
+          "type": "integer",
+          "min": 1,
+          "max": 20,
+          "label": "Charisma"
+        }
       },
-      "required": ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]
+      "required": [
+        "strength",
+        "dexterity",
+        "constitution",
+        "intelligence",
+        "wisdom",
+        "charisma"
+      ]
     },
     "resource_data": {
       "description": "Hit points and derived resources",
       "properties": {
-        "current_hp": { "type": "integer", "min": 0, "label": "Current HP" },
-        "max_hp": { "type": "integer", "min": 1, "label": "Maximum HP" },
-        "temporary_hp": { "type": "integer", "min": 0, "label": "Temporary HP" }
+        "current_hp": {
+          "type": "integer",
+          "min": 0,
+          "label": "Current HP"
+        },
+        "max_hp": {
+          "type": "integer",
+          "min": 1,
+          "label": "Maximum HP"
+        },
+        "temporary_hp": {
+          "type": "integer",
+          "min": 0,
+          "label": "Temporary HP"
+        }
       },
       "required": ["max_hp"]
     },
@@ -112,63 +233,141 @@
           "type": "object",
           "description": "Skill proficiency flags (true = proficient)",
           "properties": {
-            "acrobatics": { "type": "boolean" },
-            "animal_handling": { "type": "boolean" },
-            "arcana": { "type": "boolean" },
-            "athletics": { "type": "boolean" },
-            "deception": { "type": "boolean" },
-            "history": { "type": "boolean" },
-            "insight": { "type": "boolean" },
-            "intimidation": { "type": "boolean" },
-            "investigation": { "type": "boolean" },
-            "medicine": { "type": "boolean" },
-            "nature": { "type": "boolean" },
-            "perception": { "type": "boolean" },
-            "performance": { "type": "boolean" },
-            "persuasion": { "type": "boolean" },
-            "religion": { "type": "boolean" },
-            "sleight_of_hand": { "type": "boolean" },
-            "stealth": { "type": "boolean" },
-            "survival": { "type": "boolean" }
+            "acrobatics": {
+              "type": "boolean"
+            },
+            "animal_handling": {
+              "type": "boolean"
+            },
+            "arcana": {
+              "type": "boolean"
+            },
+            "athletics": {
+              "type": "boolean"
+            },
+            "deception": {
+              "type": "boolean"
+            },
+            "history": {
+              "type": "boolean"
+            },
+            "insight": {
+              "type": "boolean"
+            },
+            "intimidation": {
+              "type": "boolean"
+            },
+            "investigation": {
+              "type": "boolean"
+            },
+            "medicine": {
+              "type": "boolean"
+            },
+            "nature": {
+              "type": "boolean"
+            },
+            "perception": {
+              "type": "boolean"
+            },
+            "performance": {
+              "type": "boolean"
+            },
+            "persuasion": {
+              "type": "boolean"
+            },
+            "religion": {
+              "type": "boolean"
+            },
+            "sleight_of_hand": {
+              "type": "boolean"
+            },
+            "stealth": {
+              "type": "boolean"
+            },
+            "survival": {
+              "type": "boolean"
+            }
           }
         },
         "saving_throw_proficiencies": {
           "type": "object",
           "description": "Saving throw proficiency flags",
           "properties": {
-            "strength": { "type": "boolean" },
-            "dexterity": { "type": "boolean" },
-            "constitution": { "type": "boolean" },
-            "intelligence": { "type": "boolean" },
-            "wisdom": { "type": "boolean" },
-            "charisma": { "type": "boolean" }
+            "strength": {
+              "type": "boolean"
+            },
+            "dexterity": {
+              "type": "boolean"
+            },
+            "constitution": {
+              "type": "boolean"
+            },
+            "intelligence": {
+              "type": "boolean"
+            },
+            "wisdom": {
+              "type": "boolean"
+            },
+            "charisma": {
+              "type": "boolean"
+            }
           }
         },
         "languages": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "List of known languages"
         },
-        "proficiency_bonus": { "type": "integer", "min": 2, "max": 6 }
+        "proficiency_bonus": {
+          "type": "integer",
+          "min": 2,
+          "max": 6
+        }
       }
     },
     "trait_data": {
       "description": "Character class, subclass, race, background, and feats",
       "properties": {
-        "class": { "type": "string", "label": "Class" },
-        "level": { "type": "integer", "min": 1, "max": 20, "label": "Level" },
-        "subclass": { "type": "string", "label": "Subclass/Archetype" },
-        "race": { "type": "string", "label": "Race" },
-        "background": { "type": "string", "label": "Background" },
-        "alignment": { "type": "string", "label": "Alignment" },
+        "class": {
+          "type": "string",
+          "label": "Class"
+        },
+        "level": {
+          "type": "integer",
+          "min": 1,
+          "max": 20,
+          "label": "Level"
+        },
+        "subclass": {
+          "type": "string",
+          "label": "Subclass/Archetype"
+        },
+        "race": {
+          "type": "string",
+          "label": "Race"
+        },
+        "background": {
+          "type": "string",
+          "label": "Background"
+        },
+        "alignment": {
+          "type": "string",
+          "label": "Alignment"
+        },
         "feats": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "List of feat names"
         },
         "traits": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "Racial and class traits"
         }
       },
@@ -177,35 +376,106 @@
     "spell_data": {
       "description": "Spellcasting information for casters",
       "properties": {
-        "spellcasting_ability": { "type": "string", "enum": ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"], "label": "Spellcasting Ability" },
-        "spell_save_dc": { "type": "integer", "min": 8, "max": 20 },
-        "spell_attack_bonus": { "type": "integer" },
+        "spellcasting_ability": {
+          "type": "string",
+          "enum": [
+            "strength",
+            "dexterity",
+            "constitution",
+            "intelligence",
+            "wisdom",
+            "charisma"
+          ],
+          "label": "Spellcasting Ability"
+        },
+        "spell_save_dc": {
+          "type": "integer",
+          "min": 8,
+          "max": 20
+        },
+        "spell_attack_bonus": {
+          "type": "integer"
+        },
         "cantrips_known": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "List of cantrip names"
         },
         "spells_known": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "List of known spells (for prepared casters, this is prepared spells)"
         },
         "spell_slots": {
           "type": "object",
           "description": "Spell slots per level (1-9)",
           "properties": {
-            "level_1": { "type": "integer", "min": 0 },
-            "level_2": { "type": "integer", "min": 0 },
-            "level_3": { "type": "integer", "min": 0 },
-            "level_4": { "type": "integer", "min": 0 },
-            "level_5": { "type": "integer", "min": 0 },
-            "level_6": { "type": "integer", "min": 0 },
-            "level_7": { "type": "integer", "min": 0 },
-            "level_8": { "type": "integer", "min": 0 },
-            "level_9": { "type": "integer", "min": 0 }
+            "level_1": {
+              "type": "integer",
+              "min": 0
+            },
+            "level_2": {
+              "type": "integer",
+              "min": 0
+            },
+            "level_3": {
+              "type": "integer",
+              "min": 0
+            },
+            "level_4": {
+              "type": "integer",
+              "min": 0
+            },
+            "level_5": {
+              "type": "integer",
+              "min": 0
+            },
+            "level_6": {
+              "type": "integer",
+              "min": 0
+            },
+            "level_7": {
+              "type": "integer",
+              "min": 0
+            },
+            "level_8": {
+              "type": "integer",
+              "min": 0
+            },
+            "level_9": {
+              "type": "integer",
+              "min": 0
+            }
           }
         }
       }
     }
-  }
+  },
+  "resources": [
+    {
+      "id": "hitPoints",
+      "label": "Hit Points",
+      "kind": "bar",
+      "order": 0,
+      "allowStacking": true,
+      "source": {
+        "slot": "resourceData",
+        "entries": [
+          {
+            "current": "current_hp",
+            "max": "max_hp"
+          },
+          {
+            "current": "temporary_hp",
+            "label": "Temporary",
+            "optional": true
+          }
+        ]
+      }
+    }
+  ]
 }
