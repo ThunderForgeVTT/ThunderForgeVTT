@@ -4,3 +4,10 @@ dist
 data
 logs
 coverage
+# ts-rs writes these, and rewrites them on every `cargo test` of
+# thunderforge-canvas-core — not only when the generator script is run. Having
+# prettier own them too means a bare test run leaves the tree dirty and
+# `sdk:check` reports drift that no source change caused. The generator is the
+# authority on their formatting; `pnpm sdk:check` is what guards them.
+apps/web/src/engine/sdk/*.ts
+!apps/web/src/engine/sdk/commands.ts

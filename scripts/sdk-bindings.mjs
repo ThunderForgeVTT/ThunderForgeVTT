@@ -48,20 +48,6 @@ execFileSync(
   { cwd: ROOT, stdio: "inherit" },
 );
 
-// Format what was just generated.
-//
-// ts-rs emits everything on one line, and the repo's `format` script covers
-// this directory — so without this step the generator and prettier disagree
-// permanently, and whichever ran last determined whether the tree was
-// "clean". Formatting here makes both gates agree and makes the committed
-// output readable, which matters because these files are what somebody reads
-// when a payload does not match what they expected.
-execFileSync(
-  "pnpm",
-  ["exec", "prettier", "--write", "--log-level", "warn", "src/engine/sdk/**/*.ts"],
-  { cwd: path.join(ROOT, "apps", "web"), stdio: "inherit" },
-);
-
 if (!check) {
   console.log(`[sdk] regenerated into ${path.relative(ROOT, OUT_DIR)}`);
   process.exit(0);
