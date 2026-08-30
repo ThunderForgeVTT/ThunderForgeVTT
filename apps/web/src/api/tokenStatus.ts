@@ -92,16 +92,16 @@ function toDisclosed(resource: WireResource): Disclosed | null {
 }
 
 export async function getTokenStatus(sceneId: string): Promise<TokenStatus[]> {
-  const response = await postGraphQL<{
-    data?: { tokenStatus?: WireTokenStatus[] };
-    errors?: { message: string }[];
-  }>(TOKEN_STATUS_QUERY, { sceneId });
+  // `postGraphQL` unwraps `data` and throws on `errors`, so what comes back is
+  // the payload itself. Typing it as the envelope silently yields an empty
+  // list on every call — the query succeeds, `response.data` is `undefined`,
+  // and the caller sees "this scene has no status" rather than a mistake.
+  const payload = await postGraphQL<{ tokenStatus: WireTokenStatus[] }>(
+    TOKEN_STATUS_QUERY,
+    { sceneId },
+  );
 
-  if (response.errors?.length) {
-    throw new Error(response.errors.map((e) => e.message).join("; "));
-  }
-
-  return (response.data?.tokenStatus ?? []).map((token) => ({
+  return (payload?.tokenStatus ?? []).map((token) => ({
     tokenId: token.tokenId,
     resources: token.resources.flatMap((resource, index) => {
       const disclosed = toDisclosed(resource);
@@ -112,11 +112,10 @@ export async function getTokenStatus(sceneId: string): Promise<TokenStatus[]> {
             id: resource.definitionId,
             label: resource.label,
             kind: resource.kind as ResourceDefinition["kind"],
-            // The server has already sorted by the system's declared order,
-            // so the array position *is* the order. Preserving it here matters:
-            // the engine sorts by this field, and a constant would collapse
-            // Genie's health and wish points into whichever order the map
-            // iteration happened to produce.
+            // The server has already sorted by the system's declared order, so
+            // the array position *is* the order. A constant here would
+            // collapse Genie's health and wish points into whichever order the
+            // map iteration produced.
             order: index,
             allowStacking: false,
           },

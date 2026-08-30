@@ -1181,6 +1181,22 @@ fn apply_external_commands(
                     ))
                     .id();
 
+                // A token arriving after its status adopts it here, which is
+                // the other half of the ordering fix above.
+                if let Ok(slot) = token_status_slot().lock()
+                    && let Some(resources) = slot.get(&token.id)
+                {
+                    commands.entity(entity).insert(TokenStatus {
+                        resources: resources
+                            .iter()
+                            .map(|r| ResolvedResource {
+                                definition: r.definition.clone(),
+                                disclosed: r.disclosed.clone(),
+                            })
+                            .collect(),
+                    });
+                }
+
                 token_entities.0.insert(token.id, entity);
             }
             ExternalCommand::RemoveToken { token_id } => {
@@ -1194,10 +1210,21 @@ fn apply_external_commands(
             } => {
                 // Setting the component is the whole application step; the
                 // plugin's `Changed<TokenStatus>` system redraws from there.
+                // Recorded first, and unconditionally.
+                //
+                // Status routinely arrives before the token it describes: the
+                // client fetches it as the scene opens while tokens are still
+                // being loaded. Dropping it when the entity is missing made
+                // bars appear or not depending on which request won, which is
+                // the kind of bug that reproduces once in ten runs and gets
+                // called flaky. The slot is the record; the component is a
+                // projection of it, applied when there is something to apply
+                // it to (see `apply_pending_token_status`).
+                if let Ok(mut slot) = token_status_slot().lock() {
+                    slot.insert(token_id.clone(), resources.clone());
+                }
+
                 if let Some(&entity) = token_entities.0.get(&token_id) {
-                    if let Ok(mut slot) = token_status_slot().lock() {
-                        slot.insert(token_id.clone(), resources.clone());
-                    }
                     commands.entity(entity).insert(TokenStatus {
                         resources: resources
                             .into_iter()

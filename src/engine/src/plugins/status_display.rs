@@ -28,7 +28,6 @@
 use bevy::prelude::*;
 
 use crate::TOKEN_SIZE;
-use crate::TokenIdentity;
 use thunderforge_canvas_core::resource_display::{Disclosed, ResourceDefinition};
 
 /// Height of one bar, in world units.
@@ -178,20 +177,6 @@ fn redraw_changed_status(
             });
         }
     }
-}
-
-/// Look up a token entity by its server id.
-///
-/// The read surface (`getTokenStatus`) needs this, and so does the command
-/// that sets status.
-pub fn entity_for_token(
-    tokens: &Query<(Entity, &TokenIdentity)>,
-    token_id: &str,
-) -> Option<Entity> {
-    tokens
-        .iter()
-        .find(|(_, identity)| identity.0 == token_id)
-        .map(|(entity, _)| entity)
 }
 
 #[cfg(test)]

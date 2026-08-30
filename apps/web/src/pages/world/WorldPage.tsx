@@ -45,6 +45,14 @@ import { ReconcileReport } from "@/components/world/ReconcileReport";
 import { ConnectionStatus } from "@/components/world/ConnectionStatus";
 import { reportSessionPeers } from "@/engine/world/sync/subscriptionClient";
 import {
+  StatusPanel,
+  type PanelCorner,
+} from "@/components/StatusPanel/StatusPanel";
+import {
+  readTokenStatus,
+  type TokenStatusResource,
+} from "@/engine/bevy/tokenStatus";
+import {
   applyTokenStatusWorldEvent,
   refreshTokenStatus,
 } from "@/engine/world/sync/tokenStatus";
@@ -122,6 +130,18 @@ export const worldPageSeo: SeoConfig = {
   noindex: true,
 };
 
+/** Where the viewer put the status panel. Per viewer, per device. */
+const PANEL_CORNER_KEY = "thunderforge.statusPanel.corner";
+
+function isPanelCorner(value: string | null): value is PanelCorner {
+  return (
+    value === "top-left" ||
+    value === "top-right" ||
+    value === "bottom-left" ||
+    value === "bottom-right"
+  );
+}
+
 export default function WorldPage() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
@@ -138,6 +158,27 @@ export default function WorldPage() {
     }),
   );
   const [worldState, setWorldState] = useState(() => worldStore.getState());
+
+  // Spec 029: the selected token's resources, read back from the engine rather
+  // than held here. React observes; it does not become a second store
+  // (Constitution I, ADR-053).
+  // Keyed by the token it was read for, so a slow read that resolves after
+  // the selection has moved cannot paint one token's resources under
+  // another's name — and so deselection needs no synchronous state write.
+  const [panelStatus, setPanelStatus] = useState<{
+    tokenId: string;
+    resources: TokenStatusResource[] | null;
+  } | null>(null);
+  const [panelCorner, setPanelCorner] = useState<PanelCorner>(() => {
+    try {
+      const saved = localStorage.getItem(PANEL_CORNER_KEY);
+      return isPanelCorner(saved) ? saved : "bottom-right";
+    } catch {
+      // A browser refusing storage (private window, blocked site data) is not
+      // a reason to fail to render a panel.
+      return "bottom-right";
+    }
+  });
   const { user } = useAuth();
   /**
    * What this client applied at its own reconnect, still eligible to be
@@ -1119,6 +1160,40 @@ export default function WorldPage() {
     };
   }, [id, sceneId, bridgeReady, worldStore]);
 
+  /** The selected token's name, for the panel heading. */
+  const selectedTokenLabel = useMemo(() => {
+    const id = worldState.selectedTokenId;
+    if (!id) return undefined;
+    return worldState.tokens[id]?.label ?? undefined;
+  }, [worldState.selectedTokenId, worldState.tokens]);
+
+  // Follow the selection: read what the engine would draw for the selected
+  // token. Cleared on deselection so the panel never shows the previous
+  // token's numbers, which would be actively misleading mid-fight.
+  useEffect(() => {
+    const tokenId = worldState.selectedTokenId;
+    if (!tokenId) {
+      return;
+    }
+
+    let cancelled = false;
+    void readTokenStatus(tokenId).then((resources) => {
+      if (!cancelled) setPanelStatus({ tokenId, resources });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [worldState.selectedTokenId, worldState.tokens]);
+
+  // Derived rather than stored: the panel shows a token's resources only while
+  // that token is the selected one, so deselection clears it with no state
+  // write at all.
+  const panelResources =
+    worldState.selectedTokenId &&
+    panelStatus?.tokenId === worldState.selectedTokenId
+      ? panelStatus.resources
+      : null;
+
   // Spec 005 (T014-T016, data-model.md "LiveSyncState"): track this tab's
   // one shared subscription-transport connection state, so a persistent
   // "reconnecting" indicator can render (FR-009/FR-009a) and so a dropped
@@ -1751,6 +1826,25 @@ export default function WorldPage() {
                 overflow: "hidden",
               }}
             >
+              {/* Spec 029: the selected token's resources. Positioned over the
+               * canvas rather than beside it, so it sits in the viewer's
+               * chosen corner of the map they are actually reading. */}
+              <StatusPanel
+                resources={panelResources}
+                title={selectedTokenLabel}
+                corner={panelCorner}
+                onCornerChange={(corner) => {
+                  setPanelCorner(corner);
+                  try {
+                    localStorage.setItem(PANEL_CORNER_KEY, corner);
+                  } catch {
+                    // Storage refused. The choice still applies for this
+                    // session; only its persistence is lost, which is not
+                    // worth interrupting play over.
+                  }
+                }}
+              />
+
               {/* Bevy mounts canvas here */}
               {/* Spec 008 (US1, FR-002/SC-002): the flat #2a2a2a background
                * above used to show nothing at all here while the ~190MB
