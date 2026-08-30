@@ -4,7 +4,21 @@
 
 **Created**: 2026-08-29
 
-**Status**: Draft
+**Status**: Complete — closed 2026-08-30
+
+**Outcome**: All 74 tasks done. Bars and counters above tokens, a corner panel
+whose placement survives a reload, four disclosure states resolved per viewer
+on the server, application-supplied appearance, and a typed engine SDK that
+reports what it refuses instead of dropping it. Four game systems declare
+their own resources and the engine understands none of them.
+
+Capacity was measured rather than assumed (SC-006): 3,200 tokens at 30fps with
+displays enabled — the same figure as with none — at a sprite delta of 964,
+after off-screen culling took it from 16,003 sprites and 20fps. Figures are
+generated into `marketing/engine-status-capacity.json`, never transcribed.
+
+F001 (clocks) is deliberately unbuilt and needs its own spec; the follow-up on
+per-viewer visibility and conditions records a decision, not outstanding work.
 
 **Input**: User description: "Offer a model for health bars and other types of bars or on-screen counters — some might be a health bar above a token, some might be health, stamina and mana, some might be health and energy. From a selected token we should be able to display that token's bars and counters in a corner, configurable. Eventually we want theming and more advanced UI/UX features around in-engine content and controls. Cover the player's and the GM's perspective, and focus the work on the engine itself so it provides a robust TypeScript interface we can then work into the instantiation."
 
