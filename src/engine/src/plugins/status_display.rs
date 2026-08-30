@@ -129,21 +129,79 @@ fn fill_of(disclosed: &Disclosed) -> (f32, bool) {
 /// Despawn-and-rebuild rather than mutating in place: the number of bars
 /// changes when a system's declarations change or a viewer's entitlement
 /// does, and a diffing update would be more code to get the same picture.
+/// The world-space rectangle the camera can see, widened enough to cover a
+/// token's bars.
+///
+/// `None` when there is no orthographic camera to ask, which is treated as
+/// "draw everything" — a missing camera must not silently blank every display
+/// in the scene, because that failure looks exactly like the feature being
+/// broken.
+fn visible_region(
+    cameras: &Query<(&Transform, &Projection), (With<Camera2d>, Without<TokenStatus>)>,
+) -> Option<Rect> {
+    let (transform, projection) = cameras.iter().next()?;
+    let Projection::Orthographic(ortho) = projection else {
+        return None;
+    };
+
+    // Bars sit above the token, so a token whose centre is just below the
+    // bottom edge still has geometry on screen. The margin covers a token and
+    // a generous stack of bars rather than being tuned to the current
+    // appearance, which the application can change at any time.
+    const MARGIN: f32 = TOKEN_SIZE.y * 2.0;
+    let centre = transform.translation.truncate();
+    Some(Rect {
+        min: centre + ortho.area.min - Vec2::splat(MARGIN),
+        max: centre + ortho.area.max + Vec2::splat(MARGIN),
+    })
+}
+
 /// This runs only on `Changed<TokenStatus>`, so it is not a per-frame cost.
 fn redraw_changed_status(
     mut commands: Commands,
-    tokens: Query<(Entity, Ref<TokenStatus>)>,
+    tokens: Query<(Entity, Ref<TokenStatus>, &Transform)>,
     existing: Query<(Entity, &ChildOf), With<StatusGeometry>>,
     appearance: Res<Appearance>,
+    cameras: Query<(&Transform, &Projection), (With<Camera2d>, Without<TokenStatus>)>,
+    mut last_view: Local<Option<Rect>>,
 ) {
     // A change to the appearance has to repaint bars that are already on
     // screen. Keying only on `Changed<TokenStatus>` would leave every
     // existing token wearing the old palette until something else happened
     // to it — so the new colours would appear to work when demonstrated on
     // a fresh scene and do nothing in a session already in progress.
-    let repaint_everything = appearance.is_changed();
+    // FR-026: a token nowhere near the camera must not pay for bars nobody can
+    // see. This is spawn-time culling rather than leaving it to the renderer's
+    // frustum test, because the measured cost is not fill — it is that the
+    // entities exist at all. With displays enabled a 3,200-token board carried
+    // 16,003 sprites against 3,203 without, and ran at 20fps against 59.
+    // Frustum culling would still walk all 16,003 every frame.
+    let view = visible_region(&cameras);
 
-    for (token_entity, status) in tokens.iter() {
+    // Panning must bring bars back. The redraw is otherwise change-driven, so
+    // without this a token scrolled into view would stay bare until something
+    // else happened to it — which, for a token standing still, is never.
+    //
+    // Compared with a tolerance rather than exactly: a camera at rest still
+    // jitters in the low bits, and float-equality would call that a move and
+    // repaint every on-screen token every frame, turning an optimisation into
+    // a per-frame cost. The tolerance is well under a token, so a real pan is
+    // still picked up before anything reaches the edge.
+    let view_moved = match (*last_view, view) {
+        (Some(previous), Some(current)) => {
+            const TOLERANCE: f32 = 8.0;
+            (previous.min - current.min).abs().max_element() > TOLERANCE
+                || (previous.max - current.max).abs().max_element() > TOLERANCE
+        }
+        (previous, current) => previous.is_some() != current.is_some(),
+    };
+    if view_moved {
+        *last_view = view;
+    }
+
+    let repaint_everything = appearance.is_changed() || view_moved;
+
+    for (token_entity, status, transform) in tokens.iter() {
         if !repaint_everything && !status.is_changed() {
             continue;
         }
@@ -157,6 +215,14 @@ fn redraw_changed_status(
         // A token with nothing to show gets no furniture at all — not an
         // empty track, which would read as "a resource at zero".
         if status.resources.is_empty() {
+            continue;
+        }
+
+        // Off-screen: the old geometry is already cleared above, and nothing
+        // replaces it. Coming back into view is handled by `view_moved`.
+        if let Some(region) = view
+            && !region.contains(transform.translation.truncate())
+        {
             continue;
         }
 

@@ -268,8 +268,8 @@ the renderer.
 
 ## Phase 11: Polish & Cross-Cutting Concerns
 
-- [ ] T069 Measure engine capacity with status displays enabled via `apps/web/e2e/engine-limits.spec.ts` (`--workers=1`) and record the figure against the 3,200-sprite baseline — SC-006 requires a **stated** number; an unmeasured cost is the failure, a measured reduction is not
-- [ ] T070 [P] Optimise off-screen tokens to skip full display cost in `src/engine/src/plugins/status_display.rs` (FR-026)
+- [x] T069 Measure engine capacity with status displays enabled via `apps/web/e2e/engine-limits.spec.ts` (`--workers=1`) and record the figure against the 3,200-sprite baseline — SC-006 requires a **stated** number; an unmeasured cost is the failure, a measured reduction is not
+- [x] T070 [P] Optimise off-screen tokens to skip full display cost in `src/engine/src/plugins/status_display.rs` (FR-026)
 - [x] T071 [P] Document the feature in `docs/` including the four disclosure states and the note that percentage discloses more than it appears to
 - [x] T072 [P] Update `MVP.md` Phase 5 with the verified outcome, replacing the stale "unverified" note now that stats demonstrably reach the screen
 - [x] T073 Run `specs/029-in-engine-status-displays/quickstart.md` end to end, including the manual step comparing `GREYED` against a resource genuinely at zero — that one is worth doing by eye, because a design that renders them alike passes every automated check while misleading every player

@@ -65,3 +65,30 @@ export async function readTokenStatus(
     return null;
   }
 }
+
+/**
+ * Every token the engine currently holds status for, keyed by token id.
+ *
+ * `readTokenStatus` answers about one token, which is what a panel needs. This
+ * answers about the board, which is what a measurement needs: whether the
+ * displays a capacity figure claims to include are actually on the screen yet.
+ * Status resolves progressively as a scene loads, and a frame time sampled
+ * before it finishes describes a board that is still filling in.
+ *
+ * `{}` covers the engine not being mounted and a bundle predating the call —
+ * both mean "nothing is displaying", which is the honest answer to ask this.
+ */
+export async function listTokenStatus(): Promise<
+  Record<string, TokenStatusResource[]>
+> {
+  const engine = await statusModule();
+  if (!engine?.list_token_status) return {};
+  try {
+    return JSON.parse(engine.list_token_status()) as Record<
+      string,
+      TokenStatusResource[]
+    >;
+  } catch {
+    return {};
+  }
+}
