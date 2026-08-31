@@ -10,6 +10,9 @@ export type DockSectionId =
   | "actors"
   | "combat"
   | "clocks"
+  // Spec 030: what the table has asked the Game Master to allow. Present only
+  // for whoever runs the world.
+  | "requests"
   | "settings";
 
 export interface DockSection {

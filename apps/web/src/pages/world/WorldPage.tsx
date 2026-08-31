@@ -6,7 +6,11 @@ import { WorldLayout } from "@/layouts/world-layout/WorldLayout";
 import type { SeoConfig } from "@/types/seo";
 import { createWorldStore } from "@/engine/world/store";
 import {
+  applyInteractiveWorldEvent,
   applyLightWorldEvent,
+  refreshInteractives,
+  setScenePlaying,
+  startTriggerBridge,
   applyShapeWorldEvent,
   applyTokenWorldEvent,
   applyWallWorldEvent,
@@ -59,6 +63,7 @@ import {
 import {
   beginPeerAdjudication,
   endPeerAdjudication,
+  onOpenLore,
   peerAdjudicationActive,
 } from "@/engine/bevy";
 import {
@@ -108,6 +113,8 @@ import {
   type ControllableToken,
 } from "@/engine/world/facets";
 import { TokenStackPicker } from "@/components/canvas-tools/TokenStackPicker";
+import { InteractionTool } from "@/components/canvas-tools/InteractionTool";
+import { ApprovalQueue } from "@/components/ApprovalQueue";
 import {
   GmToolRail,
   type GmToolId,
@@ -279,6 +286,14 @@ export default function WorldPage() {
    * the page.
    */
   const [openGmToolId, setOpenGmToolId] = useState<GmToolId | null>(null);
+
+  /**
+   * Bumped whenever something might have changed the approval queue, so it
+   * re-reads. A counter rather than the queue itself: the server is the one
+   * that knows what is pending, and holding a copy here would be a second
+   * answer to that question.
+   */
+  const [approvalRevision, setApprovalRevision] = useState(0);
   const sceneId = selectedSceneId;
 
   // Spec 004 (US4, T034-T036): scene-switch loading/error feedback. Before
@@ -1161,7 +1176,11 @@ export default function WorldPage() {
             applyShapeWorldEvent(worldStore, sceneId, event),
             applyLightWorldEvent(worldStore, sceneId, event),
             applyTokenStatusWorldEvent(worldStore, sceneId, event),
+            applyInteractiveWorldEvent(worldStore, sceneId, event),
           ]);
+          // The approval queue is server state, so a nudge on the bus is all
+          // this side needs — it re-reads rather than holding a copy.
+          setApprovalRevision((n) => n + 1);
         }
       } catch (error) {
         console.error("World events live-sync error:", error);
@@ -1173,6 +1192,59 @@ export default function WorldPage() {
       void iterator.return?.();
     };
   }, [id, sceneId, bridgeReady, worldStore]);
+
+  /**
+   * Spec 030: interactive elements.
+   *
+   * Three things, and they belong together because each is useless without the
+   * others: load what this viewer may interact with, tell the engine the scene
+   * is being *played* (region entry fires on nothing otherwise — FR-032), and
+   * bridge engine-detected triggers back to the server, which decides.
+   */
+  useEffect(() => {
+    if (!sceneId || !bridgeReady) {
+      return;
+    }
+
+    void refreshInteractives(worldStore, sceneId).catch((error: unknown) => {
+      console.error("Failed to load interactive elements:", error);
+    });
+
+    // The play view is, by definition, play. Preparation happens on the
+    // staging route, which does not mount this.
+    setScenePlaying(worldStore, true);
+
+    const stopTriggers = startTriggerBridge(worldStore, (result) => {
+      if (result.outcome === "requested") {
+        setApprovalRevision((n) => n + 1);
+      }
+    });
+
+    return () => {
+      stopTriggers();
+      // A scene nobody is looking at is not being played, and leaving this on
+      // would let a background tab's stale positions fire a region.
+      setScenePlaying(worldStore, false);
+    };
+  }, [sceneId, bridgeReady, worldStore]);
+
+  /**
+   * Spec 030: an interactive asked for a lore page to be opened.
+   *
+   * The engine resolves *which* entry; opening a tab needs this application's
+   * URL structure, which is chrome and belongs on this side (Principle I).
+   */
+  useEffect(
+    () =>
+      onOpenLore((event) => {
+        window.open(
+          `/world/${id}/lore/${event.entryId}`,
+          "_blank",
+          "noopener,noreferrer",
+        );
+      }),
+    [id],
+  );
 
   /** The selected token's name, for the panel heading. */
   const selectedTokenLabel = useMemo(() => {
@@ -1728,6 +1800,26 @@ export default function WorldPage() {
         />
       ),
     },
+    // Spec 030. Game-Master-only: a player is not shown the queue. Their own
+    // outcome reaches them directly, and the rest of it is a list of what other
+    // people asked for — which at some tables is information the GM is
+    // deliberately not sharing yet.
+    ...(isSceneOwner && sceneId
+      ? [
+          {
+            id: "requests" as const,
+            label: "Asked for",
+            icon: "quill" as const,
+            content: (
+              <ApprovalQueue
+                sceneId={sceneId}
+                revision={approvalRevision}
+                onDecided={() => setApprovalRevision((n) => n + 1)}
+              />
+            ),
+          },
+        ]
+      : []),
     {
       id: "settings",
       label: "Settings",
@@ -1821,6 +1913,25 @@ export default function WorldPage() {
                         selectedTokenId={worldState.selectedTokenId}
                         worldId={id}
                         sceneId={sceneId}
+                      />
+                    ),
+                  },
+                  {
+                    // Spec 030. Last in the rail because it is authored *onto*
+                    // what the other four place: you draw a wall, then decide
+                    // it is a door that opens.
+                    id: "interactions",
+                    label: "Interactions",
+                    icon: "rune",
+                    content: (
+                      <InteractionTool
+                        worldStore={worldStore}
+                        worldId={id}
+                        sceneId={sceneId}
+                        selectedTokenId={worldState.selectedTokenId}
+                        selectedWallId={worldState.selectedWallId}
+                        walls={worldState.walls}
+                        lights={worldState.lights}
                       />
                     ),
                   },

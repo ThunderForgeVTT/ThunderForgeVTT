@@ -5,7 +5,12 @@ import {
 } from "@/components/ui/fantasy-icon/FantasyIcon";
 import { cn } from "@/lib/utils";
 
-export type GmToolId = "walls" | "lights" | "shapes" | "tokens";
+export type GmToolId =
+  | "walls"
+  | "lights"
+  | "shapes"
+  | "tokens"
+  | "interactions";
 
 export interface GmTool {
   id: GmToolId;
