@@ -48,7 +48,7 @@ brought along.
 These fail identically on `main`. They are a backlog item — specs describing a
 UI that has moved — not a regression, and not flake: they fail every time.
 
-### 2. A flaky shared fixture, and it is the big one
+### 2. A flaky shared fixture — **fixed**
 
 `inviteAndJoinAsPlayer` in `e2e/fixtures/helpers.ts` drives the two-browser
 invite flow through the real UI: click **Generate Join Link**, read the code,
@@ -72,11 +72,69 @@ looks alarmingly broad and moves between runs.
 Run alone, the specs it kills pass in seconds — `interactive-prop` passes in
 15.7s, twice in a row, immediately after failing inside a group.
 
-This is worth fixing at the fixture rather than per spec. Two obvious options:
-create the membership through GraphQL and reserve the UI walkthrough for
-`invite-membership.spec.ts`, which is the spec that actually tests the invite
-flow; or give the helper a retry with a longer budget. The first is better —
-every other spec is paying the cost of testing something it is not about.
+**Fixed** by the first of the two options that were open: membership is now
+created over GraphQL, and the UI walkthrough is reserved for
+`invite-membership.spec.ts`, the one spec that is actually about the invite
+flow — it still clicks every button. Everything else gets a real second
+account, a real registration, a real session cookie and a real `joinWorld`
+mutation, without paying to exercise an interface it is not testing.
+
+`genie-resource-trade` and `status-disclosure` went green as a direct result,
+having never had anything wrong with them.
+
+## The catalogue of causes, so far
+
+Fixing the first batch turned up four distinct causes, none of which the
+failure text pointed at. They are worth knowing before touching any remaining
+spec, because between them they explain most of what is left.
+
+**1. A tool panel asserted without opening it.** The GM rail mounts _only the
+open tool's content_ — deliberately, so a tool nobody is using leaves no
+listeners on the canvas. So `wall-tool`, `shape-tool` and the rest are simply
+not in the DOM until their icon is clicked, and a reload closes the rail again.
+`openGmTool` / `openDockTab` in `e2e/fixtures/helpers.ts` handle it, and are
+idempotent because both regions are toggles.
+
+**2. Scene creation moved.** `SceneSwitcher` — and with it "New scene" — is
+mounted in exactly one place: the Settings section of the play view's dock. It
+is not on `/staging`, which is where `registerAndCreateWorld` leaves the page.
+A helper calling it there looked for a button that did not exist, then clicked
+a dock tab that does not exist on that route, and waited out the full test
+timeout. That reads like a broken app rather than a helper on the wrong page.
+
+**3. A created scene is not the world's _active_ scene.** Which scene a reload
+lands on is server state (ADR-046). Creating one through the switcher selects
+it for this client only — so a spec that draws on the new scene, reloads, and
+asserts the content survived is silently returned to the previous scene, where
+its content genuinely does not exist. This one cost the most time, because
+"walls do not survive a reload" is a completely plausible bug and the store,
+the props and the DOM were all correct.
+
+**4. A reload refetches scene content over a separate round trip.**
+`waitForEngineReady` waits for the canvas, which says nothing about whether the
+scene's _walls_ have arrived. Clicks land before them and select nothing.
+`waitForWallsLoaded` / `waitForShapesLoaded` poll the store rather than
+sleeping longer, because how long a refetch takes is not a constant.
+
+### And one real product bug
+
+`GmToolRail` held "which tool is open" in local state, and it is rendered only
+once the scene and the viewer's role have resolved — so it remounted as those
+settled and lost the state. A Game Master clicked Walls, the panel appeared,
+and it vanished again for no reason they could see. Lifted to the page.
+
+## Not every failing spec should be made to pass
+
+Some assert behaviour the product deliberately removed. `invite-membership`
+expected the join page to say "invalid invite code"; spec 027 (FR-011/SC-005)
+now gives every dead link the _same_ message, because telling the holder of a
+killed link which cause applied is precisely what the server refuses to
+disclose. The right fix was to assert the new requirement — and that no reason
+appears anywhere on the page — not to restore the old text.
+
+So each failure needs a verdict, not just a patch: stale spec, real product
+bug, or intentionally-removed behaviour. Weakening an assertion to get green is
+the one outcome worse than leaving it red.
 
 ## Reading a run
 
