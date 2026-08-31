@@ -145,11 +145,36 @@ export async function clickPlay(page: Page): Promise<void> {
 }
 
 /**
- * Invites a fresh registered user into `worldId` as a Player and returns
- * their logged-in `Page`, in a separate browser context (so GM and
- * player sessions are genuinely independent cookies/tabs, matching how
- * two real people would connect). `gmPage` must already be on a page
- * showing the "Generate Join Link" control (e.g. the world dashboard).
+ * Invite a fresh registered user into `worldId` as a Player, and return their
+ * logged-in `Page` in its own browser context.
+ *
+ * The two sessions are genuinely independent — separate cookies, separate tab,
+ * separate engine instance — because that is what the specs using this are
+ * about: what a Game Master sees against what a player sees, at the same
+ * moment, on the same scene.
+ *
+ * # Why membership is created over GraphQL rather than clicked
+ *
+ * It used to drive the whole invite flow through the UI: click "Generate Join
+ * Link", read the code out of a readonly input, register, visit `/join/:code`,
+ * click "Join Campaign". Two of those buttons intermittently never appeared
+ * under suite load, and the test then died on a 300-second timeout.
+ *
+ * That made this helper the single largest source of noise in the suite, and
+ * the noise *moved*: across four full runs it took out `interactive-prop`
+ * (twice, at two different buttons), `genie-resource-trade`, and
+ * `invite-membership`. Whichever spec happened to be holding it when the
+ * machine was busy failed, so the failure list looked broad and unrelated and
+ * changed between runs. Run alone, its victims passed in seconds.
+ *
+ * The deeper problem was that roughly twenty specs were paying to exercise the
+ * invite *UI* when none of them are about it. Exactly one spec is —
+ * `invite-membership.spec.ts` — and it still clicks every button, because that
+ * is its subject. Everything else gets its player the short way.
+ *
+ * Still real in every way that matters to the callers: a real second account,
+ * a real registration, a real session cookie, and a real `joinWorld` mutation
+ * with the server enforcing membership exactly as it would have.
  */
 export async function inviteAndJoinAsPlayer(
   browser: Browser,
@@ -157,27 +182,54 @@ export async function inviteAndJoinAsPlayer(
   worldId: string,
   credentialPrefix = "e2eplayer",
 ): Promise<Page> {
-  await gmPage.goto(`/world/${worldId}`);
-  await gmPage.getByRole("button", { name: "Generate Join Link" }).click();
-  const inviteInput = gmPage.locator("input[readonly]").first();
-  await expect(inviteInput).toBeVisible({ timeout: 10_000 });
-  const inviteUrl = await inviteInput.inputValue();
-  const inviteCode = new URL(inviteUrl).pathname.split("/").pop();
+  const invite = await graphql<{
+    data?: { generateInviteCode?: { inviteCode: string } };
+    errors?: { message: string }[];
+  }>(
+    gmPage,
+    `
+      mutation ($input: GenerateInviteCodeInput!) {
+        generateInviteCode(input: $input) {
+          inviteCode
+        }
+      }
+    `,
+    { input: { worldId, maxUses: 10 } },
+  );
+  const inviteCode = invite.data?.generateInviteCode?.inviteCode;
   if (!inviteCode) {
-    throw new Error("Could not extract invite code");
+    throw new Error(
+      `Could not generate an invite: ${JSON.stringify(invite.errors ?? invite)}`,
+    );
   }
 
   const playerContext = await browser.newContext();
   const playerPage = await playerContext.newPage();
   await register(playerPage, freshCredentials(credentialPrefix));
-  await playerPage.goto(`/join/${inviteCode}`);
-  await playerPage.getByRole("button", { name: "Join Campaign" }).click();
-  await playerPage.waitForURL(
-    (url) => url.pathname.startsWith(`/world/${worldId}`),
-    {
-      timeout: 15_000,
-    },
+
+  const joined = await graphql<{
+    data?: { joinWorld?: { id: string } };
+    errors?: { message: string }[];
+  }>(
+    playerPage,
+    `
+      mutation ($input: JoinWorldInput!) {
+        joinWorld(input: $input) {
+          id
+        }
+      }
+    `,
+    { input: { inviteCode } },
   );
+  if (!joined.data?.joinWorld?.id) {
+    throw new Error(
+      `Could not join the world: ${JSON.stringify(joined.errors ?? joined)}`,
+    );
+  }
+
+  // Left on the world, as the clicked flow left it, so callers that go
+  // straight to asserting on the page still work.
+  await playerPage.goto(`/world/${worldId}`);
   return playerPage;
 }
 

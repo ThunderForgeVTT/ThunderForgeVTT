@@ -122,7 +122,9 @@ test.describe("A GM invites a genuine second player (US4)", () => {
     // never gives the owner a world_members row.
     const inviteCode = await extractInviteCode(gmPage);
     // No error banner should be showing after a successful generation.
-    await expect(gmPage.getByText(/failed to generate invite code/i)).toHaveCount(0);
+    await expect(
+      gmPage.getByText(/failed to generate invite code/i),
+    ).toHaveCount(0);
 
     // A second, genuinely distinct account — not the GM's login reused.
     const playerContext = await browser.newContext();
@@ -155,18 +157,25 @@ test.describe("A GM invites a genuine second player (US4)", () => {
     await register(page, freshCredentials("e2ebadcode"));
     await page.goto("/join/NOTAREALCODE");
 
-    // `alreadyMember` (bundled in the same GraphQL request as
-    // `worldByInviteCode`) rejects an unmatched code with "Invalid invite
-    // code", which JoinWorldPage surfaces via its error-status branch
-    // ("Could not load campaign") rather than the separate `!world`
-    // branch ("Campaign not found") — both are legitimate non-crash error
-    // states in this component; this is the one an unmatched code
-    // actually reaches.
-    await expect(page.getByRole("heading", { name: /could not load campaign/i })).toBeVisible({
-      timeout: 10_000,
-    });
-    await expect(page.getByText(/invalid invite code/i)).toBeVisible();
-    await expect(page.getByRole("button", { name: /return to my campaigns/i })).toBeVisible();
+    // Spec 027 (FR-011 / SC-005): every dead link gets the *same* message,
+    // whatever killed it — invalid, expired, used up, revoked. This test used
+    // to assert the opposite, checking for the words "invalid invite code",
+    // which is precisely the disclosure the product now withholds: telling the
+    // holder of a killed link which cause applied is what the server refuses
+    // to do, so the page must not do it either.
+    await expect(
+      page.getByRole("heading", { name: /this link is no longer available/i }),
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(
+      page.getByText(/ask your gm for a new invite link/i),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /return to my campaigns/i }),
+    ).toBeVisible();
+
+    // The reason is not on the page. That is the requirement, not a detail.
+    await expect(page.getByText(/invalid/i)).toHaveCount(0);
+    await expect(page.getByText(/expired|revoked|used up/i)).toHaveCount(0);
   });
 
   test("a user who is already a member sees the already-a-member state, not the join flow", async ({
@@ -195,12 +204,18 @@ test.describe("A GM invites a genuine second player (US4)", () => {
 
     // Revisit the same invite link as the same, now-a-member, user.
     await playerPage.goto(`/join/${inviteCode}`);
-    await expect(playerPage.getByText(/you are already a member/i)).toBeVisible({
-      timeout: 10_000,
-    });
-    await expect(playerPage.getByRole("button", { name: /enter campaign/i })).toBeVisible();
+    await expect(playerPage.getByText(/you are already a member/i)).toBeVisible(
+      {
+        timeout: 10_000,
+      },
+    );
+    await expect(
+      playerPage.getByRole("button", { name: /enter campaign/i }),
+    ).toBeVisible();
     // The join flow itself must not be offered again.
-    await expect(playerPage.getByRole("button", { name: "Join Campaign" })).toHaveCount(0);
+    await expect(
+      playerPage.getByRole("button", { name: "Join Campaign" }),
+    ).toHaveCount(0);
 
     await gmContext.close();
     await playerContext.close();
