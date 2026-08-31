@@ -1,4 +1,11 @@
 import { test, expect, type Page, type Browser } from "@playwright/test";
+import {
+  launchSceneByName,
+  openDockTab,
+  openGmTool,
+  waitForWallsLoaded,
+  type GmToolId,
+} from "./fixtures/helpers";
 
 /**
  * specs/003-dd2vtt-map-fidelity, User Story 1: live verification (not
@@ -125,7 +132,10 @@ async function enterWorldPlay(page: Page): Promise<void> {
 async function secondSessionSameLogin(
   browser: Browser,
   sourcePage: Page,
-): Promise<{ context: Awaited<ReturnType<Browser["newContext"]>>; page: Page }> {
+): Promise<{
+  context: Awaited<ReturnType<Browser["newContext"]>>;
+  page: Page;
+}> {
   const sourceContext = sourcePage.context();
   const storageState = await sourceContext.storageState();
   const context = await browser.newContext({ storageState });
@@ -134,25 +144,43 @@ async function secondSessionSameLogin(
   return { context, page };
 }
 
+/**
+ * Create a scene, then launch it so it is the world's *active* scene.
+ *
+ * "New scene" lives in exactly one place: the Settings section of the play
+ * view's right-hand dock, which is collapsed by default — hence `openDockTab`
+ * rather than a hopeful visibility check.
+ *
+ * Launching afterwards is what makes a reload meaningful. Which scene a client
+ * lands on after a reload is server state (ADR-046, spec 022); creating a
+ * scene through the switcher selects it for this client only. Without the
+ * launch, a test draws a wall here, reloads, and is silently returned to the
+ * world's previous scene — where that wall does not exist. It reads exactly
+ * like "walls do not survive a reload".
+ */
 async function createScene(page: Page, name: string): Promise<void> {
-  // In full-screen canvas mode, "New scene" lives inside the
-  // (collapsed-by-default) sidebar. Spec 010: staging is now its own
-  // route (not mounted alongside `/play`), so there is exactly one
-  // "new-scene-button" in the DOM here — no `:visible` disambiguation
-  // against a second, hidden-but-mounted staging copy is needed anymore;
-  // just ensure the Settings dock section is actually open before clicking.
-  const newSceneButton = page.getByTestId("new-scene-button");
-  if (!(await newSceneButton.isVisible().catch(() => false))) {
-    await page.getByTestId("world-dock-tab-settings").click();
-    await expect(newSceneButton).toBeVisible({ timeout: 10_000 });
+  const worldId = /\/world\/([^/]+)/.exec(new URL(page.url()).pathname)?.[1];
+  if (!worldId) {
+    throw new Error(
+      `createScene needs to be on a world route, not ${page.url()}`,
+    );
   }
+
+  await openDockTab(page, "settings");
+  const newSceneButton = page.getByTestId("new-scene-button");
+  await expect(newSceneButton).toBeVisible({ timeout: 15_000 });
   await newSceneButton.click();
   await page.locator('[data-testid="new-scene-name-input"]:visible').fill(name);
   await page.locator('[data-testid="create-scene-submit"]:visible').click();
   await expect(page.getByTestId("new-scene-name-input")).toBeHidden({
     timeout: 10_000,
   });
-  await expect(page.locator('[data-testid="scene-switcher"]:visible')).toContainText(name);
+  await expect(
+    page.locator('[data-testid="scene-switcher"]:visible'),
+  ).toContainText(name);
+
+  await launchSceneByName(page, worldId, name);
+  await page.goto(`/world/${worldId}/play`);
 }
 
 type Box = { x: number; y: number; width: number; height: number };
@@ -170,9 +198,18 @@ async function canvasBox(page: Page): Promise<Box> {
   return box;
 }
 
-/** See canvas-authoring.spec.ts's identical helper for the full
- * rationale (GM flag / bridge-ready / canvas-focus race). */
-async function waitForEngineReady(page: Page): Promise<void> {
+/**
+ * See canvas-authoring.spec.ts's identical helper for the full rationale (GM
+ * flag / bridge-ready / canvas-focus race).
+ *
+ * `tool` names the GM tool to leave open. It has to be passed on every call
+ * that precedes an assertion about that tool's panel, a call after a reload
+ * included: the left-hand rail mounts only the open tool's content, so
+ * `wall-tool` is simply not in the DOM until its icon is clicked, and a reload
+ * closes the rail again. Opened here, before the focusing canvas click below,
+ * so that click takes keyboard focus back off the rail button.
+ */
+async function waitForEngineReady(page: Page, tool?: GmToolId): Promise<void> {
   const canvas = page.locator("canvas");
   // Spec 010: `/world/:id/play` is a real route now, not a client-state
   // toggle — a reload keeps the same URL, so the canvas is simply still
@@ -187,6 +224,11 @@ async function waitForEngineReady(page: Page): Promise<void> {
   }
   await expect(canvas).toBeVisible({ timeout: 15_000 });
   await page.waitForTimeout(3_000);
+
+  if (tool) {
+    await openGmTool(page, tool);
+  }
+
   await canvas.scrollIntoViewIfNeeded();
   const box = await canvas.boundingBox();
   if (box) {
@@ -198,7 +240,11 @@ async function waitForEngineReady(page: Page): Promise<void> {
 
 /** See canvas-authoring.spec.ts's identical helper for the full
  * rationale (real click timing vs. synthetic same-frame down/up). */
-async function clickCanvasAt(page: Page, dx: number, dy: number): Promise<void> {
+async function clickCanvasAt(
+  page: Page,
+  dx: number,
+  dy: number,
+): Promise<void> {
   const box = await canvasBox(page);
   const x = box.x + box.width / 2 + dx;
   const y = box.y + box.height / 2 + dy;
@@ -212,17 +258,27 @@ test.describe("Wall passability toggles (US1, T001/T007)", () => {
   test("blocks vision and blocks movement toggle independently and take effect immediately", async ({
     page,
   }) => {
-    await registerAndCreateWorldOnDashboard(page, `E2E Passability ${uniqueSuffix()}`);
+    // Registration, world creation, a scene launch (a full navigation) and the
+    // engine's own multi-second WASM startup leave no room inside Playwright's
+    // 30-second default for the authoring this test is about.
+    test.setTimeout(240_000);
+
+    await registerAndCreateWorldOnDashboard(
+      page,
+      `E2E Passability ${uniqueSuffix()}`,
+    );
     await enterWorldPlay(page);
     await createScene(page, "Passability Scene");
-    await waitForEngineReady(page);
+    await waitForEngineReady(page, "walls");
 
     await clickCanvasAt(page, -100, 0);
     await clickCanvasAt(page, 100, 0);
     await page.keyboard.press("Enter");
 
     await clickCanvasAt(page, 0, 0);
-    await expect(page.getByText("Selected wall")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Selected wall")).toBeVisible({
+      timeout: 10_000,
+    });
 
     const blocksVision = page.locator("#wall-blocks-vision");
     const blocksMovement = page.locator("#wall-blocks-movement");
@@ -244,9 +300,15 @@ test.describe("Wall passability toggles (US1, T001/T007)", () => {
     // Reload and confirm both independent toggles persisted (FR-008/US2
     // territory, but a cheap sanity check here too).
     await page.reload();
-    await waitForEngineReady(page);
+    await waitForEngineReady(page, "walls");
+    // A reload refetches the scene's walls over a separate round trip, and a
+    // click lands before they arrive, selecting nothing. See
+    // `waitForWallsLoaded`.
+    await waitForWallsLoaded(page, 1);
     await clickCanvasAt(page, 0, 0);
-    await expect(page.getByText("Selected wall")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Selected wall")).toBeVisible({
+      timeout: 10_000,
+    });
     await expect(page.locator("#wall-blocks-vision")).not.toBeChecked();
     await expect(page.locator("#wall-blocks-movement")).toBeChecked();
   });
@@ -254,16 +316,26 @@ test.describe("Wall passability toggles (US1, T001/T007)", () => {
   test("door-state toggling is unaffected by the adjacent passability checkboxes (regression guard, T002)", async ({
     page,
   }) => {
-    await registerAndCreateWorldOnDashboard(page, `E2E Door Regression ${uniqueSuffix()}`);
+    // Registration, world creation, a scene launch (a full navigation) and the
+    // engine's own multi-second WASM startup leave no room inside Playwright's
+    // 30-second default for the authoring this test is about.
+    test.setTimeout(240_000);
+
+    await registerAndCreateWorldOnDashboard(
+      page,
+      `E2E Door Regression ${uniqueSuffix()}`,
+    );
     await enterWorldPlay(page);
     await createScene(page, "Door Regression Scene");
-    await waitForEngineReady(page);
+    await waitForEngineReady(page, "walls");
 
     await clickCanvasAt(page, -100, 0);
     await clickCanvasAt(page, 100, 0);
     await page.keyboard.press("Enter");
     await clickCanvasAt(page, 0, 0);
-    await expect(page.getByText("Selected wall")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Selected wall")).toBeVisible({
+      timeout: 10_000,
+    });
 
     // Toggle both passability checkboxes first.
     await page.locator("#wall-blocks-vision").click();
@@ -274,7 +346,9 @@ test.describe("Wall passability toggles (US1, T001/T007)", () => {
     // item).
     await page.locator("#wall-door-state").click();
     await page.getByRole("option", { name: "Door (closed)" }).click();
-    await expect(page.locator("#wall-door-state")).toContainText("Door (closed)");
+    await expect(page.locator("#wall-door-state")).toContainText(
+      "Door (closed)",
+    );
     // Passability checkboxes remain exactly as set, unaffected by the
     // door-state change sitting right next to them in the same panel.
     await expect(page.locator("#wall-blocks-vision")).not.toBeChecked();
@@ -313,42 +387,54 @@ test.describe("Live cross-session sync (US1, T003/T004/T008)", () => {
   // future fix flips it back to green instead of the gap going unnoticed.
   test.fail(
     "a wall's Blocks Movement toggle propagates to a second, already-connected session with no reload",
-    async ({
-    browser,
-  }: {
-    browser: Browser;
-  }) => {
-    const gmContext = await browser.newContext();
-    const gmPage = await gmContext.newPage();
-    await registerAndCreateWorldOnDashboard(gmPage, `E2E Wall Live Sync ${uniqueSuffix()}`);
-    await enterWorldPlay(gmPage);
-    await createScene(gmPage, "Live Sync Scene");
-    await waitForEngineReady(gmPage);
+    async ({ browser }: { browser: Browser }) => {
+      const gmContext = await browser.newContext();
+      const gmPage = await gmContext.newPage();
+      // Registration, world creation, a scene launch (a full navigation) and the
+      // engine's own multi-second WASM startup leave no room inside Playwright's
+      // 30-second default for the authoring this test is about.
+      test.setTimeout(240_000);
 
-    await clickCanvasAt(gmPage, -100, 0);
-    await clickCanvasAt(gmPage, 100, 0);
-    await gmPage.keyboard.press("Enter");
-    await clickCanvasAt(gmPage, 0, 0);
-    await expect(gmPage.getByText("Selected wall")).toBeVisible({ timeout: 10_000 });
+      await registerAndCreateWorldOnDashboard(
+        gmPage,
+        `E2E Wall Live Sync ${uniqueSuffix()}`,
+      );
+      await enterWorldPlay(gmPage);
+      await createScene(gmPage, "Live Sync Scene");
+      await waitForEngineReady(gmPage, "walls");
 
-    // Second, already-connected session (viewing the scene before the
-    // toggle below happens) — see this file's top-of-file doc comment
-    // for why this reuses the GM's login rather than a genuinely
-    // distinct player account.
-    const { context: secondContext, page: secondPage } = await secondSessionSameLogin(browser, gmPage);
-    await waitForEngineReady(secondPage);
-    await clickCanvasAt(secondPage, 0, 0);
-    await expect(secondPage.getByText("Selected wall")).toBeVisible({ timeout: 10_000 });
+      await clickCanvasAt(gmPage, -100, 0);
+      await clickCanvasAt(gmPage, 100, 0);
+      await gmPage.keyboard.press("Enter");
+      await clickCanvasAt(gmPage, 0, 0);
+      await expect(gmPage.getByText("Selected wall")).toBeVisible({
+        timeout: 10_000,
+      });
 
-    // GM toggles Blocks Movement; the second, still-open session must
-    // reflect it without a reload (FR-005, SC-002).
-    await expect(gmPage.locator("#wall-blocks-movement")).not.toBeChecked();
-    await gmPage.locator("#wall-blocks-movement").click();
-    await expect(secondPage.locator("#wall-blocks-movement")).toBeChecked({ timeout: 10_000 });
+      // Second, already-connected session (viewing the scene before the
+      // toggle below happens) — see this file's top-of-file doc comment
+      // for why this reuses the GM's login rather than a genuinely
+      // distinct player account.
+      const { context: secondContext, page: secondPage } =
+        await secondSessionSameLogin(browser, gmPage);
+      await waitForEngineReady(secondPage, "walls");
+      await clickCanvasAt(secondPage, 0, 0);
+      await expect(secondPage.getByText("Selected wall")).toBeVisible({
+        timeout: 10_000,
+      });
 
-    await gmContext.close();
-    await secondContext.close();
-  });
+      // GM toggles Blocks Movement; the second, still-open session must
+      // reflect it without a reload (FR-005, SC-002).
+      await expect(gmPage.locator("#wall-blocks-movement")).not.toBeChecked();
+      await gmPage.locator("#wall-blocks-movement").click();
+      await expect(secondPage.locator("#wall-blocks-movement")).toBeChecked({
+        timeout: 10_000,
+      });
+
+      await gmContext.close();
+      await secondContext.close();
+    },
+  );
 
   test("a GM-placed torch persists and is visible from a second, independent live session", async ({
     browser,
@@ -357,10 +443,18 @@ test.describe("Live cross-session sync (US1, T003/T004/T008)", () => {
   }) => {
     const gmContext = await browser.newContext();
     const gmPage = await gmContext.newPage();
-    await registerAndCreateWorldOnDashboard(gmPage, `E2E Torch Sync ${uniqueSuffix()}`);
+    // Registration, world creation, a scene launch (a full navigation) and the
+    // engine's own multi-second WASM startup leave no room inside Playwright's
+    // 30-second default for the authoring this test is about.
+    test.setTimeout(240_000);
+
+    await registerAndCreateWorldOnDashboard(
+      gmPage,
+      `E2E Torch Sync ${uniqueSuffix()}`,
+    );
     await enterWorldPlay(gmPage);
     await createScene(gmPage, "Torch Scene");
-    await waitForEngineReady(gmPage);
+    await waitForEngineReady(gmPage, "walls");
 
     // GM places a torch: a plain click on empty canvas with no existing
     // light nearby (systems/lighting.rs's handle_light_input creates a
@@ -373,11 +467,12 @@ test.describe("Live cross-session sync (US1, T003/T004/T008)", () => {
     // one — grab-and-release without moving the cursor is a no-op
     // either way, so this is safe to assert without disturbing state.
     await gmPage.reload();
-    await waitForEngineReady(gmPage);
+    await waitForEngineReady(gmPage, "walls");
     await clickCanvasAt(gmPage, 60, -60);
 
-    const { context: secondContext, page: secondPage } = await secondSessionSameLogin(browser, gmPage);
-    await waitForEngineReady(secondPage);
+    const { context: secondContext, page: secondPage } =
+      await secondSessionSameLogin(browser, gmPage);
+    await waitForEngineReady(secondPage, "walls");
     await expect(secondPage.locator("canvas")).toBeVisible();
     // Same existence-proxy check from the second session, confirming the
     // torch is part of the shared, server-persisted scene state every
@@ -393,20 +488,37 @@ test.describe("From-scratch authoring with no import (US1, T005)", () => {
   test("a GM can draw a wall and place a torch on a brand-new scene with no import step", async ({
     page,
   }) => {
-    await registerAndCreateWorldOnDashboard(page, `E2E From Scratch ${uniqueSuffix()}`);
+    // Registration, world creation, a scene launch (a full navigation) and the
+    // engine's own multi-second WASM startup leave no room inside Playwright's
+    // 30-second default for the authoring this test is about.
+    test.setTimeout(240_000);
+
+    await registerAndCreateWorldOnDashboard(
+      page,
+      `E2E From Scratch ${uniqueSuffix()}`,
+    );
     await enterWorldPlay(page);
     await createScene(page, "Blank Scene");
-    await waitForEngineReady(page);
+    await waitForEngineReady(page, "walls");
 
     // No import tool interaction anywhere in this test — the scene
-    // starts genuinely empty (FR-004, SC-001).
+    // starts genuinely empty (FR-004, SC-001). Asserted with the dock's
+    // Settings section open: that is where the import tool and its result
+    // panel are mounted, so with the dock collapsed this passes without
+    // looking at anything. Collapsed again afterwards so the drawing below
+    // happens on the same uncovered canvas the rest of the file assumes.
+    await openDockTab(page, "settings");
+    await expect(page.getByTestId("map-import-tool")).toBeVisible();
     await expect(page.getByTestId("map-import-success")).toHaveCount(0);
+    await page.getByTestId("world-dock-tab-settings").click();
 
     await clickCanvasAt(page, -80, -80);
     await clickCanvasAt(page, 80, -80);
     await page.keyboard.press("Enter");
     await clickCanvasAt(page, 0, -80);
-    await expect(page.getByText("Selected wall")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Selected wall")).toBeVisible({
+      timeout: 10_000,
+    });
 
     await page.keyboard.press("Escape");
     await clickCanvasAt(page, 100, 100);
@@ -425,10 +537,7 @@ test.describe("Non-GM player sees no authoring controls (US1, T006)", () => {
   // same-account fallback here: the assertion is specifically about a
   // *non-owner* viewpoint (`WorldPage.tsx`'s `isSceneOwner` check), which
   // a second session under the GM's own login can never exercise.
-  test.skip(
-    "a joined non-owner player never sees wall/shape authoring tools, only their effects",
-    () => {
-      // Intentionally unimplemented — see this describe block's comment.
-    },
-  );
+  test.skip("a joined non-owner player never sees wall/shape authoring tools, only their effects", () => {
+    // Intentionally unimplemented — see this describe block's comment.
+  });
 });

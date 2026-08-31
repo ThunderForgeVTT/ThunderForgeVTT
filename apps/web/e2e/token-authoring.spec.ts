@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Browser } from "@playwright/test";
 import type { WorldProbe } from "../src/engine/world/probe";
+import { inviteAndJoinAsPlayer, launchSceneByName } from "./fixtures/helpers";
 
 declare global {
   interface Window {
@@ -381,6 +382,23 @@ async function createScene(page: Page, name: string): Promise<void> {
   await expect(
     page.locator('[data-testid="scene-switcher"]:visible'),
   ).toContainText(name);
+
+  // Make it the world's *active* scene, not merely this client's selection.
+  //
+  // Which scene a reload lands on is server state (ADR-046, spec 022), and
+  // creating one through the switcher does not launch it. Every test in this
+  // file creates its scene, creates a token in it, and then reloads — which
+  // silently returned to the world's auto-created default scene, where that
+  // token does not exist. The US3 ownership test is where it showed: its
+  // first token was left behind in the abandoned scene while the two created
+  // after the reload landed in the default one, so assigning ownership to
+  // the first found no such row in the panel.
+  const worldId = /\/world\/([^/]+)/.exec(new URL(page.url()).pathname)?.[1];
+  if (!worldId) {
+    throw new Error(`createScene needs to be on a world route: ${page.url()}`);
+  }
+  await launchSceneByName(page, worldId, name);
+  await page.goto(`/world/${worldId}/play`);
 }
 
 type Box = { x: number; y: number; width: number; height: number };
@@ -559,6 +577,17 @@ async function createTokenViaPanel(page: Page): Promise<void> {
  * "whichever one is currently topmost," which is unspecified when
  * multiple tokens share the same (0, 0) creation position. */
 async function createTokenViaPanelCapturingId(page: Page): Promise<string> {
+  // Same reason `createTokenViaPanel` does this, and the reason this
+  // helper hung for its whole timeout without it: `createScene` leaves the
+  // dock's Settings section open, and it covers the corner the "Tokens"
+  // toggle sits in. The forced click then lands on the dock instead, the
+  // popover never opens, and the wait below is for a `token-create-trigger`
+  // that was never mounted — which reads as "creating a token is broken".
+  const collapse = page.getByTestId("world-dock-collapse");
+  if (await collapse.isVisible().catch(() => false)) {
+    await collapse.click();
+  }
+
   await page.getByTestId("token-panel-toggle-button").click({ force: true });
   await page.getByTestId("token-create-trigger").click({ force: true });
   const [response] = await Promise.all([
@@ -1328,19 +1357,21 @@ test.describe("Scene-load loading/error feedback (US4, T031/T033)", () => {
     await createScene(page, "Scene Load B");
     await waitForEngineReady(page);
 
-    // GraphQLScene.backgroundImagePath only ever reflects the legacy
-    // background_image_path column (src/server/src/graphql.rs's
-    // `From<Scene>` impl) — map import (map_import.rs:631) writes the
-    // newer background_asset_id instead, so an imported map's real
-    // background art doesn't currently surface through this field at all
-    // (a separate, pre-existing gap outside this feature's scope). To
-    // genuinely exercise FR-013's "background asset unreachable" path
-    // without depending on that gap, inject a controllable
-    // backgroundImagePath by intercepting the `scenes` query response,
-    // then control that exact path's reachability directly — this tests
-    // the load-state machine itself (this feature's actual scope), not
-    // whether map-imported backgrounds resolve (they don't yet, unrelated
-    // bug).
+    // Inject a controllable background URL by intercepting the `scenes`
+    // query response, then control that exact path's reachability — this
+    // tests the load-state machine itself (this feature's actual scope),
+    // not whether a particular scene really has art.
+    //
+    // The injected field is `backgroundUrl`, not `backgroundImagePath`.
+    // This test used to write the latter, back when it was the field
+    // `WorldPage` dispatched into the engine. It no longer is: map import
+    // writes `background_asset_id` rather than the legacy
+    // `background_image_path` column, so `backgroundImagePath` was blank
+    // for every imported map and the art silently never loaded.
+    // `WorldPage` now reads the server-computed `backgroundUrl`, which is
+    // populated whichever mechanism put the art there — so overwriting the
+    // old field left the scene with no background at all, and no
+    // background is exactly the case that produces no error to assert on.
     const FAKE_BG_PATH = "/assets/e2e-fake-background-for-scene-load-test.png";
     let bgAssetShouldSucceed = false;
 
@@ -1355,7 +1386,7 @@ test.describe("Scene-load loading/error feedback (US4, T031/T033)", () => {
       const sceneList = json?.data?.scenes;
       if (Array.isArray(sceneList)) {
         for (const scene of sceneList) {
-          scene.backgroundImagePath = FAKE_BG_PATH;
+          scene.backgroundUrl = FAKE_BG_PATH;
         }
       }
       await route.fulfill({ response, json });
@@ -1436,14 +1467,22 @@ test.describe("Non-GM sees no resize/rotate controls (US2, T015)", () => {
     await page.reload();
     await waitForEngineReady(page);
 
-    const inviteCode = await generateInviteCodeFromDashboard(page, worldId);
-    await waitForEngineReady(page);
-
-    const playerContext = await browser.newContext();
-    const playerPage = await playerContext.newPage();
+    // Membership over GraphQL rather than through the invite UI: this test
+    // is about what a player *sees on the canvas*, and the clicked invite
+    // flow ("Generate Join Link" → read the code → "Join Campaign") was the
+    // suite's single largest source of noise, intermittently never
+    // surfacing one of its buttons under load and killing the test on its
+    // full timeout. See `inviteAndJoinAsPlayer`'s own doc comment; the one
+    // spec that is genuinely about the invite UI still clicks every button.
+    const playerPage = await inviteAndJoinAsPlayer(
+      browser,
+      page,
+      worldId,
+      "e2enogm",
+    );
+    const playerContext = playerPage.context();
     try {
-      await register(playerPage, freshCredentials("e2enogm"));
-      await joinWorldAndEnterPlay(playerPage, inviteCode, worldId);
+      await playerPage.goto(`/world/${worldId}/play`);
       await waitForEngineReady(playerPage);
 
       // TokenTool must never render for a non-GM, full stop — confirmed
@@ -1490,14 +1529,17 @@ test.describe("Non-GM sees no resize/rotate controls (US2, T015)", () => {
     await page.reload();
     await waitForEngineReady(page);
 
-    const inviteCode = await generateInviteCodeFromDashboard(page, worldId);
-    await waitForEngineReady(page);
-
-    const playerContext = await browser.newContext();
-    const playerPage = await playerContext.newPage();
+    // See the sibling test above for why membership is created over
+    // GraphQL instead of through the invite UI.
+    const playerPage = await inviteAndJoinAsPlayer(
+      browser,
+      page,
+      worldId,
+      "e2enogmch",
+    );
+    const playerContext = playerPage.context();
     try {
-      await register(playerPage, freshCredentials("e2enogmch"));
-      await joinWorldAndEnterPlay(playerPage, inviteCode, worldId);
+      await playerPage.goto(`/world/${worldId}/play`);
       await waitForEngineReady(playerPage);
       await playerPage.waitForTimeout(1_500);
 

@@ -18,6 +18,11 @@ function uniqueSuffix(): string {
 test("GM creates a scene, imports a map, writes a summary, toggles hidden, and launches it — all from the Scenes section", async ({
   page,
 }) => {
+  // Playwright's 30-second default cannot cover a real dd2vtt import (see
+  // the `map-import-success` wait below), let alone the four other server
+  // round trips this walk-through makes after it.
+  test.setTimeout(180_000);
+
   await register(page, freshCredentials("e2escenemgmt"));
   await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
   const worldName = `E2E Scene Management ${uniqueSuffix()}`;
@@ -52,7 +57,14 @@ test("GM creates a scene, imports a map, writes a summary, toggles hidden, and l
   // Import a dd2vtt map.
   await page.getByRole("button", { name: "Import map" }).click();
   await page.setInputFiles('input[type="file"]', DEMO_MAP);
-  await expect(page.getByTestId("map-import-success")).toBeVisible({ timeout: 20_000 });
+  // 120s, not 20s: a dd2vtt import is a real upload plus wall/door/light
+  // extraction, and under suite load it routinely runs past twenty seconds
+  // while still succeeding — the failure then reads as "import is broken"
+  // when the panel was simply still spinning. canvas-authoring.spec.ts's
+  // `importMap` settled on the same budget for the same reason; SC-007's
+  // 30-second requirement is asserted there, on the measured duration,
+  // rather than smuggled into a locator timeout here.
+  await expect(page.getByTestId("map-import-success")).toBeVisible({ timeout: 120_000 });
 
   // Write and save a Markdown summary.
   const summaryEditor = page.getByTestId("scene-summary-editor").locator(".cm-content");

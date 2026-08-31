@@ -172,6 +172,10 @@ apps/web/test-results/
 apps/web/playwright-report/
 apps/web/e2e/screenshots/
 apps/web/e2e/fixtures/.demo/
+# A cached admin session, written by `auth-providers.spec.ts` so one
+# registration serves the whole file rather than spending the auth rate-limit
+# budget per test. Real cookies — never committed.
+apps/web/e2e/.demo/
 apps/web/.playwright/
 
 ### graphify ###

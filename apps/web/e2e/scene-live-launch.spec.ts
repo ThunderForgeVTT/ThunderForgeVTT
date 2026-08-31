@@ -22,6 +22,12 @@ function uniqueSuffix(): string {
 test("launching a different scene live-switches every member already in Play, with no manual rejoin", async ({
   browser,
 }) => {
+  // Two browser contexts, two registrations, two Bevy engine boots and a
+  // scene launch in between — Playwright's 30-second default runs out with
+  // this test's last two assertions still to go, which reads as "the live
+  // switch never arrived" when in fact nothing had gone wrong yet.
+  test.setTimeout(180_000);
+
   // `CampaignSettingsPanel`'s invite-generation flow also attempts a
   // clipboard write (see system-settings.spec.ts's identical setup) — the
   // default context has no clipboard permission, which throws and stops
