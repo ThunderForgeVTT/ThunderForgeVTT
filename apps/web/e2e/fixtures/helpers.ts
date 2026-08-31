@@ -117,7 +117,9 @@ export async function graphql<T>(
       try {
         return JSON.parse(text);
       } catch {
-        throw new Error(`Non-JSON response (status ${res.status}): ${text.slice(0, 500)}`);
+        throw new Error(
+          `Non-JSON response (status ${res.status}): ${text.slice(0, 500)}`,
+        );
       }
     },
     { query, variables },
@@ -170,9 +172,12 @@ export async function inviteAndJoinAsPlayer(
   await register(playerPage, freshCredentials(credentialPrefix));
   await playerPage.goto(`/join/${inviteCode}`);
   await playerPage.getByRole("button", { name: "Join Campaign" }).click();
-  await playerPage.waitForURL((url) => url.pathname.startsWith(`/world/${worldId}`), {
-    timeout: 15_000,
-  });
+  await playerPage.waitForURL(
+    (url) => url.pathname.startsWith(`/world/${worldId}`),
+    {
+      timeout: 15_000,
+    },
+  );
   return playerPage;
 }
 
@@ -181,12 +186,20 @@ export async function inviteAndJoinAsPlayer(
  * to select what's being played (FR-002/FR-002a). `page` must belong to
  * a GM/Owner of `worldId`.
  */
-export async function launchSceneByName(page: Page, worldId: string, sceneName: string): Promise<void> {
+export async function launchSceneByName(
+  page: Page,
+  worldId: string,
+  sceneName: string,
+): Promise<void> {
   await page.goto(`/world/${worldId}/scenes`);
   await page.getByRole("link", { name: sceneName }).click();
-  await page.waitForURL(new RegExp(`/world/${worldId}/scenes/[^/]+$`), { timeout: 10_000 });
+  await page.waitForURL(new RegExp(`/world/${worldId}/scenes/[^/]+$`), {
+    timeout: 10_000,
+  });
   await page.getByTestId("launch-scene-button").click();
-  await expect(page.getByText("Scene launched.")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("Scene launched.")).toBeVisible({
+    timeout: 10_000,
+  });
 }
 
 export async function waitForEngineReady(page: Page): Promise<void> {
@@ -200,4 +213,114 @@ export async function waitForEngineReady(page: Page): Promise<void> {
     await page.keyboard.press("Escape");
     await page.waitForTimeout(200);
   }
+}
+
+/** The GM's authoring tools, as the left-hand rail names them. */
+export type GmToolId = "walls" | "lights" | "shapes" | "tokens";
+
+/**
+ * Open one of the GM's authoring tools and wait for its panel.
+ *
+ * # Why every spec that touches a tool has to call this
+ *
+ * The rail mounts **only the open tool's content** — deliberately, so that a
+ * tool the GM is not using does not leave listeners attached to the canvas
+ * (ShapeTool's text sub-tool is the case that forced it). So `wall-tool`,
+ * `shape-tool` and the rest are simply not in the DOM until their icon is
+ * clicked, and a spec that asserts one is visible straight after the engine
+ * loads is describing the layout this replaced.
+ *
+ * Idempotent: clicking an already-open tool would close it, so this checks
+ * first. That matters because the rail is a toggle, and a helper that blindly
+ * clicked would turn "make sure this is open" into "flip it".
+ */
+export async function openGmTool(page: Page, tool: GmToolId): Promise<void> {
+  const panel = page.getByTestId(`gm-tool-panel-${tool}`);
+  if (await panel.isVisible().catch(() => false)) {
+    return;
+  }
+  await page.getByTestId(`gm-tool-${tool}`).click();
+  await expect(panel).toBeVisible({ timeout: 10_000 });
+}
+
+/**
+ * Open one of the right-hand dock's sections — `chat`, `actors`, `combat`,
+ * `clocks`, `settings`.
+ *
+ * Same shape and same reason as `openGmTool`: the dock is a toggle, and its
+ * sections are what "the sidebar" used to be.
+ */
+export async function openDockTab(page: Page, tab: string): Promise<void> {
+  const trigger = page.getByTestId(`world-dock-tab-${tab}`);
+  await expect(trigger).toBeVisible({ timeout: 10_000 });
+  if ((await trigger.getAttribute("aria-expanded")) === "true") {
+    return;
+  }
+  await trigger.click();
+}
+
+/**
+ * Wait until the engine's world store holds at least `atLeast` walls.
+ *
+ * # Why a reload needs this and a first load does not
+ *
+ * `waitForEngineReady` waits for the canvas and then settles for a fixed few
+ * seconds — which is enough for the engine to start, and says nothing about
+ * whether the *scene's content* has arrived. On a first load there is nothing
+ * to arrive. After a reload there is, and it comes over a separate round trip:
+ * the walls are fetched and dispatched into the store after the canvas is
+ * already up.
+ *
+ * Clicking in that window selects nothing, because the wall the click is aimed
+ * at does not exist yet on this client. The symptom is a "Selected wall" panel
+ * that never appears, which reads exactly like selection being broken — it
+ * cost a long debugging session to find that the store, the props and the DOM
+ * were all correct and simply arrived later than the click.
+ *
+ * Polling the store rather than sleeping longer, because "how long does a
+ * refetch take" is not a constant and a fixed wait is either flaky or slow.
+ */
+export async function waitForWallsLoaded(
+  page: Page,
+  atLeast = 1,
+): Promise<void> {
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(async () => {
+          const bevy = (await import(
+            /* @vite-ignore */ "/src/engine/bevy/index.ts"
+          )) as typeof import("../../src/engine/bevy/index");
+          const state = bevy.getBoundWorldStore()?.getState();
+          return Object.keys(state?.walls ?? {}).length;
+        }),
+      {
+        message: `the scene's walls should reach this client (expected at least ${atLeast})`,
+        timeout: 30_000,
+      },
+    )
+    .toBeGreaterThanOrEqual(atLeast);
+}
+
+/** As `waitForWallsLoaded`, for shapes. */
+export async function waitForShapesLoaded(
+  page: Page,
+  atLeast = 1,
+): Promise<void> {
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(async () => {
+          const bevy = (await import(
+            /* @vite-ignore */ "/src/engine/bevy/index.ts"
+          )) as typeof import("../../src/engine/bevy/index");
+          const state = bevy.getBoundWorldStore()?.getState();
+          return Object.keys(state?.shapes ?? {}).length;
+        }),
+      {
+        message: `the scene's shapes should reach this client (expected at least ${atLeast})`,
+        timeout: 30_000,
+      },
+    )
+    .toBeGreaterThanOrEqual(atLeast);
 }

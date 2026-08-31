@@ -108,7 +108,10 @@ import {
   type ControllableToken,
 } from "@/engine/world/facets";
 import { TokenStackPicker } from "@/components/canvas-tools/TokenStackPicker";
-import { GmToolRail } from "@/components/world/GmToolRail/GmToolRail";
+import {
+  GmToolRail,
+  type GmToolId,
+} from "@/components/world/GmToolRail/GmToolRail";
 import {
   WorldDock,
   type DockSection,
@@ -265,6 +268,17 @@ export default function WorldPage() {
   // engine's canvas handle — continues to work unmodified; it now simply
   // never leaves `"playing"`.
   const [playView] = useState<"staging" | "playing">("playing");
+
+  /**
+   * Which of the GM's authoring tools is open in the left-hand rail.
+   *
+   * Held here rather than in `GmToolRail` because that component is rendered
+   * only once the scene and the viewer's role have resolved, and remounts as
+   * they settle — which was silently closing whatever the Game Master had just
+   * opened. "Which tool am I working with" outlives the rail, so it lives with
+   * the page.
+   */
+  const [openGmToolId, setOpenGmToolId] = useState<GmToolId | null>(null);
   const sceneId = selectedSceneId;
 
   // Spec 004 (US4, T034-T036): scene-switch loading/error feedback. Before
@@ -1755,6 +1769,8 @@ export default function WorldPage() {
           toolRail={
             isSceneOwner && sceneId ? (
               <GmToolRail
+                openToolId={openGmToolId}
+                onOpenToolChange={setOpenGmToolId}
                 tools={[
                   {
                     id: "walls",

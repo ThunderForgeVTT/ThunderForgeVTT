@@ -1,5 +1,13 @@
 import { test, expect, type Page } from "@playwright/test";
 import path from "node:path";
+import {
+  launchSceneByName,
+  openDockTab,
+  openGmTool,
+  waitForShapesLoaded,
+  waitForWallsLoaded,
+  type GmToolId,
+} from "./fixtures/helpers";
 
 /**
  * End-to-end coverage for the native canvas authoring feature
@@ -27,7 +35,10 @@ function uniqueSuffix(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
-async function registerAndCreateWorld(page: Page, worldName: string): Promise<void> {
+async function registerAndCreateWorld(
+  page: Page,
+  worldName: string,
+): Promise<void> {
   const suffix = uniqueSuffix();
   const username = `e2e${suffix}`;
   const email = `${username}@example.test`;
@@ -57,28 +68,56 @@ async function registerAndCreateWorld(page: Page, worldName: string): Promise<vo
   await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
 }
 
+/**
+ * Create a scene and switch to it.
+ *
+ * # Why this navigates first
+ *
+ * `SceneSwitcher` — and with it the "New scene" button — is mounted in exactly
+ * one place: the Settings section of the play view's right-hand dock. It is
+ * not on the staging route at all. `registerAndCreateWorld` leaves the page on
+ * `/staging`, so a spec calling this straight afterwards is on a page where
+ * scene creation does not exist.
+ *
+ * The previous version checked whether the button happened to be visible and,
+ * if not, clicked a dock tab. On staging neither exists, so it waited out the
+ * full test timeout on a tab that was never going to appear — a hang that
+ * reads like a broken app rather than a helper looking on the wrong page.
+ */
 async function createScene(page: Page, name: string): Promise<void> {
-  // In full-screen canvas mode, "New scene" lives inside the
-  // (collapsed-by-default) sidebar. Spec 010: staging is now its own
-  // route (not mounted alongside `/play`), so there is exactly one
-  // "new-scene-button" in the DOM here — no `:visible` disambiguation
-  // against a second, hidden-but-mounted staging copy is needed anymore;
-  // just ensure the Settings dock section is actually open before clicking.
-  const newSceneButton = page.getByTestId("new-scene-button");
-  if (!(await newSceneButton.isVisible().catch(() => false))) {
-    await page.getByTestId("world-dock-tab-settings").click();
-    await expect(newSceneButton).toBeVisible({ timeout: 10_000 });
+  const path = new URL(page.url()).pathname;
+  const worldId = /\/world\/([^/]+)/.exec(path)?.[1];
+  if (!worldId) {
+    throw new Error(`createScene needs to be on a world route, not ${path}`);
   }
+  if (!/\/play$/.test(path)) {
+    await page.goto(`/world/${worldId}/play`);
+  }
+
+  await openDockTab(page, "settings");
+  const newSceneButton = page.getByTestId("new-scene-button");
+  await expect(newSceneButton).toBeVisible({ timeout: 15_000 });
   await newSceneButton.click();
+
   await page.locator('[data-testid="new-scene-name-input"]:visible').fill(name);
   await page.locator('[data-testid="create-scene-submit"]:visible').click();
 
-  // Dialog closes and the switcher shows the newly-created (and
-  // auto-selected) scene once creation round-trips.
   await expect(page.getByTestId("new-scene-name-input")).toBeHidden({
     timeout: 10_000,
   });
-  await expect(page.locator('[data-testid="scene-switcher"]:visible')).toContainText(name);
+  await expect(
+    page.locator('[data-testid="scene-switcher"]:visible'),
+  ).toContainText(name);
+
+  // Make it the world's *active* scene, not merely this client's selection.
+  //
+  // Which scene a reload lands on is server state (ADR-046, spec 022), and
+  // creating one through the switcher does not launch it. Without this, a test
+  // draws on the new scene, reloads, and is silently returned to the previous
+  // one — where its walls do not exist. That reads exactly like "walls do not
+  // survive a reload", and cost a long session to tell apart from it.
+  await launchSceneByName(page, worldId, name);
+  await page.goto(`/world/${worldId}/play`);
 }
 
 async function importMap(
@@ -86,6 +125,10 @@ async function importMap(
   filePath: string,
   expectedSummary: string,
 ): Promise<number> {
+  // Map import lives in the Settings section of the right-hand dock. Setting
+  // files on a hidden input succeeds, so skipping this produces the confusing
+  // shape where the import runs and its success panel is never observable.
+  await openDockTab(page, "settings");
   const tool = page.getByTestId("map-import-tool");
   const startedAt = Date.now();
   await tool.locator('input[type="file"]').setInputFiles(filePath);
@@ -158,7 +201,18 @@ async function canvasBox(page: Page): Promise<Box> {
  * canvas element, click a neutral corner of it (focus + settle for 1-2),
  * plus an extra settle window.
  */
-async function waitForEngineReady(page: Page): Promise<void> {
+async function waitForEngineReady(
+  page: Page,
+  /**
+   * Which GM tool to leave open, for tests that go on to assert its panel.
+   *
+   * Needed on every call that precedes a tool assertion, including after a
+   * reload: the rail mounts only the open tool's content, and a reload closes
+   * it. Passing it here rather than as a separate call keeps the two things
+   * that must happen together in one place.
+   */
+  tool?: GmToolId,
+): Promise<void> {
   const canvas = page.locator("canvas");
   // Spec 010: `/world/:id/play` is a real route now, not a client-state
   // toggle — a reload keeps the same URL, so the canvas is simply still
@@ -173,6 +227,15 @@ async function waitForEngineReady(page: Page): Promise<void> {
   }
   await expect(canvas).toBeVisible({ timeout: 15_000 });
   await page.waitForTimeout(3_000);
+
+  // Opened *before* the focusing click below, not after. Clicking a rail
+  // button leaves keyboard focus on it, and this file drives the engine's
+  // shape sub-tools with bare number keys — which never reach it if a DOM
+  // button is holding focus. The corner click restores focus to the canvas.
+  if (tool) {
+    await openGmTool(page, tool);
+  }
+
   await canvas.scrollIntoViewIfNeeded();
   const box = await canvas.boundingBox();
   if (box) {
@@ -203,7 +266,11 @@ async function waitForEngineReady(page: Page): Promise<void> {
  * delay between down/up guarantees at least one frame boundary between
  * them, matching real click timing.
  */
-async function clickCanvasAt(page: Page, dx: number, dy: number): Promise<void> {
+async function clickCanvasAt(
+  page: Page,
+  dx: number,
+  dy: number,
+): Promise<void> {
   const box = await canvasBox(page);
   const x = box.x + box.width / 2 + dx;
   const y = box.y + box.height / 2 + dy;
@@ -244,7 +311,9 @@ test.describe("Native canvas authoring: map import and scene switching", () => {
     // default — open it before the rest of this test relies on it being
     // reachable via `createScene`/`switchToScene`.
     await page.getByTestId("world-dock-tab-settings").click();
-    await expect(page.locator('[data-testid="new-scene-button"]:visible')).toBeVisible();
+    await expect(
+      page.locator('[data-testid="new-scene-button"]:visible'),
+    ).toBeVisible();
 
     // --- Scene One: import the rich demo map ---
     await createScene(page, "Scene One");
@@ -294,7 +363,8 @@ test.describe("Hand-drawn wall authoring (US1)", () => {
   }) => {
     await registerAndCreateWorld(page, `E2E Wall Chain ${uniqueSuffix()}`);
     await createScene(page, "Wall Chain Scene");
-    await waitForEngineReady(page);
+    await waitForEngineReady(page, "walls");
+    await openGmTool(page, "walls");
     await expect(page.getByTestId("wall-tool")).toBeVisible();
 
     // FR-001: click three distinct points, then end the chain.
@@ -306,63 +376,90 @@ test.describe("Hand-drawn wall authoring (US1)", () => {
     // Existence proxy: clicking a segment's body selects it, surfacing
     // WallTool's "Selected wall" panel (there is no wall-count testid).
     await clickCanvasAt(page, -75, -120);
-    await expect(page.getByText("Selected wall")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Selected wall")).toBeVisible({
+      timeout: 10_000,
+    });
 
     await page.reload();
-    await waitForEngineReady(page);
+    await waitForEngineReady(page, "walls");
+    // A reload refetches the scene's walls over a separate round trip, and a
+    // click lands before they arrive. See `waitForWallsLoaded`.
+    await waitForWallsLoaded(page, 1);
 
     // Both segments persisted, not just the first.
     await clickCanvasAt(page, -75, -120);
-    await expect(page.getByText("Selected wall")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Selected wall")).toBeVisible({
+      timeout: 10_000,
+    });
     await clickCanvasAt(page, 75, -120);
-    await expect(page.getByText("Selected wall")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Selected wall")).toBeVisible({
+      timeout: 10_000,
+    });
   });
 
-  test("Escape mid-chain cancels the wall with nothing persisted", async ({ page }) => {
+  test("Escape mid-chain cancels the wall with nothing persisted", async ({
+    page,
+  }) => {
     await registerAndCreateWorld(page, `E2E Wall Cancel ${uniqueSuffix()}`);
     await createScene(page, "Wall Cancel Scene");
-    await waitForEngineReady(page);
+    await waitForEngineReady(page, "walls");
 
     await clickCanvasAt(page, -100, 40);
     await clickCanvasAt(page, 0, 40);
     await page.keyboard.press("Escape");
 
     await page.reload();
-    await waitForEngineReady(page);
+    await waitForEngineReady(page, "walls");
     await clickCanvasAt(page, -50, 40);
     await expect(page.getByText("Selected wall")).toHaveCount(0);
   });
 
-  test("toggling a wall to a door and deleting it both persist", async ({ page }) => {
-    await registerAndCreateWorld(page, `E2E Wall Door Delete ${uniqueSuffix()}`);
+  test("toggling a wall to a door and deleting it both persist", async ({
+    page,
+  }) => {
+    await registerAndCreateWorld(
+      page,
+      `E2E Wall Door Delete ${uniqueSuffix()}`,
+    );
     await createScene(page, "Wall Door Scene");
-    await waitForEngineReady(page);
+    await waitForEngineReady(page, "walls");
 
     await clickCanvasAt(page, -100, 0);
     await clickCanvasAt(page, 100, 0);
     await page.keyboard.press("Enter");
 
     await clickCanvasAt(page, 0, 0);
-    await expect(page.getByText("Selected wall")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Selected wall")).toBeVisible({
+      timeout: 10_000,
+    });
 
     // 'O' cycles door state (systems/wall.rs's handle_wall_keyboard_toggles).
     await page.keyboard.press("o");
-    await expect(page.getByTestId("wall-tool")).toContainText(/door \(closed\)/i, {
-      timeout: 10_000,
-    });
+    await expect(page.getByTestId("wall-tool")).toContainText(
+      /door \(closed\)/i,
+      {
+        timeout: 10_000,
+      },
+    );
 
     await page.reload();
-    await waitForEngineReady(page);
+    await waitForEngineReady(page, "walls");
+    // A reload refetches the scene's walls over a separate round trip, and a
+    // click lands before they arrive. See `waitForWallsLoaded`.
+    await waitForWallsLoaded(page, 1);
     await clickCanvasAt(page, 0, 0);
-    await expect(page.getByTestId("wall-tool")).toContainText(/door \(closed\)/i, {
-      timeout: 10_000,
-    });
+    await expect(page.getByTestId("wall-tool")).toContainText(
+      /door \(closed\)/i,
+      {
+        timeout: 10_000,
+      },
+    );
 
     await page.getByRole("button", { name: "Delete wall" }).click();
     await expect(page.getByText("Selected wall")).toHaveCount(0);
 
     await page.reload();
-    await waitForEngineReady(page);
+    await waitForEngineReady(page, "walls");
     await clickCanvasAt(page, 0, 0);
     await expect(page.getByText("Selected wall")).toHaveCount(0);
   });
@@ -401,14 +498,16 @@ test.describe("Wall sync across sessions (US1, T012)", () => {
     const pageA = await contextA.newPage();
     await registerAndCreateWorld(pageA, `E2E Wall Sync ${uniqueSuffix()}`);
     await createScene(pageA, "Sync Scene");
-    await waitForEngineReady(pageA);
+    await waitForEngineReady(pageA, "walls");
 
     await clickCanvasAt(pageA, -100, 0);
     await clickCanvasAt(pageA, 100, 0);
     await pageA.keyboard.press("Enter");
 
     await clickCanvasAt(pageA, 0, 0);
-    await expect(pageA.getByText("Selected wall")).toBeVisible({ timeout: 10_000 });
+    await expect(pageA.getByText("Selected wall")).toBeVisible({
+      timeout: 10_000,
+    });
 
     // Second, independent session (own cookies/localStorage, own Bevy
     // WASM instance, own WebSocket connection) reusing session one's
@@ -420,10 +519,12 @@ test.describe("Wall sync across sessions (US1, T012)", () => {
     const contextB = await browser.newContext({ storageState });
     const pageB = await contextB.newPage();
     await pageB.goto(pageA.url());
-    await waitForEngineReady(pageB);
+    await waitForEngineReady(pageB, "walls");
 
     await clickCanvasAt(pageB, 0, 0);
-    await expect(pageB.getByText("Selected wall")).toBeVisible({ timeout: 10_000 });
+    await expect(pageB.getByText("Selected wall")).toBeVisible({
+      timeout: 10_000,
+    });
 
     await contextA.close();
     await contextB.close();
@@ -450,7 +551,7 @@ test.describe("Hand-drawn shape authoring (US2)", () => {
   }) => {
     await registerAndCreateWorld(page, `E2E Shapes ${uniqueSuffix()}`);
     await createScene(page, "Shape Scene");
-    await waitForEngineReady(page);
+    await waitForEngineReady(page, "shapes");
     await expect(page.getByTestId("shape-tool")).toBeVisible();
 
     // Freehand (key 1): a short multi-point drag.
@@ -476,17 +577,26 @@ test.describe("Hand-drawn shape authoring (US2)", () => {
     // to plain select-by-click (systems/shape.rs's handle_shape_tool_selection).
     await page.keyboard.press("Escape");
     await clickCanvasAt(page, -20, -125); // rectangle center
-    await expect(page.getByText("Selected shape")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Selected shape")).toBeVisible({
+      timeout: 10_000,
+    });
     await clickCanvasAt(page, 150, -125); // ellipse center
-    await expect(page.getByText("Selected shape")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Selected shape")).toBeVisible({
+      timeout: 10_000,
+    });
     await clickCanvasAt(page, -150, 75); // line midpoint
-    await expect(page.getByText("Selected shape")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Selected shape")).toBeVisible({
+      timeout: 10_000,
+    });
 
     // Text: the one sub-tool with a real, already-working UI path —
     // ShapeTool.tsx's own click-to-place popover, not engine tool state.
     await page.getByRole("button", { name: "Text" }).click();
     const box = await canvasBox(page);
-    await page.mouse.click(box.x + box.width / 2 + 100, box.y + box.height / 2 + 100);
+    await page.mouse.click(
+      box.x + box.width / 2 + 100,
+      box.y + box.height / 2 + 100,
+    );
     await expect(page.getByTestId("shape-text-popover")).toBeVisible();
     await page.getByLabel("Text").fill("Trap!");
     await page.getByRole("button", { name: "Add text" }).click();
@@ -498,16 +608,18 @@ test.describe("Hand-drawn shape authoring (US2)", () => {
   }) => {
     await registerAndCreateWorld(page, `E2E Shape Isolation ${uniqueSuffix()}`);
     await createScene(page, "Shape Scene A");
-    await waitForEngineReady(page);
+    await waitForEngineReady(page, "shapes");
 
     await page.keyboard.press("2");
     await dragCanvas(page, { dx: -60, dy: -60 }, { dx: 60, dy: 60 });
     await page.keyboard.press("Escape");
     await clickCanvasAt(page, 0, 0);
-    await expect(page.getByText("Selected shape")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Selected shape")).toBeVisible({
+      timeout: 10_000,
+    });
 
     await createScene(page, "Shape Scene B");
-    await waitForEngineReady(page);
+    await waitForEngineReady(page, "shapes");
     // A freshly created scene must not show Scene A's rectangle.
     await clickCanvasAt(page, 0, 0);
     await expect(page.getByText("Selected shape")).toHaveCount(0);
@@ -516,26 +628,31 @@ test.describe("Hand-drawn shape authoring (US2)", () => {
     // isolation holds each time, not just once.
     for (let i = 0; i < 3; i++) {
       await switchToScene(page, "Shape Scene A");
-      await waitForEngineReady(page);
+      await waitForEngineReady(page, "shapes");
       await clickCanvasAt(page, 0, 0);
-      await expect(page.getByText("Selected shape")).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText("Selected shape")).toBeVisible({
+        timeout: 10_000,
+      });
 
       await switchToScene(page, "Shape Scene B");
-      await waitForEngineReady(page);
+      await waitForEngineReady(page, "shapes");
       await clickCanvasAt(page, 0, 0);
       await expect(page.getByText("Selected shape")).toHaveCount(0);
     }
 
     // Delete: back on Scene A, remove the rectangle and confirm it's gone.
     await switchToScene(page, "Shape Scene A");
-    await waitForEngineReady(page);
+    await waitForEngineReady(page, "shapes");
     await clickCanvasAt(page, 0, 0);
-    await expect(page.getByText("Selected shape")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Selected shape")).toBeVisible({
+      timeout: 10_000,
+    });
     await page.getByRole("button", { name: "Delete shape" }).click();
     await expect(page.getByText("Selected shape")).toHaveCount(0);
 
     await page.reload();
-    await waitForEngineReady(page);
+    await waitForEngineReady(page, "shapes");
+    await waitForShapesLoaded(page, 1);
     await clickCanvasAt(page, 0, 0);
     await expect(page.getByText("Selected shape")).toHaveCount(0);
   });

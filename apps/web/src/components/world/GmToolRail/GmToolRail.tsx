@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import {
   FantasyIcon,
   type FantasyIconName,
@@ -17,6 +17,9 @@ export interface GmTool {
 
 export interface GmToolRailProps {
   tools: GmTool[];
+  /** Which tool is open, or `null` for none. */
+  openToolId: GmToolId | null;
+  onOpenToolChange: (toolId: GmToolId | null) => void;
 }
 
 /**
@@ -33,9 +36,24 @@ export interface GmToolRailProps {
  * a click listener to the canvas container while its text sub-tool is
  * active; keeping every tool mounted would leave those listeners live for
  * tools the GM isn't using.
+ *
+ * # Which tool is open is the caller's state, not this component's
+ *
+ * The rail is only rendered once the scene and the viewer's role have both
+ * resolved, so it mounts a moment after the play view does — and it was
+ * remounting again as those settled. Holding the open tool in local state
+ * meant every one of those remounts silently closed whatever the Game Master
+ * had just opened: they clicked Walls, the panel appeared, and it vanished
+ * again for no reason they could see.
+ *
+ * Lifting it to the page makes a remount survivable, which is the correct
+ * shape anyway — "which tool am I working with" outlives this component.
  */
-export function GmToolRail({ tools }: GmToolRailProps) {
-  const [openToolId, setOpenToolId] = useState<GmToolId | null>(null);
+export function GmToolRail({
+  tools,
+  openToolId,
+  onOpenToolChange,
+}: GmToolRailProps) {
   const openTool = tools.find((tool) => tool.id === openToolId) ?? null;
 
   return (
@@ -59,9 +77,7 @@ export function GmToolRail({ tools }: GmToolRailProps) {
               aria-expanded={isOpen}
               data-testid={`gm-tool-${tool.id}`}
               onClick={() =>
-                setOpenToolId((current) =>
-                  current === tool.id ? null : tool.id,
-                )
+                onOpenToolChange(openToolId === tool.id ? null : tool.id)
               }
               className={cn(
                 "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
@@ -92,7 +108,7 @@ export function GmToolRail({ tools }: GmToolRailProps) {
             </h2>
             <button
               type="button"
-              onClick={() => setOpenToolId(null)}
+              onClick={() => onOpenToolChange(null)}
               aria-label={`Close ${openTool.label}`}
               className="rounded-md px-1.5 text-lg leading-none text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
