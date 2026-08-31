@@ -214,6 +214,13 @@ struct WorldWallPayload {
     blocks_movement: bool,
     #[serde(rename = "doorState")]
     door_state: String,
+    /// Spec 030. Absent in an older payload, and `false` is what every wall
+    /// was before this existed — so a stale sender keeps working rather than
+    /// producing a wall the engine refuses.
+    #[serde(default)]
+    locked: bool,
+    #[serde(default)]
+    secret: bool,
 }
 
 /// Confirmed/authoritative light state from the server (T036-T040),
@@ -247,6 +254,35 @@ struct WorldShapePayload {
     visible_to_players: bool,
 }
 
+/// One interactive, on its way into the engine (spec 030).
+///
+/// `subjectKind` is the server's own spelling — `prop`, `door`, `region` —
+/// mapped here to the engine's spatial categories. That mapping is the seam:
+/// the interaction plugin knows a subject is a segment of map geometry and
+/// deliberately does not know what a segment means in the fiction.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct InteractivePayload {
+    id: String,
+    subject_kind: String,
+    #[serde(default)]
+    subject_ref: Option<String>,
+    #[serde(default)]
+    geometry: Option<serde_json::Value>,
+    #[serde(default)]
+    effect_id: Option<String>,
+    #[serde(default)]
+    effect_config: Option<serde_json::Value>,
+    /// `click` or `enter`.
+    trigger: String,
+    #[serde(default)]
+    can_activate: bool,
+    #[serde(default)]
+    fire_mode: Option<String>,
+    #[serde(default)]
+    fired: bool,
+}
+
 #[derive(Debug, Clone)]
 enum ExternalCommand {
     SetWorld {
@@ -278,6 +314,33 @@ enum ExternalCommand {
     /// was written.
     SetDisplayAppearance {
         override_values: AppearanceOverride,
+    },
+    /// Spec 030: one interactive on the active scene, as this viewer knows
+    /// it. A player's payload carries less than a Game Master's; the engine
+    /// treats an absent effect as "nothing to dispatch locally" rather than as
+    /// missing data.
+    UpsertInteractive {
+        interactive: InteractivePayload,
+    },
+    RemoveInteractive {
+        interactive_id: String,
+    },
+    /// Spec 030: run an effect the server has already permitted.
+    ///
+    /// The engine is not a second authority on whether it was allowed — this
+    /// exists so the change is visible immediately rather than a round trip
+    /// later (ADR-054).
+    DispatchInteraction {
+        interactive_id: String,
+        effect_id: String,
+        config: Value,
+    },
+    /// Spec 030 FR-032: whether movement is play or preparation.
+    ///
+    /// A Game Master dragging a token in preparation and in play is the same
+    /// gesture, so this cannot be inferred and has to be told.
+    SetScenePlaying {
+        playing: bool,
     },
     UpsertWall {
         wall: WorldWallPayload,
@@ -581,6 +644,22 @@ fn parse_command(input: &str) -> Option<ExternalCommand> {
             let override_values: AppearanceOverride = serde_json::from_value(raw).ok()?;
             Some(ExternalCommand::SetDisplayAppearance { override_values })
         }
+        "upsert_interactive" => {
+            let interactive: InteractivePayload =
+                serde_json::from_value(value.get("interactive")?.clone()).ok()?;
+            Some(ExternalCommand::UpsertInteractive { interactive })
+        }
+        "remove_interactive" => Some(ExternalCommand::RemoveInteractive {
+            interactive_id: value.get("interactiveId")?.as_str()?.to_owned(),
+        }),
+        "dispatch_interaction" => Some(ExternalCommand::DispatchInteraction {
+            interactive_id: value.get("interactiveId")?.as_str()?.to_owned(),
+            effect_id: value.get("effectId")?.as_str()?.to_owned(),
+            config: value.get("effectConfig").cloned().unwrap_or(Value::Null),
+        }),
+        "set_scene_playing" => Some(ExternalCommand::SetScenePlaying {
+            playing: value.get("playing")?.as_bool()?,
+        }),
         "upsert_wall" => {
             let wall_value = value.get("wall")?.clone();
             let wall: WorldWallPayload = serde_json::from_value(wall_value).ok()?;
@@ -760,6 +839,101 @@ pub fn apply_world_command(json_command: &str) {
     }
 }
 
+/// Turn the server's spelling of an interactive into the engine's.
+///
+/// The one place `door` becomes a segment of map geometry. That mapping lives
+/// here rather than in `plugins::interaction` on purpose: the plugin is
+/// required to know nothing about what a subject means, and this boundary is
+/// where the server's vocabulary stops.
+fn to_engine_interactive(payload: InteractivePayload) -> plugins::interaction::Interactive {
+    use plugins::interaction::Subject;
+
+    plugins::interaction::Interactive {
+        id: payload.id,
+        subject: match payload.subject_kind.as_str() {
+            "region" => Subject::Region,
+            "prop" => Subject::Prop,
+            // Anything attached to the scene's line geometry. An unrecognised
+            // kind lands here rather than being dropped, because a subject the
+            // engine cannot categorise is still something a Game Master
+            // placed.
+            _ => Subject::Segment,
+        },
+        subject_ref: payload.subject_ref,
+        geometry: payload
+            .geometry
+            .and_then(|g| serde_json::from_value(g).ok()),
+        effect_id: payload.effect_id,
+        config: payload.effect_config.unwrap_or(Value::Null),
+        on_entry: payload.trigger == "enter",
+        can_activate: payload.can_activate,
+        once: payload.fire_mode.as_deref() == Some("once"),
+        fired: payload.fired,
+    }
+}
+
+/// Every interactive the engine currently holds, as JSON.
+///
+/// Read-only, like `get_token_status`. A debugging or observation surface that
+/// can also mutate state becomes a way to write tests that pass against
+/// situations the application cannot reach.
+#[wasm_bindgen]
+pub fn list_interactives() -> String {
+    interactive_snapshot_slot()
+        .lock()
+        .ok()
+        .and_then(|snapshot| serde_json::to_string(&*snapshot).ok())
+        .unwrap_or_else(|| "[]".to_string())
+}
+
+/// Every effect the engine has dispatched, in order, as JSON.
+///
+/// The seam's own observation point. A contributor's *result* is visible on
+/// the canvas; what this shows is that dispatch happened at all — which is the
+/// difference an end-to-end test needs when a contributor is deliberately
+/// absent (US7).
+#[wasm_bindgen]
+pub fn dispatched_effects() -> String {
+    dispatched_effects_slot()
+        .lock()
+        .ok()
+        .and_then(|log| serde_json::to_string(&*log).ok())
+        .unwrap_or_else(|| "[]".to_string())
+}
+
+/// Which walls the engine is currently drawing, as JSON.
+///
+/// Read-only observation. It exists because "a player is not shown a secret
+/// door" is a claim about drawing and nothing else can answer it: the geometry
+/// is deliberately sent to every client (a wall that did not arrive would also
+/// stop blocking vision), so a payload check would prove the opposite of what
+/// is wanted.
+#[wasm_bindgen]
+pub fn drawn_wall_ids() -> String {
+    drawn_walls_slot()
+        .lock()
+        .ok()
+        .and_then(|walls| serde_json::to_string(&*walls).ok())
+        .unwrap_or_else(|| "[]".to_string())
+}
+
+static DRAWN_WALLS: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
+
+pub(crate) fn drawn_walls_slot() -> &'static Mutex<Vec<String>> {
+    DRAWN_WALLS.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+static INTERACTIVE_SNAPSHOT: OnceLock<Mutex<Vec<Value>>> = OnceLock::new();
+static DISPATCHED_EFFECTS: OnceLock<Mutex<Vec<Value>>> = OnceLock::new();
+
+pub(crate) fn interactive_snapshot_slot() -> &'static Mutex<Vec<Value>> {
+    INTERACTIVE_SNAPSHOT.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+pub(crate) fn dispatched_effects_slot() -> &'static Mutex<Vec<Value>> {
+    DISPATCHED_EFFECTS.get_or_init(|| Mutex::new(Vec::new()))
+}
+
 /// The SDK contract version both sides ship under.
 ///
 /// A single integer, deliberately. The engine and the application are built
@@ -902,6 +1076,20 @@ pub fn start(canvas_selector: &str) {
         // T015: wall authoring (specs/001-bevy-canvas-authoring). Depends
         // on CanvasLayerPlugin (above) for the `CanvasLayers` resource.
         .add_plugins(WallPlugin)
+        // Spec 030: interactive elements. Deliberately registered *before* any
+        // contributor, and deliberately depending on none of them — it is
+        // addable and removable on its own, which is what FR-039 asks for and
+        // what US7 tests.
+        .add_plugins(plugins::InteractionPlugin)
+        // Spec 030 US1: the first contributor. Registered *after* the
+        // interaction plugin and depending on nothing in it beyond the
+        // message type — deleting this line removes the effect and leaves
+        // everything else working, which is the property US7 tests.
+        .add_plugins(plugins::LoreLinkPlugin)
+        // Spec 030 US7: the contributor that exists only to be added and
+        // removed. Deleting this line and its file removes the capability and
+        // changes nothing else — which is the whole claim.
+        .add_plugins(plugins::SeamProbePlugin)
         // T040: light authoring (specs/001-bevy-canvas-authoring). Depends
         // on CanvasLayerPlugin (above) for the `CanvasLayers` resource, and
         // reads WallPlugin's `WallSet`/`is_visible` for occlusion.
@@ -1106,6 +1294,19 @@ struct SceneParams<'w, 's> {
     camera_viewport: Query<'w, 's, &'static Camera, With<Camera2d>>,
 }
 
+/// The interaction plugin's resources, grouped.
+///
+/// Grouped for the same reason `SceneParams` is: Bevy caps a system at 16
+/// parameters and this loop is at the limit. Every field is `Option` because
+/// `InteractionPlugin` is independently addable, and a command for an absent
+/// plugin is dropped rather than panicking (Constitution Principle II).
+#[derive(bevy::ecs::system::SystemParam)]
+struct InteractionParams<'w> {
+    interactives: Option<ResMut<'w, plugins::Interactives>>,
+    pending_activations: Option<ResMut<'w, plugins::interaction::PendingActivations>>,
+    scene_playing: Option<ResMut<'w, plugins::interaction::ScenePlaying>>,
+}
+
 fn apply_external_commands(
     mut commands: Commands,
     mut active_world: ResMut<ActiveWorld>,
@@ -1148,6 +1349,7 @@ fn apply_external_commands(
     // command with no status plugin to apply it to is a no-op rather than a
     // fault: nothing is being displayed for it to affect.
     appearance: Option<ResMut<plugins::status_display::Appearance>>,
+    mut interaction: InteractionParams,
 ) {
     let drained = if let Ok(mut queue) = external_command_queue().lock() {
         queue.drain(..).collect::<Vec<_>>()
@@ -1163,6 +1365,11 @@ fn apply_external_commands(
     let mut placed_canvas_images = placed_canvas_images;
     let mut is_game_master = is_game_master;
     let mut pending_dice_roll = pending_dice_roll;
+    let InteractionParams {
+        interactives,
+        pending_activations,
+        scene_playing,
+    } = &mut interaction;
 
     for command in drained {
         match command {
@@ -1382,12 +1589,52 @@ fn apply_external_commands(
                         blocks_vision: wall.blocks_vision,
                         blocks_movement: wall.blocks_movement,
                         door_state: DoorState::from_str_loose(&wall.door_state),
+                        locked: wall.locked,
+                        secret: wall.secret,
                     });
                 }
             }
             ExternalCommand::RemoveWall { wall_id } => {
                 if let Some(wall_set) = wall_set.as_deref_mut() {
                     wall_set.remove(&wall_id);
+                }
+            }
+            ExternalCommand::UpsertInteractive { interactive } => {
+                if let Some(interactives) = interactives.as_deref_mut() {
+                    interactives.upsert(to_engine_interactive(interactive));
+                }
+            }
+            ExternalCommand::RemoveInteractive { interactive_id } => {
+                if let Some(interactives) = interactives.as_deref_mut() {
+                    interactives.remove(&interactive_id);
+                }
+            }
+            ExternalCommand::DispatchInteraction {
+                interactive_id,
+                effect_id,
+                config,
+            } => {
+                // Queued rather than written directly: a message can only be
+                // written from a system, and this loop is one — but the
+                // interaction plugin owns the writing, so that dispatch has
+                // exactly one path whether it came from a click or from a
+                // region being crossed.
+                if let Some(pending) = pending_activations.as_deref_mut() {
+                    let subject_ref = interactives
+                        .as_deref()
+                        .and_then(|set| set.get(&interactive_id))
+                        .and_then(|i| i.subject_ref.clone());
+                    pending.0.push(plugins::InteractionActivated {
+                        interactive_id,
+                        effect_id,
+                        config,
+                        subject_ref,
+                    });
+                }
+            }
+            ExternalCommand::SetScenePlaying { playing } => {
+                if let Some(scene_playing) = scene_playing.as_deref_mut() {
+                    scene_playing.0 = playing;
                 }
             }
             ExternalCommand::UpsertLight { light } => {

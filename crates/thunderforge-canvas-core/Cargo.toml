@@ -24,6 +24,14 @@ crate-type = ["rlib"]
 # other. A dependency upgrade that moved this line to 0.33 while bevy stayed
 # on 0.32 broke the engine build in 44 places across 14 files, all of them
 # reading as unrelated type errors. Check bevy's glam before bumping this.
+[features]
+# On by default, and the default is the point being tested rather than a
+# convenience: an end-to-end test can only observe a contributor that is
+# actually in the build. What US7 asserts is that turning this off changes
+# nothing else — see `src/seam_probe.rs`.
+default = ["seam-probe"]
+seam-probe = []
+
 [dependencies]
 glam = "0.32"
 serde = { version = "1.0.229", features = ["derive"] }

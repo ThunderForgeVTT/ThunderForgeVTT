@@ -14,6 +14,17 @@ license.workspace = true
 [[bin]]
 name = "thunderforge"
 
+[features]
+# Spec 030 US7. Whether the seam probe is offered as an authorable effect.
+#
+# On by default, because an end-to-end test can only observe a contributor
+# that is in the build. Removing it is this line plus the matching one in
+# `thunderforge-canvas-core` — and nothing else, which is the property being
+# demonstrated. `crates/thunderforge-canvas-core/src/seam_probe.rs` explains
+# why it exists at all.
+default = ["seam-probe"]
+seam-probe = []
+
 [dependencies]
 tokio = { version = "1.53.1", features = ["full"] }
 serde = { version = "1.0.229", features = ["derive"] }

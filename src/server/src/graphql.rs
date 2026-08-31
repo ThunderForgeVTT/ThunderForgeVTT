@@ -81,6 +81,7 @@ pub mod share_codes;
 pub use mutations_invites::InviteMutation;
 
 // Phase 6: Wall mutations (vision-blocking scene geometry)
+pub mod mutations_interactives; // Spec 030: interactive elements
 pub mod mutations_walls;
 pub use mutations_walls::WallMutation;
 
@@ -504,6 +505,12 @@ pub struct GraphQLWall {
     blocks_vision: bool,
     blocks_movement: bool,
     door_state: GraphQLDoorState,
+    /// Spec 030: who may change the door's state, not the state itself.
+    locked: bool,
+    /// Spec 030: not drawn for players until revealed. Presentation only —
+    /// the geometry reaches every client, because a door that did not arrive
+    /// would also stop blocking vision and movement.
+    secret: bool,
     metadata: Option<Json<serde_json::Value>>,
     created_by: uuid::Uuid,
     updated_by: uuid::Uuid,
@@ -523,6 +530,8 @@ impl From<crate::models::Wall> for GraphQLWall {
             blocks_vision: wall.blocks_vision,
             blocks_movement: wall.blocks_movement,
             door_state: GraphQLDoorState::from_db_str(&wall.door_state),
+            locked: wall.locked,
+            secret: wall.secret,
             metadata: wall.metadata.map(Json),
             created_by: wall.created_by,
             updated_by: wall.updated_by,
@@ -2769,6 +2778,8 @@ pub struct QueryRoot(
     SceneQuery,
     queries::token_status::TokenStatusQuery,
     queries::token_attributes::TokenAttributesQuery,
+    // Spec 030: `effectRegistry` and `interactives(sceneId)`.
+    queries::interactives::InteractiveQuery,
     InviteQuery,
     AssetQuery,
     ActorQuery,
@@ -2815,6 +2826,8 @@ pub struct MutationRoot(
     WallMutation,
     LightSourceMutation,
     ShapeMutation,
+    // Spec 030: authoring, activation and approval for interactive elements.
+    mutations_interactives::InteractiveMutation,
     TokenMutation,
     AssetMutation,
     ActorMutation,

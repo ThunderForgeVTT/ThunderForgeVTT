@@ -10,6 +10,10 @@ export interface WallRecord {
   blocksVision: boolean;
   blocksMovement: boolean;
   doorState: DoorState;
+  /** Spec 030: who may change the state, not the state itself. */
+  locked: boolean;
+  /** Spec 030: not drawn for players until revealed. */
+  secret: boolean;
   metadata: Record<string, unknown> | null;
   createdBy: string;
   updatedBy: string;

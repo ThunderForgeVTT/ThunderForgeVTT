@@ -34,6 +34,17 @@ const WALL_SELECT_DISTANCE: f32 = 6.0;
 const UNSELECTED_COLOR: Color = Color::srgb(0.75, 0.75, 0.78);
 const SELECTED_COLOR: Color = Color::srgb(0.95, 0.85, 0.25);
 const DOOR_COLOR: Color = Color::srgb(0.55, 0.35, 0.2);
+/// A locked door, for whoever can see that it is locked.
+///
+/// Cooler and darker than an unlocked one rather than a different hue: at a
+/// glance a Game Master needs to read "door, and it will not open", and two
+/// unrelated colours would read as two unrelated things.
+const LOCKED_DOOR_COLOR: Color = Color::srgb(0.38, 0.26, 0.30);
+/// A secret door, drawn only for the Game Master.
+///
+/// Deliberately faint. It is a note to the person running the scene, and it
+/// should not compete with anything the table is actually looking at.
+const SECRET_DOOR_COLOR: Color = Color::srgb(0.35, 0.30, 0.45);
 const HANDLE_COLOR: Color = Color::srgb(0.95, 0.95, 0.95);
 const HANDLE_SIZE: Vec2 = Vec2::new(8.0, 8.0);
 
@@ -139,8 +150,16 @@ fn emit_wall_selection(wall_id: Option<&str>) {
 fn wall_color(wall: &Wall, selected: bool) -> Color {
     if selected {
         SELECTED_COLOR
+    } else if wall.secret {
+        // Only ever reached for a Game Master: `sync_wall_visuals` does not
+        // draw a secret wall at all for anybody else.
+        SECRET_DOOR_COLOR
     } else if wall.door_state != DoorState::None {
-        DOOR_COLOR
+        if wall.locked {
+            LOCKED_DOOR_COLOR
+        } else {
+            DOOR_COLOR
+        }
     } else {
         UNSELECTED_COLOR
     }
@@ -599,6 +618,21 @@ pub(crate) fn sync_wall_visuals(
     }
 
     for wall in wall_set.walls() {
+        // A secret door is not drawn for the table.
+        //
+        // Per the spec's decision the geometry still reaches every client and
+        // this is presentation only — somebody who inspects their own client
+        // and announces a secret door has created a table problem, not found a
+        // security hole. Resolving it here rather than by withholding geometry
+        // keeps vision and movement correct for everyone: a secret door that
+        // did not arrive would also stop blocking, and the wall would vanish.
+        if wall.secret && !is_gm.0 {
+            if let Some(entity) = wall_entities.0.remove(&wall.id) {
+                commands.entity(entity).despawn();
+            }
+            continue;
+        }
+
         let selected = selected_wall.is_selected(&wall.id);
         let color = wall_color(wall, selected);
         let length = wall.length().max(0.5);
@@ -622,6 +656,22 @@ pub(crate) fn sync_wall_visuals(
                 .id();
             wall_entities.0.insert(wall.id.clone(), entity);
         }
+    }
+
+    // Publish what is actually on screen, for observation only.
+    //
+    // The claim "a player is not shown a secret door" is about *drawing*, and
+    // every other way to check it is a proxy: the geometry is deliberately
+    // sent to every client, so a payload assertion would prove the opposite of
+    // what is wanted, and a screenshot proves only that something was painted.
+    // This is the one place that knows.
+    //
+    // Read-only, like `get_token_status`. An observation surface that could
+    // also mutate becomes a way to write tests that pass against situations
+    // the application cannot reach.
+    if let Ok(mut slot) = crate::drawn_walls_slot().lock() {
+        *slot = wall_entities.0.keys().cloned().collect();
+        slot.sort_unstable();
     }
 
     // GM-only endpoint handles for the selected wall (rebuilt each pass;
@@ -659,6 +709,86 @@ pub(crate) fn init_wall_systems_resources(app: &mut App) {
     app.init_resource::<WallDragState>()
         .init_resource::<WallChainState>()
         .init_resource::<WallEntities>();
+}
+
+/// Perform the door effects this subsystem contributed to the interaction
+/// seam (spec 030, US2 and US4).
+///
+/// # Why this lives with walls rather than with interactions
+///
+/// Doors are the effect most tempting to build into the interaction core,
+/// because they are the most obviously spatial thing on a map. Building them
+/// there would couple that plugin to walls and make it the place every future
+/// subsystem also gets added — which is exactly what Constitution Principle II
+/// forbids and what `scripts/verify.mjs` greps for.
+///
+/// So this reads the activation message like any other contributor, filters
+/// for the three identifiers `canvas_core::wall` declared, and ignores the
+/// rest. Nothing in the interaction plugin knows this exists.
+///
+/// # Why setting `WallSet` is enough
+///
+/// Vision and movement are *derived* from door state rather than stored
+/// alongside it (`Wall::blocking`), so changing the state here re-resolves
+/// both on the next frame with nothing else to keep in step. That is the
+/// payoff of deriving rather than duplicating, and it is why an open window
+/// and an open stone door behave correctly without either being a special
+/// case.
+///
+/// This is the optimistic half. The server has already performed the same
+/// change authoritatively; applying it here makes it visible now rather than a
+/// round trip later, and the two agreeing is the client's responsibility
+/// (ADR-054).
+pub(crate) fn handle_door_effects(
+    mut activations: MessageReader<crate::plugins::interaction::InteractionActivated>,
+    mut wall_set: ResMut<WallSet>,
+) {
+    use thunderforge_canvas_core::wall::{
+        REVEAL, SET_LOCK, SET_STATE, requested_lock, requested_state, target_of,
+    };
+
+    for activation in activations.read() {
+        let effect = activation.effect_id.as_str();
+        if !matches!(effect, SET_STATE | SET_LOCK | REVEAL) {
+            continue;
+        }
+        let Some(target) = target_of(&activation.config) else {
+            continue;
+        };
+        let Some(existing) = wall_set.get(target) else {
+            // A wall this client has not been sent. Not an error: the next
+            // sync will bring it, already in the state the server holds.
+            continue;
+        };
+
+        let mut updated = existing.clone();
+        match effect {
+            SET_STATE => {
+                // A wall that is not a door has no state to set. Turning one
+                // into a door here would be an edit nobody asked for.
+                if updated.door_state == DoorState::None {
+                    continue;
+                }
+                let Some(next) = requested_state(&activation.config, updated.door_state) else {
+                    continue;
+                };
+                updated.door_state = next;
+            }
+            SET_LOCK => {
+                let Some(locked) = requested_lock(&activation.config) else {
+                    continue;
+                };
+                updated.locked = locked;
+            }
+            REVEAL => {
+                // One-way. Re-hiding something the table has seen is a fiction
+                // problem rather than a state problem.
+                updated.secret = false;
+            }
+            _ => continue,
+        }
+        wall_set.upsert(updated);
+    }
 }
 
 #[cfg(test)]

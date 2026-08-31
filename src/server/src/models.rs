@@ -1,17 +1,18 @@
 use crate::schema::{
     admin_bootstrap_oauth_sessions, admin_bootstrap_setup, auth_security_settings,
-    canvas_image_assets, content_moderation_actions, fog_masks, game_systems, light_sources,
-    login_two_factor_challenges, oauth_authorization_sessions, oauth_link_challenges,
-    oauth_providers, players_online, scene_state_fingerprints, scenes, shapes, tokens,
-    user_oauth_accounts, user_sessions, users, walls, world_abilities, world_ability_effects,
-    world_ability_permissions, world_ability_shares, world_actor_abilities, world_actor_claims,
-    world_actor_inventory, world_actor_permissions, world_actor_shares, world_actor_system_data,
-    world_actors, world_chat_messages, world_combatants, world_combats, world_events,
-    world_genie_puzzle_clock_rewards, world_genie_puzzle_clocks, world_genie_resource_holdings,
-    world_genie_sessions, world_genie_shop_listings, world_genie_trade_proposals, world_invites,
-    world_item_effects, world_item_permissions, world_item_shares, world_items, world_lore_entries,
-    world_lore_image_assets, world_lore_links, world_lore_permissions, world_lore_revisions,
-    world_members, world_roll_records, world_tokens, worlds,
+    canvas_image_assets, content_moderation_actions, fog_masks, game_systems, interaction_requests,
+    interactives, light_sources, login_two_factor_challenges, oauth_authorization_sessions,
+    oauth_link_challenges, oauth_providers, players_online, scene_state_fingerprints, scenes,
+    shapes, tokens, user_oauth_accounts, user_sessions, users, walls, world_abilities,
+    world_ability_effects, world_ability_permissions, world_ability_shares, world_actor_abilities,
+    world_actor_claims, world_actor_inventory, world_actor_permissions, world_actor_shares,
+    world_actor_system_data, world_actors, world_chat_messages, world_combatants, world_combats,
+    world_events, world_genie_puzzle_clock_rewards, world_genie_puzzle_clocks,
+    world_genie_resource_holdings, world_genie_sessions, world_genie_shop_listings,
+    world_genie_trade_proposals, world_invites, world_item_effects, world_item_permissions,
+    world_item_shares, world_items, world_lore_entries, world_lore_image_assets, world_lore_links,
+    world_lore_permissions, world_lore_revisions, world_members, world_roll_records, world_tokens,
+    worlds,
 };
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -595,6 +596,11 @@ pub struct Wall {
     pub updated_by: uuid::Uuid,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// Who may change the door's state, not the state itself. See the
+    /// migration and `thunderforge_canvas_core::wall::Wall::locked`.
+    pub locked: bool,
+    /// Not drawn for players until revealed. Presentation only.
+    pub secret: bool,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
@@ -625,6 +631,60 @@ pub struct WallUpdate {
     pub door_state: Option<String>,
     pub metadata: Option<serde_json::Value>,
     pub updated_by: uuid::Uuid,
+    pub locked: Option<bool>,
+    pub secret: Option<bool>,
+}
+
+// ========== Interactive Models (spec 030: interactive elements) ==========
+
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = interactives)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct Interactive {
+    pub interactive_id: uuid::Uuid,
+    pub scene_id: uuid::Uuid,
+    pub subject_kind: String,
+    pub subject_ref: Option<uuid::Uuid>,
+    pub geometry: Option<serde_json::Value>,
+    pub effect_id: Option<String>,
+    pub effect_config: Option<serde_json::Value>,
+    pub trigger: String,
+    pub activation: String,
+    pub fire_mode: String,
+    pub fired_at: Option<chrono::NaiveDateTime>,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(AsChangeset, Debug, Clone, Default)]
+#[diesel(table_name = interactives)]
+pub struct InteractiveUpdate {
+    pub effect_id: Option<Option<String>>,
+    pub effect_config: Option<Option<serde_json::Value>>,
+    pub geometry: Option<Option<serde_json::Value>>,
+    pub trigger: Option<String>,
+    pub activation: Option<String>,
+    pub fire_mode: Option<String>,
+    pub updated_by: Option<uuid::Uuid>,
+}
+
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = interaction_requests)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct InteractionRequest {
+    pub request_id: uuid::Uuid,
+    pub interactive_id: uuid::Uuid,
+    pub scene_id: uuid::Uuid,
+    pub requested_by: uuid::Uuid,
+    pub state: String,
+    pub decided_by: Option<uuid::Uuid>,
+    pub decided_at: Option<chrono::NaiveDateTime>,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
 }
 
 // ========== LightSource Models (native canvas authoring) ==========

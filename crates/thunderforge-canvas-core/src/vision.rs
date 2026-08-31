@@ -389,6 +389,8 @@ mod tests {
             blocks_vision: true,
             blocks_movement: false,
             door_state: DoorState::None,
+            locked: false,
+            secret: false,
         });
         walls
     }

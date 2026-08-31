@@ -1,0 +1,810 @@
+//! Tests for the interaction seam.
+//!
+//! Split out of `interaction.rs` only because the two together exceed the
+//! repository's 1000-line file limit (`scripts/check-file-length.sh`); they
+//! are the same module, attached with `#[path]`.
+
+use super::*;
+
+fn decl(id: &str, subjects: &[SubjectKind], config: Vec<ConfigField>) -> EffectDeclaration {
+    EffectDeclaration {
+        id: id.to_string(),
+        label: id.to_string(),
+        description: String::from("does a thing"),
+        subject_kinds: subjects.to_vec(),
+        config,
+    }
+}
+
+fn reference_field(key: &str, of: &str, required: bool) -> ConfigField {
+    ConfigField {
+        key: key.to_string(),
+        label: key.to_string(),
+        kind: ConfigFieldKind::Reference { of: of.to_string() },
+        required,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Registry assembly
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_duplicate_id_fails_at_assembly_not_at_first_use() {
+    // Two contributors, each unaware of the other, claiming one name.
+    let first = vec![decl("thing.do", &[SubjectKind::Prop], vec![])];
+    let second = vec![decl("thing.do", &[SubjectKind::Door], vec![])];
+
+    let result = EffectRegistry::assemble([first, second]);
+
+    // The point is *when* this fails. Assembly is startup. If the collision
+    // instead surfaced when a Game Master happened to author one of the two,
+    // it would be found mid-session by the people least able to fix it.
+    assert_eq!(
+        result,
+        Err(RegistryError::DuplicateId {
+            id: String::from("thing.do")
+        })
+    );
+}
+
+#[test]
+fn an_unnamespaced_id_is_refused_because_it_defeats_collision_detection() {
+    let result = EffectRegistry::assemble([vec![decl("toggle", &[SubjectKind::Prop], vec![])]]);
+    assert_eq!(
+        result,
+        Err(RegistryError::UnnamespacedId {
+            id: String::from("toggle")
+        })
+    );
+}
+
+#[test]
+fn an_empty_contribution_set_assembles_into_an_empty_registry() {
+    // A build with no subsystems must offer nothing, not fail (FR-039). This
+    // is the state the seam is in before its first contributor exists, and a
+    // seam that cannot be in it is not a seam.
+    let registry = EffectRegistry::assemble(Vec::<Vec<EffectDeclaration>>::new())
+        .expect("no contributors is a legitimate build");
+    assert!(registry.is_empty());
+    assert_eq!(registry.all().count(), 0);
+    assert!(!registry.contains("anything.at_all"));
+}
+
+#[test]
+fn contributions_from_several_subsystems_are_the_union_of_what_is_compiled_in() {
+    let registry = EffectRegistry::assemble([
+        vec![decl("alpha.one", &[SubjectKind::Prop], vec![])],
+        vec![
+            decl("beta.one", &[SubjectKind::Door], vec![]),
+            decl(
+                "beta.two",
+                &[SubjectKind::Prop, SubjectKind::Region],
+                vec![],
+            ),
+        ],
+    ])
+    .expect("distinct ids");
+
+    assert_eq!(registry.len(), 3);
+    // id order, so the authoring form does not reshuffle between builds.
+    let ids: Vec<&str> = registry.all().map(|d| d.id.as_str()).collect();
+    assert_eq!(ids, vec!["alpha.one", "beta.one", "beta.two"]);
+
+    let for_door: Vec<&str> = registry
+        .for_subject(SubjectKind::Door)
+        .map(|d| d.id.as_str())
+        .collect();
+    assert_eq!(for_door, vec!["beta.one"]);
+}
+
+#[test]
+fn a_declaration_knows_its_own_namespace() {
+    let d = decl("door.set_state", &[SubjectKind::Door], vec![]);
+    assert_eq!(d.namespace(), "door");
+}
+
+// ---------------------------------------------------------------------------
+// Authoring validation
+// ---------------------------------------------------------------------------
+
+fn prop_draft() -> InteractiveDraft {
+    InteractiveDraft {
+        subject_kind: SubjectKind::Prop,
+        subject_ref: Some(String::from("token-1")),
+        geometry: None,
+        effect_id: None,
+        effect_config: serde_json::Value::Null,
+        trigger: Trigger::Click,
+        activation: Activation::Anyone,
+        fire_mode: FireMode::Always,
+    }
+}
+
+fn region_draft() -> InteractiveDraft {
+    InteractiveDraft {
+        subject_kind: SubjectKind::Region,
+        subject_ref: None,
+        geometry: Some(RegionGeometry::Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 10.0,
+            height: 10.0,
+        }),
+        effect_id: None,
+        effect_config: serde_json::Value::Null,
+        trigger: Trigger::Enter,
+        activation: Activation::Anyone,
+        fire_mode: FireMode::Always,
+    }
+}
+
+#[test]
+fn scenery_with_no_effect_is_valid() {
+    // An interactive with no effect is legitimate — a GM placing a table has
+    // not misconfigured anything (US1 scenario 3).
+    let registry = EffectRegistry::default();
+    assert_eq!(validate_draft(&prop_draft(), &registry), Ok(()));
+    assert_eq!(validate_draft(&region_draft(), &registry), Ok(()));
+}
+
+#[test]
+fn a_region_carrying_a_subject_reference_is_rejected_rather_than_tolerated() {
+    let registry = EffectRegistry::default();
+    let mut draft = region_draft();
+    draft.subject_ref = Some(String::from("token-1"));
+
+    let errors = validate_draft(&draft, &registry).expect_err("a region has no subject");
+    assert!(errors.contains(&AuthoringError::SubjectShape {
+        expected: SubjectKind::Region
+    }));
+}
+
+#[test]
+fn a_door_carrying_no_subject_reference_is_rejected() {
+    let registry = EffectRegistry::default();
+    let mut draft = prop_draft();
+    draft.subject_kind = SubjectKind::Door;
+    draft.subject_ref = None;
+
+    let errors = validate_draft(&draft, &registry).expect_err("a door is a wall");
+    assert!(errors.contains(&AuthoringError::SubjectShape {
+        expected: SubjectKind::Door
+    }));
+    // And it is missing nothing else — geometry is correctly absent.
+    assert!(
+        !errors
+            .iter()
+            .any(|e| matches!(e, AuthoringError::GeometryShape { .. }))
+    );
+}
+
+#[test]
+fn a_prop_carrying_geometry_is_rejected() {
+    let registry = EffectRegistry::default();
+    let mut draft = prop_draft();
+    draft.geometry = Some(RegionGeometry::Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 4.0,
+        height: 4.0,
+    });
+
+    let errors = validate_draft(&draft, &registry).expect_err("a book is not an area");
+    assert!(errors.contains(&AuthoringError::GeometryShape {
+        expected: SubjectKind::Prop
+    }));
+}
+
+#[test]
+fn a_region_enclosing_no_area_is_rejected() {
+    let registry = EffectRegistry::default();
+    let mut draft = region_draft();
+    draft.geometry = Some(RegionGeometry::Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 0.0,
+        height: 10.0,
+    });
+
+    let errors = validate_draft(&draft, &registry).expect_err("zero width encloses nothing");
+    assert!(errors.contains(&AuthoringError::DegenerateGeometry));
+}
+
+#[test]
+fn only_a_region_may_trigger_on_entry() {
+    let registry = EffectRegistry::default();
+    let mut draft = prop_draft();
+    draft.trigger = Trigger::Enter;
+
+    let errors = validate_draft(&draft, &registry).expect_err("a book cannot be crossed");
+    assert!(errors.contains(&AuthoringError::EnterNeedsRegion {
+        subject_kind: SubjectKind::Prop
+    }));
+}
+
+#[test]
+fn an_effect_no_contributor_declares_is_refused_at_authoring_time() {
+    let registry = EffectRegistry::default();
+    let mut draft = prop_draft();
+    draft.effect_id = Some(String::from("audio.play"));
+
+    let errors = validate_draft(&draft, &registry).expect_err("no audio subsystem exists");
+    assert!(errors.contains(&AuthoringError::UnknownEffect {
+        id: String::from("audio.play")
+    }));
+}
+
+#[test]
+fn an_effect_is_refused_on_a_subject_it_does_not_attach_to() {
+    let registry =
+        EffectRegistry::assemble([vec![decl("thing.door_only", &[SubjectKind::Door], vec![])]])
+            .expect("one declaration");
+
+    let mut draft = prop_draft();
+    draft.effect_id = Some(String::from("thing.door_only"));
+
+    let errors = validate_draft(&draft, &registry).expect_err("prop is not a door");
+    assert!(errors.contains(&AuthoringError::WrongSubjectForEffect {
+        id: String::from("thing.door_only"),
+        subject_kind: SubjectKind::Prop
+    }));
+}
+
+#[test]
+fn every_problem_is_reported_at_once_rather_than_one_per_attempt() {
+    let registry = EffectRegistry::default();
+    let mut draft = region_draft();
+    draft.subject_ref = Some(String::from("token-1"));
+    draft.geometry = None;
+    draft.effect_id = Some(String::from("nothing.here"));
+
+    let errors = validate_draft(&draft, &registry).expect_err("three separate problems");
+    // A Game Master filling in a form deserves the whole list.
+    assert!(errors.len() >= 3, "expected several, got {errors:?}");
+}
+
+// ---------------------------------------------------------------------------
+// Config validation
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_required_field_left_empty_is_refused() {
+    let declaration = decl(
+        "thing.do",
+        &[SubjectKind::Prop],
+        vec![reference_field("target", "wall", true)],
+    );
+    let errors = validate_config(&declaration, &serde_json::json!({}));
+    assert_eq!(
+        errors,
+        vec![AuthoringError::MissingConfigField {
+            key: String::from("target")
+        }]
+    );
+}
+
+#[test]
+fn an_optional_field_left_empty_is_fine() {
+    let declaration = decl(
+        "thing.do",
+        &[SubjectKind::Prop],
+        vec![reference_field("target", "wall", false)],
+    );
+    assert!(validate_config(&declaration, &serde_json::json!({})).is_empty());
+    assert!(validate_config(&declaration, &serde_json::Value::Null).is_empty());
+}
+
+#[test]
+fn a_field_nothing_declared_is_refused_rather_than_stored_and_ignored() {
+    // Storing it would be the silent-drift failure this whole design exists to
+    // avoid: a GM configures something, it is kept, and nothing ever reads it.
+    let declaration = decl("thing.do", &[SubjectKind::Prop], vec![]);
+    let errors = validate_config(&declaration, &serde_json::json!({ "colour": "red" }));
+    assert_eq!(
+        errors,
+        vec![AuthoringError::UnknownConfigField {
+            key: String::from("colour")
+        }]
+    );
+}
+
+#[test]
+fn a_choice_only_accepts_what_it_declared() {
+    let declaration = decl(
+        "thing.do",
+        &[SubjectKind::Prop],
+        vec![ConfigField {
+            key: String::from("state"),
+            label: String::from("State"),
+            kind: ConfigFieldKind::Choice {
+                options: vec![
+                    ChoiceOption {
+                        value: String::from("open"),
+                        label: String::from("Open"),
+                    },
+                    ChoiceOption {
+                        value: String::from("closed"),
+                        label: String::from("Closed"),
+                    },
+                ],
+            },
+            required: true,
+        }],
+    );
+
+    assert!(validate_config(&declaration, &serde_json::json!({ "state": "open" })).is_empty());
+    assert_eq!(
+        validate_config(&declaration, &serde_json::json!({ "state": "ajar" })),
+        vec![AuthoringError::InvalidConfigField {
+            key: String::from("state")
+        }]
+    );
+    assert_eq!(
+        validate_config(&declaration, &serde_json::json!({ "state": 3 })),
+        vec![AuthoringError::InvalidConfigField {
+            key: String::from("state")
+        }]
+    );
+}
+
+#[test]
+fn a_reference_list_accepts_several_and_refuses_a_non_reference_among_them() {
+    let declaration = decl(
+        "thing.do",
+        &[SubjectKind::Prop],
+        vec![ConfigField {
+            key: String::from("lights"),
+            label: String::from("Lights"),
+            kind: ConfigFieldKind::ReferenceList {
+                of: String::from("light"),
+            },
+            required: true,
+        }],
+    );
+
+    assert!(validate_config(&declaration, &serde_json::json!({ "lights": ["a", "b"] })).is_empty());
+    assert_eq!(
+        validate_config(&declaration, &serde_json::json!({ "lights": ["a", 7] })),
+        vec![AuthoringError::InvalidConfigField {
+            key: String::from("lights")
+        }]
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Activation — the truth table
+// ---------------------------------------------------------------------------
+
+fn context() -> ActivationContext {
+    ActivationContext {
+        actor_is_gm: false,
+        has_effect: true,
+        effect_available: true,
+        subject_locked: false,
+        activation: Activation::Anyone,
+        fire_mode: FireMode::Always,
+        has_fired: false,
+    }
+}
+
+#[test]
+fn an_ordinary_activation_performs() {
+    assert_eq!(resolve_activation(context()), ActivationOutcome::Performed);
+}
+
+#[test]
+fn no_effect_reads_as_scenery_rather_than_as_anything_going_wrong() {
+    let mut c = context();
+    c.has_effect = false;
+    // Even with everything else that could refuse it also true — there is
+    // nothing to refuse.
+    c.subject_locked = true;
+    c.activation = Activation::GmOnly;
+    assert_eq!(resolve_activation(c), ActivationOutcome::NoEffect);
+}
+
+#[test]
+fn an_absent_subsystem_is_unavailable_rather_than_refused_or_broken() {
+    let mut c = context();
+    c.effect_available = false;
+    assert_eq!(resolve_activation(c), ActivationOutcome::Unavailable);
+}
+
+#[test]
+fn a_player_is_refused_a_gm_only_interactive_and_the_gm_is_not() {
+    let mut c = context();
+    c.activation = Activation::GmOnly;
+    assert_eq!(
+        resolve_activation(c),
+        ActivationOutcome::Refused {
+            reason: RefusalReason::GmOnly
+        }
+    );
+
+    c.actor_is_gm = true;
+    assert_eq!(resolve_activation(c), ActivationOutcome::Performed);
+}
+
+#[test]
+fn a_locked_subject_refuses_a_player_and_accepts_the_gm() {
+    // FR-013. The GM locked it; the GM can still open it.
+    let mut c = context();
+    c.subject_locked = true;
+    assert_eq!(
+        resolve_activation(c),
+        ActivationOutcome::Refused {
+            reason: RefusalReason::Locked
+        }
+    );
+
+    c.actor_is_gm = true;
+    assert_eq!(resolve_activation(c), ActivationOutcome::Performed);
+}
+
+#[test]
+fn a_locked_subject_does_not_queue_a_request() {
+    // Queueing would put a decision in front of the Game Master that their own
+    // lock has already made.
+    let mut c = context();
+    c.subject_locked = true;
+    c.activation = Activation::RequiresApproval;
+    assert_eq!(
+        resolve_activation(c),
+        ActivationOutcome::Refused {
+            reason: RefusalReason::Locked
+        }
+    );
+}
+
+#[test]
+fn a_once_interactive_that_has_fired_is_refused_for_everybody_including_the_gm() {
+    let mut c = context();
+    c.fire_mode = FireMode::Once;
+    c.has_fired = true;
+    assert_eq!(
+        resolve_activation(c),
+        ActivationOutcome::Refused {
+            reason: RefusalReason::AlreadyFired
+        }
+    );
+
+    // The GM's route back is `resetInteractive`, not a privileged re-fire —
+    // otherwise "once" would mean "once, unless".
+    c.actor_is_gm = true;
+    assert_eq!(
+        resolve_activation(c),
+        ActivationOutcome::Refused {
+            reason: RefusalReason::AlreadyFired
+        }
+    );
+}
+
+#[test]
+fn a_once_interactive_that_has_not_fired_performs() {
+    let mut c = context();
+    c.fire_mode = FireMode::Once;
+    assert_eq!(resolve_activation(c), ActivationOutcome::Performed);
+}
+
+#[test]
+fn approval_is_requested_for_a_player_and_skipped_for_the_gm() {
+    let mut c = context();
+    c.activation = Activation::RequiresApproval;
+    assert_eq!(resolve_activation(c), ActivationOutcome::Requested);
+
+    // A GM's own activation does not queue — they are the person the queue
+    // exists to ask.
+    c.actor_is_gm = true;
+    assert_eq!(resolve_activation(c), ActivationOutcome::Performed);
+}
+
+#[test]
+fn permission_is_reported_before_fire_state() {
+    // Both are true. Telling a player they were never allowed is more useful
+    // than telling them they are too late for something they could not do.
+    let mut c = context();
+    c.activation = Activation::GmOnly;
+    c.fire_mode = FireMode::Once;
+    c.has_fired = true;
+    assert_eq!(
+        resolve_activation(c),
+        ActivationOutcome::Refused {
+            reason: RefusalReason::GmOnly
+        }
+    );
+}
+
+#[test]
+fn every_combination_resolves_to_exactly_one_outcome() {
+    // The exhaustive sweep. Not checking *which* outcome — the tests above do
+    // that — but that the table is total: no combination panics, and none
+    // falls through to a default that happens to be permissive.
+    let mut performed = 0;
+    for actor_is_gm in [false, true] {
+        for has_effect in [false, true] {
+            for effect_available in [false, true] {
+                for subject_locked in [false, true] {
+                    for activation in [
+                        Activation::Anyone,
+                        Activation::GmOnly,
+                        Activation::RequiresApproval,
+                    ] {
+                        for fire_mode in [FireMode::Always, FireMode::Once] {
+                            for has_fired in [false, true] {
+                                let outcome = resolve_activation(ActivationContext {
+                                    actor_is_gm,
+                                    has_effect,
+                                    effect_available,
+                                    subject_locked,
+                                    activation,
+                                    fire_mode,
+                                    has_fired,
+                                });
+                                if outcome == ActivationOutcome::Performed {
+                                    performed += 1;
+                                    // Nothing performs that a rule forbids.
+                                    assert!(has_effect && effect_available);
+                                    assert!(!subject_locked || actor_is_gm);
+                                    assert!(activation != Activation::GmOnly || actor_is_gm);
+                                    assert!(
+                                        activation != Activation::RequiresApproval || actor_is_gm
+                                    );
+                                    assert!(fire_mode != FireMode::Once || !has_fired);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert!(performed > 0, "the table cannot refuse everything");
+}
+
+// ---------------------------------------------------------------------------
+// Regions
+// ---------------------------------------------------------------------------
+
+fn rect(x: f32, y: f32, w: f32, h: f32) -> RegionGeometry {
+    RegionGeometry::Rect {
+        x,
+        y,
+        width: w,
+        height: h,
+    }
+}
+
+#[test]
+fn entry_fires_on_crossing_in_and_never_on_moving_within() {
+    // FR-030. Entry is a transition, not a state. A region that fired on every
+    // step taken inside it reads at the table as the scene stuttering rather
+    // than as a trigger misbehaving, which is why this is the first thing
+    // asserted about regions.
+    let area = rect(0.0, 0.0, 10.0, 10.0);
+
+    assert!(entered(Vec2::new(-5.0, 5.0), Vec2::new(5.0, 5.0), &area));
+    assert!(
+        !entered(Vec2::new(2.0, 2.0), Vec2::new(8.0, 8.0), &area),
+        "a token already inside has entered nothing"
+    );
+    assert!(
+        !entered(Vec2::new(5.0, 5.0), Vec2::new(20.0, 5.0), &area),
+        "leaving is not entering"
+    );
+    assert!(
+        !entered(Vec2::new(-5.0, 5.0), Vec2::new(-1.0, 5.0), &area),
+        "moving nearby is not entering"
+    );
+}
+
+#[test]
+fn a_token_that_crosses_straight_through_and_out_again_still_enters() {
+    // Deliberate. Positions arrive as endpoints, not as motion, and a Game
+    // Master dropping a token across the map went *through* the archway as far
+    // as the table is concerned. Treating it otherwise would make a trigger
+    // depend on how fast somebody dragged.
+    let area = rect(0.0, 0.0, 10.0, 10.0);
+    // Ends outside, so containment says no — this is the honest limit of
+    // comparing two points, and it is stated rather than hidden.
+    assert!(!entered(Vec2::new(-5.0, 5.0), Vec2::new(20.0, 5.0), &area));
+}
+
+#[test]
+fn overlapping_regions_both_fire_in_a_stable_order() {
+    // Arbitrary but *reproducible*, which is what the edge case needs. An
+    // undefined order would make a double-region crossing behave differently
+    // between runs, and a Game Master debugging their own scene would have
+    // nothing to hold onto.
+    let wide = rect(0.0, 0.0, 20.0, 20.0);
+    let narrow = rect(0.0, 0.0, 10.0, 10.0);
+
+    let hit = entries_for(
+        Vec2::new(-5.0, 5.0),
+        Vec2::new(5.0, 5.0),
+        // Deliberately offered out of order.
+        vec![("zulu", &narrow), ("alpha", &wide)],
+    );
+    assert_eq!(hit, vec!["alpha", "zulu"]);
+
+    // The same crossing, offered the other way round, answers identically.
+    let again = entries_for(
+        Vec2::new(-5.0, 5.0),
+        Vec2::new(5.0, 5.0),
+        vec![("alpha", &wide), ("zulu", &narrow)],
+    );
+    assert_eq!(again, hit);
+}
+
+#[test]
+fn a_region_a_move_missed_is_not_reported() {
+    let here = rect(0.0, 0.0, 10.0, 10.0);
+    let elsewhere = rect(100.0, 100.0, 10.0, 10.0);
+    let hit = entries_for(
+        Vec2::new(-5.0, 5.0),
+        Vec2::new(5.0, 5.0),
+        vec![("here", &here), ("elsewhere", &elsewhere)],
+    );
+    assert_eq!(hit, vec!["here"]);
+}
+
+#[test]
+fn a_polygon_contains_what_is_inside_it_and_not_what_is_in_its_bounding_box() {
+    // An L-shape. A rectangle test would call the notch inside, and a region
+    // drawn around a corridor would fire in the room next door.
+    let l = RegionGeometry::Polygon {
+        points: vec![
+            [0.0, 0.0],
+            [10.0, 0.0],
+            [10.0, 4.0],
+            [4.0, 4.0],
+            [4.0, 10.0],
+            [0.0, 10.0],
+        ],
+    };
+    assert!(l.contains(Vec2::new(2.0, 2.0)));
+    assert!(l.contains(Vec2::new(8.0, 2.0)));
+    assert!(l.contains(Vec2::new(2.0, 8.0)));
+    assert!(
+        !l.contains(Vec2::new(8.0, 8.0)),
+        "the notch is outside, though it is inside the bounding box"
+    );
+}
+
+#[test]
+fn a_polygon_with_too_few_points_encloses_nothing_rather_than_panicking() {
+    let sliver = RegionGeometry::Polygon {
+        points: vec![[0.0, 0.0], [10.0, 0.0]],
+    };
+    assert!(!sliver.contains(Vec2::new(5.0, 0.0)));
+    assert!(!sliver.is_valid());
+}
+
+// ---------------------------------------------------------------------------
+// The seam itself (US7)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_registry_assembled_without_a_contributor_offers_nothing_of_theirs() {
+    // The removability claim, asserted rather than described. Nothing is
+    // stubbed and nothing is mocked: this assembles the real declaration sets
+    // and leaves two of them out.
+    use crate::{lighting, lore_link, navigation, wall};
+
+    let everything = EffectRegistry::assemble([
+        lore_link::effects(),
+        wall::interaction_effects(),
+        lighting::interaction_effects(),
+        navigation::effects(),
+    ])
+    .expect("the real build");
+    assert!(everything.contains(wall::SET_STATE));
+    assert!(everything.contains(lighting::TOGGLE));
+
+    // The same seam, with doors and lighting removed the way removing a plugin
+    // would remove them.
+    let without = EffectRegistry::assemble([lore_link::effects(), navigation::effects()])
+        .expect("a build with fewer subsystems is a legitimate build");
+
+    assert!(!without.contains(wall::SET_STATE));
+    assert!(!without.contains(wall::SET_LOCK));
+    assert!(!without.contains(wall::REVEAL));
+    assert!(!without.contains(lighting::TOGGLE));
+
+    // And what remains is untouched — not degraded, not partially wired.
+    assert!(without.contains(lore_link::OPEN));
+    assert!(without.contains(navigation::REQUEST_SCENE));
+    assert_eq!(
+        without.get(lore_link::OPEN),
+        everything.get(lore_link::OPEN),
+        "a contributor is not changed by which others are present"
+    );
+}
+
+#[test]
+fn authoring_still_works_with_every_contributor_removed() {
+    // The stronger half of FR-039. Not merely "the registry is empty" but
+    // "everything around it still functions", which is what a Game Master
+    // opening a scene in a stripped build would actually meet.
+    let registry =
+        EffectRegistry::assemble(Vec::<Vec<EffectDeclaration>>::new()).expect("no contributors");
+
+    // Scenery is still authorable, because scenery needs no contributor.
+    assert_eq!(validate_draft(&prop_draft(), &registry), Ok(()));
+    assert_eq!(validate_draft(&region_draft(), &registry), Ok(()));
+
+    // The shape rules still apply.
+    let mut wrong = region_draft();
+    wrong.subject_ref = Some(String::from("token-1"));
+    assert!(validate_draft(&wrong, &registry).is_err());
+
+    // And the activation table still answers, rather than falling through to
+    // something permissive.
+    let mut context = context();
+    context.has_effect = false;
+    assert_eq!(resolve_activation(context), ActivationOutcome::NoEffect);
+}
+
+#[test]
+fn an_interactive_authored_against_an_absent_contributor_is_unavailable_not_invalid() {
+    // FR-041, at the level where it is decided. The distinction matters: an
+    // *invalid* interactive would be something to repair or delete, and a Game
+    // Master would lose work because their build happens to lack a subsystem
+    // today. An *unavailable* one is a display state, and putting the
+    // subsystem back makes it work again with nothing to restore.
+    use crate::wall;
+
+    let registry = EffectRegistry::assemble([Vec::new()]).expect("empty");
+    assert!(
+        !registry.contains(wall::SET_STATE),
+        "the subsystem is not in this build"
+    );
+
+    // Detection is a registry lookup — never "we dispatched and nothing
+    // happened", which an event cannot report.
+    let context = ActivationContext {
+        actor_is_gm: false,
+        has_effect: true,
+        effect_available: registry.contains(wall::SET_STATE),
+        subject_locked: false,
+        activation: Activation::Anyone,
+        fire_mode: FireMode::Always,
+        has_fired: false,
+    };
+    assert_eq!(resolve_activation(context), ActivationOutcome::Unavailable);
+}
+
+#[test]
+fn the_probe_can_be_added_to_a_full_registry_without_disturbing_it() {
+    // What adding a new subsystem actually costs, measured: one more set in
+    // the list, and every other answer identical.
+    use crate::{lighting, lore_link, navigation, seam_probe, wall};
+
+    let before = EffectRegistry::assemble([
+        lore_link::effects(),
+        wall::interaction_effects(),
+        lighting::interaction_effects(),
+        navigation::effects(),
+    ])
+    .expect("without the probe");
+
+    let after = EffectRegistry::assemble([
+        lore_link::effects(),
+        wall::interaction_effects(),
+        lighting::interaction_effects(),
+        navigation::effects(),
+        seam_probe::effects(),
+    ])
+    .expect("with it");
+
+    assert_eq!(after.len(), before.len() + 1);
+    assert!(after.contains(seam_probe::ECHO));
+    for declaration in before.all() {
+        assert_eq!(
+            after.get(&declaration.id),
+            Some(declaration),
+            "adding a contributor changed {}",
+            declaration.id
+        );
+    }
+}

@@ -79,6 +79,8 @@ function wallRecordToWorldWall(record: WallRecord): WorldWall {
     blocksVision: record.blocksVision,
     blocksMovement: record.blocksMovement,
     doorState: toDoorState(record.doorState),
+    locked: record.locked,
+    secret: record.secret,
   };
 }
 

@@ -62,6 +62,28 @@ pub const EVENT_CODE_COMBAT_CHANGED: i32 = 18;
 /// appear, vanish, or stop being an estimate.
 pub const EVENT_CODE_TOKEN_DISCLOSURE_CHANGED: i32 = 19;
 
+/// Spec 030: an interactive was authored, edited, deleted, reset, or fired.
+///
+/// Its own code rather than a reuse of the wall or token codes, because the
+/// subject changing and the *interaction attached to it* changing are
+/// different facts. A client redraws a wall for one and re-reads what a player
+/// may click for the other.
+pub const EVENT_CODE_INTERACTIVE_CHANGED: i32 = 20;
+
+/// Spec 030: a door's state, lock, secrecy or designation changed.
+///
+/// Distinct from `EVENT_CODE_WALL_CHANGED` deliberately. Wall geometry moving
+/// is a Game Master editing the map; a door opening is play, happens far more
+/// often, and re-resolves vision and movement for everybody. Collapsing them
+/// would make every door click look like a map edit to every client.
+pub const EVENT_CODE_DOOR_CHANGED: i32 = 21;
+
+/// Spec 030: a player asked, and the Game Master has not decided yet.
+///
+/// Carries the request rather than its outcome — the outcome arrives as
+/// whatever the approved effect did, which is a different event.
+pub const EVENT_CODE_INTERACTION_REQUEST: i32 = 22;
+
 /// Record a world event to the audit trail and trigger NOTIFY for real-time sync.
 ///
 /// # Failures are logged here, not at the call sites

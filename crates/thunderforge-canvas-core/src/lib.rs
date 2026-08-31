@@ -18,11 +18,18 @@ pub mod attributes;
 pub mod camera;
 pub mod frame_trace;
 pub mod grid;
+pub mod interaction;
 pub mod lighting;
+pub mod lore_link;
 pub mod measure;
 pub mod movement;
 pub mod movement_budget;
+pub mod navigation;
 pub mod resource_display;
+/// Spec 030, US7. A contributor that exists only to be added and removed —
+/// see the module's own docs for why it is a feature rather than a test.
+#[cfg(feature = "seam-probe")]
+pub mod seam_probe;
 pub mod shape;
 pub mod texture_budget;
 pub mod token_art;

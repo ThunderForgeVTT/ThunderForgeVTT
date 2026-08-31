@@ -685,6 +685,67 @@ pub(crate) fn init_lighting_systems_resources(app: &mut App) {
         .init_resource::<LightEntities>();
 }
 
+/// Perform the switching effect this subsystem contributed to the interaction
+/// seam (spec 030, US3).
+///
+/// Reads the activation message like any other contributor and filters for the
+/// one identifier `canvas_core::lighting` declared. Nothing in the interaction
+/// plugin knows this system exists (FR-039, FR-040).
+///
+/// # Why the prior brightness is remembered
+///
+/// A light is off when its intensity is zero, so switching one off destroys
+/// the only record of how bright it was. Without remembering it, a lever
+/// pulled twice would leave the room at a brightness nobody chose. The server
+/// stashes it authoritatively; this mirror keeps the optimistic path agreeing
+/// with it rather than inventing its own answer.
+///
+/// This is the optimistic half. The server has already performed the same
+/// change; applying it here makes it visible now rather than a round trip
+/// later (ADR-054).
+pub(crate) fn handle_switch_effects(
+    mut activations: MessageReader<crate::plugins::interaction::InteractionActivated>,
+    mut light_set: ResMut<LightSet>,
+    mut remembered: Local<std::collections::HashMap<String, f32>>,
+) {
+    use thunderforge_canvas_core::lighting::{TOGGLE, lights_of, requested_on};
+
+    for activation in activations.read() {
+        if activation.effect_id != TOGGLE {
+            continue;
+        }
+        for reference in lights_of(&activation.config) {
+            let Some(existing) = light_set.get(reference) else {
+                // Named a light this client does not hold. Not an error — the
+                // next sync brings whatever the server thinks is true.
+                continue;
+            };
+            let currently_on = existing.is_on();
+            let Some(want_on) = requested_on(&activation.config, currently_on) else {
+                continue;
+            };
+            if want_on == currently_on {
+                continue;
+            }
+
+            let mut updated = existing.clone();
+            if want_on {
+                updated.intensity = remembered
+                    .get(reference)
+                    .copied()
+                    .filter(|v| *v > 0.0)
+                    // Full rather than nothing: a light turned on to zero
+                    // looks exactly like the switch being broken.
+                    .unwrap_or(1.0);
+            } else {
+                remembered.insert(reference.to_string(), updated.intensity);
+                updated.intensity = 0.0;
+            }
+            light_set.upsert(updated);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

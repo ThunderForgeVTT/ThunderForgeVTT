@@ -129,6 +129,11 @@ impl WallMutation {
             door_state: input.door_state.map(|d| d.as_db_str().to_string()),
             metadata: input.metadata.map(|j| j.0),
             updated_by: user_id,
+            // Not settable through the generic wall update. Lock and secret
+            // are door properties with their own GM-only mutations, so that
+            // there is one authorization path for them rather than two.
+            locked: None,
+            secret: None,
         };
 
         let updated_wall = tokio::task::spawn_blocking(move || {
