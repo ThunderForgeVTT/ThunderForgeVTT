@@ -90,26 +90,66 @@ interface LiveProvider {
  * "ThunderForge could not load the current instance state", i.e. as a
  * failure that looks nothing like its cause.
  */
+/**
+ * Which stack this file's direct SQL talks to.
+ *
+ * From the environment, matching `global-setup.ts`, because the stack under
+ * test is no longer always *the* dev stack: `scripts/e2e-parallel.mjs` runs
+ * each shard against its own database, and a shard's backend materialises the
+ * env-configured providers into that one at startup.
+ *
+ * These were four separate literal `thunderforge` / `thunderforge-postgres`
+ * pairs. Under sharding every one of them was wrong in a different way — the
+ * read below described somebody else's stack, and the writes registered a user
+ * in the shard's database and then promoted them in the dev one, which cannot
+ * pass and quietly mutates a database no test in this run owns.
+ */
+const POSTGRES_CONTAINER =
+  process.env.THUNDERFORGE_POSTGRES_CONTAINER ?? "thunderforge-postgres";
+const POSTGRES_DB = process.env.THUNDERFORGE_DB_NAME ?? "thunderforge";
+const POSTGRES_USER = process.env.THUNDERFORGE_DB_USER ?? "postgres";
+
+/**
+ * One `psql` against the stack under test.
+ *
+ * A failure is restated rather than swallowed: an empty result would skip
+ * every scenario here and report a green run, and the raw `psql` error gives
+ * no hint that a *test helper* chose the database — which is how this file
+ * came to fail in 0ms with the rest of it skipped, saying nothing about why.
+ */
+function psqlExec(sql: string, extraArgs: string[] = []): string {
+  try {
+    return execFileSync(
+      "docker",
+      [
+        "exec",
+        POSTGRES_CONTAINER,
+        "psql",
+        "-U",
+        POSTGRES_USER,
+        "-d",
+        POSTGRES_DB,
+        ...extraArgs,
+        "-c",
+        sql,
+      ],
+      { encoding: "utf-8" },
+    );
+  } catch (error) {
+    throw new Error(
+      `psql against ${POSTGRES_CONTAINER}/${POSTGRES_DB} failed: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+}
+
 function liveProviders(): LiveProvider[] {
-  const output = execFileSync(
-    "docker",
-    [
-      "exec",
-      "thunderforge-postgres",
-      "psql",
-      "-U",
-      "postgres",
-      "-d",
-      "thunderforge",
-      "-t",
-      "-A",
-      "-F",
-      "|",
-      "-c",
-      "SELECT provider_key, display_name FROM oauth_providers WHERE enabled AND configured ORDER BY provider_key;",
-    ],
-    { encoding: "utf-8" },
+  const output = psqlExec(
+    "SELECT provider_key, display_name FROM oauth_providers WHERE enabled AND configured ORDER BY provider_key;",
+    ["-t", "-A", "-F", "|"],
   );
+
   return output
     .split("\n")
     .map((line) => line.trim())
@@ -287,17 +327,7 @@ async function registerAndLoginAsAdmin(page: Page): Promise<string> {
 
   await registerAccount(page, username, "Sup3r-Secret-Passphrase!");
 
-  execFileSync("docker", [
-    "exec",
-    "thunderforge-postgres",
-    "psql",
-    "-U",
-    "postgres",
-    "-d",
-    "thunderforge",
-    "-c",
-    `UPDATE users SET is_admin = true WHERE username = '${username}';`,
-  ]);
+  psqlExec(`UPDATE users SET is_admin = true WHERE username = '${username}';`);
 
   // The session's admin status is resolved server-side per-request from
   // `users.is_admin`, not cached in the session cookie itself, so a fresh
@@ -363,17 +393,9 @@ function providerCards(page: Page) {
  * first run left on, and the "it goes live" assertion would fail for a
  * reason that has nothing to do with the app. */
 function resetProviderRow(providerKey: string): void {
-  execFileSync("docker", [
-    "exec",
-    "thunderforge-postgres",
-    "psql",
-    "-U",
-    "postgres",
-    "-d",
-    "thunderforge",
-    "-c",
+  psqlExec(
     `UPDATE oauth_providers SET oauth_client_id = NULL, oauth_client_secret = NULL, configured = false, enabled = false WHERE provider_key = '${providerKey}' AND config_source = 'admin';`,
-  ]);
+  );
 }
 
 function escapeForRegExp(value: string): string {
@@ -619,17 +641,9 @@ test.describe("Custom login-button branding (US4, T022-T023)", () => {
 
       // Leave Google as it started (unconfigured, disabled) so this test
       // doesn't leave a persistent side effect for the rest of this suite.
-      execFileSync("docker", [
-        "exec",
-        "thunderforge-postgres",
-        "psql",
-        "-U",
-        "postgres",
-        "-d",
-        "thunderforge",
-        "-c",
+      psqlExec(
         "UPDATE oauth_providers SET display_name = 'Google', oauth_client_id = NULL, oauth_client_secret = NULL, configured = false, enabled = false WHERE provider_key = 'google';",
-      ]);
+      );
     });
   });
 });
