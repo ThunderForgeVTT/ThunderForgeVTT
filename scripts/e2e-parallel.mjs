@@ -51,6 +51,7 @@ import {
   ROOT_DIR,
   ensureEngineBuild,
   engineProfile,
+  skipWasmOpt,
   log,
   runCommand,
   spawnManaged,
@@ -99,6 +100,20 @@ const PERF_LANE_SPECS = [
   "status-systems",
   "world-cache-isolated",
 ];
+
+/**
+ * Which measured specs this invocation would run, before the lanes are split.
+ *
+ * Needed early: whether to skip `wasm-opt` has to be decided before the engine
+ * is built, and that is well before `allSpecFiles()` is partitioned below.
+ */
+function serialSpecsFor(args) {
+  if (args.all) return [];
+  const onlyPatterns = args.only?.split(",").map((p) => p.trim()).filter(Boolean);
+  return allSpecFiles()
+    .filter((file) => !onlyPatterns || onlyPatterns.some((p) => file.includes(p)))
+    .filter(isPerfSpec);
+}
 
 /** Every spec file, relative to `apps/web`, including `e2e/torture`. */
 function allSpecFiles() {
@@ -474,10 +489,31 @@ async function main() {
   rmSync(SHARD_DIR, { recursive: true, force: true });
   mkdirSync(SHARD_DIR, { recursive: true });
 
-  // Release, matching what the single-stack e2e path uses: a 57MB unoptimised
-  // code section compiled by the browser on every page load costs far more,
-  // across a whole suite, than the one-off build does.
-  await ensureEngineBuild({ profile: engineProfile("release") });
+  // Dev by default; release only when something is going to be measured.
+  //
+  // A release build is minutes — cargo is about 35 seconds and `wasm-opt`
+  // takes the rest — and neither half scales with cores, because
+  // `codegen-units = 1` is deliberate and `wasm-opt` is single-threaded. A dev
+  // build is seconds. For "does this behave correctly", which is what almost
+  // every run here is asking, the optimised bundle buys nothing but waiting.
+  //
+  // The exception is not negotiable. The measured specs assert on real
+  // numbers: `engine-limits` gates `fps > 20` across a token sweep, and
+  // `canvas-authoring` holds map import inside SC-007's 30 seconds. Those were
+  // *already* measured against an unoptimised build once — the map-import
+  // budget was failing at 36.1s until the image codecs were given
+  // `opt-level = 3` in the dev profile, which took it to 21.9s without the
+  // product changing at all. A dev-built number there describes rustc, not the
+  // engine.
+  //
+  // So: the lane that measures gets the build worth measuring, and everything
+  // else gets its result minutes sooner. `ENGINE_PROFILE` still overrides both.
+  const measuredLaneWillRun = serialSpecsFor(args).length > 0;
+  const profile = engineProfile(measuredLaneWillRun ? "release" : "dev");
+  if (measuredLaneWillRun && profile === "release") {
+    log("e2e", "This run includes the measured specs, so the engine is built release.");
+  }
+  await ensureEngineBuild({ profile, noOpt: skipWasmOpt() });
 
   // Once, before any shard starts. N concurrent `cargo run`s would serialise
   // on the target-directory lock anyway, and the first shard would look hung.

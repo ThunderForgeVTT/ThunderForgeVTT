@@ -214,8 +214,35 @@ export function engineProfile(defaultProfile = "release") {
   return defaultProfile;
 }
 
-export async function buildEngine({ profile = engineProfile() } = {}) {
-  log("engine", `Building WebAssembly engine (${profile})...`);
+/**
+ * Whether to skip `wasm-opt` on a release build.
+ *
+ * Measured on this repo: `cargo build --release` takes about 35 seconds and
+ * `wasm-opt` takes the rest of a multi-minute build. Neither scales with
+ * cores — `[profile.release]` sets `codegen-units = 1` on purpose, and
+ * `wasm-opt` is single-threaded over a ~25MB module — so a bigger machine does
+ * not help. Skipping the optimiser is the only lever that moves the number.
+ *
+ * The cost is real: an unoptimised module is larger for the browser to fetch
+ * and compile, and slower to run. That is why this is opt-in per run rather
+ * than a default, and why `scripts/e2e-parallel.mjs` refuses it for the lane
+ * that measures frame rates — `engine-limits` gates `fps > 20`, and a
+ * deliberately slower build would turn that assertion into a lie in either
+ * direction.
+ *
+ * Use it for targeted verification, where the question is "does this behave
+ * correctly" and never "how fast is it".
+ */
+export function skipWasmOpt() {
+  return process.env.ENGINE_SKIP_WASM_OPT === "1";
+}
+
+export async function buildEngine({
+  profile = engineProfile(),
+  noOpt = skipWasmOpt(),
+} = {}) {
+  const optNote = noOpt && profile === "release" ? ", wasm-opt skipped" : "";
+  log("engine", `Building WebAssembly engine (${profile}${optNote})...`);
   // Bevy prints "<Enable the debug feature to see the name>" in place of every
   // system, component and resource name unless `bevy/debug` is on — see the
   // `debug-names` feature in `src/engine/Cargo.toml`. It rides the dev profile
@@ -225,8 +252,12 @@ export async function buildEngine({ profile = engineProfile() } = {}) {
   // After `--`: wasm-pack has no `--features` of its own, and takes trailing
   // positional EXTRA_OPTIONS to hand to `cargo build`.
   const features = profile === "dev" ? " -- --features debug-names" : "";
+  // Only meaningful on release: the dev profile does not run `wasm-opt` in the
+  // first place, so passing it there would advertise a saving that is not
+  // there.
+  const optFlag = noOpt && profile === "release" ? " --no-opt" : "";
   const child = spawnManaged(
-    `wasm-pack build ./ --${profile} --target web --out-dir ../../dist/engine --scope thunderforge --out-name engine${features}`,
+    `wasm-pack build ./ --${profile}${optFlag} --target web --out-dir ../../dist/engine --scope thunderforge --out-name engine${features}`,
     {
       cwd: ENGINE_DIR,
       prefix: "engine",
