@@ -476,6 +476,71 @@ if (typeof window !== "undefined") {
   });
 }
 
+/**
+ * The socket's own events, as state transitions.
+ *
+ * Extracted from the `graphql-ws` callbacks so they can be exercised without
+ * one. `connectivityFor` — the judgement these feed — has had thorough unit
+ * coverage from the start, while this half, which decides *when* to ask it,
+ * had none: its header said the wiring "needs a real WebSocket and is
+ * exercised by `world-cache-offline.spec.ts`".
+ *
+ * That gap was expensive. A reconnect window here lasts about a second, so
+ * the only tests watching this seam were browser tests racing a banner, and a
+ * question as small as "does closing the socket leave `live`?" cost a
+ * thirty-second run to answer — and was still answered wrongly twice.
+ */
+export function noteSocketConnected(): void {
+  hasConnectedOnce = true;
+  lastAttempt = 0;
+  setLiveSyncState({ status: "live" });
+}
+
+export function noteSocketClosed(): void {
+  if (!hasConnectedOnce) {
+    setLiveSyncState({ status: "connecting" });
+    return;
+  }
+  // A closed socket is not a live one.
+  //
+  // This used to defer entirely to `retryWait`, on the reasoning that a drop
+  // is followed by a retry which reports itself. That holds only while
+  // `graphql-ws` actually retries — and it does not when it has no
+  // subscriptions to serve, because the client is lazy and simply lets the
+  // connection go. The state then sat at `live` with no socket at all: a tab
+  // reporting a healthy connection it did not have, which is worse than
+  // reporting the outage, and which made an offline edit indistinguishable
+  // from an online one.
+  //
+  // Reported as `reconnecting` rather than `disconnected` because that is
+  // what it is at this instant — one drop, no failed attempt yet.
+  // `noteSocketRetry` escalates it if the retries start failing.
+  setLiveSyncState(judge());
+}
+
+/**
+ * A retry is about to be waited out. `retries` is graphql-ws's own count,
+ * zero-based, so the first retry is attempt one.
+ *
+ * Only a previously-*live* connection dropping counts as "reconnecting"
+ * (data-model.md) — a still-connecting first handshake retrying stays in
+ * `connecting` rather than jumping to `reconnecting` with a confusing
+ * attempt count.
+ */
+export function noteSocketRetry(retries: number): void {
+  lastAttempt = retries + 1;
+  if (hasConnectedOnce) {
+    setLiveSyncState(judge());
+  }
+}
+
+/** Tests only: forget every socket this module has seen. */
+export function resetSocketStateForTests(): void {
+  hasConnectedOnce = false;
+  lastAttempt = 0;
+  liveSyncState = { status: "connecting" };
+}
+
 function getClient(): Client {
   if (!client) {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -483,14 +548,7 @@ function getClient(): Client {
       url: `${protocol}//${window.location.host}/api/ws`,
       retryAttempts: Infinity,
       retryWait: async (retries) => {
-        // Only a previously-*live* connection dropping counts as
-        // "reconnecting" (data-model.md) — a still-connecting first
-        // handshake retrying stays in `connecting` rather than jumping to
-        // `reconnecting` with a confusing attempt count.
-        lastAttempt = retries + 1;
-        if (hasConnectedOnce) {
-          setLiveSyncState(judge());
-        }
+        noteSocketRetry(retries);
         const delayMs = Math.min(
           RECONNECT_BASE_DELAY_MS * 2 ** retries,
           RECONNECT_MAX_DELAY_MS,
@@ -498,32 +556,8 @@ function getClient(): Client {
         await new Promise((resolve) => setTimeout(resolve, delayMs));
       },
       on: {
-        connected: () => {
-          hasConnectedOnce = true;
-          lastAttempt = 0;
-          setLiveSyncState({ status: "live" });
-        },
-        closed: () => {
-          if (!hasConnectedOnce) {
-            setLiveSyncState({ status: "connecting" });
-            return;
-          }
-          // A closed socket is not a live one.
-          //
-          // This used to defer entirely to `retryWait`, on the reasoning that
-          // a drop is followed by a retry which reports itself. That holds
-          // only while `graphql-ws` actually retries — and it does not when
-          // it has no subscriptions to serve, because the client is lazy and
-          // simply lets the connection go. The state then sat at `live` with
-          // no socket at all: a tab reporting a healthy connection it did not
-          // have, which is worse than reporting the outage, and which made an
-          // offline edit indistinguishable from an online one.
-          //
-          // Reported as `reconnecting` rather than `disconnected` because
-          // that is what it is at this instant — one drop, no failed attempt
-          // yet. `retryWait` escalates it if the retries start failing.
-          setLiveSyncState(judge());
-        },
+        connected: () => noteSocketConnected(),
+        closed: () => noteSocketClosed(),
       },
     });
   }
