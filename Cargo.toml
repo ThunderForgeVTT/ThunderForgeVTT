@@ -63,6 +63,28 @@ exit = "warn"                # std::process::exit() would kill the whole server,
 large_enum_variant = "warn"  # one oversized variant silently bloats every value of the enum
 mem_forget = "warn"          # near-always a bug outside FFI/leak-on-purpose cases
 
+# Image codecs, optimised even in a debug build.
+#
+# `image` and `webp` do the decode/transcode behind `save_background_image`
+# and `save_scene_preview_image`, and unoptimised they dominate a map
+# import: demo.dd2vtt's ~3MB embedded PNG took ~36s through a plain `cargo
+# run` backend against spec 001's 30-second SC-007 budget, while the 958KB
+# chamber map on the same code path took ~2.9s.
+#
+# That made the e2e assertion a measurement of rustc's -O0 output rather
+# than of the product, failing about as often as it passed. The budget is a
+# claim about the release build; these three lines make the dev build
+# representative enough to test it, and cost only a one-off compile of three
+# dependencies nobody is stepping through in a debugger.
+[profile.dev.package.image]
+opt-level = 3
+
+[profile.dev.package.webp]
+opt-level = 3
+
+[profile.dev.package.png]
+opt-level = 3
+
 [profile.release]
 # less code to include into binary
 panic = 'abort'
