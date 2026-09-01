@@ -62,6 +62,7 @@ This directory contains architecture decisions for ThunderForgeVTT, captured usi
 | [20260826-052](./20260826-052-client-cache-offline-and-peer-adjudication.md)          | Accepted | The Client May Hold, Continue, and Distribute — Server as Record, GM as Arbiter               |
 | [20260829-053](./20260829-053-generated-engine-sdk-and-status-presentation-split.md)  | Accepted | Generated Engine SDK, and the ECS/React Split for Status Presentation                         |
 | [20260830-054](./20260830-054-interaction_effect_contribution_seam.md)               | Accepted | The Interaction Effect Contribution Seam                                                      |
+| [20260901-055](./20260901-055-engine_wasm_build_toolchain.md)                         | Accepted | `wasm-pack` Remains the Engine's Build Driver, and Cargo Features Reach It Through `--`       |
 
 > **Note (2026-08-19):** ADRs 020–024 originally collided with an unrelated "pack system" batch that reused the same day-020 through day-024 numbers. The world-domain ADRs (020–024 above) were committed first and are documented here; the colliding pack-system ADRs were renumbered to 026–030. See `docs/SYSTEM_HOOKS_API_GUIDE.md` and ADR-036's "Related Decisions" for the corrected references.
 
