@@ -7,6 +7,8 @@
 use std::collections::HashMap;
 
 use bevy::input::mouse::MouseWheel;
+
+use crate::plugins::camera::read_wheel_notches;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use serde_json::{Value, json};
@@ -267,7 +269,10 @@ pub(crate) fn handle_light_resize(
         return;
     }
 
-    let scroll: f32 = wheel_events.read().map(|event| event.y).sum();
+    // Notches, not raw deltas — see `read_wheel_notches`. Unnormalised, a
+    // single browser wheel notch was 100 units of radius change here for the
+    // same reason it was a hundred zoom steps in the camera.
+    let scroll = read_wheel_notches(&mut wheel_events);
     if scroll == 0.0 {
         return;
     }

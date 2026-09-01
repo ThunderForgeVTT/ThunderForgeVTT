@@ -1,5 +1,6 @@
 use crate::resources::{CameraManager, SelectedLight};
-use bevy::input::mouse::MouseWheel;
+use thunderforge_canvas_core::camera::wheel_notches;
+use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 
@@ -114,6 +115,22 @@ mod tests {
 /// read the same events independently (a `MessageReader` has a per-system
 /// cursor, so one reading them does not consume them for the other). Without
 /// this check a GM resizing a light would zoom the map at the same time.
+/// Drains the wheel messages and returns their total in **notches**.
+///
+/// Every consumer of the wheel needs this, because `MouseWheel::y` is
+/// meaningless without `MouseWheel::unit`: the same physical flick of the
+/// same wheel arrives as `1.0` on a platform that counts lines and as
+/// `100.0` on one that counts pixels — and the browser this engine ships
+/// into counts pixels. Reading `.y` alone therefore looked correct in a
+/// native window and, on the web, made a single notch worth a hundred zoom
+/// steps.
+pub(crate) fn read_wheel_notches(events: &mut MessageReader<MouseWheel>) -> f32 {
+    events
+        .read()
+        .map(|event| wheel_notches(event.y, matches!(event.unit, MouseScrollUnit::Pixel)))
+        .sum()
+}
+
 fn handle_mouse_wheel_zoom(
     mut wheel_events: MessageReader<MouseWheel>,
     mut camera_mgr: ResMut<CameraManager>,
@@ -126,7 +143,7 @@ fn handle_mouse_wheel_zoom(
         return;
     }
 
-    let scroll: f32 = wheel_events.read().map(|event| event.y).sum();
+    let scroll = read_wheel_notches(&mut wheel_events);
     if scroll == 0.0 {
         return;
     }

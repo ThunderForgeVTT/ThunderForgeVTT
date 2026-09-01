@@ -50,6 +50,38 @@ impl ZoomLimits {
 /// overshooting on a trackpad's many small deltas.
 pub const ZOOM_STEP: f32 = 1.11;
 
+/// Pixels of scroll one detent of a mouse wheel reports, on platforms that
+/// measure the wheel in pixels rather than lines.
+///
+/// A browser is one such platform: Chrome answers a single wheel notch with
+/// `deltaY` of 100, which winit forwards as a pixel delta. Feeding that
+/// straight into [`zoom_steps`] as a step count asks for `ZOOM_STEP^100` —
+/// which is not a zoom, it is a teleport to the nearest limit. One notch
+/// should be one step, so pixels are divided back down by this.
+pub const WHEEL_PIXELS_PER_NOTCH: f32 = 100.0;
+
+/// How many zoom steps a raw wheel delta is worth.
+///
+/// The wheel reports in one of two units and *which one is not a constant* —
+/// it varies by platform, by browser and between a mouse and a trackpad on
+/// the same machine. Reading the delta without consulting the unit therefore
+/// works on whichever device it was written on and is wildly wrong on the
+/// next one, so this takes the unit as an argument rather than assuming.
+///
+/// Trackpads report many small pixel deltas rather than discrete notches;
+/// dividing keeps their fractional steps fractional, which is what makes a
+/// two-finger zoom feel continuous instead of ratcheting.
+pub fn wheel_notches(delta: f32, in_pixels: bool) -> f32 {
+    if !delta.is_finite() {
+        return 0.0;
+    }
+    if in_pixels {
+        delta / WHEEL_PIXELS_PER_NOTCH
+    } else {
+        delta
+    }
+}
+
 /// The scale after zooming by `steps`, positive being **in**.
 ///
 /// Fractional steps are meaningful: a trackpad delta of 0.3 zooms a third of
@@ -112,6 +144,54 @@ mod tests {
 
     fn limits() -> ZoomLimits {
         ZoomLimits::default()
+    }
+
+    #[test]
+    fn a_pixel_wheel_notch_is_one_step() {
+        // The bug this guards: a browser reports one wheel notch as a pixel
+        // delta of 100, and feeding that in as a step count zoomed by
+        // ZOOM_STEP^100 — every notch slammed the camera into a limit.
+        assert_eq!(wheel_notches(WHEEL_PIXELS_PER_NOTCH, true), 1.0);
+        assert_eq!(wheel_notches(-WHEEL_PIXELS_PER_NOTCH, true), -1.0);
+    }
+
+    #[test]
+    fn a_line_wheel_delta_is_already_in_steps() {
+        // Line-unit platforms report notches directly; dividing those too
+        // would make the wheel almost inert instead of almost instant.
+        assert_eq!(wheel_notches(1.0, false), 1.0);
+        assert_eq!(wheel_notches(-3.0, false), -3.0);
+    }
+
+    #[test]
+    fn a_trackpads_small_pixel_deltas_stay_fractional() {
+        // Rounding these to whole notches is what turns a smooth two-finger
+        // zoom into a ratchet.
+        let notches = wheel_notches(12.0, true);
+        assert!(notches > 0.0 && notches < 1.0, "got {notches}");
+    }
+
+    #[test]
+    fn one_notch_zooms_by_one_step_not_a_hundred() {
+        // End to end, in the units the caller actually receives: a single
+        // browser wheel notch must be an ~11% change, not a jump to the
+        // zoom limit.
+        let steps = wheel_notches(WHEEL_PIXELS_PER_NOTCH, true);
+        let zoomed = zoom_steps(1.0, steps, limits());
+        assert!(
+            (zoomed - 1.0 / ZOOM_STEP).abs() < 1e-6,
+            "one notch should be one step, got {zoomed}"
+        );
+        assert!(
+            zoomed > limits().min,
+            "one notch must not reach the zoom-in limit"
+        );
+    }
+
+    #[test]
+    fn a_non_finite_wheel_delta_scrolls_nothing() {
+        assert_eq!(wheel_notches(f32::NAN, true), 0.0);
+        assert_eq!(wheel_notches(f32::INFINITY, false), 0.0);
     }
 
     #[test]
