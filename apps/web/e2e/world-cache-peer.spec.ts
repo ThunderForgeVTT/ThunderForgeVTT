@@ -79,6 +79,38 @@ async function serveCorruptedBytes(context: BrowserContext): Promise<void> {
   });
 }
 
+/**
+ * Sync this page's world cache again, without reloading it.
+ *
+ * Reloading would restart the very race this test exists to avoid: the engine
+ * awaits `startPeerTransfer` before `sync_world_cache`, but the roster round
+ * trip that actually forms peer channels is deliberately not awaited, so a
+ * fresh page's first sync usually runs before it knows any peer. Calling the
+ * sync directly keeps the connections that are already up.
+ */
+async function resyncWorldCache(page: Page, worldId: string): Promise<void> {
+  const userId = await page.evaluate(async () => {
+    const res = await fetch("/api/authentication/session", {
+      credentials: "same-origin",
+    });
+    const body = (await res.json()) as {
+      session?: { user?: { id?: string } } | null;
+    };
+    return body.session?.user?.id ?? null;
+  });
+  if (!userId) throw new Error("no signed-in user to sync for");
+
+  await page.evaluate(
+    async ([world, user]) => {
+      const bevy = (await import(
+        /* @vite-ignore */ "/src/engine/bevy/index.ts"
+      )) as typeof import("../../src/engine/bevy/index");
+      await bevy.syncWorldCache(world, user);
+    },
+    [worldId, userId] as const,
+  );
+}
+
 /** Count the peer-signaling calls a context makes. */
 function countPeerSignaling(page: Page) {
   let signals = 0;
@@ -144,18 +176,54 @@ test.describe("Client world cache — peer-assisted distribution", () => {
     // The GM lies on the wire from here on.
     await serveCorruptedBytes(gmContext);
 
-    const assetId = await createCanvasAsset(gm, worldId, sceneId, 11);
-    const fingerprint = await assetFingerprint(gm, assetId);
+    // Two assets, because the first fetch can never take the peer path.
+    //
+    // The engine awaits `startPeerTransfer` before `sync_world_cache`, but the
+    // roster round trip that actually forms channels is deliberately not
+    // awaited — so a page's *first* sync runs before it knows any peer and
+    // goes to the server. That is correct behaviour, not a bug: peer transfer
+    // is opportunistic and cannot help a client's opening fetch.
+    //
+    // This test used to have one asset and depend on losing that race. On a
+    // `--dev` wasm bundle the engine is slow enough that channels always won;
+    // on a release bundle the sync wins and no peer transfer ever happens —
+    // measured at `peers: 1, bytes: 0` held for a full minute, with the
+    // corrupted bytes this test is about never sent at all.
+    //
+    // So the first asset is a warm-up whose only job is to get both clients
+    // into the world with a channel between them, and the second is the one
+    // that matters: by the time it is asked for, a peer is known.
+    const warmupId = await createCanvasAsset(gm, worldId, sceneId, 7);
+    await assetFingerprint(gm, warmupId);
 
     const gmSync = watchCacheSync(gm);
     await openWorldAndSync(gm, worldId, gmSync);
-    expect(
-      await holdsFingerprint(gm, worldId, fingerprint),
-      "the serving peer must actually hold the content first",
-    ).toBe(true);
 
     const playerSync = watchCacheSync(player);
     await openWorldAndSync(player, worldId, playerSync);
+
+    await expect
+      .poll(() => peerCounters(player).then((c) => c.peers), {
+        timeout: 60_000,
+        message: "the player needs a peer before there is a peer path to take",
+      })
+      .toBeGreaterThanOrEqual(1);
+
+    // Now the content under test, published to a table that is already
+    // connected. Re-synced rather than reloaded, which would drop the channel
+    // and restart the race.
+    const assetId = await createCanvasAsset(gm, worldId, sceneId, 11);
+    const fingerprint = await assetFingerprint(gm, assetId);
+
+    await resyncWorldCache(gm, worldId);
+    await expect
+      .poll(() => holdsFingerprint(gm, worldId, fingerprint), {
+        timeout: 60_000,
+        message: "the serving peer must actually hold the content first",
+      })
+      .toBe(true);
+
+    await resyncWorldCache(player, worldId);
 
     // Deliberately not gated on seeing `connectedPeers` reach one first.
     // That was the first shape of this test and it failed — because the
