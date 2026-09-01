@@ -117,6 +117,23 @@ export function useActorSystemData(
   // to call it without a synchronous setState
   // (react-hooks/set-state-in-effect).
   const query = useCallback(async (): Promise<ActorSystemData | null> => {
+    // No id, no question to ask.
+    //
+    // Callers reach this hook from routes and panels where the actor id
+    // arrives a render or two after mount, so `actorId` is briefly "". Asking
+    // the server about an empty id is not merely wasteful: `UUID!` refuses to
+    // parse it, so every one of those renders logged
+    // `Failed to parse "UUID": invalid length: found 0` to the console. It was
+    // constant background noise in the app and in every end-to-end run, and
+    // noise is where a real error goes to hide.
+    //
+    // Returning null rather than throwing keeps "not asked yet" and "asked and
+    // got nothing" the same shape to the caller, which is what they already
+    // handle.
+    if (!actorId) {
+      return null;
+    }
+
     const remote = await fetchActorSystemData(actorId);
     if (!remote || (gameSystemId && remote.gameSystemId !== gameSystemId)) {
       return null;

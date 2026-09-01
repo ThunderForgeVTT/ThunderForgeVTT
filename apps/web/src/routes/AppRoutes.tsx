@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Loader } from "@/components/ui/loader/Loader";
+import { EngineLoader } from "@/components/engine/EngineLoader";
 import type { HeaderNavItem } from "@/components/navigation/AppHeader";
 import { useAuth } from "@/hooks/useAuth";
 import { MainLayout } from "@/layouts/main-layout/MainLayout";
@@ -48,6 +49,41 @@ interface AppRoutesProps {
 function renderLazyPage(page: ReactNode, label: string) {
   return (
     <Suspense fallback={<Loader fullScreen label={label} />}>{page}</Suspense>
+  );
+}
+
+/**
+ * The play route's own fallback, which is the engine loader rather than the
+ * generic one.
+ *
+ * A playtest found two loading indicators for a single wait: this route's
+ * chunk loads behind a full-screen "Loading world workspace" spinner, and then
+ * `WorldPage` mounts and immediately shows `EngineLoader` — a different
+ * spinner, differently worded, differently placed. One wait, two affordances,
+ * and the swap between them reads as something having gone wrong and restarted.
+ *
+ * Rendering the same component in both places makes the transition invisible:
+ * the indeterminate loader simply gains real byte progress once the engine
+ * starts fetching. Spec 031 FR-041 — at most one loading indicator visible at
+ * any moment — is about what the user perceives, not about how many components
+ * happen to be mounted.
+ *
+ * `progress: null` is the indeterminate state the component already handles
+ * (FR-030: no Content-Length means no honest percentage, so it shows none
+ * rather than inventing one). That is exactly right here — nothing has begun
+ * downloading yet.
+ */
+function renderPlayRoute(page: ReactNode) {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen w-full items-center justify-center">
+          <EngineLoader progress={null} error={null} />
+        </div>
+      }
+    >
+      {page}
+    </Suspense>
   );
 }
 
@@ -623,7 +659,7 @@ export default function AppRoutes({
         path="/world/:id/play"
         element={
           <RequireAuthenticated>
-            {renderLazyPage(<WorldPage />, "Loading world workspace")}
+            {renderPlayRoute(<WorldPage />)}
           </RequireAuthenticated>
         }
       />
