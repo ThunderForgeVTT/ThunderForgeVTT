@@ -97,6 +97,15 @@ export function ShapeTool({
     }
 
     const onClick = (event: MouseEvent) => {
+      // Only clicks on the map itself place text — not on the tool rail or
+      // the dock, which are elsewhere in the document this listens on.
+      const target = event.target as Node | null;
+      const onMap =
+        target instanceof HTMLCanvasElement ||
+        (target !== null && container.contains(target));
+      if (!onMap) {
+        return;
+      }
       const rect = container.getBoundingClientRect();
       setTextPlacement({
         x: event.clientX - rect.left,
@@ -105,9 +114,18 @@ export function ShapeTool({
       setTextValue("");
     };
 
-    container.addEventListener("click", onClick);
+    // Listened for on the document rather than on `container` itself,
+    // because a click on the map never reaches the container: Bevy/winit
+    // inserts its real <canvas> as a direct child of <body> and WorldPage
+    // gives it `position: fixed; inset: 0` (see WorldPage.tsx's
+    // canvasSelector comment), so the canvas covers the container without
+    // ever being inside it. Bound to the container, this listener fired for
+    // no click a GM could make and the text sub-tool simply did nothing —
+    // the only sub-tool whose placement is handled here in the DOM rather
+    // than engine-side, so nothing else masked it.
+    document.addEventListener("click", onClick);
     return () => {
-      container.removeEventListener("click", onClick);
+      document.removeEventListener("click", onClick);
     };
   }, [activeTool, canvasContainerRef, sceneId]);
 
