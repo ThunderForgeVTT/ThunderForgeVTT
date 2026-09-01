@@ -1,3 +1,4 @@
+import { createNpcViaCompendium } from "./fixtures/content";
 import { expect, test } from "@playwright/test";
 import { freshCredentials, register, uniqueSuffix } from "./fixtures/helpers";
 
@@ -44,18 +45,9 @@ async function createPcActor(
   worldId: string,
   label: string,
 ): Promise<string> {
-  await gmPage.goto(`/world/${worldId}/compendium`);
-  await gmPage.locator('[data-testid="new-npc-name-input"]').fill(label);
-  await gmPage.locator('[data-testid="add-npc-button"]').click();
-  const row = gmPage.locator("tr", { hasText: label });
-  await expect(row).toBeVisible({ timeout: 10_000 });
-  await row.getByRole("link", { name: "View" }).click();
-  await gmPage.waitForURL(/\/actor\/[^/]+\/view$/, { timeout: 10_000 });
-  const match = /\/actor\/([^/]+)\/view$/.exec(new URL(gmPage.url()).pathname);
-  if (!match) {
-    throw new Error(`Could not extract actor id from URL: ${gmPage.url()}`);
-  }
-  const actorId = match[1];
+  // Through the shared fixture: this spec needs an actor, it is not about how
+  // one is made. See `fixtures/content.ts`.
+  const actorId = await createNpcViaCompendium(gmPage, worldId, label);
 
   await gmPage.goto(`/world/${worldId}/actor/${actorId}/edit`);
   await gmPage.getByLabel(/this is a player character/i).check();

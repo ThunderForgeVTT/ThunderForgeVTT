@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { createNpcViaCompendium } from "./fixtures/content";
 
 /**
  * Spec 017 (Player Onboarding — Invite-to-Actor Selection): US1 (GM-
@@ -75,18 +76,9 @@ async function generateInviteCode(gmPage: Page, worldId: string): Promise<string
  * prepare a claimable character today.
  */
 async function createPcActor(gmPage: Page, worldId: string, label: string): Promise<string> {
-  await gmPage.goto(`/world/${worldId}/compendium`);
-  await gmPage.locator('[data-testid="new-npc-name-input"]').fill(label);
-  await gmPage.locator('[data-testid="add-npc-button"]').click();
-  const row = gmPage.locator("tr", { hasText: label });
-  await expect(row).toBeVisible({ timeout: 10_000 });
-  await row.getByRole("link", { name: "View" }).click();
-  await gmPage.waitForURL(/\/actor\/[^/]+\/view$/, { timeout: 10_000 });
-  const match = /\/actor\/([^/]+)\/view$/.exec(new URL(gmPage.url()).pathname);
-  if (!match) {
-    throw new Error(`Could not extract actor id from URL: ${gmPage.url()}`);
-  }
-  const actorId = match[1];
+  // Through the shared fixture: this spec needs a claimable character, it is
+  // not about how one is made. See `fixtures/content.ts`.
+  const actorId = await createNpcViaCompendium(gmPage, worldId, label);
 
   await gmPage.goto(`/world/${worldId}/actor/${actorId}/edit`);
   await gmPage.getByLabel(/this is a player character/i).check();
