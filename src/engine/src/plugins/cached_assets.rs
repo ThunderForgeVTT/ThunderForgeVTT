@@ -1977,12 +1977,16 @@ mod wasm {
         // Deliberately not awaited: warming the cache is the next visit's
         // benefit, and making this visit wait for it would trade the thing
         // the user is watching for a thing they are not.
-        spawn_local(prefetch(
-            handles,
-            queue,
-            budget.in_use_bytes,
-            budget.limit_bytes,
-        ));
+        // Post-eviction occupancy, not `budget.in_use_bytes`.
+        //
+        // `in_use_bytes` is what the index held *before* this pass, and the
+        // prefetch gate reads its argument as what the store holds *now*. So a
+        // pass that evicted a world to make room told the prefetch the room
+        // was still occupied, `admit_speculative` refused the first item, and
+        // the queue stopped with `NoRoom` — the open world's own art never got
+        // written, by the very pass performed to fit it.
+        let occupied = budget.in_use_bytes.saturating_sub(budget.freed_bytes);
+        spawn_local(prefetch(handles, queue, occupied, budget.limit_bytes));
 
         serde_json::json!({
             "status": "synced",
@@ -2125,12 +2129,18 @@ mod wasm {
     ///   because there is nothing here to outlive it with.
     async fn prefetch(handles: Rc<Handles>, mut queue: PrefetchQueue, in_use: u64, limit: u64) {
         let world_id = queue.world_id();
-        // The store's occupancy as of the budget pass, carried forward as
+        // The store's occupancy *after* the budget pass, carried forward as
         // this task stores things. Deliberately not re-read from the index
         // each step: that is an IndexedDB scan per item, and the figure would
-        // still be a moment stale. It errs high — the eviction pass may have
-        // freed bytes since — and erring high is the safe direction for a
-        // check whose whole purpose is to stop early (FR-071).
+        // still be a moment stale.
+        //
+        // This comment used to say the figure errs high because the eviction
+        // pass may have freed bytes since, and that erring high is the safe
+        // direction for a check whose purpose is to stop early. That is
+        // exactly backwards after an eviction: erring high suppresses the
+        // write the eviction was performed to make room for. The caller now
+        // subtracts what the pass freed, so this starts from what the store
+        // actually holds (FR-071).
         let mut in_use = in_use;
         let mut yields: u32 = 0;
 

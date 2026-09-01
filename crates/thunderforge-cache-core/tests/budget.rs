@@ -195,3 +195,41 @@ fn a_zero_byte_speculative_item_never_overflows_the_check() {
     assert_eq!(admit_speculative(u64::MAX, u64::MAX, 0), Speculation::Admit);
     assert_eq!(admit_speculative(u64::MAX, u64::MAX, 1), Speculation::Stop);
 }
+
+#[test]
+fn what_an_eviction_frees_is_admitted_afterwards() {
+    // The bug this guards, end to end in arithmetic: a pass evicts a world to
+    // make room for the open one, and the prefetch that would store the open
+    // world's art is then told how full the store was *before* the eviction.
+    // `admit_speculative` refuses on that figure, the queue stops with
+    // NoRoom, and the open world's art is never written — by the very pass
+    // performed to fit it.
+    //
+    // Sized from the real failure: two ~179KB worlds against a 250,000-byte
+    // limit, one of which must go.
+    let held = 179_424;
+    let incoming = 179_342;
+    let limit = 250_000;
+
+    let index = vec![entry(1, 1, held, 0)];
+    let plan = plan_eviction(&index, limit, incoming, world(2));
+    assert_eq!(plan.evict.len(), 1, "the idle world should be released");
+    assert!(!plan.insufficient, "releasing it leaves room for the incoming");
+
+    // Before the pass — what the old code handed the prefetch.
+    assert_eq!(
+        admit_speculative(plan.in_use_bytes, limit, incoming),
+        Speculation::Stop,
+        "pre-eviction occupancy refuses the very bytes the eviction freed",
+    );
+
+    // After it, which is what the store actually holds.
+    let freed: u64 = index.iter().map(|e| e.byte_size).sum();
+    let occupied = plan.in_use_bytes - freed;
+    assert_eq!(
+        admit_speculative(occupied, limit, incoming),
+        Speculation::Admit,
+        "the open world's own art must fit in the room just made for it",
+    );
+    assert_eq!(speculative_headroom(occupied, limit), limit);
+}

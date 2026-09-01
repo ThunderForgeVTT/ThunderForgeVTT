@@ -607,6 +607,14 @@ mod wasm {
         pub limit_bytes: u64,
         /// Plaintext bytes the index accounts for, before this pass.
         pub in_use_bytes: u64,
+        /// Bytes this pass released. `in_use_bytes - freed_bytes` is what the
+        /// store actually holds afterwards.
+        ///
+        /// Reported separately rather than by correcting `in_use_bytes`, whose
+        /// "before this pass" reading is what the diagnostics and the
+        /// `world-cache-budget` summary mean by it. Anyone deciding whether
+        /// something still *fits* wants the difference.
+        pub freed_bytes: u64,
         /// Index rows released.
         pub evicted: usize,
         /// Blob files deleted. Lower than `evicted` when two items share
@@ -707,9 +715,9 @@ mod wasm {
             .await;
 
             for id in ids {
-                let fingerprint = match index.get(id).await {
-                    Ok(Some(entry)) => Some(entry.fingerprint),
-                    Ok(None) => None,
+                let (fingerprint, byte_size) = match index.get(id).await {
+                    Ok(Some(entry)) => (Some(entry.fingerprint), entry.byte_size),
+                    Ok(None) => (None, 0),
                     Err(_) => {
                         outcome.failed += 1;
                         continue;
@@ -721,6 +729,7 @@ mod wasm {
                     continue;
                 }
                 outcome.evicted += 1;
+                outcome.freed_bytes += byte_size;
 
                 let Some(fingerprint) = fingerprint else {
                     continue;
