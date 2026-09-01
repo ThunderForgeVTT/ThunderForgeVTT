@@ -43,7 +43,30 @@ test.describe("Engine load feedback (US6, T050/T051)", () => {
     expect(Date.now() - started).toBeLessThan(1_000);
 
     const bar = page.getByTestId("engine-loader-progress");
-    const determinate = await bar.getAttribute("data-determinate");
+
+    // Bounded, and tolerant of the bar being gone — for exactly the reason
+    // the loop below states, which this read was missing.
+    //
+    // The loader disappears the instant the engine is ready, and
+    // `getAttribute` on a detached locator blocks until the *test* times out
+    // rather than returning null. Unbounded here, that turned "the engine
+    // loaded quickly" into a 30-second timeout reported against the progress
+    // bar, which reads as the loader being broken.
+    //
+    // Found on a stack where the engine loads faster than this suite usually
+    // sees it: a release wasm bundle already warm in the page cache. The race
+    // was always here — the machine just never lost it before.
+    const determinate = await bar
+      .getAttribute("data-determinate", { timeout: 1_000 })
+      .catch(() => null);
+
+    if (determinate === null) {
+      // The load finished inside the sampling window. SC-009 — the part of
+      // this test that is about the user — is already asserted above; there is
+      // no progress left to observe, and demanding some would be asserting
+      // that the engine is slow.
+      return;
+    }
 
     if (determinate === "true") {
       // SC-010: progress must never move backwards, and must never reach its
