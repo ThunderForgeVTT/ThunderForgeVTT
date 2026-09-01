@@ -504,6 +504,10 @@ pub(crate) struct EngineStatsSnapshot {
     pub lights: usize,
     pub walls: usize,
     pub shadow_quads: usize,
+    /// Update ticks since `start()`, monotonic. See `EngineStats::frames` —
+    /// the one counter here that reports whether the loop is turning at all,
+    /// which is what a caller outside the engine has no other way to ask.
+    pub frames: u64,
 }
 
 /// Everything currently displayed, keyed by token id.

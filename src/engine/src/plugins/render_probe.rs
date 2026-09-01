@@ -268,6 +268,18 @@ pub struct EngineStats {
     /// Meshes spawned for wall shadows — the term that grows as
     /// lights x walls, and the first thing to check when a scene gets heavy.
     pub shadow_quads: usize,
+    /// Update ticks this engine has run since `start()`, monotonic.
+    ///
+    /// The only counter here that answers "is the loop turning *yet*" rather
+    /// than "how fast is it turning". `fps` and `frame_time_ms` are smoothed
+    /// averages and read zero for the first frames — precisely the window in
+    /// which something outside needs to know the engine has come up. A test
+    /// that waits on this waits for the thing it means, instead of sleeping
+    /// a few seconds and hoping.
+    ///
+    /// Monotonic and never reset: a caller samples it and waits for it to
+    /// advance, which a counter that could restart would break.
+    pub frames: u64,
 }
 
 fn publish_engine_stats(
@@ -292,6 +304,11 @@ fn publish_engine_stats(
         stats.fps = fps;
     }
 
+    // Unconditional, unlike the two counters above: the smoothed diagnostics
+    // have nothing to report for the first frames, and that is exactly the
+    // window in which this is the only signal there is.
+    stats.frames = stats.frames.saturating_add(1);
+
     stats.sprites = sprites.iter().count();
     stats.tokens = tokens.iter().count();
     stats.lights = light_set.map_or(0, |set| set.lights().len());
@@ -309,5 +326,6 @@ fn publish_engine_stats(
         slot.lights = stats.lights;
         slot.walls = stats.walls;
         slot.shadow_quads = stats.shadow_quads;
+        slot.frames = stats.frames;
     }
 }
