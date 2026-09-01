@@ -353,9 +353,31 @@ async function joinWorldAndEnterPlay(
   await page.waitForURL(new RegExp(`/world/${worldId}(/actor-select)?$`), {
     timeout: 15_000,
   });
-  await page.getByRole("link", { name: "Enter world" }).first().click();
-  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-  await clickPlay(page);
+
+  // Straight to `/play`, rather than through the landing page's "Enter world"
+  // link and staging.
+  //
+  // Spec 017's claim gate (`useActorClaimGate`) redirects *any* non-GM member
+  // without an actor claim to `/actor-select` — not only one with characters
+  // waiting to be claimed — and that page renders no "Enter world" link. The
+  // player here never claims anything, so the redirect always happens.
+  //
+  // Testing the URL to decide does not work either, and the attempt is worth
+  // recording: the redirect is a client-side `navigate(..., { replace: true })`
+  // fired from an effect, so it lands *after* the `waitForURL` above resolves.
+  // A branch on `page.url()` races it, and losing that race puts the click
+  // back on a page that will never show the link.
+  //
+  // That click used to be unbounded — Playwright's default action timeout is
+  // off and this config sets none — so it was limited only by the test's own
+  // 480s budget. The spec burned its full eight minutes and then reported
+  // `playerContext.close()` failing in the `finally`: a hundred lines from the
+  // cause, naming nothing to do with it.
+  //
+  // `/play` is not behind the gate, which is why `inviteAndJoinAsPlayer` — used
+  // by the two player specs above that pass — goes straight there. This spec is
+  // about dragging player-owned tokens, not about the invite UI.
+  await page.goto(`/world/${worldId}/play`);
 }
 
 async function createScene(page: Page, name: string): Promise<void> {
