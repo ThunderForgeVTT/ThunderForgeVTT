@@ -11,6 +11,31 @@ license.workspace = true
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+# Real names for systems, components and resources in Bevy's own messages.
+#
+# `bevy_utils::DebugName` is the sole thing this gates. Without it every Bevy
+# diagnostic that names a subject prints the literal string
+# "<Enable the debug feature to see the name>" — so `error[B0002]` arrives as
+# "Res<<Enable the debug feature to see the name>> in system <Enable the debug
+# feature to see the name> conflicts with a previous system parameter", and
+# `resource does not exist` never says which one. There are 33 files in
+# `bevy_ecs` alone that name a subject this way.
+#
+# That is the same failure this crate has already paid for twice: `bevy_log`
+# is enabled above precisely so Bevy's errors reach the browser console, and
+# the render-halves comment below records a day lost to a renderer that failed
+# without saying so. Routing those messages to the console and then reading a
+# placeholder where the subject should be is most of the way to not having
+# them at all.
+#
+# Not on by default, and deliberately not in the release bundle: the names are
+# `type_name` string *data*, which survives the symbol stripping that takes
+# the release build from 24.7MB to 4.15MB brotli. `scripts/shared.mjs` turns
+# it on for the `--dev` wasm-pack profile, where 71% of the bundle is already
+# unmangled symbols and the marginal cost is noise.
+debug-names = ["bevy/debug"]
+
 [dependencies]
 thunderforge_canvas_core = { path = "../../crates/thunderforge-canvas-core" }
 # Spec 028 (T027): the client world cache. `cache_core` holds the rules the

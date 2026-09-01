@@ -211,8 +211,17 @@ export function engineProfile(defaultProfile = "release") {
 
 export async function buildEngine({ profile = engineProfile() } = {}) {
   log("engine", `Building WebAssembly engine (${profile})...`);
+  // Bevy prints "<Enable the debug feature to see the name>" in place of every
+  // system, component and resource name unless `bevy/debug` is on — see the
+  // `debug-names` feature in `src/engine/Cargo.toml`. It rides the dev profile
+  // and only the dev profile: the names are string data that survives the
+  // symbol stripping the release build depends on, and the dev bundle is 71%
+  // unmangled symbols already, so this is free exactly where it is useful.
+  // After `--`: wasm-pack has no `--features` of its own, and takes trailing
+  // positional EXTRA_OPTIONS to hand to `cargo build`.
+  const features = profile === "dev" ? " -- --features debug-names" : "";
   const child = spawnManaged(
-    `wasm-pack build ./ --${profile} --target web --out-dir ../../dist/engine --scope thunderforge --out-name engine`,
+    `wasm-pack build ./ --${profile} --target web --out-dir ../../dist/engine --scope thunderforge --out-name engine${features}`,
     {
       cwd: ENGINE_DIR,
       prefix: "engine",
