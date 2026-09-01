@@ -1,4 +1,4 @@
-import { test, expect, type Page, type WebSocketRoute } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 
 /**
  * specs/005-live-canvas-sync, User Story 2 (T012/T013): the
@@ -71,27 +71,62 @@ async function enterWorldPlay(page: Page): Promise<void> {
 }
 
 test.describe("Live sync reconnect (US2, T012/T013)", () => {
+  // The waits inside this test declare 45 seconds of patience in two places.
+  // On Playwright's 30-second default they could never be spent: the test died
+  // first, and the failure was reported against whichever wait happened to be
+  // pending rather than against what was slow. The budget now exceeds what the
+  // test says it is willing to wait for.
+  test.setTimeout(120_000);
+
   test("a dropped connection shows a persistent reconnecting indicator, then auto-recovers and re-fetches on restore", async ({
     page,
   }) => {
-    // Route only the /api/ws WebSocket, transparently forwarding to the
-    // real server, so this test can sever *just* the subscription
-    // transport's connection on demand — a full `context.setOffline(true)`
-    // also breaks Vite dev-server's own dynamic module fetches (this app
-    // lazy-loads route chunks), crashing the page with an unrelated
-    // "Failed to fetch dynamically imported module" error before the
-    // WebSocket drop is even observed.
-    let activeClientWs: WebSocketRoute | null = null;
-    await page.routeWebSocket(/\/api\/ws/, (ws) => {
-      const server = ws.connectToServer();
-      ws.onMessage((message) => server.send(message));
-      server.onMessage((message) => ws.send(message));
-      activeClientWs = ws;
-      ws.onClose(() => {
-        if (activeClientWs === ws) {
-          activeClientWs = null;
+    // Record the page's own /api/ws sockets, rather than proxying them.
+    //
+    // This used to `page.routeWebSocket` the connection and sever the proxy,
+    // and that shape failed three ways at once. It kept a single "active"
+    // handle, which is the *last* socket routed — and a world page holds two:
+    // the world-event client in `engine/world/sync/subscriptionClient.ts`,
+    // whose state this indicator reports, and a private one that
+    // `engine/bevy/index.ts` opens for peer-transfer signalling once the
+    // engine has started. It also forwarded reconnects straight through, so
+    // `graphql-ws` was back in about a second and the banner flashed too
+    // briefly to assert on. Closing alone is not an outage.
+    //
+    // Measured rather than assumed: a probe reading `getLiveSyncState()` on
+    // each sample showed live -> reconnecting within 500ms of the close and
+    // back to live by 1500ms. Roughly a one-second window to catch.
+    //
+    // So this now does what `world-event-catchup.spec.ts` does, for the same
+    // reasons: record the real sockets, close every open one, and hold the
+    // endpoint blocked over CDP so the outage lasts long enough to be
+    // observed. Scoped to `/api/ws` so Vite's own module fetches keep working
+    // — a full `context.setOffline(true)` breaks the lazy route chunks this
+    // app loads, which is why these specs never used it.
+    await page.addInitScript(() => {
+      const Native = window.WebSocket;
+      const sockets: WebSocket[] = [];
+      (window as unknown as { __e2eSockets: WebSocket[] }).__e2eSockets = sockets;
+      class RecordingWebSocket extends Native {
+        constructor(url: string | URL, protocols?: string | string[]) {
+          super(url, protocols);
+          if (String(url).includes("/api/ws")) {
+            sockets.push(this);
+          }
         }
-      });
+      }
+      window.WebSocket = RecordingWebSocket as unknown as typeof WebSocket;
+    });
+
+    let sceneWallsRequests = 0;
+    page.on("request", (request) => {
+      if (
+        request.url().includes("/graphql") &&
+        request.method() === "POST" &&
+        (request.postData()?.includes("SceneWalls") ?? false)
+      ) {
+        sceneWallsRequests += 1;
+      }
     });
 
     await registerAndCreateWorldOnDashboard(page, `E2E Live Sync ${uniqueSuffix()}`);
@@ -107,31 +142,65 @@ test.describe("Live sync reconnect (US2, T012/T013)", () => {
     // must clear once the subscription reaches "live".
     await expect(indicator).toBeHidden({ timeout: 20_000 });
 
-    // Simulate a dropped connection (FR-008/FR-008a) by closing just the
-    // WebSocket, from the routing layer — everything else (HTTP, module
-    // loading) keeps working normally.
     // Polled, not asserted once. The socket is opened by whichever panel
     // first subscribes, which is not synchronous with the indicator clearing:
     // this used to be reached only after `toBeHidden` had spent many seconds
     // waiting out a banner that was stuck at "connecting" regardless of the
     // real connection, and that delay was doing the waiting this check needs.
-    // With the indicator reporting the truth promptly, the handle is
-    // legitimately not captured yet at this instant.
+    // With the indicator reporting the truth promptly, the socket is
+    // legitimately not open yet at this instant.
+    const openSocketCount = () =>
+      page.evaluate(() => {
+        const sockets = (window as unknown as { __e2eSockets: WebSocket[] })
+          .__e2eSockets;
+        return sockets.filter((socket) => socket.readyState === WebSocket.OPEN)
+          .length;
+      });
+
     await expect
-      .poll(() => activeClientWs !== null, {
+      .poll(openSocketCount, {
         timeout: 20_000,
         message: "expected the page to have an active /api/ws connection",
       })
-      .toBe(true);
-    activeClientWs?.close();
+      .toBeGreaterThan(0);
+
+    // The scene has to be loaded before it can be re-loaded.
+    await expect
+      .poll(() => sceneWallsRequests, {
+        timeout: 30_000,
+        message:
+          "the scene should have loaded once before the connection is severed",
+      })
+      .toBeGreaterThanOrEqual(1);
+
+    // Block first, then close — otherwise the client is back before the
+    // block lands.
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Network.enable");
+    await cdp.send("Network.setBlockedURLs", { urls: ["*/api/ws*"] });
+
+    // 4499 is graphql-ws's "Terminated", deliberately excluded from its fatal
+    // close codes — the client retries this one rather than treating it as a
+    // clean, intentional shutdown that needs no reconnection.
+    const severed = await page.evaluate(() => {
+      const sockets = (window as unknown as { __e2eSockets: WebSocket[] })
+        .__e2eSockets;
+      const open = sockets.filter((socket) => socket.readyState === WebSocket.OPEN);
+      for (const socket of open) {
+        socket.close(4499, "e2e sever");
+      }
+      return open.length;
+    });
+    expect(severed, "expected open sockets to sever").toBeGreaterThan(0);
 
     // FR-009/FR-009a: a persistent, non-dead-end "reconnecting" indicator
-    // — not silent stale data, not a state requiring manual action. The
-    // route handler above passes the client's next reconnect attempt
-    // straight through to the real server, so no further test-side action
-    // is needed to let it recover.
+    // — not silent stale data, not a state requiring manual action.
     await expect(indicator).toBeVisible({ timeout: 15_000 });
     await expect(indicator).toContainText("Reconnecting", { timeout: 15_000 });
+
+    // Let it back in. `graphql-ws` is already retrying with backoff, so the
+    // next attempt after this succeeds and the client resumes on its own.
+    await cdp.send("Network.setBlockedURLs", { urls: [] });
 
     // On the transition back to `live`, WorldPage.tsx must trigger a full
     // scene re-fetch (T016) — observed here as a fresh SceneWalls query
