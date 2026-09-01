@@ -12,6 +12,7 @@ import {
   Link as LinkIcon,
   Map as MapIcon,
   Moon,
+  MousePointer2,
   Package,
   Settings as SettingsIcon,
   Shapes,
@@ -41,6 +42,7 @@ export type FantasyIconName =
   | "quill"
   | "rune"
   | "scene"
+  | "select"
   | "settings"
   | "shield"
   | "skull"
@@ -81,6 +83,7 @@ const ICON_MAP: Record<
   quill: Feather,
   rune: Sparkles,
   scene: Image,
+  select: MousePointer2,
   settings: SettingsIcon,
   shield: Shield,
   skull: Skull,

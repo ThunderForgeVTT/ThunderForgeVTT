@@ -285,7 +285,10 @@ export default function WorldPage() {
    * opened. "Which tool am I working with" outlives the rail, so it lives with
    * the page.
    */
-  const [openGmToolId, setOpenGmToolId] = useState<GmToolId | null>(null);
+  // Select, not `null`: plain selection is what a GM is doing most of the
+  // time, and opening on an empty rail made "no tool armed" an unlabelled
+  // state you could only reach by closing something.
+  const [openGmToolId, setOpenGmToolId] = useState<GmToolId | null>("select");
 
   /**
    * Bumped whenever something might have changed the approval queue, so it
@@ -1864,6 +1867,14 @@ export default function WorldPage() {
                 openToolId={openGmToolId}
                 onOpenToolChange={setOpenGmToolId}
                 tools={[
+                  {
+                    id: "select",
+                    label: "Select",
+                    icon: "select",
+                    // No panel: Select is the resting mode, not a set of
+                    // properties. See `GmTool.content`.
+                    content: null,
+                  },
                   {
                     id: "walls",
                     label: "Walls",

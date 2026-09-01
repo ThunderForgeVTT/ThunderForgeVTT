@@ -6,6 +6,7 @@ import {
 import { cn } from "@/lib/utils";
 
 export type GmToolId =
+  | "select"
   | "walls"
   | "lights"
   | "shapes"
@@ -16,8 +17,16 @@ export interface GmTool {
   id: GmToolId;
   label: string;
   icon: FantasyIconName;
-  /** The tool's own panel, rendered in a flyout when this tool is open. */
-  content: ReactNode;
+  /**
+   * The tool's own panel, rendered in a flyout when this tool is open.
+   *
+   * `null` for a tool that is a *mode* rather than a set of properties —
+   * Select being the one such tool. It arms nothing and has nothing to
+   * configure, so giving it a flyout would mean the rail covered 256px of
+   * map on every load in order to say "you may now click things", which is
+   * what clicking things already says.
+   */
+  content: ReactNode | null;
 }
 
 export interface GmToolRailProps {
@@ -97,7 +106,7 @@ export function GmToolRail({
         })}
       </nav>
 
-      {openTool ? (
+      {openTool && openTool.content !== null ? (
         <section
           // Capped and scrollable rather than sized to content: a tool with
           // a selection panel open (ShapeTool with a shape selected) is
