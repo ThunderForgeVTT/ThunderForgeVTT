@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
@@ -27,7 +34,6 @@ import {
   catchUpWorldEvents,
   subscribeToLiveSyncState,
   subscribeToWorldEvents,
-  type LiveSyncState,
 } from "@/engine/world/sync";
 import {
   queueAdjudicatedChange,
@@ -1290,8 +1296,23 @@ export default function WorldPage() {
   // real gap this project's earlier audit found (subscriptionClient.ts
   // had automatic WebSocket retry via graphql-ws, but nothing reacted to
   // a reconnect to recover events missed during the outage).
-  const [liveSyncState, setLiveSyncState] = useState<LiveSyncState>(() =>
-    getLiveSyncState(),
+  // Read through `useSyncExternalStore`, not `useState` + an effect.
+  //
+  // The connection lives in a module, outside React, and it can reach `live`
+  // in the gap between this component rendering and its effects running —
+  // which is not an edge case but what a cold load of /play does every time,
+  // because the ack lands while the engine's wasm still holds the main
+  // thread. `subscribeToLiveSyncState` deliberately does not replay the
+  // current value, so a snapshot taken during render and a listener attached
+  // afterwards missed that transition entirely, and on a healthy connection
+  // there is no later transition to correct it: the "Connecting…" banner
+  // stayed on screen for the whole session while live sync worked perfectly.
+  //
+  // `useSyncExternalStore` closes the gap by construction — it re-reads the
+  // snapshot when it subscribes — which is the problem it exists to solve.
+  const liveSyncState = useSyncExternalStore(
+    subscribeToLiveSyncState,
+    getLiveSyncState,
   );
   const sceneIdRef = useRef(sceneId);
   useEffect(() => {
@@ -1593,7 +1614,6 @@ export default function WorldPage() {
       wasLiveRef.current = true;
     }
     const unsubscribe = subscribeToLiveSyncState((state) => {
-      setLiveSyncState(state);
       if (state.status === "live") {
         const currentSceneId = sceneIdRef.current;
         const worldIdNow = idRef.current;
@@ -1693,6 +1713,7 @@ export default function WorldPage() {
         wasLiveRef.current = true;
       }
     });
+
     return unsubscribe;
   }, [worldStore]);
 

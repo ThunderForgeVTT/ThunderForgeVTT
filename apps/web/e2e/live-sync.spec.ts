@@ -110,7 +110,19 @@ test.describe("Live sync reconnect (US2, T012/T013)", () => {
     // Simulate a dropped connection (FR-008/FR-008a) by closing just the
     // WebSocket, from the routing layer — everything else (HTTP, module
     // loading) keeps working normally.
-    expect(activeClientWs, "expected the page to have an active /api/ws connection").not.toBeNull();
+    // Polled, not asserted once. The socket is opened by whichever panel
+    // first subscribes, which is not synchronous with the indicator clearing:
+    // this used to be reached only after `toBeHidden` had spent many seconds
+    // waiting out a banner that was stuck at "connecting" regardless of the
+    // real connection, and that delay was doing the waiting this check needs.
+    // With the indicator reporting the truth promptly, the handle is
+    // legitimately not captured yet at this instant.
+    await expect
+      .poll(() => activeClientWs !== null, {
+        timeout: 20_000,
+        message: "expected the page to have an active /api/ws connection",
+      })
+      .toBe(true);
     activeClientWs?.close();
 
     // FR-009/FR-009a: a persistent, non-dead-end "reconnecting" indicator
