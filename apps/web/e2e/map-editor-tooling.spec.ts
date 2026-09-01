@@ -363,29 +363,22 @@ test.describe("Wall passability toggles (US1, T001/T007)", () => {
 });
 
 test.describe("Live cross-session sync (US1, T003/T004/T008)", () => {
-  // FOUND A REAL GAP, confirmed against the running dev stack — not a
-  // flaky test. `apps/web/src/engine/world/sync/walls.ts`'s own doc
-  // comment (lines 37-47) states it plainly: "no part of apps/web
-  // establishes a live GraphQL subscription transport... wall changes
-  // made by the current tab still work end-to-end via the outbound
-  // mutation bridge and its optimistic upsert_wall dispatch — only
-  // *other* clients' changes won't be observed without a page refresh."
-  // `startWallEventSync`/`applyWallWorldEvent` are written and ready to
-  // consume a `worldEventsCreated` subscription, but nothing in the app
-  // ever opens that subscription (no apollo-client/graphql-ws usage
-  // anywhere). This means quickstart.md Scenario 1 step 7 / FR-005 /
-  // SC-002's "with the player still connected... updates within a few
-  // seconds, no reload" does not hold today for a wall property change
-  // made after a second session is already viewing the scene — this
-  // test fails reproducibly against a real dev stack, not intermittently.
-  // Building the missing live-subscription transport is a substantial,
-  // separate piece of engineering (a new client-side GraphQL
-  // subscription client plus wiring it through `WorldPage.tsx`) — well
-  // beyond this spec's stated "no new dependency, no new subsystem"
-  // scope (plan.md's Constitution Check). Recorded here as `test.fail`
-  // (an expected, tracked failure) rather than silently skipped, so a
-  // future fix flips it back to green instead of the gap going unnoticed.
-  test.fail(
+  // The gap this recorded is closed, and the annotation did its job.
+  //
+  // It was written as `test.fail` — a tracked, expected failure — because
+  // nothing in `apps/web` opened a live subscription at the time:
+  // `startWallEventSync`/`applyWallWorldEvent` were written and ready, and no
+  // transport ever fed them, so another session's wall change was invisible
+  // until a reload. Its closing line asked for exactly this: "a future fix
+  // flips it back to green instead of the gap going unnoticed."
+  //
+  // That transport is now `engine/world/sync/subscriptionClient.ts` — the
+  // `graphql-ws` client whose reconnection and catch-up behaviour specs 005
+  // and 028 build on. Playwright reported this as a failure ("Expected to
+  // fail, but passed"), which is the annotation working: the marker outlived
+  // the gap and said so rather than letting a working feature keep being
+  // reported as broken.
+  test(
     "a wall's Blocks Movement toggle propagates to a second, already-connected session with no reload",
     async ({ browser }: { browser: Browser }) => {
       const gmContext = await browser.newContext();
