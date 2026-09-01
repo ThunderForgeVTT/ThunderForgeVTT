@@ -18,6 +18,8 @@ type BevyWasmModule = {
   default: (moduleOrPath?: unknown) => Promise<unknown>;
   start: (canvasSelector: string) => void;
   apply_world_command?: (json: string) => void;
+  set_authoring_mode?: (toolId: string) => boolean;
+  authoring_mode?: () => string;
   set_event_callback?: (callback: (json: string) => void) => void;
   /**
    * Spec 028 (US1, T027/T028). Optional because an engine bundle built
@@ -473,6 +475,48 @@ export async function bindWorldStore(worldStore: WorldStore): Promise<void> {
  * mutation surface; it does not add a way to reach the engine that the
  * application itself lacks.
  */
+/**
+ * Tell the engine which authoring tool is armed.
+ *
+ * The engine is the authority for this (Constitution I): every canvas input
+ * system is engine-side, and until now none of them knew which tool the Game
+ * Master had chosen — `openGmToolId` lived in React and only picked a flyout.
+ * That is why a click could be claimed by wall drawing while the rail showed
+ * Lights.
+ *
+ * Optional by design. A bundle that predates the mode simply does not export
+ * it, and the caller carries on: the tool rail still renders, and the engine
+ * behaves as it did before. Never throws — a failed mode change must not take
+ * the canvas down with it.
+ *
+ * Returns whether the engine recognised the tool.
+ */
+export async function setAuthoringMode(toolId: string): Promise<boolean> {
+  try {
+    const module = await getWasmModule();
+    if (!module.set_authoring_mode) return false;
+    return module.set_authoring_mode(toolId);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Which tool the engine currently has armed, or `null` if it cannot say.
+ *
+ * Read-only, and here so the boundary can be observed directly rather than
+ * inferred from what a click did.
+ */
+export async function getAuthoringMode(): Promise<string | null> {
+  try {
+    const module = await getWasmModule();
+    if (!module.authoring_mode) return null;
+    return module.authoring_mode();
+  } catch {
+    return null;
+  }
+}
+
 export function getBoundWorldStore(): WorldStore | null {
   return boundWorldStore;
 }

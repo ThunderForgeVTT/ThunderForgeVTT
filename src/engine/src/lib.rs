@@ -1064,6 +1064,10 @@ pub fn start(canvas_selector: &str) {
         // Phase 4.7.F2: System Registration & Plugin Setup
         .add_plugins(SystemRegistrationPlugin)
         // Phase 4.7: Canvas Rendering Infrastructure
+        // Which authoring tool is armed. Registered early because other
+        // plugins will gate their input systems on it; adds no behaviour on
+        // its own (see plugins/authoring_mode.rs).
+        .add_plugins(plugins::authoring_mode::AuthoringModePlugin)
         .add_plugins(ScenePlugin)
         .add_plugins(GridPlugin)
         .add_plugins(TokenPlugin)

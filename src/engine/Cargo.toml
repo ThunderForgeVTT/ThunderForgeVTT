@@ -58,6 +58,19 @@ bevy = { version = "0.19.1", default-features = false, features = [
   # a renderer that fails silently.
   "bevy_log",
   "bevy_core_pipeline",
+  # Modes with transitions, rather than flags with implicit ordering.
+  #
+  # Three things in this engine are state machines: which authoring tool is
+  # active, whether a token is being carried to a placement, and whether a
+  # scene is mid-swap. Bevy already models these, and `OnEnter`/`OnExit` give
+  # each transition exactly one place to run its setup and teardown.
+  #
+  # The alternative — a resource holding "current tool" and a boolean for
+  # "carrying" — is the same machine with the transitions left implicit, which
+  # is where the ordering bugs live. Spec 031 was written after a playtest
+  # found one: switching tools placed a stray marker, for every tool except the
+  # one handled outside the engine.
+  "bevy_state",
   # Gizmos draw through the polyline pipeline rather than the sprite
   # pipeline, which makes them a diagnostic that sprites cannot provide:
   # they answer "is the 2D render graph running at all" independently of

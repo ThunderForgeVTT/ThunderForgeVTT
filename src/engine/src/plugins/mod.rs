@@ -1,3 +1,4 @@
+pub mod authoring_mode;
 pub mod background;
 pub mod cached_assets;
 pub mod camera;

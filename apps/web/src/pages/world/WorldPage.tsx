@@ -71,6 +71,7 @@ import {
   endPeerAdjudication,
   onOpenLore,
   peerAdjudicationActive,
+  setAuthoringMode,
 } from "@/engine/bevy";
 import {
   getPeerTransferState,
@@ -295,6 +296,30 @@ export default function WorldPage() {
   // time, and opening on an empty rail made "no tool armed" an unlabelled
   // state you could only reach by closing something.
   const [openGmToolId, setOpenGmToolId] = useState<GmToolId | null>("select");
+
+  /**
+   * Tell the engine which tool is armed, whenever that changes.
+   *
+   * This state decides which flyout renders — that is chrome's business. It is
+   * **not** the authority for what a click on the canvas does; every canvas
+   * input system lives in the engine, and until this effect existed none of
+   * them knew which tool had been chosen. `handle_wall_input` is gated by
+   * `IsGameMaster` alone, as is token dragging, so for a Game Master a single
+   * click was offered to every authoring system at once.
+   *
+   * Closing the rail entirely (`null`) leaves the engine armed with whatever
+   * it had: there is no "no tool" mode, and inventing one here would make an
+   * empty rail behave differently from a collapsed one.
+   */
+  useEffect(() => {
+    // Only a Game Master arms a tool. The rail itself is already gated on
+    // `isSceneOwner`, and every engine input system checks `IsGameMaster`
+    // independently — this is the third layer, and it is here because a mode
+    // request is a message chrome sends, and chrome should not be sending it
+    // on a player's behalf at all. Defence in depth, not the only defence.
+    if (!isSceneOwner || !openGmToolId) return;
+    void setAuthoringMode(openGmToolId);
+  }, [isSceneOwner, openGmToolId]);
 
   /**
    * Bumped whenever something might have changed the approval queue, so it
