@@ -31,6 +31,7 @@ pub mod resource_display;
 #[cfg(feature = "seam-probe")]
 pub mod seam_probe;
 pub mod shape;
+pub mod snapping;
 pub mod texture_budget;
 pub mod token_art;
 pub mod token_kind;

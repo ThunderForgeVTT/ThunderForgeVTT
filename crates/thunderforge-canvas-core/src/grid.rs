@@ -273,10 +273,24 @@ impl GridSpec {
 
         let step = footprint.corner_step() * size;
         let local_corner = world - self.origin - Vec2::splat(half_extent);
-        let snapped_corner = Vec2::new(
-            (local_corner.x / step).round() * step,
-            (local_corner.y / step).round() * step,
-        );
+
+        // Half-up, not `round()`.
+        //
+        // `f32::round` breaks halves *away from zero*, which makes a point
+        // exactly on a cell boundary snap outward on the negative side and
+        // inward on the positive — so this disagreed with `world_to_cell`,
+        // which is floor-based and puts a boundary in the cell it opens.
+        //
+        // The two therefore agreed on every positive boundary and differed on
+        // every negative one, which is exactly how it survived: dragging a
+        // token to (-60, 60) on a 5-unit grid snapped y correctly to 62.5 and
+        // x to -62.5 where the rest of the system said -57.5. One cell out,
+        // in one axis, only when negative.
+        //
+        // `(v + 0.5).floor()` rounds halves toward positive infinity, which is
+        // the same tie-break floor division already makes.
+        let half_up = |v: f32| (v / step + 0.5).floor() * step;
+        let snapped_corner = Vec2::new(half_up(local_corner.x), half_up(local_corner.y));
 
         snapped_corner + self.origin + Vec2::splat(half_extent)
     }
@@ -368,6 +382,55 @@ fn axial_round(q: f32, r: f32) -> Cell {
     }
 
     Cell::new(rq as i32, rr as i32)
+}
+
+#[cfg(test)]
+mod boundary_tie_break_tests {
+    use super::*;
+
+    /// A point exactly on a cell boundary must land in the same cell however
+    /// it is snapped.
+    ///
+    /// `world_to_cell` is floor-based, so a boundary belongs to the cell it
+    /// *opens*. `snap_footprint` snapped the token's corner with `round`,
+    /// which breaks halves **away from zero** — so the two agreed on positive
+    /// boundaries and disagreed on negative ones.
+    ///
+    /// Found by `token-authoring.spec.ts`, dragging a token to (-60, 60) on a
+    /// 5-unit grid: y snapped to 62.5 by both routes, x snapped to -57.5 by
+    /// one and -62.5 by the other — adjacent cell centres, one cell apart.
+    #[test]
+    fn a_boundary_point_snaps_the_same_way_by_either_route() {
+        let spec = GridSpec {
+            kind: GridKind::Square,
+            size: 5.0,
+            origin: Vec2::ZERO,
+        };
+
+        for boundary in [-60.0_f32, -5.0, 0.0, 5.0, 60.0] {
+            let point = Vec2::new(boundary, boundary);
+            assert_eq!(
+                spec.snap_footprint(point, Footprint::default()),
+                spec.snap(point),
+                "boundary {boundary} disagreed between snap_footprint and snap",
+            );
+        }
+    }
+
+    /// The specific values the end-to-end suite records, so a regression is
+    /// recognisable as *that* failure rather than as arithmetic drift.
+    #[test]
+    fn the_case_token_authoring_caught() {
+        let spec = GridSpec {
+            kind: GridKind::Square,
+            size: 5.0,
+            origin: Vec2::ZERO,
+        };
+        assert_eq!(
+            spec.snap_footprint(Vec2::new(-60.0, 60.0), Footprint::default()),
+            Vec2::new(-57.5, 62.5),
+        );
+    }
 }
 
 #[cfg(test)]
