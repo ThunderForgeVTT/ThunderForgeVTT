@@ -26,12 +26,22 @@ test.describe("Spec 018 Scenarios 8-9: the Genie GM session loop", () => {
     const wrapper = page.getByTestId("genie-session-panel-wrapper");
     await expect(wrapper).toBeVisible({ timeout: 15_000 });
 
+    // The wrapper mounts before `genieSession(worldId)` answers, so at this
+    // point neither the panel nor the start button exists yet. Asking
+    // `isVisible()` straight away therefore reported "no start button",
+    // skipped the click, and then waited out the full timeout for a panel
+    // that was never going to render — a seeded world with no session shows
+    // the start button, and something has to press it.
+    //
+    // The two are the query's only resting states, so wait for whichever
+    // arrives before deciding.
+    const panel = page.getByTestId("genie-session-panel");
     const startButton = page.getByTestId("start-genie-session-button");
+    await expect(panel.or(startButton).first()).toBeVisible({ timeout: 15_000 });
     if (await startButton.isVisible().catch(() => false)) {
       await startButton.click();
     }
 
-    const panel = page.getByTestId("genie-session-panel");
     await expect(panel).toBeVisible({ timeout: 15_000 });
 
     const wishPool = page.getByTestId("session-wish-pool");

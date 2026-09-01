@@ -87,7 +87,15 @@ export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
       .catch(() => setWorldItems([]));
   }, [isGm, worldId]);
 
-  if (loading) {
+  // Only while there is nothing to show yet. `loading` goes true again on
+  // every *background* refetch — and one runs whenever a world event says the
+  // session changed, which includes the events this panel's own buttons
+  // generate. Returning null on those unmounted the entire panel and remounted
+  // it a moment later, so the control a GM had just used vanished under their
+  // cursor and the Wish Pool and Doom Clock blinked out on every spend or
+  // advance. Keeping the last known session rendered while the refresh is in
+  // flight is both what a user expects and what makes the panel clickable.
+  if (loading && !session) {
     return null;
   }
 
