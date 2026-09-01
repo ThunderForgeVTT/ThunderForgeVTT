@@ -106,8 +106,19 @@ per crate prevents false "it's broken" or false "it's fine" conclusions.
   simulation surfaces; tldraw is being removed as part of this transition
   and MUST NOT be reintroduced for token/wall/lighting/annotation authoring.
 - Backend: Rust (Axum + async-graphql + Diesel/PostgreSQL), with NOTIFY/LISTEN
-  for real-time fan-out and RxDB-based client replication for offline-capable
-  sync where already established.
+  for real-time fan-out.
+- Offline-capable sync is the client world cache (`thunderforge-cache-core`,
+  `thunderforge-cache-browser`, `thunderforge-opfs`) plus the engine/GraphQL
+  world-store bridge, together with the offline queue and its reconciliation on
+  reconnect. RxDB was removed when it moved to a paid licence and MUST NOT be
+  reintroduced; there is no client replication library in this stack.
+- Supported browsers: **Chromium only**, for now. This is a real constraint
+  rather than an omission — the world cache depends on OPFS, WebCrypto and
+  IndexedDB, and `thunderforge-cache-browser` degrades rather than crashing
+  where they are absent. A browser outside this set MUST be told plainly that
+  its content cannot be kept on device, never shown an empty cache that reads
+  as "nothing happened yet". The end-to-end suite runs Chromium alone, so any
+  claim about another browser is currently untested by construction.
 - Frontend shell: React + the existing fantasy design system
   (`apps/web/src/components/ui/`, `apps/web/src/styles/`) built on Radix
   primitives. New UI chrome around the Bevy canvas (toolbars, tool panels,
