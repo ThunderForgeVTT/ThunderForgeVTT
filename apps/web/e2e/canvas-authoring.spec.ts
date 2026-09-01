@@ -134,12 +134,22 @@ async function importMap(
   await tool.locator('input[type="file"]').setInputFiles(filePath);
 
   const success = page.getByTestId("map-import-success");
-  await expect(success).toBeVisible({ timeout: 30_000 });
+  // Deliberately far longer than SC-007's own 30-second budget, which is
+  // asserted separately on the returned duration. If the import overruns, the
+  // useful failure is "it took 34s" — not a locator timeout on a spinner that
+  // was still spinning, which is what a 30-second wait here produced and which
+  // reads like a hung upload rather than a missed budget.
+  await expect(success).toBeVisible({ timeout: 120_000 });
   await expect(success).toContainText(expectedSummary);
   return Date.now() - startedAt;
 }
 
 async function switchToScene(page: Page, name: string): Promise<void> {
+  // The switcher lives in the dock's Settings section, which is collapsed
+  // again after every navigation `createScene`/`launchSceneByName` performs.
+  // Without this the `:visible` locator below simply never resolves, and the
+  // click sits there until the test times out.
+  await openDockTab(page, "settings");
   // Spec 009: both the (hidden, if in full-screen mode) staging page and
   // the sidebar render their own scene switcher — scope to the visible one.
   const sceneSwitcher = page.locator('[data-testid="scene-switcher"]:visible');
@@ -296,6 +306,19 @@ async function dragCanvas(
   const cy = box.y + box.height / 2;
   await page.mouse.move(cx + from.dx, cy + from.dy);
   await page.mouse.down();
+  // Settle before moving off the start point, for the mirror image of the
+  // reason `clickCanvasAt` settles before releasing. Bevy reads the drag's
+  // origin as `window.cursor_position()` in whichever frame `just_pressed`
+  // lands, and a zero-delay `down` followed immediately by a stepped move
+  // pushes several CursorMoved events into that same frame — so the origin
+  // recorded was the *first interpolation step*, not where the drag began.
+  // A rectangle drawn from -60 to +60 in five steps came back 96 units wide
+  // starting at -36 (exactly one 24-unit step in), putting its anchor at
+  // (12, -12) instead of the origin — more than SHAPE_SELECT_DISTANCE's 8
+  // units from where the test then clicked, so nothing was ever selected.
+  // That reads as "shape selection is broken" and is really an off-by-one-
+  // frame in the synthetic drag; real drags never begin this fast.
+  await page.waitForTimeout(80);
   await page.mouse.move(cx + to.dx, cy + to.dy, { steps: 5 });
   await page.waitForTimeout(80);
   await page.mouse.up();
@@ -305,6 +328,12 @@ test.describe("Native canvas authoring: map import and scene switching", () => {
   test("importing a map into one scene, creating a second scene, importing a different map, and switching between them keeps each scene's content isolated", async ({
     page,
   }) => {
+    // Two full map imports (each with a 30-second SC-007 budget of its own),
+    // three scene launches and four scene switches do not fit in Playwright's
+    // 30-second default — the test was dying mid-upload, which reads like a
+    // broken import rather than a clock running out.
+    test.setTimeout(240_000);
+
     await registerAndCreateWorld(page, `E2E World ${uniqueSuffix()}`);
 
     // "New scene" lives in the Play dock's Settings section, collapsed by
@@ -316,7 +345,13 @@ test.describe("Native canvas authoring: map import and scene switching", () => {
     ).toBeVisible();
 
     // --- Scene One: import the rich demo map ---
+    //
+    // `createScene` finishes by launching the scene, which is a real
+    // navigation — the dock comes back collapsed, so every assertion about
+    // its Settings contents has to open it again first. Asserting the import
+    // tool without doing so found nothing and read like the tool being gone.
     await createScene(page, "Scene One");
+    await openDockTab(page, "settings");
     await expect(page.getByTestId("map-import-tool")).toBeVisible();
     // SC-007: importing demo.dd2vtt (background art + 8 wall polygons + 2
     // doors + 12 lights) end-to-end through the real UI must complete in
@@ -326,6 +361,16 @@ test.describe("Native canvas authoring: map import and scene switching", () => {
       DEMO_MAP,
       "31 walls, 2 doors, 12 lights",
     );
+    // Measured live at 28-34s against the dev stack, i.e. right on the line
+    // and failing about as often as it passes.
+    // Nearly all of it is `save_background_image`/`save_scene_preview_image`
+    // decoding and transcoding demo.dd2vtt's ~3MB embedded PNG in a `cargo
+    // run` *debug* backend, where the `image`/`webp` codecs run unoptimised:
+    // the 958KB chamber map, same code path, lands in ~2.9s. The product this
+    // budget is about is the release build, so a `[profile.dev.package.image]
+    // opt-level` bump would make this measurement representative rather than
+    // marginal — a build-config change, out of scope here, recorded so a
+    // borderline failure is read as the debug backend and not a regression.
     expect(importDurationMs).toBeLessThan(30_000);
     console.log(`SC-007: demo.dd2vtt import took ${importDurationMs}ms`);
 
@@ -333,6 +378,9 @@ test.describe("Native canvas authoring: map import and scene switching", () => {
     await createScene(page, "Scene Two");
     // A freshly created scene must not show the previous scene's import
     // result (per-scene isolation, not a global "last import" banner).
+    // Open Settings first: with the dock collapsed the success panel is not
+    // mounted at all, so this would pass without proving anything.
+    await openDockTab(page, "settings");
     await expect(page.getByTestId("map-import-success")).toHaveCount(0);
     await importMap(page, CHAMBER_MAP, "4 walls, 0 doors, 0 lights");
 
@@ -549,6 +597,12 @@ test.describe("Hand-drawn shape authoring (US2)", () => {
   test("freehand, rectangle, ellipse, line/arrow, and text shapes can each be created and selected", async ({
     page,
   }) => {
+    // Registration, world creation, a scene launch (a full navigation) and
+    // the engine's own multi-second WASM startup do not leave room inside
+    // Playwright's 30-second default for the drawing this test is about — it
+    // was dying mid-setup, which looks like a hang rather than a clock.
+    test.setTimeout(240_000);
+
     await registerAndCreateWorld(page, `E2E Shapes ${uniqueSuffix()}`);
     await createScene(page, "Shape Scene");
     await waitForEngineReady(page, "shapes");
@@ -606,6 +660,12 @@ test.describe("Hand-drawn shape authoring (US2)", () => {
   test("shapes are isolated per scene across 3 scene switches, and deleting one removes it", async ({
     page,
   }) => {
+    // Registration, world creation, a scene launch (a full navigation) and
+    // the engine's own multi-second WASM startup do not leave room inside
+    // Playwright's 30-second default for the drawing this test is about — it
+    // was dying mid-setup, which looks like a hang rather than a clock.
+    test.setTimeout(240_000);
+
     await registerAndCreateWorld(page, `E2E Shape Isolation ${uniqueSuffix()}`);
     await createScene(page, "Shape Scene A");
     await waitForEngineReady(page, "shapes");
@@ -629,6 +689,10 @@ test.describe("Hand-drawn shape authoring (US2)", () => {
     for (let i = 0; i < 3; i++) {
       await switchToScene(page, "Shape Scene A");
       await waitForEngineReady(page, "shapes");
+      // A scene switch refetches that scene's shapes over their own round
+      // trip; a click that lands first selects nothing. See
+      // `waitForShapesLoaded`.
+      await waitForShapesLoaded(page, 1);
       await clickCanvasAt(page, 0, 0);
       await expect(page.getByText("Selected shape")).toBeVisible({
         timeout: 10_000,
@@ -643,6 +707,7 @@ test.describe("Hand-drawn shape authoring (US2)", () => {
     // Delete: back on Scene A, remove the rectangle and confirm it's gone.
     await switchToScene(page, "Shape Scene A");
     await waitForEngineReady(page, "shapes");
+    await waitForShapesLoaded(page, 1);
     await clickCanvasAt(page, 0, 0);
     await expect(page.getByText("Selected shape")).toBeVisible({
       timeout: 10_000,
@@ -652,7 +717,10 @@ test.describe("Hand-drawn shape authoring (US2)", () => {
 
     await page.reload();
     await waitForEngineReady(page, "shapes");
-    await waitForShapesLoaded(page, 1);
+    // No `waitForShapesLoaded` here, deliberately: the scene's only shape is
+    // the one just deleted, so polling for one to arrive would wait out its
+    // whole timeout on something that must never come back. The engine-ready
+    // settle is what gives the refetch its chance to land.
     await clickCanvasAt(page, 0, 0);
     await expect(page.getByText("Selected shape")).toHaveCount(0);
   });

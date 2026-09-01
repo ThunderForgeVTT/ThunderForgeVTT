@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Browser } from "@playwright/test";
 import type { WorldProbe } from "../src/engine/world/probe";
+import { inviteAndJoinAsPlayer, launchSceneByName } from "./fixtures/helpers";
 
 declare global {
   interface Window {
@@ -86,7 +87,7 @@ async function selectPersistedToken(
   page: Page,
   cx: number,
   cy: number,
-): Promise<void> {
+): Promise<{ id: string; x: number; y: number }> {
   const { tokens } = await probeState(page);
   const target = tokens[0];
   if (!target) throw new Error("no tokens in the world store to select");
@@ -101,8 +102,25 @@ async function selectPersistedToken(
 
   for (let attempt = 0; attempt < 4; attempt += 1) {
     await clickAt(target.x, target.y);
-    const { selectedTokenId } = await probeState(page);
-    if (isPersistedTokenId(selectedTokenId)) return;
+    const { selectedTokenId, tokens } = await probeState(page);
+    if (isPersistedTokenId(selectedTokenId)) {
+      // Reported rather than left for the caller to look up again. Callers
+      // used to follow this with a "first persisted token in the store"
+      // lookup, which is a different question — the first such token is only
+      // the one just selected while the scene holds exactly one. It does not:
+      // this
+      // helper drags the engine's demo tokens off the pile to reach a
+      // persisted one, and dragging them is what gives them server rows, so
+      // by the time it succeeds there are several and the first is whichever
+      // the store happens to list first. Anchoring a handle drag on that
+      // token while a *different* one is selected grabs empty canvas, and
+      // the resize silently does nothing.
+      const selected = tokens.find((token) => token.id === selectedTokenId);
+      if (!selected) {
+        throw new Error(`selected token ${selectedTokenId} not in the store`);
+      }
+      return { id: selected.id, x: selected.x, y: selected.y };
+    }
     if (selectedTokenId === null) continue;
 
     // Selected the demo token: drag it clear so the next click reaches
@@ -156,26 +174,6 @@ function anchoredAt(
   offset: { dx: number; dy: number },
 ): { dx: number; dy: number } {
   return { dx: anchor.dx + offset.dx, dy: anchor.dy + offset.dy };
-}
-
-/**
- * The first server-backed token's id and world position, from the probe.
- *
- * Tests used to assume tokens sit at the world origin because
- * `TokenPanel` creates them at `x: 0, y: 0`. They do not: by the time one
- * reaches the canvas it has been through grid snapping, and this scene's
- * land at (-192.5, -62.5). Anything that clicks or drags "the token" has to
- * start from where it actually is, and anything asserting a move has to
- * assert start-plus-delta rather than the delta alone.
- */
-async function firstPersistedToken(
-  page: Page,
-): Promise<{ id: string; x: number; y: number }> {
-  const { tokens } = await probeState(page);
-  const token =
-    tokens.find((candidate) => isPersistedTokenId(candidate.id)) ?? tokens[0];
-  if (!token) throw new Error("no tokens in the world store");
-  return { id: token.id, x: token.x, y: token.y };
 }
 
 /**
@@ -381,6 +379,26 @@ async function createScene(page: Page, name: string): Promise<void> {
   await expect(
     page.locator('[data-testid="scene-switcher"]:visible'),
   ).toContainText(name);
+
+  // Make it the world's *active* scene, not merely this client's selection.
+  //
+  // Which scene a reload lands on is server state (ADR-046, spec 022), and
+  // creating one through the switcher does not launch it. Every test in this
+  // file creates its scene, creates a token in it, and then reloads — which
+  // silently returned to the world's auto-created default scene, where that
+  // token does not exist. The US3 ownership test is where it showed: its
+  // first token was left behind in the abandoned scene while the two created
+  // after the reload landed in the default one, so assigning ownership to
+  // the first found no such row in the panel.
+  const worldId = /\/world\/([^/]+)/.exec(new URL(page.url()).pathname)?.[1];
+  if (!worldId) {
+    throw new Error(`createScene needs to be on a world route: ${page.url()}`);
+  }
+  // Back to /play *on this scene*: the `sceneId` query parameter is how
+  // several tests below identify the scene whose persisted rows they then
+  // assert on, and a bare `/play` drops it.
+  const sceneId = await launchSceneByName(page, worldId, name);
+  await page.goto(`/world/${worldId}/play?sceneId=${sceneId}`);
 }
 
 type Box = { x: number; y: number; width: number; height: number };
@@ -559,6 +577,17 @@ async function createTokenViaPanel(page: Page): Promise<void> {
  * "whichever one is currently topmost," which is unspecified when
  * multiple tokens share the same (0, 0) creation position. */
 async function createTokenViaPanelCapturingId(page: Page): Promise<string> {
+  // Same reason `createTokenViaPanel` does this, and the reason this
+  // helper hung for its whole timeout without it: `createScene` leaves the
+  // dock's Settings section open, and it covers the corner the "Tokens"
+  // toggle sits in. The forced click then lands on the dock instead, the
+  // popover never opens, and the wait below is for a `token-create-trigger`
+  // that was never mounted — which reads as "creating a token is broken".
+  const collapse = page.getByTestId("world-dock-collapse");
+  if (await collapse.isVisible().catch(() => false)) {
+    await collapse.click();
+  }
+
   await page.getByTestId("token-panel-toggle-button").click({ force: true });
   await page.getByTestId("token-create-trigger").click({ force: true });
   const [response] = await Promise.all([
@@ -606,6 +635,35 @@ async function dragTokenAtOriginTo(
  * sibling US1 tests above — e.g. a screen offset of (dx: 60, dy: 40)
  * persists as world (60, -40)). Centralized here so T021-T023's several
  * drag/readback pairs don't each re-derive the sign by hand. */
+/**
+ * The `grid_size` a scene gets when nothing else sets one
+ * (`create_scenes_table/up.sql` — `grid_size INT NOT NULL DEFAULT 5`). Every
+ * scene in this file is created through the UI with no map imported, so this
+ * is the lattice its tokens land on.
+ */
+const DEFAULT_SCENE_GRID_SIZE = 5;
+
+/**
+ * Where a token dropped at `world` actually comes to rest.
+ *
+ * Dragging a token snaps it to a cell *centre* (`GridSpec::snap` ->
+ * `cell_center(world_to_cell(..))` in `thunderforge-canvas-core`), so a drag
+ * aimed at (100, -100) persists as (102.5, -97.5) on the default 5-unit
+ * grid. That is the product working: a VTT that let tokens rest between
+ * cells would be the bug.
+ *
+ * The expectations here used to be the raw drag target, which held only
+ * because the assertions they fed were reading a *different* scene (see
+ * `createScene`) and so never compared these numbers to a real dragged
+ * token. Snapping is applied to dragged positions only — a token that has
+ * never been dragged keeps the (0, 0) `TokenPanel` created it at.
+ */
+function snapWorld(world: { x: number; y: number }): { x: number; y: number } {
+  const cell = DEFAULT_SCENE_GRID_SIZE;
+  const center = (value: number) => Math.floor(value / cell) * cell + cell / 2;
+  return { x: center(world.x), y: center(world.y) };
+}
+
 function screenOffsetToWorld(offset: { dx: number; dy: number }): {
   x: number;
   y: number;
@@ -731,7 +789,7 @@ test.describe("Canvas-native token drag (US1, T008/T009)", () => {
 
     // Not the world origin: `TokenPanel` creates at (0, 0) but grid
     // snapping moves the token before it settles, so the drag has to start
-    // from where it actually is (see `firstPersistedToken`) and the
+    // from where it actually is (see `selectPersistedToken`) and the
     // assertion below is start-plus-delta.
     // Every token in this scene is stacked on exactly one point: the panel
     // creates at (0, 0), grid snapping puts that at (-192.5, -62.5), and
@@ -926,11 +984,9 @@ test.describe("Token resize/rotate (US1, spec 006 T001-T003)", () => {
     const box = await canvasBox(page);
     const cx = box.x + box.width / 2;
     const cy = box.y + box.height / 2;
-    await selectPersistedToken(page, cx, cy);
-
-    // Handles render around the token, so every offset below is anchored
-    // on it rather than on the canvas centre.
-    const underTest = await firstPersistedToken(page);
+    // Handles render around the *selected* token, so the anchor has to be
+    // that token and not merely the first persisted one in the store.
+    const underTest = await selectPersistedToken(page, cx, cy);
     const anchor = worldToScreenOffset(underTest);
 
     // T001/FR-001: the resize handle is now rendered at the token's
@@ -1058,9 +1114,8 @@ test.describe("Token resize/rotate (US1, spec 006 T001-T003)", () => {
     const box = await canvasBox(page);
     const cx = box.x + box.width / 2;
     const cy = box.y + box.height / 2;
-    await selectPersistedToken(page, cx, cy);
-
-    const underTest = await firstPersistedToken(page);
+    // Anchored on the token actually selected — see the sibling test above.
+    const underTest = await selectPersistedToken(page, cx, cy);
     const anchor = worldToScreenOffset(underTest);
 
     // Drag only the resize handle: scale changes, position and rotation
@@ -1328,19 +1383,21 @@ test.describe("Scene-load loading/error feedback (US4, T031/T033)", () => {
     await createScene(page, "Scene Load B");
     await waitForEngineReady(page);
 
-    // GraphQLScene.backgroundImagePath only ever reflects the legacy
-    // background_image_path column (src/server/src/graphql.rs's
-    // `From<Scene>` impl) — map import (map_import.rs:631) writes the
-    // newer background_asset_id instead, so an imported map's real
-    // background art doesn't currently surface through this field at all
-    // (a separate, pre-existing gap outside this feature's scope). To
-    // genuinely exercise FR-013's "background asset unreachable" path
-    // without depending on that gap, inject a controllable
-    // backgroundImagePath by intercepting the `scenes` query response,
-    // then control that exact path's reachability directly — this tests
-    // the load-state machine itself (this feature's actual scope), not
-    // whether map-imported backgrounds resolve (they don't yet, unrelated
-    // bug).
+    // Inject a controllable background URL by intercepting the `scenes`
+    // query response, then control that exact path's reachability — this
+    // tests the load-state machine itself (this feature's actual scope),
+    // not whether a particular scene really has art.
+    //
+    // The injected field is `backgroundUrl`, not `backgroundImagePath`.
+    // This test used to write the latter, back when it was the field
+    // `WorldPage` dispatched into the engine. It no longer is: map import
+    // writes `background_asset_id` rather than the legacy
+    // `background_image_path` column, so `backgroundImagePath` was blank
+    // for every imported map and the art silently never loaded.
+    // `WorldPage` now reads the server-computed `backgroundUrl`, which is
+    // populated whichever mechanism put the art there — so overwriting the
+    // old field left the scene with no background at all, and no
+    // background is exactly the case that produces no error to assert on.
     const FAKE_BG_PATH = "/assets/e2e-fake-background-for-scene-load-test.png";
     let bgAssetShouldSucceed = false;
 
@@ -1355,7 +1412,7 @@ test.describe("Scene-load loading/error feedback (US4, T031/T033)", () => {
       const sceneList = json?.data?.scenes;
       if (Array.isArray(sceneList)) {
         for (const scene of sceneList) {
-          scene.backgroundImagePath = FAKE_BG_PATH;
+          scene.backgroundUrl = FAKE_BG_PATH;
         }
       }
       await route.fulfill({ response, json });
@@ -1436,14 +1493,22 @@ test.describe("Non-GM sees no resize/rotate controls (US2, T015)", () => {
     await page.reload();
     await waitForEngineReady(page);
 
-    const inviteCode = await generateInviteCodeFromDashboard(page, worldId);
-    await waitForEngineReady(page);
-
-    const playerContext = await browser.newContext();
-    const playerPage = await playerContext.newPage();
+    // Membership over GraphQL rather than through the invite UI: this test
+    // is about what a player *sees on the canvas*, and the clicked invite
+    // flow ("Generate Join Link" → read the code → "Join Campaign") was the
+    // suite's single largest source of noise, intermittently never
+    // surfacing one of its buttons under load and killing the test on its
+    // full timeout. See `inviteAndJoinAsPlayer`'s own doc comment; the one
+    // spec that is genuinely about the invite UI still clicks every button.
+    const playerPage = await inviteAndJoinAsPlayer(
+      browser,
+      page,
+      worldId,
+      "e2enogm",
+    );
+    const playerContext = playerPage.context();
     try {
-      await register(playerPage, freshCredentials("e2enogm"));
-      await joinWorldAndEnterPlay(playerPage, inviteCode, worldId);
+      await playerPage.goto(`/world/${worldId}/play`);
       await waitForEngineReady(playerPage);
 
       // TokenTool must never render for a non-GM, full stop — confirmed
@@ -1490,14 +1555,17 @@ test.describe("Non-GM sees no resize/rotate controls (US2, T015)", () => {
     await page.reload();
     await waitForEngineReady(page);
 
-    const inviteCode = await generateInviteCodeFromDashboard(page, worldId);
-    await waitForEngineReady(page);
-
-    const playerContext = await browser.newContext();
-    const playerPage = await playerContext.newPage();
+    // See the sibling test above for why membership is created over
+    // GraphQL instead of through the invite UI.
+    const playerPage = await inviteAndJoinAsPlayer(
+      browser,
+      page,
+      worldId,
+      "e2enogmch",
+    );
+    const playerContext = playerPage.context();
     try {
-      await register(playerPage, freshCredentials("e2enogmch"));
-      await joinWorldAndEnterPlay(playerPage, inviteCode, worldId);
+      await playerPage.goto(`/world/${worldId}/play`);
       await waitForEngineReady(playerPage);
       await playerPage.waitForTimeout(1_500);
 
@@ -1682,8 +1750,12 @@ test.describe("Player-owned token dragging (US3, T021-T023)", () => {
     // Confirm the GM's own view still shows the expected pre-player
     // state before handing off, isolating "did setup work" from "did
     // the player's actions work".
-    expect(await readTokenPosition(page, tokenAId)).toEqual(tokenAWorldPos);
-    expect(await readTokenPosition(page, tokenBId)).toEqual(tokenBWorldPos);
+    expect(await readTokenPosition(page, tokenAId)).toEqual(
+      snapWorld(tokenAWorldPos),
+    );
+    expect(await readTokenPosition(page, tokenBId)).toEqual(
+      snapWorld(tokenBWorldPos),
+    );
     expect(await readTokenPosition(page, tokenCId)).toEqual({ x: 0, y: 0 });
 
     try {
@@ -1714,7 +1786,7 @@ test.describe("Player-owned token dragging (US3, T021-T023)", () => {
       await waitForEngineReady(playerPage);
       await playerPage.waitForTimeout(1_500);
       expect(await readTokenPosition(playerPage, tokenAId)).toEqual(
-        tokenANewWorldPos,
+        snapWorld(tokenANewWorldPos),
       );
 
       // T021 (rejection half): the player attempts to drag tokenC (at
@@ -1744,7 +1816,7 @@ test.describe("Player-owned token dragging (US3, T021-T023)", () => {
       await waitForEngineReady(playerPage);
       await playerPage.waitForTimeout(1_500);
       expect(await readTokenPosition(playerPage, tokenBId)).toEqual(
-        tokenBNewWorldPos,
+        snapWorld(tokenBNewWorldPos),
       );
 
       // T023: the player edits their primary token's photo; visible to

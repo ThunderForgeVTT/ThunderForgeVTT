@@ -242,16 +242,27 @@ export async function launchSceneByName(
   page: Page,
   worldId: string,
   sceneName: string,
-): Promise<void> {
+): Promise<string> {
   await page.goto(`/world/${worldId}/scenes`);
   await page.getByRole("link", { name: sceneName }).click();
   await page.waitForURL(new RegExp(`/world/${worldId}/scenes/[^/]+$`), {
     timeout: 10_000,
   });
+  // Captured before the launch click, because the detail route's path is the
+  // only place the new scene's id is stated plainly. Callers need it to build
+  // a `/play?sceneId=` URL: several specs read the scene under test out of
+  // that query parameter, and a bare `/play` leaves them querying whichever
+  // scene the server considers active — which is not always this one, and
+  // fails as "the token I just made does not exist".
+  const sceneId = /\/scenes\/([^/?#]+)/.exec(new URL(page.url()).pathname)?.[1];
+  if (!sceneId) {
+    throw new Error(`could not read a scene id from ${page.url()}`);
+  }
   await page.getByTestId("launch-scene-button").click();
   await expect(page.getByText("Scene launched.")).toBeVisible({
     timeout: 10_000,
   });
+  return sceneId;
 }
 
 export async function waitForEngineReady(page: Page): Promise<void> {

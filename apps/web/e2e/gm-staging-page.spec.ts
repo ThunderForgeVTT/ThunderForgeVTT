@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { openDockTab } from "./fixtures/helpers";
 
 /**
  * specs/009-gm-staging-page: the GM staging page and full-screen play
@@ -121,41 +122,34 @@ test.describe("US1: GM sees a real staging page, not the old placeholder shell",
 });
 
 test.describe("US1: back-to-staging navigates to the dedicated staging route", () => {
-  // BUG DISCOVERED during spec 010 verification (not a test bug): after
-  // going /play -> back-to-staging -> /staging, the Bevy WASM canvas from
-  // the first /play visit is NOT torn down — it stays present (and
-  // visually covers the entire viewport, confirmed via screenshot) even
-  // though `WorldPage.tsx`/its `#game-canvas-container` div has unmounted
-  // per React Router. This blocks pointer events on the staging page
-  // ("<canvas> intercepts pointer events") and prevents clicking "Play"
-  // again. Root cause is presumably in how the winit/wasm-bindgen canvas
-  // attaches itself relative to React's unmount (possibly reparented or
-  // made `position: fixed` independent of its logical container) — the
-  // engine module (`engine/bevy/index.ts`) treats `state.started` as a
-  // permanent, page-lifetime singleton (by design, per spec 009), which
-  // was safe when the canvas container never unmounted (spec 009's own
-  // architecture) but is NOT safe now that spec 010 moved staging to a
-  // route that fully unmounts `WorldPage.tsx`. This needs a dedicated
-  // follow-up: either keep the canvas container mounted above the router
-  // (undoing part of the route split) or add explicit engine
-  // teardown/context-loss handling before leaving `/play`. Flagged
-  // rather than silently masked — see `test.fail()` below.
-  test.fail(
-    "the on-screen back control returns to /staging (spec 010 route split)",
-    async ({ page }) => {
-      const worldId = await registerAndCreateWorld(page, `E2E BackToStaging ${uniqueSuffix()}`);
-      await page.getByTestId("play-button").click();
-      await waitForEngineReady(page);
+  // This was a `test.fail()` for a real bug: after /play -> back-to-staging
+  // -> /staging, the Bevy canvas from the first /play visit stayed pinned
+  // over the whole viewport (it is a child of <body> with `position: fixed`,
+  // so React unmounting `WorldPage` never touched it) and intercepted the
+  // second "Play" click. `WorldPage.tsx` now hides it from the one callback
+  // that reliably runs on unmount — see `hideEngineCanvas` there — so the
+  // round trip works and this is an ordinary passing test again. The engine
+  // itself deliberately stays booted (spec 009 research.md §1); what was
+  // missing was only hiding its canvas.
+  test("the on-screen back control returns to /staging (spec 010 route split)", async ({
+    page,
+  }) => {
+    const worldId = await registerAndCreateWorld(page, `E2E BackToStaging ${uniqueSuffix()}`);
+    await page.getByTestId("play-button").click();
+    await waitForEngineReady(page);
 
-      await page.getByTestId("back-to-staging-button").click();
-      await page.waitForURL(new RegExp(`/world/${worldId}/staging$`), { timeout: 15_000 });
-      await expect(page.getByTestId("world-staging-page")).toBeVisible();
+    // "Back to setup" lives in the play dock's Settings section now, not on
+    // the canvas chrome — it does not exist in the DOM until that section is
+    // open (see WorldDock/SettingsPanel).
+    await openDockTab(page, "settings");
+    await page.getByTestId("back-to-staging-button").click();
+    await page.waitForURL(new RegExp(`/world/${worldId}/staging$`), { timeout: 15_000 });
+    await expect(page.getByTestId("world-staging-page")).toBeVisible();
 
-      // This is where it currently breaks: the stray canvas from the
-      // first /play visit intercepts this click.
-      await page.getByTestId("play-button").click();
-      await page.waitForURL(new RegExp(`/world/${worldId}/play$`), { timeout: 15_000 });
-      await waitForEngineReady(page);
+    // The stray canvas used to intercept this click.
+    await page.getByTestId("play-button").click();
+    await page.waitForURL(new RegExp(`/world/${worldId}/play$`), { timeout: 15_000 });
+    await waitForEngineReady(page);
   });
 });
 
