@@ -1,4 +1,4 @@
-import { expect, test, type WebSocketRoute } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import {
   graphql,
   registerAndCreateWorld,
@@ -40,16 +40,36 @@ test.describe("World event catch-up on reconnect", () => {
   test("an event that happens while the socket is down is replayed on reconnect", async ({
     page,
   }) => {
-    // Forward /api/ws transparently, keeping a handle so it can be severed.
-    let activeClientWs: WebSocketRoute | null = null;
-    await page.routeWebSocket(/\/api\/ws/, (ws) => {
-      const server = ws.connectToServer();
-      ws.onMessage((message) => server.send(message));
-      server.onMessage((message) => ws.send(message));
-      activeClientWs = ws;
-      ws.onClose(() => {
-        if (activeClientWs === ws) activeClientWs = null;
-      });
+    // Keep a handle on the app's *own* socket, rather than proxying /api/ws.
+    //
+    // This used to `page.routeWebSocket` the connection and sever the proxy.
+    // The proxy itself is sound — Playwright replays the `graphql-transport-ws`
+    // subprotocol and the socket is opened in-page so the session cookie rides
+    // along — but it puts every frame of the handshake through a per-message
+    // round trip into the page, and this spec cold-loads `/play` with
+    // `page.goto`, so the ack has to win against the engine's wasm blocking the
+    // main thread. When it lost, the tab never completed a handshake at all and
+    // the failure surfaced 100 lines later as "the reconnect never finished",
+    // which it was not.
+    //
+    // Recording the socket instead leaves the handshake entirely un-proxied,
+    // and severs *the* socket rather than whichever one the route saw last. It
+    // also drops a leak: registering `ws.onClose` suppressed Playwright's own
+    // forwarding of the page close to the server, so each severed connection's
+    // `worldEventsCreated` subscription stayed alive for the rest of the run.
+    await page.addInitScript(() => {
+      const Native = window.WebSocket;
+      const sockets: WebSocket[] = [];
+      (window as unknown as { __e2eSockets: WebSocket[] }).__e2eSockets = sockets;
+      class RecordingWebSocket extends Native {
+        constructor(url: string | URL, protocols?: string | string[]) {
+          super(url, protocols);
+          if (String(url).includes("/api/ws")) {
+            sockets.push(this);
+          }
+        }
+      }
+      window.WebSocket = RecordingWebSocket as unknown as typeof WebSocket;
     });
 
     // Every catch-up this page performs, recorded from before anything is
@@ -108,6 +128,20 @@ test.describe("World event catch-up on reconnect", () => {
     // handler is mounted.
     await page.goto(`/world/${worldId}/play`);
     const indicator = page.getByTestId("live-sync-reconnecting-indicator");
+
+    // `ConnectionStatus` renders nothing at all once the socket is live, so
+    // "hidden" is also exactly what a page that has not mounted it yet looks
+    // like — and straight after `goto` that is the likelier reading. Waiting
+    // for the play view to be up first makes this assertion about the socket
+    // rather than about React not having got there, so a connection that
+    // never comes up fails here, where it happened, instead of surviving to
+    // the reconnect assertion 100 lines below and being blamed on it.
+    //
+    // Not "wait for the indicator to appear, then disappear": the banner is
+    // only rendered while the socket is *not* live, and a connection that
+    // completes promptly never renders it at all. Requiring it to appear
+    // would demand the outage this assertion exists to rule out.
+    await expect(page.locator("canvas")).toBeVisible({ timeout: 30_000 });
     await expect(indicator).toBeHidden({ timeout: 30_000 });
 
     // Let the page's subscriptions actually open before relying on live
@@ -126,12 +160,35 @@ test.describe("World event catch-up on reconnect", () => {
     expect(before, "the pre-outage message should have been recorded").toBeGreaterThan(0);
     await page.waitForTimeout(3_000);
 
-    // --- sever the socket ---
-    expect(
-      activeClientWs,
-      "the page should have an active /api/ws connection",
-    ).not.toBeNull();
-    activeClientWs?.close();
+    // --- sever the socket, and hold it down ---
+    //
+    // Closing alone is not an outage. `graphql-ws` retries immediately, and
+    // now that the indicator reports the connection truthfully rather than
+    // sitting at "connecting" forever, the gap is far too short to post an
+    // event into. Blocking the endpoint over CDP keeps *new* connections from
+    // succeeding, so the close below produces a real, controlled window.
+    // Scoped to `/api/ws` so Vite's own module fetches keep working — a full
+    // `setOffline` breaks the lazy route chunks this app loads, which is why
+    // these specs never used it.
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Network.enable");
+    await cdp.send("Network.setBlockedURLs", { urls: ["*/api/ws*"] });
+
+    const severed = await page.evaluate(() => {
+      const sockets = (window as unknown as { __e2eSockets: WebSocket[] })
+        .__e2eSockets;
+      const socket = sockets.at(-1);
+      if (!socket) return false;
+      // 4499 is graphql-ws's "Terminated", deliberately excluded from its
+      // fatal close codes — the client retries this one rather than giving
+      // up, which is the outage this test is about. A plain 1000 reads as a
+      // clean, intentional shutdown and would not be retried.
+      socket.close(4499, "e2e sever");
+      return true;
+    });
+    expect(severed, "the page should have an active /api/ws connection").toBe(
+      true,
+    );
     await expect(indicator).toBeVisible({ timeout: 20_000 });
 
     // --- something happens while this tab cannot hear it ---
@@ -143,8 +200,9 @@ test.describe("World event catch-up on reconnect", () => {
       before,
     );
 
-    // graphql-ws retries on its own; the route handler passes the next
-    // attempt straight through to the real server.
+    // Let it back in. `graphql-ws` is already retrying with backoff, so the
+    // next attempt after this succeeds and the client resumes on its own.
+    await cdp.send("Network.setBlockedURLs", { urls: [] });
     await expect(indicator).toBeHidden({ timeout: 60_000 });
 
     // The collector was installed before the socket was severed, on purpose:

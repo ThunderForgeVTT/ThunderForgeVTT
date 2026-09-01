@@ -1776,9 +1776,14 @@ test.describe("Player-owned token dragging (US3, T021-T023)", () => {
       // (tokenA, world (100, -100)) to a new world position — it moves
       // and persists.
       const tokenANewWorldPos = { x: 150, y: 50 };
+      // Grabbed at the token's *resting* position. It snapped to a cell
+      // centre when the GM dropped it, so aiming at the raw drag target
+      // starts the drag beside the token — close enough to look right and
+      // capable of catching a neighbour instead, which the server then
+      // refuses with "not found or not controlled by you".
       await dragCanvas(
         playerPage,
-        worldToScreenOffset(tokenAWorldPos),
+        worldToScreenOffset(snapWorld(tokenAWorldPos)),
         worldToScreenOffset(tokenANewWorldPos),
       );
       await playerPage.waitForTimeout(1_000);
@@ -1808,7 +1813,7 @@ test.describe("Player-owned token dragging (US3, T021-T023)", () => {
       const tokenBNewWorldPos = { x: -60, y: 60 };
       await dragCanvas(
         playerPage,
-        worldToScreenOffset(tokenBWorldPos),
+        worldToScreenOffset(snapWorld(tokenBWorldPos)),
         worldToScreenOffset(tokenBNewWorldPos),
       );
       await playerPage.waitForTimeout(1_000);

@@ -139,13 +139,63 @@ async function canvasBox(page: Page): Promise<Box> {
   return box;
 }
 
-async function createTokenViaPanel(page: Page): Promise<void> {
+/**
+ * Creates a token and returns its id.
+ *
+ * The id matters because a scene does not hold only the tokens a test made.
+ * The engine ships demo tokens, a click that lands on the pile emits an
+ * `upsert_token` for every member of it, and the mutation bridge gives each
+ * one a server row — so after a single drag this scene holds three rows where
+ * the test created one. Asserting `tokens.length === 1` and reading
+ * `tokens[0]` therefore checked a claim that was never this test's subject and
+ * read back whichever row the server happened to return first, which is not
+ * necessarily the token that was dragged. `token-authoring.spec.ts` documents
+ * the same effect and answers it the same way.
+ */
+async function createTokenViaPanel(page: Page): Promise<string> {
+  // Close the dock first. `ensureSidebarOpen` leaves the Settings section
+  // expanded to reach the scene switcher, and it covers the corner the
+  // "Tokens" toggle sits in — so the forced click below lands on the dock
+  // instead, the popover never opens, and the wait for `token-create-trigger`
+  // runs out on a control that was never mounted. That reads as "creating a
+  // token is broken" and is really a panel in the way.
+  const collapse = page.getByTestId("world-dock-collapse");
+  if (await collapse.isVisible().catch(() => false)) {
+    await collapse.click();
+  }
+
   await page.getByTestId("token-panel-toggle-button").click({ force: true });
   await page.getByTestId("token-create-trigger").click({ force: true });
-  await page.getByTestId("token-create-submit").click({ force: true });
+  const [response] = await Promise.all([
+    page.waitForResponse(
+      (resp) =>
+        resp.url().includes("/api/graphql") &&
+        (resp.request().postData() ?? "").includes("createToken"),
+    ),
+    page.getByTestId("token-create-submit").click({ force: true }),
+  ]);
+  const body = (await response.json()) as {
+    data?: { createToken?: { tokenId?: string } };
+  };
+  const tokenId = body.data?.createToken?.tokenId;
+  if (!tokenId) {
+    throw new Error("Could not extract tokenId from createToken response");
+  }
   await expect(page.getByTestId("token-create-trigger")).toBeVisible({ timeout: 10_000 });
   await page.keyboard.press("Escape");
   await page.keyboard.press("Escape");
+  return tokenId;
+}
+
+/** The one row this test is about, out of however many the scene holds. */
+function tokenById<T extends { tokenId: string }>(tokens: T[], tokenId: string): T {
+  const row = tokens.find((token) => token.tokenId === tokenId);
+  if (!row) {
+    throw new Error(
+      `token ${tokenId} not among the scene's rows: ${tokens.map((t) => t.tokenId).join(", ")}`,
+    );
+  }
+  return row;
 }
 
 async function dragCanvas(
@@ -158,6 +208,16 @@ async function dragCanvas(
   const cy = box.y + box.height / 2;
   await page.mouse.move(cx + from.dx, cy + from.dy);
   await page.mouse.down();
+  // Settle before moving off the start point. Bevy reads a drag's origin as
+  // `window.cursor_position()` in whichever frame `just_pressed` lands, and a
+  // zero-delay `down` followed straight away by a stepped move pushes several
+  // CursorMoved events into that same frame — so the origin recorded is the
+  // *first interpolation step*, not where the drag began. Dragging from the
+  // origin toward (120, 40) therefore grabbed at (24, 8), far enough off the
+  // token to miss it entirely, and the token simply never moved.
+  // `canvas-authoring.spec.ts`'s `dragCanvas` carries the same settle for the
+  // same reason; real drags never begin this fast.
+  await page.waitForTimeout(80);
   await page.mouse.move(cx + to.dx, cy + to.dy, { steps: 5 });
   await page.waitForTimeout(80);
   await page.mouse.up();
@@ -166,9 +226,82 @@ async function dragCanvas(
 /** Every panel-created token starts at the canvas world-origin (screen
  * center). Drags it from there to a fixed offset — matches
  * token-authoring.spec.ts's identical helper. */
-async function dragTokenAtOriginTo(page: Page, offset: { dx: number; dy: number }): Promise<void> {
-  await dragCanvas(page, { dx: 0, dy: 0 }, offset);
-  await page.waitForTimeout(1_000);
+/**
+ * Waits until `tokenId` is in this client's world store.
+ *
+ * A scene switch refetches that scene's tokens over their own round trip,
+ * separate from the canvas being ready — `waitForEngineReady` says the engine
+ * is up, not that this scene's contents have arrived. A drag that lands first
+ * grabs empty canvas, so the token never moves and the position assertion
+ * reads the origin it was created at. Worse, the drag can catch a *different*
+ * token, which on the player side surfaces as "not found or not controlled by
+ * you" from `moveOwnToken`.
+ */
+async function waitForTokenInStore(page: Page, tokenId: string): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate((id: string) => {
+          const state = window.__worldProbe?.state();
+          return state ? state.tokens.some((token) => token.id === id) : false;
+        }, tokenId),
+      {
+        timeout: 30_000,
+        message: `token ${tokenId} never reached this client's world store`,
+      },
+    )
+    .toBe(true);
+}
+
+/** `tokenId`'s position in this client's world store. */
+async function tokenPosition(
+  page: Page,
+  tokenId: string,
+): Promise<{ x: number; y: number }> {
+  return page.evaluate((id: string) => {
+    const token = window.__worldProbe?.state().tokens.find((t) => t.id === id);
+    if (!token) throw new Error(`token ${id} is not in the world store`);
+    return { x: token.x, y: token.y };
+  }, tokenId);
+}
+
+/**
+ * Drags *our* token from the origin to `offset`, and confirms it was ours
+ * that moved.
+ *
+ * A scene does not hold only the token this test made. The engine ships demo
+ * tokens and they spawn on the same spot, so a drag from the origin grabs
+ * whichever of the pile is topmost — which was usually not ours. The token
+ * under test then sat exactly where it was created, and the assertion that it
+ * had moved read zero: a real drag, a real token moved, just not the one
+ * being measured.
+ *
+ * So each attempt checks whether ours actually moved, and parks the interloper
+ * well clear before trying again, which uncovers the next token down.
+ * `token-authoring.spec.ts`'s `selectPersistedToken` digs through the same
+ * pile the same way and for the same reason.
+ */
+async function dragTokenAtOriginTo(
+  page: Page,
+  tokenId: string,
+  offset: { dx: number; dy: number },
+): Promise<void> {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const before = await tokenPosition(page, tokenId);
+    await dragCanvas(page, { dx: 0, dy: 0 }, offset);
+    await page.waitForTimeout(1_000);
+    const after = await tokenPosition(page, tokenId);
+    if (after.x !== before.x || after.y !== before.y) {
+      return;
+    }
+    // Something else was on top. Park it out of the way — far enough that it
+    // cannot be caught again by either this drag or the assertion's.
+    await dragCanvas(page, offset, { dx: 320 + attempt * 60, dy: -240 });
+    await page.waitForTimeout(500);
+  }
+  throw new Error(
+    `token ${tokenId} never moved: every drag from the origin caught another token`,
+  );
 }
 
 test.describe("Spec 018 Scenario 2: a GM switches a scene between Material (grid) and Wish-Warped Zone (gridless)", () => {
@@ -185,14 +318,15 @@ test.describe("Spec 018 Scenario 2: a GM switches a scene between Material (grid
     await clickPlay(page);
     await waitForEngineReady(page);
 
-    await createTokenViaPanel(page);
+    const materialTokenId = await createTokenViaPanel(page);
     // token-authoring.spec.ts's documented gap: a panel-created token
     // doesn't appear in the world store (and so isn't draggable on
     // canvas) until the scene's mount-effect re-runs, which a reload
     // forces.
     await page.reload();
     await waitForEngineReady(page);
-    await dragTokenAtOriginTo(page, { dx: 120, dy: 40 });
+    await waitForTokenInStore(page, materialTokenId);
+    await dragTokenAtOriginTo(page, materialTokenId, { dx: 120, dy: 40 });
     await page.waitForTimeout(1_000);
 
     const scenesBefore = await graphql<{ data: { scenes: { sceneId: string; gridType: string }[] } }>(
@@ -203,13 +337,14 @@ test.describe("Spec 018 Scenario 2: a GM switches a scene between Material (grid
     const materialScene = scenesBefore.data.scenes[0];
     expect(materialScene.gridType).toBe("square");
 
-    const materialTokens = await graphql<{ data: { tokens: { x: number; y: number }[] } }>(
+    const materialTokens = await graphql<{
+      data: { tokens: { tokenId: string; x: number; y: number }[] };
+    }>(
       page,
-      `query($sceneId: UUID!) { tokens(sceneId: $sceneId) { x y } }`,
+      `query($sceneId: UUID!) { tokens(sceneId: $sceneId) { tokenId x y } }`,
       { sceneId: materialScene.sceneId },
     );
-    expect(materialTokens.data.tokens.length).toBe(1);
-    const materialTokenPos = materialTokens.data.tokens[0];
+    const materialTokenPos = tokenById(materialTokens.data.tokens, materialTokenId);
     // Moved away from the origin the token was created at.
     expect(Math.abs(materialTokenPos.x) + Math.abs(materialTokenPos.y)).toBeGreaterThan(0);
 
@@ -241,7 +376,7 @@ test.describe("Spec 018 Scenario 2: a GM switches a scene between Material (grid
     await page.getByRole("option", { name: gridlessScene.name }).click();
     await page.waitForTimeout(1_000);
 
-    await createTokenViaPanel(page);
+    const gridlessTokenId = await createTokenViaPanel(page);
     await page.reload();
     // A reload navigates back to /play with no scene selected by
     // default, so re-select the gridless scene before waiting for the
@@ -251,16 +386,18 @@ test.describe("Spec 018 Scenario 2: a GM switches a scene between Material (grid
     await page.getByTestId("scene-switcher").click();
     await page.getByRole("option", { name: gridlessScene.name }).click();
     await page.waitForTimeout(1_000);
-    await dragTokenAtOriginTo(page, { dx: -80, dy: 60 });
+    await waitForTokenInStore(page, gridlessTokenId);
+    await dragTokenAtOriginTo(page, gridlessTokenId, { dx: -80, dy: 60 });
     await page.waitForTimeout(1_000);
 
-    const gridlessTokens = await graphql<{ data: { tokens: { x: number; y: number }[] } }>(
+    const gridlessTokens = await graphql<{
+      data: { tokens: { tokenId: string; x: number; y: number }[] };
+    }>(
       page,
-      `query($sceneId: UUID!) { tokens(sceneId: $sceneId) { x y } }`,
+      `query($sceneId: UUID!) { tokens(sceneId: $sceneId) { tokenId x y } }`,
       { sceneId: gridlessScene.sceneId },
     );
-    expect(gridlessTokens.data.tokens.length).toBe(1);
-    const gridlessTokenPos = gridlessTokens.data.tokens[0];
+    const gridlessTokenPos = tokenById(gridlessTokens.data.tokens, gridlessTokenId);
     expect(Math.abs(gridlessTokenPos.x) + Math.abs(gridlessTokenPos.y)).toBeGreaterThan(0);
 
     await page.screenshot({
@@ -276,22 +413,31 @@ test.describe("Spec 018 Scenario 2: a GM switches a scene between Material (grid
     await page.getByRole("option", { name: worldName }).click();
     await page.waitForTimeout(1_000);
 
-    const materialTokensAfter = await graphql<{ data: { tokens: { x: number; y: number }[] } }>(
+    const materialTokensAfter = await graphql<{
+      data: { tokens: { tokenId: string; x: number; y: number }[] };
+    }>(
       page,
-      `query($sceneId: UUID!) { tokens(sceneId: $sceneId) { x y } }`,
+      `query($sceneId: UUID!) { tokens(sceneId: $sceneId) { tokenId x y } }`,
       { sceneId: materialScene.sceneId },
     );
-    expect(materialTokensAfter.data.tokens.length).toBe(1);
-    expect(materialTokensAfter.data.tokens[0].x).toBeCloseTo(materialTokenPos.x, 5);
-    expect(materialTokensAfter.data.tokens[0].y).toBeCloseTo(materialTokenPos.y, 5);
+    // By name, not by count: parking the engine's demo tokens out of the way
+    // gives each of them a server row, so this scene legitimately holds
+    // several. How many is not this test's subject — where *its* token ended
+    // up is.
+    const materialAfter = tokenById(materialTokensAfter.data.tokens, materialTokenId);
+    expect(materialAfter.x).toBeCloseTo(materialTokenPos.x, 5);
+    expect(materialAfter.y).toBeCloseTo(materialTokenPos.y, 5);
 
     // And the gridless scene's token is still exactly where it was too.
-    const gridlessTokensAfter = await graphql<{ data: { tokens: { x: number; y: number }[] } }>(
+    const gridlessTokensAfter = await graphql<{
+      data: { tokens: { tokenId: string; x: number; y: number }[] };
+    }>(
       page,
-      `query($sceneId: UUID!) { tokens(sceneId: $sceneId) { x y } }`,
+      `query($sceneId: UUID!) { tokens(sceneId: $sceneId) { tokenId x y } }`,
       { sceneId: gridlessScene.sceneId },
     );
-    expect(gridlessTokensAfter.data.tokens[0].x).toBeCloseTo(gridlessTokenPos.x, 5);
-    expect(gridlessTokensAfter.data.tokens[0].y).toBeCloseTo(gridlessTokenPos.y, 5);
+    const gridlessAfter = tokenById(gridlessTokensAfter.data.tokens, gridlessTokenId);
+    expect(gridlessAfter.x).toBeCloseTo(gridlessTokenPos.x, 5);
+    expect(gridlessAfter.y).toBeCloseTo(gridlessTokenPos.y, 5);
   });
 });
