@@ -10,6 +10,7 @@ use bevy::input::mouse::MouseWheel;
 
 use crate::plugins::camera::read_wheel_notches;
 use bevy::prelude::*;
+use thunderforge_canvas_core::snapping::SnapRule;
 use bevy::window::PrimaryWindow;
 use serde_json::{Value, json};
 
@@ -101,6 +102,18 @@ pub(crate) struct LightDragState {
     mode: LightDragMode,
 }
 
+impl LightDragState {
+    /// Abandon whatever gesture is in progress, leaving nothing behind.
+    ///
+    /// Called from the mode's `OnExit`. A drag begun under one tool must not
+    /// complete under another's rules (spec 031 FR-040a): the user changed
+    /// what a click means partway through, and the honest answer is that the
+    /// unfinished gesture is discarded rather than reinterpreted.
+    pub(crate) fn abandon(&mut self) {
+        *self = Self::default();
+    }
+}
+
 /// Convert the cursor's window-pixel position into Bevy world space,
 /// duplicated from `systems/wall.rs`/`systems/selection.rs`'s private
 /// helper of the same name/shape (not exported from those modules).
@@ -165,6 +178,8 @@ pub(crate) fn handle_light_input(
     mut drag: ResMut<LightDragState>,
     is_gm: Res<IsGameMaster>,
     active_world: Res<ActiveWorld>,
+    scene_grid: Res<crate::resources::grid::SceneGrid>,
+    snap_enabled: Res<crate::resources::token_grid::GridSnapEnabled>,
 ) {
     if !is_gm.0 {
         return;
@@ -196,11 +211,17 @@ pub(crate) fn handle_light_input(
             return;
         }
 
+        // Snapped to a cell centre, the same rule everything else on the
+        // canvas obeys (spec 031 FR-024/FR-025). A light is a point, so the
+        // centre is the right lattice for it — walls use vertices instead,
+        // because a wall runs *between* cells rather than through one.
+        let placed = SnapRule::new(scene_grid.0, snap_enabled.0).cell(cursor);
+
         emit_event(json!({
             "type": "create_light",
             "light": {
-                "x": cursor.x,
-                "y": cursor.y,
+                "x": placed.x,
+                "y": placed.y,
                 "radius": DEFAULT_LIGHT_RADIUS,
                 "intensity": DEFAULT_LIGHT_INTENSITY,
                 "color": Value::Null,

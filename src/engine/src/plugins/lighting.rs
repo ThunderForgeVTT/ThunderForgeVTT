@@ -37,6 +37,8 @@ impl Plugin for LightingPlugin {
 
         init_lighting_systems_resources(app);
 
+        app.add_systems(OnExit(AuthoringMode::Lights), abandon_light_gesture);
+
         app.add_systems(
             Update,
             (
@@ -59,4 +61,19 @@ impl Plugin for LightingPlugin {
                 .chain(),
         );
     }
+}
+
+
+/// Discard this tool's unfinished gesture when its mode is left.
+///
+/// `OnExit` is the whole reason the authoring mode is a Bevy state rather than
+/// a resource holding a tool name: there is exactly one place where leaving a
+/// mode happens, so "abandon whatever was in progress" is written once instead
+/// of at every path that could change tools.
+///
+/// Spec 031 FR-040a and its edge case: a drag begun under one tool must not
+/// complete under another's rules. The user changed what a click means partway
+/// through; reinterpreting the half-finished gesture would be guessing.
+fn abandon_light_gesture(mut drag: ResMut<crate::systems::lighting::LightDragState>) {
+    drag.abandon();
 }

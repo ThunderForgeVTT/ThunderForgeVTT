@@ -6,6 +6,7 @@
 use std::collections::HashMap;
 
 use bevy::prelude::*;
+use thunderforge_canvas_core::snapping::SnapRule;
 use bevy::window::PrimaryWindow;
 use serde_json::json;
 
@@ -89,6 +90,18 @@ pub(crate) struct WallDragState {
     mode: WallDragMode,
 }
 
+impl WallDragState {
+    /// Abandon whatever gesture is in progress, leaving nothing behind.
+    ///
+    /// Called from the mode's `OnExit`. A drag begun under one tool must not
+    /// complete under another's rules (spec 031 FR-040a): the user changed
+    /// what a click means partway through, and the honest answer is that the
+    /// unfinished gesture is discarded rather than reinterpreted.
+    pub(crate) fn abandon(&mut self) {
+        *self = Self::default();
+    }
+}
+
 /// FR-001/FR-002: session-local, not-yet-persisted points of an
 /// in-progress multi-point wall chain ("click three points, end the
 /// chain -> one wall per consecutive pair"). Empty = no chain active.
@@ -98,6 +111,18 @@ pub(crate) struct WallDragState {
 #[derive(Resource, Default)]
 pub(crate) struct WallChainState {
     points: Vec<Vec2>,
+}
+
+impl WallChainState {
+    /// Discard an unfinished multi-point chain.
+    ///
+    /// Nothing here has been persisted — a chain only becomes walls when it is
+    /// ended with Enter — so abandoning it is exactly what Escape already does
+    /// (Acceptance Scenario 4). Leaving a tool is the same situation arrived at
+    /// a different way.
+    pub(crate) fn abandon(&mut self) {
+        self.points.clear();
+    }
 }
 
 /// Convert the cursor's window-pixel position into Bevy world space,
@@ -180,6 +205,8 @@ pub(crate) fn handle_wall_input(
     mut chain: ResMut<WallChainState>,
     is_gm: Res<IsGameMaster>,
     active_world: Res<ActiveWorld>,
+    scene_grid: Res<crate::resources::grid::SceneGrid>,
+    snap_enabled: Res<crate::resources::token_grid::GridSnapEnabled>,
 ) {
     if !is_gm.0 {
         return;
@@ -271,7 +298,20 @@ pub(crate) fn handle_wall_input(
     if mouse_button.just_released(MouseButton::Left) {
         match std::mem::take(&mut drag.mode) {
             WallDragMode::Creating { start } => {
-                let end = cursor;
+                // Snapped to grid *vertices*, not cell centres.
+                //
+                // A wall runs between cells rather than through one, so a
+                // room drawn against the lattice needs its corners on the
+                // lattice — snapping to centres would put every wall half a
+                // cell off and make four segments fail to meet (spec 031
+                // FR-024/FR-025, and `SnapRule::vertex` exists for exactly
+                // this).
+                //
+                // Both ends go through the rule: `start` was recorded from a
+                // raw cursor when the drag began.
+                let rule = SnapRule::new(scene_grid.0, snap_enabled.0);
+                let start = rule.vertex(start);
+                let end = rule.vertex(cursor);
                 if start.distance(end) < MIN_WALL_LENGTH {
                     // FR-001: a plain click (no drag) adds/continues a
                     // wall-point chain instead of being a no-op. The

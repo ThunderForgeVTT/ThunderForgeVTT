@@ -99,6 +99,18 @@ pub(crate) struct ShapeDragState {
     mode: ShapeDragMode,
 }
 
+impl ShapeDragState {
+    /// Abandon whatever gesture is in progress, leaving nothing behind.
+    ///
+    /// Called from the mode's `OnExit`. A drag begun under one tool must not
+    /// complete under another's rules (spec 031 FR-040a): the user changed
+    /// what a click means partway through, and the honest answer is that the
+    /// unfinished gesture is discarded rather than reinterpreted.
+    pub(crate) fn abandon(&mut self) {
+        *self = Self::default();
+    }
+}
+
 /// Convert the cursor's window-pixel position into Bevy world space,
 /// duplicated from `systems/wall.rs` (itself duplicated from
 /// `systems/selection.rs`'s private helper — not exported, so each canvas-

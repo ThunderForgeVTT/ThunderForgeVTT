@@ -107,6 +107,13 @@ pub fn set_authoring_mode(tool_id: &str) -> bool {
     let Some(mode) = AuthoringMode::from_tool_id(tool_id) else {
         return false;
     };
+    // Refused here, not merely hidden in the rail. FR-047: a tool the viewer
+    // may not use must be unusable even when the request arrives directly —
+    // from a console, a stale tab, or chrome that has not caught up with a
+    // permission that just changed.
+    if !tool_is_allowed(mode) {
+        return false;
+    }
     if let Ok(mut slot) = requested_mode_slot().lock() {
         *slot = Some(mode);
     }
@@ -130,6 +137,83 @@ pub fn authoring_mode() -> String {
 /// Mirrors the live state outward, for `authoring_mode()` above.
 static CURRENT_MODE: std::sync::OnceLock<std::sync::Mutex<AuthoringMode>> =
     std::sync::OnceLock::new();
+
+/// Which tools this viewer is allowed to use, or `None` for "no restriction".
+///
+/// `None` is the default and means the engine imposes no tool-level limit —
+/// which is today's behaviour, where `IsGameMaster` alone decides whether a
+/// person may author at all. Spec 031 FR-045 requires exactly that default, so
+/// existing worlds are unchanged until a Game Master grants something.
+///
+/// When the set is present it is authoritative here regardless of what chrome
+/// is showing. FR-047 is explicit that hiding a tool is not a permission check:
+/// a request made directly must be refused too, and this is where that happens.
+static ALLOWED_TOOLS: std::sync::OnceLock<std::sync::Mutex<Option<Vec<AuthoringMode>>>> =
+    std::sync::OnceLock::new();
+
+fn allowed_tools_slot() -> &'static std::sync::Mutex<Option<Vec<AuthoringMode>>> {
+    ALLOWED_TOOLS.get_or_init(|| std::sync::Mutex::new(None))
+}
+
+fn tool_is_allowed(mode: AuthoringMode) -> bool {
+    allowed_tools_slot()
+        .lock()
+        .ok()
+        .map(|slot| match slot.as_ref() {
+            None => true,
+            Some(allowed) => allowed.contains(&mode),
+        })
+        .unwrap_or(true)
+}
+
+/// Declare which tools this viewer may use.
+///
+/// Takes the web app's tool ids, comma-separated. An empty string means "no
+/// tools", which is a legitimate state for a player who has been granted none.
+/// Unrecognised ids are ignored rather than rejecting the whole list — a build
+/// that does not have a tool cannot grant it, and refusing everything because
+/// of one unknown name would take away tools the person legitimately has.
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn set_allowed_authoring_tools(tool_ids: &str) {
+    let allowed: Vec<AuthoringMode> = tool_ids
+        .split(',')
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+        .filter_map(AuthoringMode::from_tool_id)
+        .collect();
+
+    if let Ok(mut slot) = allowed_tools_slot().lock() {
+        *slot = Some(allowed);
+    }
+}
+
+/// Remove any tool restriction, returning to the unrestricted default.
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn clear_allowed_authoring_tools() {
+    if let Ok(mut slot) = allowed_tools_slot().lock() {
+        *slot = None;
+    }
+}
+
+/// Leave a tool the viewer is no longer allowed to use.
+///
+/// Permission can be revoked while someone is holding the tool. FR-047 says an
+/// unusable tool must not be usable; the spec's edge case adds that a gesture
+/// in flight must not complete. Dropping back to `Select` does both — `OnExit`
+/// on the tool being left abandons its unfinished work, which is the same path
+/// a deliberate tool change takes.
+///
+/// `Select` rather than "no mode": there is no unarmed state, and inventing one
+/// here would make a revocation behave differently from every other way of
+/// leaving a tool.
+fn leave_a_forbidden_mode(
+    current: Res<State<AuthoringMode>>,
+    mut next: ResMut<NextState<AuthoringMode>>,
+) {
+    if !tool_is_allowed(*current.get()) && *current.get() != AuthoringMode::Select {
+        next.set(AuthoringMode::Select);
+    }
+}
 
 /// Applies whatever the web app asked for, once per frame.
 fn apply_requested_mode(
@@ -163,7 +247,7 @@ pub struct AuthoringModePlugin;
 impl Plugin for AuthoringModePlugin {
     fn build(&self, app: &mut App) {
         app.init_state::<AuthoringMode>()
-            .add_systems(Update, apply_requested_mode);
+            .add_systems(Update, (apply_requested_mode, leave_a_forbidden_mode).chain());
     }
 }
 
