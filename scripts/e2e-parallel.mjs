@@ -68,6 +68,7 @@ const TEMPLATE_DB = "thunderforge_e2e_template";
 const SHARD_DIR = join(ROOT_DIR, ".e2e-shards");
 /** Measured seconds per spec file, so each run balances better than the last. */
 const DURATIONS_PATH = join(ROOT_DIR, ".e2e-shards-durations.json");
+const LOCK_PATH = join(ROOT_DIR, ".e2e-shards.lock");
 
 /**
  * The specs that measure this machine rather than the product.
@@ -89,6 +90,14 @@ const PERF_LANE_SPECS = [
   "engine-interaction-limits",
   "engine-loading",
   "canvas-authoring",
+  // These two were added from evidence rather than by reading assertions:
+  // both failed in a four-shard run and both pass alone, `status-systems` in
+  // about six seconds per ruleset and `world-cache-isolated` in 1.4 minutes.
+  // Neither asserts on a duration, so the earlier pass over the suite missed
+  // them — what they actually need is an engine that can report inside a 60s
+  // predicate, which it cannot while three other shards compete for the GPU.
+  "status-systems",
+  "world-cache-isolated",
 ];
 
 /** Every spec file, relative to `apps/web`, including `e2e/torture`. */
@@ -193,6 +202,54 @@ function recordDurations(shardDirs, previous) {
     for (const suite of report.suites ?? []) walk(suite, suite.file);
   }
   writeFileSync(DURATIONS_PATH, JSON.stringify(totals, null, 2));
+}
+
+/**
+ * Refuse to start on top of a run that is already going.
+ *
+ * This script begins by deleting the shard directory and dropping the template
+ * database, so a second invocation does not merely contend — it removes the
+ * demo sessions, JSON reports and databases the live run is in the middle of
+ * using, and the failures surface inside whatever tests happened to be running
+ * as bugs of their own.
+ *
+ * A stale lock is reclaimed rather than fatal: `process.kill(pid, 0)` throws if
+ * nothing is there, and a run killed with Ctrl-C leaves one behind every time.
+ */
+function acquireLock() {
+  try {
+    const previous = Number(readFileSync(LOCK_PATH, "utf-8").trim());
+    if (Number.isInteger(previous) && previous > 0) {
+      try {
+        process.kill(previous, 0);
+        throw new Error(
+          `another e2e-parallel run is active (pid ${previous}). ` +
+            `Wait for it, or remove ${LOCK_PATH} if you are sure it is gone.`,
+        );
+      } catch (error) {
+        // ESRCH: the pid is gone, so the lock is stale and ours to take.
+        if (error instanceof Error && !/^another e2e-parallel/.test(error.message)) {
+          log("e2e", `Reclaiming a stale lock from pid ${previous}.`);
+        } else {
+          throw error;
+        }
+      }
+    }
+  } catch (error) {
+    if (error instanceof Error && /^another e2e-parallel/.test(error.message)) {
+      throw error;
+    }
+    // No lock file at all, which is the ordinary case.
+  }
+  writeFileSync(LOCK_PATH, String(process.pid));
+}
+
+function releaseLock() {
+  try {
+    rmSync(LOCK_PATH, { force: true });
+  } catch {
+    // Nothing to release.
+  }
 }
 
 function psql(database, sql) {
@@ -412,6 +469,7 @@ async function main() {
     throw new Error(`--shards must be a positive integer, got ${total}`);
   }
 
+  acquireLock();
   log("e2e", `Preparing ${total} shard${total === 1 ? "" : "s"}.`);
   rmSync(SHARD_DIR, { recursive: true, force: true });
   mkdirSync(SHARD_DIR, { recursive: true });
@@ -494,10 +552,12 @@ async function main() {
     }
   }
 
+  releaseLock();
   process.exit(failed.length > 0 ? 1 : 0);
 }
 
 main().catch((error) => {
   log("e2e", String(error?.stack ?? error), process.stderr);
+  releaseLock();
   void terminateChildren("SIGTERM").finally(() => process.exit(1));
 });

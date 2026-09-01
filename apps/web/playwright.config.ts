@@ -22,6 +22,24 @@ export default defineConfig({
   globalSetup: "./e2e/fixtures/global-setup.ts",
   use: {
     baseURL,
+    // An action that waits forever reports the wrong thing, slowly.
+    //
+    // Playwright's default action timeout is off, so a locator action waiting
+    // on an element that never appears is bounded only by the *test* budget.
+    // It then fails against whatever call happened to be pending at that
+    // moment, which is usually cleanup. Two failures cost a day between them
+    // for exactly this reason: a player join clicked "Enter world" on a page
+    // that renders no such link and burned its full 480 seconds before
+    // reporting `playerContext.close()` in a `finally` block; and an engine
+    // loader read an attribute off a locator that had legitimately detached,
+    // turning "the engine loaded quickly" into a 30-second timeout blamed on
+    // the progress bar.
+    //
+    // 30 seconds is deliberately generous — every wait a test genuinely
+    // depends on is already written with its own explicit, larger timeout, so
+    // this only bounds the ones nobody chose. It converts that whole class
+    // from "a full budget, wrong location" into "half a minute, right line".
+    actionTimeout: 30_000,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     launchOptions: {

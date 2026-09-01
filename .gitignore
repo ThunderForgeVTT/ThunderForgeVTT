@@ -182,6 +182,7 @@ apps/web/e2e/.demo/
 # durations beside it (`.e2e-shards-durations.json`) are *not* ignored — they
 # are what keeps the first run on a new machine balanced.
 .e2e-shards/
+.e2e-shards.lock
 apps/web/.playwright/
 
 ### graphify ###

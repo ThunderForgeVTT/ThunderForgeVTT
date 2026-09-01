@@ -73,7 +73,7 @@
   "e2e/world-cache-isolated.spec.ts": 354.334,
   "e2e/world-cache-multitab.spec.ts": 26.433999999999997,
   "e2e/world-cache-offline.spec.ts": 127.51599999999999,
-  "e2e/world-cache-peer.spec.ts": 131.10999999999999,
+  "e2e/world-cache-peer.spec.ts": 151.525,
   "e2e/world-cache-permissions.spec.ts": 38.613,
   "e2e/world-cache-prefetch.spec.ts": 32.598,
   "e2e/world-cache-repair.spec.ts": 36.104,
