@@ -1,124 +1,210 @@
 # MVP 1 Roadmap
 
-This document outlines the 10 phases for reaching the Minimum Viable Product (MVP) 1 for ThunderForgeVTT.
+The ten phases to Minimum Viable Product 1, and where each actually stands.
 
-**Status as of 2026-08-22**: This checklist had never been updated since it was written — every box was still unchecked despite several phases being substantially implemented. Statuses below were verified against the actual codebase (not assumed), and are noted `[x] Done`, `[~] Partial` (with what's missing), or `[ ] Not started`. See `specs/001-bevy-canvas-authoring/`, `specs/002-canvas-authoring-asset-storage/`, `specs/003-dd2vtt-map-fidelity/`, and `specs/010-world-staging-actors/` for the specs that delivered the completed phases.
+**Statuses are verified against the codebase, never assumed.** This document
+once sat for months with every box unchecked while half the phases shipped,
+and it has since carried a size figure that drifted 16% before anyone noticed.
+So each phase below says what was checked and when. `[x] Done`,
+`[~] Partial` (with what is missing), `[ ] Not started`.
 
-## Core Concepts and Objects
+**Last verified: 2026-08-31.**
 
-This section provides a high-level overview of the core objects and concepts that will be implemented as part of the MVP.
+## Core concepts
 
-- **World:** A container for all the data related to a single game. This includes scenes, actors, game systems, etc.
-- **World Events:** A log of all the changes that happen within a world. This is used to keep all clients in sync.
-- **Game System:** A set of rules that govern how the game is played. This includes things like character stats, skills, and dice roll formulas (e.g., "1d6+STR"). The game system should be designed to be easily extendable and shareable.
-- **Scene:** A single map or location within a world. It has a background, a grid, and can contain tokens, walls, and lights.
-- **Actor:** A character or creature within the world. Actors have stats, skills, and other properties defined by the game system.
-- **Actor Events:** A log of all the changes that happen to an actor.
-- **Token:** A visual representation of an actor on a scene. Tokens have a position, a type (NPC, player, vehicle, etc.), and are bound to an actor.
-- **Token Events:** A log of all the changes that happen to a token.
-- **Actor-Token Binding:** The link between an actor and a token. This allows the token to display the actor's information and for the actor's stats to affect the token's behavior.
-- **Permissions and Policies:** A system for controlling who can do what within a world. This will be used to define roles like "player", "trusted player", "assistant DM", and "owner".
+- **World** — the container for one game: scenes, actors, game system,
+  members.
+- **World events** — the append-only log of everything that changes in a
+  world. This is what keeps clients in sync.
+- **Game system** — the rules: stats, skills, dice formulas, resources.
+  Declared by a manifest (`packs/systems/*/system.json`), not compiled into
+  the engine. Extendable and shareable by design.
+- **Scene** — one map or location: a background, a grid, tokens, walls,
+  lights, interactive elements.
+- **Actor** — a character or creature, with system-defined stats.
+- **Token** — an actor's representation on a scene: position, kind, and an
+  optional binding to an actor.
+- **Actor–token binding** — the link that lets a token show an actor's
+  information and an actor's stats affect the token.
+- **Permissions** — who may do what, per world and per object.
 
-## MVP 1 Roadmap
+## The roadmap
 
-- [x] **Phase 1: User Login** — Done
-  - Users can log in to the application.
-  - Implemented: username/password auth, OAuth providers, two-factor auth, session management, admin bootstrap (`src/server/src/auth/`, `src/server/src/users/`). Spec 007 (complete, ADR-041) added environment-variable OAuth provider configuration (`OAUTH_<PROVIDER>_CLIENT_ID`/`_CLIENT_SECRET`/etc.) as a second, deploy-time configuration source alongside the existing admin panel — env vars always win for the fields they set. Providers are generic (any OAuth2/OIDC endpoint set works), with Discord/Google/GitHub/Keycloak shipping as built-in presets, and multiple named instances of the same provider type are supported (e.g. two separate Keycloak realms). A pre-existing, unwired attempt at this same idea (`THUNDERFORGE_AUTHENTICATION` env var / `SupportedAuthentication` config type) was found dead and removed as part of this feature.
+### [x] Phase 1 — User login
 
-- [x] **Phase 2: World Creation** — Done
-  - Users can create a "world" with a basic game system/ruleset.
-  - Implemented: `createWorld` mutation with `game_system_id`/`interface_pack_id`, world listing/deletion.
+Username/password, OAuth, two-factor, sessions, admin bootstrap
+(`src/server/src/auth/`, `src/server/src/users/`).
 
-- [x] **Phase 3: Scene Creation** — Done
-  - Users can create a scene within a world.
-  - Users can set a background for the scene.
-  - Users can add a grid pattern to the scene at layer zero.
-  - Implemented: scene CRUD, `grid_size`/`grid_type` fields, background image via `.dd2vtt` import or paste-to-canvas (spec 002, backed by RustFS asset storage).
+Spec 007 added deploy-time OAuth configuration by environment variable
+(`OAUTH_<PROVIDER>_CLIENT_ID` and friends) alongside the admin panel; env vars
+win for the fields they set. Providers are generic — any OAuth2/OIDC endpoint
+set works — with Discord, Google, GitHub and Keycloak as built-in presets, and
+multiple named instances of one provider type are supported (two Keycloak
+realms, say). ADR-041.
 
-- [~] **Phase 4: Token Creation** — Partial
-  - Users can create tokens of different types (NPC, player, vehicle, etc.).
-  - Different token types should have distinct visual representations.
-  - Users can add tokens to a scene.
-  - Implemented: token placement/movement on a scene, `actor_id` binding to an actor. Spec 004 unified the token backing store onto the scene-scoped `tokens` table (ADR-040), added per-player ownership/primary-token/photo/health columns, and gated player- vs. GM-initiated moves through separate mutations (`move_own_token` vs. `update_token`). Spec 006 (complete) replaced spec 004 US2's keyboard-shortcut resize/rotate stand-in with real canvas-rendered drag handles (GM-only, whole-grid-cell resize + continuous rotate, mirroring `WallPlugin`'s handle pattern) and fixed the ownership-assignment Popover-hang bug that had spec 004's player-owned-token e2e test skipped — that test is now un-skipped and passing. **Missing**: no distinct token "type" field or type-specific visual representation (`npc`/`vehicle`-style differentiation is not implemented — every token appears to render the same way regardless of what it represents). **Resolved since**: the legacy parallel `world_tokens` RxDB sync path previously noted here is gone — RxDB was hard-cut from this codebase, and neither `startWorldSync` nor any `world_tokens` reference remains anywhere in `apps/web/src` (verified 2026-08-30). `WorldPage.tsx` now drives only the per-scene sync.
+### [x] Phase 2 — World creation
 
-- [~] **Phase 5: Actor Stats and Customization** — Partial
-  - Users can add stats and customizations to "Actors" (e.g., health).
-  - Actors are bound to tokens.
-  - This phase introduces more video game-like logic.
-  - Implemented: `world_actors`/`world_actor_system_data` tables (game-system-defined stat storage), actor-token binding via `tokens.actor_id`. Spec 010 added a dedicated `/world/:id/actor/:id/{view,edit}` UI (actor label editing, PC/NPC flag) and a DM-facing NPC catalog/creation screen at `/world/:id/staging`, plus the ability to share an actor via a link and deep-copy it (including cascaded `world_actor_system_data`) into another of the viewer's own worlds.
+`createWorld` with `game_system_id`/`interface_pack_id`, plus listing and
+deletion.
 
-  **The 2026-08-22 "unverified" note has now been checked (2026-08-30), and it splits in two.** Half is closed and half is not.
+### [x] Phase 3 — Scene creation
 
-  **Closed — actor stats reach the canvas.** Spec 029 made a token's resources visible without a click: the engine draws them as bars above the token (`src/engine/src/plugins/status_display.rs`), and the selected token's are shown in a viewer-chosen screen corner (`apps/web/src/components/StatusPanel/StatusPanel.tsx`). Which resources exist is declared by the game system's `system.json`, not hard-coded — four real declarations ship (Genie, D&D 5e, Pathfinder 2e, Blades in the Dark). Coarsening for viewers who are not entitled to exact figures happens server-side (`src/server/src/status_display.rs`), so a withheld value never reaches the client at all. Proven end to end by `apps/web/e2e/status-display.spec.ts`, which drives a Genie character's health and wish points through to both the token bars and the panel DOM. Documented in `docs/status-displays.md`.
+Scene CRUD, `grid_size`/`grid_type`, background art by `.dd2vtt` import or
+paste-to-canvas (spec 002, on RustFS asset storage). Spec 022 overhauled scene
+management and made which scene a world is _on_ server state rather than a
+per-client selection (ADR-046).
 
-  **Closed — the derived-statistics subsystem now actually executes.** `src/engine/src/derived_data.rs` has been registered in the frame loop (`src/engine/src/lib.rs`) the whole time and had **never run on a single real token**: `calculate_derived_stats` queries `(&Token, &mut DerivedStats)`, and no spawned entity carried `Token` — the only construction of that type anywhere was a unit test. Tokens now spawn with both components attached, so it computes for real entities rather than for nobody.
+### [x] Phase 4 — Token creation
 
-  **Spec 029 closed (2026-08-30).** In-engine status displays ship: bars and counters above tokens, a corner panel, four disclosure states (visible / greyed / percentage / chunked) resolved per viewer on the server, and application-supplied appearance. Four game systems declare their own resources — Genie, D&D 5e, Pathfinder 2e and Blades in the Dark — and the engine understands none of them, which is what the four-system e2e exists to prove: a built-in notion of "health" would pass for two of them and fail the others.
+Tokens place, move and bind to actors. Spec 004 unified the backing store onto
+the scene-scoped `tokens` table (ADR-040) and split player- from GM-initiated
+moves (`moveOwnToken` vs `updateToken`). Spec 006 replaced a keyboard-shortcut
+stand-in with real canvas-rendered resize and rotate handles.
 
-  Capacity was measured rather than assumed (SC-006): **3,200 tokens at 30fps with displays enabled, the same figure as with none**, at a sprite delta of 964 and a frame time within noise of the display-free board. That is after off-screen culling — before it, the same board carried 16,003 sprites against 3,203 and ran at 20fps. The figures are generated into `marketing/engine-status-capacity.json` by `scripts/status-capacity-metrics.mjs`, never transcribed.
+**Closed since the last pass**: tokens now have a kind.
+`thunderforge_canvas_core::token_kind::TokenKind` defines Character, NPC,
+Vehicle and Object, parsed server-side (`parse_token_kind`) and rendered with a
+per-kind palette in the engine (`token_kind_color`, `src/engine/src/lib.rs`).
+The "no distinct token type or visual representation" gap this document
+recorded is gone.
 
-  **Still open — nothing acts on a computed stat.** `DerivedStats` does have a `movement_speed` field, but it is set to a hard-coded `Some(30)` for every token and **nothing anywhere reads it**: there is no movement gating on a computed value (`grep movement_speed` finds only the definition, the two writes and a test). `TokenAbilities` is also still never populated — tokens spawn with `abilities: Default::default()` because the server does not send ability scores, so `calculate_ability_stats` (which queries `Changed<TokenAbilities>`) continues to match nothing, and every ability-derived figure (AC, initiative, proficiency) is a constant. Spec 029 puts movement gating explicitly out of scope; it belongs to Phase 8's rule enforcement, not here. So the "stats feed back into token _behavior_" half of the original question is unanswered because it is unbuilt, not because it is unaudited.
+### [~] Phase 5 — Actor stats and customisation
 
-- [x] **Phase 6: Walls and Lighting** — Done
-  - Users can add walls and lighting to a scene.
-  - These elements should restrict token vision.
-  - Implemented: wall/door/light-source data model, 2D vision occlusion, hand-drawn wall/shape authoring directly on the canvas (specs 001, 002). `specs/003-dd2vtt-map-fidelity/` closed the round-trip trust gap: automated tests (`src/server/src/map_import.rs`) now re-query the DB after import (and after hand-built edits on top of an import) and assert exact field equality against the source, across the richest real fixtures — proving no wall/light/background data is silently lost or altered by a reload. It also added import-response `warnings` disclosure for previously-silent field categories (freestanding portals, non-default `ambient_light`, `objects_line_of_sight`). **Gap found during that pass, now closed (verified 2026-08-30)**: the note here said no live GraphQL subscription transport was wired client-side anywhere in the app, so a wall/light change from one session reached an already-connected second session only after a page reload. `apps/web/src/pages/world/WorldPage.tsx` now opens the `worldEventsCreated` subscription once per mounted scene and feeds `applyWallWorldEvent`, `applyTokenWorldEvent`, `applyShapeWorldEvent`, `applyLightWorldEvent` and `applyTokenStatusWorldEvent` from it — one shared subscription rather than four, since each applier filters by its own event code. The backend transport (Postgres listener → broadcast channel → GraphQL subscription → `/api/ws`) already existed in full; this was the first thing in `apps/web` to actually open it. **Residual, cosmetic**: the doc comments in `apps/web/src/engine/world/sync/{walls,lights,shapes}.ts` still say no subscription transport is wired and are now stale — they describe the code as it was, and should be corrected the next time those files are touched.
+Actors carry system-defined stats (`world_actors`,
+`world_actor_system_data`), bind to tokens via `tokens.actor_id`, and have a
+dedicated UI (spec 010): view/edit routes, a PC/NPC flag, an NPC catalog on
+the staging page, and share-and-deep-copy of an actor into another of your own
+worlds.
 
-- [ ] **Phase 7: Scene Levels** — Not started
-  - Users can add levels to a scene (e.g., upstairs, downstairs).
-  - Each level can have its own set of walls and token assignments.
-  - No "level"/multi-level concept exists anywhere in the schema or engine.
+**Done — stats reach the canvas.** Spec 029 draws a token's resources as bars
+above it (`src/engine/src/plugins/status_display.rs`) and shows the selected
+token's in a viewer-chosen corner (`StatusPanel.tsx`). Which resources exist is
+declared by `system.json`, never hard-coded — four real systems ship
+declarations (Genie, D&D 5e, Pathfinder 2e, Blades in the Dark), and the engine
+understands none of them, which is precisely what the four-system e2e exists to
+prove. Coarsening for viewers not entitled to exact figures happens
+server-side (`src/server/src/status_display.rs`), so a withheld value never
+reaches the client. See `docs/status-displays.md`.
 
-- [~] **Phase 8: Game System Integration** — Partial
-  - The application should enforce the rules of the game system loaded onto the world.
-  - This includes basic mechanics like movement speed, considering actor specs.
-  - This is where the Bevy engine should be utilized.
-  - Implemented: game system package install/manifest-serving pipeline (`src/server/src/systems.rs`), a system registry with several real systems registered (Genie, D&D 5e, Pathfinder 2e, Blades in the Dark), and derived-data plumbing in the engine (`src/engine/src/derived_data.rs`). **Missing**: full rule enforcement — movement is not gated by computed speed, and actor specs do not drive in-engine behaviour end to end.
+Capacity was measured, not assumed (SC-006): **3,200 tokens at 30fps with
+displays on — the same as with none.** Before off-screen culling the same board
+carried 16,003 sprites against 3,203 and ran at 20fps. Figures are generated
+into `marketing/engine-status-capacity.json`, never transcribed.
 
-  **Read this before starting Phase 8** (found 2026-08-30, while checking what blocks per-viewer visibility). The obvious first task looks like "populate `TokenAbilities` from actor data, so `derived_data.rs` stops matching nothing". Doing that as written would entrench a bug rather than fix one.
+**Still open — nothing acts on a computed stat.** `DerivedStats.movement_speed`
+exists and is written, and `grep` finds no reader anywhere
+(`src/engine/src/components.rs:172` is the only hit outside its own writes).
+Movement is _modelled_ but not _enforced_: `movement_budget::cost_path` is
+implemented and unit-tested, while `PlannedPath` still charges one cell per
+step and no caller consults the cost. Gating movement on a computed speed
+belongs to Phase 8.
 
-  `TokenAbilities` is six fixed fields — strength through charisma — and `derived_data.rs` computes on them with formulas its own comments label as D&D 5e: `compute_armor_class` is `10 + (dex - 10) / 2`, `compute_initiative` is the 5e dexterity modifier, `compute_movement_speed` ignores both its arguments and returns 30. That is one game system's rules compiled into the engine, which is the thing Principle I and spec 029's FR-001 both forbid, and it is currently harmless only because nothing populates it. Plumbing abilities through would make it load-bearing.
+### [x] Phase 6 — Walls and lighting
 
-  It also does not survive contact with the systems already registered. Blades in the Dark has no ability scores at all — it has action ratings (Hunt, Prowl, Skirmish), twelve of them, on a 0–3 scale. There is no dexterity to read and no AC to derive. A six-field struct cannot represent that, and a system-agnostic engine should not be trying to.
+Walls, doors and light sources with 2D vision occlusion, and hand-drawn wall
+and shape authoring on the canvas (specs 001, 002).
 
-  Spec 029 solved the same problem for resources and the answer should carry over: the **system manifest declares the field mapping**, the server resolves it against the actor's stored data, and the engine renders or applies what it is given while understanding none of it. `ResourceSource`/`EntrySource` in `crates/thunderforge-canvas-core/src/resource_display.rs` are the working precedent, and `packs/systems/*/system.json` already carries four systems' worth of declarations in that shape.
+Spec 003 closed the round-trip trust gap: `map_import.rs` re-queries the
+database after an import — and after hand edits on top of one — and asserts
+exact field equality against the source across the richest real fixtures, so
+nothing is silently lost or altered by a reload. It also surfaced previously
+silent field categories as import `warnings` (freestanding portals, non-default
+`ambient_light`, `objects_line_of_sight`).
 
-  **Done (2026-08-30).** Attributes are now manifest-declared, resolved server-side against the actor's sheet, and carried as `id -> value` pairs the engine does not interpret — `TokenAttributes`, a map, replacing the six fields. The 5e formulas were removed rather than fed. `tokenAttributes(sceneId)` exposes them; `apps/web/e2e/token-attributes.spec.ts` proves all four declaring systems resolve their own sets under their own names.
+Live cross-session sync works: `WorldPage.tsx` opens the `worldEventsCreated`
+subscription once per mounted scene and feeds the wall, token, shape, light and
+status appliers from it — one subscription, each applier filtering by its own
+event code.
 
-  **Correction to what this note previously said.** It claimed deciding where system rules execute was an open, ADR-shaped question. For server-side rules it is not: `packs/systems/*/server/` are workspace crates with `validators.rs`, registered into a validator registry in `src/server/src/systems.rs`, and they are already enforcing real per-system rules — Pathfinder 2e rejects an ability value outside `-5..=10` because it stores modifiers where D&D 5e stores raw scores. Eight systems have pack crates. The mechanism exists and works.
+### [ ] Phase 7 — Scene levels
 
-  What is genuinely still open is narrower: (a) engine-side rules, since `packs/systems/*/engine/` crates cannot be loaded into a running wasm engine the way server crates link into the binary, and (b) whether validation is the same thing as enforcement — rejecting a bad score is not the same as gating movement on a computed speed. `src/engine/src/systems/core.rs` still declares a `GameSystem` trait with `ability_names()`, one stub implementation, nothing depending on it, duplicating a list the manifests now own; that is the piece to resolve, and it is smaller than "where do rules execute".
+Upstairs and downstairs, each level with its own walls and token assignments.
+No level concept exists in the schema or the engine. Not started.
 
-- [x] **Phase 9: Multiplayer** — Done
-  - The owner of a world can invite other players via an invite code or a shareable link.
-  - Invited players can join the world.
-  - Players can select their "player" type actor as their character.
-  - The Game Master (GM) should be able to override character selection.
-  - Implemented: invite-code generation, `joinWorld` mutation, `world_members`/`world_invites` tables (`src/server/src/graphql/mutations_invites.rs`). **Unverified**: character-selection override by the GM specifically was not audited in this pass.
+### [~] Phase 8 — Game system integration
 
-- [~] **Phase 10: Permissions Model** — Partial
-  - A robust permissions model should be implemented.
-  - The Dungeon Master (DM) can edit policies for different roles (player, trusted player, assistant DM).
-  - The DM can promote other players to owner.
-  - Implemented: a fixed three-tier role model (Owner/GM/Player) via `world_members`, with an `updateMemberRole` mutation that lets an Owner/GM change any member's role — including promoting someone to Owner. Spec 010 added a real, per-object permissions layer on top of this: every actor now has an "ownership block" (`world_actor_permissions`) letting the DM grant any world member Viewer/Editor/Owner on any actor (PC or NPC), with the DM implicitly retaining full control regardless of the block's contents and a default-Viewer fallback for members with no explicit grant. This is enforced server-side (`auth/actor_permissions.rs`, gating `updateActorSystemData` and `moveOwnToken`), with a DM-only editing UI at `/world/:id/actor/:id/edit`. **Missing**: this per-actor model is not yet a general "policy" system — there is still no "trusted player"/"assistant DM" world-wide role beyond the fixed three, and no equivalent ownership-block mechanism for other content types (scenes, maps, items) yet. The vestigial `policies`/`permission_grants` schema table remains dead code as before. (Same class of gap as documented in `docs/SECURITY_RBAC.md`.)
+Shipped: the system package install and manifest-serving pipeline
+(`src/server/src/systems.rs`), a registry with eight pack crates, and
+server-side per-system validators that already enforce real rules — Pathfinder
+2e rejects an ability value outside `-5..=10` because it stores modifiers where
+D&D 5e stores raw scores.
 
-### Interactive elements — spec 030
+**Attributes are system-declared, and the 5e formulas are gone.** The engine
+once carried `TokenAbilities` — six fixed fields, strength through charisma —
+with `derived_data.rs` computing on them using formulas its own comments
+labelled D&D 5e (`10 + (dex - 10) / 2` for AC, and a `movement_speed` that
+ignored both arguments and returned 30). That is one system's rules compiled
+into a system-agnostic engine, which Principle I and spec 029's FR-001 both
+forbid, and it did not survive contact with the systems already registered:
+Blades in the Dark has no ability scores at all, just twelve action ratings on
+a 0–3 scale. Attributes are now manifest-declared, resolved server-side against
+the actor's sheet, and carried as `id -> value` pairs the engine does not
+interpret (`TokenAttributes`, a map). The 5e formulas were removed rather than
+fed. `apps/web/e2e/token-attributes.spec.ts` proves all four declaring systems
+resolve their own sets under their own names.
+
+**What is genuinely still open**, and it is narrower than "where do rules
+execute":
+
+1. **Engine-side rules.** `packs/systems/*/engine/` crates cannot be loaded
+   into a running wasm engine the way server crates link into the binary.
+2. **Validation is not enforcement.** Rejecting a bad ability score is not the
+   same as gating movement on a computed speed. See Phase 5's open item.
+3. **A vestigial trait.** `src/engine/src/systems/core.rs` still declares
+   `GameSystem` with `ability_names()`, one stub implementation and no
+   dependents, duplicating a list the manifests now own. That is the piece to
+   resolve first.
+
+### [x] Phase 9 — Multiplayer
+
+Invite codes and shareable links, `joinWorld`, `world_members` and
+`world_invites`. Spec 027 unified access links and deliberately gives every
+dead link the _same_ message, whatever the cause — telling the holder which
+cause applied is exactly what the server refuses to disclose (FR-011/SC-005).
+
+**Closed since the last pass**: GM override of character selection, previously
+recorded here as unaudited, is delivered by spec 017. A GM may un-claim any
+character at any time under their existing Owner-level authority over every
+actor in their world (spec 010's DM-always-full-control rule), and the
+un-claimed player keeps their membership and returns to the "no character
+selected" state. Covered by `apps/web/e2e/actor-claim.spec.ts`, including two
+players racing to claim the same character with exactly one winner.
+
+### [~] Phase 10 — Permissions model
+
+A fixed three-tier role model (Owner/GM/Player) over `world_members`, with
+`updateMemberRole` letting an Owner or GM change any member's role, including
+promotion to Owner.
+
+Spec 010 added a real per-object layer on top: an ownership block granting any
+member Viewer/Editor/Owner on any actor, with the DM implicitly retaining full
+control and a default-Viewer fallback. Enforced server-side
+(`auth/actor_permissions.rs`, gating `updateActorSystemData` and
+`moveOwnToken`). The same shape has since been extended to lore, items and
+abilities (`world_*_permissions` tables).
+
+**Missing**: this is per-object, not a general policy system. There is still no
+world-wide "trusted player" or "assistant DM" role beyond the fixed three, and
+no ownership block for scenes or maps. The `policies`/`permission_grants`
+tables remain dead code. Same class of gap as `docs/SECURITY_RBAC.md` records.
+
+## Interactive elements — spec 030
 
 Things on a scene that respond: a prop that opens a lore entry, a lever that
 switches lights, a door that opens, closes and locks, a region that fires when
-a token crosses it, and a request the Game Master must approve. See
+a token crosses it, and a request the GM must approve. See
 `docs/interactive-elements.md`.
 
-The framing runs through the whole feature, and it is the same one ADR-051
-records: this is **not** a way to run a game without a Game Master. Every
-trigger is something a GM placed, configured and chose to allow, and anything
-consequential stays gated on their approval.
+The framing runs through the whole feature and ADR-051 records it: **this is
+not a way to run a game without a Game Master.** Every trigger is something a
+GM placed, configured and chose to allow, and anything consequential stays
+gated on their approval.
 
-**What it delivers.** Doors gained a definition — open blocks neither, closed
-blocks exactly what the wall's own profile says, and `locked` is a separate
-property governing who may change the state rather than a third state. Props
-are tokens of the existing `object` kind with no actor, so there is no second
-placement pipeline. All seven user stories are proven end to end
+**Delivered.** Doors gained a definition — open blocks neither, closed blocks
+exactly what the wall's own profile says, and `locked` is a separate property
+governing who may change the state rather than a third state. Props are tokens
+of the existing Object kind with no actor, so there is no second placement
+pipeline. All seven user stories are proven end to end
 (`apps/web/e2e/interactive-*.spec.ts`), including the two rules most likely to
 be implemented only in a UI: a player cannot open a locked door, and a request
 never expires into approval.
@@ -129,67 +215,107 @@ subsystem that performs it. Adding a triggerable capability is a declaration, a
 line in a list, and one plugin with one system — never an edit to the core.
 `scripts/check-interaction-seam.mjs`, in `pnpm verify`, asserts that core names
 none of "light", "door" or "sound", so the coupling this design forbids is
-greppable rather than a matter of judgement. The decision is
-`docs/adrs/20260830-054-interaction_effect_contribution_seam.md`.
+greppable rather than a matter of judgement. ADR-054.
 
-**What it deliberately does not deliver:**
+**Deliberately not delivered:**
 
 - **Sound.** No audio subsystem exists, so nothing declares a sound effect and
-  none is offered. That is the contribution seam working rather than a gap in
-  it: when audio is built it contributes `audio.play` and nothing else changes.
+  none is offered. That is the contribution seam working, not a gap in it —
+  when audio is built it contributes `audio.play` and nothing else changes.
 - **Multi-scene navigation.** `nav.request_scene` raises a request, the GM
-  approves or refuses it, and the requester is told — and then nothing moves
-  anybody, because there is nothing yet to move them with. The request and the
-  decision are the parts this feature owns, and they work today.
-- **Party tokens.** A token the GM controls that the whole party sees and
-  follows — a ship, a caravan — for scenes that are world maps rather than
-  tactical play. Named in the spec so the model does not preclude it; not
-  built.
+  approves or refuses, and the requester is told. Then nothing moves anybody,
+  because there is nothing yet to move them with. The request and the decision
+  are the parts this feature owns, and they work.
+- **Party tokens.** A GM-controlled token the whole party sees and follows — a
+  ship, a caravan — for world-map scenes. Named so the model does not preclude
+  it; not built.
+
+## Health of the test suite
+
+Read `docs/e2e-suite-health.md` before reacting to a failure count; the number
+is not self-explanatory, and most of what it reports has historically been the
+suite rather than the product.
+
+Two rules earned the hard way, and worth more than any individual fix:
+
+1. **Read `apps/web/test-results/<slug>/error-context.md` before theorising.**
+   It holds an accessibility snapshot of the page at the moment of failure and
+   usually contains the answer. A long session was burned stepping through a
+   store, its props and the DOM while the snapshot said plainly that the page
+   was showing a different scene.
+2. **Give every failure a verdict** — stale spec, real product bug, or
+   intentionally removed behaviour. Weakening an assertion to get green is the
+   one outcome worse than leaving it red.
+
+Always `--workers=1` for anything touching the engine.
 
 ## Post-MVP
 
-- **Metered and constrained connections:** Explicitly **not in MVP scope**, and planned.
-  - Nothing in ThunderForge is currently tested against a metered, capped, or
-    slow connection. The client fetches world content ahead of need
-    (spec 028's cache and its background prefetch), which is the right trade
-    on an unmetered link and an untested one on a metered link. There is no
-    setting today to hold that back, and adding one is a real product
-    decision rather than a switch — it is on the list, not built.
-  - **Recommended baseline: an unmetered connection of at least 50 Mbps.**
-    This figure is **UNTESTED**. It is a starting recommendation, not a
-    measurement, and it is written that way deliberately: this document
-    already carries one number that drifted 16% before anyone noticed, and an
-    unlabelled guess is how that happens. Treat it as the number we would
-    start from, and expect it to move once it has been measured.
-  - What _has_ been measured is the first load, and it bounds the guess from
-    below: 4.15MB brotli for the engine bundle (see the load-time entry
-    below), plus a world's art. Steady-state play is small — token moves and
-    dice, over one WebSocket.
-  - **If you play on something slower, on a metered link, or on mobile data,
-    we want to hear about it.** That evidence is worth more than our
-    estimate, and there is nowhere in this project it can come from except
-    people who actually did it:
-    [the discussions](https://github.com/ThunderForgeVTT/ThunderForgeVTT/discussions).
-- **Sharing and Federation:** Started for actors only.
-  - Spec 010 added actor-level sharing: any actor can be shared via a link (`/shared/actor/:code`), previewed read-only by anyone, and deep-copied ("Copy to World") into one of the viewer's own worlds, fully independent of the source (including cascaded ability/item/lore data).
-  - Not yet generalized to other content types (game systems, scenes, maps) — `specs/010-world-staging-actors/spec.md`'s Assumptions section explicitly flags this as expected future work, not built yet.
-  - No cross-instance federation (talking to other ThunderForge servers) exists.
-- **Marketplace:** Not started.
-  - A marketplace where users can upload and share their creations.
-- **Engine WASM bundle size / load-time:** Measured and largely addressed 2026-08-26. The dev-profile bundle had reached 220,099,904 bytes (~210MiB) — the earlier "~190MB (confirmed 2026-08-21)" figure had drifted ~16% unnoticed, which is itself worth knowing.
-  - **What the 210MB actually was**: 71.3% of it (157MB) is the wasm `name` custom section — unmangled Rust/Bevy symbol names — not code. There are no DWARF sections at all. That is why it gzipped 10:1, and why the number was always more alarming than the program it described.
-  - **Measured** (`wasm-pack build --release`, no source changes):
+**Metered and constrained connections.** Explicitly not in MVP scope, and
+planned. Nothing here is tested against a metered, capped or slow connection.
+The client fetches world content ahead of need (spec 028's cache and its
+background prefetch), which is the right trade on an unmetered link and an
+untested one otherwise. There is no setting today to hold that back, and adding
+one is a product decision rather than a switch.
 
-    | Build                    |      Raw | gzip -9 | brotli -q11 |
-    | ------------------------ | -------: | ------: | ----------: |
-    | dev (was shipping)       | 220.1 MB | 21.1 MB |           — |
-    | release + `wasm-opt -O`  |  24.7 MB |  6.7 MB |     4.15 MB |
-    | release + `wasm-opt -Oz` |  21.0 MB |  6.6 MB |    4.152 MB |
+- **Recommended baseline: an unmetered connection of at least 50 Mbps.** This
+  figure is **UNTESTED** — a starting recommendation, not a measurement, and
+  labelled that way deliberately, because this document already carried one
+  number that drifted 16% before anyone noticed.
+- What _has_ been measured bounds the guess from below: 4.15MB brotli for the
+  engine bundle, plus a world's art. Steady-state play is small — token moves
+  and dice over one WebSocket.
+- **If you play on something slower, on a metered link, or on mobile data, we
+  want to hear about it.** That evidence is worth more than our estimate, and
+  there is nowhere it can come from except people who actually did it:
+  [the discussions](https://github.com/ThunderForgeVTT/ThunderForgeVTT/discussions).
 
-    8.9x smaller raw, 5.1x on the wire. `-Oz` is not worth it: 3.7MB less raw for **1,861 bytes** less brotli, at ~6 extra minutes of optimizer time. Stay on wasm-pack's default `-O`.
+**Sharing and federation.** Started, for actors only: share by link
+(`/shared/actor/:code`), preview read-only, deep-copy into your own world with
+cascaded ability, item and lore data. Not generalised to systems, scenes or
+maps. No cross-instance federation exists.
 
-  - **Done**: `scripts/shared.mjs` now selects the profile per caller — the dev loop keeps `--dev` (a 7-minute rebuild after every engine edit is not a dev loop), everything else defaults to `--release`. `ENGINE_PROFILE=dev|release` overrides. The profile participates in the `pkg.sum` cache key, without which switching profiles silently skips the rebuild and serves whichever bundle was already on disk.
-  - **Done**: the server was serving the wasm **uncompressed** — `tower-http` had no compression feature and no `CompressionLayer` existed. That was a ~6x gap on first-load bytes on top of the release win, and the number that actually governs a real player's first load. Now brotli + gzip.
-  - **Done, and separate from the size of the bundle**: the load is no longer silent. Spec 028's User Story 6 shipped byte-level progress (`FR-030`/`FR-031`), a loading state inside a second, and a real explanation with a working retry when the download or the startup fails — pinned by `apps/web/e2e/engine-loading.spec.ts`. Worth stating plainly because the two are easy to conflate: **feedback is not size**. A 4.15MB brotli first load that reports itself honestly is a different problem from a 4.15MB first load, and only the first one is closed. The bundle-size items below remain open on their own terms.
-  - **Still open — per-pack lazy loading**: WASM has no dynamic code-splitting analogous to JS's `import()`. A Cargo workspace split alone won't shrink the single shipped `.wasm` unless each piece compiles to its own binary, fetched and instantiated independently over a stable JS-glue boundary. The natural seam is `packs/systems/*/engine` — a world needs only its one active system's engine code. Real architectural work, and at 4.15MB brotli the case for it is now much weaker than it looked.
-  - **Still open — Bevy feature trim**: `bevy_ui`/`bevy_ui_render` are now unused (the one-line debug HUD that needed them was removed) but deliberately retained; `webp` appears unreferenced in the engine crate; `bevy_gizmos` is diagnostic-only and could be feature-gated. None measured. Behind the two changes above in value.
+**Marketplace.** Not started.
+
+**Engine bundle size and load time.** Measured 2026-08-26. The dev-profile
+bundle had reached 220,099,904 bytes — and 71.3% of that (157MB) was the wasm
+`name` custom section, unmangled Rust and Bevy symbol names, not code. There
+are no DWARF sections at all. That is why it gzipped 10:1, and why the number
+was always more alarming than the program it described.
+
+| Build                    |      Raw | gzip -9 | brotli -q11 |
+| ------------------------ | -------: | ------: | ----------: |
+| dev (was shipping)       | 220.1 MB | 21.1 MB |           — |
+| release + `wasm-opt -O`  |  24.7 MB |  6.7 MB |     4.15 MB |
+| release + `wasm-opt -Oz` |  21.0 MB |  6.6 MB |    4.152 MB |
+
+8.9x smaller raw, 5.1x on the wire. `-Oz` is not worth it: 3.7MB less raw for
+**1,861 bytes** less brotli, at ~6 extra minutes of optimiser time. Stay on
+wasm-pack's default `-O`.
+
+- **Done** — `scripts/shared.mjs` selects the profile per caller: the dev loop
+  keeps `--dev` (a 7-minute rebuild after every engine edit is not a dev loop),
+  everything else defaults to `--release`. `ENGINE_PROFILE` overrides. The
+  profile participates in the `pkg.sum` cache key, without which switching
+  profiles silently serves whichever bundle was already on disk.
+- **Done** — the server was serving the wasm _uncompressed_: `tower-http` had
+  no compression feature and no `CompressionLayer`. That was a ~6x gap on
+  first-load bytes on top of the release win. Now brotli and gzip.
+- **Done, and not the same thing** — the load is no longer silent. Spec 028
+  shipped byte-level progress, a loading state inside a second, and a real
+  explanation with a working retry when the download or startup fails, pinned
+  by `apps/web/e2e/engine-loading.spec.ts`. Worth stating plainly because the
+  two are easy to conflate: **feedback is not size.** A 4.15MB first load that
+  reports itself honestly is a different problem from a 4.15MB first load, and
+  only the first is closed.
+- **Open — per-pack lazy loading.** WASM has no dynamic code-splitting
+  analogous to JS `import()`. A workspace split alone will not shrink the
+  shipped `.wasm` unless each piece compiles to its own binary, fetched and
+  instantiated over a stable JS-glue boundary. The natural seam is
+  `packs/systems/*/engine` — a world needs only its active system. Real
+  architectural work, and at 4.15MB brotli the case is much weaker than it
+  looked.
+- **Open — Bevy feature trim.** `bevy_ui`/`bevy_ui_render` are unused (the
+  debug HUD that needed them was removed) but deliberately retained; `webp`
+  appears unreferenced in the engine crate; `bevy_gizmos` is diagnostic-only and
+  could be feature-gated. None measured, and behind the two items above.
