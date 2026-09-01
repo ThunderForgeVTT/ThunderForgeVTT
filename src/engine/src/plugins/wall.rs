@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use crate::plugins::authoring_mode::AuthoringMode;
+
 use crate::resources::{IsGameMaster, SelectedWall, WallSet};
 use crate::systems::wall::{
     handle_door_effects, handle_wall_input, handle_wall_keyboard_toggles, handle_wall_undo,
@@ -37,7 +39,19 @@ impl Plugin for WallPlugin {
         app.add_systems(
             Update,
             (
-                handle_wall_input,
+                // Only while the wall tool is armed.
+                //
+                // This system used to be gated on `IsGameMaster` alone, which
+                // meant it competed for every Game Master click with token
+                // dragging, shapes and lighting — all of which were armed at
+                // the same time, because the engine had no idea which tool the
+                // rail was showing. Spec 031 FR-040a: exactly one authority
+                // decides the mode, and it is the engine.
+                //
+                // `IsGameMaster` stays as the inner check. The mode says *what*
+                // a click means; the role says whether this person may author
+                // at all, and that is not the mode's business.
+                handle_wall_input.run_if(in_state(AuthoringMode::Walls)),
                 handle_wall_keyboard_toggles,
                 handle_wall_undo,
                 // Spec 030: doors, contributed to the interaction seam. Reads

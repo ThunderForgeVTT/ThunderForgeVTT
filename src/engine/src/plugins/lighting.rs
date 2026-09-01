@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use crate::plugins::authoring_mode::AuthoringMode;
+
 use crate::resources::{IsGameMaster, LightSet, SelectedLight};
 use crate::systems::lighting::{
     apply_light_illumination, handle_light_input, handle_light_keyboard_toggles,
@@ -38,7 +40,11 @@ impl Plugin for LightingPlugin {
         app.add_systems(
             Update,
             (
-                handle_light_input,
+                // Only while its own tool is armed — see the note in
+                // `plugins/wall.rs`. Every authoring system was previously
+                // armed at once for a Game Master, so one click was offered to
+                // all of them and whichever claimed it won (spec 031 FR-040a).
+                handle_light_input.run_if(in_state(AuthoringMode::Lights)),
                 handle_light_resize,
                 handle_light_keyboard_toggles,
                 handle_light_undo,

@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use crate::plugins::authoring_mode::AuthoringMode;
+
 use crate::resources::{ActiveShapeTool, IsGameMaster, SelectedShape, ShapeSet};
 use crate::systems::shape::{
     handle_shape_input, handle_shape_keyboard_toggles, handle_shape_tool_selection,
@@ -39,7 +41,11 @@ impl Plugin for ShapePlugin {
             Update,
             (
                 handle_shape_tool_selection,
-                handle_shape_input,
+                // Only while its own tool is armed — see the note in
+                // `plugins/wall.rs`. Every authoring system was previously
+                // armed at once for a Game Master, so one click was offered to
+                // all of them and whichever claimed it won (spec 031 FR-040a).
+                handle_shape_input.run_if(in_state(AuthoringMode::Shapes)),
                 handle_shape_keyboard_toggles,
                 handle_shape_undo,
                 sync_shape_visuals,
