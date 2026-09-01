@@ -52,8 +52,9 @@ test.describe("World event catch-up on reconnect", () => {
     // the failure surfaced 100 lines later as "the reconnect never finished",
     // which it was not.
     //
-    // Recording the socket instead leaves the handshake entirely un-proxied,
-    // and severs *the* socket rather than whichever one the route saw last. It
+    // Recording the sockets instead leaves the handshake entirely un-proxied,
+    // and severs the page's real connections rather than whichever one the
+    // route happened to see last. It
     // also drops a leak: registering `ws.onClose` suppressed Playwright's own
     // forwarding of the page close to the server, so each severed connection's
     // `worldEventsCreated` subscription stayed alive for the rest of the run.
@@ -174,21 +175,37 @@ test.describe("World event catch-up on reconnect", () => {
     await cdp.send("Network.enable");
     await cdp.send("Network.setBlockedURLs", { urls: ["*/api/ws*"] });
 
+    // Every open socket, not the last one.
+    //
+    // A world page holds *two* connections to `/api/ws`. The world-event
+    // client in `engine/world/sync/subscriptionClient.ts` is the one whose
+    // state the indicator reports; `engine/bevy/index.ts` opens a second,
+    // private client for peer-transfer signalling, and it opens later —
+    // when the engine starts, after the page has loaded. So `at(-1)` was
+    // reliably the *signalling* socket, and closing it left the sync client
+    // connected and the indicator correctly saying nothing. The test was
+    // severing a connection it was not asserting about.
+    //
+    // Closing all of them is also the more honest reading of the scenario:
+    // the outage this spec describes is a tab that cannot hear the server,
+    // not one particular socket going away.
     const severed = await page.evaluate(() => {
       const sockets = (window as unknown as { __e2eSockets: WebSocket[] })
         .__e2eSockets;
-      const socket = sockets.at(-1);
-      if (!socket) return false;
-      // 4499 is graphql-ws's "Terminated", deliberately excluded from its
-      // fatal close codes — the client retries this one rather than giving
-      // up, which is the outage this test is about. A plain 1000 reads as a
-      // clean, intentional shutdown and would not be retried.
-      socket.close(4499, "e2e sever");
-      return true;
+      const open = sockets.filter((s) => s.readyState === WebSocket.OPEN);
+      for (const socket of open) {
+        // 4499 is graphql-ws's "Terminated", deliberately excluded from its
+        // fatal close codes — the client retries this one rather than giving
+        // up, which is the outage this test is about. A plain 1000 reads as a
+        // clean, intentional shutdown and would not be retried.
+        socket.close(4499, "e2e sever");
+      }
+      return { open: open.length, recorded: sockets.length };
     });
-    expect(severed, "the page should have an active /api/ws connection").toBe(
-      true,
-    );
+    expect(
+      severed.open,
+      `the page should have an active /api/ws connection (recorded ${severed.recorded})`,
+    ).toBeGreaterThan(0);
     await expect(indicator).toBeVisible({ timeout: 20_000 });
 
     // --- something happens while this tab cannot hear it ---
