@@ -508,6 +508,35 @@ pub async fn start_genie_session_impl(
     let doom_clock_max = input.doom_clock_max;
 
     let session = tokio::task::spawn_blocking(move || -> Result<GenieSession, String> {
+        // At most one active session per world, enforced here because
+        // nothing else enforces it and the rest of this module assumes it.
+        //
+        // `genieSession(worldId)` returns the *newest* active session
+        // (`queries/genie_session.rs` — `order(created_at.desc()).first()`),
+        // and creating a Genie world already starts one (`graphql.rs`,
+        // `is_genie_world`). So an unguarded insert left a world holding two
+        // live sessions, and concluding the newer one silently resurfaced the
+        // older: the Doom Clock a GM had just filled was replaced on screen by
+        // an untouched clock from a session nobody knew existed, with the
+        // "Session lost" banner never appearing. The carryover query below
+        // already assumes this invariant — it looks for the most recent
+        // *non-active* session to copy holdings from, which only means
+        // anything if a new session begins after the last one ended.
+        let active_exists = diesel::select(diesel::dsl::exists(
+            world_genie_sessions::table
+                .filter(world_genie_sessions::world_id.eq(world_id))
+                .filter(world_genie_sessions::status.eq("active")),
+        ))
+        .get_result::<bool>(&mut conn)
+        .map_err(|e| format!("Failed to check for an active session: {e}"))?;
+        if active_exists {
+            return Err(
+                "This world already has an active Genie session. Conclude it before \
+                 starting another."
+                    .to_string(),
+            );
+        }
+
         // FR-003 (research.md R1): per-world GM setting. When enabled,
         // copy every character's ending holdings from the most recently
         // concluded session (by created_at) into the new session before
@@ -2411,6 +2440,53 @@ mod tests {
         .expect("GM should be able to start a session");
 
         (world_id, owner_id, player_id, session.id)
+    }
+
+    #[tokio::test]
+    async fn a_world_may_hold_only_one_active_session() {
+        // The bug this guards: creating a Genie world already starts a
+        // session, and `startGenieSession` inserted a second unconditionally.
+        // `genieSession(worldId)` returns the newest active one, so
+        // concluding it silently resurfaced the older — a GM saw the Doom
+        // Clock they had just filled replaced by an untouched one, and no
+        // "Session lost" banner at all.
+        let state = test_app_state();
+        let (world_id, owner_id, _player_id, session_id) = setup_active_session(&state).await;
+
+        let second = start_genie_session_impl(
+            &state,
+            owner_id,
+            false,
+            StartGenieSessionInput {
+                world_id,
+                doom_clock_max: 6,
+            },
+        )
+        .await;
+        assert!(
+            second.is_err(),
+            "a second concurrent session must be refused while one is active"
+        );
+
+        // Concluding the first frees the world for the next one — a new game
+        // night is the whole point of the mutation.
+        advance_doom_clock_impl(&state, owner_id, false, session_id, 4)
+            .await
+            .expect("filling the clock should conclude the session");
+        let third = start_genie_session_impl(
+            &state,
+            owner_id,
+            false,
+            StartGenieSessionInput {
+                world_id,
+                doom_clock_max: 6,
+            },
+        )
+        .await;
+        assert!(
+            third.is_ok(),
+            "starting a session after the previous one ended must be allowed"
+        );
     }
 
     #[tokio::test]
