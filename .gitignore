@@ -176,6 +176,12 @@ apps/web/e2e/fixtures/.demo/
 # a whole file rather than spending the auth rate-limit budget per test.
 # Real cookies — never committed.
 apps/web/e2e/.demo/
+
+# Working state for `scripts/e2e-parallel.mjs`: one data path, demo dir and
+# JSON report per shard, rebuilt from scratch on every run. The measured
+# durations beside it (`.e2e-shards-durations.json`) are *not* ignored — they
+# are what keeps the first run on a new machine balanced.
+.e2e-shards/
 apps/web/.playwright/
 
 ### graphify ###

@@ -8,6 +8,17 @@ import tailwindcss from "@tailwindcss/vite";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// One stack per shard, so the ports and the proxy target cannot be constants.
+//
+// `scripts/e2e-parallel.mjs` runs several complete stacks side by side — each
+// its own database, bucket, backend and frontend — so that the e2e suite can
+// be split without the shards sharing mutable state. Every value below keeps
+// its previous literal as the default, so a plain `pnpm dev` is unchanged and
+// this is invisible to anyone not sharding.
+const devPort = Number(process.env.THUNDERFORGE_WEB_PORT ?? 5173);
+const backendOrigin =
+  process.env.THUNDERFORGE_BACKEND_ORIGIN ?? "http://127.0.0.1:30000";
+
 export default defineConfig({
   root: __dirname,
   base: "/",
@@ -96,7 +107,7 @@ export default defineConfig({
   },
   server: {
     host: "127.0.0.1",
-    port: 5173,
+    port: devPort,
     // Fail rather than drift. Vite's default is to take the next free port
     // when 5173 is busy, which is convenient alone and wrong here: the
     // backend proxy, the e2e baseURL and a tunnel's ingress all name 5173,
@@ -105,6 +116,9 @@ export default defineConfig({
     // notices first. Observed exactly that: a stale dev server held 5173,
     // Vite moved, and the failure that reached the console was the backend
     // panicking on its own port being in use.
+    // Still strict, and now more so rather than less: a shard whose frontend
+    // silently moved would proxy to another shard's backend and produce
+    // cross-shard failures that look like product bugs.
     strictPort: true,
     // Vite's DNS-rebinding protection rejects any request whose Host
     // header it doesn't recognize — including one forwarded through a
@@ -124,7 +138,7 @@ export default defineConfig({
     ],
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:30000",
+        target: backendOrigin,
         changeOrigin: true,
         ws: true,
       },
@@ -135,7 +149,7 @@ export default defineConfig({
       // resolved against the page origin on wasm32, so this proxy is what
       // makes `AssetServer::load("map-imports/.../uuid.png")` resolve in dev.
       "/assets": {
-        target: "http://127.0.0.1:30000",
+        target: backendOrigin,
         changeOrigin: true,
       },
     },

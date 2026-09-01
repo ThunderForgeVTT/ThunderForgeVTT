@@ -61,7 +61,7 @@ function pipeWithPrefix(stream, prefix, target) {
 
 export function spawnManaged(
   command,
-  { cwd = ROOT_DIR, prefix, detached = true },
+  { cwd = ROOT_DIR, prefix, detached = true, env = {} },
 ) {
   const child = spawn(command, {
     cwd,
@@ -70,6 +70,11 @@ export function spawnManaged(
     env: {
       ...process.env,
       FORCE_COLOR: process.env.FORCE_COLOR ?? "1",
+      // Last, so a caller can override anything inherited. `e2e-parallel.mjs`
+      // runs several stacks at once and each needs its own database, bucket,
+      // ports and data path — values that are otherwise inherited identically
+      // from this process and would have every shard writing to one place.
+      ...env,
     },
     stdio: ["inherit", "pipe", "pipe"],
   });
@@ -358,8 +363,8 @@ export async function terminateChildren(signal = "SIGINT") {
   await waitForClose(SHUTDOWN_KILL_MS);
 }
 
-export async function runCommand(command, { name, cwd = ROOT_DIR, prefix }) {
-  const child = spawnManaged(command, { cwd, prefix });
+export async function runCommand(command, { name, cwd = ROOT_DIR, prefix, env = {} }) {
+  const child = spawnManaged(command, { cwd, prefix, env });
   const result = await waitForProcess(child, name);
   if (result.code !== 0) {
     throw new Error(`${name} exited with code ${result.code}`);

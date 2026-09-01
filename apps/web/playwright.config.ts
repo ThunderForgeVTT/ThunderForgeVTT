@@ -1,12 +1,27 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// One place, so the server Playwright probes is always the server it talks to.
+//
+// These were two literals naming port 5173 independently. Under
+// `scripts/e2e-parallel.mjs` each shard runs against its own stack on its own
+// port, and a hardcoded probe URL means every shard checks 5173 — reusing a
+// stack it is not testing, or starting one that collides with the others.
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:5173";
+
+// `e2e-parallel.mjs` builds, migrates, seeds and starts every stack itself,
+// then waits for each to answer before a shard runs. Playwright must not also
+// try: `reuseExistingServer` would have it adopt whatever is on that port, and
+// on a free port it would start a `pnpm run dev` bound to the config's own
+// defaults rather than to this shard's database and bucket.
+const stackIsExternal = process.env.THUNDERFORGE_E2E_EXTERNAL_STACK === "1";
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
   reporter: [["html", { open: "never" }]],
   globalSetup: "./e2e/fixtures/global-setup.ts",
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:5173",
+    baseURL,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     launchOptions: {
@@ -34,9 +49,9 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
-  webServer: {
+  webServer: stackIsExternal ? undefined : {
     command: "pnpm run dev",
-    url: "http://localhost:5173",
+    url: baseURL,
     reuseExistingServer: true,
     timeout: 120_000,
     env: {

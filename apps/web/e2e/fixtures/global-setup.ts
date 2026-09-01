@@ -4,7 +4,16 @@ import fs from "node:fs";
 import path from "node:path";
 import { login } from "./helpers";
 
-export const DEMO_DIR = path.join(__dirname, ".demo");
+// Per-shard when sharding, so parallel stacks do not race on one file.
+//
+// `scripts/e2e-parallel.mjs` runs several Playwright processes at once, each
+// against its own stack. They all run this global setup, and they would all
+// write the same `storage-state.json` — a session belonging to whichever
+// backend won the race, handed to every shard. The state is only valid
+// against the stack that minted it, so the losers authenticate as nobody and
+// fail in ways that have nothing to do with what they are testing.
+export const DEMO_DIR =
+  process.env.THUNDERFORGE_E2E_DEMO_DIR ?? path.join(__dirname, ".demo");
 export const DEMO_STATE_PATH = path.join(DEMO_DIR, "storage-state.json");
 export const DEMO_WORLD_PATH = path.join(DEMO_DIR, "world.json");
 
