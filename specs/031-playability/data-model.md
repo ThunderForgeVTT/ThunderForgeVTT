@@ -74,7 +74,8 @@ Two additions to existing lore:
 |---|
 | A null parent is a root entry. |
 | Cycles are rejected at the data boundary. |
-| Deleting a parent must not orphan children — either re-parent to the deleted node's parent or refuse; decided in tasks. |
+| Deleting a parent **re-parents its children to the grandparent** — the deleted entry's own parent. A deleted root's children become roots, since there is no grandparent to inherit them. Never refuse the delete, and never orphan a subtree to the root when a real home exists. |
+| The database keeps `ON DELETE SET NULL` as a backstop only. It is the safe fallback if the application path is ever bypassed — content is never destroyed, merely flattened — but the delete mutation is what implements the rule above. |
 
 **`world_lore_tags`** — many-to-many.
 

@@ -35,13 +35,13 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 
 **Purpose**: Prerequisites and decisions that unblock everything else.
 
-- [ ] T001 Enable the `bevy_state` feature in `src/engine/Cargo.toml`, then verify with `cargo check --target wasm32-unknown-unknown -p thunderforge_engine` and record the release bundle size delta (research R11)
-- [ ] T002 [P] Write ADR for how a token survives a scene change (candidates A/B in research R2) in `docs/adrs/` and add its row to `docs/adrs/README.md`
-- [ ] T003 [P] Write ADR for the actor imagery model — rows keyed by role, not two columns (research R4) in `docs/adrs/` and index it in `docs/adrs/README.md`
-- [ ] T004 [P] Write ADR for presentational item price versus a system-owned economy (research R5) in `docs/adrs/` and index it in `docs/adrs/README.md`
-- [ ] T005 [P] Correct the RxDB reference under Technology Constraints in `.specify/memory/constitution.md` — the world cache plus the engine/GraphQL bridge is now the sole sync mechanism
-- [ ] T006 [P] Add a shared `createNpc` fixture in `apps/web/e2e/fixtures/world-cache.ts` (or a new `fixtures/content.ts`) and repoint `apps/web/e2e/world-compendium.spec.ts`, `apps/web/e2e/players-section.spec.ts` and `apps/web/e2e/actor-claim.spec.ts` at it, before any UI moves
-- [ ] T007 Decide and record the supported browser matrix in `docs/` — a prerequisite for FR-042 and a product decision, not an engineering one (research R7)
+- [X] T001 Enable the `bevy_state` feature in `src/engine/Cargo.toml`, then verify with `cargo check --target wasm32-unknown-unknown -p thunderforge_engine` and record the release bundle size delta (research R11)
+- [X] T002 [P] Write ADR for how a token survives a scene change (candidates A/B in research R2) in `docs/adrs/` and add its row to `docs/adrs/README.md`
+- [X] T003 [P] Write ADR for the actor imagery model — rows keyed by role, not two columns (research R4) in `docs/adrs/` and index it in `docs/adrs/README.md`
+- [X] T004 [P] Write ADR for presentational item price versus a system-owned economy (research R5) in `docs/adrs/` and index it in `docs/adrs/README.md`
+- [X] T005 [P] Correct the RxDB reference under Technology Constraints in `.specify/memory/constitution.md` — the world cache plus the engine/GraphQL bridge is now the sole sync mechanism
+- [X] T006 [P] Add a shared `createNpc` fixture in `apps/web/e2e/fixtures/world-cache.ts` (or a new `fixtures/content.ts`) and repoint `apps/web/e2e/world-compendium.spec.ts`, `apps/web/e2e/players-section.spec.ts` and `apps/web/e2e/actor-claim.spec.ts` at it, before any UI moves
+- [X] T007 Decide and record the supported browser matrix in `docs/` — a prerequisite for FR-042 and a product decision, not an engineering one (research R7)
 
 ---
 
@@ -51,13 +51,13 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 
 **⚠️ CRITICAL**: T008 and T009 block US9, US1 and US6.
 
-- [ ] T008 Introduce the authoring-mode state machine as a Bevy state in `src/engine/src/plugins/` (select | walls | lights | shapes | tokens | interactions), registered in `src/engine/src/lib.rs` — the engine becomes the single authority for the active mode (FR-040a, contracts/engine-events.md)
-- [ ] T009 Convert `apps/web/src/components/world/GmToolRail/GmToolRail.tsx` to *request* a mode change through the engine boundary rather than holding the active mode in React chrome (Constitution I)
-- [ ] T010 [P] Add snapping rules — square and hex — as pure functions with unit tests in `crates/thunderforge-canvas-core/src/` (research R8; needed by both Place and wall drawing)
-- [ ] T011 [P] Create the `world_actor_images` migration in `src/server/migrations/` with paired `up.sql`/`down.sql`, unique on (`actor_id`, `role`), `created_by`/`updated_by` provenance (data-model.md)
-- [ ] T012 [P] Create the `world_item_prices` migration in `src/server/migrations/` with paired up/down, at most one price per item (data-model.md)
-- [ ] T013 [P] Create the lore organisation migration in `src/server/migrations/` — `world_lore_entries.parent_id` self-FK plus a `world_lore_tags` table unique on (`lore_entry_id`, `tag`) (data-model.md)
-- [ ] T014 Regenerate `src/server/src/schema.rs` from the new migrations and confirm the server builds with `cargo check -p thunderforge`
+- [X] T008 Introduce the authoring-mode state machine as a Bevy state in `src/engine/src/plugins/` (select | walls | lights | shapes | tokens | interactions), registered in `src/engine/src/lib.rs` — the engine becomes the single authority for the active mode (FR-040a, contracts/engine-events.md)
+- [X] T009 Convert `apps/web/src/components/world/GmToolRail/GmToolRail.tsx` to *request* a mode change through the engine boundary rather than holding the active mode in React chrome (Constitution I)
+- [X] T010 [P] Add snapping rules — square and hex — as pure functions with unit tests in `crates/thunderforge-canvas-core/src/` (research R8; needed by both Place and wall drawing)
+- [X] T011 [P] Create the `world_actor_images` migration in `src/server/migrations/` with paired `up.sql`/`down.sql`, unique on (`actor_id`, `role`), `created_by`/`updated_by` provenance (data-model.md)
+- [X] T012 [P] Create the `world_item_prices` migration in `src/server/migrations/` with paired up/down, at most one price per item (data-model.md)
+- [X] T013 [P] Create the lore organisation migration in `src/server/migrations/` — `world_lore_entries.parent_id` self-FK plus a `world_lore_tags` table unique on (`lore_entry_id`, `tag`) (data-model.md)
+- [X] T014 Regenerate `src/server/src/schema.rs` from the new migrations and confirm the server builds with `cargo check -p thunderforge`
 
 **Checkpoint**: Mode is engine-owned; schema is in place; snapping is testable natively.
 
@@ -69,7 +69,7 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 
 **Independent Test**: Each defect has a direct reproduction; fixed when the reproduction no longer occurs.
 
-- [ ] T015 [US9] Confirm the stray-marker cause before fixing — check whether the marker lands at the tool *button's* screen position rather than the pointer's last map position (research R6), and record the finding in `specs/031-playability/research.md`
+- [X] T015 [US9] Confirm the stray-marker cause before fixing — check whether the marker lands at the tool *button's* screen position rather than the pointer's last map position (research R6), and record the finding in `specs/031-playability/research.md`
 - [ ] T016 [US9] Make entering an authoring mode inert on top of T008 so no tool switch places content, in `src/engine/src/plugins/` (FR-040, FR-040a)
 - [ ] T017 [US9] Ensure a gesture in flight — a drag or a carried placement — cannot complete under a newly entered mode's rules, in `src/engine/src/plugins/` (spec edge case)
 - [ ] T018 [P] [US9] Remove the overlapping loader on the play route so exactly one indicator shows: reconcile the route Suspense fallback in `apps/web/src/routes/AppRoutes.tsx` with `engine-load-indicator` in `apps/web/src/pages/world/WorldPage.tsx` (FR-041, research R9)
@@ -98,6 +98,11 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 - [ ] T030 [US1] Add View and Place actions to `apps/web/src/components/world/PlayDock/ActorsPanel.tsx`, replacing the link that navigates away from play (FR-001)
 - [ ] T031 [US1] Open the actor in a new browser tab for a GM from `apps/web/src/components/world/PlayDock/ActorsPanel.tsx` (FR-002, GM half)
 - [ ] T032 [US1] Wire Place to begin an engine placement and, on confirmation, call the token-create mutation subject to existing ownership rules, in `apps/web/src/` (FR-004, FR-007, contracts/graphql-mutations.md)
+- [ ] T032a [US1] Declare tool use as a permission in the world's single permission declaration, defaulting to Game-Master-only so existing worlds are unchanged, in `src/server/src/` (FR-044, FR-045, ADR-050)
+- [ ] T032b [US1] Let a Game Master grant specific tools to a specific player from the world's settings, in `apps/web/src/pages/world/settings/` and `src/server/src/graphql/` (FR-046)
+- [ ] T032c [US1] Resolve tool permission on the client so an unavailable tool never appears in the rail, in `apps/web/src/pages/world/WorldPage.tsx` and `apps/web/src/components/world/GmToolRail/GmToolRail.tsx` (FR-047)
+- [ ] T032d [US1] Enforce tool permission engine-side so a directly issued mode request or canvas input is refused regardless of what chrome shows, in `src/engine/src/plugins/authoring_mode.rs` and the input systems (FR-047, SC-012)
+- [ ] T032e [US1] End a gesture in flight when the acting person's permission for that tool is revoked, and make the loss legible, in `src/engine/src/` (spec edge case)
 - [ ] T033 [US1] Make an inert selection state legible when every kind is filtered out, in `apps/web/src/components/world/GmToolRail/GmToolRail.tsx` (spec edge case)
 - [ ] T034 [P] [US1] Add e2e coverage for place-then-cancel leaving nothing, and for a filtered Select ignoring walls, in `apps/web/e2e/canvas-authoring.spec.ts`
 
@@ -207,7 +212,7 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 - [ ] T069 [US8] Implement actor imagery upload for portrait and token roles through the existing transcode/storage path in `src/server/src/graphql/`, mirroring `mutations_lore_images.rs` (FR-036, research R4)
 - [ ] T070 [US8] Add the imagery upload UI to the actor edit page in `apps/web/src/pages/world/actor/` and display each role where it belongs (FR-036)
 - [ ] T071 [P] [US8] Add item price recording and display, presentational only, in `src/server/src/graphql/` and `apps/web/src/pages/world/compendium/ItemCompendiumTab.tsx` (FR-037, research R5)
-- [ ] T072 [P] [US8] Add the lore tree and tags — move, tag, and find by either — in `apps/web/src/pages/world/lore/` and `src/server/src/graphql/`, rejecting cycles at the data boundary (FR-038)
+- [ ] T072 [P] [US8] Add the lore tree and tags — move, tag, and find by either — in `apps/web/src/pages/world/lore/` and `src/server/src/graphql/`, rejecting cycles at the data boundary, and re-parenting a deleted entry's children to their grandparent rather than orphaning them (FR-038, data-model.md)
 - [ ] T073 [US8] Allow creating or attaching an item or lore entry from an actor's screen without leaving it, in `apps/web/src/pages/world/actor/` (FR-039)
 
 **Checkpoint**: Preparation and administration are comfortable at real world sizes.

@@ -295,6 +295,9 @@ that reproduction no longer occurs.
 - A mode change that arrives while a gesture is already in flight: a drag
   begun under one tool, or a placement being carried when the user switches
   away. Neither may complete under the new mode's rules.
+- A player's tool permission being revoked while they are mid-gesture with that
+  tool: the gesture must not complete, and the loss must be legible rather than
+  the tool silently ceasing to respond.
 
 ## Requirements *(mandatory)*
 
@@ -316,6 +319,20 @@ that reproduction no longer occurs.
 - **FR-006**: A placed token MUST obey the same grid rules as a dragged one.
 - **FR-007**: Token placement MUST be subject to the same ownership and
   permission rules as token creation.
+
+**Who may use a tool**
+
+- **FR-044**: Which authoring tools a person may use MUST be a declared
+  permission, resolved from the single permission declaration the world already
+  uses — not a role check written separately per tool.
+- **FR-045**: The default MUST be that only a Game Master may author, so
+  existing worlds behave exactly as they do today until a Game Master decides
+  otherwise.
+- **FR-046**: A Game Master MUST be able to grant a specific player the use of
+  specific tools for their world.
+- **FR-047**: A tool a person may not use MUST be neither offered nor usable —
+  it does not appear in their rail, and the engine refuses its input even if
+  the request is made directly. Hiding alone is not sufficient.
 
 **Selection**
 
@@ -451,6 +468,8 @@ that reproduction no longer occurs.
 - **SC-010**: A Game Master can find a specific player among fifty and change
   their character binding in under fifteen seconds.
 - **SC-011**: A game system that does not use rounds presents no round counter.
+- **SC-012**: A person without permission for a tool cannot author with it by
+  any route, including a directly issued request, in 100% of attempts.
 
 ## Assumptions
 

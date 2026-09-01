@@ -139,9 +139,33 @@ sub-tool handled in the DOM — every other tool is engine-side. The one tool th
 does not respond to an engine-level click is exactly the one that does not
 misfire.
 
-**Cheapest confirmation**: check whether the stray marker lands at the tool
-*button's* screen position rather than where the pointer last was on the map. If
-so, the rail's click is reaching the engine.
+**Confirmed at the code level (T015), and it is worse than "a click leaks
+through".** Every engine-side authoring system is gated on `IsGameMaster`
+**and nothing else**:
+
+- `systems/wall.rs::handle_wall_input` — `if !is_gm.0 { return; }`
+- `systems/token.rs` — the same guard at four separate input systems
+- `systems/lighting.rs`, `systems/shape.rs` — likewise
+
+And the tool the Game Master had chosen never reached the engine at all:
+`openGmToolId` lived in `WorldPage`'s React state, where it selected which
+flyout to render and was sent nowhere.
+
+So for a Game Master, **every authoring system was armed simultaneously**, and
+a single click on the canvas was offered to all of them at once. Whichever
+claimed it won. Text is the exception because it is the one sub-tool handled in
+the DOM: it stops listening when its panel unmounts, which is what "switching
+tools" actually did.
+
+That makes this a *missing concept* rather than an input-routing slip — the
+engine had no notion of an active tool to route to. T008 introduces it; T016
+gates the systems on it.
+
+**Still worth doing in a browser**: check whether the stray marker lands at the
+tool *button's* position or the pointer's last map position. It no longer
+changes the diagnosis, but it distinguishes "the rail's own click reached the
+canvas" from "a later click was claimed by the wrong system", which affects
+whether suppressing pointer events over the rail is also needed.
 
 **Note for FR-029**: canvas right-click is being added in the same feature.
 Whatever suppresses the browser context menu must be scoped to the canvas and
