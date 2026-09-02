@@ -3,7 +3,7 @@
   "title": "Basic Game System",
   "version": "0.1.0",
   "author": "ThunderForgeVTT Contributors",
-  "description": "A minimal, generic starter system pack for ThunderForgeVTT — a blank-slate template with a small ability score block and no bespoke mechanics, meant to be forked as the starting point for a new system pack.",
+  "description": "A minimal, generic starter system pack for ThunderForgeVTT \u2014 a blank-slate template with a small ability score block and no bespoke mechanics, meant to be forked as the starting point for a new system pack.",
   "license": "ThunderForgeVTT Original Content",
   "url": "https://github.com/ThunderForgeVTT/ThunderForgeVTT",
   "compatibility": {
@@ -11,13 +11,29 @@
     "verified": "0.1.0",
     "maximum": "1.0.0"
   },
-  "esmodules": ["module/main.mjs"],
-  "styles": ["styles/main.css"],
+  "esmodules": [
+    "module/main.mjs"
+  ],
+  "styles": [
+    "styles/main.css"
+  ],
   "abilities": {
-    "strength": { "label": "Strength", "abbreviation": "STR" },
-    "agility": { "label": "Agility", "abbreviation": "AGI" },
-    "intellect": { "label": "Intellect", "abbreviation": "INT" },
-    "willpower": { "label": "Willpower", "abbreviation": "WIL" }
+    "strength": {
+      "label": "Strength",
+      "abbreviation": "STR"
+    },
+    "agility": {
+      "label": "Agility",
+      "abbreviation": "AGI"
+    },
+    "intellect": {
+      "label": "Intellect",
+      "abbreviation": "INT"
+    },
+    "willpower": {
+      "label": "Willpower",
+      "abbreviation": "WIL"
+    }
   },
   "skills": {},
   "legal": {
@@ -33,33 +49,110 @@
     "ability_data": {
       "description": "Basic ability scores",
       "properties": {
-        "strength": { "type": "integer", "label": "Strength" },
-        "agility": { "type": "integer", "label": "Agility" },
-        "intellect": { "type": "integer", "label": "Intellect" },
-        "willpower": { "type": "integer", "label": "Willpower" }
+        "strength": {
+          "type": "integer",
+          "label": "Strength"
+        },
+        "agility": {
+          "type": "integer",
+          "label": "Agility"
+        },
+        "intellect": {
+          "type": "integer",
+          "label": "Intellect"
+        },
+        "willpower": {
+          "type": "integer",
+          "label": "Willpower"
+        }
       },
-      "required": ["strength", "agility", "intellect", "willpower"]
+      "required": [
+        "strength",
+        "agility",
+        "intellect",
+        "willpower"
+      ]
     },
     "resource_data": {
       "description": "Health",
       "properties": {
-        "current_health": { "type": "integer", "min": 0, "label": "Current Health" },
-        "max_health": { "type": "integer", "min": 1, "label": "Maximum Health" }
+        "current_health": {
+          "type": "integer",
+          "min": 0,
+          "label": "Current Health"
+        },
+        "max_health": {
+          "type": "integer",
+          "min": 1,
+          "label": "Maximum Health"
+        }
       },
-      "required": ["max_health"]
+      "required": [
+        "max_health"
+      ]
     },
     "proficiency_data": {
       "description": "Trained skills",
       "properties": {
-        "trained_skills": { "type": "array", "items": { "type": "string" }, "label": "Trained Skills" }
+        "trained_skills": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "label": "Trained Skills"
+        }
       }
     },
     "trait_data": {
       "description": "Freeform notes and character level",
       "properties": {
-        "notes": { "type": "array", "items": { "type": "string" }, "label": "Notes" },
-        "level": { "type": "integer", "min": 1, "label": "Level" }
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "label": "Notes"
+        },
+        "level": {
+          "type": "integer",
+          "min": 1,
+          "label": "Level"
+        }
       }
     }
-  }
+  },
+  "resources": [
+    {
+      "id": "health",
+      "label": "Health",
+      "kind": "bar",
+      "order": 0,
+      "allowStacking": false,
+      "source": {
+        "slot": "resourceData",
+        "entries": [
+          {
+            "current": "current_health",
+            "max": "max_health"
+          }
+        ]
+      }
+    }
+  ],
+  "sheet": [
+    {
+      "id": "level",
+      "label": "Level",
+      "kind": "number",
+      "slot": "traitData",
+      "source": "level"
+    },
+    {
+      "id": "notes",
+      "label": "Notes",
+      "kind": "text",
+      "slot": "traitData",
+      "source": "notes"
+    }
+  ]
 }

@@ -1,0 +1,145 @@
+{
+  "id": "forged-silver",
+  "type": "interface",
+  "title": "Forged Silver",
+  "version": "1.0.0",
+  "description": "A writing-first arrangement for systems whose characters are described rather than scored.",
+  "compatibility": {
+    "minimum": "0.1.0",
+    "verified": "0.1.0",
+    "maximum": null
+  },
+  "legal": {
+    "licenseName": "AGPL-3.0-or-later",
+    "attributionText": "ThunderForgeVTT Contributors",
+    "requiredNotice": null,
+    "disclaimer": null,
+    "trademarkRestrictions": [],
+    "requiredUiPlacement": null,
+    "sourceUrl": null
+  },
+  "light": {
+    "background": "oklch(0.98 0.004 90)",
+    "card": "oklch(0.995 0.003 90)",
+    "muted": "oklch(0.94 0.006 90)",
+    "mutedForeground": "oklch(0.52 0.01 90)",
+    "primary": "oklch(0.44 0.03 90)",
+    "accent": "oklch(0.92 0.015 90)",
+    "accentForeground": "oklch(0.28 0.02 90)",
+    "border": "oklch(0.89 0.008 90)",
+    "ring": "oklch(0.62 0.04 90)",
+    "sidebar": "oklch(0.96 0.005 90)",
+    "sidebarRing": "oklch(0.62 0.04 90)"
+  },
+  "dark": {
+    "background": "oklch(0.18 0.008 90)",
+    "card": "oklch(0.24 0.01 90)",
+    "muted": "oklch(0.30 0.01 90)",
+    "primary": "oklch(0.88 0.015 90)",
+    "accent": "oklch(0.31 0.015 90)",
+    "border": "oklch(1 0 0 / 12%)",
+    "ring": "oklch(0.64 0.04 90)",
+    "sidebar": "oklch(0.23 0.01 90)",
+    "sidebarRing": "oklch(0.64 0.04 90)"
+  },
+  "targets": [
+    "fate_core"
+  ],
+  "layout": [
+    {
+      "kind": "section",
+      "title": "Character",
+      "children": [
+        {
+          "kind": "block",
+          "id": "highConcept"
+        },
+        {
+          "kind": "block",
+          "id": "trouble"
+        }
+      ]
+    },
+    {
+      "kind": "section",
+      "title": "Aspects",
+      "children": [
+        {
+          "kind": "rowList",
+          "of": "other"
+        }
+      ]
+    },
+    {
+      "kind": "section",
+      "title": "Skills",
+      "children": [
+        {
+          "kind": "rowList",
+          "of": "skills"
+        }
+      ]
+    },
+    {
+      "kind": "section",
+      "title": "Stress and Consequences",
+      "children": [
+        {
+          "kind": "row",
+          "children": [
+            {
+              "kind": "column",
+              "children": [
+                {
+                  "kind": "value",
+                  "id": "stress"
+                }
+              ]
+            },
+            {
+              "kind": "column",
+              "children": [
+                {
+                  "kind": "value",
+                  "id": "consequenceMild"
+                },
+                {
+                  "kind": "value",
+                  "id": "consequenceModerate"
+                },
+                {
+                  "kind": "value",
+                  "id": "consequenceSevere"
+                },
+                {
+                  "kind": "value",
+                  "id": "consequenceExtreme"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "section",
+      "title": "Fate Points",
+      "children": [
+        {
+          "kind": "barStack",
+          "of": "resources"
+        }
+      ]
+    },
+    {
+      "kind": "section",
+      "title": "Stunts and Extras",
+      "children": [
+        {
+          "kind": "block",
+          "id": "stunts"
+        }
+      ]
+    }
+  ]
+}

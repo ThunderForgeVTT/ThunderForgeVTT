@@ -96,7 +96,7 @@
     "requiredNotice": null,
     "disclaimer": "This is an unofficial, third-party digital implementation of mechanics derived from the Blades in the Dark SRD. It is not affiliated with, endorsed by, or sponsored by One Seven Design, John Harper, or Evil Hat Productions. 'Blades in the Dark' and the 'Forged in the Dark' framework name may be trademarks of their respective owners; only the CC-BY-licensed SRD text and mechanics are reused here, under attribution.",
     "trademarkRestrictions": [],
-    "requiredUiPlacement": "Must be shown on the system selection screen when a GM picks Blades in the Dark / Forged in the Dark, and/or a permanent, easily accessible module settings tab for the system — not buried in a ToS or changelog.",
+    "requiredUiPlacement": "Must be shown on the system selection screen when a GM picks Blades in the Dark / Forged in the Dark, and/or a permanent, easily accessible module settings tab for the system \u2014 not buried in a ToS or changelog.",
     "sourceUrl": "https://creativecommons.org/licenses/by/3.0/"
   },
   "data_types": {
@@ -217,5 +217,14 @@
       }
     }
   ],
-  "movement": {}
+  "movement": {},
+  "sheet": [
+    {
+      "id": "notes",
+      "label": "Notes",
+      "kind": "text",
+      "slot": "traitData",
+      "source": "notes"
+    }
+  ]
 }

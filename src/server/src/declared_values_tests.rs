@@ -409,3 +409,51 @@ fn every_bundled_system_publishes_something() {
         "expected the bundled systems, checked {checked}"
     );
 }
+
+/// T077: every bundled system declares what it stores.
+///
+/// The gap this closes was in three manifests at once, and it was invisible:
+/// `fate_core`, `cypher_system`, `year_zero_engine` and `basic-game-system`
+/// all stored numbers in `resource_data` and declared no resources at all, so
+/// the data sat in the database and never reached a sheet. Nothing failed —
+/// the values simply were not there, which looks exactly like a character who
+/// has not filled them in.
+///
+/// Reads the systems from the directory rather than naming them, so a pack
+/// added later is held to the same standard without anyone remembering.
+#[test]
+fn no_bundled_system_stores_a_pool_it_never_declares() {
+    let systems = std::fs::read_dir(packs()).expect("the systems directory");
+
+    for entry in systems.filter_map(Result::ok) {
+        if !entry.path().is_dir() {
+            continue;
+        }
+        let id = entry.file_name().to_string_lossy().into_owned();
+        let manifest: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(entry.path().join("system.json")).expect("a manifest"),
+        )
+        .expect("valid json");
+
+        let stores_resource_data = manifest
+            .pointer("/data_types/resource_data/properties")
+            .and_then(|p| p.as_object())
+            .is_some_and(|p| !p.is_empty());
+
+        if !stores_resource_data {
+            continue;
+        }
+
+        let declares = manifest
+            .get("resources")
+            .and_then(|r| r.as_array())
+            .is_some_and(|r| !r.is_empty());
+
+        assert!(
+            declares,
+            "{id} stores values in `resource_data` and declares no resources, \
+             so they never reach a sheet — and the absence looks exactly like a \
+             character who has not filled them in"
+        );
+    }
+}

@@ -1,0 +1,191 @@
+{
+  "id": "forged-bronze",
+  "type": "interface",
+  "title": "Forged Bronze",
+  "version": "1.0.0",
+  "description": "A pool-and-condition arrangement for systems whose stats are spent rather than rolled against.",
+  "compatibility": {
+    "minimum": "0.1.0",
+    "verified": "0.1.0",
+    "maximum": null
+  },
+  "legal": {
+    "licenseName": "AGPL-3.0-or-later",
+    "attributionText": "ThunderForgeVTT Contributors",
+    "requiredNotice": null,
+    "disclaimer": null,
+    "trademarkRestrictions": [],
+    "requiredUiPlacement": null,
+    "sourceUrl": null
+  },
+  "light": {
+    "background": "oklch(0.975 0.008 60)",
+    "card": "oklch(0.995 0.005 60)",
+    "muted": "oklch(0.93 0.012 60)",
+    "mutedForeground": "oklch(0.51 0.02 60)",
+    "primary": "oklch(0.45 0.06 60)",
+    "accent": "oklch(0.91 0.03 60)",
+    "accentForeground": "oklch(0.28 0.04 60)",
+    "border": "oklch(0.88 0.015 60)",
+    "ring": "oklch(0.60 0.06 60)",
+    "sidebar": "oklch(0.955 0.01 60)",
+    "sidebarRing": "oklch(0.60 0.06 60)"
+  },
+  "dark": {
+    "background": "oklch(0.18 0.012 60)",
+    "card": "oklch(0.24 0.015 60)",
+    "muted": "oklch(0.30 0.015 60)",
+    "primary": "oklch(0.87 0.03 60)",
+    "accent": "oklch(0.31 0.02 60)",
+    "border": "oklch(1 0 0 / 12%)",
+    "ring": "oklch(0.63 0.05 60)",
+    "sidebar": "oklch(0.23 0.015 60)",
+    "sidebarRing": "oklch(0.63 0.05 60)"
+  },
+  "targets": [
+    "cypher_system"
+  ],
+  "layout": [
+    {
+      "kind": "section",
+      "title": "Character",
+      "children": [
+        {
+          "kind": "row",
+          "children": [
+            {
+              "kind": "column",
+              "children": [
+                {
+                  "kind": "value",
+                  "id": "characterType"
+                }
+              ]
+            },
+            {
+              "kind": "column",
+              "children": [
+                {
+                  "kind": "value",
+                  "id": "descriptor"
+                }
+              ]
+            },
+            {
+              "kind": "column",
+              "children": [
+                {
+                  "kind": "value",
+                  "id": "focus"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "row",
+          "children": [
+            {
+              "kind": "column",
+              "children": [
+                {
+                  "kind": "value",
+                  "id": "tier"
+                }
+              ]
+            },
+            {
+              "kind": "column",
+              "children": [
+                {
+                  "kind": "value",
+                  "id": "effort"
+                }
+              ]
+            },
+            {
+              "kind": "column",
+              "children": [
+                {
+                  "kind": "value",
+                  "id": "xp"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "section",
+      "title": "Pools",
+      "children": [
+        {
+          "kind": "barStack",
+          "of": "resources"
+        }
+      ]
+    },
+    {
+      "kind": "section",
+      "title": "Condition",
+      "children": [
+        {
+          "kind": "row",
+          "children": [
+            {
+              "kind": "column",
+              "children": [
+                {
+                  "kind": "value",
+                  "id": "damageTrack"
+                }
+              ]
+            },
+            {
+              "kind": "column",
+              "children": [
+                {
+                  "kind": "value",
+                  "id": "armor"
+                },
+                {
+                  "kind": "value",
+                  "id": "recoveryBonus"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "section",
+      "title": "Skills and Abilities",
+      "children": [
+        {
+          "kind": "rowList",
+          "of": "other"
+        },
+        {
+          "kind": "block",
+          "id": "specialAbilities"
+        }
+      ]
+    },
+    {
+      "kind": "section",
+      "title": "Cyphers and Equipment",
+      "children": [
+        {
+          "kind": "block",
+          "id": "cyphers"
+        },
+        {
+          "kind": "block",
+          "id": "equipment"
+        }
+      ]
+    }
+  ]
+}

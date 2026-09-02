@@ -125,7 +125,7 @@
   "coreCheck": "1d20+modifier",
   "legal": {
     "licenseName": "Open RPG Creative License (ORC)",
-    "attributionText": "Pathfinder Player Core 2 / Pathfinder Monster Core © 2024, Paizo Inc.; licensed under the ORC License located at the Library of Congress at TX 9-307-067 and available online at various locations including paizo.com/orclicense, azoralaw.com/orclicense, and others. All warranties are disclaimed as set forth therein.",
+    "attributionText": "Pathfinder Player Core 2 / Pathfinder Monster Core \u00a9 2024, Paizo Inc.; licensed under the ORC License located at the Library of Congress at TX 9-307-067 and available online at various locations including paizo.com/orclicense, azoralaw.com/orclicense, and others. All warranties are disclaimed as set forth therein.",
     "requiredNotice": "Sourced verbatim from Player Core's own printed ORC Notice page (p.463, colophon abridged): 'This product is licensed under the ORC License to be held in the Library of Congress and available online at various locations including paizo.com/orclicense, azoralaw.com/orclicense, and others. All warranties are disclaimed as set forth therein. Attribution: This product is original game content and is not based on a licensed game system. If you use our Licensed Material in your own published work, please credit us in your product as follows: Pathfinder Player Core (c) 2023 Paizo Inc., Designed by Logan Bonner, Jason Bulmahn, Stephen Radney-MacFarland, and Mark Seifter. [full author list continues in the book colophon] ... Reserved Material: Reserved Material elements in this product include all elements designated as Reserved Material under the ORC License. To avoid confusion, such items include: All trademarks, registered trademarks, proper nouns (characters, deities, locations, etc., as well as all adjectives, names, titles, and descriptive terms derived from proper nouns), artworks, characters, dialogue, locations, organizations, plots, storylines, and trade dress. Expressly Designated Licensed Material: This product contains no Expressly Designated Licensed Material. Pathfinder Player Core (c) 2023, Paizo Inc. Paizo, the Paizo golem, Pathfinder, and other trademarks owned by Paizo are property of Paizo Inc. All rights reserved.'",
     "disclaimer": null,
     "trademarkRestrictions": [
@@ -133,7 +133,7 @@
       "Do not reproduce Reserved Material (proprietary setting lore, named NPCs/deities/locations, official artwork) in the system pack; only Licensed Material (mechanics and rules text) may be programmatically ingested",
       "Software built to process ORC-licensed data is not itself required to be open-sourced; only the game-mechanic content carries share-alike/attribution obligations, not the rendering engine or platform code"
     ],
-    "requiredUiPlacement": "The ORC Notice must be prominently displayed wherever a GM selects or enables this system pack — e.g. on a system-selection splash screen shown at campaign creation, and/or in a permanent, easily accessible module settings/about tab — not buried in a hidden Terms of Service page.",
+    "requiredUiPlacement": "The ORC Notice must be prominently displayed wherever a GM selects or enables this system pack \u2014 e.g. on a system-selection splash screen shown at campaign creation, and/or in a permanent, easily accessible module settings/about tab \u2014 not buried in a hidden Terms of Service page.",
     "sourceUrl": "https://paizo.com/orclicense"
   },
   "data_types": {
@@ -303,5 +303,14 @@
       "source": "speed_burrow",
       "order": 4
     }
-  }
+  },
+  "sheet": [
+    {
+      "id": "notes",
+      "label": "Notes",
+      "kind": "text",
+      "slot": "traitData",
+      "source": "notes"
+    }
+  ]
 }

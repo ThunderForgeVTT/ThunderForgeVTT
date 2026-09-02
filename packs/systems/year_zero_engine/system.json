@@ -37,22 +37,58 @@
     }
   },
   "skills": {
-    "force": { "ability": "strength", "label": "Force" },
-    "melee": { "ability": "strength", "label": "Melee" },
-    "stamina": { "ability": "strength", "label": "Stamina" },
-    "marksmanship": { "ability": "agility", "label": "Marksmanship" },
-    "mobility": { "ability": "agility", "label": "Mobility" },
-    "stealth": { "ability": "agility", "label": "Stealth" },
-    "crafting": { "ability": "wits", "label": "Crafting" },
-    "observation": { "ability": "wits", "label": "Observation" },
-    "survival": { "ability": "wits", "label": "Survival" },
-    "healing": { "ability": "empathy", "label": "Healing" },
-    "insight": { "ability": "empathy", "label": "Insight" },
-    "persuasion": { "ability": "empathy", "label": "Persuasion" }
+    "force": {
+      "ability": "strength",
+      "label": "Force"
+    },
+    "melee": {
+      "ability": "strength",
+      "label": "Melee"
+    },
+    "stamina": {
+      "ability": "strength",
+      "label": "Stamina"
+    },
+    "marksmanship": {
+      "ability": "agility",
+      "label": "Marksmanship"
+    },
+    "mobility": {
+      "ability": "agility",
+      "label": "Mobility"
+    },
+    "stealth": {
+      "ability": "agility",
+      "label": "Stealth"
+    },
+    "crafting": {
+      "ability": "wits",
+      "label": "Crafting"
+    },
+    "observation": {
+      "ability": "wits",
+      "label": "Observation"
+    },
+    "survival": {
+      "ability": "wits",
+      "label": "Survival"
+    },
+    "healing": {
+      "ability": "empathy",
+      "label": "Healing"
+    },
+    "insight": {
+      "ability": "empathy",
+      "label": "Insight"
+    },
+    "persuasion": {
+      "ability": "empathy",
+      "label": "Persuasion"
+    }
   },
   "skillRoll": {
     "formula": "(attribute+skill)d6cs>=6",
-    "description": "Year Zero Engine's core dice-pool mechanic (standard d6-pool variant, not the optional step-dice variant used by games like Twilight 2000): roll a pool of Base Dice (equal to the attribute score) plus Skill Dice (equal to the skill level), all d6, and count each die showing a 6 as one success; at least one success is required to succeed. Confirmed against crates/thunderforge-dice's real grammar: `attribute` and `skill` are placeholder-bound scores summed inside the parenthesized dice-count expression (a real grammar feature, per the existing `(skill)d6kh3x=6cs>=4` formula in that crate's own test suite), producing a single d6 pool so `cs>=6` counts successes across the combined pool in one pass. Two separately-counted pools added with `+` (e.g. `{attribute}d6cs>=6+{skill}d6cs>=6`) also parses, but the dice engine only classifies a formula's ResolutionKind as SuccessCount when success-counting happens on a single top-level dice/pool node, so the two-pool-added-together form would evaluate to the correct numeric total but be reported as a Total, not a SuccessCount — the single-combined-pool form above is the correct one for this mechanic. Gear Dice are a further additive pool this pass intentionally leaves out of the formula (out of scope per this pass's plan).",
+    "description": "Year Zero Engine's core dice-pool mechanic (standard d6-pool variant, not the optional step-dice variant used by games like Twilight 2000): roll a pool of Base Dice (equal to the attribute score) plus Skill Dice (equal to the skill level), all d6, and count each die showing a 6 as one success; at least one success is required to succeed. Confirmed against crates/thunderforge-dice's real grammar: `attribute` and `skill` are placeholder-bound scores summed inside the parenthesized dice-count expression (a real grammar feature, per the existing `(skill)d6kh3x=6cs>=4` formula in that crate's own test suite), producing a single d6 pool so `cs>=6` counts successes across the combined pool in one pass. Two separately-counted pools added with `+` (e.g. `{attribute}d6cs>=6+{skill}d6cs>=6`) also parses, but the dice engine only classifies a formula's ResolutionKind as SuccessCount when success-counting happens on a single top-level dice/pool node, so the two-pool-added-together form would evaluate to the correct numeric total but be reported as a Total, not a SuccessCount \u2014 the single-combined-pool form above is the correct one for this mechanic. Gear Dice are a further additive pool this pass intentionally leaves out of the formula (out of scope per this pass's plan).",
     "placeholders": {
       "attribute": "The chosen attribute's score (1-5): strength, agility, wits, or empathy.",
       "skill": "The chosen skill's trained level (0-5)."
@@ -149,5 +185,68 @@
         }
       }
     }
-  }
+  },
+  "resources": [
+    {
+      "id": "health",
+      "label": "Health",
+      "kind": "counter",
+      "order": 0,
+      "allowStacking": false,
+      "source": {
+        "slot": "resourceData",
+        "entries": [
+          {
+            "current": "health"
+          }
+        ]
+      }
+    },
+    {
+      "id": "resolve",
+      "label": "Resolve",
+      "kind": "counter",
+      "order": 1,
+      "allowStacking": false,
+      "source": {
+        "slot": "resourceData",
+        "entries": [
+          {
+            "current": "resolve"
+          }
+        ]
+      }
+    },
+    {
+      "id": "stress",
+      "label": "Stress",
+      "kind": "counter",
+      "order": 2,
+      "allowStacking": false,
+      "source": {
+        "slot": "resourceData",
+        "entries": [
+          {
+            "current": "stress"
+          }
+        ]
+      }
+    }
+  ],
+  "sheet": [
+    {
+      "id": "experiencePoints",
+      "label": "Experience",
+      "kind": "number",
+      "slot": "resourceData",
+      "source": "experience_points"
+    },
+    {
+      "id": "notes",
+      "label": "Notes",
+      "kind": "text",
+      "slot": "traitData",
+      "source": "notes"
+    }
+  ]
 }

@@ -122,7 +122,7 @@
   "conditions": {
     "bound": {
       "label": "Bound",
-      "description": "The Genie's power is constrained by their vessel, a Patron's rule, or a captor's ward — wish-granting abilities are suppressed or restricted until the binding is broken."
+      "description": "The Genie's power is constrained by their vessel, a Patron's rule, or a captor's ward \u2014 wish-granting abilities are suppressed or restricted until the binding is broken."
     },
     "exposed": {
       "label": "Exposed",
@@ -278,5 +278,14 @@
       "default": 6,
       "order": 0
     }
-  }
+  },
+  "sheet": [
+    {
+      "id": "notes",
+      "label": "Notes",
+      "kind": "text",
+      "slot": "traitData",
+      "source": "notes"
+    }
+  ]
 }

@@ -211,8 +211,8 @@ is here.
 - [ ] T019h **The named declaration sets and `all` can drift.** `other` is a complement, so the renderer needs the whole published set as well as the five named ones — and nothing checks the two agree. If the server sent each value's set membership beside its `group`, the client would stop carrying six lists that can disagree with each other
 - [ ] T019i **A state's null current and its rendered text disagree.** `State { current: None }` renders to an empty string in the `value` field, so a system that legitimately named a rung `""` would read as no-rung. Only the structured field is trustworthy — the same lesson as T019a, in a smaller place
 - [ ] T019j **A `Track` cannot express a segmented run** — Fate's style where only boxes 1, 2 and 4 exist has no representation. Nothing shipping needs it; it is the first thing a system will ask for
-- [ ] T077 [P] [US4] Audit the remaining bundled manifests — `blades_in_the_dark`, `pathfinder2e`, `year_zero_engine`, `basic-game-system` — against the same question, and declare what each actually tracks
-- [ ] T078 [US4] Write a Fate-shaped and a Cypher-shaped interface pack under `packs/interface/`. This is the acceptance test for the whole increment (SC-013): if either needs a format change to be written, the format is not finished, and finding that out by writing a pack is what worked every previous time
+- [X] T077 [P] [US4] Audit the remaining bundled manifests — `blades_in_the_dark`, `pathfinder2e`, `year_zero_engine`, `basic-game-system` — against the same question, and declare what each actually tracks
+- [X] T078 [US4] Write a Fate-shaped and a Cypher-shaped interface pack under `packs/interface/`. This is the acceptance test for the whole increment (SC-013): if either needs a format change to be written, the format is not finished, and finding that out by writing a pack is what worked every previous time
 
 ### Proof
 
