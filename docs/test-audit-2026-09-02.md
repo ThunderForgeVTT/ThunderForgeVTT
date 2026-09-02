@@ -35,6 +35,8 @@ The pattern has bitten this repository repeatedly:
 | 5. Boundary-blind validators (3 packs) | `yze`, `genie`, `dnd5e` validators | ✓ range narrowed one step each end |
 | 7. Name promised coverage it lacked | `src/core/src/policies/mod.rs` | ✓ `remove` gutted to a no-op |
 | Web: `missing` reported for a loaded pack | `appearance-context.test.ts` | ✓ `missing = requestedId` |
+| Web: CSRF never asserted | `api/__tests__/graphqlClient.test.ts` | ✓ both `withCsrf(...)` call sites stripped |
+| 6. Six vacuous e2e absence assertions | six spec files | replaced with positive assertions; **pending a live re-run** |
 | 3 (partly). Engine suite never built | `src/engine/Cargo.toml` — winit confined to wasm | one blocker of two; see T082-T084 |
 
 **A note on fixing these.** The first attempt at the Year Zero boundary test

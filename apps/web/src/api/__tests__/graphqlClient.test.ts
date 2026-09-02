@@ -257,3 +257,65 @@ describe("operationNameOf", () => {
     expect(operationNameOf("{ worldAbilities { id } }")).toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// CSRF (found by the 2026-09-02 mutation audit)
+// ---------------------------------------------------------------------------
+
+/**
+ * Nothing asserted that this client sends a CSRF token.
+ *
+ * The audit replaced **both** `withCsrf(...)` call sites in `graphqlClient.ts`
+ * with plain header literals and the whole suite stayed green — every mutation
+ * this app makes would have been rejected by the server, and no test would
+ * have noticed. It was found from the other direction on the same day: an e2e
+ * hand-rolled a `fetch` to `/api/graphql`, omitted the token, and got a 401
+ * with an empty body.
+ *
+ * `withCsrf` reads the `csrf_token` cookie, so these set and clear one.
+ */
+describe("CSRF", () => {
+  // This suite runs under vitest's `node` environment — there is no `document`
+  // — so the cookie is stubbed rather than set. `withCsrf` reads
+  // `document.cookie` and nothing else, which is exactly the seam to stub.
+  const withCookie = (cookie: string) => vi.stubGlobal("document", { cookie });
+
+  it("sends the token from the cookie on a query", async () => {
+    withCookie("csrf_token=a-real-token");
+    fetchMock.mockResolvedValue(jsonResponse({ data: { worldAbilities: [] } }));
+
+    await postGraphQL(QUERY, { worldId: "w" });
+
+    const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>;
+    expect(headers["x-csrf-token"]).toBe("a-real-token");
+  });
+
+  it("sends it on a multipart upload too", async () => {
+    withCookie("csrf_token=a-real-token");
+    fetchMock.mockResolvedValue(jsonResponse({ data: { upload: true } }));
+
+    await postGraphQLMultipart(
+      QUERY,
+      { worldId: "w" },
+      new File(["x"], "x.png", { type: "image/png" }),
+      "variables.file",
+    );
+
+    const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>;
+    expect(headers["x-csrf-token"]).toBe("a-real-token");
+  });
+
+  /**
+   * No cookie is not a crash. A first request before the session exists has
+   * nothing to send, and the server answers that on its own terms.
+   */
+  it("sends no token header when there is no cookie", async () => {
+    withCookie("");
+    fetchMock.mockResolvedValue(jsonResponse({ data: { worldAbilities: [] } }));
+
+    await postGraphQL(QUERY, { worldId: "w" });
+
+    const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>;
+    expect(headers["x-csrf-token"]).toBeUndefined();
+  });
+});
