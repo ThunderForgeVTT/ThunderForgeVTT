@@ -147,6 +147,16 @@
           ]
         }
       ]
+    },
+    {
+      "kind": "section",
+      "title": "Everything Else",
+      "children": [
+        {
+          "kind": "rowList",
+          "of": "other"
+        }
+      ]
     }
   ]
 }

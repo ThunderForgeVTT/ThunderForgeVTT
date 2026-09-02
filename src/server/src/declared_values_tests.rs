@@ -150,18 +150,42 @@ fn a_genie_actors_pools_arrive_with_their_maximums_intact() {
 
 /// A system that declares no pools gets none — which is correct for a ruleset
 /// that tracks none, not a gap to fill with a default.
+///
+/// Written against Fate Core, which declared no resources at the time. It does
+/// now — T075 gave it the fate points and refresh its `resource_data` had
+/// always stored — so the assertion moved to `year_zero_engine`, which still
+/// declares none. It kept passing after Fate changed, because the fixture
+/// happened to supply no resource data either: a test can go on being green
+/// while its message becomes false, and the message was the thing that was
+/// wrong.
 #[test]
 fn a_system_with_no_declared_resources_publishes_none() {
     let slots = ActorSlots {
-        ability_data: Some(serde_json::json!({ "athletics": 2 })),
+        ability_data: Some(serde_json::json!({ "strength": 3, "agility": 2 })),
+        resource_data: Some(serde_json::json!({ "anything": 4, "max_anything": 8 })),
         ..ActorSlots::default()
     };
-    let values = declared_values_for_actor(&packs(), "fate_core", &slots);
+    let values = declared_values_for_actor(&packs(), "year_zero_engine", &slots);
     assert!(
         values
             .iter()
             .all(|v| !matches!(v.value, DeclaredValueKind::Fraction { .. })),
-        "Fate Core declares no pools"
+        "Year Zero declares no resources, so stored numbers that look like          pools are not published as pools"
+    );
+}
+
+/// The converse, and the one the previous test stopped covering: a system that
+/// *does* declare pools publishes them.
+#[test]
+fn a_system_that_declares_pools_publishes_them() {
+    let slots = ActorSlots {
+        resource_data: Some(serde_json::json!({ "fate_points": 3, "refresh": 3 })),
+        ..ActorSlots::default()
+    };
+    let values = declared_values_for_actor(&packs(), "fate_core", &slots);
+    assert!(
+        find(&values, "fatePoints").is_some(),
+        "Fate stored these all along and declared them nowhere until T075"
     );
 }
 
@@ -225,5 +249,163 @@ fn a_5e_actor_derives_its_modifiers_saves_and_skills() {
     assert_eq!(
         find(&values, "strength").map(|v| v.origin),
         Some(Origin::Stored)
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Increment E: every shipping system has a sheet (SC-012)
+// ---------------------------------------------------------------------------
+
+/// Fate Core, which declares no abilities at all and whose sheet is mostly
+/// text. Before this increment it published two numbers and nothing else.
+#[test]
+fn a_fate_actor_publishes_its_aspects_its_stress_and_its_named_skills() {
+    let slots = ActorSlots {
+        ability_data: None,
+        resource_data: Some(serde_json::json!({
+            "fate_points": 3, "refresh": 3, "stress": 2
+        })),
+        proficiency_data: Some(serde_json::json!({
+            "skills": [{ "name": "Burglary", "value": 3 }, { "name": "Notice", "value": 2 }]
+        })),
+        trait_data: Some(serde_json::json!({
+            "high_concept": "Disgraced Knight of the Ninth Gate",
+            "trouble": "Sworn to a debt I cannot name",
+            "consequence_mild": "Bruised Ribs",
+            "stunts": ["Riposte", "Reputation Precedes Me"]
+        })),
+    };
+    let values = declared_values_for_actor(&packs(), "fate_core", &slots);
+
+    assert_eq!(
+        find(&values, "highConcept").map(|v| v.value.clone()),
+        Some(DeclaredValueKind::Text(
+            "Disgraced Knight of the Ninth Gate".to_string()
+        ))
+    );
+
+    // A flat run of eight, two ticked — not a bar.
+    assert_eq!(
+        find(&values, "stress").map(|v| v.value.clone()),
+        Some(DeclaredValueKind::Track { filled: 2, of: 8 })
+    );
+
+    // Player-named slots take the player's words.
+    assert_eq!(
+        find(&values, "skill1").map(|v| v.label.clone()),
+        Some("Burglary".to_string())
+    );
+
+    // And the pools it always stored and never declared.
+    assert!(find(&values, "fatePoints").is_some());
+
+    assert!(
+        values.len() > 6,
+        "Fate rendered two numbers before this increment; it now publishes {}",
+        values.len()
+    );
+}
+
+/// Cypher, whose stat is a triple and whose damage track has no marks.
+#[test]
+fn a_cypher_actor_publishes_its_pools_its_edges_and_its_damage_ladder() {
+    let slots = ActorSlots {
+        ability_data: Some(serde_json::json!({ "might": 10, "speed": 9, "intellect": 12 })),
+        resource_data: Some(serde_json::json!({
+            "might": 7, "might_pool": 10, "might_edge": 1,
+            "speed": 9, "speed_pool": 9, "speed_edge": 0,
+            "intellect": 12, "intellect_pool": 12, "intellect_edge": 2,
+            "effort": 1, "xp": 4
+        })),
+        proficiency_data: Some(serde_json::json!({
+            "skills": [{ "name": "Stealth", "value": 1 }]
+        })),
+        trait_data: Some(serde_json::json!({
+            "type": "Explorer", "descriptor": "Clever", "focus": "Bears a Halo of Fire",
+            "tier": 2, "damage_track": "impaired",
+            "cyphers": ["Detonation (level 4)"]
+        })),
+    };
+    let values = declared_values_for_actor(&packs(), "cypher_system", &slots);
+
+    // A pool with its maximum, as numbers.
+    assert_eq!(
+        find(&values, "mightPool").map(|v| v.value.clone()),
+        Some(DeclaredValueKind::Fraction {
+            current: 7,
+            max: Some(10)
+        })
+    );
+
+    // The edge belongs to the same thing — FR-033, so a sheet can show them
+    // together rather than as unrelated rows.
+    assert_eq!(
+        find(&values, "mightEdge").and_then(|v| v.group.clone()),
+        Some("mightPool".to_string())
+    );
+
+    // A ladder, with its rungs, and a character partway down it.
+    match find(&values, "damageTrack").map(|v| v.value.clone()) {
+        Some(DeclaredValueKind::State { current, options }) => {
+            assert_eq!(current.as_deref(), Some("impaired"));
+            assert_eq!(options.len(), 3, "the whole ladder travels");
+        }
+        other => panic!("expected a state ladder, got {other:?}"),
+    }
+
+    assert_eq!(
+        find(&values, "focus").map(|v| v.value.clone()),
+        Some(DeclaredValueKind::Text("Bears a Halo of Fire".to_string()))
+    );
+}
+
+/// SC-012, read from the directory rather than from a list here, so a pack
+/// added later is covered without anyone remembering to add it.
+#[test]
+fn every_bundled_system_publishes_something() {
+    let dir = std::fs::read_dir(packs()).expect("the systems directory");
+    let mut checked = 0;
+
+    for entry in dir.filter_map(Result::ok) {
+        if !entry.path().is_dir() {
+            continue;
+        }
+        let id = entry.file_name().to_string_lossy().into_owned();
+
+        // A generic actor: whatever the system reads, it reads from here.
+        let slots = ActorSlots {
+            ability_data: Some(serde_json::json!({
+                "strength": 12, "dexterity": 12, "constitution": 12,
+                "intelligence": 12, "wisdom": 12, "charisma": 12,
+                "might": 10, "speed": 10, "intellect": 10,
+                "insight": 2, "prowess": 2, "resolve": 2,
+                "cunning": 2, "spirit": 2, "agility": 2, "wits": 2, "empathy": 2,
+                "willpower": 2
+            })),
+            resource_data: Some(serde_json::json!({
+                "current_health": 5, "max_health": 10,
+                "current_wish_points": 1, "max_wish_points": 3,
+                "current_hp": 9, "max_hp": 15,
+                "might": 8, "might_pool": 10,
+                "fate_points": 3, "refresh": 3, "stress": 1
+            })),
+            proficiency_data: Some(
+                serde_json::json!({ "skills": [{"name":"Something","value":1}] }),
+            ),
+            trait_data: Some(serde_json::json!({ "level": 3, "tier": 2 })),
+        };
+
+        let values = declared_values_for_actor(&packs(), &id, &slots);
+        assert!(
+            !values.is_empty(),
+            "{id} publishes nothing at all — a world bound to it would show an \
+             empty sheet (SC-012)"
+        );
+        checked += 1;
+    }
+
+    assert!(
+        checked >= 7,
+        "expected the bundled systems, checked {checked}"
     );
 }

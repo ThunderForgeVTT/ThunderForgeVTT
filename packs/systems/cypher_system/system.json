@@ -46,7 +46,7 @@
     },
     "practiced": {
       "label": "Practiced",
-      "effect": "The unmodified default — no ease or hindrance from training."
+      "effect": "The unmodified default \u2014 no ease or hindrance from training."
     },
     "inability": {
       "label": "Inability",
@@ -144,5 +144,185 @@
         }
       }
     }
-  }
+  },
+  "resources": [
+    {
+      "id": "mightPool",
+      "label": "Might",
+      "kind": "bar",
+      "order": 0,
+      "allowStacking": false,
+      "source": {
+        "slot": "resourceData",
+        "entries": [
+          {
+            "current": "might",
+            "max": "might_pool"
+          }
+        ]
+      }
+    },
+    {
+      "id": "speedPool",
+      "label": "Speed",
+      "kind": "bar",
+      "order": 1,
+      "allowStacking": false,
+      "source": {
+        "slot": "resourceData",
+        "entries": [
+          {
+            "current": "speed",
+            "max": "speed_pool"
+          }
+        ]
+      }
+    },
+    {
+      "id": "intellectPool",
+      "label": "Intellect",
+      "kind": "bar",
+      "order": 2,
+      "allowStacking": false,
+      "source": {
+        "slot": "resourceData",
+        "entries": [
+          {
+            "current": "intellect",
+            "max": "intellect_pool"
+          }
+        ]
+      }
+    }
+  ],
+  "sheet": [
+    {
+      "id": "characterType",
+      "label": "Type",
+      "kind": "text",
+      "slot": "traitData",
+      "source": "type"
+    },
+    {
+      "id": "descriptor",
+      "label": "Descriptor",
+      "kind": "text",
+      "slot": "traitData",
+      "source": "descriptor"
+    },
+    {
+      "id": "focus",
+      "label": "Focus",
+      "kind": "text",
+      "slot": "traitData",
+      "source": "focus"
+    },
+    {
+      "id": "tier",
+      "label": "Tier",
+      "kind": "number",
+      "slot": "traitData",
+      "source": "tier"
+    },
+    {
+      "id": "effort",
+      "label": "Effort",
+      "kind": "number",
+      "slot": "resourceData",
+      "source": "effort"
+    },
+    {
+      "id": "xp",
+      "label": "Experience",
+      "kind": "number",
+      "slot": "resourceData",
+      "source": "xp"
+    },
+    {
+      "id": "mightEdge",
+      "label": "Might Edge",
+      "kind": "number",
+      "slot": "resourceData",
+      "source": "might_edge",
+      "group": "mightPool"
+    },
+    {
+      "id": "speedEdge",
+      "label": "Speed Edge",
+      "kind": "number",
+      "slot": "resourceData",
+      "source": "speed_edge",
+      "group": "speedPool"
+    },
+    {
+      "id": "intellectEdge",
+      "label": "Intellect Edge",
+      "kind": "number",
+      "slot": "resourceData",
+      "source": "intellect_edge",
+      "group": "intellectPool"
+    },
+    {
+      "id": "armor",
+      "label": "Armor",
+      "kind": "number",
+      "slot": "traitData",
+      "source": "armor"
+    },
+    {
+      "id": "damageTrack",
+      "label": "Damage Track",
+      "kind": "state",
+      "slot": "traitData",
+      "source": "damage_track",
+      "options": [
+        "impaired",
+        "debilitated",
+        "dead"
+      ]
+    },
+    {
+      "id": "recoveryBonus",
+      "label": "Recovery Bonus",
+      "kind": "number",
+      "slot": "traitData",
+      "source": "recovery_bonus"
+    },
+    {
+      "id": "skill",
+      "label": "Skills",
+      "kind": "slots",
+      "count": 7,
+      "slot": "proficiencyData",
+      "source": "skills"
+    },
+    {
+      "id": "specialAbilities",
+      "label": "Special Abilities",
+      "kind": "list",
+      "slot": "traitData",
+      "source": "special_abilities"
+    },
+    {
+      "id": "cyphers",
+      "label": "Cyphers",
+      "kind": "list",
+      "slot": "traitData",
+      "source": "cyphers"
+    },
+    {
+      "id": "equipment",
+      "label": "Equipment",
+      "kind": "list",
+      "slot": "traitData",
+      "source": "equipment"
+    },
+    {
+      "id": "notes",
+      "label": "Notes",
+      "kind": "text",
+      "slot": "traitData",
+      "source": "notes"
+    }
+  ]
 }

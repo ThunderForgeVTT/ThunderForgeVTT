@@ -5,7 +5,7 @@
  * constructs against what the *system* declares — in the system's own order —
  * and specific constructs by identifier.
  *
- * # Three rules this file exists to keep
+ * # Four rules this file exists to keep
  *
  * 1. **The pack does not choose the order.** `badgeGrid of "attributes"`
  *    renders every declared attribute, in declaration order. Sorting them
@@ -23,7 +23,23 @@
  *    number invites the two to disagree — with the stored one going stale.
  *    That is the whole reason `origin` is on the wire, and here it is visible
  *    in the DOM: a stored value renders an `<input>`, a derived one renders
- *    no input at all and carries `aria-readonly`.
+ *    no input at all and carries `aria-readonly`. The rule holds for every
+ *    representation: a derived track's marks are not buttons, and a derived
+ *    ladder's rungs are not selectable.
+ *
+ * 4. **The layout says where; the value says what.** There is no node kind
+ *    per kind of value — `tracker` and `slotGrid` are gone. `value` and
+ *    `block` name an identifier, and what arrives decides how it draws: a
+ *    `fraction` is a bar, a `track` is a run of marks, a `state` is a ladder
+ *    with a rung marked, and anything else is its text. The difference
+ *    between `value` and `block` is space, not meaning.
+ *
+ * # Never parse the rendered string
+ *
+ * Every one of those decisions reads a structured field. Deciding from the
+ * text was a real bug (T019a): a system writing "4 of 7" instead of "4 / 7"
+ * silently lost its bar, with nothing failing anywhere. `value` is for
+ * showing, never for branching on.
  *
  * # Why editing is not wired to a mutation
  *
@@ -35,16 +51,18 @@
  */
 
 import { useId } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { declarationsFrom, valuesIn } from "./declarations";
 import {
   rendersAnything,
   resolutionFrom,
-  slotLevels,
+  shapeOf,
+  stateReading,
+  unitsOf,
   type Resolution,
-  type SlotLevel,
+  type ValueUnit,
 } from "./resolve";
 import type {
   LayoutDeclaration,
@@ -59,6 +77,10 @@ export interface SheetLayoutProps {
   /**
    * What the system declares, per set, already in the system's own order.
    * Sets a caller omits are treated as sets the system declares empty.
+   *
+   * `all` is the system's full published set, and it is what `other` is
+   * computed from: without it, a value no named set claims would fall off
+   * the bottom of the sheet (FR-034, SC-012).
    */
   declarations: Partial<SheetDeclarations>;
   /**
@@ -69,26 +91,34 @@ export interface SheetLayoutProps {
   className?: string;
 }
 
+/** What every representation below needs. */
+interface ValueProps {
+  value: SheetValue;
+  onValueChange?: (id: string, next: string) => void;
+  className?: string;
+}
+
 // ---------------------------------------------------------------------------
-// One value
+// Text: the representation everything that is not a pool, track or ladder gets
 // ---------------------------------------------------------------------------
 
 /**
- * A value's number, editable exactly when the system stored it.
+ * A value's text, editable exactly when the system stored it.
  *
  * The `data-origin` attribute is not decoration: it is how a test — and a
  * person reading the DOM — can see that rule 3 held, without inferring it
  * from the absence of something.
+ *
+ * `multiline` is the only thing `block` changes about a text value. It is a
+ * claim about space, not about the value: a block naming a number gets a
+ * number in a wide box.
  */
-function ValueControl({
+function ValueText({
   value,
   onValueChange,
   className,
-}: {
-  value: SheetValue;
-  onValueChange?: (id: string, next: string) => void;
-  className?: string;
-}) {
+  multiline = false,
+}: ValueProps & { multiline?: boolean }) {
   const inputId = useId();
 
   if (value.origin === "derived") {
@@ -99,29 +129,267 @@ function ValueControl({
         data-value-id={value.id}
         aria-readonly="true"
         aria-label={value.label}
-        className={cn("text-sm font-semibold tabular-nums", className)}
+        className={cn(
+          "text-sm font-semibold tabular-nums",
+          multiline && "w-full text-left font-normal whitespace-pre-line",
+          className,
+        )}
       >
         {value.value}
       </output>
     );
   }
 
-  return (
+  const shared = {
+    id: inputId,
+    "data-slot": "declared-value",
+    "data-origin": "stored" as const,
+    "data-value-id": value.id,
+    "aria-label": value.label,
+    defaultValue: value.value,
+    onChange: onValueChange
+      ? (event: { target: { value: string } }) =>
+          onValueChange(value.id, event.target.value)
+      : undefined,
+  };
+
+  return multiline ? (
+    <Textarea {...shared} className={cn("w-full text-sm", className)} />
+  ) : (
     <Input
-      id={inputId}
-      data-slot="declared-value"
-      data-origin="stored"
-      data-value-id={value.id}
-      aria-label={value.label}
-      defaultValue={value.value}
-      onChange={
-        onValueChange
-          ? (event) => onValueChange(value.id, event.target.value)
-          : undefined
-      }
+      {...shared}
       className={cn("h-7 text-center text-sm tabular-nums", className)}
     />
   );
+}
+
+// ---------------------------------------------------------------------------
+// Pool: a proportion, drawn as a bar
+// ---------------------------------------------------------------------------
+
+/**
+ * The bar for a pool, or nothing.
+ *
+ * Read, never parsed. And nothing for a counter: a pool with no maximum is
+ * not a pool that is empty — Blades in the Dark's coin counts up with nothing
+ * to be a proportion of, and a bar would have to invent the thing it fills.
+ */
+function ValueMeter({ value }: { value: SheetValue }) {
+  const fraction = value.fraction;
+  const max = fraction?.max ?? null;
+  if (!fraction || max === null || max <= 0) return null;
+  const filled = Math.max(0, Math.min(1, fraction.current / max));
+  return (
+    <div
+      data-slot="value-meter"
+      role="meter"
+      aria-label={value.label}
+      aria-valuenow={fraction.current}
+      aria-valuemin={0}
+      aria-valuemax={max}
+      className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+    >
+      <div
+        className="h-full rounded-full bg-primary"
+        style={{ width: `${filled * 100}%` }}
+      />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Track: a bounded run of marks
+// ---------------------------------------------------------------------------
+
+/**
+ * `filled` of `of` marks, ticked.
+ *
+ * Not a bar, though the two numbers look alike. A pool is a quantity and the
+ * numbers are the point; a track is a set of marks and the count is the
+ * point — Fate's stress is eight boxes a player ticks, and drawing it as a
+ * bar gives them nothing to tick. There is no notion of rows here for the
+ * same reason there is none upstream: two tracks is what two tracks are.
+ */
+function ValueMarks({ value, onValueChange, className }: ValueProps) {
+  const track = value.track;
+  if (!track) return null;
+  const total = Math.max(0, Math.trunc(track.of));
+  const filled = Math.max(0, Math.min(total, Math.trunc(track.filled)));
+  const editable = value.origin === "stored";
+
+  return (
+    <div
+      data-slot="track"
+      data-value-id={value.id}
+      data-origin={value.origin}
+      data-track-filled={filled}
+      data-track-of={total}
+      role="group"
+      aria-label={value.label}
+      className={cn("flex flex-wrap gap-1", className)}
+    >
+      {Array.from({ length: total }, (_, index) => {
+        const checked = index < filled;
+        const shared = {
+          "data-slot": "track-mark",
+          "aria-checked": checked,
+          "aria-label": `${value.label} ${index + 1}`,
+          className: cn(
+            "size-4 rounded-[4px] border border-input",
+            checked && "bg-primary",
+          ),
+        } as const;
+        // A derived track is a readout, not a control: it never becomes a
+        // button, because a button invites a click that would have to be
+        // refused. Ticking mark n means the track now reads n, which is the
+        // only edit a run of marks can express.
+        return editable ? (
+          <button
+            key={index}
+            type="button"
+            role="checkbox"
+            onClick={
+              onValueChange
+                ? () =>
+                    onValueChange(
+                      value.id,
+                      String(
+                        checked && index + 1 === filled ? index : index + 1,
+                      ),
+                    )
+                : undefined
+            }
+            {...shared}
+          />
+        ) : (
+          <span key={index} role="img" aria-readonly="true" {...shared} />
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// State: an ordered ladder with one rung current
+// ---------------------------------------------------------------------------
+
+/**
+ * Every rung the system declares, with the current one marked.
+ *
+ * The whole ladder travels, not just the position, because a sheet shows what
+ * comes next — a Cypher damage track a player can read ahead on.
+ *
+ * A stored state that is *not* among the options renders as unknown and marks
+ * no rung. The failure that prevents is specific and bad: a saved character
+ * whose condition was renamed silently reading as the first option, which on
+ * a damage track means healed. `data-state-unknown` puts that in the DOM so
+ * it is assertable rather than a matter of trust.
+ */
+function ValueLadder({ value, onValueChange, className }: ValueProps) {
+  const reading = stateReading(value);
+  if (!reading) return null;
+  const { options, current, unknown } = reading;
+  const editable = value.origin === "stored";
+
+  return (
+    <div
+      data-slot="state-ladder"
+      data-value-id={value.id}
+      data-origin={value.origin}
+      data-state-current={current ?? undefined}
+      data-state-unknown={unknown ? "true" : undefined}
+      role="group"
+      aria-label={value.label}
+      className={cn("flex flex-wrap items-center gap-1", className)}
+    >
+      {unknown ? (
+        <span
+          data-slot="state-unknown"
+          title={`${value.label}: ${current}`}
+          className="rounded-md border border-dashed border-destructive px-2 py-0.5 text-xs text-destructive"
+        >
+          {`Unknown state: ${current}`}
+        </span>
+      ) : null}
+      {options.map((option) => {
+        const isCurrent = !unknown && option === current;
+        const shared = {
+          "data-slot": "state-option",
+          "data-state-option": option,
+          "data-current": isCurrent ? "true" : undefined,
+          "aria-checked": isCurrent,
+          className: cn(
+            "rounded-md border border-input px-2 py-0.5 text-xs",
+            isCurrent && "border-primary bg-primary text-primary-foreground",
+          ),
+        } as const;
+        return editable ? (
+          <button
+            key={option}
+            type="button"
+            role="radio"
+            onClick={
+              onValueChange ? () => onValueChange(value.id, option) : undefined
+            }
+            {...shared}
+          >
+            {option}
+          </button>
+        ) : (
+          <span key={option} role="img" aria-readonly="true" {...shared}>
+            {option}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// One value, whatever kind it is
+// ---------------------------------------------------------------------------
+
+/**
+ * The control area for a value: whichever of the four representations its
+ * structured fields ask for.
+ *
+ * A pool keeps its number here and gets its bar from `ValueMeter` alongside,
+ * because a bar without the numbers is a proportion a player cannot type into.
+ */
+function ValueBody({
+  value,
+  onValueChange,
+  className,
+  multiline = false,
+}: ValueProps & { multiline?: boolean }) {
+  switch (shapeOf(value)) {
+    case "track":
+      return (
+        <ValueMarks
+          value={value}
+          onValueChange={onValueChange}
+          className={className}
+        />
+      );
+    case "state":
+      return (
+        <ValueLadder
+          value={value}
+          onValueChange={onValueChange}
+          className={className}
+        />
+      );
+    case "pool":
+    case "text":
+      return (
+        <ValueText
+          value={value}
+          onValueChange={onValueChange}
+          className={className}
+          multiline={multiline}
+        />
+      );
+  }
 }
 
 /** The words next to a value: its abbreviation where the system offers one. */
@@ -144,6 +412,87 @@ function ValueLabel({
   );
 }
 
+/** Label beside body, with a bar beneath when the value is a pool. */
+function ValueLine({
+  value,
+  onValueChange,
+  short = false,
+  multiline = false,
+}: ValueProps & { short?: boolean; multiline?: boolean }) {
+  return (
+    <div
+      data-slot="value-line"
+      data-value-id={value.id}
+      className={cn(
+        "flex gap-1",
+        multiline ? "w-full flex-col" : "flex-col justify-between",
+      )}
+    >
+      <div
+        className={cn(
+          "flex gap-2",
+          multiline ? "flex-col" : "flex-row items-center justify-between",
+        )}
+      >
+        <ValueLabel value={value} short={short} />
+        <ValueBody
+          value={value}
+          onValueChange={onValueChange}
+          multiline={multiline}
+        />
+      </div>
+      <ValueMeter value={value} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Groups
+// ---------------------------------------------------------------------------
+
+/**
+ * The values of one unit, rendered as one thing.
+ *
+ * A group is a single frame with its members inside, in the system's own
+ * order within the group. A Fate consequence's severity and the aspect
+ * written into it are one line on a paper sheet, and two unrelated rows here
+ * would be the renderer contradicting the system (FR-033).
+ */
+function Unit({
+  unit,
+  at,
+  short = false,
+}: {
+  unit: ValueUnit;
+  at: Resolution;
+  short?: boolean;
+}) {
+  if (unit.group === null) {
+    const [value] = unit.values;
+    return (
+      <ValueLine value={value} onValueChange={at.onValueChange} short={short} />
+    );
+  }
+  return (
+    <div
+      data-slot="value-group"
+      data-group={unit.group}
+      role="group"
+      aria-label={unit.values[0]?.label ?? unit.group}
+      className="flex flex-col gap-1 rounded-lg border border-border p-2"
+    >
+      {unit.values.map((value) => (
+        <ValueLine
+          key={value.id}
+          value={value}
+          onValueChange={at.onValueChange}
+          short={short}
+        />
+      ))}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Generic constructs
 // ---------------------------------------------------------------------------
@@ -151,11 +500,11 @@ function ValueLabel({
 function BadgeGrid({
   values,
   columns,
-  onValueChange,
+  at,
 }: {
   values: readonly SheetValue[];
   columns?: number | null;
-  onValueChange?: (id: string, next: string) => void;
+  at: Resolution;
 }) {
   const across = columns && columns > 0 ? columns : 3;
   return (
@@ -164,211 +513,66 @@ function BadgeGrid({
       className="grid gap-2"
       style={{ gridTemplateColumns: `repeat(${across}, minmax(0, 1fr))` }}
     >
-      {values.map((value) => (
-        <div
-          key={value.id}
-          data-slot="badge"
-          data-value-id={value.id}
-          className="flex flex-col items-center gap-1 rounded-lg border border-border p-2"
-        >
-          <ValueLabel value={value} short />
-          <ValueControl value={value} onValueChange={onValueChange} />
-        </div>
-      ))}
+      {unitsOf(values).map((unit) =>
+        unit.group === null ? (
+          <div
+            key={unit.key}
+            data-slot="badge"
+            data-value-id={unit.values[0].id}
+            className="flex flex-col items-center gap-1 rounded-lg border border-border p-2"
+          >
+            <ValueLabel value={unit.values[0]} short />
+            <ValueBody
+              value={unit.values[0]}
+              onValueChange={at.onValueChange}
+            />
+            <ValueMeter value={unit.values[0]} />
+          </div>
+        ) : (
+          <Unit key={unit.key} unit={unit} at={at} short />
+        ),
+      )}
     </div>
   );
 }
 
 function BarStack({
   values,
-  onValueChange,
+  at,
 }: {
   values: readonly SheetValue[];
-  onValueChange?: (id: string, next: string) => void;
+  at: Resolution;
 }) {
   return (
     <div data-slot="bar-stack" className="flex flex-col gap-2">
-      {values.map((value) => {
-        // Read, never parsed. The server sends a pool's two numbers as
-        // numbers; recovering them from the rendered string was branching on
-        // what a value means, and a system writing "4 of 7" lost its bar.
-        const fraction = value.fraction ?? null;
-        const max = fraction?.max ?? null;
-        const filled =
-          fraction && max !== null && max > 0
-            ? Math.max(0, Math.min(1, fraction.current / max))
-            : null;
-        return (
-          <div
-            key={value.id}
-            data-slot="bar"
-            data-value-id={value.id}
-            className="flex flex-col gap-1"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <ValueLabel value={value} />
-              <ValueControl value={value} onValueChange={onValueChange} />
-            </div>
-            {filled === null ? null : (
-              <div
-                role="meter"
-                aria-label={value.label}
-                aria-valuenow={fraction?.current}
-                aria-valuemin={0}
-                aria-valuemax={max ?? undefined}
-                className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
-              >
-                <div
-                  className="h-full rounded-full bg-primary"
-                  style={{ width: `${filled * 100}%` }}
-                />
-              </div>
-            )}
-          </div>
-        );
-      })}
+      {unitsOf(values).map((unit) => (
+        <div key={unit.key} data-slot="bar">
+          <Unit unit={unit} at={at} />
+        </div>
+      ))}
     </div>
   );
 }
 
 function RowList({
   values,
-  onValueChange,
-}: {
-  values: readonly SheetValue[];
-  onValueChange?: (id: string, next: string) => void;
-}) {
-  return (
-    <ul data-slot="row-list" className="flex flex-col gap-1">
-      {values.map((value) => (
-        <li
-          key={value.id}
-          data-slot="row"
-          data-value-id={value.id}
-          className="flex items-center justify-between gap-3 border-b border-border/50 py-1 last:border-b-0"
-        >
-          <ValueLabel value={value} />
-          <ValueControl value={value} onValueChange={onValueChange} />
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Specific constructs
-// ---------------------------------------------------------------------------
-
-/** How many boxes a tracker shows as filled. */
-function filledBoxes(value: SheetValue): number {
-  const parsed = Number.parseInt(value.value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-}
-
-function Tracker({
-  value,
-  boxes,
-  rows,
-}: {
-  value: SheetValue;
-  boxes: number;
-  rows: number;
-}) {
-  const filled = filledBoxes(value);
-  const editable = value.origin === "stored";
-  return (
-    <div
-      data-slot="tracker"
-      data-value-id={value.id}
-      data-origin={value.origin}
-      className="flex flex-col gap-1"
-    >
-      <ValueLabel value={value} />
-      {Array.from({ length: Math.max(1, rows) }, (_, row) => (
-        <div
-          key={row}
-          role="group"
-          aria-label={value.label}
-          className="flex gap-1"
-        >
-          {Array.from({ length: boxes }, (_, column) => {
-            const index = row * boxes + column;
-            const checked = index < filled;
-            const shared = {
-              "data-slot": "tracker-box",
-              "aria-checked": checked,
-              className: cn(
-                "size-4 rounded-[4px] border border-input",
-                checked && "bg-primary",
-              ),
-            } as const;
-            // A derived tracker is a readout, not a control: it never
-            // becomes a button, because a button invites a click that would
-            // have to be refused.
-            return editable ? (
-              <button
-                key={column}
-                type="button"
-                role="checkbox"
-                aria-label={`${value.label} ${index + 1}`}
-                {...shared}
-              />
-            ) : (
-              <span
-                key={column}
-                role="img"
-                aria-readonly="true"
-                aria-label={`${value.label} ${index + 1}`}
-                {...shared}
-              />
-            );
-          })}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function SlotGrid({
-  id,
-  levels,
   at,
 }: {
-  id: string;
-  levels: SlotLevel[];
+  values: readonly SheetValue[];
   at: Resolution;
 }) {
   return (
-    <div
-      data-slot="slot-grid"
-      data-value-id={id}
-      className="flex flex-col gap-1"
-    >
-      {levels.map(({ level, total, spent }) => (
-        <div
-          key={level}
-          data-slot="slot-level"
-          data-level={level}
-          className="flex items-center gap-2"
+    <ul data-slot="row-list" className="flex flex-col gap-1">
+      {unitsOf(values).map((unit) => (
+        <li
+          key={unit.key}
+          data-slot="row"
+          className="border-b border-border/50 py-1 last:border-b-0"
         >
-          <Badge variant="outline">{level}</Badge>
-          {total ? (
-            <ValueControl
-              value={total}
-              onValueChange={at.onValueChange}
-              className="w-14"
-            />
-          ) : null}
-          {spent ? (
-            <ValueControl
-              value={spent}
-              onValueChange={at.onValueChange}
-              className="w-14"
-            />
-          ) : null}
-        </div>
+          <Unit unit={unit} at={at} />
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }
 
@@ -410,33 +614,30 @@ function Node({ node, at }: { node: LayoutNode; at: Resolution }) {
         <BadgeGrid
           values={valuesIn(at.declarations, node.of)}
           columns={node.columns}
-          onValueChange={at.onValueChange}
+          at={at}
         />
       );
     case "barStack":
-      return (
-        <BarStack
-          values={valuesIn(at.declarations, node.of)}
-          onValueChange={at.onValueChange}
-        />
-      );
+      return <BarStack values={valuesIn(at.declarations, node.of)} at={at} />;
     case "rowList":
-      return (
-        <RowList
-          values={valuesIn(at.declarations, node.of)}
-          onValueChange={at.onValueChange}
-        />
-      );
+      return <RowList values={valuesIn(at.declarations, node.of)} at={at} />;
     case "value": {
       const value = at.byId.get(node.id);
       if (!value) return null;
       return (
-        <div
-          data-slot="layout-value"
-          className="flex items-center justify-between gap-2"
-        >
-          <ValueLabel value={value} />
-          <ValueControl value={value} onValueChange={at.onValueChange} />
+        <div data-slot="layout-value" className="flex flex-col gap-1">
+          <ValueLine value={value} onValueChange={at.onValueChange} />
+        </div>
+      );
+    }
+    case "block": {
+      const value = at.byId.get(node.id);
+      if (!value) return null;
+      // The same value a `value` would render, given the width and the room
+      // to wrap. Space, not meaning.
+      return (
+        <div data-slot="layout-block" className="flex w-full flex-col gap-1">
+          <ValueLine value={value} onValueChange={at.onValueChange} multiline />
         </div>
       );
     }
@@ -449,27 +650,17 @@ function Node({ node, at }: { node: LayoutNode; at: Resolution }) {
           {left ? (
             <div className="flex flex-col items-center gap-1">
               <ValueLabel value={left} short />
-              <ValueControl value={left} onValueChange={at.onValueChange} />
+              <ValueBody value={left} onValueChange={at.onValueChange} />
             </div>
           ) : null}
           {right ? (
             <div className="flex flex-col items-center gap-1">
               <ValueLabel value={right} short />
-              <ValueControl value={right} onValueChange={at.onValueChange} />
+              <ValueBody value={right} onValueChange={at.onValueChange} />
             </div>
           ) : null}
         </div>
       );
-    }
-    case "tracker": {
-      const value = at.byId.get(node.id);
-      if (!value) return null;
-      return <Tracker value={value} boxes={node.boxes} rows={node.rows ?? 1} />;
-    }
-    case "slotGrid": {
-      const levels = slotLevels(node.id, node.levels, at);
-      if (levels.length === 0) return null;
-      return <SlotGrid id={node.id} levels={levels} at={at} />;
     }
     default:
       // Already reported by `rendersAnything`, which runs first.
@@ -497,8 +688,7 @@ function keyFor(node: LayoutNode, index: number): string {
     case "rowList":
       return `${node.kind}:${node.of}`;
     case "value":
-    case "tracker":
-    case "slotGrid":
+    case "block":
       return `${node.kind}:${node.id}`;
     case "pair":
       return `pair:${node.value}:${node.beside}`;

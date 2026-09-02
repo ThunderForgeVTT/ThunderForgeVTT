@@ -18,14 +18,14 @@ fn a_specific_node_reports_every_identifier_it_names() {
     let node = parse(
         r#"{"kind":"section","title":"Combat","children":[
              {"kind":"pair","value":"strength","beside":"strengthMod"},
-             {"kind":"tracker","id":"deathSaves","boxes":3,"rows":2}
+             {"kind":"block","id":"notes"}
            ]}"#,
     )
     .expect("valid");
 
     let mut ids = node.referenced_ids();
     ids.sort_unstable();
-    assert_eq!(ids, vec!["deathSaves", "strength", "strengthMod"]);
+    assert_eq!(ids, vec!["notes", "strength", "strengthMod"]);
 }
 
 /// FR-003a, as a property of the type rather than a rule someone enforces.
@@ -100,14 +100,8 @@ fn every_kind_the_format_offers_is_named_in_all_kinds() {
                 value: "a".to_string(),
                 beside: "b".to_string(),
             },
-            LayoutNode::Tracker {
+            LayoutNode::Block {
                 id: "a".to_string(),
-                boxes: 3,
-                rows: 2,
-            },
-            LayoutNode::SlotGrid {
-                id: "a".to_string(),
-                levels: 9,
             },
         ],
     }];
@@ -126,4 +120,67 @@ fn declaration_order_is_the_systems_and_a_pack_cannot_restate_it() {
     // be making a claim about the ruleset.
     let node = parse(r#"{"kind":"badgeGrid","of":"attributes","order":["cunning"]}"#);
     assert!(node.is_err());
+}
+
+// ---------------------------------------------------------------------------
+// Increment E: the layout says where, the value says what
+// ---------------------------------------------------------------------------
+
+/// The construct that used to exist for tracks is gone, and nothing replaced
+/// it, because nothing needed to.
+///
+/// `value` names an identifier; the value that arrives says whether it is a
+/// number, a pool, a run of marks or a rung on a ladder. A layout carrying a
+/// box count was a layout stating what a value *is*, and it was wrong for two
+/// of the three systems that have a track.
+#[test]
+fn a_layout_cannot_state_what_kind_a_value_is() {
+    for forbidden in [
+        r#"{"kind":"tracker","id":"stress","boxes":8}"#,
+        r#"{"kind":"slotGrid","id":"spellSlots","levels":9}"#,
+        // And the shape they would come back as:
+        r#"{"kind":"value","id":"stress","boxes":8}"#,
+        r#"{"kind":"value","id":"damage","states":["impaired","dead"]}"#,
+    ] {
+        assert!(
+            parse(forbidden).is_err(),
+            "{forbidden} states what a value is, which belongs to the system"
+        );
+    }
+}
+
+/// One construct, every kind. This is what let the format shrink while
+/// covering Fate's stress track and Cypher's damage ladder, neither of which
+/// it could express before.
+#[test]
+fn one_construct_addresses_a_value_of_any_kind() {
+    for id in [
+        "strength",
+        "hitPoints",
+        "stress",
+        "damageTrack",
+        "background",
+    ] {
+        let node = parse(&format!(r#"{{"kind":"value","id":"{id}"}}"#)).expect("valid");
+        assert_eq!(node.referenced_ids(), vec![id]);
+    }
+}
+
+/// `block` is a claim about space, not about meaning.
+#[test]
+fn a_block_names_an_identifier_like_any_specific_construct() {
+    let node = parse(r#"{"kind":"block","id":"notes"}"#).expect("valid");
+    assert_eq!(node.referenced_ids(), vec!["notes"]);
+    assert_eq!(node.kind(), "block");
+}
+
+/// FR-034 and SC-012's mechanism: a set for everything the named sets do not
+/// claim, so nothing a system publishes falls off the bottom of the base pack.
+#[test]
+fn there_is_a_set_for_everything_else() {
+    let node = parse(r#"{"kind":"rowList","of":"other"}"#).expect("valid");
+    assert!(
+        node.referenced_ids().is_empty(),
+        "still generic — it names nothing, so it composes with any system"
+    );
 }

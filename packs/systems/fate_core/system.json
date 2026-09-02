@@ -24,17 +24,72 @@
   },
   "abilities": {},
   "ladder": [
-    { "key": "legendary", "label": "Legendary", "abbreviation": "+8", "value": 8 },
-    { "key": "epic", "label": "Epic", "abbreviation": "+7", "value": 7 },
-    { "key": "fantastic", "label": "Fantastic", "abbreviation": "+6", "value": 6 },
-    { "key": "superb", "label": "Superb", "abbreviation": "+5", "value": 5 },
-    { "key": "great", "label": "Great", "abbreviation": "+4", "value": 4 },
-    { "key": "good", "label": "Good", "abbreviation": "+3", "value": 3 },
-    { "key": "fair", "label": "Fair", "abbreviation": "+2", "value": 2 },
-    { "key": "average", "label": "Average", "abbreviation": "+1", "value": 1 },
-    { "key": "mediocre", "label": "Mediocre", "abbreviation": "+0", "value": 0 },
-    { "key": "poor", "label": "Poor", "abbreviation": "-1", "value": -1 },
-    { "key": "terrible", "label": "Terrible", "abbreviation": "-2", "value": -2 }
+    {
+      "key": "legendary",
+      "label": "Legendary",
+      "abbreviation": "+8",
+      "value": 8
+    },
+    {
+      "key": "epic",
+      "label": "Epic",
+      "abbreviation": "+7",
+      "value": 7
+    },
+    {
+      "key": "fantastic",
+      "label": "Fantastic",
+      "abbreviation": "+6",
+      "value": 6
+    },
+    {
+      "key": "superb",
+      "label": "Superb",
+      "abbreviation": "+5",
+      "value": 5
+    },
+    {
+      "key": "great",
+      "label": "Great",
+      "abbreviation": "+4",
+      "value": 4
+    },
+    {
+      "key": "good",
+      "label": "Good",
+      "abbreviation": "+3",
+      "value": 3
+    },
+    {
+      "key": "fair",
+      "label": "Fair",
+      "abbreviation": "+2",
+      "value": 2
+    },
+    {
+      "key": "average",
+      "label": "Average",
+      "abbreviation": "+1",
+      "value": 1
+    },
+    {
+      "key": "mediocre",
+      "label": "Mediocre",
+      "abbreviation": "+0",
+      "value": 0
+    },
+    {
+      "key": "poor",
+      "label": "Poor",
+      "abbreviation": "-1",
+      "value": -1
+    },
+    {
+      "key": "terrible",
+      "label": "Terrible",
+      "abbreviation": "-2",
+      "value": -2
+    }
   ],
   "ladderRoll": {
     "formula": "4dF + SKILL",
@@ -42,24 +97,146 @@
     "notes": "Confirmed supported by crates/thunderforge-dice's grammar: 'dF' is a first-class die-sides token (parser.rs parse_dice_term) that resolves each die to -1/0/+1 (eval.rs DieSides::Fate). SKILL is a placeholder bound to the character's Ladder rating for the chosen skill at roll time. See crates/thunderforge-dice/src/eval.rs test `fate_core_ladder_roll_with_skill_placeholder` for a verified 4dF+skill resolution."
   },
   "skills": {
-    "athletics": { "label": "Athletics", "actions": ["Overcome", "Create an Advantage", "Defend"] },
-    "burglary": { "label": "Burglary", "actions": ["Overcome", "Create an Advantage"] },
-    "contacts": { "label": "Contacts", "actions": ["Overcome", "Create an Advantage", "Defend"] },
-    "crafts": { "label": "Crafts", "actions": ["Overcome", "Create an Advantage"] },
-    "deceive": { "label": "Deceive", "actions": ["Overcome", "Create an Advantage", "Defend"] },
-    "drive": { "label": "Drive", "actions": ["Overcome", "Create an Advantage", "Defend"] },
-    "empathy": { "label": "Empathy", "actions": ["Overcome", "Create an Advantage", "Defend"] },
-    "fight": { "label": "Fight", "actions": ["Overcome", "Create an Advantage", "Attack", "Defend"] },
-    "investigate": { "label": "Investigate", "actions": ["Overcome", "Create an Advantage"] },
-    "lore": { "label": "Lore", "actions": ["Overcome", "Create an Advantage"] },
-    "notice": { "label": "Notice", "actions": ["Overcome", "Create an Advantage", "Defend"] },
-    "physique": { "label": "Physique", "actions": ["Overcome", "Create an Advantage", "Defend"] },
-    "provoke": { "label": "Provoke", "actions": ["Overcome", "Create an Advantage", "Attack"] },
-    "rapport": { "label": "Rapport", "actions": ["Overcome", "Create an Advantage", "Defend"] },
-    "resources": { "label": "Resources", "actions": ["Overcome", "Create an Advantage"] },
-    "shoot": { "label": "Shoot", "actions": ["Overcome", "Create an Advantage", "Attack"] },
-    "stealth": { "label": "Stealth", "actions": ["Overcome", "Create an Advantage", "Defend"] },
-    "will": { "label": "Will", "actions": ["Overcome", "Create an Advantage", "Defend"] }
+    "athletics": {
+      "label": "Athletics",
+      "actions": [
+        "Overcome",
+        "Create an Advantage",
+        "Defend"
+      ]
+    },
+    "burglary": {
+      "label": "Burglary",
+      "actions": [
+        "Overcome",
+        "Create an Advantage"
+      ]
+    },
+    "contacts": {
+      "label": "Contacts",
+      "actions": [
+        "Overcome",
+        "Create an Advantage",
+        "Defend"
+      ]
+    },
+    "crafts": {
+      "label": "Crafts",
+      "actions": [
+        "Overcome",
+        "Create an Advantage"
+      ]
+    },
+    "deceive": {
+      "label": "Deceive",
+      "actions": [
+        "Overcome",
+        "Create an Advantage",
+        "Defend"
+      ]
+    },
+    "drive": {
+      "label": "Drive",
+      "actions": [
+        "Overcome",
+        "Create an Advantage",
+        "Defend"
+      ]
+    },
+    "empathy": {
+      "label": "Empathy",
+      "actions": [
+        "Overcome",
+        "Create an Advantage",
+        "Defend"
+      ]
+    },
+    "fight": {
+      "label": "Fight",
+      "actions": [
+        "Overcome",
+        "Create an Advantage",
+        "Attack",
+        "Defend"
+      ]
+    },
+    "investigate": {
+      "label": "Investigate",
+      "actions": [
+        "Overcome",
+        "Create an Advantage"
+      ]
+    },
+    "lore": {
+      "label": "Lore",
+      "actions": [
+        "Overcome",
+        "Create an Advantage"
+      ]
+    },
+    "notice": {
+      "label": "Notice",
+      "actions": [
+        "Overcome",
+        "Create an Advantage",
+        "Defend"
+      ]
+    },
+    "physique": {
+      "label": "Physique",
+      "actions": [
+        "Overcome",
+        "Create an Advantage",
+        "Defend"
+      ]
+    },
+    "provoke": {
+      "label": "Provoke",
+      "actions": [
+        "Overcome",
+        "Create an Advantage",
+        "Attack"
+      ]
+    },
+    "rapport": {
+      "label": "Rapport",
+      "actions": [
+        "Overcome",
+        "Create an Advantage",
+        "Defend"
+      ]
+    },
+    "resources": {
+      "label": "Resources",
+      "actions": [
+        "Overcome",
+        "Create an Advantage"
+      ]
+    },
+    "shoot": {
+      "label": "Shoot",
+      "actions": [
+        "Overcome",
+        "Create an Advantage",
+        "Attack"
+      ]
+    },
+    "stealth": {
+      "label": "Stealth",
+      "actions": [
+        "Overcome",
+        "Create an Advantage",
+        "Defend"
+      ]
+    },
+    "will": {
+      "label": "Will",
+      "actions": [
+        "Overcome",
+        "Create an Advantage",
+        "Defend"
+      ]
+    }
   },
   "legal": {
     "licenseName": "Creative Commons Attribution 3.0 Unported license",
@@ -114,5 +291,116 @@
         }
       }
     }
-  }
+  },
+  "resources": [
+    {
+      "id": "fatePoints",
+      "label": "Fate Points",
+      "kind": "counter",
+      "order": 0,
+      "allowStacking": false,
+      "source": {
+        "slot": "resourceData",
+        "entries": [
+          {
+            "current": "fate_points"
+          }
+        ]
+      }
+    },
+    {
+      "id": "refresh",
+      "label": "Refresh",
+      "kind": "counter",
+      "order": 1,
+      "allowStacking": false,
+      "source": {
+        "slot": "resourceData",
+        "entries": [
+          {
+            "current": "refresh"
+          }
+        ]
+      }
+    }
+  ],
+  "sheet": [
+    {
+      "id": "highConcept",
+      "label": "High Concept",
+      "kind": "text",
+      "slot": "traitData",
+      "source": "high_concept"
+    },
+    {
+      "id": "trouble",
+      "label": "Trouble",
+      "kind": "text",
+      "slot": "traitData",
+      "source": "trouble"
+    },
+    {
+      "id": "aspect",
+      "label": "Aspects",
+      "kind": "slots",
+      "count": 3,
+      "slot": "traitData",
+      "source": "aspects"
+    },
+    {
+      "id": "stress",
+      "label": "Stress",
+      "kind": "track",
+      "of": 8,
+      "slot": "resourceData",
+      "source": "stress"
+    },
+    {
+      "id": "consequenceMild",
+      "label": "Mild Consequence",
+      "kind": "text",
+      "slot": "traitData",
+      "source": "consequence_mild",
+      "group": "consequenceMild"
+    },
+    {
+      "id": "consequenceModerate",
+      "label": "Moderate Consequence",
+      "kind": "text",
+      "slot": "traitData",
+      "source": "consequence_moderate",
+      "group": "consequenceModerate"
+    },
+    {
+      "id": "consequenceSevere",
+      "label": "Severe Consequence",
+      "kind": "text",
+      "slot": "traitData",
+      "source": "consequence_severe",
+      "group": "consequenceSevere"
+    },
+    {
+      "id": "consequenceExtreme",
+      "label": "Extreme Consequence",
+      "kind": "text",
+      "slot": "traitData",
+      "source": "consequence_extreme",
+      "group": "consequenceExtreme"
+    },
+    {
+      "id": "skill",
+      "label": "Skills",
+      "kind": "slots",
+      "count": 26,
+      "slot": "proficiencyData",
+      "source": "skills"
+    },
+    {
+      "id": "stunts",
+      "label": "Stunts and Extras",
+      "kind": "list",
+      "slot": "traitData",
+      "source": "stunts"
+    }
+  ]
 }

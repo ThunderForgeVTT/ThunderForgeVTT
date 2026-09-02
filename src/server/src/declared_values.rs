@@ -166,6 +166,32 @@ fn visible_from(slots: &ActorSlots, declarations: &[AttributeDeclaration]) -> Ve
         .collect()
 }
 
+/// Everything else the system's sheet declares (FR-031).
+///
+/// The aspects, the tracks, the ladders and the player-named slots — the parts
+/// of a character sheet that are not a score, a skill, a pool or a speed, and
+/// which for two of the shipping systems are most of it.
+fn sheet_from(slots: &ActorSlots, systems_dir: &str, system_id: &str) -> Vec<DeclaredValue> {
+    crate::sheet::declarations_for_system(systems_dir, system_id)
+        .into_iter()
+        .flat_map(|declaration| {
+            let slot = match declaration.slot.as_str() {
+                "resourceData" | "resource_data" => slots.resource_data.as_ref(),
+                "abilityData" | "ability_data" => slots.ability_data.as_ref(),
+                "proficiencyData" | "proficiency_data" => slots.proficiency_data.as_ref(),
+                _ => slots.trait_data.as_ref(),
+            };
+            match slot {
+                Some(slot) => crate::sheet::values_from(&declaration, slot),
+                // A slot the actor has nothing in. A track and a ladder still
+                // exist — an empty stress track is the truth — so they are
+                // resolved against an empty object rather than skipped.
+                None => crate::sheet::values_from(&declaration, &serde_json::json!({})),
+            }
+        })
+        .collect()
+}
+
 /// Every value one actor publishes, stored and derived, in one set.
 ///
 /// A system this build does not have, or one that computes nothing, yields
@@ -179,6 +205,7 @@ pub fn declared_values_for_actor(
     let declarations = crate::attributes::attribute_declarations_for_system(systems_dir, system_id);
     let mut visible = visible_from(slots, &declarations);
     visible.extend(resources_from(slots, systems_dir, system_id));
+    visible.extend(sheet_from(slots, systems_dir, system_id));
     let context = context_from(slots);
 
     // Rules are built from the pack's own manifest, so tables like Genie's

@@ -496,7 +496,7 @@ pub fn validate_targeting(
 /// The conformance test requires the rest. Listing the exemptions here rather
 /// than inverting the check keeps the requirement stated positively: Forge
 /// demonstrates everything except what FR-025b forbids it.
-pub const IDENTIFIER_NAMING_KINDS: &[&str] = &["value", "pair", "tracker", "slotGrid"];
+pub const IDENTIFIER_NAMING_KINDS: &[&str] = &["value", "pair", "block"];
 
 /// FR-007a: the base pack exercises every construct it is permitted to use,
 /// and names nothing.

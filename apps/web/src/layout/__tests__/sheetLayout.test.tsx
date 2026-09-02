@@ -22,8 +22,8 @@ import type {
  * function of its props — no state, no effects — so server-rendering it
  * observes exactly what a viewer would see. That is also the right level for
  * the rules under test: they are about what *appears*, and specifically about
- * two things not appearing — a heading over an empty set, and a text box over
- * a computed number.
+ * several things not appearing — a heading over an empty set, a text box over
+ * a computed number, and a bar where a player expects boxes to tick.
  *
  * The Forge layout is read from `packs/interface/forge/interface.json` rather
  * than restated here, so a change to the shipping pack is felt by this test
@@ -74,6 +74,46 @@ function pool(
   };
 }
 
+/** A bounded run of marks. Same two numbers as a pool; a different thing. */
+function track(
+  id: string,
+  label: string,
+  filled: number,
+  of: number,
+  origin: SheetValue["origin"] = "stored",
+): SheetValue {
+  return {
+    id,
+    label,
+    abbreviation: null,
+    value: `${filled} / ${of}`,
+    track: { filled, of },
+    origin,
+  };
+}
+
+/** An ordered ladder of named states, one of them current. */
+function ladder(
+  id: string,
+  label: string,
+  current: string | null,
+  options: string[],
+  origin: SheetValue["origin"] = "stored",
+): SheetValue {
+  return {
+    id,
+    label,
+    abbreviation: null,
+    value: current ?? "",
+    state: { current, options },
+    origin,
+  };
+}
+
+function grouped(value: SheetValue, group: string): SheetValue {
+  return { ...value, group };
+}
+
 function derived(
   id: string,
   label: string,
@@ -105,8 +145,8 @@ const GENIE: Partial<SheetDeclarations> = {
 /**
  * The identifiers the markup mentions, first mention first.
  *
- * `data-value-id` appears on both a row and the control inside it, so the
- * repeats are collapsed: what is under test is the order, which is the
+ * `data-value-id` appears on the line and again on the control inside it, so
+ * the repeats are collapsed: what is under test is the order, which is the
  * system's own and never the pack's.
  */
 function idsInOrder(markup: string): string[] {
@@ -149,9 +189,11 @@ describe("Forge's layout against a Genie-shaped actor", () => {
     // The failure this rule exists to prevent: a "Skills" heading with
     // nothing under it, telling a player their sheet is broken.
     expect(markup).not.toContain("Skills");
-    // One row list, not two: the movement one in the last section. The
-    // skills one is not there at all.
+    // One row list, not two: the movement one. The skills one is not there
+    // at all, and neither is Forge's trailing `other` list — Genie's values
+    // are all claimed by a named set.
     expect(markup.match(/data-slot="row-list"/g)).toHaveLength(1);
+    expect(markup).not.toContain("Everything Else");
     // The other three sections are still there, so the absence above is
     // about the empty set and not about nothing having rendered.
     expect(markup).toContain("Attributes");
@@ -163,14 +205,30 @@ describe("Forge's layout against a Genie-shaped actor", () => {
   });
 
   it("keeps a section whose children are only partly empty", () => {
-    // Forge's last section pairs movement with derived values. Movement
-    // alone is enough for the section to exist.
+    // Forge's last-but-one section pairs movement with derived values.
+    // Movement alone is enough for the section to exist.
     const movementOnly = render(FORGE.layout, {
       movement: [stored("walk", "Walk", "30")],
     });
     expect(movementOnly).toContain("Movement and Derived Values");
     expect(movementOnly).toContain("Walk");
     expect(movementOnly).not.toContain("Attributes");
+  });
+
+  it("draws a Genie-shaped actor's unclaimed values in Forge's last section", () => {
+    // FR-034: Forge ends with `other`, so nothing a system publishes falls
+    // off the bottom of the base pack.
+    const withExtras = render(FORGE.layout, {
+      ...GENIE,
+      all: [
+        ...(GENIE.attributes ?? []),
+        ...(GENIE.resources ?? []),
+        stored("boon", "Bound Boon", "A debt owed to a sultan"),
+      ],
+    });
+    expect(withExtras).toContain("Everything Else");
+    expect(withExtras).toContain("Bound Boon");
+    expect(withExtras.match(/data-slot="row-list"/g)).toHaveLength(2);
   });
 });
 
@@ -307,17 +365,234 @@ describe("generic constructs keep the system's declaration order", () => {
   });
 });
 
+/**
+ * The point of this whole block: a track and a pool can carry the same two
+ * numbers and are not the same thing. A pool is a quantity with a maximum and
+ * the numbers are the point; a track is a set of marks and the count is the
+ * point. Draw one as the other and a player who expected boxes to tick gets a
+ * bar they cannot touch.
+ */
+describe("a track is a run of marks, and a pool is a bar", () => {
+  const layout: LayoutDeclaration = [{ kind: "value", id: "stress" }];
+
+  it("renders a track as `filled` of `of` marks, none of them a bar", () => {
+    const markup = render(layout, {
+      resources: [track("stress", "Stress", 3, 8)],
+    });
+    expect(markup.match(/data-slot="track-mark"/g)).toHaveLength(8);
+    expect(markup.match(/aria-checked="true"/g)).toHaveLength(3);
+    expect(markup).toContain('data-track-filled="3"');
+    expect(markup).toContain('data-track-of="8"');
+    // Not a bar, and not a text box either: the marks are the control.
+    expect(markup).not.toContain('role="meter"');
+    expect(markup).not.toContain("<input");
+  });
+
+  it("renders a pool with the same numbers as a bar, and no marks", () => {
+    const markup = render(layout, {
+      resources: [pool("stress", "Stress", 3, 8)],
+    });
+    expect(markup).toContain('role="meter"');
+    expect(markup).toContain('aria-valuenow="3"');
+    expect(markup).toContain('aria-valuemax="8"');
+    expect(markup).not.toContain('data-slot="track-mark"');
+  });
+
+  it("gives a stored track marks that can be clicked and a derived one none", () => {
+    const editable = render(layout, {
+      resources: [track("stress", "Stress", 1, 4)],
+    });
+    expect(editable.match(/<button/g)).toHaveLength(4);
+
+    const readonly = render(layout, {
+      resources: [track("stress", "Stress", 1, 4, "derived")],
+    });
+    expect(readonly).not.toContain("<button");
+    expect(readonly.match(/data-slot="track-mark"/g)).toHaveLength(4);
+  });
+
+  it("draws a track from its numbers, not from its text", () => {
+    // The T019a failure, restated for marks: the string says something else
+    // entirely and the marks are still right.
+    const odd = {
+      ...track("stress", "Stress", 2, 5),
+      value: "two boxes out of five",
+    };
+    const markup = render(layout, { resources: [odd] });
+    expect(markup.match(/data-slot="track-mark"/g)).toHaveLength(5);
+    expect(markup.match(/aria-checked="true"/g)).toHaveLength(2);
+  });
+});
+
+describe("a state set is a ladder with a rung marked", () => {
+  const layout: LayoutDeclaration = [{ kind: "value", id: "damage" }];
+  const RUNGS = ["hale", "impaired", "debilitated", "dead"];
+
+  it("renders every option the system declares, in the system's order", () => {
+    const markup = render(layout, {
+      resources: [ladder("damage", "Damage Track", "impaired", RUNGS)],
+    });
+    for (const rung of RUNGS) {
+      expect(markup).toContain(`data-state-option="${rung}"`);
+    }
+    expect(markup.indexOf("hale")).toBeLessThan(markup.indexOf("dead"));
+    // Exactly one rung is current.
+    expect(markup.match(/data-current="true"/g)).toHaveLength(1);
+    expect(markup).toContain('data-state-current="impaired"');
+    // A ladder has no marks and no bar.
+    expect(markup).not.toContain('data-slot="track-mark"');
+    expect(markup).not.toContain('role="meter"');
+  });
+
+  it("marks no rung when the character is on none of them", () => {
+    // A real answer, not a missing one: an uninjured character is at no
+    // position on a damage track.
+    const markup = render(layout, {
+      resources: [ladder("damage", "Damage Track", null, RUNGS)],
+    });
+    expect(markup.match(/data-state-option=/g)).toHaveLength(4);
+    expect(markup).not.toContain('data-current="true"');
+    expect(markup).not.toContain("data-state-unknown");
+  });
+
+  /**
+   * The failure this prevents is specific and quiet: a saved character whose
+   * condition was renamed reading as the *first* option — which on a damage
+   * track means silently healed.
+   */
+  it("renders a stored state that is not among its options as unknown", () => {
+    const markup = render(layout, {
+      resources: [ladder("damage", "Damage Track", "maimed", RUNGS)],
+    });
+    expect(markup).toContain('data-state-unknown="true"');
+    expect(markup).toContain('data-slot="state-unknown"');
+    expect(markup).toContain("maimed");
+    // And emphatically not "hale".
+    expect(markup).not.toContain('data-current="true"');
+  });
+
+  it("lets a player move a stored ladder but not a derived one", () => {
+    const editable = render(layout, {
+      resources: [ladder("damage", "Damage Track", "hale", RUNGS)],
+    });
+    expect(editable.match(/<button/g)).toHaveLength(4);
+
+    const readonly = render(layout, {
+      resources: [ladder("damage", "Damage Track", "hale", RUNGS, "derived")],
+    });
+    expect(readonly).not.toContain("<button");
+    expect(readonly.match(/aria-readonly="true"/g)).toHaveLength(4);
+  });
+});
+
+describe("`other` catches everything the named sets did not claim", () => {
+  const layout: LayoutDeclaration = [{ kind: "rowList", of: "other" }];
+
+  it("renders a value that belongs to no named set", () => {
+    // FR-034 / SC-012: a value missing from a sheet is indistinguishable
+    // from the character not having it.
+    const markup = render(layout, {
+      attributes: [stored("might", "Might", "3", "MGT")],
+      all: [
+        stored("might", "Might", "3", "MGT"),
+        stored("heritage", "Heritage", "Djinn-touched"),
+      ],
+    });
+    expect(markup).toContain("Heritage");
+    expect(markup).toContain("Djinn-touched");
+    // The claimed one is not repeated into `other`.
+    expect(markup).not.toContain("MGT");
+  });
+
+  it("renders nothing when every value is claimed", () => {
+    expect(
+      render(layout, {
+        attributes: [stored("might", "Might", "3", "MGT")],
+        all: [stored("might", "Might", "3", "MGT")],
+      }),
+    ).toBe("");
+  });
+
+  it("renders nothing when the caller passes no full set at all", () => {
+    // Honest rather than an error: nothing was published, so nothing went
+    // unclaimed.
+    expect(
+      render(layout, { attributes: [stored("might", "Might", "3", "MGT")] }),
+    ).toBe("");
+  });
+
+  it("keeps whatever kind an unclaimed value is", () => {
+    const markup = render(layout, {
+      all: [track("scars", "Scars", 2, 4)],
+    });
+    expect(markup.match(/data-slot="track-mark"/g)).toHaveLength(4);
+  });
+});
+
+describe("values sharing a group render as one thing", () => {
+  /**
+   * A Fate consequence is a severity *and* the aspect written into it. Two
+   * unrelated rows would be the renderer contradicting the system (FR-033).
+   */
+  const CONSEQUENCE: SheetValue[] = [
+    grouped(stored("mildSeverity", "Severity", "2"), "mildConsequence"),
+    grouped(
+      stored("mildAspect", "Aspect", "Sprained ankle"),
+      "mildConsequence",
+    ),
+  ];
+
+  it("puts both halves inside one group frame", () => {
+    const markup = render([{ kind: "rowList", of: "other" }], {
+      all: CONSEQUENCE,
+    });
+    expect(markup.match(/data-slot="value-group"/g)).toHaveLength(1);
+    expect(markup).toContain('data-group="mildConsequence"');
+    // One row, not two: the group is the unit the list holds.
+    expect(markup.match(/data-slot="row"/g)).toHaveLength(1);
+    expect(markup).toContain("Sprained ankle");
+  });
+
+  it("keeps declaration order within the group", () => {
+    const markup = render([{ kind: "rowList", of: "other" }], {
+      all: CONSEQUENCE,
+    });
+    expect(idsInOrder(markup)).toEqual(["mildSeverity", "mildAspect"]);
+  });
+
+  it("gathers members the system did not declare adjacently, without reordering the set", () => {
+    // A Cypher stat is a current value, a pool and an edge; the group takes
+    // the position of its first member and pulls the rest up to it.
+    const markup = render([{ kind: "rowList", of: "other" }], {
+      all: [
+        grouped(stored("mightCurrent", "Might", "9"), "might"),
+        stored("speedPool", "Speed Pool", "12"),
+        grouped(stored("mightEdge", "Might Edge", "1"), "might"),
+      ],
+    });
+    expect(idsInOrder(markup)).toEqual([
+      "mightCurrent",
+      "mightEdge",
+      "speedPool",
+    ]);
+    expect(markup.match(/data-slot="value-group"/g)).toHaveLength(1);
+  });
+
+  it("leaves an ungrouped value in no frame at all", () => {
+    const markup = render([{ kind: "rowList", of: "other" }], {
+      all: [stored("heritage", "Heritage", "Djinn-touched")],
+    });
+    expect(markup).not.toContain('data-slot="value-group"');
+  });
+});
+
 describe("specific constructs", () => {
   const declarations: Partial<SheetDeclarations> = {
     attributes: [stored("strength", "Strength", "16", "STR")],
-    derived: [
-      derived("strengthMod", "Strength Modifier", "+3", "MOD"),
-      derived("deathSaves", "Death Save Successes", "2"),
-    ],
+    derived: [derived("strengthMod", "Strength Modifier", "+3", "MOD")],
     resources: [
-      stored("spellSlots1", "1st-level slots", "4"),
-      stored("spellSlots1Spent", "1st-level spent", "1"),
-      stored("spellSlots2", "2nd-level slots", "3"),
+      track("deathSaves", "Death Save Successes", 2, 3),
+      stored("notes", "Notes", "Owes the smith a favour"),
     ],
   };
 
@@ -340,44 +615,23 @@ describe("specific constructs", () => {
     expect(markup.match(/<input/g)).toHaveLength(1);
   });
 
-  it("renders a tracker as a bounded run of boxes", () => {
-    const markup = render(
-      [{ kind: "tracker", id: "deathSaves", boxes: 3, rows: 2 }],
-      declarations,
-    );
-    expect(markup.match(/data-slot="tracker-box"/g)).toHaveLength(6);
-    // Two of six filled, and — being derived — none of them a control.
-    expect(markup.match(/aria-checked="true"/g)).toHaveLength(2);
-    expect(markup).not.toContain("<button");
+  it("gives a block the same value with room to breathe", () => {
+    const markup = render([{ kind: "block", id: "notes" }], declarations);
+    expect(markup).toContain('data-slot="layout-block"');
+    expect(markup).toContain("<textarea");
+    expect(markup).toContain("Owes the smith a favour");
   });
 
-  it("gives a stored tracker boxes that can be clicked", () => {
-    const markup = render([{ kind: "tracker", id: "used", boxes: 3 }], {
-      resources: [stored("used", "Uses", "1")],
-    });
-    expect(markup.match(/<button/g)).toHaveLength(3);
-  });
-
-  it("renders a slotGrid as one row per level the system declares", () => {
-    const markup = render(
-      [{ kind: "slotGrid", id: "spellSlots", levels: 9 }],
-      declarations,
-    );
-    // Nine levels asked for, two declared: a caster shows the slots they
-    // have rather than six empty rows.
-    expect(markup.match(/data-slot="slot-level"/g)).toHaveLength(2);
-    expect(markup).toContain('data-level="1"');
-    expect(markup).toContain('data-level="2"');
+  it("renders a block of a track as marks, not as prose", () => {
+    // A block says how much room, never what the value is.
+    const markup = render([{ kind: "block", id: "deathSaves" }], declarations);
+    expect(markup.match(/data-slot="track-mark"/g)).toHaveLength(3);
+    expect(markup).not.toContain("<textarea");
   });
 
   it("renders nothing for an identifier the system does not declare", () => {
     expect(render([{ kind: "value", id: "ki" }], declarations)).toBe("");
-    expect(
-      render([{ kind: "tracker", id: "ki", boxes: 3 }], declarations),
-    ).toBe("");
-    expect(
-      render([{ kind: "slotGrid", id: "kiPoints", levels: 9 }], declarations),
-    ).toBe("");
+    expect(render([{ kind: "block", id: "ki" }], declarations)).toBe("");
     // And a section holding only unresolvable references is not a heading
     // over blank space either.
     expect(
@@ -386,7 +640,7 @@ describe("specific constructs", () => {
           {
             kind: "section",
             title: "Spellcasting",
-            children: [{ kind: "slotGrid", id: "kiPoints", levels: 9 }],
+            children: [{ kind: "value", id: "kiPoints" }],
           },
         ],
         declarations,
@@ -412,6 +666,23 @@ describe("a node kind this build does not know", () => {
     expect(warn).toHaveBeenCalledWith(
       "[layout] ignoring unknown node kind: diceTray",
     );
+    warn.mockRestore();
+  });
+
+  it("is skipped when it is a node kind that was removed", () => {
+    // `tracker` and `slotGrid` were real kinds and are not any more. A pack
+    // still carrying one loses that node and keeps the rest of the sheet.
+    resetUnknownKindWarnings();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const markup = render(
+      [
+        { kind: "tracker", id: "deathSaves", boxes: 3 },
+        { kind: "value", id: "might" },
+      ] as unknown as LayoutNode[],
+      { attributes: [stored("might", "Might", "3", "MGT")] },
+    );
+    expect(markup).toContain('data-value-id="might"');
+    expect(markup).not.toContain('data-slot="tracker"');
     warn.mockRestore();
   });
 });

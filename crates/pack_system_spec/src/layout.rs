@@ -35,7 +35,25 @@
 //! six-ability block with an eighteen-row skill list, a three-pool column with
 //! no skills, a skills-only ladder with no abilities at all. A layout that
 //! only names identifiers serves none of them generally; one that only
-//! addresses sets cannot express a nine-level slot grid.
+//! addresses sets cannot say that a modifier belongs beside its score.
+//!
+//! # Why there is no construct per kind of value
+//!
+//! There was: a `tracker` with a box count, and a `slotGrid` with a level
+//! count. Both are gone, and the format got smaller while covering more.
+//!
+//! A `tracker` carrying `boxes` and `rows` was a layout stating what a value
+//! *is*, and it was wrong for two of the three systems that have a track —
+//! Fate's stress is one flat run of eight, Cypher's damage ladder has no marks
+//! at all. But a layout never needed to know: `value` names an identifier, and
+//! the value that arrives says whether it is a number, a pool, a run of marks
+//! or a rung on a ladder. The layout says *where*, the value says *what*,
+//! which is FR-003a stated as a shape rather than as a rule.
+//!
+//! `slotGrid` went the same way for the same reason. It existed because a
+//! spell slot is two numbers per level and nothing said how level three's
+//! total was named — but that is a fact about the declaration, and groups
+//! (FR-033) are where it belongs.
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -56,6 +74,17 @@ pub enum DeclarationSet {
     Movement,
     /// Everything the system computes rather than stores.
     Derived,
+    /// Everything the system declares that none of the named sets claim.
+    ///
+    /// The construct that makes "every shipping system has a usable sheet" a
+    /// property rather than a hope (FR-034, SC-012). A system declaring
+    /// something this build has never heard of still has it drawn, because a
+    /// value missing from a sheet is indistinguishable from the character not
+    /// having it (FR-035).
+    ///
+    /// Forge ends with one of these, so nothing a system publishes falls off
+    /// the bottom of the base pack.
+    Other,
 }
 
 /// One node of a pack's layout.
@@ -123,23 +152,15 @@ pub enum LayoutNode {
         value: String,
         beside: String,
     },
-    /// A bounded run of boxes — 5e's three death-save successes and three
-    /// failures, and nothing else in any shipping system.
-    Tracker {
+    /// A value given room to breathe — a paragraph, a list a player adds to.
+    ///
+    /// The distinction from [`Self::Value`] is how much space it gets, which
+    /// is a layout decision. It says nothing about what the value *is*: that
+    /// is the value's own kind, and a `block` naming a number is a number in a
+    /// wide box rather than a claim that the number is prose.
+    Block {
         id: String,
-        boxes: u8,
-        #[serde(default = "one")]
-        rows: u8,
     },
-    /// A levelled grid of total-and-spent counters: spell slots.
-    SlotGrid {
-        id: String,
-        levels: u8,
-    },
-}
-
-fn one() -> u8 {
-    1
 }
 
 impl LayoutNode {
@@ -163,9 +184,7 @@ impl LayoutNode {
             // Generic nodes name nothing. That is the whole property that
             // lets Forge compose against a system nobody has written yet.
             Self::BadgeGrid { .. } | Self::BarStack { .. } | Self::RowList { .. } => {}
-            Self::Value { id } | Self::Tracker { id, .. } | Self::SlotGrid { id, .. } => {
-                out.push(id)
-            }
+            Self::Value { id } | Self::Block { id } => out.push(id),
             Self::Pair { value, beside } => {
                 out.push(value);
                 out.push(beside);
@@ -185,8 +204,7 @@ impl LayoutNode {
             Self::RowList { .. } => "rowList",
             Self::Value { .. } => "value",
             Self::Pair { .. } => "pair",
-            Self::Tracker { .. } => "tracker",
-            Self::SlotGrid { .. } => "slotGrid",
+            Self::Block { .. } => "block",
         }
     }
 
@@ -204,8 +222,7 @@ impl LayoutNode {
         "rowList",
         "value",
         "pair",
-        "tracker",
-        "slotGrid",
+        "block",
     ];
 
     /// Which kinds appear in this tree.

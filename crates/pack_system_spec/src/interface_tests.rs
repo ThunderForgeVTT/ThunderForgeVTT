@@ -471,3 +471,50 @@ fn the_two_shipped_packs_are_structurally_different() {
     assert_eq!(steel.targets, vec!["dnd5e".to_string()]);
     assert_ne!(base.light, steel.light, "and they do not look the same");
 }
+
+// ---------------------------------------------------------------------------
+// Increment E: nothing a system publishes falls off the base pack
+// ---------------------------------------------------------------------------
+
+/// FR-034 and SC-012's mechanism, asserted rather than assumed.
+///
+/// Forge addresses the five named declaration sets *and* everything else. A
+/// system declaring something this build has never heard of still has it
+/// drawn, because a value missing from a sheet is indistinguishable from the
+/// character not having it.
+#[test]
+fn the_base_pack_addresses_everything_a_system_can_declare() {
+    let forge = forge();
+    let layout = forge.layout.as_deref().expect("forge declares a layout");
+
+    fn sets(nodes: &[crate::layout::LayoutNode], out: &mut Vec<crate::layout::DeclarationSet>) {
+        use crate::layout::LayoutNode::*;
+        for node in nodes {
+            match node {
+                Section { children, .. } | Column { children } | Row { children } => {
+                    sets(children, out)
+                }
+                BadgeGrid { of, .. } | BarStack { of } | RowList { of } => out.push(*of),
+                _ => {}
+            }
+        }
+    }
+
+    let mut addressed = Vec::new();
+    sets(layout, &mut addressed);
+
+    for set in [
+        crate::layout::DeclarationSet::Attributes,
+        crate::layout::DeclarationSet::Resources,
+        crate::layout::DeclarationSet::Skills,
+        crate::layout::DeclarationSet::Movement,
+        crate::layout::DeclarationSet::Derived,
+        crate::layout::DeclarationSet::Other,
+    ] {
+        assert!(
+            addressed.contains(&set),
+            "the base pack must address {set:?}, or a system declaring into it \
+             gets a sheet with a hole in it"
+        );
+    }
+}

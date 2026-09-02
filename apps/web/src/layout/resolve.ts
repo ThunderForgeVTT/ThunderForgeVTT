@@ -8,63 +8,132 @@
  * renders nothing itself*. React cannot be asked after the fact whether a
  * subtree came out empty, so emptiness has to be a question that can be
  * answered about a node without rendering it. That question lives here.
+ *
+ * The other questions here are of the same shape — what *kind* of thing a
+ * value is, and which values belong together — and they are answered by
+ * reading structured fields, never by reading the rendered string. Parsing
+ * the string to decide was a real bug: a system writing "4 of 7" instead of
+ * "4 / 7" silently lost its bar (spec 032 T019a).
  */
 
 import { indexById, valuesIn } from "./declarations";
-import type { LayoutNode, SheetDeclarations, SheetValue } from "./types";
+import type { LayoutNode, ResolvedDeclarations, SheetValue } from "./types";
 
 /** What a node needs in order to resolve anything it addresses. */
 export interface Resolution {
-  declarations: SheetDeclarations;
+  declarations: ResolvedDeclarations;
   byId: ReadonlyMap<string, SheetValue>;
   onValueChange?: (id: string, next: string) => void;
 }
 
 export function resolutionFrom(
-  declarations: SheetDeclarations,
+  declarations: ResolvedDeclarations,
   onValueChange?: (id: string, next: string) => void,
 ): Resolution {
   return { declarations, byId: indexById(declarations), onValueChange };
 }
 
-/** One level of a slot grid: its total, its spent count, or one of the two. */
-export interface SlotLevel {
-  level: number;
-  total: SheetValue | null;
-  spent: SheetValue | null;
+// ---------------------------------------------------------------------------
+// What kind of thing a value is
+// ---------------------------------------------------------------------------
+
+/**
+ * Which representation a value asks for.
+ *
+ * Decided by which structured field the server sent, in the order the wire
+ * type makes them mutually exclusive. `text` is not a failure case: it is
+ * what a score, a name, a Fate ladder rung and a proficiency all are.
+ */
+export type ValueShape = "pool" | "track" | "state" | "text";
+
+export function shapeOf(value: SheetValue): ValueShape {
+  if (value.fraction) return "pool";
+  if (value.track) return "track";
+  if (value.state) return "state";
+  return "text";
+}
+
+/** How a state ladder reads: its rungs, which one is current, and whether it is known. */
+export interface StateReading {
+  options: readonly string[];
+  /** The stored state, or null for "none of them" — a real answer. */
+  current: string | null;
+  /**
+   * True when a state is stored that the system no longer declares.
+   *
+   * The failure this exists to prevent: a saved character whose condition was
+   * renamed reading as the *first* option — which on a damage track means
+   * silently healed. An unknown state is shown as unknown.
+   */
+  unknown: boolean;
+}
+
+export function stateReading(value: SheetValue): StateReading | null {
+  const state = value.state;
+  if (!state) return null;
+  const options = state.options ?? [];
+  const current = state.current === "" ? null : (state.current ?? null);
+  return {
+    options,
+    current,
+    unknown: current !== null && !options.includes(current),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Grouping
+// ---------------------------------------------------------------------------
+
+/**
+ * One thing on the sheet: a lone value, or the several that share a group.
+ *
+ * A Fate consequence is a severity and the aspect written into it; a Cypher
+ * stat is a current value, a pool and an edge. Those are one thing a player
+ * reads, and rendering them as unrelated rows loses exactly the fact the
+ * `group` field was added to carry (FR-033).
+ */
+export interface ValueUnit {
+  /** The group's identifier, or null for a value that is in no group. */
+  group: string | null;
+  /** In declaration order within the group. The system's order, never ours. */
+  values: readonly SheetValue[];
+  key: string;
 }
 
 /**
- * The counters one slot grid resolves to, level by level.
+ * Split a set into the units it renders as.
  *
- * The format gives a slot grid a single identifier and a level count, while
- * the wire carries one value per identifier — so the per-level identifiers
- * have to be recovered by convention (`spellSlots3`, `spellSlots3Spent`, and
- * the dotted equivalents). That is a gap in the layout format rather than a
- * preference expressed here: nothing in `LayoutNode::SlotGrid` says how a
- * level addresses its two numbers.
- *
- * A level neither of whose counters the system declares is omitted, so a
- * caster who has reached level 3 shows three rows rather than nine, and a
- * system with no slots at all shows no grid.
+ * A group takes the position of its *first* member, so grouping never
+ * reorders a set: it only pulls later members up to join the first. Members
+ * need not be adjacent in the system's declaration list — nothing requires a
+ * system to declare them together — but their order among themselves is the
+ * system's own.
  */
-export function slotLevels(
-  id: string,
-  levels: number,
-  at: Resolution,
-): SlotLevel[] {
-  const found: SlotLevel[] = [];
-  for (let level = 1; level <= levels; level += 1) {
-    const total =
-      at.byId.get(`${id}${level}`) ?? at.byId.get(`${id}.${level}`) ?? null;
-    const spent =
-      at.byId.get(`${id}${level}Spent`) ??
-      at.byId.get(`${id}.${level}.spent`) ??
-      null;
-    if (total || spent) found.push({ level, total, spent });
+export function unitsOf(values: readonly SheetValue[]): ValueUnit[] {
+  const units: { group: string | null; values: SheetValue[]; key: string }[] =
+    [];
+  const byGroup = new Map<string, { values: SheetValue[] }>();
+  for (const value of values) {
+    const group = value.group ?? null;
+    if (group === null) {
+      units.push({ group: null, values: [value], key: value.id });
+      continue;
+    }
+    const existing = byGroup.get(group);
+    if (existing) {
+      existing.values.push(value);
+      continue;
+    }
+    const unit = { group, values: [value], key: `group:${group}` };
+    byGroup.set(group, unit);
+    units.push(unit);
   }
-  return found;
+  return units;
 }
+
+// ---------------------------------------------------------------------------
+// Emptiness
+// ---------------------------------------------------------------------------
 
 /**
  * Kinds already complained about, so an unrecognised node costs one line in
@@ -101,13 +170,10 @@ export function rendersAnything(node: LayoutNode, at: Resolution): boolean {
     case "rowList":
       return valuesIn(at.declarations, node.of).length > 0;
     case "value":
+    case "block":
       return at.byId.has(node.id);
     case "pair":
       return at.byId.has(node.value) || at.byId.has(node.beside);
-    case "tracker":
-      return at.byId.has(node.id) && node.boxes > 0;
-    case "slotGrid":
-      return slotLevels(node.id, node.levels, at).length > 0;
     default:
       warnUnknown((node as { kind?: string }).kind ?? "(missing kind)");
       return false;
