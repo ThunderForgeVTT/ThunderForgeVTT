@@ -28,6 +28,14 @@ type BevyWasmModule = {
   begin_token_placement?: (actorId: string) => boolean;
   cancel_token_placement?: () => void;
   authoring_mode?: () => string;
+  /**
+   * Spec 031 (US4, FR-018). Optional for the same reason as the rest: a
+   * bundle built before the scene machine existed must still mount, and its
+   * absence means chrome loads a scene the way it always did rather than
+   * being an error.
+   */
+  begin_scene_transition?: (sceneId: string) => boolean;
+  complete_scene_transition?: () => void;
   set_event_callback?: (callback: (json: string) => void) => void;
   /**
    * Spec 028 (US1, T027/T028). Optional because an engine bundle built
@@ -462,6 +470,61 @@ function reportInteractionTriggered(event: InteractionTriggeredEvent): void {
   }
 }
 
+/**
+ * The engine asking for a scene's contents.
+ *
+ * Emitted by the scene-transition machine at the one moment loading is safe:
+ * the previous scene's tokens, walls, lights and shapes are already off the
+ * canvas, and the machine has settled into `Loading` to wait. Fetching
+ * alongside `beginSceneTransition` instead would race the engine's despawn,
+ * which runs on its own frame — and the frame usually wins, which is the
+ * worst of the two outcomes because the times it loses look like a map that
+ * randomly came up empty.
+ */
+export interface SceneLoadRequestedEvent {
+  type: "scene_load_requested";
+  sceneId: string;
+}
+
+function asSceneLoadRequested(event: unknown): SceneLoadRequestedEvent | null {
+  if (typeof event !== "object" || event === null) return null;
+  const candidate = event as { type?: unknown };
+  return candidate.type === "scene_load_requested"
+    ? (event as SceneLoadRequestedEvent)
+    : null;
+}
+
+const sceneLoadRequestedListeners = new Set<
+  (event: SceneLoadRequestedEvent) => void
+>();
+
+/**
+ * Be told when the engine has cleared the canvas and wants a scene's content.
+ *
+ * A listener rather than a promise from `beginSceneTransition`: the machine
+ * can be sent somewhere else mid-transition, so "which scene was asked for"
+ * has to travel with the event rather than be assumed from the call that
+ * started it.
+ */
+export function onSceneLoadRequested(
+  listener: (event: SceneLoadRequestedEvent) => void,
+): () => void {
+  sceneLoadRequestedListeners.add(listener);
+  return () => {
+    sceneLoadRequestedListeners.delete(listener);
+  };
+}
+
+function reportSceneLoadRequested(event: SceneLoadRequestedEvent): void {
+  for (const listener of sceneLoadRequestedListeners) {
+    try {
+      listener(event);
+    } catch {
+      // One bad listener must not stop the others hearing about this.
+    }
+  }
+}
+
 export async function bindWorldStore(worldStore: WorldStore): Promise<void> {
   const module = await getWasmModule();
   boundWorldStore = worldStore;
@@ -518,6 +581,29 @@ export async function bindWorldStore(worldStore: WorldStore): Promise<void> {
           for (const listener of unavailableListeners) {
             listener(unavailable);
           }
+          return;
+        }
+
+        // Nor is the scene machine's request for content. It asks chrome to
+        // go and fetch — the engine owns no network by design — and there is
+        // no store command by that name for it to become.
+        const sceneLoad = asSceneLoadRequested(parsed);
+        if (sceneLoad) {
+          reportSceneLoadRequested(sceneLoad);
+          return;
+        }
+
+        // The machine's other two notices are dropped here rather than left
+        // to fall through. They report where a transition got to, nothing in
+        // world state changes because of them, and dispatching them would put
+        // commands nothing reduces into the store — the same reason every
+        // report above is routed out. Chrome learns a transition finished
+        // from the state it already tracks, not from these.
+        const sceneNotice = (parsed as { type?: unknown }).type;
+        if (
+          sceneNotice === "scene_unloaded" ||
+          sceneNotice === "scene_transition_complete"
+        ) {
           return;
         }
 
@@ -656,6 +742,50 @@ export async function cancelTokenPlacement(): Promise<void> {
     module.cancel_token_placement?.();
   } catch {
     // Nothing to abandon.
+  }
+}
+
+/**
+ * Begin swapping the canvas over to `sceneId`.
+ *
+ * The engine takes the previous scene's tokens, walls, lights, shapes,
+ * interactives and selection off the canvas itself (FR-018) and then emits
+ * `scene_load_requested`. Subscribe with `onSceneLoadRequested` and fetch
+ * *then*: the despawn happens on a later frame, so anything fetched from here
+ * is racing it.
+ *
+ * Returns whether the engine took the request. `false` means the machine is
+ * absent from this bundle, the wasm layer is unreachable, or the id was
+ * empty — in every one of those cases nothing will be despawned and no
+ * request will ever be emitted, so a caller waiting for one would wait
+ * forever and must load by itself instead.
+ */
+export async function beginSceneTransition(sceneId: string): Promise<boolean> {
+  try {
+    const module = await getWasmModule();
+    return module.begin_scene_transition?.(sceneId) ?? false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Tell the engine that every command for the new scene has been sent.
+ *
+ * This is not optional politeness. `Loading` has no timeout on purpose — the
+ * engine has no way to judge whether chrome has failed or is merely slow — so
+ * a load path that reaches its end without calling this leaves the machine
+ * waiting for the rest of a scene that is already fully here. Call it on
+ * every exit from the load, the failed ones included: "chrome has stopped
+ * sending" is the honest report, and a partly-loaded scene the person can see
+ * is better than a transition that never ends.
+ */
+export async function completeSceneTransition(): Promise<void> {
+  try {
+    const module = await getWasmModule();
+    module.complete_scene_transition?.();
+  } catch {
+    // A bundle without the machine was never in a transition to finish.
   }
 }
 

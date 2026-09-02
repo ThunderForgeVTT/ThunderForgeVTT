@@ -71,7 +71,7 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 
 - [X] T015 [US9] Confirm the stray-marker cause before fixing — check whether the marker lands at the tool *button's* screen position rather than the pointer's last map position (research R6), and record the finding in `specs/031-playability/research.md`
 - [X] T016 [US9] Make entering an authoring mode inert on top of T008 so no tool switch places content, in `src/engine/src/plugins/` (FR-040, FR-040a)
-- [ ] T017 [US9] Ensure a gesture in flight — a drag or a carried placement — cannot complete under a newly entered mode's rules, in `src/engine/src/plugins/` (spec edge case)
+- [X] T017 [US9] Ensure a gesture in flight — a drag or a carried placement — cannot complete under a newly entered mode's rules, in `src/engine/src/plugins/` (spec edge case)
 - [X] T018 [P] [US9] Remove the overlapping loader on the play route so exactly one indicator shows: reconcile the route Suspense fallback in `apps/web/src/routes/AppRoutes.tsx` with `engine-load-indicator` in `apps/web/src/pages/world/WorldPage.tsx` (FR-041, research R9)
 - [X] T019 [P] [US9] Guard `apps/web/src/hooks/useActorSystemData.ts` so no query is issued without an identifier, removing the repeated `Failed to parse "UUID": invalid length: found 0` (FR-043)
 - [X] T020 [US9] Report unsupported client storage plainly instead of an empty cache — surface `CacheError::Unsupported` from `crates/thunderforge-cache-browser/` through to the diagnostics panel in `apps/web/src/components/` (FR-042, research R7, depends on T007)
@@ -169,12 +169,12 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 
 **Depends on**: T002's ADR.
 
-- [ ] T053 [US4] Add the scene-transition state machine (`ready → unloading → loading → ready`) as a Bevy plugin in `src/engine/src/plugins/scene_transition.rs`, registered in `src/engine/src/lib.rs` (FR-018, research R11)
-- [ ] T054 [US4] Unload the previous scene's tokens, walls and lights on `OnEnter(unloading)` and load the new scene's on `OnEnter(loading)`, in `src/engine/src/plugins/scene_transition.rs` (FR-018)
-- [ ] T054a [US4] Drive the scene-transition machine from chrome — nothing calls `begin_scene_transition`/`complete_scene_transition`, so T053/T054 are registered and inert and FR-018 is not yet delivered, in `apps/web/src/pages/world/WorldPage.tsx` and `apps/web/src/engine/bevy/index.ts` (FR-018)
+- [X] T053 [US4] Add the scene-transition state machine (`ready → unloading → loading → ready`) as a Bevy plugin in `src/engine/src/plugins/scene_transition.rs`, registered in `src/engine/src/lib.rs` (FR-018, research R11)
+- [X] T054 [US4] Unload the previous scene's tokens, walls and lights on `OnEnter(unloading)` and load the new scene's on `OnEnter(loading)`, in `src/engine/src/plugins/scene_transition.rs` (FR-018)
+- [X] T054a [US4] Drive the scene-transition machine from chrome — nothing calls `begin_scene_transition`/`complete_scene_transition`, so T053/T054 are registered and inert and FR-018 is not yet delivered, in `apps/web/src/pages/world/WorldPage.tsx` and `apps/web/src/engine/bevy/index.ts` (FR-018)
 - [ ] T055 [US4] Implement party retention per T002's ADR in `src/server/src/graphql/`, ensuring a character that already has a token in the destination gains no second one (FR-019, contracts/graphql-mutations.md)
 - [ ] T056 [US4] Add the GM's bring-the-party choice to the scene-change surface in `apps/web/src/` (FR-019)
-- [ ] T057 [P] [US4] Add the retention predicate with unit tests in `crates/thunderforge-canvas-core/src/`
+- [X] T057 [P] [US4] Add the retention predicate with unit tests in `crates/thunderforge-canvas-core/src/`
 
 **Checkpoint**: A session can move rooms without re-placing the party by hand.
 
@@ -186,12 +186,12 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 
 **Independent Test**: Draw a four-walled room with a door in under thirty seconds; walls follow the grid, including hex.
 
-- [ ] T058 [US6] Add a GM-facing grid-snapping setting defaulting to on, applying to walls and lights, in `apps/web/src/` and `src/engine/src/plugins/grid.rs` (FR-024)
-- [ ] T059 [US6] Apply T010's snapping rules to wall and light placement, honouring the scene's grid type including hex, in `src/engine/src/plugins/` (FR-025)
-- [ ] T060 [US6] Add room and door primitives selectable while drawing, in `src/engine/src/plugins/wall.rs` (FR-026)
-- [ ] T061 [US6] Ensure doors created by the primitive are functional — open, close, lock — reusing the existing door effects, in `src/engine/src/plugins/wall.rs` (FR-027)
+- [X] T058 [US6] Add a GM-facing grid-snapping setting defaulting to on, applying to walls and lights, in `apps/web/src/` and `src/engine/src/plugins/grid.rs` (FR-024)
+- [X] T059 [US6] Apply T010's snapping rules to wall and light placement, honouring the scene's grid type including hex, in `src/engine/src/plugins/` (FR-025)
+- [X] T060 [US6] Add room and door primitives selectable while drawing, in `src/engine/src/plugins/wall.rs` (FR-026)
+- [X] T061 [US6] Ensure doors created by the primitive are functional — open, close, lock — reusing the existing door effects, in `src/engine/src/plugins/wall.rs` (FR-027)
 - [ ] T062 [US6] Add placement helper controls to the interactions authoring surface for the supported effect kinds, in `apps/web/src/` (FR-028)
-- [ ] T063 [US6] Support canvas right-click and suppress the browser context menu on the canvas surface only, in `src/engine/src/` (FR-029, research R6 caution)
+- [X] T063 [US6] Support canvas right-click and suppress the browser context menu on the canvas surface only, in `src/engine/src/` (FR-029, research R6 caution)
 
 **Checkpoint**: A GM can build a map at speed.
 
