@@ -367,6 +367,34 @@ export function updateWorldGameSystem(
   ).then((data) => data.updateWorldGameSystem);
 }
 
+type UpdateWorldInterfacePackMutation = {
+  updateWorldInterfacePack: WorldRecord;
+};
+
+/**
+ * Spec 032 (FR-010): sets or clears the world's interface pack. DM/GM-only,
+ * server-enforced.
+ *
+ * `null` clears the binding, which means "the base pack" — a real thing a Game
+ * Master may want, and the reason this id is nullable where
+ * `updateWorldGameSystem`'s is not.
+ */
+export function updateWorldInterfacePack(
+  worldId: string,
+  interfacePackId: string | null,
+): Promise<WorldRecord> {
+  return postGraphQL<UpdateWorldInterfacePackMutation>(
+    `
+      mutation UpdateWorldInterfacePack($input: UpdateWorldInterfacePackInput!) {
+        updateWorldInterfacePack(input: $input) {
+          ${WORLD_FIELDS}
+        }
+      }
+    `,
+    { input: { worldId, interfacePackId } },
+  ).then((data) => data.updateWorldInterfacePack);
+}
+
 type UpdateWorldGenieResourceCarryoverMutation = {
   updateWorldGenieResourceCarryover: WorldRecord;
 };

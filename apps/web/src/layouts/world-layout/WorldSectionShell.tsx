@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button/Button";
+import { WorldAppearance } from "@/appearance/WorldAppearance";
 import { WorldSidebarNav } from "@/layouts/world-layout/WorldSidebarNav";
 
 export interface WorldSectionShellProps {
@@ -32,22 +33,24 @@ export function WorldSectionShell({
   children,
 }: WorldSectionShellProps) {
   return (
-    <div className="mx-auto grid w-full max-w-[1800px] gap-4 p-4 sm:p-6 lg:p-8">
-      <div className="flex justify-end">
-        <Button
-          asChild
-          variant="primary"
-          size="lg"
-          icon="spark"
-          data-testid="play-button"
-        >
-          <Link to={`/world/${worldId}/play`}>Play</Link>
-        </Button>
+    <WorldAppearance worldId={worldId}>
+      <div className="mx-auto grid w-full max-w-[1800px] gap-4 p-4 sm:p-6 lg:p-8">
+        <div className="flex justify-end">
+          <Button
+            asChild
+            variant="primary"
+            size="lg"
+            icon="spark"
+            data-testid="play-button"
+          >
+            <Link to={`/world/${worldId}/play`}>Play</Link>
+          </Button>
+        </div>
+        <div className="flex items-start gap-6">
+          <WorldSidebarNav worldId={worldId} isGm={isGm} />
+          <div className="min-w-0 flex-1">{children}</div>
+        </div>
       </div>
-      <div className="flex items-start gap-6">
-        <WorldSidebarNav worldId={worldId} isGm={isGm} />
-        <div className="min-w-0 flex-1">{children}</div>
-      </div>
-    </div>
+    </WorldAppearance>
   );
 }

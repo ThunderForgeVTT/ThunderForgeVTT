@@ -142,3 +142,7 @@ async fn get_pack_manifest(
 #[cfg(test)]
 #[path = "interface_packs_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "interface_packs_integration_tests.rs"]
+mod integration_tests;

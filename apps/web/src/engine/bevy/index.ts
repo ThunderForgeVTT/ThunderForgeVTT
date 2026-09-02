@@ -1019,6 +1019,39 @@ export async function setIsGameMaster(isGameMaster: boolean): Promise<void> {
 }
 
 /**
+ * Spec 032: hands the world's interface pack its canvas half.
+ *
+ * The engine has accepted `set_display_appearance` since spec 029 — the
+ * command parses, `StatusDisplayPlugin` owns the `Appearance` resource it
+ * writes, and the TypeScript SDK types it in `sdk/commands.ts`. Until now
+ * nothing called it. Every layer existed and nothing joined them, which is the
+ * same shape as the two dead paths found during spec 031.
+ *
+ * Like `setIsGameMaster`, this goes to the wasm bridge directly rather than
+ * through `worldStore.dispatch`: an appearance is presentation, not world
+ * state to persist or broadcast. The server already told everyone the pack
+ * changed; this is each client applying it to its own canvas.
+ *
+ * A pack with no `canvas` block sends nothing, and the engine keeps its own
+ * defaults — an empty override would say "reset everything to nothing", which
+ * is a different claim.
+ */
+export async function setDisplayAppearance(
+  appearance: Record<string, unknown> | null,
+): Promise<void> {
+  if (!appearance) {
+    return;
+  }
+  const module = await getWasmModule();
+  if (!module.apply_world_command) {
+    return;
+  }
+  module.apply_world_command(
+    JSON.stringify({ type: "set_display_appearance", appearance }),
+  );
+}
+
+/**
  * Spec 014 (US4): forwards the per-die detail from an already-resolved
  * `rollDice` response into the engine's `DiceRollPlugin`, purely to
  * animate a reveal — this never asks the engine to decide an outcome

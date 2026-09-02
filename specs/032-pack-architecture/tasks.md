@@ -120,26 +120,28 @@ can be validated until identifiers resolve, so this phase blocks that one.
 
 ### Web — resolution and rendering
 
-- [ ] T036 [P] [US1] Add `apps/web/src/api/interfacePacks.ts` — list, and fetch one manifest — mirroring `apps/web/src/api/gameSystems.ts`
-- [ ] T037 [US1] Create `apps/web/src/appearance/appearance-context.ts` holding the context, the `ResolvedAppearance` type from data-model.md, and the `useAppearance` hook. Context and hook in their own module from the start: a module exporting a provider *and* a hook cannot fast-refresh, and this repo now enforces that at `--max-warnings=0`
-- [ ] T038 [US1] Create `apps/web/src/appearance/AppearanceProvider.tsx` — resolve Forge as base, overlay the chosen pack, apply the token map for the reader's light/dark selection onto `document.documentElement` as custom properties. No stylesheet fetch, no reload
-- [ ] T039 [US1] Make it re-apply when the reader toggles light/dark, reading `useTheme` from `apps/web/src/hooks/theme-context` — the reader keeps their brightness, the world keeps its pack (research §5)
-- [ ] T040 [US1] Send the manifest's `canvas` block to the engine as `{ type: "set_display_appearance", appearance }` on resolve and on change, using the command already typed in `apps/web/src/engine/sdk/commands.ts`. **No engine change**: this is that command's first caller
-- [ ] T041 [US1] Build the layout renderer in `apps/web/src/layout/`: walk a `LayoutDeclaration`, resolve generic constructs against the system's declarations in order, resolve specific constructs by identifier, and render nothing — not an empty frame — for a set the system declares as empty
-- [ ] T042 [US1] Make derived values non-editable in the renderer, keyed on `origin`, and stored values editable. A text box over a computed number invites the two to disagree, which is the failure `origin` exists to prevent
-- [ ] T043 [US1] Subscribe to `EVENT_CODE_WORLD_APPEARANCE_CHANGED` where the world's other event handlers live in `apps/web/src/pages/world/WorldPage.tsx`, re-resolving on receipt so participants see the change without reloading (SC-001)
-- [ ] T044 [P] [US1] Mount `AppearanceProvider` inside the world layout — not at the app root — because the binding is per world and a user with two worlds open must not see one leak into the other
+- [X] T036 [P] [US1] Add `apps/web/src/api/interfacePacks.ts` — list, and fetch one manifest — mirroring `apps/web/src/api/gameSystems.ts`
+- [X] T037 [US1] Create `apps/web/src/appearance/appearance-context.ts` holding the context, the `ResolvedAppearance` type from data-model.md, and the `useAppearance` hook. Context and hook in their own module from the start: a module exporting a provider *and* a hook cannot fast-refresh, and this repo now enforces that at `--max-warnings=0`
+- [X] T038 [US1] Create `apps/web/src/appearance/AppearanceProvider.tsx` — resolve Forge as base, overlay the chosen pack, apply the token map for the reader's light/dark selection onto `document.documentElement` as custom properties. No stylesheet fetch, no reload
+- [X] T039 [US1] Make it re-apply when the reader toggles light/dark, reading `useTheme` from `apps/web/src/hooks/theme-context` — the reader keeps their brightness, the world keeps its pack (research §5)
+- [X] T040 [US1] Send the manifest's `canvas` block to the engine as `{ type: "set_display_appearance", appearance }` on resolve and on change, using the command already typed in `apps/web/src/engine/sdk/commands.ts`. **No engine change**: this is that command's first caller
+- [X] T041 [US1] Build the layout renderer in `apps/web/src/layout/`: walk a `LayoutDeclaration`, resolve generic constructs against the system's declarations in order, resolve specific constructs by identifier, and render nothing — not an empty frame — for a set the system declares as empty
+- [X] T042 [US1] Make derived values non-editable in the renderer, keyed on `origin`, and stored values editable. A text box over a computed number invites the two to disagree, which is the failure `origin` exists to prevent
+- [X] T043 [US1] Subscribe to `EVENT_CODE_WORLD_APPEARANCE_CHANGED` where the world's other event handlers live in `apps/web/src/pages/world/WorldPage.tsx`, re-resolving on receipt so participants see the change without reloading (SC-001)
+- [X] T044 [P] [US1] Mount `AppearanceProvider` inside the world layout — not at the app root — because the binding is per world and a user with two worlds open must not see one leak into the other
 
 ### Web — the picker
 
-- [ ] T045 [US1] Create `apps/web/src/pages/world/settings/WorldAppearanceSettingsCard.tsx`: list packs that target this world's system (plus every untargeted pack) in title order with no badge or pinned position for Forge, preview one without committing, commit through T034 (FR-008, US1 scenarios 1, 6, 7)
-- [ ] T046 [US1] Show the active pack **by name** in `apps/web/src/pages/world/settings/WorldAppearanceSettingsCard.tsx` — "Forge" for a world that has never chosen one, never an empty select and never a placeholder (FR-023, US1 scenario 3)
-- [ ] T047 [US1] Gate the control on `useWorldRole` so a player sees it read-only, surfacing the server's refusal rather than a silent no-op (FR-010)
-- [ ] T048 [US1] Add the card to `apps/web/src/pages/world/settings/WorldSystemSettingsPage.tsx` beside the existing system and grants cards
+- [X] T045 [US1] Create `apps/web/src/pages/world/settings/WorldAppearanceSettingsCard.tsx`: list packs that target this world's system (plus every untargeted pack) in title order with no badge or pinned position for Forge, preview one without committing, commit through T034 (FR-008, US1 scenarios 1, 6, 7)
+- [X] T046 [US1] Show the active pack **by name** in `apps/web/src/pages/world/settings/WorldAppearanceSettingsCard.tsx` — "Forge" for a world that has never chosen one, never an empty select and never a placeholder (FR-023, US1 scenario 3)
+- [X] T047 [US1] Gate the control on `useWorldRole` so a player sees it read-only, surfacing the server's refusal rather than a silent no-op (FR-010)
+- [X] T048 [US1] Add the card to `apps/web/src/pages/world/settings/WorldSystemSettingsPage.tsx` beside the existing system and grants cards
 
 ### Tests
 
-- [ ] T049 [P] [US1] Vitest for resolution: a pack declaring one token inherits the rest from Forge; an absent pack resolves to Forge with `missing` set; light/dark picks the right map; a generic construct over an empty declaration set renders nothing
+- [X] T049 [P] [US1] Vitest for resolution: a pack declaring one token inherits the rest from Forge; an absent pack resolves to Forge with `missing` set; light/dark picks the right map; a generic construct over an empty declaration set renders nothing
+- [ ] T019a **The layout format is insufficient in three places, found by building the renderer against it.** In descending severity: (1) `slotGrid` carries one `id` and a `levels` count, but each level has *two* numbers (total and spent) and the wire carries one value per identifier — nothing in the format says how level three's total is named, so it is unrenderable without an out-of-band convention the renderer had to invent; (2) `barStack` has no maximum to draw a bar against, because `GraphQLDeclaredValue.value` is one pre-rendered string — the renderer recovers a proportion by *parsing* `"4 / 7"`, which is precisely the "branching on what a value means" that the wire type's own comment says it exists to prevent, and a system writing `"4 of 7"` silently loses its bar; (3) `tracker` has no notion of what a box is, so a system storing death saves as a list shows nothing sensible. (2) is the one to fix first and the fix is probably that resources reach the client in the `current`/`max` shape the canvas already uses, rather than flattened to text
+- [ ] T019b `section.collapsed` is carried to the DOM as `data-collapsed` but does not actually collapse anything — honouring it needs state. Decide whether collapsing is in MVP 1 before a pack author relies on it
 - [ ] T050 [US1] E2E `apps/web/e2e/world-appearance.spec.ts` — a GM changes the pack and a second browser context in the same world sees it **without reloading** (SC-001); both see identical content, actions and values (US1 scenario 2); a player is refused (FR-010); Forge appears among its peers (US1 scenario 6); a Genie actor renders through generic layout with no empty skills heading (US1 scenario 8)
 
 **Checkpoint**: User Story 1 is demonstrable. A GM dresses the table, the table sees it, and an actor renders in the system's own shape.
