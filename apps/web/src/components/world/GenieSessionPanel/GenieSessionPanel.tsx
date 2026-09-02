@@ -505,7 +505,16 @@ export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
               toQuantity: input.toQuantity,
             })
           }
-          onAcceptProposal={(proposalId) => acceptResourceTrade(proposalId)}
+          /*
+            Awaited and discarded, rather than returned. The prop's contract is
+            `void | Promise<void>`, so the pack can await completion — but
+            `acceptResourceTrade` resolves to the caller's updated holdings,
+            and handing those back would make the pack's callback signature
+            depend on this system's record shape.
+          */
+          onAcceptProposal={async (proposalId) => {
+            await acceptResourceTrade(proposalId);
+          }}
           onDeclineProposal={(proposalId) => declineResourceTrade(proposalId)}
         />
       ) : null}

@@ -13,7 +13,13 @@ interface UseCanvasEngineOptions {
 }
 
 interface UseCanvasEngineResult {
-  containerRef: React.RefObject<HTMLDivElement>;
+  /*
+    `| null` because that is what `useRef<HTMLDivElement>(null)` returns under
+    React 19: the ref is empty until the element mounts, and the types now say
+    so. Consumers already handle it — every read here is guarded — so this
+    declaration was simply describing an older React.
+  */
+  containerRef: React.RefObject<HTMLDivElement | null>;
   engine: any; // Engine WASM instance for calling exported functions
   engineReady: boolean;
   /** Spec 008 (US1, FR-002): "downloading" until engineReady flips true —

@@ -219,7 +219,7 @@ test(`${CHURN} sockets churning through ${ROUNDS} rounds while ${MESSAGES} messa
 
   const starved = result.duringStorm.filter((count) => count < MESSAGES).length;
 
-  // eslint-disable-next-line no-console -- the run's own summary, matching
+   
   // the other torture specs so every tier reads the same way in a log.
   console.log(
     `[torture] churn=${CHURN}x${ROUNDS} messages=${MESSAGES} ` +

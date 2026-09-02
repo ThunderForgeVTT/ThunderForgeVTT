@@ -313,7 +313,16 @@ const PROPOSE_RESOURCE_TRADE_MUTATION = `
   }
 `;
 
-export interface ProposeResourceTradeInput {
+/**
+ * A `type`, not an `interface`, and the difference is load-bearing.
+ *
+ * `postGraphQL` takes `Record<string, unknown>` for its variables. TypeScript
+ * gives a type alias an implicit index signature and an interface none, so an
+ * interface here is not assignable and the call does not compile — which it
+ * did not, unnoticed, because this error predates the package being
+ * typechecked in anger.
+ */
+export type ProposeResourceTradeInput = {
   sessionId: string;
   fromActorId: string;
   fromResourceType: string;

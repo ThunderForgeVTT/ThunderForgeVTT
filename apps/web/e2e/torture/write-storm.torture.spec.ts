@@ -190,7 +190,7 @@ test(`${WRITERS} writers into one world, every write seen exactly once`, async (
   const unique = new Set(result.seen);
   const duplicates = result.seen.length - unique.size;
 
-  // eslint-disable-next-line no-console -- the run's own summary, matching
+   
   // session-storm's line so both tiers read the same way in a log.
   console.log(
     `[torture] writers=${WRITERS} writes=${TOTAL_WRITES} delivered=${unique.size} ` +

@@ -48,7 +48,10 @@ test("a Game Master reaches interactions from the tool rail", async ({
   const worldId = await registerAndCreateWorld(page, `Rail ${suffix}`);
   const [sceneId] = await sceneIds(page, worldId);
 
-  const lore = await gql<{ createLoreEntry: { id: string } }>(
+  // Created for its side effect: the interaction tool's configuration field is
+  // a picker of this world's lore, so there has to be an entry to pick. The
+  // returned id is not needed — the test selects by name.
+  await gql<{ createLoreEntry: { id: string } }>(
     page,
     `mutation ($input: CreateLoreEntryInput!) {
       createLoreEntry(input: $input) { id }

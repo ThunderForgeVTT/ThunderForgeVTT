@@ -381,7 +381,7 @@ test(`a Game Master in two sessions and ${PLAYERS} players all writing at once`,
     const trespassAllowed = trespass.filter((r) => !r.errors).length;
     const gmRefused = gmResults.filter((r) => r.errors).length;
 
-    // eslint-disable-next-line no-console -- the run's own summary, matching
+     
     // the other torture specs so every tier reads the same way in a log.
     console.log(
       `[torture] players=${PLAYERS} own=${own.length} ownRefused=${ownRefused} ` +

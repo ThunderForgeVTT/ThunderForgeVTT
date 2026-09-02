@@ -360,7 +360,7 @@ test(`${TABLES} tables of ${PLAYERS_PER_TABLE}, nobody hears another table`, asy
     const shortfall = reports.filter((r) => r.chat < MESSAGES_PER_TABLE).length;
     const leaked = reports.reduce((sum, r) => sum + r.foreign, 0);
 
-    // eslint-disable-next-line no-console -- the run's own summary, matching
+     
     // the other torture specs so every tier reads the same way in a log.
     console.log(
       `[torture] tables=${TABLES} people=${people.length} ` +

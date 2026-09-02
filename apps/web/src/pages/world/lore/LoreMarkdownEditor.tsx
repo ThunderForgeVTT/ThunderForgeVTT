@@ -159,7 +159,7 @@ export function LoreMarkdownEditor({
         },
       }),
     ];
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- setIsUploading/setUploadError are stable useState setters
+     
   }, [loreEntryId, worldId]);
 
   return (
