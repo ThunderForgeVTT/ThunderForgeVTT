@@ -20,6 +20,8 @@ database row in this increment (research.md §3).
 | `legal` | `SystemManifestLegal` | Reused verbatim, not re-declared |
 | `light`, `dark` | token map | Partial; absent keys inherit Forge's |
 | `canvas` | `AppearanceOverride?` | Absent means engine defaults |
+| `targets` | `[system id]` | Required. `[]` means "any system", and is only permissible with generic-only layout |
+| `layout` | `LayoutDeclaration?` | Absent inherits Forge's, which is generic |
 
 **Identity**: `id`. Two packs claiming the same id is a startup-time conflict,
 not a runtime one, because discovery is a directory listing — the filesystem
@@ -57,6 +59,60 @@ The name — chosen 2026-09-02, overriding the draft's "Mithral" — carries non
 of the guarantee.
 
 ---
+
+## Declared Value
+
+One thing a system publishes about an actor. The unit everything downstream
+carries and nothing downstream interprets.
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | string | The system's own identifier — `strength`, `strengthMod`, `wishPoints` |
+| `value` | integer / number / text / boolean / list | |
+| `origin` | `stored` \| `derived` | Which half of the resolution produced it |
+
+**Stored** values come from the actor's existing JSONB slots, read against the
+system manifest's declarations — a path that already exists.
+
+**Derived** values come from the system pack's own `derive`, and are **never
+written to the database**. A derived value that is also stored is two values
+that can disagree, and the stored one is the one that goes stale. They are
+recomputed on every read, which is affordable precisely because `derive` is
+pure and does no I/O.
+
+`origin` exists so a surface can tell a player which numbers they may edit. A
+5e Strength score is typed in; its modifier is not, and a sheet that offered a
+text box for it would be inviting the two to disagree.
+
+## System Contract
+
+The single trait every system pack implements to supply its declared values
+(FR-027). Lives in `thunderforge-canvas-core`, the only crate both the server
+and the engine already depend on. See
+[contracts/system-contract.md](./contracts/system-contract.md).
+
+Replaces two divergent declarations that exist today and are depended upon by
+nothing, one of which returns a fixed `DerivedStats` of armour class,
+initiative and proficiency bonus — a shape with nowhere to put Blades in the
+Dark's stress and trauma, and nothing to say to Fate Core.
+
+## Layout Declaration
+
+A tree of constructs, each addressing the system's declarations **generically**
+(by kind and declaration order) or **specifically** (by identifier).
+
+| | Addresses | Composes with | Validated against |
+|---|---|---|---|
+| Generic | a declaration set | any system, including ones that ship later | nothing to check — it names nothing |
+| Specific | a named identifier | the systems in `targets` | each target's manifest, independently |
+
+Forge is generic-only, which is what makes it simultaneously the universal
+fallback (FR-006, FR-025b) and the format's conformance reference (FR-007a). A
+targeted pack mixes both.
+
+**Not part of a layout**: expressions, conditionals, thresholds, colour ramps
+keyed to values, and any label the system did not declare. Each of those is a
+claim about what a number *means*, which is the system's to make.
 
 ## World Appearance Binding
 
@@ -96,6 +152,7 @@ ResolvedAppearance {
   light:    TokenMap          // Forge's tokens, overlaid with the pack's
   dark:     TokenMap
   canvas:   AppearanceOverride
+  layout:   LayoutDeclaration // the pack's, or Forge's generic one
 }
 ```
 

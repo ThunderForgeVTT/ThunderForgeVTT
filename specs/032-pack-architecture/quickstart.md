@@ -10,8 +10,9 @@ node scripts/dev.mjs        # frontend :5173, backend :30000
 The backend is on **30000**, not 3000.
 
 Prerequisites: a world you are the Game Master of, a second signed-in account
-that is a player in that world, and both interface packs present in
-`packs/interface/`.
+that is a player in that world, both interface packs present in
+`packs/interface/`, and at least two worlds bound to different game systems —
+one of them Genie, which is the only system `IMPLEMENTED_SYSTEM_IDS` contains.
 
 ---
 
@@ -81,7 +82,25 @@ and reverts (FR-010).
 4. Put the directory back and reload. The world returns to that pack with no
    re-binding step.
 
-## 6. A pack that should be refused
+## 6. The sheet is the system's shape, not ours
+
+This is the part the whole revision exists for, and no assertion covers what it
+feels like.
+
+1. Open an actor in a **Genie** world under Forge. Three attributes, Health and
+   Wish Points as bars. No skills section — Genie declares none, and an empty
+   heading over nothing is the failure to look for.
+2. Open an actor in a world bound to a system Forge has never heard of. Same
+   generic arrangement, that system's values, nothing blank or mislabelled
+   (US1 scenario 8).
+3. Switch that world to the targeted pack. The arrangement changes to that
+   system's own shape — its grids, its trackers — and the *numbers do not*
+   (FR-011).
+4. Find a derived value on screen — a modifier, a passive, a save total. Confirm
+   it is **not editable**, and that the stored value it comes from is. If both
+   are editable, `origin` is not reaching the surface and the two will disagree.
+
+## 7. A pack that should be refused
 
 Edit a pack's `interface.json` to fail, one at a time, and confirm each is
 refused *and says why*:
@@ -93,6 +112,9 @@ refused *and says why*:
 | Set `foreground` and `background` to near-identical colours in `light` only | Names the pair, the ratio, the requirement, **and that it was the light mode** (FR-012a, SC-003a) |
 | Break a colour value | Names the value, does not fall back |
 | Remove `legal` | Names the missing legal metadata |
+| Reference an identifier the target system does not declare | Names the identifier **and** the system (FR-026, SC-003b) |
+| Set `targets: []` while the layout names an identifier | Names the identifier, and says an untargeted pack must be generic |
+| Add a layout construct to the format without using it in Forge | Forge's conformance test fails (FR-007a) |
 
 The mode in the third row is the detail worth verifying by hand. A pack that
 reads fine in dark and fails in light is the common failure, and a message that
@@ -108,6 +130,8 @@ says only "contrast too low" sends an author to the wrong half of their file.
 | Contrast ratios, per mode, per pair | `cargo test -p pack_system_spec` |
 | Mutation authorization, missing-pack rejection, world event recorded | `cargo test -p thunderforge` |
 | Token overlay, fallback to Forge, light/dark selection | `pnpm --filter web test` |
+| Derived values: purity, and the same stored input giving the same output | `cargo test -p thunderforge_canvas_core`, `cargo test -p genie_server` |
+| No hand-written list of system identifiers in shared server code | `node scripts/check-system-registry.mjs` |
 | GM sets a pack and a second browser context sees it without reloading | `apps/web/e2e/world-appearance.spec.ts` |
 | A player is refused | same |
 | The two labels say the same true thing | same |
