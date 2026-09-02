@@ -10,9 +10,9 @@ use bevy::input::mouse::MouseWheel;
 
 use crate::plugins::camera::read_wheel_notches;
 use bevy::prelude::*;
-use thunderforge_canvas_core::snapping::SnapRule;
 use bevy::window::PrimaryWindow;
 use serde_json::{Value, json};
+use thunderforge_canvas_core::snapping::SnapRule;
 
 use crate::resources::{
     CanvasLayer, IsGameMaster, LightEdit, LightSet, LightSource, SceneAmbient, SelectedLight,

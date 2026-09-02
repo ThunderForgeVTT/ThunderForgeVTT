@@ -260,10 +260,7 @@ fn request_new_scene(pending: Res<PendingScene>) {
 }
 
 /// Finish once chrome says the content is all here.
-fn finish_loading(
-    pending: Res<PendingScene>,
-    mut next: ResMut<NextState<SceneTransition>>,
-) {
+fn finish_loading(pending: Res<PendingScene>, mut next: ResMut<NextState<SceneTransition>>) {
     if !LOAD_COMPLETE.swap(false, std::sync::atomic::Ordering::SeqCst) {
         return;
     }
@@ -288,8 +285,7 @@ impl Plugin for SceneTransitionPlugin {
             .add_systems(
                 Update,
                 (
-                    apply_requested_transition
-                        .run_if(not(in_state(SceneTransition::Unloading))),
+                    apply_requested_transition.run_if(not(in_state(SceneTransition::Unloading))),
                     finish_loading.run_if(in_state(SceneTransition::Loading)),
                     // Last, so the readable value reflects the state this frame
                     // ran under rather than the one before it.

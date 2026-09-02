@@ -61,7 +61,8 @@ test.describe("World event catch-up on reconnect", () => {
     await page.addInitScript(() => {
       const Native = window.WebSocket;
       const sockets: WebSocket[] = [];
-      (window as unknown as { __e2eSockets: WebSocket[] }).__e2eSockets = sockets;
+      (window as unknown as { __e2eSockets: WebSocket[] }).__e2eSockets =
+        sockets;
       class RecordingWebSocket extends Native {
         constructor(url: string | URL, protocols?: string | string[]) {
           super(url, protocols);
@@ -158,7 +159,10 @@ test.describe("World event catch-up on reconnect", () => {
     // the beginning of the world, replay everything, and the assertions below
     // would pass while proving nothing about the cursor.
     const before = await sendChat(page, worldId, "before the outage");
-    expect(before, "the pre-outage message should have been recorded").toBeGreaterThan(0);
+    expect(
+      before,
+      "the pre-outage message should have been recorded",
+    ).toBeGreaterThan(0);
     await page.waitForTimeout(3_000);
 
     // --- sever the socket, and hold it down ---
@@ -213,9 +217,10 @@ test.describe("World event catch-up on reconnect", () => {
     // Over HTTP, which the route above leaves working. This is a real world
     // event written to the durable record; the tab is simply not listening.
     const missedId = await sendChat(page, worldId, "posted during the outage");
-    expect(missedId, "the missed message should have been recorded").toBeGreaterThan(
-      before,
-    );
+    expect(
+      missedId,
+      "the missed message should have been recorded",
+    ).toBeGreaterThan(before);
 
     // Let it back in. `graphql-ws` is already retrying with backoff, so the
     // next attempt after this succeeds and the client resumes on its own.
@@ -288,9 +293,13 @@ async function sendChat(
     errors?: { message: string }[];
   }>(
     page,
-    `mutation ($input: SendChatMessageInput!) {
-       sendChatMessage(input: $input) { id }
-     }`,
+    `
+      mutation ($input: SendChatMessageInput!) {
+        sendChatMessage(input: $input) {
+          id
+        }
+      }
+    `,
     { input: { worldId, body } },
   );
   expect(
@@ -303,9 +312,13 @@ async function sendChat(
     errors?: { message: string }[];
   }>(
     page,
-    `query ($worldId: UUID!, $afterId: Int!) {
-       worldEventsSince(worldId: $worldId, afterId: $afterId) { latestId }
-     }`,
+    `
+      query ($worldId: UUID!, $afterId: Int!) {
+        worldEventsSince(worldId: $worldId, afterId: $afterId) {
+          latestId
+        }
+      }
+    `,
     { worldId, afterId: 0 },
   );
   expect(

@@ -116,10 +116,7 @@ fn bind_claim(
 /// than inspecting the constraint name, because Diesel reports the name as
 /// free text and the two paths need different messages, not different
 /// parsing.
-fn explain_failed_bind(
-    conn: &mut PgConnection,
-    actor_id: Uuid,
-) -> Result<ClaimError, DieselError> {
+fn explain_failed_bind(conn: &mut PgConnection, actor_id: Uuid) -> Result<ClaimError, DieselError> {
     let taken = world_actor_claims::table
         .filter(world_actor_claims::actor_id.eq(actor_id))
         .count()
@@ -642,8 +639,7 @@ pub async fn set_player_character_binding_impl(
                 .map_err(|_| "That player is not a member of this world".to_string())?;
 
             diesel::delete(
-                world_actor_claims::table
-                    .filter(world_actor_claims::world_member_id.eq(member.id)),
+                world_actor_claims::table.filter(world_actor_claims::world_member_id.eq(member.id)),
             )
             .execute(conn)?;
 

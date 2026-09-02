@@ -159,7 +159,6 @@ export function LoreMarkdownEditor({
         },
       }),
     ];
-     
   }, [loreEntryId, worldId]);
 
   return (

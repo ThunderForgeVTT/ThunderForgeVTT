@@ -265,8 +265,9 @@ export default function ItemEditorPage({ mode }: ItemEditorPageProps) {
               className="text-xs text-muted-foreground"
               data-testid="item-name-suggestion"
             >
-              Did you mean <span className="font-medium">{suggestion.name}</span>
-              ? Names can be reused if that's intentional.
+              Did you mean{" "}
+              <span className="font-medium">{suggestion.name}</span>? Names can
+              be reused if that's intentional.
             </p>
           ) : null}
 

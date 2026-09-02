@@ -61,11 +61,7 @@ async function serveCorruptedBytes(context: BrowserContext): Promise<void> {
       let frame: Uint8Array | null = null;
       if (data instanceof ArrayBuffer) frame = new Uint8Array(data);
       else if (ArrayBuffer.isView(data)) {
-        frame = new Uint8Array(
-          data.buffer,
-          data.byteOffset,
-          data.byteLength,
-        );
+        frame = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
       }
       if (frame && frame.length > HEADER + SEQ && frame[0] === TAG_CHUNK) {
         const copy = frame.slice();
@@ -149,7 +145,10 @@ async function seatTable(
     permissions: ["clipboard-read", "clipboard-write"],
   });
   const gm = await gmContext.newPage();
-  const worldId = await registerAndCreateWorld(gm, `E2E Peer ${uniqueSuffix()}`);
+  const worldId = await registerAndCreateWorld(
+    gm,
+    `E2E Peer ${uniqueSuffix()}`,
+  );
   const [sceneId] = await sceneIds(gm, worldId);
   const player = await inviteAndJoinAsPlayer(browser, gm, worldId, prefix);
   return { gmContext, gm, player, worldId, sceneId };
@@ -239,7 +238,8 @@ test.describe("Client world cache — peer-assisted distribution", () => {
     await expect
       .poll(() => peerCounters(player).then((c) => c.failures), {
         timeout: 90_000,
-        message: "content that does not hash to what was asked for must be discarded",
+        message:
+          "content that does not hash to what was asked for must be discarded",
       })
       .toBeGreaterThanOrEqual(1);
 
@@ -286,7 +286,11 @@ test.describe("Client world cache — peer-assisted distribution", () => {
     const sharedFingerprint = await assetFingerprint(gm, sharedAssetId);
 
     // Art on a hidden scene nobody has launched: the GM's prep.
-    const prepSceneId = await createScene(gm, worldId, `Prep ${uniqueSuffix()}`);
+    const prepSceneId = await createScene(
+      gm,
+      worldId,
+      `Prep ${uniqueSuffix()}`,
+    );
     await setSceneHidden(gm, prepSceneId, true);
     const secretAssetId = await createCanvasAsset(gm, worldId, prepSceneId, 22);
     const secretFingerprint = await assetFingerprint(gm, secretAssetId);
@@ -300,7 +304,8 @@ test.describe("Client world cache — peer-assisted distribution", () => {
     await expect
       .poll(() => holdsFingerprint(gm, worldId, secretFingerprint), {
         timeout: 60_000,
-        message: "the GM must hold the content this test says the player cannot get",
+        message:
+          "the GM must hold the content this test says the player cannot get",
       })
       .toBe(true);
 
@@ -308,7 +313,9 @@ test.describe("Client world cache — peer-assisted distribution", () => {
     await openWorldAndSync(player, worldId, playerSync);
 
     await expect
-      .poll(() => peerCounters(player).then((c) => c.peers), { timeout: 60_000 })
+      .poll(() => peerCounters(player).then((c) => c.peers), {
+        timeout: 60_000,
+      })
       .toBeGreaterThanOrEqual(1);
 
     // The entitled content arrives, which is what makes the negative below
@@ -360,7 +367,10 @@ test.describe("Client world cache — peer-assisted distribution", () => {
     // Set before any application script runs, which is what a user who
     // turned it off in a previous session actually has.
     await player.context().addInitScript(() => {
-      window.localStorage.setItem("thunderforge:peer-transfer-enabled", "false");
+      window.localStorage.setItem(
+        "thunderforge:peer-transfer-enabled",
+        "false",
+      );
     });
 
     const assetId = await createCanvasAsset(gm, worldId, sceneId, 31);

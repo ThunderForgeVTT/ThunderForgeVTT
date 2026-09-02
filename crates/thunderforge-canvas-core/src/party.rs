@@ -62,10 +62,7 @@ impl Retention {
 ///
 /// `destination_occupants` is every character id the destination scene already
 /// holds a token for.
-pub fn retention_for<S: AsRef<str>>(
-    character_id: &str,
-    destination_occupants: &[S],
-) -> Retention {
+pub fn retention_for<S: AsRef<str>>(character_id: &str, destination_occupants: &[S]) -> Retention {
     if destination_occupants
         .iter()
         .any(|occupant| occupant.as_ref() == character_id)
@@ -88,10 +85,7 @@ pub fn characters_to_create<S: AsRef<str>, T: AsRef<str>>(
     selection: &[S],
     destination_occupants: &[T],
 ) -> Vec<String> {
-    let occupants: BTreeSet<&str> = destination_occupants
-        .iter()
-        .map(AsRef::as_ref)
-        .collect();
+    let occupants: BTreeSet<&str> = destination_occupants.iter().map(AsRef::as_ref).collect();
 
     let mut created: BTreeSet<&str> = BTreeSet::new();
     let mut out = Vec::new();

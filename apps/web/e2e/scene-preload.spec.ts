@@ -98,7 +98,10 @@ test("a connected player observes nothing when the GM preloads another scene", a
 
   // Put the table on the *first* scene, so there is something for the player
   // to be watching that a stray write could disturb.
-  const scenes = await gmPage.getByTestId("scenes-table").getByRole("link").all();
+  const scenes = await gmPage
+    .getByTestId("scenes-table")
+    .getByRole("link")
+    .all();
   const playingSceneName = (
     await Promise.all(scenes.map((link) => link.textContent()))
   ).find((name) => name && name !== otherScene);

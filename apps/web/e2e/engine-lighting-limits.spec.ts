@@ -267,7 +267,7 @@ test("engine sweep: lights and walls as geometry, with the shadow pass proven in
 
     const sample = await sampleSteadyState(page, level.lights, level.walls);
     samples.push(sample);
-     
+
     console.log(
       `[engine] lights=${String(sample.lights).padStart(3)} ` +
         `walls=${String(sample.walls).padStart(5)} ` +
@@ -277,7 +277,6 @@ test("engine sweep: lights and walls as geometry, with the shadow pass proven in
     );
   }
 
-   
   console.log(`[engine] lightingSweep=${JSON.stringify(samples)}`);
 
   expect(

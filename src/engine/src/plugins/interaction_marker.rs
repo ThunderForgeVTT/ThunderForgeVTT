@@ -226,7 +226,10 @@ mod tests {
     fn a_namespace_decides_the_colour() {
         // Both door effects are one colour: a player glancing at the map sees
         // "a door", not "a door whose lock state can be set".
-        assert_eq!(marker_color("door.set_lock"), marker_color("door.set_state"));
+        assert_eq!(
+            marker_color("door.set_lock"),
+            marker_color("door.set_state")
+        );
         assert_ne!(marker_color("lore.open"), marker_color("item.pickup"));
     }
 

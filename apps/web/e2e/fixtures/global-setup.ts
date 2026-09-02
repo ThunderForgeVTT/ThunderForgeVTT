@@ -17,7 +17,10 @@ export const DEMO_DIR =
 export const DEMO_STATE_PATH = path.join(DEMO_DIR, "storage-state.json");
 export const DEMO_WORLD_PATH = path.join(DEMO_DIR, "world.json");
 
-const SEED_SQL_PATH = path.join(__dirname, "../../../../src/server/seeds/e2e_demo.sql");
+const SEED_SQL_PATH = path.join(
+  __dirname,
+  "../../../../src/server/seeds/e2e_demo.sql",
+);
 
 export const DEMO_USER = {
   identifier: "e2edemo",
@@ -37,13 +40,18 @@ const DEMO_WORLD_NAME = "Genie Demo World";
  * a database that was just `docker compose down -v`'d and re-migrated. */
 function applySeedSql(): void {
   const sql = fs.readFileSync(SEED_SQL_PATH, "utf-8");
-  const containerName = process.env.THUNDERFORGE_POSTGRES_CONTAINER ?? "thunderforge-postgres";
+  const containerName =
+    process.env.THUNDERFORGE_POSTGRES_CONTAINER ?? "thunderforge-postgres";
   const dbName = process.env.THUNDERFORGE_DB_NAME ?? "thunderforge";
   const dbUser = process.env.THUNDERFORGE_DB_USER ?? "postgres";
-  execFileSync("docker", ["exec", "-i", containerName, "psql", "-U", dbUser, "-d", dbName], {
-    input: sql,
-    stdio: ["pipe", "inherit", "inherit"],
-  });
+  execFileSync(
+    "docker",
+    ["exec", "-i", containerName, "psql", "-U", dbUser, "-d", dbName],
+    {
+      input: sql,
+      stdio: ["pipe", "inherit", "inherit"],
+    },
+  );
 }
 
 /**
@@ -74,7 +82,10 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
   fs.writeFileSync(
     DEMO_WORLD_PATH,
     JSON.stringify(
-      { worldId: DEMO_WORLD_ID, worldName: DEMO_WORLD_NAME } satisfies DemoWorld,
+      {
+        worldId: DEMO_WORLD_ID,
+        worldName: DEMO_WORLD_NAME,
+      } satisfies DemoWorld,
       null,
       2,
     ),

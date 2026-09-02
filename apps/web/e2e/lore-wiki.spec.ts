@@ -51,7 +51,10 @@ async function extractInviteCode(page: Page): Promise<string> {
   return code;
 }
 
-async function registerAndCreateWorld(page: Page, worldName: string): Promise<string> {
+async function registerAndCreateWorld(
+  page: Page,
+  worldName: string,
+): Promise<string> {
   await register(page, freshCredentials("e2elore"));
   await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
   await page.locator("#world-name").fill(worldName);
@@ -71,24 +74,36 @@ async function currentUserId(page: Page): Promise<string> {
     headers: csrfToken ? { "x-csrf-token": csrfToken } : {},
     data: { query: "query { me { id } }" },
   });
-  const payload = (await response.json()) as { data?: { me?: { id?: string } } };
+  const payload = (await response.json()) as {
+    data?: { me?: { id?: string } };
+  };
   const id = payload.data?.me?.id;
-  if (!id) throw new Error("Could not resolve current user id via /api/graphql");
+  if (!id)
+    throw new Error("Could not resolve current user id via /api/graphql");
   return id;
 }
 
 /** Creates a lore entry from the Compendium's Lore tab and follows "View". */
-async function createLoreEntry(page: Page, worldId: string, title: string): Promise<string> {
+async function createLoreEntry(
+  page: Page,
+  worldId: string,
+  title: string,
+): Promise<string> {
   await page.goto(`/world/${worldId}/compendium`);
   await page.getByRole("tab", { name: "Lore" }).click();
   await page.getByTestId("new-lore-entry-title-input").fill(title);
   await page.getByTestId("add-lore-entry-button").click();
-  const row = page.getByTestId("lore-catalog-table").locator("tr", { hasText: title });
+  const row = page
+    .getByTestId("lore-catalog-table")
+    .locator("tr", { hasText: title });
   await expect(row).toBeVisible({ timeout: 10_000 });
   await row.getByRole("link", { name: "View" }).click();
-  await page.waitForURL(/\/world\/[^/]+\/lore\/[^/]+\/view$/, { timeout: 15_000 });
+  await page.waitForURL(/\/world\/[^/]+\/lore\/[^/]+\/view$/, {
+    timeout: 15_000,
+  });
   const match = /\/lore\/([^/]+)\/view$/.exec(new URL(page.url()).pathname);
-  if (!match) throw new Error(`Could not extract lore slug from URL: ${page.url()}`);
+  if (!match)
+    throw new Error(`Could not extract lore slug from URL: ${page.url()}`);
   return match[1];
 }
 
@@ -99,7 +114,9 @@ const PNG_BASE64 =
  * `.cm-content`, not a real `<textarea>`) — `.fill()`/`.inputValue()`
  * don't apply. Mirrors session-notes.spec.ts's own helpers. */
 function loreEditorContent(page: Page) {
-  return page.getByTestId("lore-markdown-editor-textarea").locator(".cm-content");
+  return page
+    .getByTestId("lore-markdown-editor-textarea")
+    .locator(".cm-content");
 }
 
 /** For short, single-line content — types it via real keystrokes, which
@@ -135,13 +152,19 @@ async function pasteIntoLoreEditor(page: Page, text: string): Promise<void> {
   await editor.evaluate((el, plainText) => {
     const dt = new DataTransfer();
     dt.setData("text/plain", plainText);
-    const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: dt });
+    const event = new ClipboardEvent("paste", {
+      bubbles: true,
+      cancelable: true,
+      clipboardData: dt,
+    });
     el.dispatchEvent(event);
   }, text);
 }
 
 async function readLoreEditor(page: Page): Promise<string> {
-  const lines = await loreEditorContent(page).locator(".cm-line").allTextContents();
+  const lines = await loreEditorContent(page)
+    .locator(".cm-line")
+    .allTextContents();
   return lines.join("\n");
 }
 
@@ -164,7 +187,11 @@ async function pasteImageIntoEditor(page: Page): Promise<void> {
     const file = new File([bytes], "pasted.png", { type: "image/png" });
     const dt = new DataTransfer();
     dt.items.add(file);
-    const event = new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: dt });
+    const event = new ClipboardEvent("paste", {
+      bubbles: true,
+      cancelable: true,
+      clipboardData: dt,
+    });
     el.dispatchEvent(event);
   }, PNG_BASE64);
 }
@@ -173,7 +200,10 @@ test.describe("US1: DM authors a lore entry with rich Markdown", () => {
   test("GFM constructs (table, task list, code block, blockquote) render correctly", async ({
     page,
   }) => {
-    const worldId = await registerAndCreateWorld(page, `E2E Lore GFM ${uniqueSuffix()}`);
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Lore GFM ${uniqueSuffix()}`,
+    );
     const title = `Ancient Ruins ${uniqueSuffix()}`;
     const slug = await createLoreEntry(page, worldId, title);
 
@@ -211,11 +241,17 @@ test.describe("US1: DM authors a lore entry with rich Markdown", () => {
     await expect(rendered.locator("em")).toContainText("italic");
     await expect(rendered.locator("del, s")).toContainText("strike");
     await expect(rendered.locator("table")).toBeVisible();
-    await expect(rendered.locator('input[type="checkbox"]').first()).toBeChecked();
-    await expect(rendered.locator('input[type="checkbox"]').nth(1)).not.toBeChecked();
+    await expect(
+      rendered.locator('input[type="checkbox"]').first(),
+    ).toBeChecked();
+    await expect(
+      rendered.locator('input[type="checkbox"]').nth(1),
+    ).not.toBeChecked();
     await expect(rendered.locator("blockquote")).toContainText("a blockquote");
     await expect(rendered.locator("pre code")).toContainText("const x = 1;");
-    await expect(rendered.locator('a[href="https://example.com"]')).toBeVisible();
+    await expect(
+      rendered.locator('a[href="https://example.com"]'),
+    ).toBeVisible();
   });
 });
 
@@ -223,7 +259,10 @@ test.describe("US2: correlate lore entries with each other and with actors", () 
   test("[[links]] to another entry and an actor resolve, with reciprocal linked-from backlinks", async ({
     page,
   }) => {
-    const worldId = await registerAndCreateWorld(page, `E2E Lore Correlate ${uniqueSuffix()}`);
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Lore Correlate ${uniqueSuffix()}`,
+    );
 
     // Seed an actor (NPC) to link to. This spec needs one to exist; it is
     // not about how one is made, so it uses the shared fixture.
@@ -263,21 +302,33 @@ test.describe("US2: correlate lore entries with each other and with actors", () 
     const rendered = page.getByTestId("lore-markdown-rendered");
     await expect(rendered.getByText(entryBTitle)).toBeVisible();
     await expect(rendered.getByText(npcName)).toBeVisible();
-    await expect(rendered.locator(".lore-link-broken")).toContainText("Totally Nonexistent Title");
+    await expect(rendered.locator(".lore-link-broken")).toContainText(
+      "Totally Nonexistent Title",
+    );
 
     // Backlink appears on Entry B's detail page.
     await page.goto(`/world/${worldId}/compendium`);
     await page.getByRole("tab", { name: "Lore" }).click();
-    await page.getByTestId("lore-catalog-table").locator("tr", { hasText: entryBTitle }).getByRole("link", { name: "View" }).click();
-    await expect(page.getByTestId("lore-linked-from")).toContainText(entryATitle, { timeout: 10_000 });
+    await page
+      .getByTestId("lore-catalog-table")
+      .locator("tr", { hasText: entryBTitle })
+      .getByRole("link", { name: "View" })
+      .click();
+    await expect(page.getByTestId("lore-linked-from")).toContainText(
+      entryATitle,
+      { timeout: 10_000 },
+    );
 
     // Backlink appears on the actor's detail page too.
     await page.goto(`/world/${worldId}/compendium`);
     await page.getByTestId("npc-catalog-table").getByText(npcName).click();
     await page.getByTestId("actor-preview-panel-view").click();
-    await expect(page.getByTestId("actor-lore-linked-from")).toContainText(entryATitle, {
-      timeout: 10_000,
-    });
+    await expect(page.getByTestId("actor-lore-linked-from")).toContainText(
+      entryATitle,
+      {
+        timeout: 10_000,
+      },
+    );
   });
 
   // Spec 013 US3 (T038-T042): the same [[...]] correlation extended to
@@ -289,11 +340,17 @@ test.describe("US2: correlate lore entries with each other and with actors", () 
   test("[[links]] to an Item resolve, with a reciprocal linked-from backlink on the item's page", async ({
     page,
   }) => {
-    const worldId = await registerAndCreateWorld(page, `E2E Lore Item Correlate ${uniqueSuffix()}`);
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Lore Item Correlate ${uniqueSuffix()}`,
+    );
 
     const itemName = `Amulet of Linking ${uniqueSuffix()}`;
     await createItemViaCompendium(page, worldId, itemName);
-    await expect(page.getByTestId("item-catalog-table")).toContainText(itemName, { timeout: 10_000 });
+    await expect(page.getByTestId("item-catalog-table")).toContainText(
+      itemName,
+      { timeout: 10_000 },
+    );
 
     const entryTitle = `Entry Linking an Item ${uniqueSuffix()}`;
     const slug = await createLoreEntry(page, worldId, entryTitle);
@@ -308,7 +365,9 @@ test.describe("US2: correlate lore entries with each other and with actors", () 
     await expect(page.getByText("Saved.")).toBeVisible({ timeout: 10_000 });
 
     await page.goto(`/world/${worldId}/lore/${slug}/view`);
-    await expect(page.getByTestId("lore-markdown-rendered").getByText(itemName)).toBeVisible();
+    await expect(
+      page.getByTestId("lore-markdown-rendered").getByText(itemName),
+    ).toBeVisible();
 
     // Reciprocal backlink on the item's own detail page.
     await page.goto(`/world/${worldId}/compendium`);
@@ -316,15 +375,21 @@ test.describe("US2: correlate lore entries with each other and with actors", () 
     await page.getByTestId("item-catalog-table").getByText(itemName).click();
     await page.getByTestId("item-preview-panel-view").click();
     await page.waitForURL(/\/item\/[^/]+\/view$/, { timeout: 15_000 });
-    await expect(page.getByTestId("item-lore-linked-from")).toContainText(entryTitle, {
-      timeout: 10_000,
-    });
+    await expect(page.getByTestId("item-lore-linked-from")).toContainText(
+      entryTitle,
+      {
+        timeout: 10_000,
+      },
+    );
   });
 });
 
 test.describe("US3: paste an image into the editor", () => {
   test("pasted image uploads and renders inline", async ({ page }) => {
-    const worldId = await registerAndCreateWorld(page, `E2E Lore Image ${uniqueSuffix()}`);
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Lore Image ${uniqueSuffix()}`,
+    );
     const title = `Illustrated Entry ${uniqueSuffix()}`;
     const slug = await createLoreEntry(page, worldId, title);
 
@@ -341,24 +406,35 @@ test.describe("US3: paste an image into the editor", () => {
     await expect(page.getByText("Saved.")).toBeVisible({ timeout: 10_000 });
 
     await page.goto(`/world/${worldId}/lore/${slug}/view`);
-    await expect(page.getByTestId("lore-markdown-rendered").locator("img")).toBeVisible({
+    await expect(
+      page.getByTestId("lore-markdown-rendered").locator("img"),
+    ).toBeVisible({
       timeout: 10_000,
     });
   });
 });
 
 test.describe("US4: shareable urlified URL", () => {
-  test("URL uses a readable slug and updates when the title changes", async ({ page }) => {
-    const worldId = await registerAndCreateWorld(page, `E2E Lore Slug ${uniqueSuffix()}`);
+  test("URL uses a readable slug and updates when the title changes", async ({
+    page,
+  }) => {
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Lore Slug ${uniqueSuffix()}`,
+    );
     const title = `The Sunken Spire ${uniqueSuffix()}`;
     const slug = await createLoreEntry(page, worldId, title);
     expect(slug).not.toMatch(/^[0-9a-f-]{36}$/); // not a raw UUID
     expect(slug).toContain("sunken-spire");
 
     await page.goto(`/world/${worldId}/lore/${slug}/edit`);
-    await page.locator("#lore-entry-title").fill(`Renamed Spire ${uniqueSuffix()}`);
+    await page
+      .locator("#lore-entry-title")
+      .fill(`Renamed Spire ${uniqueSuffix()}`);
     await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/lore\/renamed-spire[^/]*\/edit$/, { timeout: 10_000 });
+    await expect(page).toHaveURL(/\/lore\/renamed-spire[^/]*\/edit$/, {
+      timeout: 10_000,
+    });
   });
 });
 
@@ -367,11 +443,16 @@ test.describe("FR-021: entry-level Owner (not DM-only) can delete; Viewer cannot
     page,
     browser,
   }) => {
-    const worldId = await registerAndCreateWorld(page, `E2E Lore Ownership ${uniqueSuffix()}`);
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Lore Ownership ${uniqueSuffix()}`,
+    );
     const title = `Delegable Entry ${uniqueSuffix()}`;
     const slug = await createLoreEntry(page, worldId, title);
 
-    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page
+      .context()
+      .grantPermissions(["clipboard-read", "clipboard-write"]);
     await page.goto(`/world/${worldId}`);
     await page.getByRole("button", { name: "Generate Join Link" }).click();
     const inviteCode = await extractInviteCode(page);
@@ -381,42 +462,64 @@ test.describe("FR-021: entry-level Owner (not DM-only) can delete; Viewer cannot
     try {
       await register(playerPage, freshCredentials("e2eloreowner"));
       await playerPage.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
-      await playerPage.locator("#world-name").fill(`E2E Lore Player World ${uniqueSuffix()}`);
+      await playerPage
+        .locator("#world-name")
+        .fill(`E2E Lore Player World ${uniqueSuffix()}`);
       await playerPage.getByRole("button", { name: /create world/i }).click();
-      await playerPage.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
+      await playerPage.waitForURL(/\/world\/[^/]+\/staging$/, {
+        timeout: 15_000,
+      });
       const playerId = await currentUserId(playerPage);
 
       await playerPage.goto(`/join/${inviteCode}`);
       await playerPage.getByRole("button", { name: "Join Campaign" }).click();
-      await playerPage.waitForURL(new RegExp(`/world/${worldId}$`), { timeout: 15_000 });
+      await playerPage.waitForURL(new RegExp(`/world/${worldId}$`), {
+        timeout: 15_000,
+      });
 
       // Before any grant: player has default Viewer — no Edit link in the
       // catalog, and hitting /edit directly redirects to /view.
       await playerPage.goto(`/world/${worldId}/lore/${slug}/view`);
-      await expect(playerPage.getByRole("button", { name: "Edit" })).toHaveCount(0);
+      await expect(
+        playerPage.getByRole("button", { name: "Edit" }),
+      ).toHaveCount(0);
       await playerPage.goto(`/world/${worldId}/lore/${slug}/edit`);
-      await expect(playerPage).toHaveURL(new RegExp(`/lore/${slug}/view$`), { timeout: 10_000 });
+      await expect(playerPage).toHaveURL(new RegExp(`/lore/${slug}/view$`), {
+        timeout: 10_000,
+      });
 
       // DM grants the player Owner via the ownership block.
       await page.goto(`/world/${worldId}/lore/${slug}/edit`);
-      await expect(page.getByTestId("lore-ownership-block")).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByTestId("lore-ownership-block")).toBeVisible({
+        timeout: 10_000,
+      });
       const ownershipRow = page.getByTestId(`lore-ownership-row-${playerId}`);
       try {
         await expect(ownershipRow).toBeVisible({ timeout: 15_000 });
       } catch {
         await page.reload();
-        await expect(page.getByTestId("lore-ownership-block")).toBeVisible({ timeout: 10_000 });
+        await expect(page.getByTestId("lore-ownership-block")).toBeVisible({
+          timeout: 10_000,
+        });
         await expect(ownershipRow).toBeVisible({ timeout: 15_000 });
       }
-      await page.getByTestId(`lore-ownership-select-${playerId}`).selectOption("OWNER");
-      await expect(page.getByTestId(`lore-ownership-select-${playerId}`)).toHaveValue("OWNER");
+      await page
+        .getByTestId(`lore-ownership-select-${playerId}`)
+        .selectOption("OWNER");
+      await expect(
+        page.getByTestId(`lore-ownership-select-${playerId}`),
+      ).toHaveValue("OWNER");
 
       // Player now holds entry-level Owner (not DM) and can delete it.
       await playerPage.goto(`/world/${worldId}/lore/${slug}/edit`);
       await expect(playerPage).toHaveURL(new RegExp(`/lore/${slug}/edit$`));
-      await expect(playerPage.getByTestId("lore-ownership-block")).toHaveCount(0); // non-DM never sees the block, even as entry Owner
+      await expect(playerPage.getByTestId("lore-ownership-block")).toHaveCount(
+        0,
+      ); // non-DM never sees the block, even as entry Owner
       await playerPage.getByRole("button", { name: "Delete" }).click();
-      await playerPage.waitForURL(new RegExp(`/world/${worldId}/compendium$`), { timeout: 10_000 });
+      await playerPage.waitForURL(new RegExp(`/world/${worldId}/compendium$`), {
+        timeout: 10_000,
+      });
       await playerPage.getByRole("tab", { name: "Lore" }).click();
       await expect(playerPage.getByText(title)).toHaveCount(0);
     } finally {

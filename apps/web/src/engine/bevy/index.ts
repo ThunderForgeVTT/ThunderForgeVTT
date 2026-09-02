@@ -703,7 +703,9 @@ export async function bindWorldStore(worldStore: WorldStore): Promise<void> {
           }
           return;
         }
-        if ((parsed as { type?: unknown }).type === "token_placement_cancelled") {
+        if (
+          (parsed as { type?: unknown }).type === "token_placement_cancelled"
+        ) {
           for (const listener of placementCancelledListeners) {
             listener();
           }

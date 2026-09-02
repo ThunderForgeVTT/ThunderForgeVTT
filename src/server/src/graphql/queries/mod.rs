@@ -5,9 +5,9 @@
 
 pub mod ability;
 // Spec 031: `authoringTools(worldId)` — which tools the caller may use.
-pub mod authoring_tools;
 pub mod actor;
 pub mod admin;
+pub mod authoring_tools;
 pub mod genie_session;
 pub mod healthcheck;
 pub mod interactives;
@@ -28,9 +28,9 @@ pub mod world_events_since;
 pub mod world_sync_plan;
 
 pub use ability::AbilityQuery;
-pub use authoring_tools::AuthoringToolsQuery;
 pub use actor::ActorQuery;
 pub use admin::AdminQuery;
+pub use authoring_tools::AuthoringToolsQuery;
 pub use genie_session::GenieSessionQuery;
 pub use healthcheck::HealthcheckQuery;
 pub use inventory::InventoryQuery;

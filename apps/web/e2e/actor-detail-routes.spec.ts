@@ -45,7 +45,10 @@ async function extractInviteCode(page: Page): Promise<string> {
   return code;
 }
 
-async function registerAndCreateWorld(page: Page, worldName: string): Promise<string> {
+async function registerAndCreateWorld(
+  page: Page,
+  worldName: string,
+): Promise<string> {
   await register(page, freshCredentials("e2earoutes"));
   await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
   await page.locator("#world-name").fill(worldName);
@@ -65,9 +68,12 @@ async function currentUserId(page: Page): Promise<string> {
     headers: csrfToken ? { "x-csrf-token": csrfToken } : {},
     data: { query: "query { me { id } }" },
   });
-  const payload = (await response.json()) as { data?: { me?: { id?: string } } };
+  const payload = (await response.json()) as {
+    data?: { me?: { id?: string } };
+  };
   const id = payload.data?.me?.id;
-  if (!id) throw new Error("Could not resolve current user id via /api/graphql");
+  if (!id)
+    throw new Error("Could not resolve current user id via /api/graphql");
   return id;
 }
 
@@ -86,7 +92,9 @@ test.describe("US4: Viewer can view but is redirected away from /edit", () => {
     const actorId = await createNpcViaCompendium(page, worldId, npcName);
     await page.goto(`/world/${worldId}/actor/${actorId}/view`);
 
-    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page
+      .context()
+      .grantPermissions(["clipboard-read", "clipboard-write"]);
     await page.goto(`/world/${worldId}`);
     await page.getByRole("button", { name: "Generate Join Link" }).click();
     const inviteCode = await extractInviteCode(page);
@@ -95,34 +103,55 @@ test.describe("US4: Viewer can view but is redirected away from /edit", () => {
     try {
       await register(playerPage, freshCredentials("e2earoutesplyr"));
       await playerPage.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
-      await playerPage.locator("#world-name").fill(`E2E Player Own ${uniqueSuffix()}`);
+      await playerPage
+        .locator("#world-name")
+        .fill(`E2E Player Own ${uniqueSuffix()}`);
       await playerPage.getByRole("button", { name: /create world/i }).click();
-      await playerPage.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
+      await playerPage.waitForURL(/\/world\/[^/]+\/staging$/, {
+        timeout: 15_000,
+      });
       const playerId = await currentUserId(playerPage);
 
       await playerPage.goto(`/join/${inviteCode}`);
       await playerPage.getByRole("button", { name: "Join Campaign" }).click();
-      await playerPage.waitForURL(new RegExp(`/world/${worldId}(/actor-select)?$`), { timeout: 15_000 });
+      await playerPage.waitForURL(
+        new RegExp(`/world/${worldId}(/actor-select)?$`),
+        { timeout: 15_000 },
+      );
 
       // Default Viewer: /view renders, /edit redirects to /view.
       await playerPage.goto(`/world/${worldId}/actor/${actorId}/view`);
-      await expect(playerPage.getByRole("heading", { level: 1 })).toBeVisible({ timeout: 10_000 });
-      await expect(playerPage.getByRole("button", { name: "Edit" })).toHaveCount(0);
+      await expect(playerPage.getByRole("heading", { level: 1 })).toBeVisible({
+        timeout: 10_000,
+      });
+      await expect(
+        playerPage.getByRole("button", { name: "Edit" }),
+      ).toHaveCount(0);
 
       await playerPage.goto(`/world/${worldId}/actor/${actorId}/edit`);
-      await playerPage.waitForURL(new RegExp(`/actor/${actorId}/view$`), { timeout: 10_000 });
+      await playerPage.waitForURL(new RegExp(`/actor/${actorId}/view$`), {
+        timeout: 10_000,
+      });
 
       // DM grants Editor; the player can now reach /edit and save.
       await page.goto(`/world/${worldId}/actor/${actorId}/edit`);
-      await expect(page.getByTestId("actor-ownership-block")).toBeVisible({ timeout: 10_000 });
-      await page.getByTestId(`ownership-select-${playerId}`).selectOption("EDITOR");
-      await expect(page.getByTestId(`ownership-select-${playerId}`)).toHaveValue("EDITOR");
+      await expect(page.getByTestId("actor-ownership-block")).toBeVisible({
+        timeout: 10_000,
+      });
+      await page
+        .getByTestId(`ownership-select-${playerId}`)
+        .selectOption("EDITOR");
+      await expect(
+        page.getByTestId(`ownership-select-${playerId}`),
+      ).toHaveValue("EDITOR");
 
       await playerPage.goto(`/world/${worldId}/actor/${actorId}/edit`);
       await expect(playerPage).toHaveURL(new RegExp(`/actor/${actorId}/edit$`));
       await playerPage.locator("#actor-label").fill("Renamed By Editor");
       await playerPage.getByRole("button", { name: "Save" }).click();
-      await expect(playerPage.getByText("Saved.")).toBeVisible({ timeout: 10_000 });
+      await expect(playerPage.getByText("Saved.")).toBeVisible({
+        timeout: 10_000,
+      });
     } finally {
       await playerContext.close();
     }
@@ -146,10 +175,14 @@ test.describe("US4: Viewer can view but is redirected away from /edit", () => {
       await outsiderPage.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
 
       await outsiderPage.goto(`/world/${worldId}/actor/${actorId}/view`);
-      await expect(outsiderPage.getByText("Actor not found")).toBeVisible({ timeout: 10_000 });
+      await expect(outsiderPage.getByText("Actor not found")).toBeVisible({
+        timeout: 10_000,
+      });
 
       await outsiderPage.goto(`/world/${worldId}/actor/${actorId}/edit`);
-      await expect(outsiderPage.getByText("Actor not found")).toBeVisible({ timeout: 10_000 });
+      await expect(outsiderPage.getByText("Actor not found")).toBeVisible({
+        timeout: 10_000,
+      });
     } finally {
       await outsiderContext.close();
     }

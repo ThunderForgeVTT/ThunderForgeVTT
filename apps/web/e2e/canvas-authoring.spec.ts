@@ -782,7 +782,10 @@ test.describe("Switching tools never authors (spec 031 FR-040, SC-008)", () => {
     };
 
     const before = await counts();
-    expect(before, "the world probe should be available in a dev build").not.toBeNull();
+    expect(
+      before,
+      "the world probe should be available in a dev build",
+    ).not.toBeNull();
 
     const tools: GmToolId[] = [
       "select",
@@ -829,7 +832,10 @@ test.describe("Placing a token from the actors pane (spec 031 US1)", () => {
       page.evaluate(() => window.__worldProbe?.state().counts.tokens ?? -1);
 
     const before = await tokenCount();
-    expect(before, "the world probe should be available in a dev build").toBeGreaterThanOrEqual(0);
+    expect(
+      before,
+      "the world probe should be available in a dev build",
+    ).toBeGreaterThanOrEqual(0);
 
     const began = await page.evaluate(async () => {
       const bevy = (await import(

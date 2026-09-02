@@ -276,14 +276,7 @@ impl ActorImageMutation {
     ) -> GraphQLResult<bool> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
-        remove_actor_image_impl(
-            state,
-            auth_user.user_id,
-            auth_user.is_admin,
-            actor_id,
-            role,
-        )
-        .await
+        remove_actor_image_impl(state, auth_user.user_id, auth_user.is_admin, actor_id, role).await
     }
 }
 
@@ -394,7 +387,10 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(first.id, second.id, "the role's row is updated, not doubled");
+        assert_eq!(
+            first.id, second.id,
+            "the role's row is updated, not doubled"
+        );
         assert_ne!(first.asset_id, second.asset_id);
 
         let mut conn = state.db_pool.get().unwrap();

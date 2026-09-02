@@ -48,7 +48,10 @@ async function extractInviteCode(page: Page): Promise<string> {
   return code;
 }
 
-async function registerAndCreateWorld(page: Page, worldName: string): Promise<string> {
+async function registerAndCreateWorld(
+  page: Page,
+  worldName: string,
+): Promise<string> {
   await register(page, freshCredentials("e2eclaimgm"));
   await page.goto("/worlds/create");
   await page.locator("#world-name").fill(worldName);
@@ -61,8 +64,13 @@ async function registerAndCreateWorld(page: Page, worldName: string): Promise<st
   return match[1];
 }
 
-async function generateInviteCode(gmPage: Page, worldId: string): Promise<string> {
-  await gmPage.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+async function generateInviteCode(
+  gmPage: Page,
+  worldId: string,
+): Promise<string> {
+  await gmPage
+    .context()
+    .grantPermissions(["clipboard-read", "clipboard-write"]);
   await gmPage.goto(`/world/${worldId}`);
   await gmPage.getByRole("button", { name: "Generate Join Link" }).click();
   return extractInviteCode(gmPage);
@@ -75,7 +83,11 @@ async function generateInviteCode(gmPage: Page, worldId: string): Promise<string
  * "This is a player character" checkbox, matching how a real GM would
  * prepare a claimable character today.
  */
-async function createPcActor(gmPage: Page, worldId: string, label: string): Promise<string> {
+async function createPcActor(
+  gmPage: Page,
+  worldId: string,
+  label: string,
+): Promise<string> {
   // Through the shared fixture: this spec needs a claimable character, it is
   // not about how one is made. See `fixtures/content.ts`.
   const actorId = await createNpcViaCompendium(gmPage, worldId, label);
@@ -83,14 +95,22 @@ async function createPcActor(gmPage: Page, worldId: string, label: string): Prom
   await gmPage.goto(`/world/${worldId}/actor/${actorId}/edit`);
   await gmPage.getByLabel(/this is a player character/i).check();
   await gmPage.getByRole("button", { name: "Save" }).click();
-  await expect(gmPage.getByText(/^saved\.?$/i)).toBeVisible({ timeout: 10_000 });
+  await expect(gmPage.getByText(/^saved\.?$/i)).toBeVisible({
+    timeout: 10_000,
+  });
 
   return actorId;
 }
 
-async function markAvailable(gmPage: Page, worldId: string, actorId: string): Promise<void> {
+async function markAvailable(
+  gmPage: Page,
+  worldId: string,
+  actorId: string,
+): Promise<void> {
   await gmPage.goto(`/world/${worldId}/actor/${actorId}/view`);
-  const checkbox = gmPage.getByTestId("actor-claim-block").locator('input[type="checkbox"]');
+  const checkbox = gmPage
+    .getByTestId("actor-claim-block")
+    .locator('input[type="checkbox"]');
   await checkbox.click();
   await expect(checkbox).toBeChecked({ timeout: 10_000 });
 }
@@ -103,11 +123,22 @@ test.describe("Spec 017 US1: a joining player picks a GM-designated character", 
       permissions: ["clipboard-read", "clipboard-write"],
     });
     const gmPage = await gmContext.newPage();
-    const worldId = await registerAndCreateWorld(gmPage, `E2E Actor Claim ${uniqueSuffix()}`);
+    const worldId = await registerAndCreateWorld(
+      gmPage,
+      `E2E Actor Claim ${uniqueSuffix()}`,
+    );
 
-    const ariaId = await createPcActor(gmPage, worldId, `Aria ${uniqueSuffix()}`);
+    const ariaId = await createPcActor(
+      gmPage,
+      worldId,
+      `Aria ${uniqueSuffix()}`,
+    );
     await markAvailable(gmPage, worldId, ariaId);
-    const borinId = await createPcActor(gmPage, worldId, `Borin ${uniqueSuffix()}`);
+    const borinId = await createPcActor(
+      gmPage,
+      worldId,
+      `Borin ${uniqueSuffix()}`,
+    );
     await markAvailable(gmPage, worldId, borinId);
 
     const inviteCode = await generateInviteCode(gmPage, worldId);
@@ -125,11 +156,15 @@ test.describe("Spec 017 US1: a joining player picks a GM-designated character", 
     await expect(rows).toHaveCount(2);
 
     await rows.first().getByRole("button", { name: "Select" }).click();
-    await playerPage.waitForURL(new RegExp(`/world/${worldId}$`), { timeout: 15_000 });
+    await playerPage.waitForURL(new RegExp(`/world/${worldId}$`), {
+      timeout: 15_000,
+    });
 
     // Revisiting later does not show Actor Selection again (FR-002).
     await playerPage.goto(`/world/${worldId}/actor-select`);
-    await playerPage.waitForURL(new RegExp(`/world/${worldId}$`), { timeout: 15_000 });
+    await playerPage.waitForURL(new RegExp(`/world/${worldId}$`), {
+      timeout: 15_000,
+    });
 
     // A second joining player only sees the one character left.
     const secondContext = await browser.newContext();
@@ -148,14 +183,23 @@ test.describe("Spec 017 US1: a joining player picks a GM-designated character", 
     await secondContext.close();
   });
 
-  test("two players racing to claim the same character: exactly one wins", async ({ browser }) => {
+  test("two players racing to claim the same character: exactly one wins", async ({
+    browser,
+  }) => {
     test.setTimeout(120_000);
     const gmContext = await browser.newContext({
       permissions: ["clipboard-read", "clipboard-write"],
     });
     const gmPage = await gmContext.newPage();
-    const worldId = await registerAndCreateWorld(gmPage, `E2E Claim Race ${uniqueSuffix()}`);
-    const actorId = await createPcActor(gmPage, worldId, `Contested ${uniqueSuffix()}`);
+    const worldId = await registerAndCreateWorld(
+      gmPage,
+      `E2E Claim Race ${uniqueSuffix()}`,
+    );
+    const actorId = await createPcActor(
+      gmPage,
+      worldId,
+      `Contested ${uniqueSuffix()}`,
+    );
     await markAvailable(gmPage, worldId, actorId);
 
     const inviteA = await generateInviteCode(gmPage, worldId);
@@ -164,7 +208,9 @@ test.describe("Spec 017 US1: a joining player picks a GM-designated character", 
     await register(pageA, freshCredentials("e2eracea"));
     await pageA.goto(`/join/${inviteA}`);
     await pageA.getByRole("button", { name: "Join Campaign" }).click();
-    await pageA.waitForURL(new RegExp(`/world/${worldId}/actor-select$`), { timeout: 15_000 });
+    await pageA.waitForURL(new RegExp(`/world/${worldId}/actor-select$`), {
+      timeout: 15_000,
+    });
 
     const inviteB = await generateInviteCode(gmPage, worldId);
     const contextB = await browser.newContext();
@@ -172,23 +218,39 @@ test.describe("Spec 017 US1: a joining player picks a GM-designated character", 
     await register(pageB, freshCredentials("e2eraceb"));
     await pageB.goto(`/join/${inviteB}`);
     await pageB.getByRole("button", { name: "Join Campaign" }).click();
-    await pageB.waitForURL(new RegExp(`/world/${worldId}/actor-select$`), { timeout: 15_000 });
+    await pageB.waitForURL(new RegExp(`/world/${worldId}/actor-select$`), {
+      timeout: 15_000,
+    });
 
-    const selectA = pageA.getByTestId("available-actor-row").getByRole("button", { name: "Select" });
-    const selectB = pageB.getByTestId("available-actor-row").getByRole("button", { name: "Select" });
+    const selectA = pageA
+      .getByTestId("available-actor-row")
+      .getByRole("button", { name: "Select" });
+    const selectB = pageB
+      .getByTestId("available-actor-row")
+      .getByRole("button", { name: "Select" });
     await expect(selectA).toBeVisible({ timeout: 15_000 });
     await expect(selectB).toBeVisible({ timeout: 15_000 });
 
     const [resultA, resultB] = await Promise.allSettled([
-      selectA.click().then(() =>
-        pageA.waitForURL(new RegExp(`/world/${worldId}$`), { timeout: 15_000 }),
-      ),
-      selectB.click().then(() =>
-        pageB.waitForURL(new RegExp(`/world/${worldId}$`), { timeout: 15_000 }),
-      ),
+      selectA
+        .click()
+        .then(() =>
+          pageA.waitForURL(new RegExp(`/world/${worldId}$`), {
+            timeout: 15_000,
+          }),
+        ),
+      selectB
+        .click()
+        .then(() =>
+          pageB.waitForURL(new RegExp(`/world/${worldId}$`), {
+            timeout: 15_000,
+          }),
+        ),
     ]);
 
-    const successes = [resultA, resultB].filter((r) => r.status === "fulfilled").length;
+    const successes = [resultA, resultB].filter(
+      (r) => r.status === "fulfilled",
+    ).length;
     expect(successes).toBe(1);
 
     await gmContext.close().catch(() => {});
@@ -205,7 +267,10 @@ test.describe("Spec 017 US2: a joining player creates their own character", () =
       permissions: ["clipboard-read", "clipboard-write"],
     });
     const gmPage = await gmContext.newPage();
-    const worldId = await registerAndCreateWorld(gmPage, `E2E Player Created ${uniqueSuffix()}`);
+    const worldId = await registerAndCreateWorld(
+      gmPage,
+      `E2E Player Created ${uniqueSuffix()}`,
+    );
 
     await gmPage.goto(`/world/${worldId}`);
     await gmPage.getByTestId("allow-player-created-actors-toggle").click();
@@ -224,9 +289,15 @@ test.describe("Spec 017 US2: a joining player creates their own character", () =
     });
 
     await expect(playerPage.getByTestId("create-own-actor-form")).toBeVisible();
-    await playerPage.locator("#new-character-name").fill(`Homebrew Hero ${uniqueSuffix()}`);
-    await playerPage.getByRole("button", { name: /create and play as this character/i }).click();
-    await playerPage.waitForURL(new RegExp(`/world/${worldId}$`), { timeout: 15_000 });
+    await playerPage
+      .locator("#new-character-name")
+      .fill(`Homebrew Hero ${uniqueSuffix()}`);
+    await playerPage
+      .getByRole("button", { name: /create and play as this character/i })
+      .click();
+    await playerPage.waitForURL(new RegExp(`/world/${worldId}$`), {
+      timeout: 15_000,
+    });
 
     // A second player, with the setting off, sees no create option.
     await gmPage.goto(`/world/${worldId}`);
@@ -244,7 +315,9 @@ test.describe("Spec 017 US2: a joining player creates their own character", () =
     await secondPage.waitForURL(new RegExp(`/world/${worldId}/actor-select$`), {
       timeout: 15_000,
     });
-    await expect(secondPage.getByTestId("create-own-actor-form")).toHaveCount(0);
+    await expect(secondPage.getByTestId("create-own-actor-form")).toHaveCount(
+      0,
+    );
 
     await gmContext.close();
     await playerContext.close();
@@ -260,8 +333,15 @@ test.describe("Spec 017 US3: the GM manages availability and claims", () => {
       permissions: ["clipboard-read", "clipboard-write"],
     });
     const gmPage = await gmContext.newPage();
-    const worldId = await registerAndCreateWorld(gmPage, `E2E Unclaim ${uniqueSuffix()}`);
-    const actorId = await createPcActor(gmPage, worldId, `Reclaimable ${uniqueSuffix()}`);
+    const worldId = await registerAndCreateWorld(
+      gmPage,
+      `E2E Unclaim ${uniqueSuffix()}`,
+    );
+    const actorId = await createPcActor(
+      gmPage,
+      worldId,
+      `Reclaimable ${uniqueSuffix()}`,
+    );
     await markAvailable(gmPage, worldId, actorId);
 
     const inviteCode = await generateInviteCode(gmPage, worldId);
@@ -273,15 +353,24 @@ test.describe("Spec 017 US3: the GM manages availability and claims", () => {
     await playerPage.waitForURL(new RegExp(`/world/${worldId}/actor-select$`), {
       timeout: 15_000,
     });
-    await playerPage.getByTestId("available-actor-row").getByRole("button", { name: "Select" }).click();
-    await playerPage.waitForURL(new RegExp(`/world/${worldId}$`), { timeout: 15_000 });
+    await playerPage
+      .getByTestId("available-actor-row")
+      .getByRole("button", { name: "Select" })
+      .click();
+    await playerPage.waitForURL(new RegExp(`/world/${worldId}$`), {
+      timeout: 15_000,
+    });
 
     await gmPage.goto(`/world/${worldId}/actor/${actorId}/view`);
     const claimBlock = gmPage.getByTestId("actor-claim-block");
-    await expect(claimBlock.getByText(/claimed by/i)).toBeVisible({ timeout: 10_000 });
+    await expect(claimBlock.getByText(/claimed by/i)).toBeVisible({
+      timeout: 10_000,
+    });
 
     await claimBlock.getByRole("button", { name: "Un-claim" }).click();
-    await expect(claimBlock.locator('input[type="checkbox"]')).toBeVisible({ timeout: 10_000 });
+    await expect(claimBlock.locator('input[type="checkbox"]')).toBeVisible({
+      timeout: 10_000,
+    });
 
     // The character is available again without re-flagging.
     await playerPage.goto(`/world/${worldId}/actor-select`);

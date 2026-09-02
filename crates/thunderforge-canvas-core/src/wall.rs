@@ -1060,7 +1060,11 @@ mod room_and_clear_tests {
             (Vec2::new(0.0, 40.0), Vec2::new(60.0, 0.0)),
             (Vec2::new(60.0, 0.0), Vec2::new(0.0, 40.0)),
         ] {
-            assert_eq!(room_segments(a, b).expect("room"), reference, "{a:?}->{b:?}");
+            assert_eq!(
+                room_segments(a, b).expect("room"),
+                reference,
+                "{a:?}->{b:?}"
+            );
         }
     }
 

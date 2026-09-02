@@ -241,8 +241,8 @@ pub async fn pick_up_placed_item_impl(
 
     let result = tokio::task::spawn_blocking(move || {
         conn.transaction(|conn| -> Result<(ActorInventoryEntry, Uuid), PickupError> {
-            let world_id = world_id_for_scene(conn, scene_id)
-                .map_err(|_| "Scene not found".to_string())?;
+            let world_id =
+                world_id_for_scene(conn, scene_id).map_err(|_| "Scene not found".to_string())?;
 
             let actor_world: Uuid = world_actors::table
                 .filter(world_actors::id.eq(actor_id))
@@ -348,12 +348,7 @@ mod tests {
     };
 
     /// Places `item_id` on `scene_id` as a token whose metadata names it.
-    fn place_item(
-        conn: &mut PgConnection,
-        scene_id: Uuid,
-        item_id: Uuid,
-        quantity: i32,
-    ) -> Uuid {
+    fn place_item(conn: &mut PgConnection, scene_id: Uuid, item_id: Uuid, quantity: i32) -> Uuid {
         let token_id = Uuid::now_v7();
         let now = chrono::Utc::now().naive_utc();
         diesel::insert_into(tokens::table)

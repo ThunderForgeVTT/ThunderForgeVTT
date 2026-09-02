@@ -192,14 +192,22 @@ test.describe("Engine load feedback (US6, T050/T051)", () => {
 
       // Stop once the engine is up: past that point there is nothing left to
       // overlap, and continuing would only slow the suite down.
-      if (await page.locator("canvas").isVisible().catch(() => false)) {
+      if (
+        await page
+          .locator("canvas")
+          .isVisible()
+          .catch(() => false)
+      ) {
         if (visible === 0) break;
       }
       await page.waitForTimeout(120);
     }
 
     // Guards against the test passing because it never actually looked.
-    expect(sampled, "the loading window should have been sampled").toBeGreaterThan(2);
+    expect(
+      sampled,
+      "the loading window should have been sampled",
+    ).toBeGreaterThan(2);
   });
 
   test("a returning visitor is not made to wait by the loader itself", async ({

@@ -6,9 +6,9 @@
 use std::collections::HashMap;
 
 use bevy::prelude::*;
-use thunderforge_canvas_core::snapping::SnapRule;
 use bevy::window::PrimaryWindow;
 use serde_json::json;
+use thunderforge_canvas_core::snapping::SnapRule;
 
 use crate::resources::{
     ActiveWallPrimitive, CanvasLayer, DoorState, IsGameMaster, SelectedWall, Wall, WallEdit,

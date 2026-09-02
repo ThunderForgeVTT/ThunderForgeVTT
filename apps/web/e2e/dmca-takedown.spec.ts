@@ -46,23 +46,32 @@ async function register(page: Page, creds: Credentials): Promise<void> {
 /** Registers a GM, creates a world, and adds one Item via the Compendium,
  * returning its detail-page id. Mirrors world-compendium.spec.ts's own
  * addItemFromCompendium helper. */
-async function createWorldWithItem(page: Page, itemName: string): Promise<{ worldId: string; itemId: string }> {
+async function createWorldWithItem(
+  page: Page,
+  itemName: string,
+): Promise<{ worldId: string; itemId: string }> {
   await register(page, freshCredentials("e2edmcaowner"));
   await page.goto("/worlds/create");
   await page.locator("#world-name").fill(`E2E DMCA Takedown ${uniqueSuffix()}`);
   await page.getByRole("button", { name: /create world/i }).click();
   await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-  const worldMatch = /\/world\/([^/]+)\/staging$/.exec(new URL(page.url()).pathname);
-  if (!worldMatch) throw new Error(`Could not extract world id from URL: ${page.url()}`);
+  const worldMatch = /\/world\/([^/]+)\/staging$/.exec(
+    new URL(page.url()).pathname,
+  );
+  if (!worldMatch)
+    throw new Error(`Could not extract world id from URL: ${page.url()}`);
   const worldId = worldMatch[1];
 
   await createItemViaCompendium(page, worldId, itemName);
-  await expect(page.getByTestId("item-catalog-table")).toContainText(itemName, { timeout: 10_000 });
+  await expect(page.getByTestId("item-catalog-table")).toContainText(itemName, {
+    timeout: 10_000,
+  });
   await page.getByTestId("item-catalog-table").getByText(itemName).click();
   await page.getByTestId("item-preview-panel-view").click();
   await page.waitForURL(/\/item\/[^/]+\/view$/, { timeout: 15_000 });
   const itemMatch = /\/item\/([^/]+)\/view$/.exec(new URL(page.url()).pathname);
-  if (!itemMatch) throw new Error(`Could not extract item id from URL: ${page.url()}`);
+  if (!itemMatch)
+    throw new Error(`Could not extract item id from URL: ${page.url()}`);
   return { worldId, itemId: itemMatch[1] };
 }
 
@@ -80,13 +89,17 @@ test.describe("US1/US2: a claimant files a DMCA takedown notice against an item"
     const claimantContext = await browser.newContext();
     const claimantPage = await claimantContext.newPage();
     await claimantPage.goto("/legal/dmca");
-    await expect(claimantPage.getByTestId("takedown-notice-form")).toBeVisible();
+    await expect(
+      claimantPage.getByTestId("takedown-notice-form"),
+    ).toBeVisible();
 
     await claimantPage.getByLabel("Content type").click();
     await claimantPage.getByRole("option", { name: "Item" }).click();
     await claimantPage.locator("#dmca-entity-id").fill(itemId);
     await claimantPage.locator("#dmca-claimant-name").fill("Jane Claimant");
-    await claimantPage.locator("#dmca-claimant-contact").fill("jane.claimant@example.test");
+    await claimantPage
+      .locator("#dmca-claimant-contact")
+      .fill("jane.claimant@example.test");
     await claimantPage
       .locator("#dmca-work-description")
       .fill("An original bronze statue design, registered copyright.");
@@ -98,13 +111,19 @@ test.describe("US1/US2: a claimant files a DMCA takedown notice against an item"
     await claimantPage.locator("#dmca-signature").fill("Jane Claimant");
 
     await claimantPage.getByTestId("takedown-notice-submit").click();
-    await expect(claimantPage.getByTestId("takedown-notice-accepted")).toBeVisible({ timeout: 10_000 });
-    await expect(claimantPage.getByTestId("takedown-notice-accepted")).toContainText("Case reference");
+    await expect(
+      claimantPage.getByTestId("takedown-notice-accepted"),
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(
+      claimantPage.getByTestId("takedown-notice-accepted"),
+    ).toContainText("Case reference");
 
     // The item's own detail page, for anyone (including its owner),
     // must now show the disabled-content banner instead of its content.
     await ownerPage.goto(`/world/${worldId}/item/${itemId}/view`);
-    await expect(ownerPage.getByText("Content disabled")).toBeVisible({ timeout: 10_000 });
+    await expect(ownerPage.getByText("Content disabled")).toBeVisible({
+      timeout: 10_000,
+    });
     await expect(
       ownerPage.getByText(/disabled in response to a DMCA takedown notice/i),
     ).toBeVisible();
@@ -136,7 +155,9 @@ test.describe("US1/US2: a claimant files a DMCA takedown notice against an item"
     // before ever reaching the resolver).
     await page.locator("#dmca-entity-id").fill(itemId);
     await page.locator("#dmca-claimant-name").fill("Incomplete Claimant");
-    await page.locator("#dmca-claimant-contact").fill("incomplete@example.test");
+    await page
+      .locator("#dmca-claimant-contact")
+      .fill("incomplete@example.test");
     await page.locator("#dmca-work-description").fill("Some work.");
     await page.locator("#dmca-infringing-location").fill("Somewhere.");
     await page.locator("#dmca-signature").fill("Incomplete Claimant");
@@ -144,7 +165,11 @@ test.describe("US1/US2: a claimant files a DMCA takedown notice against an item"
     // elements this test is verifying get flagged, not silently accepted.
 
     await page.getByTestId("takedown-notice-submit").click();
-    await expect(page.getByTestId("takedown-notice-rejected")).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByTestId("takedown-notice-rejected")).toContainText(/notice incomplete/i);
+    await expect(page.getByTestId("takedown-notice-rejected")).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.getByTestId("takedown-notice-rejected")).toContainText(
+      /notice incomplete/i,
+    );
   });
 });

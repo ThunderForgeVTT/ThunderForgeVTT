@@ -12,7 +12,9 @@ import { test, expect, type Page } from "@playwright/test";
  * textarea — `.fill()`/`toHaveValue()` don't apply. Click in, select all,
  * and type over it instead. */
 async function fillSessionNotes(page: Page, text: string): Promise<void> {
-  const editor = page.getByTestId("session-notes-editor").locator(".cm-content");
+  const editor = page
+    .getByTestId("session-notes-editor")
+    .locator(".cm-content");
   await editor.click();
   await page.keyboard.press("ControlOrMeta+a");
   await page.keyboard.press("Backspace");
@@ -60,7 +62,10 @@ async function register(page: Page, creds: Credentials): Promise<void> {
   await page.getByRole("button", { name: "Create account" }).click();
 }
 
-async function registerAndCreateWorld(page: Page, worldName: string): Promise<string> {
+async function registerAndCreateWorld(
+  page: Page,
+  worldName: string,
+): Promise<string> {
   await register(page, freshCredentials("e2esessnotes"));
   await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
   await page.locator("#world-name").fill(worldName);
@@ -73,7 +78,9 @@ async function registerAndCreateWorld(page: Page, worldName: string): Promise<st
   return match[1];
 }
 
-test("Session Setup shows exactly Play, Players, and Last Session Notes", async ({ page }) => {
+test("Session Setup shows exactly Play, Players, and Last Session Notes", async ({
+  page,
+}) => {
   await registerAndCreateWorld(page, `E2E Session Shape ${uniqueSuffix()}`);
 
   await expect(page.getByTestId("play-button")).toBeVisible();
@@ -117,19 +124,31 @@ test("DM edits and saves Last Session Notes; a Player sees it read-only", async 
     await playerPage.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
     await playerPage.goto(inviteRelativePath);
     await playerPage.getByRole("button", { name: "Join Campaign" }).click();
-    await playerPage.waitForURL(new RegExp(`/world/${worldId}(/actor-select)?$`), { timeout: 15_000 });
+    await playerPage.waitForURL(
+      new RegExp(`/world/${worldId}(/actor-select)?$`),
+      { timeout: 15_000 },
+    );
 
     await playerPage.goto(`/world/${worldId}/staging`);
-    await expect(playerPage.getByTestId("session-notes-readonly")).toContainText(notesText);
+    await expect(
+      playerPage.getByTestId("session-notes-readonly"),
+    ).toContainText(notesText);
     await expect(playerPage.getByTestId("session-notes-editor")).toHaveCount(0);
-    await expect(playerPage.getByTestId("session-notes-save-button")).toHaveCount(0);
+    await expect(
+      playerPage.getByTestId("session-notes-save-button"),
+    ).toHaveCount(0);
   } finally {
     await playerContext.close();
   }
 });
 
-test("saving an empty value is a valid save, not an error", async ({ page }) => {
-  await registerAndCreateWorld(page, `E2E Session Notes Empty ${uniqueSuffix()}`);
+test("saving an empty value is a valid save, not an error", async ({
+  page,
+}) => {
+  await registerAndCreateWorld(
+    page,
+    `E2E Session Notes Empty ${uniqueSuffix()}`,
+  );
 
   // First, save some text so there's something to clear.
   await fillSessionNotes(page, "Something to clear");
@@ -145,17 +164,27 @@ test("saving an empty value is a valid save, not an error", async ({ page }) => 
   await expect.poll(() => readSessionNotes(page)).toBe("");
 });
 
-test("spec 021: the editor shows line numbers and a working fold gutter", async ({ page }) => {
-  await registerAndCreateWorld(page, `E2E Session Notes Fold ${uniqueSuffix()}`);
+test("spec 021: the editor shows line numbers and a working fold gutter", async ({
+  page,
+}) => {
+  await registerAndCreateWorld(
+    page,
+    `E2E Session Notes Fold ${uniqueSuffix()}`,
+  );
 
   const editor = page.getByTestId("session-notes-editor");
-  await fillSessionNotes(page, "# Heading One\nSome text under it.\nMore text.");
+  await fillSessionNotes(
+    page,
+    "# Heading One\nSome text under it.\nMore text.",
+  );
 
   // Line numbers are visible (basicSetup.lineNumbers, spec 021 FR-001).
   // `.cm-gutterElement` includes a hidden width-calculation spacer
   // (`visibility: hidden`, used only to size the gutter) alongside the
   // real, visible per-line markers — exclude it explicitly.
-  const realLineNumbers = editor.locator(".cm-gutter.cm-lineNumbers .cm-gutterElement:not([style*='visibility: hidden'])");
+  const realLineNumbers = editor.locator(
+    ".cm-gutter.cm-lineNumbers .cm-gutterElement:not([style*='visibility: hidden'])",
+  );
   await expect(realLineNumbers.first()).toBeVisible();
   await expect(realLineNumbers).toHaveCount(3);
 
@@ -172,9 +201,13 @@ test("spec 021: the editor shows line numbers and a working fold gutter", async 
 
   await expect(editor.locator(".cm-foldPlaceholder")).toHaveCount(1);
   await expect.poll(() => readSessionNotes(page)).toContain("Heading One");
-  await expect.poll(() => readSessionNotes(page)).not.toContain("Some text under it.");
+  await expect
+    .poll(() => readSessionNotes(page))
+    .not.toContain("Some text under it.");
 
   // Unfold restores it.
   await editor.getByTitle("Fold line").first().click({ force: true });
-  await expect.poll(() => readSessionNotes(page)).toContain("Some text under it.");
+  await expect
+    .poll(() => readSessionNotes(page))
+    .toContain("Some text under it.");
 });

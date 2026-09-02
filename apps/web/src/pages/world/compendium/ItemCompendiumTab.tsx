@@ -46,13 +46,10 @@ export function ItemCompendiumTab({
   // Reset during render rather than at the top of the effect below: this
   // is state derived from the arguments, and doing it in the effect commits
   // one render pairing the new key with the previous key's data.
-  useResetOnChange(
-    `${worldId}|${query}|${refreshKey ?? ""}`,
-    () => {
-      setItems(null);
-      setError(null);
-    },
-  );
+  useResetOnChange(`${worldId}|${query}|${refreshKey ?? ""}`, () => {
+    setItems(null);
+    setError(null);
+  });
 
   useEffect(() => {
     let active = true;

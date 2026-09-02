@@ -6,16 +6,13 @@ use crate::schema::{
     shapes, tokens, user_oauth_accounts, user_sessions, users, walls, world_abilities,
     world_ability_effects, world_ability_permissions, world_ability_shares, world_actor_abilities,
     world_actor_claims, world_actor_images, world_actor_inventory, world_actor_permissions,
-    world_actor_shares,
-    world_actor_system_data, world_actors, world_authoring_tool_grants,
-    world_chat_messages, world_combatants, world_combats,
-    world_events, world_genie_puzzle_clock_rewards, world_genie_puzzle_clocks,
-    world_genie_resource_holdings, world_genie_sessions, world_genie_shop_listings,
-    world_genie_trade_proposals, world_invites, world_item_effects, world_item_permissions,
-    world_item_prices, world_item_shares, world_items, world_lore_entries, world_lore_image_assets, world_lore_links,
-    world_lore_permissions, world_lore_revisions, world_lore_tags, world_members,
-    world_roll_records, world_tokens,
-    worlds,
+    world_actor_shares, world_actor_system_data, world_actors, world_authoring_tool_grants,
+    world_chat_messages, world_combatants, world_combats, world_events,
+    world_genie_puzzle_clock_rewards, world_genie_puzzle_clocks, world_genie_resource_holdings,
+    world_genie_sessions, world_genie_shop_listings, world_genie_trade_proposals, world_invites,
+    world_item_effects, world_item_permissions, world_item_prices, world_item_shares, world_items,
+    world_lore_entries, world_lore_image_assets, world_lore_links, world_lore_permissions,
+    world_lore_revisions, world_lore_tags, world_members, world_roll_records, world_tokens, worlds,
 };
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};

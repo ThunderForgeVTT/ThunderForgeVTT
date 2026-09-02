@@ -198,7 +198,7 @@ test("engine capacity sweep: frame time against token count", async ({
 
     const sample = await sampleSteadyState(page, level);
     samples.push(sample);
-     
+
     // table it prints; a passing assertion says far less than the curve.
     console.log(
       `[engine] tokens=${String(sample.tokens).padStart(4)} ` +
@@ -208,7 +208,6 @@ test("engine capacity sweep: frame time against token count", async ({
     );
   }
 
-   
   console.log(`[engine] sweep=${JSON.stringify(samples)}`);
 
   // Every level must have produced a real reading. A zero here means the

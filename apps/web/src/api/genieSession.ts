@@ -330,7 +330,7 @@ export type ProposeResourceTradeInput = {
   toActorId: string;
   toResourceType: string;
   toQuantity: number;
-}
+};
 
 /** Caller must control fromActorId (server-enforced). */
 export async function proposeResourceTrade(

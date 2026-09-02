@@ -55,7 +55,10 @@ async function register(page: Page, creds: Credentials): Promise<void> {
 /** Same helper as `map-editor-tooling.spec.ts` (duplicated rather than
  * shared, per this project's established e2e convention — see that
  * file's own top-of-file doc comment). */
-async function registerAndCreateWorldOnDashboard(page: Page, worldName: string): Promise<void> {
+async function registerAndCreateWorldOnDashboard(
+  page: Page,
+  worldName: string,
+): Promise<void> {
   await register(page, freshCredentials("e2elivesync"));
 
   await page.goto("/worlds/create");
@@ -106,7 +109,8 @@ test.describe("Live sync reconnect (US2, T012/T013)", () => {
     await page.addInitScript(() => {
       const Native = window.WebSocket;
       const sockets: WebSocket[] = [];
-      (window as unknown as { __e2eSockets: WebSocket[] }).__e2eSockets = sockets;
+      (window as unknown as { __e2eSockets: WebSocket[] }).__e2eSockets =
+        sockets;
       class RecordingWebSocket extends Native {
         constructor(url: string | URL, protocols?: string | string[]) {
           super(url, protocols);
@@ -129,7 +133,10 @@ test.describe("Live sync reconnect (US2, T012/T013)", () => {
       }
     });
 
-    await registerAndCreateWorldOnDashboard(page, `E2E Live Sync ${uniqueSuffix()}`);
+    await registerAndCreateWorldOnDashboard(
+      page,
+      `E2E Live Sync ${uniqueSuffix()}`,
+    );
     await enterWorldPlay(page);
 
     // Every world gets exactly one scene at creation
@@ -185,7 +192,9 @@ test.describe("Live sync reconnect (US2, T012/T013)", () => {
     const severed = await page.evaluate(() => {
       const sockets = (window as unknown as { __e2eSockets: WebSocket[] })
         .__e2eSockets;
-      const open = sockets.filter((socket) => socket.readyState === WebSocket.OPEN);
+      const open = sockets.filter(
+        (socket) => socket.readyState === WebSocket.OPEN,
+      );
       for (const socket of open) {
         socket.close(4499, "e2e sever");
       }

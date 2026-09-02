@@ -83,7 +83,12 @@ export function SelectionFilterMenu() {
   // force from the first click rather than from the first change.
   useEffect(() => {
     writeStored(STORAGE_KEY, kinds);
-    void setSelectionFilter(kinds.tokens, kinds.walls, kinds.lights, kinds.shapes);
+    void setSelectionFilter(
+      kinds.tokens,
+      kinds.walls,
+      kinds.lights,
+      kinds.shapes,
+    );
   }, [kinds]);
 
   useEffect(() => {
@@ -117,7 +122,9 @@ export function SelectionFilterMenu() {
           person who collapsed this menu an hour ago is exactly the person who
           will not remember switching everything off.
         */}
-        {selectsNothing ? "Selection filter — nothing selectable" : "Selection filter"}
+        {selectsNothing
+          ? "Selection filter — nothing selectable"
+          : "Selection filter"}
       </button>
     );
   }
@@ -143,7 +150,10 @@ export function SelectionFilterMenu() {
             data-testid={`selection-filter-${key}`}
             checked={kinds[key]}
             onChange={(event) =>
-              setKinds((current) => ({ ...current, [key]: event.target.checked }))
+              setKinds((current) => ({
+                ...current,
+                [key]: event.target.checked,
+              }))
             }
           />
           {label}

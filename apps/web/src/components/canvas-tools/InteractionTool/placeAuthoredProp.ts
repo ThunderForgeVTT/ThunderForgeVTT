@@ -1,7 +1,4 @@
-import type {
-  CreateInteractiveInput,
-  Interactive,
-} from "@/api/interactives";
+import type { CreateInteractiveInput, Interactive } from "@/api/interactives";
 import type { TokenRecord } from "@/types/token";
 
 /**
@@ -104,7 +101,11 @@ export async function placeAuthoredProp(
       activation: draft.activation,
       fireMode: draft.fireMode,
     });
-    return { kind: "placed", tokenId, interactiveId: interactive.interactiveId };
+    return {
+      kind: "placed",
+      tokenId,
+      interactiveId: interactive.interactiveId,
+    };
   } catch {
     return {
       kind: "propOnly",

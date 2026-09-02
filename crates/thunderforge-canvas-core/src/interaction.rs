@@ -335,7 +335,8 @@ impl EffectRegistry {
             if self.declarations.contains_key(&declaration.id) {
                 return Err(RegistryError::DuplicateId { id: declaration.id });
             }
-            self.declarations.insert(declaration.id.clone(), declaration);
+            self.declarations
+                .insert(declaration.id.clone(), declaration);
         }
         Ok(())
     }

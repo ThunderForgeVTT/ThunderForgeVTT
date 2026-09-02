@@ -103,8 +103,7 @@ fn requested_placement_slot() -> &'static std::sync::Mutex<Option<(String, Strin
 }
 
 /// Whether the web app has asked to cancel.
-static CANCEL_REQUESTED: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
+static CANCEL_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Begin carrying something of `kind`, described to chrome by `reference`.
 ///

@@ -378,56 +378,57 @@ test.describe("Live cross-session sync (US1, T003/T004/T008)", () => {
   // fail, but passed"), which is the annotation working: the marker outlived
   // the gap and said so rather than letting a working feature keep being
   // reported as broken.
-  test(
-    "a wall's Blocks Movement toggle propagates to a second, already-connected session with no reload",
-    async ({ browser }: { browser: Browser }) => {
-      const gmContext = await browser.newContext();
-      const gmPage = await gmContext.newPage();
-      // Registration, world creation, a scene launch (a full navigation) and the
-      // engine's own multi-second WASM startup leave no room inside Playwright's
-      // 30-second default for the authoring this test is about.
-      test.setTimeout(240_000);
+  test("a wall's Blocks Movement toggle propagates to a second, already-connected session with no reload", async ({
+    browser,
+  }: {
+    browser: Browser;
+  }) => {
+    const gmContext = await browser.newContext();
+    const gmPage = await gmContext.newPage();
+    // Registration, world creation, a scene launch (a full navigation) and the
+    // engine's own multi-second WASM startup leave no room inside Playwright's
+    // 30-second default for the authoring this test is about.
+    test.setTimeout(240_000);
 
-      await registerAndCreateWorldOnDashboard(
-        gmPage,
-        `E2E Wall Live Sync ${uniqueSuffix()}`,
-      );
-      await enterWorldPlay(gmPage);
-      await createScene(gmPage, "Live Sync Scene");
-      await waitForEngineReady(gmPage, "walls");
+    await registerAndCreateWorldOnDashboard(
+      gmPage,
+      `E2E Wall Live Sync ${uniqueSuffix()}`,
+    );
+    await enterWorldPlay(gmPage);
+    await createScene(gmPage, "Live Sync Scene");
+    await waitForEngineReady(gmPage, "walls");
 
-      await clickCanvasAt(gmPage, -100, 0);
-      await clickCanvasAt(gmPage, 100, 0);
-      await gmPage.keyboard.press("Enter");
-      await clickCanvasAt(gmPage, 0, 0);
-      await expect(gmPage.getByText("Selected wall")).toBeVisible({
-        timeout: 10_000,
-      });
+    await clickCanvasAt(gmPage, -100, 0);
+    await clickCanvasAt(gmPage, 100, 0);
+    await gmPage.keyboard.press("Enter");
+    await clickCanvasAt(gmPage, 0, 0);
+    await expect(gmPage.getByText("Selected wall")).toBeVisible({
+      timeout: 10_000,
+    });
 
-      // Second, already-connected session (viewing the scene before the
-      // toggle below happens) — see this file's top-of-file doc comment
-      // for why this reuses the GM's login rather than a genuinely
-      // distinct player account.
-      const { context: secondContext, page: secondPage } =
-        await secondSessionSameLogin(browser, gmPage);
-      await waitForEngineReady(secondPage, "walls");
-      await clickCanvasAt(secondPage, 0, 0);
-      await expect(secondPage.getByText("Selected wall")).toBeVisible({
-        timeout: 10_000,
-      });
+    // Second, already-connected session (viewing the scene before the
+    // toggle below happens) — see this file's top-of-file doc comment
+    // for why this reuses the GM's login rather than a genuinely
+    // distinct player account.
+    const { context: secondContext, page: secondPage } =
+      await secondSessionSameLogin(browser, gmPage);
+    await waitForEngineReady(secondPage, "walls");
+    await clickCanvasAt(secondPage, 0, 0);
+    await expect(secondPage.getByText("Selected wall")).toBeVisible({
+      timeout: 10_000,
+    });
 
-      // GM toggles Blocks Movement; the second, still-open session must
-      // reflect it without a reload (FR-005, SC-002).
-      await expect(gmPage.locator("#wall-blocks-movement")).not.toBeChecked();
-      await gmPage.locator("#wall-blocks-movement").click();
-      await expect(secondPage.locator("#wall-blocks-movement")).toBeChecked({
-        timeout: 10_000,
-      });
+    // GM toggles Blocks Movement; the second, still-open session must
+    // reflect it without a reload (FR-005, SC-002).
+    await expect(gmPage.locator("#wall-blocks-movement")).not.toBeChecked();
+    await gmPage.locator("#wall-blocks-movement").click();
+    await expect(secondPage.locator("#wall-blocks-movement")).toBeChecked({
+      timeout: 10_000,
+    });
 
-      await gmContext.close();
-      await secondContext.close();
-    },
-  );
+    await gmContext.close();
+    await secondContext.close();
+  });
 
   test("a GM-placed torch persists and is visible from a second, independent live session", async ({
     browser,

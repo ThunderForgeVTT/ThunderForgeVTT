@@ -67,31 +67,33 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
-  webServer: stackIsExternal ? undefined : {
-    command: "pnpm run dev",
-    url: baseURL,
-    reuseExistingServer: true,
-    timeout: 120_000,
-    env: {
-      // Every auth route is rate limited per IP per path: 15/min for
-      // login and register, 40/min for the rest — including
-      // `/authentication/setup/status`, which `App.tsx` calls on *every*
-      // page load and which gates the whole router. A suite that
-      // registers a throwaway user per test blows through both budgets,
-      // and the symptom is not a 429 anywhere in the test output: it is a
-      // form that never renders, because the app replaced itself with
-      // "ThunderForge could not load the current instance state".
-      //
-      // The server already provides exactly this escape hatch for exactly
-      // this reason (`auth_middleware.rs` — debug builds only, compiled
-      // out of a release binary, announced loudly in the log), and
-      // `scripts/torture.mjs` already sets it. The e2e harness is the same
-      // kind of harness and needs it for the same reason.
-      //
-      // Note this only reaches a dev stack Playwright itself starts:
-      // `reuseExistingServer` means an already-running stack keeps
-      // whatever environment it was launched with.
-      THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT: "1",
-    },
-  },
+  webServer: stackIsExternal
+    ? undefined
+    : {
+        command: "pnpm run dev",
+        url: baseURL,
+        reuseExistingServer: true,
+        timeout: 120_000,
+        env: {
+          // Every auth route is rate limited per IP per path: 15/min for
+          // login and register, 40/min for the rest — including
+          // `/authentication/setup/status`, which `App.tsx` calls on *every*
+          // page load and which gates the whole router. A suite that
+          // registers a throwaway user per test blows through both budgets,
+          // and the symptom is not a 429 anywhere in the test output: it is a
+          // form that never renders, because the app replaced itself with
+          // "ThunderForge could not load the current instance state".
+          //
+          // The server already provides exactly this escape hatch for exactly
+          // this reason (`auth_middleware.rs` — debug builds only, compiled
+          // out of a release binary, announced loudly in the log), and
+          // `scripts/torture.mjs` already sets it. The e2e harness is the same
+          // kind of harness and needs it for the same reason.
+          //
+          // Note this only reaches a dev stack Playwright itself starts:
+          // `reuseExistingServer` means an already-running stack keeps
+          // whatever environment it was launched with.
+          THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT: "1",
+        },
+      },
 });

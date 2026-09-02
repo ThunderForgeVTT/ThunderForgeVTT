@@ -55,7 +55,10 @@ async function extractInviteCode(page: Page): Promise<string> {
   return code;
 }
 
-async function registerAndCreateWorld(page: Page, worldName: string): Promise<string> {
+async function registerAndCreateWorld(
+  page: Page,
+  worldName: string,
+): Promise<string> {
   await register(page, freshCredentials("e2eownership"));
   await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
   await page.locator("#world-name").fill(worldName);
@@ -75,13 +78,20 @@ async function currentUserId(page: Page): Promise<string> {
     headers: csrfToken ? { "x-csrf-token": csrfToken } : {},
     data: { query: "query { me { id } }" },
   });
-  const payload = (await response.json()) as { data?: { me?: { id?: string } } };
+  const payload = (await response.json()) as {
+    data?: { me?: { id?: string } };
+  };
   const id = payload.data?.me?.id;
-  if (!id) throw new Error("Could not resolve current user id via /api/graphql");
+  if (!id)
+    throw new Error("Could not resolve current user id via /api/graphql");
   return id;
 }
 
-async function createNpcAndOpenEdit(page: Page, worldId: string, npcName: string): Promise<string> {
+async function createNpcAndOpenEdit(
+  page: Page,
+  worldId: string,
+  npcName: string,
+): Promise<string> {
   // Spec 011: NPC creation moved from staging to /compendium.
   await page.goto(`/world/${worldId}/compendium`);
   // Spec 031 FR-035 moved NPC authoring onto its own page, so the
@@ -89,13 +99,18 @@ async function createNpcAndOpenEdit(page: Page, worldId: string, npcName: string
   // link to follow.
   const seededActorId = await createNpcViaCompendium(page, worldId, npcName);
   await page.goto(`/world/${worldId}/actor/${seededActorId}/view`);
-  await page.waitForURL(new RegExp(`/world/${worldId}/actor/[^/]+/view$`), { timeout: 15_000 });
+  await page.waitForURL(new RegExp(`/world/${worldId}/actor/[^/]+/view$`), {
+    timeout: 15_000,
+  });
   await page.getByRole("button", { name: "Edit" }).click();
-  await page.waitForURL(new RegExp(`/world/${worldId}/actor/([^/]+)/edit$`), { timeout: 15_000 });
+  await page.waitForURL(new RegExp(`/world/${worldId}/actor/([^/]+)/edit$`), {
+    timeout: 15_000,
+  });
   const match = new RegExp(`/world/${worldId}/actor/([^/]+)/edit$`).exec(
     new URL(page.url()).pathname,
   );
-  if (!match) throw new Error(`Could not extract actor id from URL: ${page.url()}`);
+  if (!match)
+    throw new Error(`Could not extract actor id from URL: ${page.url()}`);
   return match[1];
 }
 
@@ -107,7 +122,9 @@ test.describe("US3: DM assigns ownership; grantee gains edit rights", () => {
     const worldName = `E2E Ownership ${uniqueSuffix()}`;
     const worldId = await registerAndCreateWorld(page, worldName);
 
-    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page
+      .context()
+      .grantPermissions(["clipboard-read", "clipboard-write"]);
     await page.goto(`/world/${worldId}`);
     await page.getByRole("button", { name: "Generate Join Link" }).click();
     const inviteCode = await extractInviteCode(page);
@@ -116,45 +133,68 @@ test.describe("US3: DM assigns ownership; grantee gains edit rights", () => {
     try {
       await register(playerPage, freshCredentials("e2eownerplyr"));
       await playerPage.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
-      await playerPage.locator("#world-name").fill(`E2E Player Own ${uniqueSuffix()}`);
+      await playerPage
+        .locator("#world-name")
+        .fill(`E2E Player Own ${uniqueSuffix()}`);
       await playerPage.getByRole("button", { name: /create world/i }).click();
-      await playerPage.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
+      await playerPage.waitForURL(/\/world\/[^/]+\/staging$/, {
+        timeout: 15_000,
+      });
       const playerId = await currentUserId(playerPage);
 
       await playerPage.goto(`/join/${inviteCode}`);
       await playerPage.getByRole("button", { name: "Join Campaign" }).click();
-      await playerPage.waitForURL(new RegExp(`/world/${worldId}(/actor-select)?$`), { timeout: 15_000 });
+      await playerPage.waitForURL(
+        new RegExp(`/world/${worldId}(/actor-select)?$`),
+        { timeout: 15_000 },
+      );
 
       await page.goto(`/world/${worldId}/staging`);
-      const actorId = await createNpcAndOpenEdit(page, worldId, `Bo Jangles ${uniqueSuffix()}`);
+      const actorId = await createNpcAndOpenEdit(
+        page,
+        worldId,
+        `Bo Jangles ${uniqueSuffix()}`,
+      );
 
       // DM assigns the player Owner via the ownership block. The player
       // row depends on `useWorldMembers`'s fetch picking up the
       // just-completed join, which can lag behind the GraphQL mutation
       // that caused it — reload once if the row hasn't appeared yet,
       // rather than failing outright on fetch timing.
-      await expect(page.getByTestId("actor-ownership-block")).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByTestId("actor-ownership-block")).toBeVisible({
+        timeout: 10_000,
+      });
       const ownershipRow = page.getByTestId(`ownership-row-${playerId}`);
       try {
         await expect(ownershipRow).toBeVisible({ timeout: 15_000 });
       } catch {
         await page.reload();
-        await expect(page.getByTestId("actor-ownership-block")).toBeVisible({ timeout: 10_000 });
+        await expect(page.getByTestId("actor-ownership-block")).toBeVisible({
+          timeout: 10_000,
+        });
         await expect(ownershipRow).toBeVisible({ timeout: 15_000 });
       }
-      await page.getByTestId(`ownership-select-${playerId}`).selectOption("OWNER");
-      await expect(page.getByTestId(`ownership-select-${playerId}`)).toHaveValue("OWNER");
+      await page
+        .getByTestId(`ownership-select-${playerId}`)
+        .selectOption("OWNER");
+      await expect(
+        page.getByTestId(`ownership-select-${playerId}`),
+      ).toHaveValue("OWNER");
 
       // The player can now reach the actor's /edit route and save.
       await playerPage.goto(`/world/${worldId}/actor/${actorId}/edit`);
       await expect(playerPage).toHaveURL(new RegExp(`/actor/${actorId}/edit$`));
       await playerPage.locator("#actor-label").fill("Renamed By Owner Player");
       await playerPage.getByRole("button", { name: "Save" }).click();
-      await expect(playerPage.getByText("Saved.")).toBeVisible({ timeout: 10_000 });
+      await expect(playerPage.getByText("Saved.")).toBeVisible({
+        timeout: 10_000,
+      });
 
       // But the player (non-DM) cannot see/change the ownership block,
       // even though they now hold Owner on this very actor.
-      await expect(playerPage.getByTestId("actor-ownership-block")).toHaveCount(0);
+      await expect(playerPage.getByTestId("actor-ownership-block")).toHaveCount(
+        0,
+      );
     } finally {
       await playerContext.close();
     }
@@ -167,42 +207,64 @@ test.describe("US3: DM assigns ownership; grantee gains edit rights", () => {
     const worldName = `E2E Multi Owner ${uniqueSuffix()}`;
     const worldId = await registerAndCreateWorld(page, worldName);
 
-    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page
+      .context()
+      .grantPermissions(["clipboard-read", "clipboard-write"]);
     await page.goto(`/world/${worldId}`);
     await page.getByRole("button", { name: "Generate Join Link" }).click();
     const inviteCode = await extractInviteCode(page);
-    const contexts = await Promise.all([browser.newContext(), browser.newContext()]);
-    const [playerAPage, playerBPage] = await Promise.all(contexts.map((c) => c.newPage()));
+    const contexts = await Promise.all([
+      browser.newContext(),
+      browser.newContext(),
+    ]);
+    const [playerAPage, playerBPage] = await Promise.all(
+      contexts.map((c) => c.newPage()),
+    );
     try {
       const playerIds: string[] = [];
       for (const [index, playerPage] of [playerAPage, playerBPage].entries()) {
         await register(playerPage, freshCredentials(`e2emultiowner${index}`));
         await playerPage.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
-        await playerPage.locator("#world-name").fill(`E2E Multi Own ${index} ${uniqueSuffix()}`);
+        await playerPage
+          .locator("#world-name")
+          .fill(`E2E Multi Own ${index} ${uniqueSuffix()}`);
         await playerPage.getByRole("button", { name: /create world/i }).click();
-        await playerPage.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
+        await playerPage.waitForURL(/\/world\/[^/]+\/staging$/, {
+          timeout: 15_000,
+        });
         playerIds.push(await currentUserId(playerPage));
 
         await playerPage.goto(`/join/${inviteCode}`);
         await playerPage.getByRole("button", { name: "Join Campaign" }).click();
-        await playerPage.waitForURL(new RegExp(`/world/${worldId}(/actor-select)?$`), { timeout: 15_000 });
+        await playerPage.waitForURL(
+          new RegExp(`/world/${worldId}(/actor-select)?$`),
+          { timeout: 15_000 },
+        );
       }
 
       await page.goto(`/world/${worldId}/staging`);
       await createNpcAndOpenEdit(page, worldId, `Shared NPC ${uniqueSuffix()}`);
 
-      await expect(page.getByTestId("actor-ownership-block")).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByTestId("actor-ownership-block")).toBeVisible({
+        timeout: 10_000,
+      });
       for (const playerId of playerIds) {
         const ownershipRow = page.getByTestId(`ownership-row-${playerId}`);
         try {
           await expect(ownershipRow).toBeVisible({ timeout: 15_000 });
         } catch {
           await page.reload();
-          await expect(page.getByTestId("actor-ownership-block")).toBeVisible({ timeout: 10_000 });
+          await expect(page.getByTestId("actor-ownership-block")).toBeVisible({
+            timeout: 10_000,
+          });
           await expect(ownershipRow).toBeVisible({ timeout: 15_000 });
         }
-        await page.getByTestId(`ownership-select-${playerId}`).selectOption("OWNER");
-        await expect(page.getByTestId(`ownership-select-${playerId}`)).toHaveValue("OWNER");
+        await page
+          .getByTestId(`ownership-select-${playerId}`)
+          .selectOption("OWNER");
+        await expect(
+          page.getByTestId(`ownership-select-${playerId}`),
+        ).toHaveValue("OWNER");
       }
     } finally {
       await Promise.all(contexts.map((c) => c.close()));

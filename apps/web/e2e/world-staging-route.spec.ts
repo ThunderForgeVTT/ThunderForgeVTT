@@ -42,7 +42,10 @@ async function register(page: Page, creds: Credentials): Promise<void> {
   await page.getByRole("button", { name: "Create account" }).click();
 }
 
-async function registerAndCreateWorld(page: Page, worldName: string): Promise<string> {
+async function registerAndCreateWorld(
+  page: Page,
+  worldName: string,
+): Promise<string> {
   await register(page, freshCredentials("e2estagingroute"));
   await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
   await page.locator("#world-name").fill(worldName);
@@ -56,22 +59,30 @@ async function registerAndCreateWorld(page: Page, worldName: string): Promise<st
 }
 
 test.describe("US1: welcome hub 'Enter' goes to staging, not straight to canvas", () => {
-  test("clicking Enter for a world lands on /world/:id/staging", async ({ page }) => {
+  test("clicking Enter for a world lands on /world/:id/staging", async ({
+    page,
+  }) => {
     const worldName = `E2E Welcome Enter ${uniqueSuffix()}`;
     const worldId = await registerAndCreateWorld(page, worldName);
 
     await page.goto("/welcome");
     await page.getByRole("link", { name: `Enter ${worldName}` }).click();
-    await page.waitForURL(new RegExp(`/world/${worldId}/staging$`), { timeout: 15_000 });
+    await page.waitForURL(new RegExp(`/world/${worldId}/staging$`), {
+      timeout: 15_000,
+    });
     await expect(page.getByTestId("world-staging-page")).toBeVisible();
   });
 });
 
 test.describe("Spec 011 regression: staging no longer embeds the NPC catalog", () => {
-  test("staging shows a Compendium link instead of an inline NPC form", async ({ page }) => {
+  test("staging shows a Compendium link instead of an inline NPC form", async ({
+    page,
+  }) => {
     await registerAndCreateWorld(page, `E2E Staging No NPC ${uniqueSuffix()}`);
 
-    await expect(page.getByTestId("world-nav-npcs")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId("world-nav-npcs")).toBeVisible({
+      timeout: 10_000,
+    });
     // The authoring entry point, not the old inline form: that form no
     // longer exists anywhere, so asserting its absence would pass vacuously
     // and stop testing that staging has no NPC authoring (spec 031 FR-035).

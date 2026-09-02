@@ -9,6 +9,7 @@
 // query/mutation module will need this headroom too.
 #![recursion_limit = "512"]
 
+mod actor_assets_serve; // Spec 031: authenticated proxy for actor portrait/token images (mirrors lore_assets_serve)
 mod adapters;
 mod admin;
 mod attributes; // Phase 8: a system's own attribute set, from its manifest
@@ -22,7 +23,6 @@ mod errors;
 mod graphql;
 mod interaction; // Spec 030: the effect registry, and the rules the GraphQL layer obeys
 mod light_effects; // Spec 030: lighting, as a contributor to the interaction seam
-mod actor_assets_serve; // Spec 031: authenticated proxy for actor portrait/token images (mirrors lore_assets_serve)
 mod lore_assets_serve; // Spec 012: authenticated proxy for lore image assets (mirrors canvas_assets_serve)
 mod map_import;
 mod markdown; // Spec 012: lore wiki GFM rendering, [[link]] resolution, slug generation

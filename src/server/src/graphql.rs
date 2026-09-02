@@ -462,7 +462,8 @@ impl GraphQLWorldActor {
         ctx: &Context<'_>,
     ) -> GraphQLResult<Vec<crate::graphql::types::GraphQLActorImage>> {
         let state = app_state(ctx)?;
-        let rows = crate::graphql::mutations_actor_images::actor_images_impl(state, self.id).await?;
+        let rows =
+            crate::graphql::mutations_actor_images::actor_images_impl(state, self.id).await?;
         Ok(rows
             .into_iter()
             .map(crate::graphql::types::GraphQLActorImage::from)

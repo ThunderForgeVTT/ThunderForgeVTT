@@ -115,7 +115,10 @@ fn a_late_contributor_colliding_with_an_early_one_still_fails_at_registration() 
     // And the one already there is untouched — a refused contribution does not
     // half-apply.
     assert_eq!(
-        registry.get("thing.do").expect("still present").subject_kinds,
+        registry
+            .get("thing.do")
+            .expect("still present")
+            .subject_kinds,
         vec![SubjectKind::Prop]
     );
 }

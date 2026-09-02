@@ -72,7 +72,10 @@ async function register(page: Page, creds: Credentials): Promise<void> {
   await page.getByRole("button", { name: "Create account" }).click();
 }
 
-async function registerAndCreateWorld(page: Page, worldName: string): Promise<string> {
+async function registerAndCreateWorld(
+  page: Page,
+  worldName: string,
+): Promise<string> {
   await register(page, freshCredentials("e2egnpc"));
   await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
   await page.locator("#world-name").fill(worldName);
@@ -90,10 +93,16 @@ async function assignGenieSystem(page: Page, worldId: string): Promise<void> {
   await page.getByTestId("system-picker").click();
   await page.getByRole("option", { name: "genie" }).click();
   await page.getByRole("button", { name: "Confirm" }).click();
-  await expect(page.getByText("System assigned.")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("System assigned.")).toBeVisible({
+    timeout: 10_000,
+  });
 }
 
-async function graphql<T>(page: Page, query: string, variables: Record<string, unknown>): Promise<T> {
+async function graphql<T>(
+  page: Page,
+  query: string,
+  variables: Record<string, unknown>,
+): Promise<T> {
   return page.evaluate(
     async ({ query, variables }) => {
       const csrfToken = document.cookie
@@ -114,7 +123,9 @@ async function graphql<T>(page: Page, query: string, variables: Record<string, u
       try {
         return JSON.parse(text);
       } catch {
-        throw new Error(`Non-JSON response (status ${res.status}): ${text.slice(0, 500)}`);
+        throw new Error(
+          `Non-JSON response (status ${res.status}): ${text.slice(0, 500)}`,
+        );
       }
     },
     { query, variables },
@@ -129,7 +140,13 @@ async function createGenieActor(
 ): Promise<string> {
   const result = await graphql<{ data: { createActor: { id: string } } }>(
     page,
-    `mutation($input: CreateActorInput!) { createActor(input: $input) { id } }`,
+    `
+      mutation ($input: CreateActorInput!) {
+        createActor(input: $input) {
+          id
+        }
+      }
+    `,
     { input: { worldId, label, isNpc, gameSystemId: "genie" } },
   );
   return result.data.createActor.id;
@@ -140,9 +157,18 @@ async function setTraitData(
   actorId: string,
   traitData: Record<string, unknown>,
 ): Promise<void> {
-  const result = await graphql<{ data?: unknown; errors?: { message: string }[] }>(
+  const result = await graphql<{
+    data?: unknown;
+    errors?: { message: string }[];
+  }>(
     page,
-    `mutation($input: GraphQLUpdateActorSystemDataInput!) { updateActorSystemData(input: $input) { id } }`,
+    `
+      mutation ($input: GraphQLUpdateActorSystemDataInput!) {
+        updateActorSystemData(input: $input) {
+          id
+        }
+      }
+    `,
     {
       input: {
         actorId,
@@ -153,7 +179,9 @@ async function setTraitData(
     },
   );
   if (result.errors?.length) {
-    throw new Error(`updateActorSystemData failed: ${result.errors[0].message}`);
+    throw new Error(
+      `updateActorSystemData failed: ${result.errors[0].message}`,
+    );
   }
 }
 
@@ -183,17 +211,30 @@ test.describe("Spec 018 Scenario 3: NPC size category sets a token's default foo
   // the RxDB collection it read from. The RxDB hard-cut replaced that read
   // path with a direct GraphQL fetch, so this now asserts the real,
   // working behavior.
-  test(
-    "a colossal NPC's token defaults to a larger scale than a diminutive NPC's",
-    async ({ page }) => {
+  test("a colossal NPC's token defaults to a larger scale than a diminutive NPC's", async ({
+    page,
+  }) => {
     test.setTimeout(90_000);
-    const worldId = await registerAndCreateWorld(page, `E2E Genie NPCs ${uniqueSuffix()}`);
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Genie NPCs ${uniqueSuffix()}`,
+    );
     await assignGenieSystem(page, worldId);
 
-    const diminutiveId = await createGenieActor(page, worldId, "Minor Sprite", true);
+    const diminutiveId = await createGenieActor(
+      page,
+      worldId,
+      "Minor Sprite",
+      true,
+    );
     await setTraitData(page, diminutiveId, { size_category: "diminutive" });
 
-    const colossalId = await createGenieActor(page, worldId, "Towering Elemental Servant", true);
+    const colossalId = await createGenieActor(
+      page,
+      worldId,
+      "Towering Elemental Servant",
+      true,
+    );
     await setTraitData(page, colossalId, { size_category: "colossal" });
 
     await page.goto(`/world/${worldId}/staging`);
@@ -216,7 +257,9 @@ test.describe("Spec 018 Scenario 3: NPC size category sets a token's default foo
     await waitForEngineReady(page);
     await page.getByTestId("token-panel-toggle-button").click({ force: true });
     await page.getByTestId("token-create-trigger").click({ force: true });
-    await page.getByTestId("token-create-npc-select").selectOption({ label: "Minor Sprite" });
+    await page
+      .getByTestId("token-create-npc-select")
+      .selectOption({ label: "Minor Sprite" });
     const diminutiveHint = page.getByTestId("token-create-npc-scale-hint");
     await expect(
       diminutiveHint,
@@ -224,7 +267,9 @@ test.describe("Spec 018 Scenario 3: NPC size category sets a token's default foo
     ).toHaveText(/0\.5/, { timeout: 10_000 });
     const [createDiminutiveResp] = await Promise.all([
       page.waitForResponse(
-        (r) => r.url().includes("/api/graphql") && (r.request().postData() ?? "").includes("createToken"),
+        (r) =>
+          r.url().includes("/api/graphql") &&
+          (r.request().postData() ?? "").includes("createToken"),
       ),
       page.getByTestId("token-create-submit").click({ force: true }),
     ]);
@@ -240,7 +285,9 @@ test.describe("Spec 018 Scenario 3: NPC size category sets a token's default foo
 
     // Colossal NPC's token.
     await page.getByTestId("token-create-trigger").click({ force: true });
-    await page.getByTestId("token-create-npc-select").selectOption({ label: "Towering Elemental Servant" });
+    await page
+      .getByTestId("token-create-npc-select")
+      .selectOption({ label: "Towering Elemental Servant" });
     const colossalHint = page.getByTestId("token-create-npc-scale-hint");
     // Not /\b4\b/: "4" and "x" are both word characters, so there's no
     // word boundary between them in "scale: 4x" and that regex could
@@ -249,7 +296,9 @@ test.describe("Spec 018 Scenario 3: NPC size category sets a token's default foo
     await expect(colossalHint).toHaveText(/\b4x\b/, { timeout: 10_000 });
     const [createColossalResp] = await Promise.all([
       page.waitForResponse(
-        (r) => r.url().includes("/api/graphql") && (r.request().postData() ?? "").includes("createToken"),
+        (r) =>
+          r.url().includes("/api/graphql") &&
+          (r.request().postData() ?? "").includes("createToken"),
       ),
       page.getByTestId("token-create-submit").click({ force: true }),
     ]);
@@ -266,7 +315,9 @@ test.describe("Spec 018 Scenario 3: NPC size category sets a token's default foo
 
     await page.keyboard.press("Escape");
     await page.keyboard.press("Escape");
-    await page.screenshot({ path: "e2e/screenshots/genie-npc-size-category-tokens.png" });
+    await page.screenshot({
+      path: "e2e/screenshots/genie-npc-size-category-tokens.png",
+    });
   });
 });
 
@@ -275,43 +326,69 @@ test.describe("Spec 018 Scenario 5: a Wish-Granted Item with a mechanical effect
     page,
   }) => {
     test.setTimeout(90_000);
-    const worldId = await registerAndCreateWorld(page, `E2E Genie Items ${uniqueSuffix()}`);
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Genie Items ${uniqueSuffix()}`,
+    );
     await assignGenieSystem(page, worldId);
 
-    const actorId = await createGenieActor(page, worldId, "Test Genie PC", false);
+    const actorId = await createGenieActor(
+      page,
+      worldId,
+      "Test Genie PC",
+      false,
+    );
 
     // Create the Wish-Granted Item via the real compendium UI. Spec 031
     // FR-035 moved that off the items tab and onto an editor page; the
     // mutation behind Save is unchanged, so the id still comes from the
     // `createItem` response rather than from a URL.
     await page.goto(`/world/${worldId}/compendium/item/new`);
-    await page.getByTestId("item-editor-name-input").fill("Lamp of Minor Binding");
+    await page
+      .getByTestId("item-editor-name-input")
+      .fill("Lamp of Minor Binding");
     await page
       .getByTestId("item-editor-description-input")
-      .fill("A tarnished brass lamp that suppresses a bound Genie's power while held.");
+      .fill(
+        "A tarnished brass lamp that suppresses a bound Genie's power while held.",
+      );
     const [createItemResp] = await Promise.all([
       page.waitForResponse(
-        (r) => r.url().includes("/api/graphql") && (r.request().postData() ?? "").includes("createItem"),
+        (r) =>
+          r.url().includes("/api/graphql") &&
+          (r.request().postData() ?? "").includes("createItem"),
       ),
       page.getByTestId("item-editor-save").click(),
     ]);
-    const createItemBody = (await createItemResp.json()) as { data?: { createItem?: { id?: string } } };
+    const createItemBody = (await createItemResp.json()) as {
+      data?: { createItem?: { id?: string } };
+    };
     const itemId = createItemBody.data?.createItem?.id;
     expect(itemId).toBeTruthy();
 
     // Add a formula-bearing effect via the real item detail/edit UI.
     await page.goto(`/world/${worldId}/item/${itemId}/edit`);
-    await expect(page.getByTestId("item-effect-editor")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId("item-effect-editor")).toBeVisible({
+      timeout: 10_000,
+    });
     await page.getByTestId("new-item-effect-formula").fill("1d4");
-    await page.getByTestId("new-item-effect-target").fill("Binding Suppression");
+    await page
+      .getByTestId("new-item-effect-target")
+      .fill("Binding Suppression");
     await page.getByTestId("add-item-effect-button").click();
-    await expect(page.getByTestId(/^item-effect-row-/)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId(/^item-effect-row-/)).toBeVisible({
+      timeout: 10_000,
+    });
 
     // Add the item to the Genie character's inventory via the real
     // ActorInventoryPanel UI.
     await page.goto(`/world/${worldId}/actor/${actorId}/view`);
-    await expect(page.getByTestId("actor-inventory-panel")).toBeVisible({ timeout: 10_000 });
-    await page.getByTestId("inventory-add-item-select").selectOption({ label: "Lamp of Minor Binding" });
+    await expect(page.getByTestId("actor-inventory-panel")).toBeVisible({
+      timeout: 10_000,
+    });
+    await page
+      .getByTestId("inventory-add-item-select")
+      .selectOption({ label: "Lamp of Minor Binding" });
     await page.getByTestId("inventory-add-quantity-input").fill("1");
     await page.getByTestId("inventory-add-button").click();
 
@@ -326,13 +403,19 @@ test.describe("Spec 018 Scenario 5: a Wish-Granted Item with a mechanical effect
     // item's own detail page (spec 013's actual wiring) rather than in
     // the inventory row itself (see file header note on this gap).
     await page.goto(`/world/${worldId}/item/${itemId}/view`);
-    await expect(page.getByText("A tarnished brass lamp that suppresses a bound Genie's power while held.")).toBeVisible();
+    await expect(
+      page.getByText(
+        "A tarnished brass lamp that suppresses a bound Genie's power while held.",
+      ),
+    ).toBeVisible();
     const effectRow = page.getByTestId(/^item-effect-row-/).first();
     await expect(effectRow).toBeVisible({ timeout: 10_000 });
     // The effect's formula/target render as editable inputs (ItemEffectEditor
     // is always in "edit" shape, regardless of the page's own view/edit
     // mode) — assert on their values, not on text-node content.
     await expect(effectRow.locator("input").nth(0)).toHaveValue("1d4");
-    await expect(effectRow.locator("input").nth(1)).toHaveValue("Binding Suppression");
+    await expect(effectRow.locator("input").nth(1)).toHaveValue(
+      "Binding Suppression",
+    );
   });
 });

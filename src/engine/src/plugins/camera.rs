@@ -1,8 +1,8 @@
 use crate::resources::{CameraManager, SelectedLight};
-use thunderforge_canvas_core::camera::wheel_notches;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
+use thunderforge_canvas_core::camera::wheel_notches;
 
 pub struct CameraPlugin;
 

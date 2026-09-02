@@ -36,7 +36,10 @@ async function register(page: Page, creds: Credentials): Promise<void> {
   await page.getByRole("button", { name: "Create account" }).click();
 }
 
-async function registerAndCreateWorld(page: Page, worldName: string): Promise<string> {
+async function registerAndCreateWorld(
+  page: Page,
+  worldName: string,
+): Promise<string> {
   await register(page, freshCredentials("e2eshare"));
   await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
   await page.locator("#world-name").fill(worldName);
@@ -49,7 +52,11 @@ async function registerAndCreateWorld(page: Page, worldName: string): Promise<st
   return match[1];
 }
 
-async function createNpcAndOpenEdit(page: Page, worldId: string, npcName: string): Promise<string> {
+async function createNpcAndOpenEdit(
+  page: Page,
+  worldId: string,
+  npcName: string,
+): Promise<string> {
   // Spec 011: NPC creation moved from staging to the dedicated
   // /compendium route.
   await page.goto(`/world/${worldId}/compendium`);
@@ -58,13 +65,18 @@ async function createNpcAndOpenEdit(page: Page, worldId: string, npcName: string
   // link to follow.
   const seededActorId = await createNpcViaCompendium(page, worldId, npcName);
   await page.goto(`/world/${worldId}/actor/${seededActorId}/view`);
-  await page.waitForURL(new RegExp(`/world/${worldId}/actor/[^/]+/view$`), { timeout: 15_000 });
+  await page.waitForURL(new RegExp(`/world/${worldId}/actor/[^/]+/view$`), {
+    timeout: 15_000,
+  });
   await page.getByRole("button", { name: "Edit" }).click();
-  await page.waitForURL(new RegExp(`/world/${worldId}/actor/([^/]+)/edit$`), { timeout: 15_000 });
+  await page.waitForURL(new RegExp(`/world/${worldId}/actor/([^/]+)/edit$`), {
+    timeout: 15_000,
+  });
   const match = new RegExp(`/world/${worldId}/actor/([^/]+)/edit$`).exec(
     new URL(page.url()).pathname,
   );
-  if (!match) throw new Error(`Could not extract actor id from URL: ${page.url()}`);
+  if (!match)
+    throw new Error(`Could not extract actor id from URL: ${page.url()}`);
   return match[1];
 }
 
@@ -74,7 +86,10 @@ test.describe("US5: share an actor, copy it independently, then revoke", () => {
     browser,
   }) => {
     const npcName = `Bo Jangles ${uniqueSuffix()}`;
-    const sourceWorldId = await registerAndCreateWorld(page, `E2E Share Source ${uniqueSuffix()}`);
+    const sourceWorldId = await registerAndCreateWorld(
+      page,
+      `E2E Share Source ${uniqueSuffix()}`,
+    );
     const actorId = await createNpcAndOpenEdit(page, sourceWorldId, npcName);
 
     await page.getByRole("button", { name: "Share" }).click();
@@ -86,29 +101,45 @@ test.describe("US5: share an actor, copy it independently, then revoke", () => {
     let destinationWorldId: string;
     const destinationWorldName = `E2E Share Destination ${uniqueSuffix()}`;
     try {
-      destinationWorldId = await registerAndCreateWorld(otherPage, destinationWorldName);
+      destinationWorldId = await registerAndCreateWorld(
+        otherPage,
+        destinationWorldName,
+      );
 
       await otherPage.goto(new URL(shareUrl).pathname);
-      await expect(otherPage.getByRole("heading", { name: npcName })).toBeVisible({
+      await expect(
+        otherPage.getByRole("heading", { name: npcName }),
+      ).toBeVisible({
         timeout: 10_000,
       });
       // Read-only: no edit/save controls, no indication of the source world.
-      await expect(otherPage.getByRole("button", { name: "Save" })).toHaveCount(0);
-      await expect(otherPage.getByTestId("actor-ownership-block")).toHaveCount(0);
+      await expect(otherPage.getByRole("button", { name: "Save" })).toHaveCount(
+        0,
+      );
+      await expect(otherPage.getByTestId("actor-ownership-block")).toHaveCount(
+        0,
+      );
 
       await otherPage.getByRole("button", { name: "Copy to World" }).click();
-      await otherPage.locator("select").selectOption({ label: destinationWorldName });
+      await otherPage
+        .locator("select")
+        .selectOption({ label: destinationWorldName });
       await otherPage.getByRole("button", { name: "Confirm copy" }).click();
-      await expect(otherPage.getByRole("heading", { name: "Copied!" })).toBeVisible({
+      await expect(
+        otherPage.getByRole("heading", { name: "Copied!" }),
+      ).toBeVisible({
         timeout: 10_000,
       });
 
       // The copy is a real, independent actor in the destination world's
       // roster (spec 011: viewed via /compendium, not /staging).
       await otherPage.goto(`/world/${destinationWorldId}/compendium`);
-      await expect(otherPage.getByTestId("npc-catalog-table")).toContainText(npcName, {
-        timeout: 10_000,
-      });
+      await expect(otherPage.getByTestId("npc-catalog-table")).toContainText(
+        npcName,
+        {
+          timeout: 10_000,
+        },
+      );
       await otherPage
         .getByTestId("npc-catalog-table")
         .locator("tr", { hasText: npcName })
@@ -118,7 +149,9 @@ test.describe("US5: share an actor, copy it independently, then revoke", () => {
       await otherPage.getByRole("button", { name: "Edit" }).click();
       await otherPage.locator("#actor-label").fill("Renamed Copy");
       await otherPage.getByRole("button", { name: "Save" }).click();
-      await expect(otherPage.getByText("Saved.")).toBeVisible({ timeout: 10_000 });
+      await expect(otherPage.getByText("Saved.")).toBeVisible({
+        timeout: 10_000,
+      });
     } finally {
       await otherContext.close();
     }
@@ -131,11 +164,15 @@ test.describe("US5: share an actor, copy it independently, then revoke", () => {
     // reachable in the same session that created it. It must no longer
     // resolve for anyone afterward.
     await page.getByRole("button", { name: "Revoke link" }).click();
-    await expect(page.getByText("Share link revoked.")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Share link revoked.")).toBeVisible({
+      timeout: 10_000,
+    });
 
     // Editing the copy must not have touched the source actor.
     await page.goto(`/world/${sourceWorldId}/actor/${actorId}/view`);
-    await expect(page.getByRole("heading", { name: npcName })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: npcName })).toBeVisible({
+      timeout: 10_000,
+    });
 
     const laterContext = await browser.newContext();
     const laterPage = await laterContext.newPage();
@@ -143,7 +180,9 @@ test.describe("US5: share an actor, copy it independently, then revoke", () => {
       await register(laterPage, freshCredentials("e2eshareafter"));
       await laterPage.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
       await laterPage.goto(new URL(shareUrl).pathname);
-      await expect(laterPage.getByText("no longer available")).toBeVisible({ timeout: 10_000 });
+      await expect(laterPage.getByText("no longer available")).toBeVisible({
+        timeout: 10_000,
+      });
     } finally {
       await laterContext.close();
     }
@@ -154,7 +193,10 @@ test.describe("US5: share an actor, copy it independently, then revoke", () => {
     browser,
   }) => {
     const npcName = `Bo Jangles ${uniqueSuffix()}`;
-    const sourceWorldId = await registerAndCreateWorld(page, `E2E Share NoDest ${uniqueSuffix()}`);
+    const sourceWorldId = await registerAndCreateWorld(
+      page,
+      `E2E Share NoDest ${uniqueSuffix()}`,
+    );
     await createNpcAndOpenEdit(page, sourceWorldId, npcName);
     await page.getByRole("button", { name: "Share" }).click();
     const shareUrl = await page.getByTestId("share-link-input").inputValue();
@@ -166,12 +208,16 @@ test.describe("US5: share an actor, copy it independently, then revoke", () => {
       await outsiderPage.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
       // Deliberately does not create a world — has zero DM-level access anywhere.
       await outsiderPage.goto(new URL(shareUrl).pathname);
-      await expect(outsiderPage.getByRole("heading", { name: npcName })).toBeVisible({
+      await expect(
+        outsiderPage.getByRole("heading", { name: npcName }),
+      ).toBeVisible({
         timeout: 10_000,
       });
       await outsiderPage.getByRole("button", { name: "Copy to World" }).click();
       await expect(
-        outsiderPage.getByText("You don't have DM-level access to any world yet"),
+        outsiderPage.getByText(
+          "You don't have DM-level access to any world yet",
+        ),
       ).toBeVisible({ timeout: 10_000 });
     } finally {
       await outsiderContext.close();
