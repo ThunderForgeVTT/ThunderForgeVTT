@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import type { WorldProbe } from "../src/engine/world/probe";
 import path from "node:path";
 import {
   launchSceneByName,
@@ -8,6 +9,12 @@ import {
   waitForWallsLoaded,
   type GmToolId,
 } from "./fixtures/helpers";
+
+declare global {
+  interface Window {
+    __worldProbe?: WorldProbe;
+  }
+}
 
 /**
  * End-to-end coverage for the native canvas authoring feature
@@ -723,5 +730,167 @@ test.describe("Hand-drawn shape authoring (US2)", () => {
     // settle is what gives the refetch its chance to land.
     await clickCanvasAt(page, 0, 0);
     await expect(page.getByText("Selected shape")).toHaveCount(0);
+  });
+});
+
+test.describe("Switching tools never authors (spec 031 FR-040, SC-008)", () => {
+  test("no ordered pair of tool switches places anything", async ({ page }) => {
+    test.setTimeout(240_000);
+
+    // The defect this locks down: every engine authoring system used to be
+    // gated on `IsGameMaster` alone, so all of them were armed at once and a
+    // single canvas click was offered to each in turn. Switching tools placed
+    // a stray marker — for every tool *except* text, which is the one sub-tool
+    // handled in the DOM and therefore the only one that stops listening when
+    // its panel unmounts.
+    //
+    // Every *ordered* pair, not just the pair someone happened to notice. The
+    // asymmetry is the whole lesson of this bug: it was reported as "changing
+    // to the light tool", and the cause had nothing to do with lights.
+    await registerAndCreateWorld(page, `E2E Tool Switch ${uniqueSuffix()}`);
+    await createScene(page, "Tool Switch Scene");
+    await waitForEngineReady(page);
+
+    const counts = async () =>
+      page.evaluate(() => {
+        const state = window.__worldProbe?.state();
+        return state
+          ? {
+              tokens: state.counts.tokens ?? 0,
+              walls: state.counts.walls ?? 0,
+              lights: state.counts.lights ?? 0,
+              shapes: state.counts.shapes ?? 0,
+            }
+          : null;
+      });
+
+    /**
+     * Click a tool in the rail, without assuming it opens a panel.
+     *
+     * `openGmTool` waits for that tool's flyout, which is right for tools that
+     * have one — and Select deliberately does not. It "renders no flyout: a
+     * panel open by default would cover 256px of map on every load to say you
+     * may now click things". So the shared helper cannot express "arm Select",
+     * and this test needs exactly that, for every tool including Select.
+     */
+    const armTool = async (tool: GmToolId) => {
+      await page.getByTestId(`gm-tool-${tool}`).click();
+      await expect(page.getByTestId(`gm-tool-${tool}`)).toHaveAttribute(
+        "aria-expanded",
+        /.*/,
+      );
+    };
+
+    const before = await counts();
+    expect(before, "the world probe should be available in a dev build").not.toBeNull();
+
+    const tools: GmToolId[] = [
+      "select",
+      "walls",
+      "lights",
+      "shapes",
+      "tokens",
+      "interactions",
+    ];
+
+    for (const from of tools) {
+      for (const to of tools) {
+        if (from === to) continue;
+        await armTool(from);
+        await armTool(to);
+
+        const after = await counts();
+        expect(
+          after,
+          `switching from ${from} to ${to} changed what is on the scene`,
+        ).toEqual(before);
+      }
+    }
+  });
+});
+
+test.describe("Placing a token from the actors pane (spec 031 US1)", () => {
+  test("a cancelled placement leaves nothing behind", async ({ page }) => {
+    test.setTimeout(180_000);
+
+    // FR-005 and the reason placement is a state rather than a flag: leaving
+    // the carry has exactly one exit, so "no trace" is guaranteed in one place
+    // instead of at every path out.
+    //
+    // Driven through the engine boundary rather than the actors pane, because
+    // the behaviour under test is the engine's. Whether a button is wired to
+    // it is a different question, and mixing the two would leave a failure
+    // ambiguous between them.
+    await registerAndCreateWorld(page, `E2E Place Cancel ${uniqueSuffix()}`);
+    await createScene(page, "Placement Scene");
+    await waitForEngineReady(page);
+
+    const tokenCount = async () =>
+      page.evaluate(() => window.__worldProbe?.state().counts.tokens ?? -1);
+
+    const before = await tokenCount();
+    expect(before, "the world probe should be available in a dev build").toBeGreaterThanOrEqual(0);
+
+    const began = await page.evaluate(async () => {
+      const bevy = (await import(
+        /* @vite-ignore */ "/src/engine/bevy/index.ts"
+      )) as typeof import("../src/engine/bevy/index");
+      return bevy.beginTokenPlacement("00000000-0000-0000-0000-00000000abcd");
+    });
+    expect(began, "the engine should accept a placement request").toBe(true);
+
+    // Escape is the user-facing cancel; the engine treats a chrome-side cancel
+    // identically, and both run the same OnExit.
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(500);
+
+    expect(
+      await tokenCount(),
+      "a cancelled placement must not create a token",
+    ).toBe(before);
+  });
+
+  test("the Select tool's filter is remembered, and says when it selects nothing", async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+
+    // FR-009 and FR-010, plus the edge case: a filter that excludes everything
+    // is legitimate and invisible, so the interface has to say so — including
+    // when the menu is collapsed, which is the one combination with nothing on
+    // screen to explain the silence.
+    await registerAndCreateWorld(page, `E2E Select Filter ${uniqueSuffix()}`);
+    await createScene(page, "Filter Scene");
+    await waitForEngineReady(page);
+
+    // `openGmTool`, not a bare click: the rail is a toggle and Select is open
+    // by default, so clicking it *closes* the panel this test needs. The
+    // helper checks first, which is exactly why it exists.
+    //
+    // It also works for Select now, where it did not before: the helper waits
+    // for `gm-tool-panel-select`, which only started existing when Select
+    // gained this filter menu.
+    await openGmTool(page, "select");
+    await expect(page.getByTestId("selection-filter")).toBeVisible();
+
+    for (const kind of ["tokens", "walls", "lights", "shapes"]) {
+      await page.getByTestId(`selection-filter-${kind}`).uncheck();
+    }
+    await expect(page.getByTestId("selection-filter-empty")).toBeVisible();
+
+    await page.getByTestId("selection-filter-collapse").click();
+    const collapsed = page.getByTestId("selection-filter-expand");
+    await expect(collapsed).toBeVisible();
+    await expect(collapsed).toHaveAttribute("data-selects-nothing", "true");
+
+    // Survives a reload: the preference is per-person, not per-visit.
+    await page.reload();
+    await waitForEngineReady(page);
+    // Collapsed state persisted, so the panel does not reopen — the collapsed
+    // control is what should be showing, carrying the warning.
+    await expect(page.getByTestId("selection-filter-expand")).toHaveAttribute(
+      "data-selects-nothing",
+      "true",
+    );
   });
 });

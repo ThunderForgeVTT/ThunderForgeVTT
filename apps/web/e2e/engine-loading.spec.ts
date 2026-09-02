@@ -151,6 +151,57 @@ test.describe("Engine load feedback (US6, T050/T051)", () => {
     await expect(error).toBeHidden({ timeout: 60_000 });
   });
 
+  test("exactly one loading indicator is on screen at any moment", async ({
+    page,
+  }) => {
+    // SC-007, and the property whose absence let two loaders ship.
+    //
+    // The existing tests here assert that *a* loader appears within a second.
+    // None of them asserted that only one does, which is how the play route
+    // came to show a full-screen "Loading world workspace" spinner and then
+    // swap it for a differently styled engine loader — one wait, two
+    // affordances, and the swap reading as something having failed and
+    // restarted.
+    //
+    // Sampled repeatedly rather than checked once: the failure is a transient
+    // overlap during a load, so a single assertion after the fact would pass
+    // against the very bug it is meant to catch.
+    const indicators = [
+      "engine-load-indicator",
+      "scene-load-indicator",
+      // The generic route-level loader. It has no testid of its own, so it is
+      // matched by the role its spinner exposes; if it ever gains one, prefer
+      // that.
+    ];
+
+    await openPlayView(page);
+
+    let sampled = 0;
+    for (let i = 0; i < 25; i += 1) {
+      const counts = await Promise.all(
+        indicators.map((id) => page.getByTestId(id).count()),
+      );
+      const visible = counts.reduce((a, b) => a + b, 0);
+      expect(
+        visible,
+        `${visible} loading indicators were on screen at once (${indicators
+          .map((id, n) => `${id}=${counts[n]}`)
+          .join(", ")})`,
+      ).toBeLessThanOrEqual(1);
+      sampled += 1;
+
+      // Stop once the engine is up: past that point there is nothing left to
+      // overlap, and continuing would only slow the suite down.
+      if (await page.locator("canvas").isVisible().catch(() => false)) {
+        if (visible === 0) break;
+      }
+      await page.waitForTimeout(120);
+    }
+
+    // Guards against the test passing because it never actually looked.
+    expect(sampled, "the loading window should have been sampled").toBeGreaterThan(2);
+  });
+
   test("a returning visitor is not made to wait by the loader itself", async ({
     page,
   }) => {

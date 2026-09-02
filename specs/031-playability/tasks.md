@@ -70,10 +70,10 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 **Independent Test**: Each defect has a direct reproduction; fixed when the reproduction no longer occurs.
 
 - [X] T015 [US9] Confirm the stray-marker cause before fixing — check whether the marker lands at the tool *button's* screen position rather than the pointer's last map position (research R6), and record the finding in `specs/031-playability/research.md`
-- [ ] T016 [US9] Make entering an authoring mode inert on top of T008 so no tool switch places content, in `src/engine/src/plugins/` (FR-040, FR-040a)
+- [X] T016 [US9] Make entering an authoring mode inert on top of T008 so no tool switch places content, in `src/engine/src/plugins/` (FR-040, FR-040a)
 - [ ] T017 [US9] Ensure a gesture in flight — a drag or a carried placement — cannot complete under a newly entered mode's rules, in `src/engine/src/plugins/` (spec edge case)
-- [ ] T018 [P] [US9] Remove the overlapping loader on the play route so exactly one indicator shows: reconcile the route Suspense fallback in `apps/web/src/routes/AppRoutes.tsx` with `engine-load-indicator` in `apps/web/src/pages/world/WorldPage.tsx` (FR-041, research R9)
-- [ ] T019 [P] [US9] Guard `apps/web/src/hooks/useActorSystemData.ts` so no query is issued without an identifier, removing the repeated `Failed to parse "UUID": invalid length: found 0` (FR-043)
+- [X] T018 [P] [US9] Remove the overlapping loader on the play route so exactly one indicator shows: reconcile the route Suspense fallback in `apps/web/src/routes/AppRoutes.tsx` with `engine-load-indicator` in `apps/web/src/pages/world/WorldPage.tsx` (FR-041, research R9)
+- [X] T019 [P] [US9] Guard `apps/web/src/hooks/useActorSystemData.ts` so no query is issued without an identifier, removing the repeated `Failed to parse "UUID": invalid length: found 0` (FR-043)
 - [ ] T020 [US9] Report unsupported client storage plainly instead of an empty cache — surface `CacheError::Unsupported` from `crates/thunderforge-cache-browser/` through to the diagnostics panel in `apps/web/src/components/` (FR-042, research R7, depends on T007)
 - [ ] T021 [P] [US9] Add an e2e assertion that exactly one loading indicator is visible at any moment during world load, in `apps/web/e2e/engine-loading.spec.ts` (SC-007)
 - [ ] T022 [P] [US9] Add an e2e assertion that switching between every *ordered* pair of tools places nothing, including text as the control case, in `apps/web/e2e/canvas-authoring.spec.ts` (SC-008)
@@ -242,6 +242,66 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 - [ ] T079 [P] Update `docs/adrs/README.md` index rows for every ADR added in Phase 1
 - [ ] T080 Run `pnpm verify` (rustfmt, clippy, prettier, eslint) and fix what it reports **in the code this feature added**. Keep it to that: a repo-wide lint remediation folded into a feature phase buries the feature work, and every line then has to be read to be sure nothing behavioural slipped in. Wide passes get their own commit. `pnpm verify:fix` rewrites what can be rewritten mechanically
 - [ ] T081 Confirm the release engine bundle size delta from T001 is acceptable and record it
+
+---
+
+## Engine batches — pay the wasm rebuild once, not twenty times
+
+A Rust change costs a release wasm rebuild (~7 minutes) before any end-to-end
+run can see it; a TypeScript change costs nothing. Twenty of the remaining
+tasks touch `src/engine/` or `crates/thunderforge-canvas-core/`, and verifying
+them one at a time would spend over two hours rebuilding.
+
+So the engine work is grouped into four batches. Each is a coherent unit that
+can be written against `cargo check`, then verified in **one** run of the specs
+named against it. The web, server and e2e tasks around them carry no rebuild
+cost and can be done in the gaps while a batch builds.
+
+**This is a scheduling structure, not a change to dependencies** — the phase
+dependencies below still hold, and a batch must not start before its
+prerequisites.
+
+### Batch A — modes and gestures (after Phase 3's gating)
+
+T017, T032d, T032e. Everything about a mode transition interrupting or refusing
+work in progress. Small, and it completes the story T016 began.
+
+**Verify with**: `canvas-authoring`, `map-editor-tooling`, `token-authoring`.
+
+### Batch B — placement and selection (US1, the MVP)
+
+T023, T024, T025, T026, T027, plus T059 (apply snapping to wall and light
+placement) since it is the same input path and the same rebuild.
+
+The largest batch and the one with the most new surface. T063 (canvas
+right-click) joins it because research R6 warns that context-menu suppression
+must not deepen the input-routing problem — it wants the same eyes and the same
+verification run as placement.
+
+**Verify with**: `canvas-authoring`, `token-authoring`, plus the new placement
+coverage from T034.
+
+### Batch C — interactions on the map (US3)
+
+T039, T041, T045, T046. The lore marker, the contributed `item.pickup` effect,
+the optimistic removal and its restore, and reporting an interactive whose
+subsystem is absent.
+
+**Verify with**: the new US3 coverage (T047) and `interactive-approval`.
+
+### Batch D — scene transition and wall primitives (US4, US6)
+
+T053, T054, T057, T060, T061. The scene-transition state machine with its
+unload/load hooks, the native retention predicate, and room/door primitives.
+
+**Verify with**: `canvas-authoring`, `world-cache-isolated`, and the US4
+coverage.
+
+### Not in a batch
+
+T058 (the snapping *setting*) is web-side and only needs the engine to already
+honour snapping, which Batch B delivers. The remaining 48 tasks touch web,
+server or e2e only and can be verified without a rebuild at all.
 
 ---
 
