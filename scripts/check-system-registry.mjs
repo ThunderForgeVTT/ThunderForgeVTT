@@ -63,7 +63,9 @@ function bundledSystemIds() {
 /**
  * Shared server code. Pack crates are not shared code — a pack naming itself
  * is the whole point — and neither are tests, which have to name a system to
- * assert anything about it.
+ * assert anything about it. Tests reach this codebase two ways: inline
+ * `#[cfg(test)]` modules, stripped below, and sibling `*_tests.rs` files
+ * wired with `#[path]`, excluded here.
  */
 function sharedServerSources() {
   const root = path.join(repoRoot, "src", "server", "src");
@@ -79,13 +81,22 @@ function sharedServerSources() {
     }
   };
   walk(root);
-  return out.filter(
-    (file) =>
+  return out.filter((file) => {
+    const name = path.basename(file);
+    return (
       // The linkage module, exempt for the reason in its own header.
-      path.basename(file) !== "system_packs.rs" &&
+      name !== "system_packs.rs" &&
       // Test-support fixtures have to name systems to build one.
-      path.basename(file) !== "test_support.rs",
-  );
+      name !== "test_support.rs" &&
+      // This crate keeps some test modules in sibling `*_tests.rs` files
+      // wired with `#[path]` — `interaction_tests.rs`, `system_rules_tests.rs`.
+      // They carry no `#[cfg(test)]` marker of their own, so the stripper
+      // below cannot see them, but they are tests and a test asserting "a
+      // Genie actor derives its Wish Points" has to name Genie. Same
+      // exemption as an inline test module, different file layout.
+      !name.endsWith("_tests.rs")
+    );
+  });
 }
 
 /**

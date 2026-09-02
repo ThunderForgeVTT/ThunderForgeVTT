@@ -21,8 +21,27 @@ use uuid::Uuid;
 use thunderforge_canvas_core::attributes::{AttributeDeclaration, attributes_from};
 use thunderforge_canvas_core::movement_budget::{MovementDeclaration, speeds_from};
 
+use thunderforge_canvas_core::system_rules::{DeclaredValueKind, Origin};
+
 use crate::attributes::{attribute_declarations_for_system, movement_declarations_for_system};
+use crate::declared_values::{ActorSlots, declared_values_for_actor};
 use crate::graphql::{app_state, authenticated_user};
+
+/// A declared value as text.
+///
+/// One rendering, here, rather than each surface choosing its own — two
+/// clients formatting the same number differently is the sort of difference
+/// nobody notices until a Game Master and a player are reading the same sheet
+/// and disagreeing about it.
+fn render(value: &DeclaredValueKind) -> String {
+    match value {
+        DeclaredValueKind::Integer(v) => v.to_string(),
+        DeclaredValueKind::Number(v) => v.to_string(),
+        DeclaredValueKind::Text(v) => v.clone(),
+        DeclaredValueKind::Boolean(v) => v.to_string(),
+        DeclaredValueKind::List(items) => items.join(", "),
+    }
+}
 
 /// One attribute score.
 #[derive(SimpleObject, Debug, Clone)]
@@ -46,11 +65,45 @@ pub struct GraphQLSpeed {
     pub value: f64,
 }
 
+/// Whether a value was stored or computed.
+///
+/// Sent because a surface has to know which numbers a player may edit. A 5e
+/// Strength score is typed in; its modifier is not, and a text box over a
+/// computed value invites the two to disagree.
+#[derive(async_graphql::Enum, Copy, Clone, Debug, PartialEq, Eq)]
+pub enum GraphQLValueOrigin {
+    Stored,
+    Derived,
+}
+
+/// One value a system publishes about an actor.
+///
+/// Superset of [`GraphQLAttribute`]: it carries derived values too, and says
+/// which is which. The older field stays because it is what the canvas and
+/// the existing panels read, and moving them is not this increment's job.
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLDeclaredValue {
+    /// The system's own identifier — `might`, `strength`, `wishPointsForLevel`.
+    pub id: String,
+    pub label: String,
+    pub abbreviation: Option<String>,
+    /// Rendered as text, because systems do not agree on the type of a value:
+    /// a score is an integer, a Fate ladder rung is a word, a proficiency is
+    /// a flag. Sending each as itself would need a union the layout layer
+    /// would have to branch on, and branching on a value's type is the first
+    /// step towards knowing what it means.
+    pub value: String,
+    pub origin: GraphQLValueOrigin,
+}
+
 /// What a token's sheet says about it.
 #[derive(SimpleObject, Debug, Clone)]
 pub struct GraphQLTokenAttributes {
     pub token_id: Uuid,
     pub attributes: Vec<GraphQLAttribute>,
+    /// Everything the system publishes — the attributes above plus whatever
+    /// it derives — each saying where it came from.
+    pub values: Vec<GraphQLDeclaredValue>,
     /// Only the movement types this creature actually has.
     ///
     /// An absent type means it cannot move that way at all, which is a
@@ -138,16 +191,41 @@ impl TokenAttributesQuery {
             let actor_ids: Vec<Uuid> = rows.iter().filter_map(|(_, a)| *a).collect();
 
             // One read for the whole scene rather than one per token.
-            let stored: HashMap<Uuid, serde_json::Value> = world_actor_system_data::table
+            // Every slot, not only `ability_data`: a system's rules read from
+            // wherever their inputs live, and Genie's by-level Wish Points
+            // rule reads a `level` that sits in the trait slot.
+            type SlotRow = (
+                Uuid,
+                Option<serde_json::Value>,
+                Option<serde_json::Value>,
+                Option<serde_json::Value>,
+                Option<serde_json::Value>,
+            );
+            let slots: HashMap<Uuid, ActorSlots> = world_actor_system_data::table
                 .filter(world_actor_system_data::actor_id.eq_any(&actor_ids))
                 .select((
                     world_actor_system_data::actor_id,
                     world_actor_system_data::ability_data,
+                    world_actor_system_data::resource_data,
+                    world_actor_system_data::proficiency_data,
+                    world_actor_system_data::trait_data,
                 ))
-                .load::<(Uuid, Option<serde_json::Value>)>(&mut conn)
+                .load::<SlotRow>(&mut conn)
                 .unwrap_or_default()
                 .into_iter()
-                .filter_map(|(id, data)| data.map(|d| (id, d)))
+                .map(
+                    |(id, ability_data, resource_data, proficiency_data, trait_data)| {
+                        (
+                            id,
+                            ActorSlots {
+                                ability_data,
+                                resource_data,
+                                proficiency_data,
+                                trait_data,
+                            },
+                        )
+                    },
+                )
                 .collect();
 
             let mut out = Vec::new();
@@ -156,13 +234,20 @@ impl TokenAttributesQuery {
                 let Some(actor_id) = actor_id else {
                     continue;
                 };
-                let Some(data) = stored.get(&actor_id) else {
+                let Some(slot) = slots.get(&actor_id) else {
+                    continue;
+                };
+                let Some(data) = slot.ability_data.as_ref() else {
                     continue;
                 };
 
                 let resolved = attributes_from(data, &declarations);
                 let speeds = speeds_from(data, &movement);
-                if resolved.is_empty() && speeds.is_empty() {
+                let values = match system_id.as_deref() {
+                    Some(id) => declared_values_for_actor(&systems_dir, id, slot),
+                    None => Vec::new(),
+                };
+                if resolved.is_empty() && speeds.is_empty() && values.is_empty() {
                     continue;
                 }
 
@@ -192,6 +277,19 @@ impl TokenAttributesQuery {
                             label: a.label,
                             abbreviation: a.abbreviation,
                             value: a.value,
+                        })
+                        .collect(),
+                    values: values
+                        .into_iter()
+                        .map(|value| GraphQLDeclaredValue {
+                            id: value.id,
+                            label: value.label,
+                            abbreviation: value.abbreviation,
+                            value: render(&value.value),
+                            origin: match value.origin {
+                                Origin::Stored => GraphQLValueOrigin::Stored,
+                                Origin::Derived => GraphQLValueOrigin::Derived,
+                            },
                         })
                         .collect(),
                     speeds: labelled,

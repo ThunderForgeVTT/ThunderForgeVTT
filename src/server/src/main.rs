@@ -18,6 +18,7 @@ mod auth_middleware;
 mod canvas_assets_serve;
 mod config;
 mod db_types;
+mod declared_values; // Spec 032: an actor's values, stored and derived, in one set
 mod door_effects; // Spec 030: doors, as a contributor to the interaction seam
 mod errors;
 mod graphql;
