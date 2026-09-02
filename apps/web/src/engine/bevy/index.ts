@@ -326,6 +326,68 @@ function asOpenLore(event: unknown): OpenLoreEvent | null {
   return candidate.type === "openLore" ? (event as OpenLoreEvent) : null;
 }
 
+/** A player asked to pick a placed item up. Chrome asks the server. */
+export interface PickUpItemEvent {
+  type: "pickUpItem";
+  interactiveId: string;
+  itemId: string;
+  /** The scene token to remove once the server agrees. */
+  subjectRef?: string;
+}
+
+function asPickUpItem(event: unknown): PickUpItemEvent | null {
+  const candidate = event as { type?: unknown };
+  return candidate.type === "pickUpItem" ? (event as PickUpItemEvent) : null;
+}
+
+/**
+ * An interactive whose effect this build cannot perform.
+ *
+ * ADR-054: absence is detected *before* dispatch, by comparing the stored
+ * effect id against the assembled registry — never by noticing that a
+ * fire-and-forget dispatch did nothing. A Game Master whose build lacks the
+ * subsystem has a switch they cannot use, not a scene that failed to load.
+ */
+export interface InteractionUnavailableEvent {
+  type: "interactionUnavailable";
+  interactiveId: string;
+  effectId: string;
+}
+
+function asInteractionUnavailable(
+  event: unknown,
+): InteractionUnavailableEvent | null {
+  const candidate = event as { type?: unknown };
+  return candidate.type === "interactionUnavailable"
+    ? (event as InteractionUnavailableEvent)
+    : null;
+}
+
+const pickUpItemListeners = new Set<(event: PickUpItemEvent) => void>();
+const unavailableListeners = new Set<
+  (event: InteractionUnavailableEvent) => void
+>();
+
+/** Subscribe to pickup requests. Returns the unsubscribe. */
+export function onPickUpItem(
+  listener: (event: PickUpItemEvent) => void,
+): () => void {
+  pickUpItemListeners.add(listener);
+  return () => {
+    pickUpItemListeners.delete(listener);
+  };
+}
+
+/** Subscribe to unavailable-interaction reports. Returns the unsubscribe. */
+export function onInteractionUnavailable(
+  listener: (event: InteractionUnavailableEvent) => void,
+): () => void {
+  unavailableListeners.add(listener);
+  return () => {
+    unavailableListeners.delete(listener);
+  };
+}
+
 const openLoreListeners = new Set<(event: OpenLoreEvent) => void>();
 
 /**
@@ -434,6 +496,28 @@ export async function bindWorldStore(worldStore: WorldStore): Promise<void> {
         const triggered = asInteractionTriggered(parsed);
         if (triggered) {
           reportInteractionTriggered(triggered);
+          return;
+        }
+
+        // Nor is a pickup request: it asks the server for a change, and the
+        // engine has removed nothing. Dispatching it would put a command
+        // nothing reduces into the store — the same reason lore-open and
+        // trigger detection are routed out above.
+        const pickUp = asPickUpItem(parsed);
+        if (pickUp) {
+          for (const listener of pickUpItemListeners) {
+            listener(pickUp);
+          }
+          return;
+        }
+
+        // Nor is a report that this build cannot perform an effect. It is
+        // something to tell the Game Master, not a change to the world.
+        const unavailable = asInteractionUnavailable(parsed);
+        if (unavailable) {
+          for (const listener of unavailableListeners) {
+            listener(unavailable);
+          }
           return;
         }
 

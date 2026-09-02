@@ -35,6 +35,12 @@ impl Plugin for LightingPlugin {
             // be independently addable (Principle II).
             .add_message::<crate::plugins::interaction::InteractionActivated>();
 
+        // Declared beside the system that performs it — see `plugins/wall.rs`.
+        crate::plugins::interaction::contribute(
+            app,
+            thunderforge_canvas_core::lighting::interaction_effects(),
+        );
+
         init_lighting_systems_resources(app);
 
         app.add_systems(OnExit(AuthoringMode::Lights), abandon_light_gesture);

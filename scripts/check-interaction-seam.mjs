@@ -47,6 +47,20 @@ const GUARDED = "src/engine/src/plugins/interaction.rs";
  *
  * `sound` is here although no audio subsystem exists — which is the point.
  * When one is built it contributes `audio.play` and this file does not change.
+ *
+ * # Why `item` is absent, though item is a contributor
+ *
+ * It cannot be checked this way. `impl Iterator<Item = &Interactive>` is the
+ * ordinary Rust spelling of an associated type, appears twice in the guarded
+ * file, and is not a mention of the item subsystem at all. Unlike `highlight`
+ * it cannot be reworded, so adding it would mean either a permanently failing
+ * check or an exception carved into the matcher — and an exception is the thing
+ * this file's header says makes a check untrustworthy.
+ *
+ * The seam is still guarded for item by the same means as everything else: the
+ * core dispatches by effect id and `item.pickup` is contributed from
+ * `thunderforge-canvas-core`, so naming it here would require a deliberate
+ * edit that a reviewer would see.
  */
 const FORBIDDEN = ["light", "door", "sound"];
 

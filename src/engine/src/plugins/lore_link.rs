@@ -24,7 +24,7 @@ use bevy::prelude::*;
 use thunderforge_canvas_core::lore_link::{OPEN, entry_of};
 
 use crate::emit_event;
-use crate::plugins::interaction::InteractionActivated;
+use crate::plugins::interaction::{InteractionActivated, contribute};
 
 pub struct LoreLinkPlugin;
 
@@ -35,6 +35,11 @@ impl Plugin for LoreLinkPlugin {
         // seam would not be independently addable (Principle II).
         app.add_message::<InteractionActivated>()
             .add_systems(Update, open_requested_entries);
+
+        // Declared next to the system that handles it, so the two are added
+        // and removed together — what the seam is asked before dispatch is
+        // exactly what this build can perform.
+        contribute(app, thunderforge_canvas_core::lore_link::effects());
     }
 }
 

@@ -19,6 +19,7 @@ pub mod camera;
 pub mod frame_trace;
 pub mod grid;
 pub mod interaction;
+pub mod item;
 pub mod lighting;
 pub mod lore_link;
 pub mod measure;

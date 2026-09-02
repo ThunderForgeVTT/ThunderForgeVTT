@@ -938,7 +938,9 @@ pub async fn create_puzzle_clock_impl(
 /// `"triggering_actor"`-mode rows (FR-006a); when `None`, those rows
 /// fall back to the same whole-party split every `"whole_party"` row
 /// uses. Returns the number of reward rows granted (for the `world_events`
-/// payload's `rewards_granted` field).
+/// payload's `rewards_granted` field). `acting_user_id` is the GM whose
+/// clock advance triggered the grant — the person accountable for the
+/// inventory rows it writes.
 fn grant_puzzle_clock_rewards(
     conn: &mut PgConnection,
     clock_id: Uuid,
@@ -947,6 +949,7 @@ fn grant_puzzle_clock_rewards(
     old_segments: i32,
     new_segments: i32,
     actor_id: Option<Uuid>,
+    acting_user_id: Uuid,
 ) -> Result<i32, diesel::result::Error> {
     let due_rewards = world_genie_puzzle_clock_rewards::table
         .filter(world_genie_puzzle_clock_rewards::clock_id.eq(clock_id))
@@ -1019,7 +1022,13 @@ fn grant_puzzle_clock_rewards(
                 // reward means "everyone gets one," not "split one item
                 // between everyone").
                 for recipient_id in &recipients {
-                    grant_item_to_actor_in_tx(conn, *recipient_id, item_id, quantity)?;
+                    grant_item_to_actor_in_tx(
+                        conn,
+                        *recipient_id,
+                        item_id,
+                        quantity,
+                        acting_user_id,
+                    )?;
                 }
             }
         }
@@ -1039,12 +1048,15 @@ fn grant_puzzle_clock_rewards(
 /// already-open transaction (mirrors `add_item_to_inventory_impl`'s
 /// upsert query — that function owns its own connection/spawn_blocking
 /// and can't be called from inside this transaction closure, so the
-/// core upsert is duplicated here rather than reused).
+/// core upsert is duplicated here rather than reused). `acting_user_id` is
+/// attributed as `created_by` on a new row and `updated_by` on every write,
+/// matching `upsert_inventory_entry`.
 fn grant_item_to_actor_in_tx(
     conn: &mut PgConnection,
     actor_id: Uuid,
     item_id: Uuid,
     quantity: i32,
+    acting_user_id: Uuid,
 ) -> Result<(), diesel::result::Error> {
     let item_name = world_items::table
         .filter(world_items::id.eq(item_id))
@@ -1057,6 +1069,8 @@ fn grant_item_to_actor_in_tx(
             world_actor_inventory::item_id.eq(item_id),
             world_actor_inventory::item_name_snapshot.eq(item_name.clone()),
             world_actor_inventory::quantity.eq(quantity),
+            world_actor_inventory::created_by.eq(acting_user_id),
+            world_actor_inventory::updated_by.eq(acting_user_id),
         ))
         .on_conflict((
             world_actor_inventory::actor_id,
@@ -1067,6 +1081,8 @@ fn grant_item_to_actor_in_tx(
             world_actor_inventory::quantity.eq(world_actor_inventory::quantity + quantity),
             world_actor_inventory::item_name_snapshot.eq(item_name),
             world_actor_inventory::updated_at.eq(Utc::now().naive_utc()),
+            // created_by stays with whoever first stocked the row.
+            world_actor_inventory::updated_by.eq(acting_user_id),
         ))
         .execute(conn)?;
     Ok(())
@@ -1163,6 +1179,7 @@ pub async fn advance_puzzle_clock_impl(
                 old_segments,
                 new_segments,
                 actor_id,
+                user_id,
             )?;
 
             let _ = record_world_event(
@@ -1996,6 +2013,7 @@ pub async fn purchase_from_shop_impl(
                 .set((
                     world_actor_inventory::quantity.eq(world_actor_inventory::quantity - 1),
                     world_actor_inventory::updated_at.eq(Utc::now().naive_utc()),
+                    world_actor_inventory::updated_by.eq(user_id),
                 ))
                 .execute(conn)?;
 
@@ -2049,6 +2067,7 @@ pub async fn purchase_from_shop_impl(
                         world_actor_inventory::quantity
                             .eq(world_actor_inventory::quantity - required_qty),
                         world_actor_inventory::updated_at.eq(Utc::now().naive_utc()),
+                        world_actor_inventory::updated_by.eq(user_id),
                     ))
                     .execute(conn)?;
                     grant_item_to_actor_in_tx(
@@ -2056,11 +2075,12 @@ pub async fn purchase_from_shop_impl(
                         listing.actor_id,
                         required_item_id,
                         required_qty,
+                        user_id,
                     )?;
                 }
 
                 // Transfer the listed item to the buyer.
-                grant_item_to_actor_in_tx(conn, buyer_actor_id, listing.item_id, 1)?;
+                grant_item_to_actor_in_tx(conn, buyer_actor_id, listing.item_id, 1, user_id)?;
 
                 let _ = record_world_event(
                     conn,
@@ -3114,7 +3134,13 @@ mod tests {
         item_id
     }
 
-    fn stock_item(conn: &mut PgConnection, actor_id: Uuid, item_id: Uuid, quantity: i32) {
+    fn stock_item(
+        conn: &mut PgConnection,
+        actor_id: Uuid,
+        item_id: Uuid,
+        quantity: i32,
+        owner_id: Uuid,
+    ) {
         use crate::schema::world_actor_inventory;
         diesel::insert_into(world_actor_inventory::table)
             .values((
@@ -3122,6 +3148,8 @@ mod tests {
                 world_actor_inventory::item_id.eq(item_id),
                 world_actor_inventory::item_name_snapshot.eq("Test Item"),
                 world_actor_inventory::quantity.eq(quantity),
+                world_actor_inventory::created_by.eq(owner_id),
+                world_actor_inventory::updated_by.eq(owner_id),
             ))
             .execute(conn)
             .expect("failed to stock item");
@@ -3136,7 +3164,7 @@ mod tests {
         let npc = insert_test_actor(&mut conn, world_id, scene_id, owner_id);
         let buyer = insert_test_actor(&mut conn, world_id, scene_id, player_id);
         let item = insert_test_item(&mut conn, world_id, owner_id, "Rusty Lantern");
-        stock_item(&mut conn, npc, item, 1);
+        stock_item(&mut conn, npc, item, 1, owner_id);
         drop(conn);
 
         let listing = create_shop_listing_impl(
@@ -3205,7 +3233,7 @@ mod tests {
         let buyer = insert_test_actor(&mut conn, world_id, scene_id, player_id);
         let lantern = insert_test_item(&mut conn, world_id, owner_id, "Rusty Lantern");
         let flask = insert_test_item(&mut conn, world_id, owner_id, "Sealed Flask");
-        stock_item(&mut conn, npc, lantern, 1);
+        stock_item(&mut conn, npc, lantern, 1, owner_id);
         drop(conn);
 
         let listing = create_shop_listing_impl(
@@ -3231,7 +3259,7 @@ mod tests {
         );
 
         let mut conn = state.db_pool.get().unwrap();
-        stock_item(&mut conn, buyer, flask, 1);
+        stock_item(&mut conn, buyer, flask, 1, owner_id);
         drop(conn);
 
         purchase_from_shop_impl(&state, player_id, false, listing.id, buyer)
@@ -3271,7 +3299,7 @@ mod tests {
         let buyer_a = insert_test_actor(&mut conn, world_id, scene_id, player_id);
         let buyer_b = insert_test_actor(&mut conn, world_id, scene_id, player_two);
         let item = insert_test_item(&mut conn, world_id, owner_id, "Sole Survivor Blade");
-        stock_item(&mut conn, npc, item, 1);
+        stock_item(&mut conn, npc, item, 1, owner_id);
         drop(conn);
 
         let listing = create_shop_listing_impl(

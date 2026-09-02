@@ -1091,6 +1091,7 @@ pub fn start(canvas_selector: &str) {
         // addable and removable on its own, which is what FR-039 asks for and
         // what US7 tests.
         .add_plugins(plugins::InteractionPlugin)
+        .add_plugins(plugins::interaction_marker::InteractionMarkerPlugin)
         // Spec 030 US1: the first contributor. Registered *after* the
         // interaction plugin and depending on nothing in it beyond the
         // message type — deleting this line removes the effect and leaves
@@ -1100,6 +1101,13 @@ pub fn start(canvas_selector: &str) {
         // removed. Deleting this line and its file removes the capability and
         // changes nothing else — which is the whole claim.
         .add_plugins(plugins::SeamProbePlugin)
+        // Spec 031 US3: picking something up off the map. Another contributor
+        // and nothing more — one file, one system, one declaration.
+        .add_plugins(plugins::ItemPlugin)
+        // Spec 030 US6: travel requests. Declaration only; the request and the
+        // decision happen on the server and in the application, and this says
+        // so rather than letting the seam report a working effect absent.
+        .add_plugins(plugins::NavigationPlugin)
         // T040: light authoring (specs/001-bevy-canvas-authoring). Depends
         // on CanvasLayerPlugin (above) for the `CanvasLayers` resource, and
         // reads WallPlugin's `WallSet`/`is_visible` for occlusion.

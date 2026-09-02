@@ -63,36 +63,65 @@ pub async fn add_item_to_inventory_impl(
     let quantity = input.quantity;
 
     tokio::task::spawn_blocking(move || {
-        let item_name = world_items::table
-            .filter(world_items::id.eq(item_id))
-            .select(world_items::name)
-            .first::<String>(&mut conn)
-            .map_err(|_| "Item not found".to_string())?;
-
-        diesel::insert_into(world_actor_inventory::table)
-            .values((
-                world_actor_inventory::actor_id.eq(actor_id),
-                world_actor_inventory::item_id.eq(item_id),
-                world_actor_inventory::item_name_snapshot.eq(item_name.clone()),
-                world_actor_inventory::quantity.eq(quantity),
-            ))
-            .on_conflict((
-                world_actor_inventory::actor_id,
-                world_actor_inventory::item_id,
-            ))
-            .do_update()
-            .set((
-                world_actor_inventory::quantity.eq(world_actor_inventory::quantity + quantity),
-                world_actor_inventory::item_name_snapshot.eq(item_name),
-                world_actor_inventory::updated_at.eq(chrono::Utc::now().naive_utc()),
-            ))
-            .returning(ActorInventoryEntry::as_returning())
-            .get_result::<ActorInventoryEntry>(&mut conn)
-            .map_err(|e| format!("Failed to add item to inventory: {e}"))
+        upsert_inventory_entry(&mut conn, actor_id, item_id, quantity, user_id)
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(Error::new)
+}
+
+/// The one place an inventory entry is created or topped up.
+///
+/// Extracted from `add_item_to_inventory_impl` so spec 031's pickup can run
+/// the *same* write inside its own transaction (T043) rather than growing a
+/// second, subtly different path to the same table. It takes a connection
+/// rather than the pool precisely so a caller can enlist it in a transaction
+/// it already owns; the permission decision stays with the caller, because
+/// pickup and manual add answer "may you?" differently even though they write
+/// identically.
+///
+/// `acting_user_id` is the person the write is attributed to: it lands in
+/// `created_by` on a fresh row and in `updated_by` on every write, including
+/// the top-up, so "who put this here" stays distinguishable from "who last
+/// touched it".
+pub(crate) fn upsert_inventory_entry(
+    conn: &mut PgConnection,
+    actor_id: Uuid,
+    item_id: Uuid,
+    quantity: i32,
+    acting_user_id: Uuid,
+) -> Result<ActorInventoryEntry, String> {
+    let item_name = world_items::table
+        .filter(world_items::id.eq(item_id))
+        .select(world_items::name)
+        .first::<String>(conn)
+        .map_err(|_| "Item not found".to_string())?;
+
+    diesel::insert_into(world_actor_inventory::table)
+        .values((
+            world_actor_inventory::actor_id.eq(actor_id),
+            world_actor_inventory::item_id.eq(item_id),
+            world_actor_inventory::item_name_snapshot.eq(item_name.clone()),
+            world_actor_inventory::quantity.eq(quantity),
+            world_actor_inventory::created_by.eq(acting_user_id),
+            world_actor_inventory::updated_by.eq(acting_user_id),
+        ))
+        .on_conflict((
+            world_actor_inventory::actor_id,
+            world_actor_inventory::item_id,
+        ))
+        .do_update()
+        .set((
+            world_actor_inventory::quantity.eq(world_actor_inventory::quantity + quantity),
+            world_actor_inventory::item_name_snapshot.eq(item_name),
+            world_actor_inventory::updated_at.eq(chrono::Utc::now().naive_utc()),
+            // created_by is deliberately NOT touched on conflict: the row's
+            // author is whoever first stocked it, not whoever topped it up.
+            world_actor_inventory::updated_by.eq(acting_user_id),
+        ))
+        .returning(ActorInventoryEntry::as_returning())
+        .get_result::<ActorInventoryEntry>(conn)
+        .map_err(|e| format!("Failed to add item to inventory: {e}"))
 }
 
 /// Testable core of `InventoryMutation::adjust_inventory_quantity`. Sets
@@ -158,6 +187,7 @@ pub async fn adjust_inventory_quantity_impl(
             .set((
                 world_actor_inventory::quantity.eq(quantity),
                 world_actor_inventory::updated_at.eq(chrono::Utc::now().naive_utc()),
+                world_actor_inventory::updated_by.eq(user_id),
             ))
             .returning(ActorInventoryEntry::as_returning())
             .get_result::<ActorInventoryEntry>(&mut conn)
@@ -595,5 +625,127 @@ mod tests {
         assert_eq!(inventory.len(), 1);
         assert_eq!(inventory[0].item_name_snapshot, "Lamp of Minor Binding");
         assert_eq!(inventory[0].item_id, Some(item.id));
+    }
+
+    /// Constitution Principle III: every inventory write records who made
+    /// it. `created_by` answers "who put this here" and must NOT move when
+    /// someone else changes the row; `updated_by` answers "who last touched
+    /// it" and must.
+    #[tokio::test]
+    async fn inventory_writes_record_created_by_and_updated_by() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        insert_test_scene(&mut conn, world_id, owner_id);
+        let player_id = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world_id, player_id, "Player");
+        drop(conn);
+
+        let item = create_item_impl(
+            &state,
+            owner_id,
+            false,
+            CreateItemInput {
+                world_id,
+                name: "Rope, 50ft".to_string(),
+                description: None,
+            },
+        )
+        .await
+        .expect("DM should create item");
+
+        let actor = create_actor_impl(
+            &state,
+            owner_id,
+            false,
+            CreateActorInput {
+                world_id,
+                label: "Player Character".to_string(),
+                is_npc: false,
+                actor_type: None,
+                game_system_id: None,
+                description: None,
+            },
+        )
+        .await
+        .expect("DM should create actor");
+
+        let entry = add_item_to_inventory_impl(
+            &state,
+            owner_id,
+            false,
+            AddItemToInventoryInput {
+                actor_id: actor.id,
+                item_id: item.id,
+                quantity: 2,
+            },
+        )
+        .await
+        .expect("add should succeed");
+        assert_eq!(
+            entry.created_by,
+            Some(owner_id),
+            "a new inventory row must record its author"
+        );
+        assert_eq!(
+            entry.updated_by,
+            Some(owner_id),
+            "a new inventory row's last writer is its author"
+        );
+
+        crate::graphql::mutations_actor_permissions::set_actor_permission_impl(
+            &state,
+            owner_id,
+            false,
+            crate::graphql::mutations_actor_permissions::SetActorPermissionInput {
+                actor_id: actor.id,
+                user_id: player_id,
+                level: ActorPermissionLevel::Editor,
+            },
+        )
+        .await
+        .expect("DM should grant Editor on the actor");
+
+        let adjusted = adjust_inventory_quantity_impl(
+            &state,
+            player_id,
+            false,
+            AdjustInventoryQuantityInput {
+                inventory_entry_id: entry.id,
+                quantity: 7,
+            },
+        )
+        .await
+        .expect("Editor-on-actor should adjust the quantity")
+        .expect("a non-zero quantity keeps the row");
+        assert_eq!(adjusted.quantity, 7);
+        assert_eq!(
+            adjusted.created_by,
+            Some(owner_id),
+            "created_by must stay with whoever first stocked the row"
+        );
+        assert_eq!(
+            adjusted.updated_by,
+            Some(player_id),
+            "updated_by must name whoever last changed the row"
+        );
+
+        // A top-up through the same upsert path is an update, not a new row:
+        // the author stands, the last writer moves.
+        let topped_up = add_item_to_inventory_impl(
+            &state,
+            player_id,
+            false,
+            AddItemToInventoryInput {
+                actor_id: actor.id,
+                item_id: item.id,
+                quantity: 1,
+            },
+        )
+        .await
+        .expect("Editor-on-actor should top up the entry");
+        assert_eq!(topped_up.created_by, Some(owner_id));
+        assert_eq!(topped_up.updated_by, Some(player_id));
     }
 }

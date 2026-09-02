@@ -15,7 +15,7 @@ use bevy::prelude::*;
 use thunderforge_canvas_core::seam_probe::{ECHO, note_of};
 
 use crate::emit_event;
-use crate::plugins::interaction::InteractionActivated;
+use crate::plugins::interaction::{InteractionActivated, contribute};
 
 pub struct SeamProbePlugin;
 
@@ -26,6 +26,9 @@ impl Plugin for SeamProbePlugin {
         // independently addable (Principle II).
         app.add_message::<InteractionActivated>()
             .add_systems(Update, echo_notes);
+
+        // One more line, and the effect is both declared and performed.
+        contribute(app, thunderforge_canvas_core::seam_probe::effects());
     }
 }
 

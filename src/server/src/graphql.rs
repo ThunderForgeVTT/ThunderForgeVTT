@@ -153,6 +153,11 @@ pub use mutations_item_shares::{ItemShareMutation, ItemShareQuery};
 pub mod mutations_inventory;
 pub use mutations_inventory::InventoryMutation;
 
+// Spec 031: taking a placed item off the map into an inventory — one
+// transaction, exactly one winner.
+pub mod mutations_pickup;
+pub use mutations_pickup::PickupMutation;
+
 // Spec 015: DMCA notice-and-takedown moderation mutations
 pub mod mutations_moderation;
 pub use mutations_moderation::ModerationMutation;
@@ -2844,6 +2849,7 @@ pub struct MutationRoot(
     ItemPermissionMutation,
     ItemShareMutation,
     InventoryMutation,
+    PickupMutation,
     ModerationMutation,
     RollMutation,
     GenieSessionMutation,

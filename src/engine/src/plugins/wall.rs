@@ -34,6 +34,13 @@ impl Plugin for WallPlugin {
             // Principle II asks for plugins that are.
             .add_message::<crate::plugins::interaction::InteractionActivated>();
 
+        // What this subsystem contributes to the seam's vocabulary, declared
+        // beside the systems that perform it so the two cannot drift apart.
+        crate::plugins::interaction::contribute(
+            app,
+            thunderforge_canvas_core::wall::interaction_effects(),
+        );
+
         init_wall_systems_resources(app);
 
         app.add_systems(OnExit(AuthoringMode::Walls), abandon_wall_gesture);

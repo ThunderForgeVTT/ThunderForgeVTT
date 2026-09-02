@@ -527,6 +527,8 @@ diesel::table! {
         quantity -> Int4,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        created_by -> Nullable<Uuid>,
+        updated_by -> Nullable<Uuid>,
     }
 }
 

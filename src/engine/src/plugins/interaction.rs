@@ -31,7 +31,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use thunderforge_canvas_core::interaction::{RegionGeometry, entries_for};
+use thunderforge_canvas_core::interaction::{
+    EffectDeclaration, EffectRegistry, RegionGeometry, entries_for,
+};
 
 // The identity component the command loop actually attaches to a token
 // entity. Not `components::Token`, which is a richer shape nothing on the
@@ -140,6 +142,14 @@ impl Interactives {
         self.entries.len()
     }
 
+    /// Every interactive on the scene.
+    ///
+    /// Read-only by return type: callers observe, and mutation stays with
+    /// `upsert`/`remove`/`clear` so there is one way each change happens.
+    pub fn iter(&self) -> impl Iterator<Item = &Interactive> {
+        self.entries.values()
+    }
+
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
@@ -188,6 +198,52 @@ impl Interactives {
 #[derive(Resource, Debug, Default)]
 pub struct PreviousPositions(pub BTreeMap<String, Vec2>);
 
+/// Everything this build can actually perform.
+///
+/// The union of what was compiled in, and nothing else: each subsystem adds
+/// its own declarations through [`contribute`] as its plugin is registered, so
+/// this file never learns what any of them are. Remove a plugin and its
+/// entries are simply not here.
+///
+/// # Why the seam holds one of these at all
+///
+/// A message is fire-and-forget. Nothing can ask it whether anybody listened,
+/// so "this build cannot perform that" is not something dispatch can discover
+/// after the fact — by then the activation has been spent and the answer is a
+/// silence indistinguishable from success (ADR-054, decision 4).
+///
+/// So it is answered before dispatch, by a lookup. An interactive carrying an
+/// identifier nothing here declares is reported unavailable and is not
+/// dispatched, not repaired and not deleted: a Game Master who opens a scene
+/// in a build missing a subsystem has one thing they cannot use today, not a
+/// scene they have lost.
+#[derive(Resource, Debug, Default, Clone)]
+pub struct AvailableEffects(pub EffectRegistry);
+
+/// Register a subsystem's declarations as this build's.
+///
+/// Called by a contributing plugin from its own `build`, next to the system
+/// that handles what it declares — the declaration and the handler are added
+/// and removed together, which is what stops the two drifting apart.
+///
+/// # Why a collision is a panic
+///
+/// Two contributors claiming one identifier is a programming error in this
+/// build, found at startup, whose fix is a source change. Serving with one of
+/// the two quietly dropped would mean an authored interactive stopping work
+/// for reasons nothing reports — and the report would arrive at a table,
+/// mid-session, from the people least able to act on it.
+pub fn contribute(app: &mut App, declarations: Vec<EffectDeclaration>) {
+    if !app.world().contains_resource::<AvailableEffects>() {
+        app.insert_resource(AvailableEffects::default());
+    }
+    app.world_mut()
+        .resource_mut::<AvailableEffects>()
+        .0
+        .contribute(declarations)
+        .expect("effect declarations collide — a build error, not a runtime one");
+}
+
 /// Activations waiting to be written as messages.
 ///
 /// A queue rather than a direct write because the command boundary is outside
@@ -201,6 +257,7 @@ pub struct InteractionPlugin;
 impl Plugin for InteractionPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Interactives>()
+            .init_resource::<AvailableEffects>()
             .init_resource::<PreviousPositions>()
             .init_resource::<PendingActivations>()
             .init_resource::<ScenePlaying>()
@@ -285,18 +342,50 @@ fn detect_entries(
     }
 }
 
-/// Hand every queued activation to whoever declared its identifier.
+/// Hand every queued activation to whoever declared its identifier — and
+/// report the ones nobody did.
 ///
-/// A message, not a call. Nothing here can tell whether anybody listened, and
-/// that is deliberate: absence is detected before dispatch, by comparing the
-/// stored identifier against the registry on the server (FR-041). An empty
-/// build with no contributors runs this loop and nothing happens, which is
-/// correct rather than broken.
+/// A message, not a call, so nothing here can tell whether anybody listened.
+/// That is why the check comes first: an identifier absent from
+/// [`AvailableEffects`] belongs to a subsystem this build does not have, and
+/// dispatching it would spend the activation into a silence that reads exactly
+/// like success (ADR-054, decision 4, and FR-041).
+///
+/// The unavailable one is reported outward and dropped. It is not an error and
+/// not a reason to change anything the Game Master authored — put the
+/// subsystem back and the same interactive works again, with nothing to
+/// restore.
+///
+/// An empty build with no contributors runs this loop, reports each activation
+/// unavailable, and dispatches nothing. That is correct rather than broken.
 fn dispatch_pending(
     mut pending: ResMut<PendingActivations>,
+    available: Res<AvailableEffects>,
     mut writer: MessageWriter<InteractionActivated>,
 ) {
     for activation in pending.0.drain(..) {
+        if !available.0.contains(&activation.effect_id) {
+            // Logged on the same channel as a performed one, so a test can
+            // tell "reported unavailable" from "vanished" — which is the
+            // distinction the whole check exists to make observable.
+            crate::dispatched_effects_slot()
+                .lock()
+                .map(|mut log| {
+                    log.push(serde_json::json!({
+                        "effectId": activation.effect_id,
+                        "interactiveId": activation.interactive_id,
+                        "outcome": "unavailable",
+                    }));
+                })
+                .ok();
+
+            crate::emit_event(serde_json::json!({
+                "type": "interactionUnavailable",
+                "interactiveId": activation.interactive_id,
+                "effectId": activation.effect_id,
+            }));
+            continue;
+        }
         writer.write(activation);
     }
 }

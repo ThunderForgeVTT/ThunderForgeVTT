@@ -52,6 +52,11 @@ fn contributions() -> Vec<Vec<EffectDeclaration>> {
         thunderforge_canvas_core::wall::interaction_effects(),
         thunderforge_canvas_core::lighting::interaction_effects(),
         thunderforge_canvas_core::navigation::effects(),
+        // Spec 031 US3. Declared here as well as in the engine, because this
+        // is the list authoring validates against: without it the server
+        // refuses to author an `item.pickup`, and the effect would exist in
+        // the engine while being unreachable from the interaction tool.
+        thunderforge_canvas_core::item::effects(),
         // Spec 030 US7. A contributor that exists only to be added and
         // removed; see its module docs. Compiled out with one line in
         // `thunderforge-canvas-core`'s manifest, and nothing else changes.

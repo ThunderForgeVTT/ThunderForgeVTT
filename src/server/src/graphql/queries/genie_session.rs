@@ -614,6 +614,8 @@ mod tests {
                 world_actor_inventory::item_id.eq(item_id),
                 world_actor_inventory::item_name_snapshot.eq("Test Item"),
                 world_actor_inventory::quantity.eq(2),
+                world_actor_inventory::created_by.eq(owner_id),
+                world_actor_inventory::updated_by.eq(owner_id),
             ))
             .execute(&mut conn)
             .unwrap();

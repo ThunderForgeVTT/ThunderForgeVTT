@@ -1466,6 +1466,11 @@ pub struct ActorInventoryEntry {
     pub quantity: i32,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// Provenance, retrofitted onto a table that predates it. Nullable
+    /// because rows written before the retrofit have no recorded author and
+    /// inventing one would be a lie; every write site sets both.
+    pub created_by: Option<uuid::Uuid>,
+    pub updated_by: Option<uuid::Uuid>,
 }
 
 /// New inventory entry for insertion.
@@ -1476,6 +1481,8 @@ pub struct NewActorInventoryEntry {
     pub item_id: Option<uuid::Uuid>,
     pub item_name_snapshot: String,
     pub quantity: i32,
+    pub created_by: Option<uuid::Uuid>,
+    pub updated_by: Option<uuid::Uuid>,
 }
 
 // ============================================================================

@@ -72,6 +72,55 @@ fn an_empty_contribution_set_assembles_into_an_empty_registry() {
 }
 
 #[test]
+fn contributing_one_set_at_a_time_builds_the_same_registry_as_assembling_them() {
+    // Where subsystems are plugins, each adds its own declarations as it is
+    // registered — there is no central list naming them all, because a central
+    // list is the coupling ADR-054 exists to remove.
+    //
+    // That only works if the two ways of building a registry agree. If they
+    // could differ, the vocabulary a build offers would depend on how it was
+    // wired rather than on what was compiled in.
+    let sets = [
+        vec![decl("alpha.one", &[SubjectKind::Prop], vec![])],
+        vec![decl("beta.one", &[SubjectKind::Door], vec![])],
+    ];
+
+    let assembled = EffectRegistry::assemble(sets.clone()).expect("distinct ids");
+
+    let mut incremental = EffectRegistry::default();
+    for set in sets {
+        incremental.contribute(set).expect("distinct ids");
+    }
+
+    assert_eq!(incremental, assembled);
+}
+
+#[test]
+fn a_late_contributor_colliding_with_an_early_one_still_fails_at_registration() {
+    // Registration is startup, so this is still assembly time. The failure
+    // must not wait for somebody to author one of the two.
+    let mut registry = EffectRegistry::default();
+    registry
+        .contribute(vec![decl("thing.do", &[SubjectKind::Prop], vec![])])
+        .expect("the first claim on the name");
+
+    let result = registry.contribute(vec![decl("thing.do", &[SubjectKind::Region], vec![])]);
+
+    assert_eq!(
+        result,
+        Err(RegistryError::DuplicateId {
+            id: String::from("thing.do")
+        })
+    );
+    // And the one already there is untouched — a refused contribution does not
+    // half-apply.
+    assert_eq!(
+        registry.get("thing.do").expect("still present").subject_kinds,
+        vec![SubjectKind::Prop]
+    );
+}
+
+#[test]
 fn contributions_from_several_subsystems_are_the_union_of_what_is_compiled_in() {
     let registry = EffectRegistry::assemble([
         vec![decl("alpha.one", &[SubjectKind::Prop], vec![])],

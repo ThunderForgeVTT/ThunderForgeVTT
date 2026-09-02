@@ -127,6 +127,8 @@ import {
   type GmToolId,
 } from "@/components/world/GmToolRail/GmToolRail";
 import { SelectionFilterMenu } from "@/components/world/GmToolRail/SelectionFilterMenu";
+import { PlacedItemPrompt } from "@/components/world/PlacedItemPrompt";
+import { getMyActorClaim } from "@/api/actorClaims";
 import {
   WorldDock,
   type DockSection,
@@ -1264,6 +1266,36 @@ export default function WorldPage() {
   }, [sceneId, bridgeReady, worldStore]);
 
   /**
+   * Which character the person at this keyboard is playing.
+   *
+   * Needed only to know where a picked-up item goes (spec 031 FR-015). `null`
+   * is an ordinary answer, not a failure: a Game Master has no claim, and the
+   * pickup prompt says so rather than offering an action that cannot work.
+   */
+  const [claimedActorId, setClaimedActorId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    getMyActorClaim(id)
+      .then((claim) => {
+        if (active) {
+          setClaimedActorId(claim?.actorId ?? null);
+        }
+      })
+      .catch(() => {
+        // A claim that cannot be read leaves Pick up unavailable and explained,
+        // which is the same state as having no claim. Nothing on the map
+        // depends on this, so there is nothing to report.
+        if (active) {
+          setClaimedActorId(null);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  /**
    * Spec 030: an interactive asked for a lore page to be opened.
    *
    * The engine resolves *which* entry; opening a tab needs this application's
@@ -2240,6 +2272,13 @@ export default function WorldPage() {
           }
         />
       </div>
+
+      {/*
+        Outside the layout on purpose: it is a fixed overlay over the map, and
+        nesting it in the dock would put it inside a scrolling, clipping
+        container. Spec 031 FR-014.
+      */}
+      <PlacedItemPrompt worldId={id} actorId={claimedActorId} />
     </>
   );
 }

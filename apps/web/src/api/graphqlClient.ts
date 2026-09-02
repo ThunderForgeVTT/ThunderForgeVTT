@@ -37,7 +37,18 @@ export const GRAPHQL_ENDPOINT = "/api/graphql";
  * something genuinely slow can raise or disable it. */
 export const DEFAULT_TIMEOUT_MS = 30_000;
 
-type GraphQLErrorEntry = { message?: string };
+type GraphQLErrorEntry = {
+  message?: string;
+  /**
+   * The server's machine-readable classification, when it set one.
+   *
+   * Kept because some refusals are not failures. A contested pickup returns
+   * `ALREADY_TAKEN` (spec 031 FR-016) and means "somebody was quicker" — a
+   * caller has to be able to tell that from a genuine error, and matching on
+   * the human-readable message would break the first time it is reworded.
+   */
+  extensions?: { code?: unknown };
+};
 
 type GraphQLResponse<TData> = {
   data?: TData;
@@ -60,16 +71,34 @@ export class GraphQLRequestError extends Error {
   readonly status: number | undefined;
   /** Every message the server returned, not just the first. */
   readonly errors: string[];
+  /**
+   * Every `extensions.code` the server returned.
+   *
+   * Empty for a transport failure or an unreadable body, which is honest: no
+   * code was returned, rather than one that could not be read.
+   */
+  readonly codes: string[];
 
   constructor(
     message: string,
-    details: { operation?: string; status?: number; errors?: string[] } = {},
+    details: {
+      operation?: string;
+      status?: number;
+      errors?: string[];
+      codes?: string[];
+    } = {},
   ) {
     super(message);
     this.name = "GraphQLRequestError";
     this.operation = details.operation;
     this.status = details.status;
     this.errors = details.errors ?? [];
+    this.codes = details.codes ?? [];
+  }
+
+  /** Whether the server classified this refusal as `code`. */
+  hasCode(code: string): boolean {
+    return this.codes.includes(code);
   }
 }
 
@@ -88,6 +117,13 @@ function collectMessages(errors: GraphQLErrorEntry[] | undefined): string[] {
   return (errors ?? [])
     .map((e) => e?.message)
     .filter((m): m is string => typeof m === "string" && m.trim() !== "");
+}
+
+/** Every `extensions.code` the server set, in the order it returned them. */
+function collectCodes(errors: GraphQLErrorEntry[] | undefined): string[] {
+  return (errors ?? [])
+    .map((e) => e?.extensions?.code)
+    .filter((c): c is string => typeof c === "string" && c.trim() !== "");
 }
 
 /**
@@ -134,13 +170,14 @@ function unwrap<TData>(
   }
 
   const messages = collectMessages(payload.errors);
+  const codes = collectCodes(payload.errors);
 
   if (!response.ok || messages.length > 0) {
     throw new GraphQLRequestError(
       messages.length > 0
         ? messages.join("; ")
         : `${notOkFallback} (HTTP ${response.status})`,
-      { operation, status: response.status, errors: messages },
+      { operation, status: response.status, errors: messages, codes },
     );
   }
 

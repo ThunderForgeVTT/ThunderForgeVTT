@@ -1,4 +1,4 @@
-import { postGraphQL } from "@/api/graphqlClient";
+import { GraphQLRequestError, postGraphQL } from "@/api/graphqlClient";
 import type { InventoryEntryRecord } from "@/types/inventory";
 
 const INVENTORY_ENTRY_FIELDS = `
@@ -89,4 +89,52 @@ export function removeInventoryEntry(
     `,
     { inventoryEntryId },
   ).then((data) => data.removeInventoryEntry);
+}
+
+type PickUpPlacedItemMutation = {
+  pickUpPlacedItem: InventoryEntryRecord;
+};
+
+/**
+ * The extension code the server sets when an item was already taken.
+ *
+ * Spec 031 FR-016. Worth telling apart from every other failure: losing a race
+ * is an ordinary thing that happens at a busy table, and reporting it as an
+ * error the player did something wrong would be both wrong and discouraging.
+ */
+export const ALREADY_TAKEN = "ALREADY_TAKEN";
+
+/**
+ * Take a placed item off the map and into a character's inventory.
+ *
+ * Server-authoritative and all-or-nothing: the token is deleted and the entry
+ * created in one transaction, and exactly one of two simultaneous callers wins
+ * (spec 031 FR-015, FR-016). Chrome never removes the token itself — it waits
+ * for the sync that follows the server's answer, which is what makes a refusal
+ * cost nothing to recover from (FR-017).
+ */
+export function pickUpPlacedItem(
+  tokenId: string,
+  actorId: string,
+): Promise<InventoryEntryRecord> {
+  return postGraphQL<PickUpPlacedItemMutation>(
+    `
+      mutation PickUpPlacedItem($input: PickUpPlacedItemInput!) {
+        pickUpPlacedItem(input: $input) {
+          ${INVENTORY_ENTRY_FIELDS}
+        }
+      }
+    `,
+    { input: { tokenId, actorId } },
+  ).then((data) => data.pickUpPlacedItem);
+}
+
+/**
+ * Whether a failed pickup was somebody else being quicker.
+ *
+ * Matched on the server's `extensions.code`, not its message — the wording is
+ * for a person and may change, the code is the contract.
+ */
+export function isAlreadyTaken(error: unknown): boolean {
+  return error instanceof GraphQLRequestError && error.hasCode(ALREADY_TAKEN);
 }

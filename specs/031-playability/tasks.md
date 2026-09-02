@@ -75,8 +75,8 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 - [X] T018 [P] [US9] Remove the overlapping loader on the play route so exactly one indicator shows: reconcile the route Suspense fallback in `apps/web/src/routes/AppRoutes.tsx` with `engine-load-indicator` in `apps/web/src/pages/world/WorldPage.tsx` (FR-041, research R9)
 - [X] T019 [P] [US9] Guard `apps/web/src/hooks/useActorSystemData.ts` so no query is issued without an identifier, removing the repeated `Failed to parse "UUID": invalid length: found 0` (FR-043)
 - [ ] T020 [US9] Report unsupported client storage plainly instead of an empty cache — surface `CacheError::Unsupported` from `crates/thunderforge-cache-browser/` through to the diagnostics panel in `apps/web/src/components/` (FR-042, research R7, depends on T007)
-- [ ] T021 [P] [US9] Add an e2e assertion that exactly one loading indicator is visible at any moment during world load, in `apps/web/e2e/engine-loading.spec.ts` (SC-007)
-- [ ] T022 [P] [US9] Add an e2e assertion that switching between every *ordered* pair of tools places nothing, including text as the control case, in `apps/web/e2e/canvas-authoring.spec.ts` (SC-008)
+- [X] T021 [P] [US9] Add an e2e assertion that exactly one loading indicator is visible at any moment during world load, in `apps/web/e2e/engine-loading.spec.ts` (SC-007)
+- [X] T022 [P] [US9] Add an e2e assertion that switching between every *ordered* pair of tools places nothing, including text as the control case, in `apps/web/e2e/canvas-authoring.spec.ts` (SC-008)
 
 **Checkpoint**: The four defects are gone and two of them have regression tests.
 
@@ -88,23 +88,23 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 
 **Independent Test**: With a connected player, view a character, place a token and move it — the play view is never navigated away from.
 
-- [ ] T023 [US1] Add the placement state machine (`idle → carrying → placed | cancelled`) as a Bevy plugin in `src/engine/src/plugins/placement.rs` and register it in `src/engine/src/lib.rs` (FR-004, research R11)
-- [ ] T024 [US1] Render the carried token as provisional and follow the cursor, snapping via T010's rules, in `src/engine/src/plugins/placement.rs` (FR-006)
-- [ ] T025 [US1] Implement cancel — Escape and the chosen pointer gesture — with `OnExit` guaranteeing no trace, in `src/engine/src/plugins/placement.rs` (FR-005)
-- [ ] T026 [US1] Emit placement-confirmed and placement-cancelled reports across the engine boundary per `contracts/engine-events.md`, in `src/engine/src/`
-- [ ] T027 [P] [US1] Add the selection-filter plugin in `src/engine/src/plugins/selection_filter.rs`, defaulting to every kind enabled, registered in `src/engine/src/lib.rs` (FR-008)
-- [ ] T028 [P] [US1] Build the collapsible Select filter menu in `apps/web/src/components/world/GmToolRail/GmToolRail.tsx`, occupying no map space when collapsed (FR-010)
-- [ ] T029 [US1] Persist filter choices and collapsed state per user per device in `apps/web/src/` (FR-009, research R10)
-- [ ] T030 [US1] Add View and Place actions to `apps/web/src/components/world/PlayDock/ActorsPanel.tsx`, replacing the link that navigates away from play (FR-001)
-- [ ] T031 [US1] Open the actor in a new browser tab for a GM from `apps/web/src/components/world/PlayDock/ActorsPanel.tsx` (FR-002, GM half)
-- [ ] T032 [US1] Wire Place to begin an engine placement and, on confirmation, call the token-create mutation subject to existing ownership rules, in `apps/web/src/` (FR-004, FR-007, contracts/graphql-mutations.md)
+- [X] T023 [US1] Add the placement state machine (`idle → carrying → placed | cancelled`) as a Bevy plugin in `src/engine/src/plugins/placement.rs` and register it in `src/engine/src/lib.rs` (FR-004, research R11)
+- [X] T024 [US1] Render the carried token as provisional and follow the cursor, snapping via T010's rules, in `src/engine/src/plugins/placement.rs` (FR-006)
+- [X] T025 [US1] Implement cancel — Escape and the chosen pointer gesture — with `OnExit` guaranteeing no trace, in `src/engine/src/plugins/placement.rs` (FR-005)
+- [X] T026 [US1] Emit placement-confirmed and placement-cancelled reports across the engine boundary per `contracts/engine-events.md`, in `src/engine/src/`
+- [X] T027 [P] [US1] Add the selection-filter plugin in `src/engine/src/plugins/selection_filter.rs`, defaulting to every kind enabled, registered in `src/engine/src/lib.rs` (FR-008)
+- [X] T028 [P] [US1] Build the collapsible Select filter menu in `apps/web/src/components/world/GmToolRail/GmToolRail.tsx`, occupying no map space when collapsed (FR-010)
+- [X] T029 [US1] Persist filter choices and collapsed state per user per device in `apps/web/src/` (FR-009, research R10)
+- [X] T030 [US1] Add View and Place actions to `apps/web/src/components/world/PlayDock/ActorsPanel.tsx`, replacing the link that navigates away from play (FR-001)
+- [X] T031 [US1] Open the actor in a new browser tab for a GM from `apps/web/src/components/world/PlayDock/ActorsPanel.tsx` (FR-002, GM half)
+- [X] T032 [US1] Wire Place to begin an engine placement and, on confirmation, call the token-create mutation subject to existing ownership rules, in `apps/web/src/` (FR-004, FR-007, contracts/graphql-mutations.md)
 - [ ] T032a [US1] Declare tool use as a permission in the world's single permission declaration, defaulting to Game-Master-only so existing worlds are unchanged, in `src/server/src/` (FR-044, FR-045, ADR-050)
 - [ ] T032b [US1] Let a Game Master grant specific tools to a specific player from the world's settings, in `apps/web/src/pages/world/settings/` and `src/server/src/graphql/` (FR-046)
 - [ ] T032c [US1] Resolve tool permission on the client so an unavailable tool never appears in the rail, in `apps/web/src/pages/world/WorldPage.tsx` and `apps/web/src/components/world/GmToolRail/GmToolRail.tsx` (FR-047)
 - [ ] T032d [US1] Enforce tool permission engine-side so a directly issued mode request or canvas input is refused regardless of what chrome shows, in `src/engine/src/plugins/authoring_mode.rs` and the input systems (FR-047, SC-012)
 - [ ] T032e [US1] End a gesture in flight when the acting person's permission for that tool is revoked, and make the loss legible, in `src/engine/src/` (spec edge case)
-- [ ] T033 [US1] Make an inert selection state legible when every kind is filtered out, in `apps/web/src/components/world/GmToolRail/GmToolRail.tsx` (spec edge case)
-- [ ] T034 [P] [US1] Add e2e coverage for place-then-cancel leaving nothing, and for a filtered Select ignoring walls, in `apps/web/e2e/canvas-authoring.spec.ts`
+- [X] T033 [US1] Make an inert selection state legible when every kind is filtered out, in `apps/web/src/components/world/GmToolRail/GmToolRail.tsx` (spec edge case)
+- [X] T034 [P] [US1] Add e2e coverage for place-then-cancel leaving nothing, and for a filtered Select ignoring walls, in `apps/web/e2e/canvas-authoring.spec.ts`
 
 **Checkpoint**: A GM can place and select without leaving the table. **MVP.**
 
@@ -133,12 +133,12 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 
 - [ ] T039 [US3] Add authoring for a placed lore marker using the existing `lore.open` effect, in `src/engine/src/plugins/interaction.rs` and the interactions authoring surface in `apps/web/src/` (FR-011)
 - [ ] T040 [US3] Render the lore marker with `lucide-react`'s book icon and open the entry in a new browser tab on activation, in `apps/web/src/` (FR-012)
-- [ ] T041 [US3] Contribute an `item.pickup` effect **from the item subsystem**, not the interaction core, in `src/engine/src/` — `scripts/verify.mjs` enforces this seam (FR-013, ADR-054, research R3)
-- [ ] T042 [US3] Offer Pickup and View on activation of a placed item, in `apps/web/src/` (FR-014)
-- [ ] T043 [US3] Implement the pickup mutation in `src/server/src/graphql/` — remove the scene token and create one inventory entry, all-or-nothing (FR-015, contracts/graphql-mutations.md)
-- [ ] T044 [US3] Resolve concurrent pickup at the database boundary so exactly one player wins, reusing spec 017's claim-race pattern, in `src/server/src/graphql/` (FR-016)
-- [ ] T045 [US3] Restore the token on a refused pickup, leaving map and inventories unchanged, in `apps/web/src/` and `src/engine/src/` (FR-017)
-- [ ] T046 [US3] Report an interactive whose subsystem is absent as unavailable rather than dispatching into nothing, in `src/engine/src/plugins/interaction.rs` (ADR-054)
+- [X] T041 [US3] Contribute an `item.pickup` effect **from the item subsystem**, not the interaction core, in `src/engine/src/` — `scripts/verify.mjs` enforces this seam (FR-013, ADR-054, research R3)
+- [X] T042 [US3] Offer Pickup and View on activation of a placed item, in `apps/web/src/` (FR-014)
+- [X] T043 [US3] Implement the pickup mutation in `src/server/src/graphql/` — remove the scene token and create one inventory entry, all-or-nothing (FR-015, contracts/graphql-mutations.md)
+- [X] T044 [US3] Resolve concurrent pickup at the database boundary so exactly one player wins, reusing spec 017's claim-race pattern, in `src/server/src/graphql/` (FR-016)
+- [X] T045 [US3] Restore the token on a refused pickup, leaving map and inventories unchanged, in `apps/web/src/` and `src/engine/src/` (FR-017)
+- [X] T046 [US3] Report an interactive whose subsystem is absent as unavailable rather than dispatching into nothing, in `src/engine/src/plugins/interaction.rs` (ADR-054)
 - [ ] T047 [P] [US3] Add e2e coverage that two simultaneous pickups yield exactly one inventory entry, in `apps/web/e2e/` (SC-006)
 
 **Checkpoint**: A map is a place, not a picture.
@@ -151,10 +151,10 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 
 **Independent Test**: Preload changes nothing any player can see and leaves the GM on the list; Launch changes both.
 
-- [ ] T048 [US5] Add Preload as a client-side warm of the chosen scene's content, changing no server state, in `apps/web/src/pages/world/scenes/` (FR-020, research R1)
-- [ ] T049 [US5] Keep Launch as the only action that sets the table's scene and navigates into play, in `apps/web/src/pages/world/scenes/SceneDetailPage.tsx` (FR-021)
-- [ ] T050 [US5] Build the scene action table showing each scene's description and its render from `scene_preview_images`, in `apps/web/src/pages/world/scenes/ScenesPage.tsx` (FR-023)
-- [ ] T051 [US5] State the difference between Launch and Preload in the interface, in `apps/web/src/pages/world/scenes/` (FR-022)
+- [X] T048 [US5] Add Preload as a client-side warm of the chosen scene's content, changing no server state, in `apps/web/src/pages/world/scenes/` (FR-020, research R1)
+- [X] T049 [US5] Keep Launch as the only action that sets the table's scene and navigates into play, in `apps/web/src/pages/world/scenes/SceneDetailPage.tsx` (FR-021)
+- [X] T050 [US5] Build the scene action table showing each scene's description and its render from `scene_preview_images`, in `apps/web/src/pages/world/scenes/ScenesPage.tsx` (FR-023)
+- [X] T051 [US5] State the difference between Launch and Preload in the interface, in `apps/web/src/pages/world/scenes/` (FR-022)
 - [ ] T052 [P] [US5] Add e2e coverage that a connected player observes no change when a GM Preloads, in `apps/web/e2e/` (SC-004)
 
 **Checkpoint**: Preparation no longer reveals itself. **Validate research R1's assumption here** — it is the one most likely to be wrong.
@@ -284,8 +284,18 @@ coverage from T034.
 ### Batch C — interactions on the map (US3)
 
 T039, T041, T045, T046. The lore marker, the contributed `item.pickup` effect,
-the optimistic removal and its restore, and reporting an interactive whose
+the removal of the picked-up token, and reporting an interactive whose
 subsystem is absent.
+
+**Divergence from the plan, as built**: no optimistic removal, and therefore no
+restore path. The plan assumed the engine would delete the token immediately
+and put it back on refusal. It does not: the token stays until the server's
+answer arrives through the ordinary sync. FR-017 is then satisfied by
+construction — a refused pickup leaves the map and every inventory untouched
+because nothing was changed in anticipation — and the failure mode the restore
+path would have had (an undo that runs during a scene change or a disconnect,
+losing the token for good) does not exist. The cost is that a pickup takes a
+round trip to look like it worked.
 
 **Verify with**: the new US3 coverage (T047) and `interactive-approval`.
 

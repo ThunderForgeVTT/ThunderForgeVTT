@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useResetOnChange } from "@/hooks/useResetOnChange";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   getScene,
   launchScene,
@@ -14,6 +14,7 @@ import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { MapImportTool } from "@/components/canvas-tools/MapImportTool/MapImportTool";
 import { LoreMarkdownRenderer } from "@/pages/world/lore/LoreMarkdownRenderer";
 import { SceneSummaryEditor } from "@/pages/world/scenes/SceneSummaryEditor";
+import { preloadScene } from "@/services/scenePreload";
 import type { SceneRecord } from "@/types/scene";
 
 export interface SceneDetailPageProps {
@@ -37,11 +38,13 @@ export function SceneDetailPage({
   sceneId,
   isGm,
 }: SceneDetailPageProps) {
+  const navigate = useNavigate();
   const [scene, setScene] = useState<SceneRecord | null | undefined>(undefined);
   const [summaryDraft, setSummaryDraft] = useState("");
   const [isSavingSummary, setIsSavingSummary] = useState(false);
   const [isSavingHidden, setIsSavingHidden] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
+  const [isPreloading, setIsPreloading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
   // Reset during render rather than at the top of the effect below: this
@@ -123,17 +126,55 @@ export function SceneDetailPage({
     }
   };
 
+  /**
+   * Set the table's scene, then go and stand at it.
+   *
+   * The navigation is the fix, not a flourish. Launch previously set the
+   * active scene and left the Game Master on the scene page reading "Scene
+   * launched." — so the players were looking at a map the person who launched
+   * it was not, and the only way in was to find the Play link by hand. Spec
+   * 031 FR-021 makes entering play part of what Launch means, which is also
+   * what separates it from Preload.
+   *
+   * Navigating only after `launchScene` resolves: arriving at a table whose
+   * scene did not actually change would be a worse failure than staying put
+   * with the error visible.
+   */
   const handleLaunch = async () => {
     setIsLaunching(true);
     setStatus(null);
     try {
       await launchScene(worldId, sceneId);
-      setStatus("Scene launched.");
+      navigate(`/world/${worldId}/play`);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Failed to launch scene");
-    } finally {
       setIsLaunching(false);
     }
+  };
+
+  /**
+   * Warm this scene in *this* browser and tell nobody.
+   *
+   * Deliberately not a mutation. See `services/scenePreload` for why the
+   * server must not hear about it: ADR-046 broadcasts the active scene, so
+   * anything server-side would show at the table, which is the opposite of
+   * preparing (spec 031 FR-020, SC-004).
+   */
+  const handlePreload = async () => {
+    if (!scene) {
+      return;
+    }
+    setIsPreloading(true);
+    setStatus(null);
+    const outcome = await preloadScene(scene);
+    setStatus(
+      outcome.warmed
+        ? "Scene preloaded. Players saw nothing."
+        : outcome.reason === "no-background"
+          ? "Nothing to preload — this scene has no background."
+          : "Could not preload. The scene will still open normally.",
+    );
+    setIsPreloading(false);
   };
 
   if (scene === undefined) {
@@ -175,15 +216,40 @@ export function SceneDetailPage({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">{scene.name}</h1>
         {isGm ? (
-          <Button
-            type="button"
-            icon="spark"
-            onClick={() => void handleLaunch()}
-            disabled={isLaunching}
-            data-testid="launch-scene-button"
-          >
-            {isLaunching ? "Launching..." : "Launch"}
-          </Button>
+          <div className="grid justify-items-end gap-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                icon="torch"
+                onClick={() => void handlePreload()}
+                disabled={isPreloading || isLaunching}
+                data-testid="preload-scene-button"
+              >
+                {isPreloading ? "Preloading..." : "Preload"}
+              </Button>
+              <Button
+                type="button"
+                icon="spark"
+                onClick={() => void handleLaunch()}
+                disabled={isLaunching || isPreloading}
+                data-testid="launch-scene-button"
+              >
+                {isLaunching ? "Launching..." : "Launch"}
+              </Button>
+            </div>
+            {/*
+              Said rather than inferred (spec 031 FR-022). The two buttons sit
+              together and one of them changes what every player is looking
+              at, so which is which cannot be left to be discovered.
+            */}
+            <p
+              className="text-xs text-muted-foreground"
+              data-testid="scene-action-explainer"
+            >
+              Launch moves the table here. Preload only warms this browser.
+            </p>
+          </div>
         ) : null}
       </div>
 

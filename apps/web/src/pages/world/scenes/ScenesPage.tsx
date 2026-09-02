@@ -106,7 +106,15 @@ export function ScenesPage({ worldId, isGm }: ScenesPageProps) {
           <table className="w-full text-sm" data-testid="scenes-table">
             <thead>
               <tr className="border-b border-border bg-muted/50 text-left text-xs tracking-wide text-muted-foreground uppercase">
+                {/*
+                  Spec 031 FR-023. The list was a column of names, which is
+                  the least useful thing to choose a map by: a Game Master
+                  picking the next scene mid-session recognises the picture
+                  long before they read the title.
+                */}
+                <th className="p-2 font-semibold">Map</th>
                 <th className="p-2 font-semibold">Name</th>
+                <th className="p-2 font-semibold">Description</th>
                 {isGm ? (
                   <th className="p-2 font-semibold">Visibility</th>
                 ) : null}
@@ -119,6 +127,24 @@ export function ScenesPage({ worldId, isGm }: ScenesPageProps) {
                   className="border-b border-border last:border-0 hover:bg-muted/40"
                   data-testid={`scene-row-${scene.sceneId}`}
                 >
+                  <td className="p-2">
+                    {scene.previewUrl ? (
+                      <img
+                        src={scene.previewUrl}
+                        alt=""
+                        // Empty alt on purpose: the name sits in the very
+                        // next cell, so describing the thumbnail would make a
+                        // screen reader announce the scene twice.
+                        loading="lazy"
+                        className="h-12 w-20 rounded border border-border object-cover"
+                        data-testid={`scene-preview-${scene.sceneId}`}
+                      />
+                    ) : (
+                      <div className="grid h-12 w-20 place-items-center rounded border border-dashed border-border text-[10px] text-muted-foreground">
+                        No map
+                      </div>
+                    )}
+                  </td>
                   <td className="p-2 font-medium">
                     <Link
                       to={`/world/${worldId}/scenes/${scene.sceneId}`}
@@ -126,6 +152,13 @@ export function ScenesPage({ worldId, isGm }: ScenesPageProps) {
                     >
                       {scene.name}
                     </Link>
+                  </td>
+                  <td className="max-w-md p-2 text-muted-foreground">
+                    {scene.description ? (
+                      <span className="line-clamp-2">{scene.description}</span>
+                    ) : (
+                      <span className="italic">No description</span>
+                    )}
                   </td>
                   {isGm ? (
                     <td className="p-2">

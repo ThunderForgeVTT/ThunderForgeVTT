@@ -303,19 +303,41 @@ impl EffectRegistry {
     where
         I: IntoIterator<Item = Vec<EffectDeclaration>>,
     {
-        let mut declarations: BTreeMap<String, EffectDeclaration> = BTreeMap::new();
+        let mut registry = Self::default();
         for set in contributions {
-            for declaration in set {
-                if !declaration.id.contains('.') {
-                    return Err(RegistryError::UnnamespacedId { id: declaration.id });
-                }
-                if declarations.contains_key(&declaration.id) {
-                    return Err(RegistryError::DuplicateId { id: declaration.id });
-                }
-                declarations.insert(declaration.id.clone(), declaration);
-            }
+            registry.contribute(set)?;
         }
-        Ok(Self { declarations })
+        Ok(registry)
+    }
+
+    /// Add one contributor's declarations to a registry already standing.
+    ///
+    /// The same rules as [`Self::assemble`], which is written in terms of this
+    /// — there is one place a duplicate is caught, not two.
+    ///
+    /// It exists because a registry is not always built from a list held in
+    /// one file. Where subsystems are plugins, each adds its own declarations
+    /// as it is registered, and the union is whatever was compiled in — which
+    /// is the shape ADR-054 asks for, and the one where removing a subsystem
+    /// is removing a line rather than editing a central list that names them
+    /// all.
+    ///
+    /// Still an assembly-time failure: registration happens at startup, so a
+    /// collision is found before anybody sits down at the table.
+    pub fn contribute(
+        &mut self,
+        declarations: Vec<EffectDeclaration>,
+    ) -> Result<(), RegistryError> {
+        for declaration in declarations {
+            if !declaration.id.contains('.') {
+                return Err(RegistryError::UnnamespacedId { id: declaration.id });
+            }
+            if self.declarations.contains_key(&declaration.id) {
+                return Err(RegistryError::DuplicateId { id: declaration.id });
+            }
+            self.declarations.insert(declaration.id.clone(), declaration);
+        }
+        Ok(())
     }
 
     pub fn get(&self, id: &str) -> Option<&EffectDeclaration> {
