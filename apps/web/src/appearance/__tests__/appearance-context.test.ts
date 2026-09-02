@@ -77,6 +77,23 @@ describe("resolving a world's appearance", () => {
     expect(resolved.packId).toBe(BASE_PACK_ID);
   });
 
+  /**
+   * The case the suite could not see, found by mutation audit: simplifying
+   * `missing` to just the requested id left every test green.
+   *
+   * That reports a pack as missing while it is applied — the participant is
+   * told once that their world's look is unavailable, and then shown it. The
+   * two other tests cover "asked for and absent" and "asked for nothing"; this
+   * is the third case, and the only one that distinguishes the condition from
+   * the request.
+   */
+  it("reports nothing missing when the pack it asked for loaded", () => {
+    const resolved = resolveAppearance(base, pack({}), "forged-steel");
+
+    expect(resolved.missing).toBeNull();
+    expect(resolved.packId).toBe("forged-steel");
+  });
+
   it("keeps both palettes, because the reader picks the mode", () => {
     const resolved = resolveAppearance(
       base,

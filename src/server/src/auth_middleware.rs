@@ -53,12 +53,33 @@ fn limiter_store() -> &'static Mutex<HashMap<String, Vec<i64>>> {
 /// The load harness sets it because registering a table of players
 /// legitimately exceeds a limit written for humans typing passwords. Nothing
 /// else should.
+/// Whether a value asks for the bypass.
+///
+/// Split out from [`rate_limit_disabled`] so a test can exercise **this
+/// function** rather than a copy of it. The one below memoises in a
+/// `OnceLock`, so a test calling it twice gets the first answer back and
+/// cannot vary the input — which is why the test used to re-implement this
+/// parsing inline and assert against its own reimplementation.
+///
+/// A mutation audit on 2026-09-02 forced `rate_limit_disabled` to return
+/// `true` — brute-force protection off in every debug build — and both bypass
+/// tests passed, because neither of them called it. A test that re-implements
+/// the code under test asserts that the author can write the same expression
+/// twice.
+#[cfg(debug_assertions)]
+pub(crate) fn bypass_requested(value: Option<&str>) -> bool {
+    value.is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+}
+
 #[cfg(debug_assertions)]
 fn rate_limit_disabled() -> bool {
     static DISABLED: OnceLock<bool> = OnceLock::new();
     *DISABLED.get_or_init(|| {
-        let disabled = std::env::var("THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT")
-            .is_ok_and(|value| value == "1" || value.eq_ignore_ascii_case("true"));
+        let disabled = bypass_requested(
+            std::env::var("THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT")
+                .ok()
+                .as_deref(),
+        );
         if disabled {
             // Said once, loudly, at the first auth request. A server with its
             // brute-force protection off should never be a quiet surprise to
@@ -496,11 +517,12 @@ mod rate_limit_bypass_tests {
     /// separately below.
     #[test]
     fn the_bypass_stays_shut_unless_the_variable_says_otherwise() {
-        // Not `rate_limit_disabled()` directly: it memoises on first call,
-        // and a test that ran after another had already read the environment
-        // would pass on a cached answer rather than on the logic.
-        let reads =
-            |value: Option<&str>| value.is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
+        // `bypass_requested` is the function the middleware actually calls,
+        // not a copy of it written here. It used to be a copy: the memoising
+        // wrapper cannot be called twice with different inputs, so the test
+        // re-implemented the parsing and asserted against its own version —
+        // which stayed green when the real path was forced open.
+        let reads = super::bypass_requested;
 
         assert!(!reads(None), "absent must mean the limit is on");
         assert!(!reads(Some("")), "empty must mean the limit is on");

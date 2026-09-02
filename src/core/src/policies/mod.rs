@@ -160,7 +160,7 @@ mod tests {
 
     #[cfg(test)]
     mod default {
-        use crate::policies::Policy;
+        use crate::policies::{Policy, PolicyEffect};
         use uuid::Uuid;
 
         #[test]
@@ -169,6 +169,64 @@ mod tests {
             let access = String::from("get");
             let basic = Policy::default();
             assert!(!basic.can_i(uuid, access))
+        }
+
+        /// The effect itself, which the test above cannot see.
+        ///
+        /// `it_should_deny_on_default` uses a policy with **no resources**, so
+        /// `can_i` returns false through "nothing matched" whatever the effect
+        /// is. A mutation audit on 2026-09-02 changed `Default` to `Allow` and
+        /// every policy test stayed green: the authorisation primitive could be
+        /// wholly inverted without a single failure.
+        ///
+        /// These two supply a resource that *does* match, so the only thing
+        /// left deciding the answer is the effect.
+        #[test]
+        fn an_allowing_policy_permits_a_resource_it_lists() {
+            let uuid = Uuid::new_v4().to_string();
+            let access = String::from("get");
+            let mut allowing = Policy {
+                effect: PolicyEffect::Allow,
+                resources: vec![],
+            };
+            allowing.add(uuid.clone(), access.clone());
+
+            assert!(
+                allowing.can_i(uuid, access),
+                "an allow policy listing this resource must permit it, or the \
+                 effect is not being read at all"
+            );
+        }
+
+        #[test]
+        fn a_denying_policy_refuses_a_resource_it_lists() {
+            let uuid = Uuid::new_v4().to_string();
+            let access = String::from("get");
+            let mut denying = Policy {
+                effect: PolicyEffect::Deny,
+                resources: vec![],
+            };
+            denying.add(uuid.clone(), access.clone());
+
+            assert!(
+                !denying.can_i(uuid, access),
+                "listing a resource must not permit it under a deny effect"
+            );
+        }
+
+        /// And the default is the denying one — asserted against the effect
+        /// rather than against an empty resource list.
+        #[test]
+        fn the_default_effect_is_deny() {
+            let uuid = Uuid::new_v4().to_string();
+            let access = String::from("get");
+            let mut default = Policy::default();
+            default.add(uuid.clone(), access.clone());
+
+            assert!(
+                !default.can_i(uuid, access),
+                "a default policy that lists a resource must still refuse it"
+            );
         }
 
         #[test]
