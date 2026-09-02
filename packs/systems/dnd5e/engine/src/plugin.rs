@@ -1,12 +1,12 @@
 //! D&D 5e Bevy Plugin
 //!
-//! Implements the GameSystem trait for D&D 5e ruleset.
+//! Rule calculations for the D&D 5e ruleset.
 //! Provides derived data calculations, d20 rolls, spell slot management.
 
 use bevy::prelude::*;
 use std::sync::Arc;
 
-/// D&D 5e System implementing GameSystem trait
+/// D&D 5e System rule calculations.
 pub struct DnD5eSystem;
 
 impl DnD5eSystem {
@@ -15,39 +15,47 @@ impl DnD5eSystem {
     }
 
     /// Register this system with the Bevy world
-    pub fn register() -> Arc<dyn GameSystemTrait> {
+    pub fn register() -> Arc<Self> {
         Arc::new(Self)
     }
-}
 
-impl Default for DnD5eSystem {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// GameSystem trait - should match the one in src/engine/src/systems/core.rs
-/// Re-defined here to avoid cross-package dependency
-pub trait GameSystemTrait: Send + Sync {
     /// Get system name
-    fn name(&self) -> String;
+    pub fn name(&self) -> String {
+        "D&D 5e".to_string()
+    }
 
     /// Get system version
-    fn version(&self) -> String;
+    pub fn version(&self) -> String {
+        "0.1.0".to_string()
+    }
+
+    // ---------------------------------------------------------------------
+    // 5e rules staged for T051 (5e's `SystemRules` implementation).
+    //
+    // These bodies were the default methods of the deleted `GameSystemTrait`
+    // and are kept verbatim, numbers unchanged, so T051 can move them onto
+    // `thunderforge_canvas_core::system_rules::SystemRules` without having to
+    // re-derive the tables. Do not "tidy" the spell-slot table.
+    // ---------------------------------------------------------------------
 
     /// Calculate ability modifier from ability score
     /// Formula: (score - 10) / 2, rounded down
-    fn ability_modifier(&self, score: i32) -> i32 {
+    pub fn ability_modifier(&self, score: i32) -> i32 {
         (score - 10) / 2
     }
 
     /// Get skill bonus (modifier + proficiency if applicable)
-    fn skill_bonus(&self, ability_mod: i32, is_proficient: bool, proficiency_bonus: i32) -> i32 {
+    pub fn skill_bonus(
+        &self,
+        ability_mod: i32,
+        is_proficient: bool,
+        proficiency_bonus: i32,
+    ) -> i32 {
         ability_mod + (if is_proficient { proficiency_bonus } else { 0 })
     }
 
     /// Get proficiency bonus for character level
-    fn proficiency_bonus(&self, level: u32) -> i32 {
+    pub fn proficiency_bonus(&self, level: u32) -> i32 {
         match level {
             1..=4 => 2,
             5..=8 => 3,
@@ -59,7 +67,7 @@ pub trait GameSystemTrait: Send + Sync {
     }
 
     /// Calculate maximum spell slots for a given spell level at character level
-    fn max_spell_slots(&self, character_level: u32, spell_level: usize) -> i32 {
+    pub fn max_spell_slots(&self, character_level: u32, spell_level: usize) -> i32 {
         let spell_slots = match character_level {
             1 => vec![2, 0, 0, 0, 0, 0, 0, 0, 0],
             2 => vec![3, 2, 0, 0, 0, 0, 0, 0, 0],
@@ -92,13 +100,9 @@ pub trait GameSystemTrait: Send + Sync {
     }
 }
 
-impl GameSystemTrait for DnD5eSystem {
-    fn name(&self) -> String {
-        "D&D 5e".to_string()
-    }
-
-    fn version(&self) -> String {
-        "0.1.0".to_string()
+impl Default for DnD5eSystem {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

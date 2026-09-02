@@ -72,14 +72,16 @@ impl SystemRules for Undeclared {
 
 #[test]
 fn a_system_with_no_rules_yields_exactly_what_was_stored() {
-    let out = resolve(None, vec![stored("whole", 10)]);
+    let values = vec![stored("whole", 10)];
+    let out = resolve(None, values.clone(), &DeclaredValues::new(values));
     assert_eq!(out.len(), 1);
     assert_eq!(out[0].origin, Origin::Stored);
 }
 
 #[test]
 fn derived_values_join_the_stored_ones_and_say_which_they_are() {
-    let out = resolve(Some(&Halver), vec![stored("whole", 10)]);
+    let values = vec![stored("whole", 10)];
+    let out = resolve(Some(&Halver), values.clone(), &DeclaredValues::new(values));
 
     let half = out
         .iter()
@@ -104,7 +106,7 @@ fn derived_values_join_the_stored_ones_and_say_which_they_are() {
 /// could ever have been checked against.
 #[test]
 fn a_value_the_system_never_declared_is_dropped_rather_than_rendered() {
-    let out = resolve(Some(&Undeclared), Vec::new());
+    let out = resolve(Some(&Undeclared), Vec::new(), &DeclaredValues::default());
 
     assert!(
         out.iter().any(|v| v.id == "promised"),
@@ -132,7 +134,12 @@ fn a_derived_value_never_overwrites_a_stored_one_of_the_same_name() {
         }
     }
 
-    let out = resolve(Some(&Shadower), vec![stored("whole", 10)]);
+    let values = vec![stored("whole", 10)];
+    let out = resolve(
+        Some(&Shadower),
+        values.clone(),
+        &DeclaredValues::new(values),
+    );
     assert_eq!(out.len(), 1, "one identifier, one value");
     assert_eq!(out[0].value.as_integer(), Some(10), "the typed-in one wins");
     assert_eq!(out[0].origin, Origin::Stored);
@@ -145,15 +152,17 @@ fn a_derived_value_never_overwrites_a_stored_one_of_the_same_name() {
 #[test]
 fn the_same_stored_values_always_yield_the_same_derived_ones() {
     let input = || vec![stored("whole", 7)];
-    let first = resolve(Some(&Halver), input());
+    let call = || resolve(Some(&Halver), input(), &DeclaredValues::new(input()));
+    let first = call();
     for _ in 0..64 {
-        assert_eq!(resolve(Some(&Halver), input()), first);
+        assert_eq!(call(), first);
     }
 }
 
 #[test]
 fn a_rule_whose_input_is_missing_omits_its_output_rather_than_zeroing_it() {
-    let out = resolve(Some(&Halver), vec![stored("unrelated", 3)]);
+    let values = vec![stored("unrelated", 3)];
+    let out = resolve(Some(&Halver), values.clone(), &DeclaredValues::new(values));
     assert!(
         !out.iter().any(|v| v.id == "half"),
         "a zero is a statement; an unfilled sheet is the absence of one"
@@ -165,4 +174,38 @@ fn a_whole_numbered_float_is_an_integer_and_a_fractional_one_is_not() {
     assert_eq!(DeclaredValueKind::Number(14.0).as_integer(), Some(14));
     assert_eq!(DeclaredValueKind::Number(14.5).as_integer(), None);
     assert_eq!(DeclaredValueKind::Text("14".into()).as_integer(), None);
+}
+
+/// The case the two arguments exist for: Genie's Wish Points rule reads a
+/// `level` that lives in the trait slot and is not one of the three
+/// attributes Genie puts on a sheet.
+#[test]
+fn a_rule_can_read_context_a_sheet_does_not_show() {
+    let visible = vec![stored("whole", 10)];
+    let context = DeclaredValues::new([stored("whole", 10), stored("hidden", 4)]);
+
+    struct ReadsHidden;
+    impl SystemRules for ReadsHidden {
+        fn id(&self) -> &str {
+            "reads-hidden"
+        }
+        fn derived_declarations(&self) -> Vec<AttributeDeclaration> {
+            vec![declaration("doubled", 0)]
+        }
+        fn derive(&self, stored: &DeclaredValues) -> Vec<DeclaredValue> {
+            match stored.integer("hidden") {
+                Some(hidden) => vec![derived("doubled", hidden * 2)],
+                None => Vec::new(),
+            }
+        }
+    }
+
+    let out = resolve(Some(&ReadsHidden), visible, &context);
+
+    assert!(
+        !out.iter().any(|v| v.id == "hidden"),
+        "context is legible to a rule, not automatically shown on a sheet"
+    );
+    let doubled = out.iter().find(|v| v.id == "doubled").expect("derived");
+    assert_eq!(doubled.value.as_integer(), Some(8));
 }

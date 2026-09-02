@@ -5,8 +5,8 @@
 //!
 //! ## Architecture
 //!
-//! - **plugin.rs**: DnD5eSystem implementing GameSystem trait
-//!   - Registered at startup via SystemRegistry (Phase 4.7.F2)
+//! - **plugin.rs**: DnD5eSystem rule calculations
+//!   - Staged for T051 (`SystemRules` implementation)
 //!   - Provides rule calculations (ability modifiers, proficiency bonuses, spell slots)
 //!
 //! - **dice.rs**: Deterministic d20 dice roller
@@ -25,7 +25,7 @@ pub mod dice;
 pub mod plugin;
 
 pub use dice::{roll_d20, roll_d20_seeded, D20Roll, RollAdvantage};
-pub use plugin::{DnD5ePlugin, DnD5eSystem, GameSystemTrait};
+pub use plugin::{DnD5ePlugin, DnD5eSystem};
 
 /// D&D 5e Engine Version
 pub const VERSION: &str = "0.1.0";

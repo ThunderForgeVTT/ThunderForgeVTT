@@ -199,7 +199,22 @@ pub trait SystemRules: Send + Sync {
 
 /// Merge a system's stored and derived values into the one set everything reads.
 ///
-/// # Why the filter exists
+/// # Why `visible` and `context` are two arguments
+///
+/// What a rule may *read* is not what a sheet *shows*.
+///
+/// Genie's by-level Wish Points rule needs the character's `level`, which
+/// lives in the actor's trait slot and is not one of the three attributes
+/// Genie declares. Handing `derive` only the displayed attributes would make
+/// that rule uncomputable; adding `level` to the displayed set to feed it
+/// would put a field on the sheet to satisfy a function, which is the tail
+/// wagging the dog.
+///
+/// So `context` is everything legible about the actor, and `visible` is the
+/// subset a surface presents. `context` should contain `visible`; nothing
+/// breaks if it does not, the rule simply sees less.
+///
+/// # Why undeclared derivations are dropped
 ///
 /// A `derive` returning an identifier absent from `derived_declarations` is a
 /// bug in the pack, and this treats it as one: the value is dropped rather
@@ -211,10 +226,14 @@ pub trait SystemRules: Send + Sync {
 /// Dropped silently at this layer and reported by the test in this module,
 /// because the failure is a build-time mistake in a bundled pack, not
 /// something a player at a table can act on.
-pub fn resolve(rules: Option<&dyn SystemRules>, stored: Vec<DeclaredValue>) -> Vec<DeclaredValue> {
-    let stored = DeclaredValues::new(stored);
+pub fn resolve(
+    rules: Option<&dyn SystemRules>,
+    visible: Vec<DeclaredValue>,
+    context: &DeclaredValues,
+) -> Vec<DeclaredValue> {
+    let shown = DeclaredValues::new(visible);
     let Some(rules) = rules else {
-        return stored.iter().cloned().collect();
+        return shown.iter().cloned().collect();
     };
 
     let permitted: BTreeMap<String, AttributeDeclaration> = rules
@@ -223,15 +242,17 @@ pub fn resolve(rules: Option<&dyn SystemRules>, stored: Vec<DeclaredValue>) -> V
         .map(|d| (d.id.clone(), d))
         .collect();
 
-    let mut out: Vec<DeclaredValue> = stored.iter().cloned().collect();
+    let mut out: Vec<DeclaredValue> = shown.iter().cloned().collect();
     let mut derived: Vec<DeclaredValue> = rules
-        .derive(&stored)
+        .derive(context)
         .into_iter()
-        // A derived value must be declared, and must not shadow a stored one:
-        // if a system both stores and computes the same identifier, the stored
-        // value is the one a player typed in and the computed one is the
-        // disagreement this contract exists to prevent.
-        .filter(|value| permitted.contains_key(&value.id) && !stored.contains(&value.id))
+        // A derived value must be declared, and must not shadow anything the
+        // actor stores: if a system both stores and computes one identifier,
+        // the stored value is the one a player typed in and the computed one
+        // is the disagreement this contract exists to prevent. Checked against
+        // `context` rather than `visible`, so a stored field that happens not
+        // to be on the sheet still wins.
+        .filter(|value| permitted.contains_key(&value.id) && !context.contains(&value.id))
         .collect();
     derived.sort_by_key(|value| {
         permitted
