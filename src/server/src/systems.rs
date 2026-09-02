@@ -581,177 +581,66 @@ impl GameSystemRegistry {
 }
 
 // ============================================================================
-// D&D 5e System Registration
-// ============================================================================
-
-/// Initialize D&D 5e validators in the registry
-pub fn register_dnd5e_system(registry: &mut GameSystemRegistry) {
-    use dnd5e_server::{
-        validate_ability_data_for_registry, validate_proficiency_data_for_registry,
-        validate_resource_data_for_registry, validate_spell_data_for_registry,
-        validate_trait_data_for_registry,
-    };
-
-    registry.register(
-        "dnd5e",
-        SystemValidators {
-            ability_data: Some(validate_ability_data_for_registry),
-            resource_data: Some(validate_resource_data_for_registry),
-            proficiency_data: Some(validate_proficiency_data_for_registry),
-            trait_data: Some(validate_trait_data_for_registry),
-            spell_data: Some(validate_spell_data_for_registry),
-        },
-    );
-}
-
-// ============================================================================
-// Genie System Registration
-// ============================================================================
-
-/// Initialize Genie validators in the registry.
-///
-/// Genie has no spell_data slot (it has no spellcasting) and reuses the
-/// registry's trait_data slot for conditions/Patron/size_category
-/// (spec 018 data-model.md — see genie-server's validators.rs doc comments).
-pub fn register_genie_system(registry: &mut GameSystemRegistry) {
-    use genie_server::{
-        validate_ability_data_for_registry, validate_proficiency_data_for_registry,
-        validate_resource_data_for_registry, validate_trait_data_for_registry,
-    };
-
-    registry.register(
-        "genie",
-        SystemValidators {
-            ability_data: Some(validate_ability_data_for_registry),
-            resource_data: Some(validate_resource_data_for_registry),
-            proficiency_data: Some(validate_proficiency_data_for_registry),
-            trait_data: Some(validate_trait_data_for_registry),
-            spell_data: None,
-        },
-    );
-}
-
-// ============================================================================
-// Pathfinder 2e / Cypher System / Fate Core / Blades in the Dark / Year Zero
-// Engine System Registration
-// ============================================================================
-//
-// All five follow register_genie_system's exact pattern: no spell_data slot
-// (none of the five research digests found a spellcasting-specific data
-// shape distinct from generic resource_data), full ability/resource/
-// proficiency/trait_data validation from each pack's own validators.rs.
-
-pub fn register_pathfinder2e_system(registry: &mut GameSystemRegistry) {
-    use pathfinder2e_server::{
-        validate_ability_data_for_registry, validate_proficiency_data_for_registry,
-        validate_resource_data_for_registry, validate_trait_data_for_registry,
-    };
-    registry.register(
-        "pathfinder2e",
-        SystemValidators {
-            ability_data: Some(validate_ability_data_for_registry),
-            resource_data: Some(validate_resource_data_for_registry),
-            proficiency_data: Some(validate_proficiency_data_for_registry),
-            trait_data: Some(validate_trait_data_for_registry),
-            spell_data: None,
-        },
-    );
-}
-
-pub fn register_cypher_system(registry: &mut GameSystemRegistry) {
-    use cypher_server::{
-        validate_ability_data_for_registry, validate_proficiency_data_for_registry,
-        validate_resource_data_for_registry, validate_trait_data_for_registry,
-    };
-    registry.register(
-        "cypher_system",
-        SystemValidators {
-            ability_data: Some(validate_ability_data_for_registry),
-            resource_data: Some(validate_resource_data_for_registry),
-            proficiency_data: Some(validate_proficiency_data_for_registry),
-            trait_data: Some(validate_trait_data_for_registry),
-            spell_data: None,
-        },
-    );
-}
-
-pub fn register_fate_core_system(registry: &mut GameSystemRegistry) {
-    use fate_server::{
-        validate_ability_data_for_registry, validate_proficiency_data_for_registry,
-        validate_resource_data_for_registry, validate_trait_data_for_registry,
-    };
-    registry.register(
-        "fate_core",
-        SystemValidators {
-            // Fate has no fixed ability scores (research.md); ability_data
-            // still validates (accepts any object, per fate-server's
-            // validators.rs) so an empty ability_data block is always valid.
-            ability_data: Some(validate_ability_data_for_registry),
-            resource_data: Some(validate_resource_data_for_registry),
-            proficiency_data: Some(validate_proficiency_data_for_registry),
-            trait_data: Some(validate_trait_data_for_registry),
-            spell_data: None,
-        },
-    );
-}
-
-pub fn register_blades_in_the_dark_system(registry: &mut GameSystemRegistry) {
-    use blades_server::{
-        validate_ability_data_for_registry, validate_proficiency_data_for_registry,
-        validate_resource_data_for_registry, validate_trait_data_for_registry,
-    };
-    registry.register(
-        "blades_in_the_dark",
-        SystemValidators {
-            ability_data: Some(validate_ability_data_for_registry),
-            resource_data: Some(validate_resource_data_for_registry),
-            proficiency_data: Some(validate_proficiency_data_for_registry),
-            trait_data: Some(validate_trait_data_for_registry),
-            spell_data: None,
-        },
-    );
-}
-
-pub fn register_year_zero_engine_system(registry: &mut GameSystemRegistry) {
-    use yze_server::{
-        validate_ability_data_for_registry, validate_proficiency_data_for_registry,
-        validate_resource_data_for_registry, validate_trait_data_for_registry,
-    };
-    registry.register(
-        "year_zero_engine",
-        SystemValidators {
-            ability_data: Some(validate_ability_data_for_registry),
-            resource_data: Some(validate_resource_data_for_registry),
-            proficiency_data: Some(validate_proficiency_data_for_registry),
-            trait_data: Some(validate_trait_data_for_registry),
-            spell_data: None,
-        },
-    );
-}
-
-// ============================================================================
-// Lazy-Loaded Global Registry (Singleton Pattern)
+// The registry, assembled from what the packs contributed
 // ============================================================================
 
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
-/// Global registry instance - initialized once, accessed many times
+/// Every bundled system's validators, collected rather than listed.
+///
+/// # What this replaced
+///
+/// Seven `register_*_system` functions lived here, each naming a system id as
+/// a string literal and wiring five validator function pointers by hand, all
+/// called from this initialiser — which already carried a `// In future
+/// phases: register_coc7e_system(...)` comment waiting to be the eighth.
+/// Adding a system meant editing shared server code that had to know that
+/// system's name and the shape of its stored data, which is exactly what spec
+/// 032's SC-004 measures and FR-029 forbids.
+///
+/// Now each pack declares its own contribution next to the validators it is
+/// declaring, and this collects them without naming one. A pack whose data
+/// shape changes changes one file — its own.
+///
+/// The one thing that is still a list is `crate::system_packs`, which holds a
+/// `use <pack> as _;` line per pack because an unreferenced Rust crate is
+/// never linked and its submissions vanish with it. Those lines carry no
+/// information about the systems they name, which is why they can be a list
+/// and a validator table could not.
 pub static GAME_SYSTEMS: Lazy<Mutex<GameSystemRegistry>> = Lazy::new(|| {
     let mut registry = GameSystemRegistry::new();
 
-    // 🎮 Register all available systems on first access
-    register_dnd5e_system(&mut registry);
-    register_genie_system(&mut registry);
-    register_pathfinder2e_system(&mut registry);
-    register_cypher_system(&mut registry);
-    register_fate_core_system(&mut registry);
-    register_blades_in_the_dark_system(&mut registry);
-    register_year_zero_engine_system(&mut registry);
-    // In future phases: register_coc7e_system(&mut registry);
+    for contribution in thunderforge_canvas_core::system_contribution::contributions() {
+        registry.register(
+            contribution.id,
+            SystemValidators {
+                ability_data: contribution.ability_data,
+                resource_data: contribution.resource_data,
+                proficiency_data: contribution.proficiency_data,
+                trait_data: contribution.trait_data,
+                spell_data: contribution.spell_data,
+            },
+        );
+    }
 
     Mutex::new(registry)
 });
+
+/// The rules a system contributes, built from that system's own manifest.
+///
+/// `None` for a system that computes nothing, which is a fact about the
+/// ruleset rather than a gap: Fate Core has no derived scores to publish.
+/// `None` also for a system this build does not have, which is why a caller
+/// must treat the two the same way — a world bound to a missing pack still
+/// opens, with its stored values intact (FR-019).
+pub fn rules_for_system(
+    system_id: &str,
+    manifest: &serde_json::Value,
+) -> Option<Box<dyn thunderforge_canvas_core::system_rules::SystemRules>> {
+    let contribution = thunderforge_canvas_core::system_contribution::contribution_for(system_id)?;
+    contribution.rules.map(|build| build(manifest))
+}
 
 /// Validate actor system data using globally registered validators
 /// This is the main entry point from GraphQL mutations

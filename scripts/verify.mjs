@@ -122,6 +122,19 @@ const steps = [
       : ["pnpm", "run", "sdk:check"],
   },
   {
+    // Spec 032 FR-029. A system pack declares what it contributes and
+    // nothing lists it — a property a behavioural test cannot catch eroding,
+    // because a hand-maintained registry passes every test it has right up
+    // until the eighth system costs as much to add as the first.
+    //
+    // Not affected by `--fix`: a violation is shared code that has learned a
+    // system's name, and moving that knowledge back into the pack needs a
+    // person.
+    name: "system registry",
+    cwd: ".",
+    command: ["node", "./scripts/check-system-registry.mjs"],
+  },
+  {
     // Spec 030 T076. FR-039 says the interaction plugin owns no effect, and
     // that is a claim a behavioural test cannot catch eroding until something
     // has already broken. This catches it in the diff.

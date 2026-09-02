@@ -40,6 +40,7 @@ mod state;
 mod status_display; // Spec 029: resolving what each viewer is told
 mod storage; // Spec 002: RustFS canvas image asset storage
 mod system_hooks;
+mod system_packs; // Spec 032 FR-029: which packs are linked, and nothing more
 mod systems;
 #[cfg(test)]
 mod test_support; // Spec 002: shared fixtures for tests/tests requiring a live DB + RustFS

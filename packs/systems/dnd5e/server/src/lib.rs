@@ -43,6 +43,20 @@ pub const VERSION: &str = "0.1.0";
 /// System ID for registration
 pub const SYSTEM_ID: &str = "dnd5e";
 
+// Spec 032 (FR-029): this pack declares what it contributes. Nothing in
+// shared server code lists this system, names its id, or wires its
+// validators — the server collects whatever contributions are linked in.
+inventory::submit! {
+    thunderforge_canvas_core::system_contribution::SystemContribution {
+        ability_data: Some(validators::validate_ability_data_for_registry),
+        resource_data: Some(validators::validate_resource_data_for_registry),
+        proficiency_data: Some(validators::validate_proficiency_data_for_registry),
+        trait_data: Some(validators::validate_trait_data_for_registry),
+        spell_data: Some(validators::validate_spell_data_for_registry),
+        ..thunderforge_canvas_core::system_contribution::SystemContribution::new("dnd5e")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
