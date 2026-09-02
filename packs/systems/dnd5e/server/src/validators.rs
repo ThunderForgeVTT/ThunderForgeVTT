@@ -535,6 +535,38 @@ mod tests {
         assert!(validate_ability_data(&data).is_ok());
     }
 
+    /// **The boundaries themselves**, written as literals.
+    ///
+    /// A mutation audit on 2026-09-02 narrowed this rule from 1-20 to 2-19 and
+    /// all thirty-seven tests in this pack still passed: the accept fixture
+    /// uses 9 to 16, and the reject cases sit outside both ends, so the two
+    /// scores the rule actually names were never supplied. One is a real
+    /// character — a 20 is the cap a player spends their whole progression
+    /// reaching — and the rule refusing it would be discovered at a table.
+    ///
+    /// Literals rather than the range's own bounds: a test written against the
+    /// constant asserts the rule accepts whatever the rule is written against,
+    /// which is true of every range and catches nothing. That mistake was made
+    /// and caught while fixing this same class of bug in `yze-server`.
+    #[test]
+    fn ability_data_accepts_the_exact_ends_of_the_range() {
+        let at = |score: i64| {
+            json!({
+                "strength": score, "dexterity": score, "constitution": score,
+                "intelligence": score, "wisdom": score, "charisma": score
+            })
+        };
+
+        assert!(
+            validate_ability_data(&at(1)).is_ok(),
+            "the lowest score the rule names must be accepted by it"
+        );
+        assert!(
+            validate_ability_data(&at(20)).is_ok(),
+            "and a 20 is where a character's whole progression ends up"
+        );
+    }
+
     #[test]
     fn test_validate_ability_data_out_of_range() {
         let data = json!({

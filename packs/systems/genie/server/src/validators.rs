@@ -283,6 +283,30 @@ mod tests {
         assert!(validate_trait_data(&data).is_ok());
     }
 
+    /// **The boundaries themselves**, written as literals.
+    ///
+    /// A mutation audit on 2026-09-02 narrowed this rule from 1-10 to 2-9 and
+    /// all twenty tests in this pack still passed: the accept case uses 3 and
+    /// the reject cases sit outside both ends, so the two levels the rule
+    /// actually names were never supplied. Levels 1 and 10 are also the ends
+    /// of the Wish Points table in `system.json`, so getting this wrong would
+    /// make a first- or tenth-level character unsaveable.
+    ///
+    /// Literals rather than the range's own bounds: a test written against the
+    /// constant asserts that the rule accepts whatever the rule is written
+    /// against, which is true for every range and catches nothing.
+    #[test]
+    fn trait_data_accepts_the_first_and_last_levels_the_table_covers() {
+        assert!(
+            validate_trait_data(&json!({ "level": 1 })).is_ok(),
+            "a first-level character must be saveable"
+        );
+        assert!(
+            validate_trait_data(&json!({ "level": 10 })).is_ok(),
+            "and so must a tenth-level one — the last rung of the Wish Points table"
+        );
+    }
+
     #[test]
     fn trait_data_accepts_no_level_at_all() {
         let data = json!({ "active_conditions": [] });

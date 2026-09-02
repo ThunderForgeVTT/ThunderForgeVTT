@@ -150,6 +150,43 @@ mod tests {
     }
 
     #[test]
+    /// **The boundaries themselves**, which the interior fixture cannot see.
+    ///
+    /// A mutation audit on 2026-09-02 narrowed this range from 1-5 to 2-4 and
+    /// every test in this pack still passed: the accept fixture uses 3, and
+    /// the reject cases use 0 and 6, so the two numbers the rule actually
+    /// names were never supplied. The same shape had already hidden a real
+    /// bug in 5e's ability modifier, whose tests used even scores and one odd
+    /// score above ten — exactly the set that could not fail.
+    ///
+    /// `pathfinder2e` and `blades_in_the_dark` were already testing their
+    /// exact boundaries; this follows them.
+    #[test]
+    fn ability_data_accepts_the_exact_boundaries_of_the_range() {
+        // **Literals, not `ABILITY_MIN`/`ABILITY_MAX`.** The first version of
+        // this test used the constants, which made it assert that the rule
+        // accepts whatever the rule is written against — true for any range,
+        // and it passed the very mutation it was written to catch. A boundary
+        // test has to name the boundary.
+        let mut lowest = valid_abilities();
+        for field in ["strength", "agility", "wits", "empathy"] {
+            lowest[field] = json!(1);
+        }
+        assert!(
+            validate_ability_data(&lowest).is_ok(),
+            "the lowest score the rule names must be accepted by it"
+        );
+
+        let mut highest = valid_abilities();
+        for field in ["strength", "agility", "wits", "empathy"] {
+            highest[field] = json!(5);
+        }
+        assert!(
+            validate_ability_data(&highest).is_ok(),
+            "and so must the highest"
+        );
+    }
+
     fn ability_data_rejects_score_below_standard_dice_pool_range() {
         // research/system_year_zero_engine.json core_stats[].scale: standard
         // d6-pool variant range is 1-5; 0 is below the minimum.

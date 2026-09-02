@@ -26,6 +26,24 @@ The pattern has bitten this repository repeatedly:
   score above ten, exactly the set that cannot detect the truncation bug the
   function had for every odd score below ten.
 
+## Fixed so far
+
+| Finding | Fixed in | Mutation now fails |
+|---|---|---|
+| 1. Deny-by-default never tested | `src/core/src/policies/mod.rs` | ✓ `Default` → `Allow` |
+| 2. Rate-limit bypass tested a copy | `src/server/src/auth_middleware.rs` | ✓ `bypass_requested` → `true` |
+| 5. Boundary-blind validators (3 packs) | `yze`, `genie`, `dnd5e` validators | ✓ range narrowed one step each end |
+| 7. Name promised coverage it lacked | `src/core/src/policies/mod.rs` | ✓ `remove` gutted to a no-op |
+| Web: `missing` reported for a loaded pack | `appearance-context.test.ts` | ✓ `missing = requestedId` |
+| 3 (partly). Engine suite never built | `src/engine/Cargo.toml` — winit confined to wasm | one blocker of two; see T082-T084 |
+
+**A note on fixing these.** The first attempt at the Year Zero boundary test
+used `super::ABILITY_MIN` and `super::ABILITY_MAX`, which made it assert that
+the rule accepts whatever the rule is written against — true of every range,
+and it passed the very mutation it was written to catch. A boundary test has to
+name the boundary as a literal. Worth knowing that writing a test for this
+class of bug is itself prone to it.
+
 ## Confirmed, ranked
 
 ### 1. Deny-by-default is never tested — `src/core/src/policies/mod.rs`

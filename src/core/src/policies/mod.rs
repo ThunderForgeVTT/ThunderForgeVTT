@@ -254,6 +254,32 @@ mod tests {
             );
         }
 
+        /// Removing a resource entirely, which nothing covered.
+        ///
+        /// A mutation audit on 2026-09-02 gutted `Policy::remove` to a no-op.
+        /// Only one test noticed — and the test *named*
+        /// `it_should_modify_amd_remove_existing_access_when_resource_found`
+        /// was not it: despite its name it never called `remove`, and was
+        /// behaviourally identical to the modify test beside it. It is now
+        /// named for what it does, and this covers the branch its name had
+        /// been claiming.
+        #[test]
+        fn it_should_remove_a_resource_entirely_when_no_access_is_named() {
+            let uuid = Uuid::new_v4().to_string();
+            let mut basic = Policy::default();
+            basic.add(uuid.clone(), String::from("get"));
+            basic.add(uuid.clone(), String::from("put"));
+            assert_eq!(basic.resources.len(), 1);
+
+            basic.remove(uuid.clone(), None);
+
+            assert!(
+                basic.resources.is_empty(),
+                "removing with no access named must drop the resource itself, \
+                 not one of its verbs"
+            );
+        }
+
         #[test]
         fn it_should_remove_resource_when_found() {
             let uuid = Uuid::new_v4().to_string();
@@ -272,7 +298,7 @@ mod tests {
         }
 
         #[test]
-        fn it_should_modify_amd_remove_existing_access_when_resource_found() {
+        fn it_should_modify_existing_access_when_resource_found() {
             let uuid = Uuid::new_v4().to_string();
             let get_access = String::from("get");
             let post_access = String::from("post");
