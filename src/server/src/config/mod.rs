@@ -62,6 +62,14 @@ pub struct Directories {
     pub(crate) asset_directory: String,
     pub(crate) databases_basedir: String,
     pub(crate) systems_dir: String,
+    /// Where interface packs live — presentation-only packs, siblings of the
+    /// system packs above.
+    ///
+    /// A separate directory rather than a `type` field in one shared tree,
+    /// because spec 032's FR-002 makes the two pack types exclusive and a
+    /// directory that cannot hold both is the cheapest enforcement of that
+    /// there is.
+    pub(crate) interface_packs_dir: String,
 }
 
 impl From<String> for Directories {
@@ -70,6 +78,7 @@ impl From<String> for Directories {
         let databases_dir = &base_dir.join("databases");
         let config_dir = &base_dir.join("config");
         let systems_dir = &base_dir.join("packs").join("systems");
+        let interface_packs_dir = &base_dir.join("packs").join("interface");
         Directories {
             base_dir: String::from(&base_dir.to_str().unwrap().to_owned()),
             config_directory: String::from(&config_dir.to_str().unwrap().to_owned()),
@@ -93,6 +102,7 @@ impl From<String> for Directories {
             static_files: String::from(&base_dir.join("client").to_str().unwrap().to_owned()),
             asset_directory: String::from(&base_dir.join("assets").to_str().unwrap().to_owned()),
             systems_dir: String::from(&systems_dir.to_str().unwrap().to_owned()),
+            interface_packs_dir: String::from(&interface_packs_dir.to_str().unwrap().to_owned()),
         }
     }
 }
@@ -107,6 +117,7 @@ impl Directories {
             &self.static_files,
             &self.world_basedir,
             &self.systems_dir,
+            &self.interface_packs_dir,
         ];
         for directory in directories {
             let dir_path = Path::new(&directory);

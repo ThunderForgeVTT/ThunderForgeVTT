@@ -44,11 +44,11 @@ routes, mutation), `packs/systems/*/` (each system's rules),
 
 ## Phase 1: Setup
 
-- [ ] T001 [P] Write ADR-046 — "an interface pack is data, not a module" — in `docs/adrs/`, recording why the format has nowhere to put code and how that keeps this increment independent of ADR-029, and add its row to `docs/adrs/README.md` (Constitution IV, research §1)
-- [ ] T002 [P] Write ADR-047 — the system contract: one declaration, declared values rather than a fixed struct, and why it lives in `thunderforge-canvas-core` — citing the two divergent traits it retires and the two fixed structs this codebase has already corrected. Index it in `docs/adrs/README.md` (research §8, §9)
-- [ ] T003 [P] Write ADR-048 in `docs/adrs/` — how a system pack's implementation is discovered rather than listed, recording that the mechanism is the least settled decision in this feature and what would change the answer. Index it in `docs/adrs/README.md` (research §12)
-- [ ] T004 Add `interface_packs_dir` to `Directories` in `src/server/src/config/mod.rs`, resolving to `<data>/packs/interface` exactly as `systems_dir` resolves to `<data>/packs/systems`
-- [ ] T005 [P] Create `packs/interface/` with a `README.md` stating that packs here are presentation-only, may not contribute behaviour, that the type is exclusive (FR-002), and that bundled packs are named `Forged <Metal>` with Forge as the base (FR-007b)
+- [X] T001 [P] Write ADR-059 — "an interface pack is data, not a module" — in `docs/adrs/`, recording why the format has nowhere to put code and how that keeps this increment independent of ADR-029, and add its row to `docs/adrs/README.md` (Constitution IV, research §1)
+- [X] T002 [P] Write ADR-060 — the system contract: one declaration, declared values rather than a fixed struct, and why it lives in `thunderforge-canvas-core` — citing the two divergent traits it retires and the two fixed structs this codebase has already corrected. Index it in `docs/adrs/README.md` (research §8, §9)
+- [X] T003 [P] Write ADR-061 in `docs/adrs/` — how a system pack's implementation is discovered rather than listed, recording that the mechanism is the least settled decision in this feature and what would change the answer. Index it in `docs/adrs/README.md` (research §12)
+- [X] T004 Add `interface_packs_dir` to `Directories` in `src/server/src/config/mod.rs`, resolving to `<data>/packs/interface` exactly as `systems_dir` resolves to `<data>/packs/systems`
+- [X] T005 [P] Create `packs/interface/` with a `README.md` stating that packs here are presentation-only, may not contribute behaviour, that the type is exclusive (FR-002), and that bundled packs are named `Forged <Metal>` with Forge as the base (FR-007b)
 
 ---
 
@@ -59,15 +59,15 @@ routes, mutation), `packs/systems/*/` (each system's rules),
 **⚠️ CRITICAL**: layout addresses declared identifiers. Nothing in Increment B
 can be validated until identifiers resolve, so this phase blocks that one.
 
-- [ ] T006 Define `DeclaredValue`, `Origin` and the `SystemRules` trait in `crates/thunderforge-canvas-core/src/system_rules.rs` per `contracts/system-contract.md`, with `derived_declarations()` separate from `derive()` so a pack can be validated against a system without running it
-- [ ] T007 Document on the trait, in prose, that `derive` is pure — no I/O, no clock, no randomness — and why: a derived value is recomputed per read and never stored, so an impure one shows two viewers of the same character two different sheets
-- [ ] T008 [P] Add contract-level tests in `crates/thunderforge-canvas-core/` that a `SystemRules` implementation returning an identifier absent from `derived_declarations()` is rejected by the resolver rather than silently rendered
+- [X] T006 Define `DeclaredValue`, `Origin` and the `SystemRules` trait in `crates/thunderforge-canvas-core/src/system_rules.rs` per `contracts/system-contract.md`, with `derived_declarations()` separate from `derive()` so a pack can be validated against a system without running it
+- [X] T007 Document on the trait, in prose, that `derive` is pure — no I/O, no clock, no randomness — and why: a derived value is recomputed per read and never stored, so an impure one shows two viewers of the same character two different sheets
+- [X] T008 [P] Add contract-level tests in `crates/thunderforge-canvas-core/` that a `SystemRules` implementation returning an identifier absent from `derived_declarations()` is rejected by the resolver rather than silently rendered
 - [ ] T009 Delete `trait GameSystem`, `SkillDefinition` and `DerivedStats` from `src/engine/src/systems/core.rs`, whose only implementation is a stub and on which nothing depends (`src/server/src/attributes.rs` records this). Confirm with `cargo check --target wasm32-unknown-unknown -p thunderforge_engine`
 - [ ] T010 Delete the re-declared `trait GameSystemTrait` from `packs/systems/dnd5e/engine/src/plugin.rs` — the one whose comment says it "should match" the deleted one and has drifted from it — and depend on `thunderforge_canvas_core` instead, which is the cross-package dependency its comment says it was avoiding
-- [ ] T011 Implement `SystemRules` for Genie in `packs/systems/genie/server/`, declaring and deriving what Genie actually needs, with unit tests. Genie first because `IMPLEMENTED_SYSTEM_IDS` in `apps/web/src/api/gameSystems.ts` contains only `genie`
+- [X] T011 Implement `SystemRules` for Genie in `packs/systems/genie/server/`, declaring and deriving what Genie actually needs, with unit tests. Genie first because `IMPLEMENTED_SYSTEM_IDS` in `apps/web/src/api/gameSystems.ts` contains only `genie`
 - [ ] T012 Resolve stored and derived values into one `identifier → value` set in `src/server/src/attributes.rs` (or a sibling), merging the manifest-declared stored read that already exists with `derive`, tagging each with its `origin`
 - [ ] T013 Expose the resolved set on the actor's GraphQL type, `origin` included, so a surface can tell which values a player may edit and which are computed
-- [ ] T014 Replace `register_dnd5e_system` and `register_genie_system` in `src/server/src/systems.rs` with discovery per ADR-048, removing the hand-wired validator lists and the per-system `[dependencies.*_server]` blocks in `src/server/Cargo.toml` that adding a system currently requires editing (FR-029, SC-004)
+- [ ] T014 Replace the **seven** `register_*_system` functions in `src/server/src/systems.rs` and their `GAME_SYSTEMS` caller with discovery per ADR-061, removing the hand-wired validator lists and the **seven** per-system `[dependencies.*_server]` blocks in `src/server/Cargo.toml`. Adding a system currently requires editing both files, and `GAME_SYSTEMS` already carries a `// In future phases: register_coc7e_system(...)` comment — the eighth line somebody was going to have to write (FR-029, SC-004)
 - [ ] T015 [P] Add `scripts/check-system-registry.mjs`, modelled on `scripts/check-interaction-seam.mjs`, failing the build if a hand-maintained list of system identifiers reappears in shared server code — and add it as a step in `scripts/verify.mjs`
 - [ ] T016 [P] Server tests in `src/server/src/attributes.rs`'s test module: an actor in a Genie world reports stored and derived values through one path, and the same stored input always yields the same derived output
 
