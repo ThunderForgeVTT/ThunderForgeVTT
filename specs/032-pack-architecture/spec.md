@@ -42,6 +42,59 @@ half is unblocked and ships first.** The system-pack half is blocked on ADR-029
 being answered, and this specification treats that dependency as a hard gate
 rather than a footnote.
 
+## Clarifications
+
+### Session 2026-09-02
+
+- Q: When an interface pack declares it is built for a particular system, may it also decide how that system's stats are arranged on screen — and where do derived numbers like a 5e ability modifier or spell save DC get computed? (FR-003) → A: The system computes, the interface arranges. System packs declare their derived values alongside their stored ones; interface packs declare layout by referring to declared identifiers. Both remain pure data, and both stay outside ADR-029's gate.
+
+- Q: How should a pack's compatibility with a system be established — does the pack simply state which systems it targets, or is that claim checked against what those systems actually declare? → A: Declared **and** validated. A pack states its target systems; validation reads each named system's manifest and rejects the pack if its layout references an identifier that system does not declare, naming both the identifier and the system.
+
+- Q: Where should a system's derived values actually be computed — in the pack's Rust crate on the server, in the pack's TypeScript module in the browser, or declared as expressions in the manifest? → A: In the pack's Rust crate, **conditional on there being a real plugin API**: one shared Rust contract that every pack implements, so the implementation cannot be fumbled differently in each pack. The contract carries declared `identifier → value` pairs, never a fixed struct.
+
+- Q: If every interface pack is named after a metal, what happens to "Forge" — does the base pack get a metal name too, and which one? → A: The base pack stays **Forge** and is the conformance reference for the pack format; packs bundled with the product are named **Forged &lt;Metal&gt;** — Forged Iron, Forged Steel. The schema, not Forge, remains the authority on what a pack may contain; Forge's obligation is to exercise all of it. Third-party packs are not required to borrow the house name.
+
+- Q: How does Forge manage to work with every system — including one nobody has written a pack for — while still being the pack that exercises every layout construct? → A: Layout addresses declarations **generically as well as specifically**. A construct may target a declaration set by kind and order ("every declared attribute, in declaration order"), or an individual identifier by name. Forge uses only the generic form, so it composes against any system without naming a concept it cannot know; targeted packs use names and are validated under FR-026.
+
+**Evidence behind that answer.** The official D&D 5e character sheet carries 336
+form fields: 122 checkboxes (18 skill proficiencies, 6 save proficiencies, 6
+death saves, the rest spell-prepared toggles), 100 spell name slots, 18 spell
+slot counters across nine levels, 9 attack fields, 5 currency denominations, 6
+ability scores — **and six separate ability-modifier fields**, because paper
+cannot compute. `packs/systems/dnd5e/system.json` declares roughly thirty
+things against those 336, and nothing anywhere in the product derives a value
+from another: `AttributeDeclaration` carries id, label, abbreviation, source
+and order, and stops there.
+
+So a 5e interface cannot be colours and spacing. Most of a 5e sheet is derived
+numbers and structures the generic layer has never heard of — death saves exist
+in no other shipping system, and Genie has a Wish Pool and a Doom Clock where
+5e has spell slots. The question was never whether interfaces are
+system-shaped; it is who computes, and the answer above puts that with the
+system, where the ruleset already lives.
+
+**Two contracts and two implementations already exist.** The product declares a
+system contract twice — once in the engine's own system module and once,
+re-declared, inside the bundled 5e pack with a comment saying it "should match"
+the first; it has since drifted, and neither is depended upon by anything. The
+engine's version carries a fixed set of derived statistics — armour class,
+initiative, proficiency bonus — which is the same mistake the attribute and
+resource declarations were each introduced to correct. The 5e presentation
+exists twice as well: roughly 1,190 lines in the pack that nothing builds or
+loads, beside roughly 1,130 lines in shared application code that do run, with
+5e the only system holding a module there. FR-027 through FR-030 are written
+against that state.
+
+**A published sheet is read for scope, never for design.** Publishers'
+character sheets are copyrighted, and their layout, wording, ornament and trade
+dress are exactly the part that is theirs. They are consulted to answer *what
+does this system ask a player to track* — a question of fact about the ruleset
+— and never to answer *what should ours look like*. Every ThunderForge
+interface is ThunderForge's own design: our arrangement, our type, our
+ornament, our way of rendering an actor. This is the same line the bundled 5e
+pack's own manifest already draws in its trademark restrictions, applied to
+presentation rather than to naming.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A Game Master dresses the table (Priority: P1)
@@ -96,6 +149,14 @@ Story 2 is never built.
    any one of them, **Then** the base pack is presented on the same footing as
    the others, with no capability, placement, or removability that the others
    lack.
+7. **Given** a world bound to a game system, **When** its Game Master chooses a
+   pack that targets that system, **Then** the system's own values are
+   presented in that pack's arrangement — its declared attributes, resources
+   and derived values, laid out as that pack declares — and a pack targeting a
+   different system is not offered for this world.
+8. **Given** a world bound to a system no pack targets, **When** anyone opens an
+   actor, **Then** Forge presents that system's declared values through generic
+   arrangement, and nothing is missing, blank, or mislabelled.
 
 ---
 
@@ -203,6 +264,13 @@ content is destroyed or made unexportable.
 
 - A pack claims to be both an interface pack and a system pack. It must be
   rejected: the type is exclusive, because the safety rule attaches to the type.
+- A system adds a declaration after a pack targeting it was validated. The pack
+  is not thereby wrong — a new identifier it does not lay out is simply not
+  laid out — but a system that *removes* one breaks every pack referencing it,
+  and that must surface at validation rather than as a blank panel.
+- A pack targets two systems whose declarations overlap only partly. Its layout
+  must validate against each named system independently, not against their
+  union.
 - An interface pack's presentation makes a control unreadable, invisible, or
   unreachable. Skinning must not be able to remove an affordance; a pack that
   hides an action has changed behaviour by other means.
@@ -239,6 +307,18 @@ content is destroyed or made unexportable.
   action, rule, computed value, data change, or executable logic. This
   prohibition MUST be enforced by an automated validation that runs before a pack
   can be made available, not by reviewer judgement alone.
+- **FR-003a**: Declaring *where a value appears* is presentation; declaring
+  *what a value is* is behaviour. An interface pack MAY therefore arrange,
+  group, order, and emphasise values by referring to identifiers a system pack
+  has declared, and MUST NOT compute, transform, or conditionally derive any
+  value it displays. A layout referring to an identifier the bound system does
+  not declare MUST fail validation rather than render blank.
+- **FR-003b**: An interface pack MUST NOT reproduce a publisher's sheet
+  layout, ornament, wording, or trade dress. Published sheets inform *what a
+  system tracks*; they MUST NOT be the source of *how ThunderForge presents
+  it*. Any pack bundled with the product MUST be an original ThunderForge
+  design, and a pack's legal metadata MUST NOT claim a licence it does not
+  hold for presentation it did not author.
 - **FR-004**: A system pack MUST be able to contribute functional surfaces —
   minimally a character sheet, an items/inventory presentation, and rules
   behaviour hooks — without any change to shared application code that names the
@@ -257,6 +337,21 @@ content is destroyed or made unexportable.
   no capability or status that other interface packs cannot also have. The name
   is the house's; the standing is not — nothing about being the shipped pack may
   give Forge a capability, a placement, or an exemption another pack cannot have.
+- **FR-007a**: Forge MUST be the **conformance reference** for the pack format:
+  every token and every layout construct the format offers MUST appear
+  somewhere in Forge, and that MUST be enforced by a test rather than by
+  inspection. The schema remains the authority on what a pack may contain —
+  Forge's role is to exercise it, not to define it. Stated this way on purpose:
+  a base pack that *defined* the vocabulary would hold a capability no other
+  pack has, which is the accumulated privilege FR-007 exists to prevent, and a
+  format construct nothing can actually build would then be discovered by a
+  third-party author rather than by Forge failing its own test.
+- **FR-007b**: Interface packs bundled with the product MUST be named
+  **Forged &lt;Metal&gt;** — Forged Iron, Forged Steel — with Forge itself as the
+  base. Third-party packs MUST NOT be required to adopt the house name; the
+  convention signals that a pack ships with the product, and requiring it of
+  packs the product did not author would make a claim on work that is not the
+  product's, which is the same line FR-003b draws from the other direction.
 - **FR-008**: A world's Game Master MUST be able to see the interface packs
   available, preview one before committing, and select one for the world.
 - **FR-009**: An interface-pack selection MUST be stored against the world and
@@ -276,6 +371,60 @@ content is destroyed or made unexportable.
   cannot read the pack their Game Master chose has no setting of their own to
   escape to, which makes an illegible pack indistinguishable from FR-012's
   unreachable control.
+
+#### System-shaped interfaces
+
+- **FR-024**: A system pack MUST be able to declare its **derived** values —
+  a 5e ability modifier, a save total, a passive score, a spell save DC —
+  alongside the values it stores, and the product MUST resolve both into the
+  same `identifier → value` form before anything presents them. A value that
+  only exists on paper because paper cannot compute is a value this product
+  computes.
+- **FR-025**: An interface pack MUST be able to declare layout — grouping,
+  ordering, emphasis, and repeating collections — over identifiers a system has
+  declared. The format MUST be able to express the structural shapes the
+  shipping systems actually have, which differ in kind and not merely in
+  degree: a six-ability block with an eighteen-row skill list; a three-pool
+  column with no skills; a skills-only ladder with no abilities at all; a
+  nine-level slot grid; a bounded success/failure tracker.
+- **FR-025a**: A layout construct MUST be able to address a system's
+  declarations **generically** — by kind and declaration order, as in "every
+  declared attribute" or "every declared resource" — as well as **specifically**
+  by identifier. Generic addressing is what lets one layout compose against a
+  system it has never heard of, including one that ships later; specific
+  addressing is what lets a targeted pack lay out a nine-level slot grid or a
+  death-save tracker.
+- **FR-025b**: Forge MUST use generic addressing only, and MUST NOT reference
+  any system's identifiers. This is what makes FR-006's system-agnostic default
+  a mechanism rather than a promise: the default *is* Forge, and it works for
+  every system precisely because it names nothing. It is also what reconciles
+  FR-007a with FR-026 — Forge exercises every construct while remaining
+  compatible with every system, because the constructs it exercises are the
+  generic ones.
+- **FR-026**: An interface pack MUST declare the systems it targets, and that
+  claim MUST be validated before the pack is made available: a pack whose
+  layout references an identifier a named system does not declare MUST be
+  rejected, naming both the identifier and the system. A declaration that is
+  merely asserted is the failure mode spec 016 already corrected for legal
+  metadata, arriving in a second place.
+- **FR-027**: There MUST be exactly one contract that every system pack
+  implements to supply its values, and it MUST be stated once. Two
+  declarations of the same contract, kept in step by convention, MUST NOT
+  exist — every pack must be held to the same obligations by construction
+  rather than by each author reproducing them.
+- **FR-028**: That contract MUST carry values as declared identifier-and-value
+  pairs and MUST NOT name any particular system's concepts in its own
+  vocabulary. A contract with fixed places for armour class, initiative and
+  proficiency bonus is one ruleset's character sheet built into the product:
+  it has nowhere to put a system whose resources are stress and trauma, and
+  nothing at all to say to one that declares no abilities.
+- **FR-029**: A system pack's implementation of that contract MUST be
+  discovered rather than listed. Adding a pack MUST NOT require editing a
+  central registry, and that property MUST be enforced automatically rather
+  than left to convention.
+- **FR-030**: A system's presentation MUST live in that system's pack and MUST
+  NOT live in shared application code. Where a system's presentation exists in
+  both places, exactly one MUST survive, and it MUST be the pack's.
 
 #### System packs
 
@@ -332,6 +481,15 @@ content is destroyed or made unexportable.
 - **Pack Contribution**: A single declared thing a pack offers — one surface,
   one hook, one look. The unit of validation, of mounting, and of failure
   containment.
+- **Declared Value**: One `identifier → value` pair a system publishes about an
+  actor, whether stored (a 5e Strength score) or derived (its modifier). The
+  unit everything downstream carries and nothing downstream interprets.
+- **System Contract**: The single contract every system pack implements to
+  supply its declared values, stated once and shared by everything that reads
+  them (FR-027, FR-028).
+- **Layout Declaration**: A pack's statement of how declared values are
+  arranged — generic when it addresses a declaration set by kind and order,
+  specific when it names an identifier (FR-025a).
 - **World Appearance Binding**: A world's chosen interface pack, scoped to the
   world and applied to everyone in it. Set by the world's Game Master.
 - **World Pack Binding**: A world's association with a system pack and with an
@@ -357,6 +515,9 @@ content is destroyed or made unexportable.
 - **SC-003a**: A candidate interface pack that falls below the legibility floor
   is rejected in 100% of validation runs, naming the surface and the mode that
   failed.
+- **SC-003b**: A candidate interface pack that names a target system it cannot
+  render — its layout references an identifier that system does not declare —
+  is rejected in 100% of validation runs, naming the identifier and the system.
 - **SC-004**: A new game system can contribute a character sheet, an item
   presentation, and rules behaviour with **zero** lines changed in shared
   application code — measured as: the change set that adds the system touches
@@ -393,6 +554,9 @@ reading does not reopen them.
   stating the peer requirement outright rather than by choosing a word that
   hints at it. If Forge ever acquires a capability another pack cannot have,
   FR-007 is what has been violated — the name was never the guarantee.
+  *Extended later the same day:* bundled packs are named **Forged &lt;Metal&gt;**
+  with Forge as the base, and Forge is the format's conformance reference
+  rather than its authority (FR-007a, FR-007b).
 - **An interface pack is chosen per world by its Game Master, not per user**
   (2026-09-02, requester). The draft argued the opposite. The table sees one
   look, chosen by the person who runs the table; there is no per-user override
