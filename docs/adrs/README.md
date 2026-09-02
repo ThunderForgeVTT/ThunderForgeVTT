@@ -68,7 +68,7 @@ This directory contains architecture decisions for ThunderForgeVTT, captured usi
 | [20260901-058](./20260901-058-item_price_is_presentational.md)                        | Accepted | A Game Master's Item Price Is Presentational; Systems Own Economies                           |
 | [20260902-059](./20260902-059-interface_pack_is_data_not_a_module.md) | Accepted | An Interface Pack Is Data, Not a Module |
 | [20260902-060](./20260902-060-one_system_contract_with_declared_values.md) | Accepted | One System Contract, Carrying Declared Values |
-| [20260902-061](./20260902-061-system_rules_discovery_not_a_registry.md) | Proposed | A System Pack's Rules Are Discovered, Not Listed |
+| [20260902-061](./20260902-061-system_rules_discovery_not_a_registry.md) | Accepted | A System Pack's Rules Are Discovered, Not Listed |
 
 > **Note (2026-08-19):** ADRs 020–024 originally collided with an unrelated "pack system" batch that reused the same day-020 through day-024 numbers. The world-domain ADRs (020–024 above) were committed first and are documented here; the colliding pack-system ADRs were renumbered to 026–030. See `docs/SYSTEM_HOOKS_API_GUIDE.md` and ADR-036's "Related Decisions" for the corrected references.
 

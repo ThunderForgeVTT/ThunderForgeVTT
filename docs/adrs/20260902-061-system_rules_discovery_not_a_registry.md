@@ -1,7 +1,7 @@
 # A System Pack's Rules Are Discovered, Not Listed
 
 - **Date**: 2026-09-02
-- **Status**: Proposed
+- **Status**: Accepted (2026-09-02, after the spike below)
 - **Spec**: `specs/032-pack-architecture/` (FR-029, SC-004)
 
 ## Context
@@ -126,6 +126,43 @@ the target is the same modest property under a more ambitious name.
   editing, not existence.
 - **Keep the hand-written list.** Rejected. It is precisely the thing SC-004
   measures, and `systems.rs` already documents its own repetitiveness.
+
+## The spike, and what it changed
+
+Written as Proposed because the mechanism was unsettled. It was settled the
+same day by measurement, and the answer was not the one this ADR expected.
+
+`inventory` collects fine in a single crate, and builds for
+wasm32-unknown-unknown. But the case that matters failed:
+
+| Setup | Collected |
+|---|---|
+| A binary depending on a submitting crate, naming no symbol from it | **nothing** — debug and release alike |
+| The same, plus one `use pack as _;` | everything |
+
+An unreferenced Rust rlib is never linked, and its submissions go with it.
+Distributed slices distribute the *content* of a registration; they do not
+make a crate present. Nothing in the crate's documentation is wrong about
+this — it is ordinary static linking — but it means "discovered rather than
+listed" cannot be literally true for statically linked packs, and a design
+that assumed otherwise would have shipped a product that silently registered
+no game systems at all.
+
+**So the decision stands, with the boundary drawn where the measurement put
+it.** `inventory` carries what a pack contributes — its id, its validators,
+its rules constructor. `src/server/src/system_packs.rs` holds one `use <pack>
+as _;` line per bundled pack, and `Cargo.toml` holds one dependency.
+
+The distinction that makes this acceptable rather than a defeat: those two
+lines are **build-graph facts**. They say a crate exists and should be linked.
+They say nothing about what it contains — not its data shapes, not its
+validators, not its rules — so unlike the seven `register_*_system` functions
+they replaced, there is nothing in them that can drift out of step with a
+pack. The thing that rots is knowledge, and the knowledge is gone.
+
+SC-004 asks for "zero lines changed in shared application code". This delivers
+two, and neither can be wrong about a system. That gap is worth stating
+plainly rather than rounding down.
 
 ## What Would Change the Answer
 
