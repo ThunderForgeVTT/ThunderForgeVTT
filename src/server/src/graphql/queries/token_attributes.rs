@@ -187,6 +187,12 @@ pub struct GraphQLDeclaredValue {
     /// The group this belongs to, when it is part of one — a Fate consequence
     /// and its aspect, a Cypher stat's current value, pool and edge.
     pub group: Option<String>,
+    /// The group's own name, when its system gave it one (T019g). Without it a
+    /// renderer names a group after whichever member came first, which is a
+    /// guess that declaration order should not get to make.
+    pub group_label: Option<String>,
+    /// This is the member to show when there is room for one (T019g).
+    pub headline: bool,
     pub origin: GraphQLValueOrigin,
 }
 
@@ -208,6 +214,8 @@ impl From<thunderforge_canvas_core::system_rules::DeclaredValue> for GraphQLDecl
             track: track_of(&value.value),
             state: state_of(&value.value),
             group: value.group,
+            group_label: value.group_label,
+            headline: value.headline,
             origin: match value.origin {
                 Origin::Stored => GraphQLValueOrigin::Stored,
                 Origin::Derived => GraphQLValueOrigin::Derived,

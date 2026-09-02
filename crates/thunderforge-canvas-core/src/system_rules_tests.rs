@@ -346,3 +346,62 @@ fn grouped_values_carry_the_relationship_a_sheet_shows() {
 fn an_ungrouped_value_says_so_rather_than_belonging_to_a_group_of_one() {
     assert_eq!(stored("strength", 14).group, None);
 }
+
+/// The system's declaration order survives `resolve` (spec 032).
+///
+/// It did not. `visible` was funnelled through `DeclaredValues`, a `BTreeMap`
+/// keyed by id, which deduplicated correctly and alphabetised everything on
+/// the way past. Genie declares might, cunning, spirit and a sheet showed
+/// cunning, might, spirit; 5e declares walk, fly, swim, climb and a sheet
+/// showed climb first.
+///
+/// Every layer above this one documents that a set arrives in the system's own
+/// order and that a pack never reorders it. The order was gone before any of
+/// them saw it, which is why none of their tests could catch this.
+#[test]
+fn resolve_keeps_the_order_the_system_declared_and_not_the_alphabet() {
+    let value = |id: &str| DeclaredValue {
+        id: id.to_string(),
+        label: id.to_string(),
+        abbreviation: None,
+        value: DeclaredValueKind::Integer(1),
+        group: None,
+        group_label: None,
+        headline: false,
+        origin: Origin::Stored,
+    };
+
+    // Deliberately in an order the alphabet would destroy.
+    let declared = vec![value("walk"), value("fly"), value("swim"), value("climb")];
+    let resolved = resolve(None, declared, &DeclaredValues::default());
+
+    let order: Vec<&str> = resolved.iter().map(|v| v.id.as_str()).collect();
+    assert_eq!(order, vec!["walk", "fly", "swim", "climb"]);
+}
+
+/// Deduplication is still wanted; it is only the sorting that was not.
+#[test]
+fn resolve_keeps_the_first_of_two_values_sharing_an_identifier() {
+    let value = |id: &str, n: i32| DeclaredValue {
+        id: id.to_string(),
+        label: format!("{id}-{n}"),
+        abbreviation: None,
+        value: DeclaredValueKind::Integer(n),
+        group: None,
+        group_label: None,
+        headline: false,
+        origin: Origin::Stored,
+    };
+
+    let resolved = resolve(
+        None,
+        vec![value("might", 1), value("cunning", 2), value("might", 3)],
+        &DeclaredValues::default(),
+    );
+
+    assert_eq!(resolved.len(), 2, "one identifier is one value");
+    // The earlier one is the one the system reached for first, matching
+    // `indexById` on the other side of the wire.
+    assert_eq!(resolved[0].value.as_integer(), Some(1));
+    assert_eq!(resolved[0].label, "might-1");
+}

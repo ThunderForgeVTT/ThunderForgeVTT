@@ -97,18 +97,56 @@ pub async fn actor_system_data_impl(
 
 /// Everything one actor's system publishes about it, stored and derived.
 ///
+/// One actor's values, in the sets a sheet lays out.
+///
+/// Mirrors `SheetDeclarations` in `apps/web/src/layout/types.ts` field for
+/// field, deliberately: the renderer takes exactly this shape, and a wire type
+/// that needed reshaping on arrival would be a place for the two to drift.
+#[derive(async_graphql::SimpleObject, Debug, Clone, Default)]
+pub struct GraphQLActorSheet {
+    pub attributes: Vec<crate::graphql::queries::token_attributes::GraphQLDeclaredValue>,
+    pub resources: Vec<crate::graphql::queries::token_attributes::GraphQLDeclaredValue>,
+    pub skills: Vec<crate::graphql::queries::token_attributes::GraphQLDeclaredValue>,
+    pub movement: Vec<crate::graphql::queries::token_attributes::GraphQLDeclaredValue>,
+    pub derived: Vec<crate::graphql::queries::token_attributes::GraphQLDeclaredValue>,
+    /// Everything a named set did not claim.
+    pub other: Vec<crate::graphql::queries::token_attributes::GraphQLDeclaredValue>,
+    /// Every value, in the system's own declaration order.
+    pub all: Vec<crate::graphql::queries::token_attributes::GraphQLDeclaredValue>,
+}
+
+impl From<crate::declared_values::ActorSheetValues> for GraphQLActorSheet {
+    fn from(sets: crate::declared_values::ActorSheetValues) -> Self {
+        let convert = |values: Vec<thunderforge_canvas_core::system_rules::DeclaredValue>| {
+            values
+                .into_iter()
+                .map(crate::graphql::queries::token_attributes::GraphQLDeclaredValue::from)
+                .collect()
+        };
+        Self {
+            attributes: convert(sets.attributes),
+            resources: convert(sets.resources),
+            skills: convert(sets.skills),
+            movement: convert(sets.movement),
+            derived: convert(sets.derived),
+            other: convert(sets.other),
+            all: convert(sets.all),
+        }
+    }
+}
+
 /// The read that makes Increment E reach a player. `tokenAttributes` answers
 /// the same question for a scene's tokens, which is the canvas's need; a
 /// character sheet has an actor and no token, and until now there was no way
 /// to ask.
 ///
 /// Same visibility rule as every other actor-scoped read.
-pub async fn actor_declared_values_impl(
+pub async fn actor_sheet_values_impl(
     state: &AppState,
     user_id: uuid::Uuid,
     is_admin: bool,
     actor_id: uuid::Uuid,
-) -> GraphQLResult<Vec<thunderforge_canvas_core::system_rules::DeclaredValue>> {
+) -> GraphQLResult<crate::declared_values::ActorSheetValues> {
     let mut conn = state
         .db_pool
         .get()
@@ -129,7 +167,7 @@ pub async fn actor_declared_values_impl(
     // An actor belonging to no system has nothing declared about it. Not an
     // error: a marker on a map is a real thing with no sheet.
     let Some(system_id) = system_id else {
-        return Ok(Vec::new());
+        return Ok(crate::declared_values::ActorSheetValues::default());
     };
 
     let mut conn = state
@@ -173,11 +211,26 @@ pub async fn actor_declared_values_impl(
         None => crate::declared_values::ActorSlots::default(),
     };
 
-    Ok(crate::declared_values::declared_values_for_actor(
+    Ok(crate::declared_values::actor_sheet_values(
         &state.directories.systems_dir,
         &system_id,
         &slots,
     ))
+}
+
+/// The same read, flattened.
+///
+/// Kept because `actorDeclaredValues` is a shipped field and a caller that
+/// wants one list should not have to reassemble it from six.
+pub async fn actor_declared_values_impl(
+    state: &AppState,
+    user_id: uuid::Uuid,
+    is_admin: bool,
+    actor_id: uuid::Uuid,
+) -> GraphQLResult<Vec<thunderforge_canvas_core::system_rules::DeclaredValue>> {
+    Ok(actor_sheet_values_impl(state, user_id, is_admin, actor_id)
+        .await?
+        .all)
 }
 
 /// Testable core of `ActorQuery::search_actors`. Server-side counterpart
@@ -275,6 +328,28 @@ impl ActorQuery {
             .into_iter()
             .map(crate::graphql::queries::token_attributes::GraphQLDeclaredValue::from)
             .collect())
+    }
+
+    /// The same values, already in the sets a sheet lays out.
+    ///
+    /// `actorDeclaredValues` sends one flat list, which left a renderer with
+    /// six sets to fill and nothing to fill them from: everything a system
+    /// published landed in `other`, so Forge's Attributes and Resources
+    /// sections were empty for every system that has them.
+    ///
+    /// A value's set is a fact about which block of the manifest declared it,
+    /// and the server is the side that reads the manifest. Producing the named
+    /// sets and `all` in one pass is also what stops them disagreeing (T019h).
+    async fn actor_sheet(
+        &self,
+        ctx: &Context<'_>,
+        actor_id: uuid::Uuid,
+    ) -> GraphQLResult<GraphQLActorSheet> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        let sets =
+            actor_sheet_values_impl(state, auth_user.user_id, auth_user.is_admin, actor_id).await?;
+        Ok(GraphQLActorSheet::from(sets))
     }
 
     /// Server-side search pairing for the client's FlexSearch index —

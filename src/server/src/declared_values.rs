@@ -173,6 +173,67 @@ fn visible_from(slots: &ActorSlots, declarations: &[AttributeDeclaration]) -> Ve
         .collect()
 }
 
+/// The speeds a system declares.
+///
+/// Every bundled manifest has a `movement` block — Genie's `stride`, 5e's
+/// walk/fly/swim/climb — and until now nothing read one. The values existed in
+/// the manifest, the layout format had a `movement` set to lay them out, Forge
+/// has a section titled for them, and the set arrived empty every time because
+/// no code turned the block into values. A sheet section that is always empty
+/// is indistinguishable from a system that has no speeds.
+///
+/// `default` is used when the actor stores nothing, which is the one place in
+/// this module where a default is right rather than an omission: a manifest
+/// saying `"default": 30` is the system stating a speed every character has
+/// until it says otherwise, not a gap being filled in.
+fn movement_from(slots: &ActorSlots, systems_dir: &str, system_id: &str) -> Vec<DeclaredValue> {
+    let Some(manifest) = read_manifest(systems_dir, system_id) else {
+        return Vec::new();
+    };
+    let Some(block) = manifest.get("movement").and_then(|m| m.as_object()) else {
+        return Vec::new();
+    };
+
+    let stored = slots.trait_data.as_ref();
+    let mut declared: Vec<(i64, DeclaredValue)> = block
+        .iter()
+        .filter_map(|(id, entry)| {
+            let source = entry
+                .get("source")
+                .and_then(|s| s.as_str())
+                .unwrap_or(id.as_str());
+            let value = stored
+                .and_then(|slot| slot.get(source))
+                .and_then(|v| v.as_i64())
+                .or_else(|| entry.get("default").and_then(|d| d.as_i64()))?;
+
+            Some((
+                entry.get("order").and_then(|o| o.as_i64()).unwrap_or(0),
+                DeclaredValue {
+                    id: id.clone(),
+                    label: entry
+                        .get("label")
+                        .and_then(|l| l.as_str())
+                        .unwrap_or(id.as_str())
+                        .to_string(),
+                    abbreviation: None,
+                    value: DeclaredValueKind::Integer(i32::try_from(value).ok()?),
+                    group: None,
+                    group_label: None,
+                    headline: false,
+                    origin: Origin::Stored,
+                },
+            ))
+        })
+        .collect();
+
+    // The system's own order. A manifest object has no inherent one — serde
+    // gives them alphabetically — so `order` is what keeps 5e's walk ahead of
+    // its climb rather than the alphabet deciding.
+    declared.sort_by_key(|(order, _)| *order);
+    declared.into_iter().map(|(_, value)| value).collect()
+}
+
 /// Everything else the system's sheet declares (FR-031).
 ///
 /// The aspects, the tracks, the ladders and the player-named slots — the parts
@@ -204,6 +265,84 @@ fn sheet_from(slots: &ActorSlots, systems_dir: &str, system_id: &str) -> Vec<Dec
 /// A system this build does not have, or one that computes nothing, yields
 /// exactly the stored half — which is the whole of FR-019's promise on the
 /// values side: a world whose pack is missing still shows what it stored.
+/// One actor's values, already sorted into the sets a sheet lays out.
+///
+/// # Why the server does this and not the client
+///
+/// Because the server is the only side that knows. A value's set is a fact
+/// about which block of the manifest declared it — `abilities`, `resources`,
+/// `movement`, `sheet` — and that block is read here. A flat list on the wire
+/// left the renderer with six lists to reconstruct and no information to do it
+/// with, so everything a system published landed in `other` and Forge's
+/// Attributes and Resources sections were empty for every system that has
+/// them.
+///
+/// This is also T019h's real fix rather than its detector. The named sets and
+/// `all` cannot disagree when one function produces both from one pass.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ActorSheetValues {
+    pub attributes: Vec<DeclaredValue>,
+    pub resources: Vec<DeclaredValue>,
+    pub skills: Vec<DeclaredValue>,
+    pub movement: Vec<DeclaredValue>,
+    pub derived: Vec<DeclaredValue>,
+    /// Everything a named set did not claim, in declaration order.
+    pub other: Vec<DeclaredValue>,
+    /// Every value, in the order the system declared them.
+    pub all: Vec<DeclaredValue>,
+}
+
+/// Every value one actor publishes, in its sets.
+pub fn actor_sheet_values(
+    systems_dir: &str,
+    system_id: &str,
+    slots: &ActorSlots,
+) -> ActorSheetValues {
+    let declarations = crate::attributes::attribute_declarations_for_system(systems_dir, system_id);
+
+    let attributes = visible_from(slots, &declarations);
+    let resources = resources_from(slots, systems_dir, system_id);
+    let movement = movement_from(slots, systems_dir, system_id);
+
+    let ids = |values: &[DeclaredValue]| -> std::collections::BTreeSet<String> {
+        values.iter().map(|v| v.id.clone()).collect()
+    };
+    let (attribute_ids, resource_ids, movement_ids) =
+        (ids(&attributes), ids(&resources), ids(&movement));
+
+    let all = declared_values_for_actor(systems_dir, system_id, slots);
+
+    // Sets are read back off `all` rather than off the pieces above, so a value
+    // that `resolve` dropped, renamed or replaced is absent from its set too.
+    // Building the sets from the inputs would let a sheet show a value the
+    // resolved list no longer contains.
+    let mut out = ActorSheetValues {
+        all: all.clone(),
+        ..Default::default()
+    };
+    for value in all {
+        match &value {
+            // Derived first: a system may compute a value that shares an
+            // identifier with a stored declaration, and what it *is* on the
+            // sheet is the computed one.
+            v if v.origin == Origin::Derived => out.derived.push(value),
+            v if attribute_ids.contains(&v.id) => out.attributes.push(value),
+            v if resource_ids.contains(&v.id) => out.resources.push(value),
+            v if movement_ids.contains(&v.id) => out.movement.push(value),
+            _ => out.other.push(value),
+        }
+    }
+
+    // `skills` stays empty deliberately, and the reason is a fact about the
+    // shipping systems rather than an omission. 5e computes its eighteen from
+    // its abilities, so they arrive as derived values; Fate and Cypher have
+    // no fixed skill list at all — theirs are player-named slots declared in
+    // `sheet`, which is where the player's own names can live. A manifest
+    // `skills` block naming a fixed list has no system using it, and inventing
+    // a reader for it now would be shaping a construct against no consumer.
+    out
+}
+
 pub fn declared_values_for_actor(
     systems_dir: &str,
     system_id: &str,
@@ -212,6 +351,7 @@ pub fn declared_values_for_actor(
     let declarations = crate::attributes::attribute_declarations_for_system(systems_dir, system_id);
     let mut visible = visible_from(slots, &declarations);
     visible.extend(resources_from(slots, systems_dir, system_id));
+    visible.extend(movement_from(slots, systems_dir, system_id));
     visible.extend(sheet_from(slots, systems_dir, system_id));
     let context = context_from(slots);
 

@@ -533,3 +533,139 @@ async fn an_actor_reports_its_declared_values_without_a_token() {
          rather than reading the stored row directly"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Movement, and the sets a sheet lays out
+// ---------------------------------------------------------------------------
+
+/// Every bundled manifest declares a `movement` block and nothing read one.
+///
+/// The layout format has a `movement` set, Forge has a section titled for it,
+/// and the set arrived empty for every system — which on screen is
+/// indistinguishable from a ruleset that tracks no speeds.
+#[test]
+fn a_systems_declared_speeds_are_published() {
+    let values = declared_values_for_actor(&packs(), "genie", &genie_actor(Some(3)));
+
+    let stride = find(&values, "stride").expect("genie declares a stride and publishes none");
+    assert_eq!(stride.label, "Stride");
+    // Genie's manifest gives stride a default of 6 and this actor stores no
+    // speed, so the default is what a character has until it says otherwise.
+    assert_eq!(stride.value.as_integer(), Some(6));
+}
+
+#[test]
+fn a_stored_speed_overrides_the_manifests_default() {
+    let mut actor = genie_actor(Some(3));
+    actor.trait_data.as_mut().unwrap()["stride"] = serde_json::json!(9);
+
+    let values = declared_values_for_actor(&packs(), "genie", &actor);
+    assert_eq!(
+        find(&values, "stride").and_then(|v| v.value.as_integer()),
+        Some(9)
+    );
+}
+
+#[test]
+fn declared_speeds_keep_the_systems_order_and_not_the_alphabet() {
+    // 5e declares walk, fly, swim, climb in that order. A manifest object has
+    // no inherent order — serde hands them over alphabetically — so without
+    // `order` a 5e sheet would read climb, fly, swim, walk.
+    let actor = ActorSlots {
+        trait_data: Some(serde_json::json!({
+            "speed_walk": 30, "speed_fly": 60, "speed_swim": 15, "speed_climb": 15
+        })),
+        ..Default::default()
+    };
+    let sets = actor_sheet_values(&packs(), "dnd5e", &actor);
+    let order: Vec<&str> = sets.movement.iter().map(|v| v.id.as_str()).collect();
+
+    assert_eq!(order.first(), Some(&"walk"), "walk is declared first");
+    assert_ne!(
+        order.first(),
+        Some(&"climb"),
+        "the alphabet is not the order"
+    );
+}
+
+/// The sets, which the client could not previously reconstruct.
+///
+/// A flat list on the wire left the renderer six lists to fill and nothing to
+/// fill them from, so everything landed in `other` and Forge's Attributes and
+/// Resources sections were empty for every system that has them.
+mod sets {
+    use super::*;
+
+    #[test]
+    fn a_genie_actors_values_arrive_in_the_sets_a_sheet_lays_out() {
+        let sets = actor_sheet_values(&packs(), "genie", &genie_actor(Some(3)));
+
+        assert!(
+            sets.attributes.iter().any(|v| v.id == "might"),
+            "an ability belongs in attributes"
+        );
+        assert!(
+            sets.resources.iter().any(|v| v.id.contains("ealth")),
+            "a pool belongs in resources"
+        );
+        assert!(
+            sets.movement.iter().any(|v| v.id == "stride"),
+            "a speed belongs in movement"
+        );
+        assert!(
+            sets.derived.iter().all(|v| v.origin == Origin::Derived),
+            "only computed values are derived"
+        );
+    }
+
+    /// T019h, as a property rather than a detector: one pass produces both, so
+    /// they cannot disagree.
+    #[test]
+    fn every_named_set_is_contained_in_all() {
+        let sets = actor_sheet_values(&packs(), "genie", &genie_actor(Some(3)));
+        let all: std::collections::BTreeSet<&str> =
+            sets.all.iter().map(|v| v.id.as_str()).collect();
+
+        for (name, set) in [
+            ("attributes", &sets.attributes),
+            ("resources", &sets.resources),
+            ("skills", &sets.skills),
+            ("movement", &sets.movement),
+            ("derived", &sets.derived),
+            ("other", &sets.other),
+        ] {
+            for value in set {
+                assert!(
+                    all.contains(value.id.as_str()),
+                    "{name} claims `{}`, which `all` has never heard of",
+                    value.id
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_sets_partition_all_with_nothing_lost_and_nothing_doubled() {
+        // The property that makes `other` a complement rather than a guess.
+        let sets = actor_sheet_values(&packs(), "genie", &genie_actor(Some(3)));
+        let counted = sets.attributes.len()
+            + sets.resources.len()
+            + sets.skills.len()
+            + sets.movement.len()
+            + sets.derived.len()
+            + sets.other.len();
+
+        assert_eq!(
+            counted,
+            sets.all.len(),
+            "every published value belongs to exactly one set"
+        );
+    }
+
+    #[test]
+    fn a_system_this_build_does_not_have_yields_empty_sets_rather_than_failing() {
+        let sets = actor_sheet_values(&packs(), "no-such-system", &genie_actor(Some(3)));
+        assert!(sets.all.is_empty());
+        assert!(sets.attributes.is_empty());
+    }
+}

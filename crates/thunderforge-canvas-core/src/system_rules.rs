@@ -329,9 +329,27 @@ pub fn resolve(
     visible: Vec<DeclaredValue>,
     context: &DeclaredValues,
 ) -> Vec<DeclaredValue> {
-    let shown = DeclaredValues::new(visible);
+    // Deduplicated by identifier, **in the order the system declared them**.
+    //
+    // This used to funnel `visible` through `DeclaredValues`, which is a
+    // `BTreeMap` keyed by id — so it deduplicated correctly and alphabetised
+    // everything on the way past. Genie declares might, cunning, spirit and a
+    // sheet showed cunning, might, spirit; 5e declares walk, fly, swim, climb
+    // and a sheet showed climb first. Every layer above this one is careful to
+    // say that the system's order is the system's own and a pack never
+    // reorders a set, and the order had already been lost before any of them
+    // saw it.
+    let mut seen = std::collections::BTreeSet::new();
+    let mut out: Vec<DeclaredValue> = visible
+        .into_iter()
+        // First declaration wins, matching `indexById` on the other side of
+        // the wire: a value listed twice is one value, and the earlier is the
+        // one the system reached for first.
+        .filter(|value| seen.insert(value.id.clone()))
+        .collect();
+
     let Some(rules) = rules else {
-        return shown.iter().cloned().collect();
+        return out;
     };
 
     let permitted: BTreeMap<String, AttributeDeclaration> = rules
@@ -340,7 +358,6 @@ pub fn resolve(
         .map(|d| (d.id.clone(), d))
         .collect();
 
-    let mut out: Vec<DeclaredValue> = shown.iter().cloned().collect();
     let mut derived: Vec<DeclaredValue> = rules
         .derive(context)
         .into_iter()
