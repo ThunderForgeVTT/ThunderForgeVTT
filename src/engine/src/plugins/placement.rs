@@ -211,14 +211,45 @@ fn clear_carry(
 }
 
 /// A carry does not survive leaving the tool it was begun under.
+///
+/// # Why this clears the carry as well as requesting the state change
+///
+/// Setting `NextState` is not enough on its own, and the gap is exactly one
+/// frame wide. `OnExit(AuthoringMode::…)` runs in the `StateTransition`
+/// schedule, *before* `Update`; the `PlacementState::Idle` it asks for is a
+/// different state machine and does not apply until the following frame's
+/// transition. So `resolve_placement` — gated on `PlacementState::Carrying`,
+/// which is still true — would run once more in this frame's `Update`, under
+/// the new tool, and a left click in that frame would confirm the placement.
+///
+/// That is spec 031's edge case in its most literal form: a gesture in flight
+/// completing under a newly entered mode's rules. The wall, shape and lighting
+/// tools do not have it, because each is gated on the very state whose `OnExit`
+/// abandons it, and `in_state` is already false by the time `Update` runs.
+///
+/// Emptying `CarriedToken` closes it. Nothing is being carried the instant the
+/// mode is left, and `carry_is_live` refuses to run the completion path over
+/// nothing. The preview sprite is despawned a frame later by `clear_carry`,
+/// which is the only place that has ever despawned it.
 fn abandon_on_mode_change(
     state: Res<State<PlacementState>>,
     mut next: ResMut<NextState<PlacementState>>,
+    mut carried: ResMut<CarriedToken>,
 ) {
     if *state.get() == PlacementState::Carrying {
         emit_event(json!({ "type": "token_placement_cancelled" }));
+        carried.actor_id.clear();
         next.set(PlacementState::Idle);
     }
+}
+
+/// Whether there is still something in hand.
+///
+/// The second half of the gate, alongside `in_state(Carrying)`: the state says
+/// the gesture has not formally ended, and this says it has not been abandoned
+/// within the frame. See `abandon_on_mode_change` for why one frame matters.
+fn carry_is_live(carried: Res<CarriedToken>) -> bool {
+    !carried.actor_id.is_empty()
 }
 
 /// Duplicated from the other canvas-authoring modules, which each keep their
@@ -247,7 +278,8 @@ impl Plugin for PlacementPlugin {
                 Update,
                 (follow_cursor, resolve_placement)
                     .chain()
-                    .run_if(in_state(PlacementState::Carrying)),
+                    .run_if(in_state(PlacementState::Carrying))
+                    .run_if(carry_is_live),
             )
             .add_systems(OnEnter(PlacementState::Carrying), show_preview)
             .add_systems(OnExit(PlacementState::Carrying), clear_carry)
@@ -260,6 +292,17 @@ impl Plugin for PlacementPlugin {
             .add_systems(OnExit(AuthoringMode::Lights), abandon_on_mode_change)
             .add_systems(OnExit(AuthoringMode::Shapes), abandon_on_mode_change)
             .add_systems(OnExit(AuthoringMode::Tokens), abandon_on_mode_change)
-            .add_systems(OnExit(AuthoringMode::Interactions), abandon_on_mode_change);
+            .add_systems(OnExit(AuthoringMode::Interactions), abandon_on_mode_change)
+            // A scene change is a mode change too. Whatever the Game Master
+            // was carrying belonged to the scene being left; dropping it into
+            // the new one would place a token from the wrong map, and the
+            // preview would be the only thing on screen that survived the
+            // swap. Registered here rather than in the scene-transition plugin
+            // so that plugin keeps knowing nothing about placement — and if it
+            // is not added at all, this schedule simply never runs.
+            .add_systems(
+                OnEnter(crate::plugins::scene_transition::SceneTransition::Unloading),
+                abandon_on_mode_change,
+            );
     }
 }

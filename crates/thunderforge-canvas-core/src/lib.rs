@@ -26,6 +26,7 @@ pub mod measure;
 pub mod movement;
 pub mod movement_budget;
 pub mod navigation;
+pub mod party;
 pub mod resource_display;
 /// Spec 030, US7. A contributor that exists only to be added and removed —
 /// see the module's own docs for why it is a feature rather than a test.

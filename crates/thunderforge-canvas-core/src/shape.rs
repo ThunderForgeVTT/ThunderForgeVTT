@@ -132,6 +132,18 @@ impl ShapeSet {
         Some(self.shapes.remove(index))
     }
 
+    /// Drop every shape, and the undo history that referred to them.
+    ///
+    /// The counterpart of `WallSet::clear`, for the same reason — see spec 031
+    /// FR-018. FR-018 names tokens, walls and lights; annotations are cleared
+    /// alongside them because an arrow the Game Master drew over the tavern
+    /// floor is no more part of the cellar than a wall of it is.
+    pub fn clear(&mut self) {
+        self.shapes.clear();
+        self.undo_stack.clear();
+        self.dirty = true;
+    }
+
     pub fn push_undo(&mut self, edit: ShapeEdit) {
         self.undo_stack.push(edit);
         if self.undo_stack.len() > MAX_UNDO_STACK {
@@ -261,5 +273,32 @@ mod tests {
         s.geometry = json!({ "x": 1.0, "y": 2.0 });
         s.text = Some("hello".to_string());
         assert_eq!(s.text.as_deref(), Some("hello"));
+    }
+}
+
+#[cfg(test)]
+mod clear_tests {
+    use super::*;
+
+    #[test]
+    fn clearing_removes_every_shape_and_its_undo_history() {
+        let mut set = ShapeSet::default();
+        let shape = Shape {
+            id: "s1".to_string(),
+            kind: ShapeKind::Rect,
+            geometry: serde_json::json!({ "x": 0.0, "y": 0.0 }),
+            text: None,
+            style: None,
+            visible_to_players: false,
+        };
+        set.upsert(shape.clone());
+        set.push_undo(ShapeEdit::Delete { deleted: shape });
+        set.dirty = false;
+
+        set.clear();
+
+        assert!(set.shapes().is_empty());
+        assert_eq!(set.undo_stack_len(), 0);
+        assert!(set.dirty);
     }
 }

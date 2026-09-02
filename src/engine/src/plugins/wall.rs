@@ -2,7 +2,10 @@ use bevy::prelude::*;
 
 use crate::plugins::authoring_mode::AuthoringMode;
 
-use crate::resources::{IsGameMaster, SelectedWall, WallSet};
+use crate::resources::{
+    ActiveWallPrimitive, GridSnapEnabled, IsGameMaster, SceneGrid, SelectedWall, WallPrimitive,
+    WallSet,
+};
 use crate::systems::wall::{
     handle_door_effects, handle_wall_input, handle_wall_keyboard_toggles, handle_wall_undo,
     init_wall_systems_resources, sync_wall_visuals,
@@ -28,6 +31,21 @@ impl Plugin for WallPlugin {
         app.init_resource::<WallSet>()
             .init_resource::<SelectedWall>()
             .init_resource::<IsGameMaster>()
+            // Which of segment/room/door a drag draws (FR-026).
+            .init_resource::<ActiveWallPrimitive>()
+            // Snapping, and the lattice to snap to. Both are owned by other
+            // plugins and both are read by `handle_wall_input`, so this plugin
+            // registers them itself rather than requiring `TokenPlugin` and
+            // `GridPlugin` to have been added first. `init_resource` is
+            // idempotent, so this costs nothing when they have been
+            // (Constitution Principle II — the same argument the
+            // `IsGameMaster` line above already makes).
+            //
+            // The defaults are the ones FR-024 asks for: snapping on, and a
+            // gridless scene until the server says otherwise, which
+            // `SnapRule::is_active` treats as nothing to snap to.
+            .init_resource::<GridSnapEnabled>()
+            .init_resource::<SceneGrid>()
             // Registered here as well as in `InteractionPlugin`, and
             // `add_message` is idempotent. A contributor that could only be
             // added *after* the seam would not be independently addable, and
@@ -48,6 +66,9 @@ impl Plugin for WallPlugin {
         app.add_systems(
             Update,
             (
+                // Before the input system, so a primitive chosen this frame is
+                // the one this frame's click draws.
+                apply_requested_primitive,
                 // Only while the wall tool is armed.
                 //
                 // This system used to be gated on `IsGameMaster` alone, which
@@ -93,4 +114,85 @@ fn abandon_wall_gesture(
 ) {
     drag.abandon();
     chain.abandon();
+}
+
+
+/// What the web app has most recently asked the wall tool to draw.
+///
+/// A slot rather than a direct write, for the reason every other boundary in
+/// this crate uses one: `App::run()` owns the `World` and never returns on
+/// wasm, so there is no handle to set a resource from outside the schedule.
+static REQUESTED_PRIMITIVE: std::sync::OnceLock<std::sync::Mutex<Option<WallPrimitive>>> =
+    std::sync::OnceLock::new();
+
+fn requested_primitive_slot() -> &'static std::sync::Mutex<Option<WallPrimitive>> {
+    REQUESTED_PRIMITIVE.get_or_init(|| std::sync::Mutex::new(None))
+}
+
+/// Choose what the wall tool draws: `segment`, `room` or `door`.
+///
+/// FR-026 asks for these to be selectable *while drawing*, so this is a
+/// setting on the armed tool rather than a separate tool of its own — the wall
+/// tool stays the wall tool, and the primitive says what a drag means.
+///
+/// Returns whether the name was recognised. `false` leaves the current
+/// primitive untouched, matching `set_authoring_mode`: a name this build does
+/// not know must not silently change what the next drag draws.
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn set_wall_primitive(primitive_id: &str) -> bool {
+    let Some(primitive) = WallPrimitive::from_id(primitive_id) else {
+        return false;
+    };
+    if let Ok(mut slot) = requested_primitive_slot().lock() {
+        *slot = Some(primitive);
+    }
+    true
+}
+
+/// Mirrors the live primitive outward, for `wall_primitive()`.
+static CURRENT_PRIMITIVE: std::sync::OnceLock<std::sync::Mutex<WallPrimitive>> =
+    std::sync::OnceLock::new();
+
+/// What the wall tool is currently drawing.
+///
+/// Observation only, so a test can ask the engine rather than infer it from
+/// the walls that came out — the same reason `authoring_mode()` exists.
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn wall_primitive() -> String {
+    CURRENT_PRIMITIVE
+        .get()
+        .and_then(|slot| slot.lock().ok().map(|primitive| *primitive))
+        .unwrap_or_default()
+        .as_id()
+        .to_string()
+}
+
+/// Apply whatever the web app asked for, once per frame.
+///
+/// Changing the primitive abandons an unfinished chain, for the same reason
+/// leaving the tool does: the points were placed under a rule about what the
+/// next click means, and that rule has just changed. Finishing them under the
+/// new one would be guessing (spec 031 FR-040a's edge case, one level down).
+fn apply_requested_primitive(
+    mut active: ResMut<ActiveWallPrimitive>,
+    mut chain: ResMut<crate::systems::wall::WallChainState>,
+) {
+    if let Some(requested) = requested_primitive_slot()
+        .lock()
+        .ok()
+        .and_then(|mut slot| slot.take())
+        && requested != active.0
+    {
+        active.0 = requested;
+        chain.abandon();
+    }
+
+    // Mirrored unconditionally, so the readable value follows the resource
+    // even when it changed for a reason other than a request.
+    if let Ok(mut mirror) = CURRENT_PRIMITIVE
+        .get_or_init(|| std::sync::Mutex::new(WallPrimitive::default()))
+        .lock()
+    {
+        *mirror = active.0;
+    }
 }

@@ -22,4 +22,7 @@ pub use selection::{DraggingToken, SelectedToken};
 pub use shape::{ActiveShapeTool, SelectedShape, Shape, ShapeEdit, ShapeKind, ShapeSet};
 pub use token_grid::{GridSnapEnabled, TokenGridBehaviour};
 pub use vision::{LightingOverlay, SceneAmbient, TokenVision};
-pub use wall::{DoorState, IsGameMaster, SelectedWall, Wall, WallEdit, WallSet, is_visible};
+pub use wall::{
+    ActiveWallPrimitive, DoorState, IsGameMaster, SelectedWall, Wall, WallEdit, WallPrimitive,
+    WallSet, is_visible,
+};

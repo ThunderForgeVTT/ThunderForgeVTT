@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::plugins::authoring_mode::AuthoringMode;
 
-use crate::resources::{IsGameMaster, LightSet, SelectedLight};
+use crate::resources::{GridSnapEnabled, IsGameMaster, LightSet, SceneGrid, SelectedLight};
 use crate::systems::lighting::{
     apply_light_illumination, handle_light_input, handle_light_keyboard_toggles,
     handle_light_resize, handle_light_undo, handle_switch_effects, init_lighting_systems_resources,
@@ -30,6 +30,13 @@ impl Plugin for LightingPlugin {
         app.init_resource::<LightSet>()
             .init_resource::<SelectedLight>()
             .init_resource::<IsGameMaster>()
+            // Snapping, and the lattice to snap to — read by
+            // `handle_light_input` (FR-024/FR-025). Registered here so this
+            // plugin does not require `TokenPlugin` and `GridPlugin` to have
+            // been added first; `init_resource` is idempotent, so it costs
+            // nothing when they have been (Constitution Principle II).
+            .init_resource::<GridSnapEnabled>()
+            .init_resource::<SceneGrid>()
             // Registered here as well as in `InteractionPlugin`, idempotently.
             // A contributor that could only be added after the seam would not
             // be independently addable (Principle II).

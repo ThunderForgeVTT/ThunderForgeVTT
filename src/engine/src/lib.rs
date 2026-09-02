@@ -77,8 +77,21 @@ pub(crate) struct TokenIdentity(pub(crate) String);
 #[derive(Resource, Default)]
 pub(crate) struct ActiveWorld(pub(crate) String);
 
+/// Which entity is drawing which token id.
+///
+/// `pub(crate)` so the scene-transition plugin can drop the whole map when a
+/// scene is unloaded (spec 031 FR-018). Despawning the entities without
+/// clearing this would leave the map pointing at dead entities, and the next
+/// `upsert_token` for a reused id would update nothing.
 #[derive(Resource, Default)]
-struct TokenEntities(HashMap<String, Entity>);
+pub(crate) struct TokenEntities(HashMap<String, Entity>);
+
+impl TokenEntities {
+    /// Forget every token id, for a scene that is no longer on the canvas.
+    pub(crate) fn clear(&mut self) {
+        self.0.clear();
+    }
+}
 
 #[derive(Resource)]
 struct LastPlayerSent(Vec2);
@@ -1068,8 +1081,24 @@ pub fn start(canvas_selector: &str) {
         // plugins will gate their input systems on it; adds no behaviour on
         // its own (see plugins/authoring_mode.rs).
         .add_plugins(plugins::authoring_mode::AuthoringModePlugin)
+        // Spec 031 US4: `ready -> unloading -> loading -> ready`. Clears the
+        // previous scene's content and asks for the next one's; it fetches
+        // nothing and knows what none of the content *is*. Removing this line
+        // leaves every other plugin working — the canvas simply never changes
+        // scene (Constitution Principle II).
+        //
+        // Before `PlacementPlugin` for the same reason `AuthoringModePlugin`
+        // is: placement hangs an `OnEnter` off this state to abandon a carry
+        // when the scene changes, and a state is registered before anything
+        // schedules against it.
+        .add_plugins(plugins::scene_transition::SceneTransitionPlugin)
         .add_plugins(plugins::placement::PlacementPlugin)
         .add_plugins(plugins::selection_filter::SelectionFilterPlugin)
+        // Spec 031 US6: right-clicking the map. Suppresses the browser menu on
+        // the canvas element only and reports the gesture; chrome draws the
+        // menu, because a menu is chrome. Removing this line restores the
+        // browser menu and changes nothing else.
+        .add_plugins(plugins::context_menu::ContextMenuPlugin)
         .add_plugins(ScenePlugin)
         .add_plugins(GridPlugin)
         .add_plugins(TokenPlugin)

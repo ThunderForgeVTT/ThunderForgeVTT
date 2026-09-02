@@ -126,3 +126,16 @@ wasm-bindgen-futures = "0.4"
 futures-util = "0.3"
 once_cell = "1.21"
 uuid = { version = "1.26.0", features = ["serde"] }
+
+# The DOM, for the one thing the engine cannot do through Bevy: cancelling the
+# browser's own context menu on the canvas element (spec 031 FR-029). Confined
+# to the wasm target the way `thunderforge-cache-browser` confines its own
+# web-sys, so a native `cargo check` of this crate never pulls it in.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { version = "0.3.104", features = [
+  "Document",
+  "Element",
+  "Event",
+  "EventTarget",
+  "Window",
+] }

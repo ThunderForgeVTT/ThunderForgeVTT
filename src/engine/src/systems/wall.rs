@@ -11,7 +11,8 @@ use bevy::window::PrimaryWindow;
 use serde_json::json;
 
 use crate::resources::{
-    CanvasLayer, DoorState, IsGameMaster, SelectedWall, Wall, WallEdit, WallSet,
+    ActiveWallPrimitive, CanvasLayer, DoorState, IsGameMaster, SelectedWall, Wall, WallEdit,
+    WallPrimitive, WallSet,
 };
 use crate::{ActiveWorld, emit_event};
 
@@ -190,6 +191,72 @@ fn wall_color(wall: &Wall, selected: bool) -> Color {
     }
 }
 
+/// Emit the four walls of a room drawn between two snapped corners.
+///
+/// FR-026. The geometry is `thunderforge_canvas_core::wall::room_segments`,
+/// which is where it can be tested for the property that matters — that the
+/// four segments share their corner points exactly, so the room encloses its
+/// interior rather than leaking light through a seam a fraction of a unit
+/// wide.
+///
+/// A degenerate drag emits nothing. The gesture did not describe a room, and
+/// four walls stacked along a line is a worse answer than none.
+fn emit_room(start: Vec2, end: Vec2, world_id: &str) {
+    let Some(segments) = thunderforge_canvas_core::wall::room_segments(start, end) else {
+        return;
+    };
+
+    for (from, to) in segments {
+        emit_event(json!({
+            "type": "create_wall",
+            "wall": {
+                "x1": from.x,
+                "y1": from.y,
+                "x2": to.x,
+                "y2": to.y,
+                "blocksVision": true,
+                "blocksMovement": false,
+                "doorState": "none",
+            },
+            "worldId": world_id,
+        }));
+    }
+}
+
+/// Emit one wall that is already a door.
+///
+/// FR-027: a door drawn this way is a functional door, and it is functional
+/// because it is *the same kind of door* the tool has always produced — a wall
+/// whose `door_state` is not `None`. Everything that acts on doors keys off
+/// exactly that: `handle_door_effects` performs the contributed
+/// `door.set_state` / `door.set_lock` / `door.reveal` effects, the `O` keybind
+/// cycles the selected wall's state, `wall_color` draws it as a door, and
+/// `Wall::blocking` derives what it stops from the state it is in. None of
+/// them is taught about this primitive, and none of them needs to be —
+/// inventing a second kind of door here is exactly what would break them.
+///
+/// It blocks movement, where a plain wall from this tool does not. That is the
+/// difference between a wall and a doorway: a closed door is a way through
+/// that happens to be shut, so it has to stop somebody while it is shut and
+/// stop nobody once it opens, which `Wall::blocking` already derives.
+fn emit_door(start: Vec2, end: Vec2, world_id: &str) {
+    emit_event(json!({
+        "type": "create_wall",
+        "wall": {
+            "x1": start.x,
+            "y1": start.y,
+            "x2": end.x,
+            "y2": end.y,
+            "blocksVision": true,
+            "blocksMovement": true,
+            // Closed, not open. A door drawn onto a map is a door in a wall,
+            // and a Game Master who wanted an opening would have drawn none.
+            "doorState": "closed",
+        },
+        "worldId": world_id,
+    }));
+}
+
 /// T012: click-drag to create a wall, click to select, drag an endpoint to
 /// move it. GM-only per `CanvasLayer::Walls.editing_is_gm_only()` — this
 /// crate has no broader role system, so `IsGameMaster` gates it directly.
@@ -207,6 +274,7 @@ pub(crate) fn handle_wall_input(
     active_world: Res<ActiveWorld>,
     scene_grid: Res<crate::resources::grid::SceneGrid>,
     snap_enabled: Res<crate::resources::token_grid::GridSnapEnabled>,
+    primitive: Res<ActiveWallPrimitive>,
 ) {
     if !is_gm.0 {
         return;
@@ -216,7 +284,26 @@ pub(crate) fn handle_wall_input(
         return;
     };
 
+    // FR-024/FR-025: every point this system commits goes through the same
+    // rule, and the rule is the scene's — square, hex or gridless, and off
+    // entirely when the Game Master has turned snapping off.
+    let rule = SnapRule::new(scene_grid.0, snap_enabled.0);
+
     if mouse_button.just_pressed(MouseButton::Left) {
+        // FR-026: with a room or a door armed, a press always starts drawing.
+        //
+        // Selecting and endpoint-dragging belong to the segment tool, the same
+        // way `handle_shape_input` draws rather than selects when a shape tool
+        // is active. A room tool that sometimes grabbed a nearby endpoint
+        // instead of starting a room would be a tool that behaves differently
+        // depending on what happens to be under the cursor.
+        if primitive.0 != WallPrimitive::Segment {
+            selected_wall.deselect();
+            emit_wall_selection(None);
+            drag.mode = WallDragMode::Creating { start: cursor };
+            return;
+        }
+
         // FR-001: once a wall-point chain is in progress, every click
         // feeds it directly — bypassing endpoint-grab/body-select so an
         // accidental near-miss over an existing wall doesn't hijack the
@@ -279,13 +366,18 @@ pub(crate) fn handle_wall_input(
         } = &drag.mode
             && let Some(wall) = wall_set.get(wall_id).cloned()
         {
+            // Snapped while dragging, not only when created. An endpoint
+            // dragged to a raw cursor position lands between lattice corners,
+            // which is how a room that was drawn closed stops being closed
+            // the first time someone nudges a corner (FR-025).
+            let moved = rule.vertex(cursor);
             let mut updated = wall;
             if *is_start {
-                updated.x1 = cursor.x;
-                updated.y1 = cursor.y;
+                updated.x1 = moved.x;
+                updated.y1 = moved.y;
             } else {
-                updated.x2 = cursor.x;
-                updated.y2 = cursor.y;
+                updated.x2 = moved.x;
+                updated.y2 = moved.y;
             }
             // Optimistic local move so the sprite tracks the cursor;
             // reconciled by the next `upsert_wall` confirmation from
@@ -309,9 +401,28 @@ pub(crate) fn handle_wall_input(
                 //
                 // Both ends go through the rule: `start` was recorded from a
                 // raw cursor when the drag began.
-                let rule = SnapRule::new(scene_grid.0, snap_enabled.0);
                 let start = rule.vertex(start);
                 let end = rule.vertex(cursor);
+
+                match primitive.0 {
+                    WallPrimitive::Room => {
+                        emit_room(start, end, &active_world.0);
+                        return;
+                    }
+                    WallPrimitive::Door => {
+                        if start.distance(end) >= MIN_WALL_LENGTH {
+                            emit_door(start, end, &active_world.0);
+                        }
+                        // A click with no drag draws no door. Unlike the
+                        // segment tool it does not seed a chain either: a
+                        // chain of doors is not a thing, and silently starting
+                        // one would make the next click somewhere else produce
+                        // a door across the room.
+                        return;
+                    }
+                    WallPrimitive::Segment => {}
+                }
+
                 if start.distance(end) < MIN_WALL_LENGTH {
                     // FR-001: a plain click (no drag) adds/continues a
                     // wall-point chain instead of being a no-op. The

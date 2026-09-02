@@ -189,6 +189,11 @@ pub(crate) fn handle_light_input(
         return;
     };
 
+    // FR-024/FR-025: one rule, built from the scene's own grid, used by both
+    // the placement path and the move path below. Built once here so the two
+    // cannot end up asking different questions.
+    let snap_rule = SnapRule::new(scene_grid.0, snap_enabled.0);
+
     if mouse_button.just_pressed(MouseButton::Left) {
         for light in light_set.lights() {
             if cursor.distance(light.position()) <= LIGHT_GRAB_RADIUS {
@@ -215,7 +220,7 @@ pub(crate) fn handle_light_input(
         // canvas obeys (spec 031 FR-024/FR-025). A light is a point, so the
         // centre is the right lattice for it — walls use vertices instead,
         // because a wall runs *between* cells rather than through one.
-        let placed = SnapRule::new(scene_grid.0, snap_enabled.0).cell(cursor);
+        let placed = snap_rule.cell(cursor);
 
         emit_event(json!({
             "type": "create_light",
@@ -241,9 +246,14 @@ pub(crate) fn handle_light_input(
         if let LightDragMode::Moving { light_id, .. } = &drag.mode
             && let Some(light) = light_set.get(light_id).cloned()
         {
+            // Snapped while dragging, not only when placed. A light moved to
+            // a raw cursor position sits off-lattice, so the same lamp lands
+            // in a different place depending on whether it was placed there or
+            // dragged there — which is the inconsistency FR-025 is about.
+            let moved = snap_rule.cell(cursor);
             let mut updated = light;
-            updated.x = cursor.x;
-            updated.y = cursor.y;
+            updated.x = moved.x;
+            updated.y = moved.y;
             // Optimistic local move so the sprite tracks the cursor;
             // reconciled by the next `upsert_light` confirmation from the
             // server.

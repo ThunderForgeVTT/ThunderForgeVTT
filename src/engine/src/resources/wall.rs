@@ -45,6 +45,60 @@ impl SelectedWall {
     }
 }
 
+/// What the wall tool draws when it is dragged.
+///
+/// Spec 031 FR-026. A Game Master building a map spends most of the time
+/// drawing the same two things — the outline of a room, and a door in it — and
+/// drawing either from single segments is four gestures and a keypress where
+/// it could be one. The primitive says which of them a drag means.
+///
+/// Deliberately a property of the tool rather than of a wall: nothing about a
+/// finished wall records that it was drawn as part of a room. Four walls drawn
+/// as a room and four drawn one at a time are the same four walls, and a room
+/// that remained a unit would be a grouping feature that nothing has asked
+/// for — and one that every later edit would have to maintain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum WallPrimitive {
+    /// One wall per drag, and a click continues a multi-point chain. The
+    /// behaviour the tool has always had, and the default for that reason.
+    #[default]
+    Segment,
+    /// Four walls closing a rectangle between the drag's two corners.
+    Room,
+    /// One wall, already a closed door.
+    Door,
+}
+
+impl WallPrimitive {
+    /// Parse the identifier the web app uses.
+    ///
+    /// An unrecognised value yields `None` and the caller leaves the primitive
+    /// alone — the same rule `AuthoringMode::from_tool_id` follows, and for the
+    /// same reason: a name this build does not know must not silently rearm
+    /// the tool to something the Game Master did not pick.
+    pub fn from_id(id: &str) -> Option<Self> {
+        match id {
+            "segment" => Some(Self::Segment),
+            "room" => Some(Self::Room),
+            "door" => Some(Self::Door),
+            _ => None,
+        }
+    }
+
+    /// The identifier the web app uses, for reporting the choice back out.
+    pub fn as_id(self) -> &'static str {
+        match self {
+            Self::Segment => "segment",
+            Self::Room => "room",
+            Self::Door => "door",
+        }
+    }
+}
+
+/// The primitive the wall tool currently draws.
+#[derive(Resource, Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ActiveWallPrimitive(pub WallPrimitive);
+
 /// Bevy `Resource` newtype over the engine-agnostic `WallSet` core type.
 /// `Deref`/`DerefMut` make this transparent to existing call sites
 /// (`wall_set.walls()`, `wall_set.upsert(...)`, etc. all keep working

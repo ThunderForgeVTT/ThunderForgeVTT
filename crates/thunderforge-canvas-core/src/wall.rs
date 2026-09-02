@@ -365,6 +365,19 @@ impl WallSet {
         Some(self.walls.remove(index))
     }
 
+    /// Drop every wall, and the undo history that referred to them.
+    ///
+    /// For a scene change (spec 031 FR-018), where the previous scene's
+    /// geometry has to stop existing rather than be edited away one wall at a
+    /// time. The undo stack goes with it deliberately: an undo entry names a
+    /// wall id from a scene nobody is looking at any more, and replaying one
+    /// would emit a mutation against the wrong scene.
+    pub fn clear(&mut self) {
+        self.walls.clear();
+        self.undo_stack.clear();
+        self.dirty = true;
+    }
+
     pub fn push_undo(&mut self, edit: WallEdit) {
         self.undo_stack.push(edit);
         if self.undo_stack.len() > MAX_UNDO_STACK {
@@ -385,6 +398,50 @@ impl WallSet {
     pub fn vision_blocking_walls(&self) -> impl Iterator<Item = &Wall> {
         self.walls.iter().filter(|w| w.currently_blocks_vision())
     }
+}
+
+/// The four segments of an axis-aligned room drawn between two opposite
+/// corners.
+///
+/// Spec 031 FR-026. A room is the commonest thing a Game Master draws and the
+/// slowest to draw by hand: four segments whose ends have to meet exactly, or
+/// the vision pass leaks light through the seam. Building it from the four
+/// corner points guarantees they meet, because adjacent segments are handed
+/// the *same* [`Vec2`], not two values that round to the same place.
+///
+/// Returned in a closed loop starting at the lower-left corner and running
+/// anticlockwise, so the caller emits them in a predictable order.
+///
+/// `None` for a degenerate rectangle — a drag with no width or no height. That
+/// is a room with no interior, and the honest answer is that the gesture did
+/// not describe one; drawing two pairs of coincident walls instead would leave
+/// the Game Master with four walls stacked on a line and no way to see it.
+///
+/// Corner order is normalised, so dragging up-left produces the same room as
+/// dragging down-right. Nothing downstream should have to care which way the
+/// hand moved.
+pub fn room_segments(a: Vec2, b: Vec2) -> Option<[(Vec2, Vec2); 4]> {
+    let min = Vec2::new(a.x.min(b.x), a.y.min(b.y));
+    let max = Vec2::new(a.x.max(b.x), a.y.max(b.y));
+
+    if !(max.x - min.x).is_finite() || !(max.y - min.y).is_finite() {
+        return None;
+    }
+    if max.x - min.x <= f32::EPSILON || max.y - min.y <= f32::EPSILON {
+        return None;
+    }
+
+    let bottom_left = min;
+    let bottom_right = Vec2::new(max.x, min.y);
+    let top_right = max;
+    let top_left = Vec2::new(min.x, max.y);
+
+    Some([
+        (bottom_left, bottom_right),
+        (bottom_right, top_right),
+        (top_right, top_left),
+        (top_left, bottom_left),
+    ])
 }
 
 /// Returns true if segment `p1`-`p2` intersects segment `p3`-`p4`.
@@ -913,5 +970,146 @@ mod tests {
         assert_eq!(target_of(&config), Some("w-1"));
         assert_eq!(requested_lock(&config), Some(true));
         assert_eq!(requested_lock(&serde_json::json!({})), None);
+    }
+}
+
+#[cfg(test)]
+mod room_and_clear_tests {
+    use super::*;
+
+    fn wall(id: &str) -> Wall {
+        Wall {
+            id: id.to_string(),
+            x1: 0.0,
+            y1: 0.0,
+            x2: 10.0,
+            y2: 0.0,
+            blocks_vision: true,
+            blocks_movement: false,
+            door_state: DoorState::None,
+            locked: false,
+            secret: false,
+        }
+    }
+
+    #[test]
+    fn clearing_removes_every_wall() {
+        let mut set = WallSet::default();
+        set.upsert(wall("a"));
+        set.upsert(wall("b"));
+        set.clear();
+        assert!(set.walls().is_empty());
+        assert!(set.get("a").is_none());
+    }
+
+    #[test]
+    fn clearing_discards_the_undo_history_too() {
+        // An undo entry names a wall id from a scene nobody is looking at any
+        // more. Replaying one would emit a mutation against the wrong scene,
+        // which is worse than having no undo across a scene change.
+        let mut set = WallSet::default();
+        set.upsert(wall("a"));
+        set.push_undo(WallEdit::Delete { deleted: wall("a") });
+        set.clear();
+        assert_eq!(set.undo_stack_len(), 0);
+        assert!(set.pop_undo().is_none());
+    }
+
+    #[test]
+    fn clearing_marks_the_set_dirty() {
+        // Occlusion and illumination recompute off `dirty`. A cleared scene
+        // that did not set it would keep casting the previous scene's shadows.
+        let mut set = WallSet::default();
+        set.upsert(wall("a"));
+        set.dirty = false;
+        set.clear();
+        assert!(set.dirty);
+    }
+
+    #[test]
+    fn a_room_is_four_segments_that_close() {
+        let room = room_segments(Vec2::ZERO, Vec2::new(100.0, 50.0)).expect("non-degenerate");
+        assert_eq!(room.len(), 4);
+        // Each segment's end is the next one's start, and the last closes back
+        // onto the first. This is the property the vision pass depends on: a
+        // corner that misses by a fraction of a unit is a corner light escapes
+        // through.
+        for pair in 0..4 {
+            assert_eq!(room[pair].1, room[(pair + 1) % 4].0, "segment {pair}");
+        }
+    }
+
+    #[test]
+    fn a_room_covers_exactly_the_dragged_rectangle() {
+        let room = room_segments(Vec2::new(-20.0, 5.0), Vec2::new(30.0, 45.0)).expect("room");
+        let xs: Vec<f32> = room.iter().flat_map(|(a, b)| [a.x, b.x]).collect();
+        let ys: Vec<f32> = room.iter().flat_map(|(a, b)| [a.y, b.y]).collect();
+        assert_eq!(xs.iter().cloned().fold(f32::MAX, f32::min), -20.0);
+        assert_eq!(xs.iter().cloned().fold(f32::MIN, f32::max), 30.0);
+        assert_eq!(ys.iter().cloned().fold(f32::MAX, f32::min), 5.0);
+        assert_eq!(ys.iter().cloned().fold(f32::MIN, f32::max), 45.0);
+    }
+
+    #[test]
+    fn the_drag_direction_does_not_change_the_room() {
+        // Four ways to drag out the same rectangle. A Game Master should not
+        // have to start from a particular corner.
+        let reference = room_segments(Vec2::new(0.0, 0.0), Vec2::new(60.0, 40.0)).expect("room");
+        for (a, b) in [
+            (Vec2::new(60.0, 40.0), Vec2::new(0.0, 0.0)),
+            (Vec2::new(0.0, 40.0), Vec2::new(60.0, 0.0)),
+            (Vec2::new(60.0, 0.0), Vec2::new(0.0, 40.0)),
+        ] {
+            assert_eq!(room_segments(a, b).expect("room"), reference, "{a:?}->{b:?}");
+        }
+    }
+
+    #[test]
+    fn a_flat_drag_is_not_a_room() {
+        // No interior means no room. Emitting two pairs of coincident walls
+        // would leave four walls stacked on a line with nothing to show for it.
+        assert!(room_segments(Vec2::ZERO, Vec2::new(100.0, 0.0)).is_none());
+        assert!(room_segments(Vec2::ZERO, Vec2::new(0.0, 100.0)).is_none());
+        assert!(room_segments(Vec2::ZERO, Vec2::ZERO).is_none());
+    }
+
+    #[test]
+    fn a_non_finite_corner_is_not_a_room() {
+        // A cursor position can arrive as NaN when the camera projection is
+        // degenerate. Four walls at NaN would be invisible and unselectable.
+        assert!(room_segments(Vec2::ZERO, Vec2::new(f32::NAN, 10.0)).is_none());
+        assert!(room_segments(Vec2::new(f32::INFINITY, 0.0), Vec2::new(10.0, 10.0)).is_none());
+    }
+
+    #[test]
+    fn room_walls_built_from_the_segments_enclose_their_interior() {
+        // The point of drawing a room rather than four walls: a sightline from
+        // inside to outside is blocked on every side.
+        let mut set = WallSet::default();
+        for (index, (a, b)) in room_segments(Vec2::new(-50.0, -50.0), Vec2::new(50.0, 50.0))
+            .expect("room")
+            .into_iter()
+            .enumerate()
+        {
+            let mut segment = wall(&format!("r{index}"));
+            segment.x1 = a.x;
+            segment.y1 = a.y;
+            segment.x2 = b.x;
+            segment.y2 = b.y;
+            set.upsert(segment);
+        }
+
+        let inside = Vec2::ZERO;
+        for outside in [
+            Vec2::new(0.0, 200.0),
+            Vec2::new(0.0, -200.0),
+            Vec2::new(200.0, 0.0),
+            Vec2::new(-200.0, 0.0),
+        ] {
+            assert!(
+                !is_visible(inside, outside, &set),
+                "the room leaked toward {outside:?}",
+            );
+        }
     }
 }

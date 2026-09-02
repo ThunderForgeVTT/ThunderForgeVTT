@@ -231,6 +231,16 @@ impl LightSet {
         Some(self.lights.remove(index))
     }
 
+    /// Drop every light, and the undo history that referred to them.
+    ///
+    /// The counterpart of `WallSet::clear`, for the same reason and with the
+    /// same caveat about the undo stack — see spec 031 FR-018.
+    pub fn clear(&mut self) {
+        self.lights.clear();
+        self.undo_stack.clear();
+        self.dirty = true;
+    }
+
     pub fn push_undo(&mut self, edit: LightEdit) {
         self.undo_stack.push(edit);
         if self.undo_stack.len() > MAX_UNDO_STACK {
@@ -425,5 +435,39 @@ mod tests {
             (intensity_to_restore(Some(&serde_json::json!({ "priorIntensity": 0.0 }))) - 1.0).abs()
                 < f32::EPSILON
         );
+    }
+}
+
+#[cfg(test)]
+mod clear_tests {
+    use super::*;
+
+    #[test]
+    fn clearing_removes_every_light_and_its_undo_history() {
+        let mut set = LightSet::default();
+        set.upsert(LightSource {
+            id: "l1".to_string(),
+            x: 0.0,
+            y: 0.0,
+            radius: 10.0,
+            intensity: 1.0,
+            color: None,
+            attached_token_id: None,
+            casts_shadows: true,
+        });
+        set.push_undo(LightEdit::Move {
+            light_id: "l1".to_string(),
+            prior_x: 0.0,
+            prior_y: 0.0,
+        });
+        set.dirty = false;
+
+        set.clear();
+
+        assert!(set.lights().is_empty());
+        assert_eq!(set.undo_stack_len(), 0);
+        // Illumination recomputes off `dirty`; a cleared scene that did not
+        // set it would keep lighting the previous map.
+        assert!(set.dirty);
     }
 }
