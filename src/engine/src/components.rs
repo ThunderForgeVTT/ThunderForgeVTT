@@ -273,10 +273,6 @@ impl TokenBundle {
     }
 }
 
-/// Marker component for player-controlled tokens
-#[derive(Component)]
-pub struct PlayerControlled;
-
 /// Marker component for tokens that are currently selected
 #[derive(Component)]
 pub struct Selected;

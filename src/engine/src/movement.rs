@@ -7,7 +7,19 @@ use crate::sync_test::{CircularFlowTracer, FlowStage};
 use crate::systems::optimistic::mark_mutation_pending;
 use bevy::prelude::*;
 
-/// Token is player-controlled and can be moved interactively
+/// Token is player-controlled and can be moved interactively.
+///
+/// # There were two of these
+///
+/// `components.rs` declared a second `PlayerControlled`, and nothing used it —
+/// `lib.rs`'s spawn, `token_move.rs`'s query and `sync_test.rs` all took this
+/// one. In Bevy they are different component types, so a query on that one
+/// would never have matched an entity tagged with this one: dead rather than
+/// broken, but only by luck.
+///
+/// It survived because this module is browser-bound and this crate's tests
+/// have never compiled on a host, so nothing that could see both was ever
+/// built. Found while investigating why (spec 032 T083).
 #[derive(Component)]
 pub struct PlayerControlled;
 
