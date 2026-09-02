@@ -1203,6 +1203,24 @@ export default function WorldPage() {
       return;
     }
 
+    // Chrome's own copy of the tokens the canvas no longer holds, cleared for
+    // the same reason as the walls and shapes loops above — and tokens need it
+    // most, because the engine spawns demo tokens of its own at boot and
+    // announces them to the store. Spec 031's transition despawns those with
+    // everything else, so without this the store keeps rows for tokens that do
+    // not exist on the canvas and have no server row either: a panel listing
+    // one, a party roster placing one, and a click at its reported position
+    // landing on empty canvas.
+    //
+    // `loadTokensIntoStore` only upserts, so leaving the stale rows for it to
+    // overwrite was never an option — nothing overwrites a row whose id the
+    // new scene never mentions. `"sync"` source: a confirmed-state correction,
+    // not a delete intent, and `startTokenMutationBridge` returns early on
+    // `"sync"`, so this never calls `deleteToken`.
+    for (const tokenId of Object.keys(worldStore.getState().tokens)) {
+      worldStore.dispatch({ type: "remove_token", tokenId }, "sync");
+    }
+
     const tokensGeneration = sceneLoadGeneration;
     void loadTokensIntoStore(worldStore, sceneId)
       .then(() => markSceneResourceLoaded("tokens", tokensGeneration))
