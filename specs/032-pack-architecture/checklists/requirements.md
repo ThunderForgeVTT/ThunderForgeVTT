@@ -46,24 +46,27 @@
       restoration and content preservation (FR-018 through FR-021)
 - [x] The empty-state wording inconsistency is captured as a testable
       requirement with a measurable outcome (FR-022, FR-023, SC-008)
-- [x] The per-user vs per-world question is resolved with reasoning, not
-      deferred (FR-009, FR-010, Assumptions)
-- [x] The base-pack naming choice is resolved with reasoning, and the underlying
-      requirement is stated so it survives a different naming answer (FR-007,
-      Assumptions)
+- [x] The per-world scoping question is resolved with reasoning, not
+      deferred (FR-009, FR-010, Decisions)
+- [x] The base-pack naming choice is resolved, and the underlying requirement
+      is stated so it survives the naming answer — which it had to, the answer
+      having gone the other way (FR-007, Decisions)
 
 ## Open Items for Requester Confirmation
 
-- [ ] **Base interface pack name.** Specification assumes "Mithral" over
-      "Forge", because the peer-not-privileged reading matches FR-007. Confirm
-      or override; the requirement is unaffected either way.
-- [ ] **Interface pack scoping.** Specification assumes a per-user preference
-      (FR-009) with an optional per-world *suggestion* (FR-010), rather than a
-      Game-Master-imposed table-wide look. Confirm.
-- [ ] **Accessibility floor for interface packs.** Listed as an edge case: is a
-      pack failing contrast/legibility expectations a validation rejection or a
-      warning to the user? Unresolved by design — needs a product answer before
-      planning User Story 1's validation step.
+All three answered 2026-09-02. Recorded in the specification's **Decisions**
+section; the answers overrode the draft on two of the three.
+
+- [x] **Base interface pack name.** Answered: **Forge**, overriding the draft's
+      "Mithral". FR-007 now states the peer requirement outright rather than
+      relying on the name to imply it.
+- [x] **Interface pack scoping.** Answered: **per world, set by the Game
+      Master**, overriding the draft's per-user preference. FR-009 and FR-010
+      rewritten; the per-world *suggestion* (old FR-010) is gone, since there is
+      no per-user selection left for it to be advisory to.
+- [x] **Accessibility floor for interface packs.** Answered: **rejection at
+      validation**. Added as FR-012a and SC-003a. This is a consequence of the
+      scoping answer — a table-wide look is one no reader can opt out of.
 
 ## Validation Notes
 

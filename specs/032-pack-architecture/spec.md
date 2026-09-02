@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-01
 
-**Status**: Draft
+**Status**: Planned
 
 **Input**: User description: "Interface pack = THEME. Look only. Skins for the engine. User configurable. Call the base one 'Forge' or 'Mithral'. System pack = FUNCTION — each game system decides how the interface *works*: what a character sheet is, how items are presented, whether combat has rounds. A dnd5e sheet and a pathfinder sheet are wildly different and each system should ship its own."
 
@@ -44,15 +44,16 @@ rather than a footnote.
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 - A player dresses the product to taste (Priority: P1)
+### User Story 1 - A Game Master dresses the table (Priority: P1)
 
-A player who finds the default presentation too dark, too ornate, or too hard to
-read opens their appearance settings, sees the interface packs available to them,
-previews one, and chooses it. Every screen they visit afterwards is drawn in that
-pack's look. Nothing they can do in the product behaves any differently than it
-did before: the same buttons exist, the same actions are permitted, the same
-numbers appear. Their choice follows them from world to world and from session to
-session, and it is theirs alone — nobody else at the table sees their pick.
+A Game Master who finds the default presentation too dark, too ornate, or too
+hard to read opens the world's appearance settings, sees the interface packs
+available, previews one, and chooses it for the world. Every screen anyone at
+that table visits afterwards is drawn in that pack's look. Nothing anyone can do
+in the product behaves any differently than it did before: the same buttons
+exist, the same actions are permitted, the same numbers appear. The choice
+belongs to the world, so the whole table sees one look, and a different world
+can look entirely different.
 
 **Why this priority**: This is the half that is unblocked. It delivers visible,
 demonstrable value on its own, it retires a field that is currently a lie on two
@@ -62,30 +63,36 @@ settles the base pack's identity as the first pack among peers rather than a
 privileged house style, which is much cheaper to establish now than to retrofit.
 
 **Independent Test**: Fully testable with no system-pack work whatsoever. Install
-two interface packs, switch between them as a player, and confirm every screen
-re-skins while every available action, permission, and displayed value stays
-identical. Delivers value even if User Story 2 is never built.
+two interface packs, switch the world between them as its Game Master, and
+confirm every screen re-skins for every participant while every available action,
+permission, and displayed value stays identical. Delivers value even if User
+Story 2 is never built.
 
 **Acceptance Scenarios**:
 
-1. **Given** a signed-in player with the base interface pack active, **When**
-   they select a different available interface pack in their settings, **Then**
-   every product surface they subsequently open is presented in the newly chosen
-   pack, and the choice persists across sign-out and sign-in.
-2. **Given** two players in the same world with different interface packs
-   selected, **When** both open the same scene and the same character, **Then**
-   each sees their own pack's presentation, and both see identical content,
-   identical available actions, and identical values.
-3. **Given** a player who has never chosen an interface pack, **When** they use
-   the product, **Then** the base interface pack is applied, and their settings
-   show it as the active choice by name rather than as an empty or placeholder
-   value.
+1. **Given** a world with the base interface pack active, **When** its Game
+   Master selects a different available interface pack in the world's settings,
+   **Then** every product surface anyone subsequently opens in that world is
+   presented in the newly chosen pack, and the choice persists across sign-out
+   and sign-in.
+2. **Given** two players in the same world, **When** both open the same scene and
+   the same character, **Then** both see the world's chosen pack, and both see
+   identical content, identical available actions, and identical values.
+3. **Given** a player in a world whose Game Master has never chosen an interface
+   pack, **When** they use the product, **Then** the base interface pack is
+   applied, and the world's settings show it as the active choice by name rather
+   than as an empty or placeholder value.
 4. **Given** an interface pack under review for inclusion, **When** it is
    validated, **Then** any attempt by the pack to contribute behaviour — a new
    action, a changed value, a rule, a data mutation, or executable logic of any
    kind — is rejected before the pack is made available, with the rejected
    contribution named.
-5. **Given** a player viewing a list of interface packs, **When** they inspect
+5. **Given** an interface pack under review for inclusion, **When** its
+   presentation is checked against the legibility floor, **Then** a pack that
+   fails it is rejected before it is made available, naming what failed —
+   because a table-wide look is not something an individual reader can opt out
+   of.
+6. **Given** someone viewing a list of interface packs, **When** they inspect
    any one of them, **Then** the base pack is presented on the same footing as
    the others, with no capability, placement, or removability that the others
    lack.
@@ -204,15 +211,18 @@ content is destroyed or made unexportable.
   reads as "no data."
 - Two system packs claim the same system identity. One must win by a stated rule
   and the conflict must be surfaced, not resolved silently.
-- A player's chosen interface pack is available to them but not to another
-  player in the same world. Nothing about the shared session may depend on it.
+- A world's chosen interface pack is available to the server but cannot be
+  fetched by one participant's client. That participant must fall back to the
+  base pack and still see the same content, actions, and values as everyone
+  else — nothing about the shared session may depend on which look loaded.
 - A world is bound to a system pack whose declared compatibility does not cover
   the running product version.
 - A pack is removed while a session is live, not merely between sessions.
 - Content authored under one system pack is viewed after the world is re-bound to
   a different system pack.
-- An interface pack ships a look that fails contrast or legibility expectations —
-  is that a rejection at validation time or a warning to the player?
+- An interface pack passes the legibility floor in one theme and fails it in the
+  other, or fails only on one surface. Validation must name the surface and the
+  mode, not merely the pack.
 
 ## Requirements *(mandatory)*
 
@@ -242,21 +252,30 @@ content is destroyed or made unexportable.
 
 #### Interface packs
 
-- **FR-007**: A base interface pack MUST always be present, MUST be the applied
-  default when no other choice is in effect, and MUST have no capability or
-  status that other interface packs cannot also have.
-- **FR-008**: Users MUST be able to see the interface packs available to them,
-  preview one before committing, and select one.
-- **FR-009**: An interface-pack selection MUST be stored as a per-user
-  preference that applies across every world that user enters, and MUST NOT
-  change what any other user sees.
-- **FR-010**: A world MAY record a *suggested* interface pack, which MUST be
-  presented to users as a suggestion they can accept or decline, and MUST NOT
-  override a user's own selection.
+- **FR-007**: A base interface pack, named **Forge**, MUST always be present,
+  MUST be the applied default when no other choice is in effect, and MUST have
+  no capability or status that other interface packs cannot also have. The name
+  is the house's; the standing is not — nothing about being the shipped pack may
+  give Forge a capability, a placement, or an exemption another pack cannot have.
+- **FR-008**: A world's Game Master MUST be able to see the interface packs
+  available, preview one before committing, and select one for the world.
+- **FR-009**: An interface-pack selection MUST be stored against the world and
+  MUST apply to every participant in that world, so that the whole table sees
+  one look; a different world MUST be able to carry a different selection.
+- **FR-010**: Selecting an interface pack MUST be a Game Master authority,
+  refused for a participant who does not hold it, and the refusal MUST name the
+  authority required rather than failing silently.
 - **FR-011**: Switching interface packs MUST NOT change which actions are
   available, which permissions apply, or which values are displayed.
 - **FR-012**: An interface pack MUST NOT be able to hide, disable, or make
   unreachable any control that the product presents in the base pack.
+- **FR-012a**: An interface pack MUST meet a stated legibility floor —
+  minimally text and control contrast — and a pack that fails it MUST be
+  rejected at validation, naming what failed. Rejection rather than a warning
+  to the reader, because FR-009 makes the look table-wide: a participant who
+  cannot read the pack their Game Master chose has no setting of their own to
+  escape to, which makes an illegible pack indistinguishable from FR-012's
+  unreachable control.
 
 #### System packs
 
@@ -280,9 +299,9 @@ content is destroyed or made unexportable.
 
 #### Absence, degradation, and honesty
 
-- **FR-018**: When a user's selected interface pack is unavailable, the product
-  MUST fall back to the base pack, MUST inform the user once, and MUST NOT block
-  any action.
+- **FR-018**: When a world's selected interface pack is unavailable, the product
+  MUST fall back to the base pack, MUST inform each participant once, and MUST
+  NOT block any action.
 - **FR-019**: When a world's system pack is missing or unusable, the world MUST
   still open, MUST name the missing pack, MUST present its content through
   system-agnostic defaults, and MUST keep that content readable and exportable.
@@ -307,16 +326,17 @@ content is destroyed or made unexportable.
 - **System Pack**: A pack that defines how the product functions for one game
   system. Declares functional surfaces (character sheet, item presentation,
   rules hooks) and the data shapes its content uses. Bound to a world.
-- **Base Interface Pack**: The interface pack that is always present and applied
-  by default. A peer of every other interface pack, not a privileged one.
+- **Base Interface Pack**: **Forge** — the interface pack that is always present
+  and applied by default. A peer of every other interface pack, not a privileged
+  one.
 - **Pack Contribution**: A single declared thing a pack offers — one surface,
   one hook, one look. The unit of validation, of mounting, and of failure
   containment.
-- **User Appearance Preference**: A user's chosen interface pack, scoped to the
-  user and not to any world.
-- **World Pack Binding**: A world's association with a system pack, and its
-  optional *suggested* interface pack. Distinct in kind: the system binding is
-  authoritative for the world; the interface suggestion is advisory to each user.
+- **World Appearance Binding**: A world's chosen interface pack, scoped to the
+  world and applied to everyone in it. Set by the world's Game Master.
+- **World Pack Binding**: A world's association with a system pack and with an
+  interface pack. Both are authoritative for the world; they differ only in what
+  they govern — one how it works, the other how it looks.
 - **Degraded World State**: The state of a world whose bound system pack is
   absent or unusable — content intact and readable, system-specific presentation
   and behaviour unavailable, and the cause named.
@@ -325,14 +345,18 @@ content is destroyed or made unexportable.
 
 ### Measurable Outcomes
 
-- **SC-001**: A user can change their interface pack and see every product
-  surface re-skinned in under 30 seconds, without leaving the settings surface to
-  do it and without restarting a session.
+- **SC-001**: A Game Master can change the world's interface pack and see every
+  product surface re-skinned in under 30 seconds, without leaving the settings
+  surface to do it and without restarting a session; every other participant in
+  that world sees the change without reloading.
 - **SC-002**: Across a full pass of the product under two different interface
   packs, 100% of available actions, permissions, and displayed values are
   identical; the only differences observed are presentational.
 - **SC-003**: A candidate interface pack that attempts to contribute behaviour is
   rejected in 100% of validation runs, with the offending contribution named.
+- **SC-003a**: A candidate interface pack that falls below the legibility floor
+  is rejected in 100% of validation runs, naming the surface and the mode that
+  failed.
 - **SC-004**: A new game system can contribute a character sheet, an item
   presentation, and rules behaviour with **zero** lines changed in shared
   application code — measured as: the change set that adds the system touches
@@ -357,22 +381,31 @@ content is destroyed or made unexportable.
   demonstrable state without any dependency on the pack-code security decision
   being resolved.
 
+## Decisions
+
+Three questions this specification originally left to the requester have been
+answered. They are recorded here as decisions, not assumptions, so that a later
+reading does not reopen them.
+
+- **The base interface pack is named Forge** (2026-09-02, requester). The draft
+  argued for "Mithral" on the grounds that a house name invites the base pack to
+  accumulate privileges. The name is Forge; the concern is answered by FR-007
+  stating the peer requirement outright rather than by choosing a word that
+  hints at it. If Forge ever acquires a capability another pack cannot have,
+  FR-007 is what has been violated — the name was never the guarantee.
+- **An interface pack is chosen per world by its Game Master, not per user**
+  (2026-09-02, requester). The draft argued the opposite. The table sees one
+  look, chosen by the person who runs the table; there is no per-user override
+  and no per-world "suggestion". The accessibility reasoning that motivated the
+  per-user reading does not disappear, it *moves*: because a participant cannot
+  opt out of the world's look, the legibility floor becomes something validation
+  has to enforce rather than something a reader can route around. That is
+  FR-012a, and it exists because of this decision.
+- **A pack that fails the legibility floor is rejected at validation, not
+  shipped with a warning** (2026-09-02, requester). See FR-012a and SC-003a.
+
 ## Assumptions
 
-- **Naming.** The base interface pack is named **"Mithral"**, not "Forge". The
-  two candidate names encode different architectures: "Forge" reads as the
-  house style, which invites the base pack to accumulate privileges other packs
-  cannot have; "Mithral" reads as the first pack among peers, which is the
-  architecture FR-007 requires. This is a decision the requester should confirm —
-  the requirement (peer, not privileged) stands regardless of which word wins.
-- **Interface pack scope is per user, not per world.** The requester said
-  "probably user configurable," and this specification resolves the ambiguity in
-  favour of a per-user preference (FR-009) with an optional per-world
-  *suggestion* (FR-010). The alternative — a Game Master imposing a look on the
-  whole table — was rejected because a skin that carries no behaviour has no
-  reason to be table-wide, and because accessibility needs (contrast, size,
-  legibility) belong to the person looking at the screen. This is the second
-  decision worth confirming.
 - **The two halves ship in sequence, not together.** The interface-pack half is
   unblocked and is the deliverable of this specification's first increment. The
   system-pack half is gated on the runtime pack-code security decision (ADR-029,
