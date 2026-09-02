@@ -242,7 +242,7 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 - [X] T078 [P] Run `node scripts/e2e-parallel.mjs --shards=4` and confirm no regression against the pre-feature baseline
 - [X] T079 [P] Update `docs/adrs/README.md` index rows for every ADR added in Phase 1
 - [X] T080 Run `pnpm verify` (rustfmt, clippy, prettier, eslint) and fix what it reports **in the code this feature added**. Keep it to that: a repo-wide lint remediation folded into a feature phase buries the feature work, and every line then has to be read to be sure nothing behavioural slipped in. Wide passes get their own commit. `pnpm verify:fix` rewrites what can be rewritten mechanically
-- [ ] T081 Confirm the release engine bundle size delta from T001 is acceptable and record it
+- [X] T081 Confirm the release engine bundle size delta from T001 is acceptable and record it
 
 ---
 

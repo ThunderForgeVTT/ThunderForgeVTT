@@ -337,6 +337,25 @@ drifted 16%.
 Both figures above are measured, not estimated: `brotli -q11` via Python's
 `brotli`, `gzip -9` via `gzip`, on the release build wasm-pack produced.
 
+### The bundle budget
+
+**The engine is expected to grow as it gains features. The threshold of concern
+is 100MB after compression.** At 4.92MB brotli there is roughly 20x headroom,
+so an 18.5% rise across one spec is growth, not a problem, and does not need
+re-litigating each time a feature lands.
+
+That budget is as generous as it is because of the downloader, not in spite of
+it: spec 028 caches world content on the device and prefetches ahead of need,
+so the engine bundle is a first-visit cost that is then kept, rather than a
+per-session one. What the budget protects is the first visit — and 100MB
+compressed is where that stops being reasonable on an ordinary connection.
+
+The number to watch is therefore **brotli, not raw**. Raw size is mostly the
+wasm `name` section (see the table above), which compresses roughly 6:1 and is
+why the raw figure has always looked more alarming than the program it
+describes. Track the compressed column here on each spec that touches the
+engine; that is the one the budget is stated in.
+
 - **Done** — `scripts/shared.mjs` selects the profile per caller: the dev loop
   keeps `--dev` (a 7-minute rebuild after every engine edit is not a dev loop),
   everything else defaults to `--release`. `ENGINE_PROFILE` overrides. The
