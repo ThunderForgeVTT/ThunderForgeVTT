@@ -68,6 +68,27 @@ section; the answers overrode the draft on two of the three.
       validation**. Added as FR-012a and SC-003a. This is a consequence of the
       scoping answer — a table-wide look is one no reader can opt out of.
 
+## Feature-Specific Checks — User Story 4 (added 2026-09-02)
+
+- [x] The declaration vocabulary is stated as a minimum set of kinds, each
+      evidenced by a shipping system's sheet, rather than as an open-ended
+      "support more types" (FR-031)
+- [x] Blank slots and fixed lists are distinguished, because a format modelling
+      only the second mislabels the first (FR-032)
+- [x] Grouped values are required, so a Fate consequence and a Cypher stat do
+      not arrive as unrelated parts (FR-033)
+- [x] The base pack's conformance obligation is extended to the new kinds, so
+      "every system has a usable sheet" is a property rather than a promise
+      (FR-034)
+- [x] Unknown kinds degrade to labelled text rather than vanishing, and the
+      reason is stated: absence is indistinguishable from not having it
+      (FR-035, SC-014)
+- [x] The manifests' own incompleteness is a requirement rather than a
+      background note, since a format that could express these would still show
+      nothing while they stay silent (FR-036)
+- [x] The enlargement is named as an enlargement in Decisions, rather than
+      folded in silently
+
 ## Validation Notes
 
 **Drafting decisions:**

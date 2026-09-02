@@ -260,10 +260,74 @@ content is destroyed or made unexportable.
 
 ---
 
+### User Story 4 - Every shipping system has a usable sheet (Priority: P1)
+
+A player opens their character in any world, whatever ruleset it runs, and
+sees the sheet that ruleset actually has — its aspects, its pools, its
+conditions, its blank slots — without anyone having written a pack for it. A
+pack author who wants to do better for one system can, but nobody has to
+before the system is playable.
+
+**Why this priority**: it is P1 because the alternative is a product that
+works for two rulesets and renders two numbers for the rest, and because the
+gap is in the *format*, not in any pack. Three published sheets were read for
+scope while building the first two packs, and each disagreed with the format
+in a different way:
+
+| System | Fields | Attributes | Track | The largest part of the sheet |
+|---|---|---|---|---|
+| D&D 5e | 336 | 6 scores, 6 derived modifiers | two 3-mark runs meaning opposite things | numbers and fixed lists |
+| Fate Core | 51 | **none** | one flat 8-mark track | 3 aspects, 4 consequences each paired with an aspect, 26 *blank* skill slots, stunts |
+| Cypher | 55 | 3 stats, each a **triple** — current, pool, edge | **named ordered states**, no marks at all | background, descriptor, focus, type, special abilities, attacks, 7 blank skill slots, repeating cypher and equipment lists |
+
+Two of the three are mostly free text, which nothing in the product can
+declare or render. Cypher's damage track has no marks to count. Fate has no
+attributes at all and twenty-six skill *slots* rather than a fixed list. A
+format shaped by the first ruleset that needed it fits that ruleset, which is
+the mistake the attribute and resource declarations were each written to
+correct — and this is the third time it has come up.
+
+**Independent Test**: bind a world to each bundled system in turn, open an
+actor under the base pack with no targeted pack installed, and confirm every
+part of that system's declared sheet is present and readable. Delivers value
+without any targeted pack existing.
+
+**Acceptance Scenarios**:
+
+1. **Given** a world bound to any bundled system and no interface pack chosen,
+   **When** a player opens an actor, **Then** everything that system declares
+   is rendered, and nothing it declares is silently absent.
+2. **Given** a system whose sheet is largely free text, **When** a player opens
+   an actor, **Then** its text — named entries, paragraph blocks, and lists a
+   player adds to — is present and editable where the system stores it.
+3. **Given** a system that tracks harm as a run of marks and one that tracks it
+   as named ordered states, **When** a player opens an actor in each, **Then**
+   both are rendered as what they are, and neither is coerced into the other's
+   shape.
+4. **Given** a system that declares a kind the running product does not know,
+   **When** a player opens an actor, **Then** the value is still shown — as
+   text, plainly labelled — rather than omitted, because a number missing from
+   a character sheet is worse than a number shown without its intended
+   presentation.
+5. **Given** a system pack author, **When** they declare their system's sheet
+   in its manifest, **Then** they can do so without a change to the product,
+   and the base pack renders it.
+
+---
+
 ### Edge Cases
 
 - A pack claims to be both an interface pack and a system pack. It must be
   rejected: the type is exclusive, because the safety rule attaches to the type.
+- A player names a blank slot the same as a declared one — a Fate skill called
+  "Athletics" where the system also declares Athletics. Which one a layout
+  addressing that identifier means must be decided rather than discovered.
+- A system declares a track of marks whose length depends on something else.
+  Fate's stress boxes are available according to a skill rating, so a track's
+  length is not always a constant in the manifest.
+- An ordered set of named states is stored as a state the system no longer
+  declares — a saved character whose condition was renamed. It must read as
+  unknown rather than as the first state, which would silently heal them.
 - A system adds a declaration after a pack targeting it was validated. The pack
   is not thereby wrong — a new identifier it does not lay out is simply not
   laid out — but a system that *removes* one breaks every pack referencing it,
@@ -426,6 +490,44 @@ content is destroyed or made unexportable.
   NOT live in shared application code. Where a system's presentation exists in
   both places, exactly one MUST survive, and it MUST be the pack's.
 
+#### What a system may declare
+
+- **FR-031**: A system MUST be able to declare every kind of thing its sheet
+  tracks, not only its numbers. The set MUST minimally admit: a **number**; a
+  **pool** with a current value and an optional maximum; a **truth** (trained,
+  proficient); a **piece of text**; an **ordered list of text** a player adds
+  to; a **track** of a bounded number of marks; and an **ordered set of named
+  states** where exactly one is current. Each of those is on a sheet the
+  product already ships a pack for, and the last two are different things: a
+  run of marks has a count, and Cypher's impaired-debilitated-dead has none.
+- **FR-032**: A declaration MUST be able to say that its value is **filled in
+  by the player rather than chosen from the system's own list**. Fate's
+  twenty-six skill slots and Cypher's seven are blanks a player names; 5e's
+  eighteen skills are a fixed list. A format that models only the second turns
+  the first into eighteen wrong labels.
+- **FR-033**: A system MUST be able to declare **a group whose parts belong
+  together** — a Fate consequence is a severity and the aspect written into it;
+  a Cypher stat is a current value, a pool and an edge. Publishing the parts
+  separately loses the fact that they are one thing, which is what a sheet
+  shows and a player reads.
+- **FR-034**: The base pack MUST render **every kind FR-031 admits**,
+  generically. This is what makes "every shipping system has a usable sheet" a
+  property of the product rather than a promise about future packs, and it
+  extends FR-007a's conformance obligation: a kind the format admits and the
+  base pack cannot draw is a kind nobody has shown can be presented.
+- **FR-035**: A declared value whose kind the running product does not
+  recognise MUST be rendered as text, plainly labelled, rather than omitted. A
+  value missing from a character sheet is worse than one shown without its
+  intended presentation, because absence is indistinguishable from the
+  character not having it.
+- **FR-036**: Every bundled system pack's manifest MUST declare what that
+  system's sheet actually tracks. Today two of them declare no resources at all
+  — `fate_core` stores fate points and refresh, `cypher_system` stores three
+  pools that are its central mechanic — and Fate stores its aspects and
+  consequences nowhere, its whole trait slot being one `notes` field. A format
+  that could express these would still show nothing while the manifests stay
+  silent.
+
 #### System packs
 
 - **FR-013**: A system pack MUST declare the functional surfaces it provides,
@@ -538,6 +640,16 @@ content is destroyed or made unexportable.
 - **SC-010**: A pack author can produce a working system pack from the published
   contract alone, without reading shared application source, and the contract has
   zero references to documents that do not exist.
+- **SC-012**: Every bundled system renders a usable sheet under the base pack
+  with no targeted pack installed — measured as: for each system, 100% of what
+  its manifest declares appears on the sheet, and nothing it declares is
+  absent.
+- **SC-013**: A pack author can declare a Fate-shaped and a Cypher-shaped sheet
+  — free text, blank slots, a marked track and named ordered states — with
+  **zero** changes to the product, measured as a change set touching only that
+  system's own pack directory.
+- **SC-014**: A system declaring a kind the running product does not recognise
+  loses no values: 100% of them still appear, as labelled text.
 - **SC-011**: The interface-pack half (User Story 1) reaches a shippable,
   demonstrable state without any dependency on the pack-code security decision
   being resolved.
@@ -567,6 +679,18 @@ reading does not reopen them.
   FR-012a, and it exists because of this decision.
 - **A pack that fails the legibility floor is rejected at validation, not
   shipped with a warning** (2026-09-02, requester). See FR-012a and SC-003a.
+- **The declaration vocabulary covers a whole character sheet, not only its
+  numbers** (2026-09-02, requester). Added as User Story 4 after three
+  published sheets were read for scope while building the first two packs, and
+  each disagreed with the format differently. The alternative on the table was
+  to ship the two systems that fit and leave the rest to a later feature; the
+  answer was to expand this specification so every shipping system can be
+  written now. FR-031 to FR-036 and SC-012 to SC-014 are that decision.
+
+  It is a real enlargement and worth naming as one: the interface half was
+  scoped as the cheap, unblocked half, and this is the second time it has
+  grown. It remains unblocked — nothing here asks a pack to execute anything —
+  but it is no longer small.
 
 ## Assumptions
 

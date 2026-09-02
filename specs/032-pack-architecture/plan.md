@@ -46,6 +46,16 @@ lines in `packs/systems/dnd5e/web/` beside roughly 1,130 live ones in
 `dnd5e` is the only system with a module in shared app code, which is SC-004's
 violation standing in the open.
 
+**And it grew again.** Increment E was added after three published sheets —
+5e's 336 fields, Fate's 51, Cypher's 55 — were read for scope while building
+A–D. Two of the three are mostly free text, Cypher's damage track has no marks
+to count, and Fate has no attributes at all. The format fitted the first
+ruleset that needed it, which is the mistake the attribute and resource
+declarations were each written to correct; this is its third appearance. The
+interface half was scoped as the cheap unblocked half and is still unblocked —
+nothing in E asks a pack to execute anything — but "cheap" stopped being true
+two increments ago and should not be repeated.
+
 ## Technical Context
 
 **Language/Version**: Rust 1.98 (contract, validator, server, pack crates),
@@ -214,6 +224,20 @@ User Story 3's interface half.
 
 *Checkpoint*: two packs, two shapes, and `apps/web/src/systems/` is gone.
 
+### E — Every shipping system has a usable sheet (User Story 4)
+
+Added 2026-09-02, after three published sheets were read for scope while
+building A–D and each disagreed with the format differently. The declaration
+vocabulary grows from numbers and pools to cover a whole character sheet: text,
+player-named blank slots, ordered lists, marked tracks, named ordered states,
+and groups whose parts belong together. Forge renders every kind, which is what
+makes "usable sheet for every system" a property rather than a promise. The
+bundled manifests are completed to declare what their sheets actually track.
+
+*Checkpoint*: bind a world to each bundled system in turn and open an actor
+under the base pack alone. Every system has a sheet worth reading, and none of
+them needed a pack written for it.
+
 ## Risks
 
 Recorded because the previous plan's confidence did not survive contact with
@@ -229,10 +253,20 @@ than one that does.
   `contributions()` list; what it actually enforces is that the *core* owns no
   effect. Research §6 picks a mechanism; it is the decision most likely to need
   revisiting.
-- **The layout vocabulary is the part that can be got wrong quietly.** Too thin
-  and Forged &lt;Metal&gt; cannot express a nine-level slot grid; too rich and it
-  acquires conditionals, at which point it is a language and FR-003 is gone.
-  FR-007a's conformance test is the guard, and it only guards what Forge uses.
+- **The layout vocabulary is the part that can be got wrong quietly** — and it
+  was, four times, each found by building something against it rather than by
+  review. `barStack` had no maximum, `slotGrid` could not address its own
+  per-level numbers, `tracker` fitted one of three systems, and there was no
+  way to declare text at all. The guard that worked was writing a real pack and
+  a real renderer; the guard that did not was reading the type and thinking it
+  looked complete. Increment E should expect the same, and the same remedy:
+  build a Fate pack and a Cypher pack against it before calling it settled.
+- **Increment E's genuine risk is the opposite of the earlier one.** Too thin
+  and Fate renders two numbers; too rich and the format acquires conditionals
+  and becomes a language, at which point FR-003 is gone and the whole increment
+  is behind ADR-029. Every kind FR-031 admits is a *shape of value*, never a
+  rule about one — that is the line, and it is easier to hold when stated
+  before the work than argued afterwards.
 
 ## Deferred
 

@@ -175,6 +175,50 @@ can be validated until identifiers resolve, so this phase blocks that one.
 
 ---
 
+## Phase 5b: Increment E — Every shipping system has a usable sheet (US4)
+
+**Goal**: bind a world to any bundled system, open an actor under the base pack
+alone, and find a sheet worth reading — without a pack having been written for
+it.
+
+**Independent Test**: for each bundled system in turn, everything its manifest
+declares is present on the sheet and nothing it declares is absent.
+
+**Supersedes T019a/T019c/T019d/T019f**, which recorded these gaps one at a
+time as each was found. They stay in the list as the evidence trail; the work
+is here.
+
+### The vocabulary
+
+- [ ] T066 [US4] Extend `DeclaredValueKind` in `crates/thunderforge-canvas-core/src/system_rules.rs` to the set FR-031 requires: the existing `Integer`/`Number`/`Text`/`Boolean`/`List`/`Fraction`, plus a **`Track`** (a bounded run of marks, with how many are filled) and a **`State`** (an ordered set of named states with one current). Each new kind must be a *shape of value* and never a rule about one — the moment a variant carries a threshold or a condition, the format is a language and FR-003 is gone
+- [ ] T067 [US4] Add a **group** to the declaration model (FR-033), so a Fate consequence arrives as its severity and the aspect written into it, and a Cypher stat as its current value, pool and edge — one thing with parts, not three unrelated identifiers. Decide deliberately whether this nests in a value or is a declaration that names its members; the second keeps `DeclaredValue` flat, which everything downstream currently relies on
+- [ ] T068 [US4] Add **player-named slots** (FR-032) to the attribute/skill declarations in `crates/thunderforge-canvas-core/src/attributes.rs`: a declaration that says "there are twenty-six of these and the player names them" rather than naming them. A format modelling only fixed lists turns Fate's twenty-six blanks into eighteen wrong labels
+- [ ] T069 [P] [US4] Unit-test each new kind in `crates/thunderforge-canvas-core/src/system_rules_tests.rs` against the real shapes: 5e's two 3-mark runs, Fate's flat 8-mark track, Cypher's impaired/debilitated/dead. A track and a state set are different things and a test that treats them alike proves nothing
+- [ ] T070 [US4] Render unknown kinds as labelled text (FR-035, SC-014) wherever values are resolved, so a system declaring something this build does not know loses nothing. Absence is indistinguishable from the character not having it, which is why this degrades rather than drops
+
+### The layout constructs
+
+- [ ] T071 [US4] Replace `tracker` in `crates/pack_system_spec/src/layout.rs`. It carries `boxes` + `rows` and fits one of the three systems that has a track: 5e's death saves are two separate 3-mark runs meaning opposite things, Fate's stress is one flat 8-mark track, Cypher's damage track has **no marks at all**. Whatever replaces it must admit a run of marks and an ordered set of named states as different things
+- [ ] T072 [US4] Add text constructs to the layout format: a labelled text field, a paragraph block, and a list a player adds to. Two of the three sheets read are *mostly* these — Fate's aspects, consequences and stunts; Cypher's background, descriptor, focus, type, special abilities, attacks and notes — and the format can currently express none of them
+- [ ] T073 [US4] Fix `slotGrid` (T019a's remaining gap): it carries one identifier and a level count, but each level has a total and an expended count and nothing says how level three's total is named. Either the construct addresses its members or the declaration groups them — T067's answer probably settles this one too
+- [ ] T074 [US4] Extend Forge to render every kind FR-031 admits (FR-034), and extend `validate_conformance` to require it. A kind the format admits and the base pack cannot draw is a kind nobody has shown can be presented
+
+### The manifests
+
+- [ ] T075 [P] [US4] Declare `fate_core`'s sheet in `packs/systems/fate_core/system.json`: fate points and refresh as resources (it currently declares **no** top-level `resources` block at all), three aspects, four consequences each paired with an aspect, twenty-six player-named skill slots, a flat eight-mark stress track, and a stunts block
+- [ ] T076 [P] [US4] Declare `cypher_system`'s sheet in `packs/systems/cypher_system/system.json`: might, speed and intellect each as a group of current value, pool and edge; effort, tier, xp, recovery bonus, armor and limit; the impaired/debilitated/dead damage track as named ordered states; seven player-named skill slots; and the free-text identity and equipment fields
+- [ ] T077 [P] [US4] Audit the remaining bundled manifests — `blades_in_the_dark`, `pathfinder2e`, `year_zero_engine`, `basic-game-system` — against the same question, and declare what each actually tracks
+- [ ] T078 [US4] Write a Fate-shaped and a Cypher-shaped interface pack under `packs/interface/`. This is the acceptance test for the whole increment (SC-013): if either needs a format change to be written, the format is not finished, and finding that out by writing a pack is what worked every previous time
+
+### Proof
+
+- [ ] T079 [US4] Test in `crates/pack_system_spec/` that for every bundled system, everything its manifest declares is renderable by Forge (SC-012). Read the systems from the directory rather than listing them, so a pack added later is covered without anyone remembering to add it
+- [ ] T080 [US4] E2E in `apps/web/e2e/world-appearance.spec.ts`: a world on each of at least three structurally different systems, opened under the base pack alone, renders that system's own sheet — and the three are visibly different from each other
+
+**Checkpoint**: no bundled system renders two numbers and a heading.
+
+---
+
 ## Phase 6: Polish & Cross-Cutting Concerns
 
 - [ ] T062 Run `quickstart.md` by hand, end to end — including §1's "open a dialog", §3 step 4's light/dark check, and §6 step 4's derived-value editability check. Constitution V
