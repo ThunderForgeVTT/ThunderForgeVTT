@@ -300,10 +300,20 @@ pub async fn update_lore_entry_impl(
 
 /// Testable core of `LoreMutation::delete_lore_entry`. Owner-level
 /// permission (FR-021, entry-level Owner per spec Clarifications, not
-/// DM-only). Cascades (revisions/permissions/images/outgoing links) and
-/// nulls out other entries'/actors' incoming links are both handled by
-/// the migrations' `ON DELETE` actions — no application-level cleanup
+/// DM-only). Cascades (revisions/permissions/images/tags/outgoing links)
+/// and nulling out other entries'/actors' incoming links are both handled
+/// by the migrations' `ON DELETE` actions — no application-level cleanup
 /// needed (FR-020).
+///
+/// Spec 031 (FR-038) adds the one thing the database cannot decide: where
+/// the children go. The column's `ON DELETE SET NULL` would flatten them to
+/// the top level, which loses information nobody asked to lose — the
+/// deleted entry's own parent is still a true, more specific home. So the
+/// children are handed to their grandparent first, in the same transaction
+/// as the delete, and the `SET NULL` stays behind as the backstop for the
+/// case where this path is bypassed. A deleted root has no grandparent, and
+/// its children becoming roots is then the correct answer rather than a
+/// fallback.
 pub async fn delete_lore_entry_impl(
     state: &AppState,
     user_id: Uuid,
@@ -326,8 +336,35 @@ pub async fn delete_lore_entry_impl(
         .map_err(|e| LoreWriteError::Database(e.to_string()))?;
 
     let deleted = tokio::task::spawn_blocking(move || {
-        diesel::delete(world_lore_entries::table.filter(world_lore_entries::id.eq(lore_entry_id)))
-            .execute(&mut conn)
+        conn.transaction::<usize, diesel::result::Error, _>(|conn| {
+            let existing: Option<(Uuid, Option<Uuid>)> = world_lore_entries::table
+                .filter(world_lore_entries::id.eq(lore_entry_id))
+                .select((world_lore_entries::world_id, world_lore_entries::parent_id))
+                .first(conn)
+                .optional()?;
+            let Some((world_id, grandparent_id)) = existing else {
+                return Ok(0);
+            };
+
+            // The same lock a move takes, so a move that would have parented
+            // something under this entry either lands before the children are
+            // gathered or finds the entry already gone. Without it a child
+            // could arrive between the re-parent and the delete, and only the
+            // database's SET NULL backstop would catch it — correct, but it
+            // would flatten a subtree the tree still had a home for.
+            crate::graphql::mutations_lore_tree::lock_world_tree(conn, world_id)?;
+
+            diesel::update(
+                world_lore_entries::table.filter(world_lore_entries::parent_id.eq(lore_entry_id)),
+            )
+            .set(world_lore_entries::parent_id.eq(grandparent_id))
+            .execute(conn)?;
+
+            diesel::delete(
+                world_lore_entries::table.filter(world_lore_entries::id.eq(lore_entry_id)),
+            )
+            .execute(conn)
+        })
     })
     .await
     .map_err(|_| LoreWriteError::Database("Failed to spawn blocking task".to_string()))?

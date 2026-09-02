@@ -20,6 +20,12 @@ export type LoreEntryRecord = {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  /** Spec 031 (FR-038): the entry this one files under, `null` at the top
+   * level. An id and not a slug: the tree outlives the URL scheme. */
+  parentId: string | null;
+  /** Spec 031 (FR-038): normalised, alphabetical. Empty on a moderated
+   * placeholder, which carries no real content to label. */
+  tags: string[];
   /** FR-006: every lore entry whose body currently links to this one. */
   linkedFrom: LoreLinkSourceRecord[];
 };

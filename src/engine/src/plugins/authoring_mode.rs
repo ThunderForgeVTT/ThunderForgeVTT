@@ -23,13 +23,17 @@
 //! `OnEnter`/`OnExit` give each mode exactly one place to arm and disarm, and
 //! `in_state` gates a system without every system re-deriving "am I on?".
 //!
-//! # What this module does not do
+//! # Two gates, and why both
 //!
-//! It does not gate anything yet. Introducing the state and gating the
-//! existing always-on systems are deliberately separate steps: the state is
-//! additive and safe, while gating changes the behaviour of every authoring
-//! system on the canvas and is done one system at a time, with the canvas
-//! end-to-end suite run between each. See spec 031, T008 versus T016.
+//! The mode says *what* a click means. Which tools a person may use at all is
+//! a separate question, answered by the server and pushed in through
+//! [`set_allowed_authoring_tools`] — and answered again here, because chrome
+//! that hides a button is presentation, not enforcement (FR-047, SC-012). A
+//! request arriving from a console, a stale tab, or a client that has not
+//! caught up with a revocation is refused by [`set_authoring_mode`]; a viewer
+//! already holding a tool they have just lost is moved off it by
+//! `leave_a_forbidden_mode`, and their in-flight gesture dies with the
+//! `OnExit` every other tool change runs.
 
 use bevy::prelude::*;
 
@@ -155,7 +159,13 @@ fn allowed_tools_slot() -> &'static std::sync::Mutex<Option<Vec<AuthoringMode>>>
     ALLOWED_TOOLS.get_or_init(|| std::sync::Mutex::new(None))
 }
 
-fn tool_is_allowed(mode: AuthoringMode) -> bool {
+/// Whether this viewer may use `mode` right now.
+///
+/// Public because it is the check, not a detail of one: `set_authoring_mode`
+/// consults it for a request, and [`authoring_tool_allowed`] hands the same
+/// answer to the input systems as a run condition. Two spellings of "may I"
+/// is how a bypass gets in.
+pub fn tool_is_allowed(mode: AuthoringMode) -> bool {
     allowed_tools_slot()
         .lock()
         .ok()
@@ -164,6 +174,19 @@ fn tool_is_allowed(mode: AuthoringMode) -> bool {
             Some(allowed) => allowed.contains(&mode),
         })
         .unwrap_or(true)
+}
+
+/// A run condition arming a system only while its tool is permitted.
+///
+/// Gating the input systems as well as the mode request is not belt and
+/// braces. `leave_a_forbidden_mode` runs in `Update`, so the state it sets
+/// does not take effect until the next frame's `StateTransition` — leaving one
+/// whole frame in which `in_state(AuthoringMode::Walls)` is still true for a
+/// tool the viewer has just lost. A click landing in that frame would draw.
+/// SC-012 says "by any route, in 100% of attempts", and a 16ms window is not
+/// 100%.
+pub fn authoring_tool_allowed(mode: AuthoringMode) -> impl FnMut() -> bool + Clone {
+    move || tool_is_allowed(mode)
 }
 
 /// Declare which tools this viewer may use.
@@ -206,12 +229,30 @@ pub fn clear_allowed_authoring_tools() {
 /// `Select` rather than "no mode": there is no unarmed state, and inventing one
 /// here would make a revocation behave differently from every other way of
 /// leaving a tool.
+/// `Select` rather than "no mode": there is no unarmed state, and inventing one
+/// here would make a revocation behave differently from every other way of
+/// leaving a tool.
+///
+/// # Why it also reports
+///
+/// The edge case spec 031 records is not "the gesture must be discarded" — the
+/// `OnExit` handlers already do that — it is that the loss must be *legible*.
+/// Dropping silently to `Select` is exactly the failure it names: the tool
+/// stops responding and the person is left clicking at a map that has quietly
+/// stopped listening, with the rail still showing their tool as armed. So the
+/// engine says what it did. Chrome decides how to show it (Principle I); what
+/// chrome must not do is have to infer it by polling `authoring_mode()`.
 fn leave_a_forbidden_mode(
     current: Res<State<AuthoringMode>>,
     mut next: ResMut<NextState<AuthoringMode>>,
 ) {
-    if !tool_is_allowed(*current.get()) && *current.get() != AuthoringMode::Select {
+    let mode = *current.get();
+    if !tool_is_allowed(mode) && mode != AuthoringMode::Select {
         next.set(AuthoringMode::Select);
+        crate::emit_event(serde_json::json!({
+            "type": "authoringToolRevoked",
+            "tool": mode.as_tool_id(),
+        }));
     }
 }
 
@@ -246,8 +287,10 @@ pub struct AuthoringModePlugin;
 
 impl Plugin for AuthoringModePlugin {
     fn build(&self, app: &mut App) {
-        app.init_state::<AuthoringMode>()
-            .add_systems(Update, (apply_requested_mode, leave_a_forbidden_mode).chain());
+        app.init_state::<AuthoringMode>().add_systems(
+            Update,
+            (apply_requested_mode, leave_a_forbidden_mode).chain(),
+        );
     }
 }
 
@@ -285,5 +328,61 @@ mod tests {
     #[test]
     fn select_is_the_default() {
         assert_eq!(AuthoringMode::default(), AuthoringMode::Select);
+    }
+
+    /// The default is *unrestricted*, and that is deliberate: the engine is
+    /// the second gate, not the first. A build nobody has told about tool
+    /// permissions must behave exactly as it did before they existed —
+    /// FR-045's "existing worlds are unchanged", seen from this side.
+    #[test]
+    fn no_declaration_restricts_nothing() {
+        clear_allowed_authoring_tools();
+        for mode in [
+            AuthoringMode::Select,
+            AuthoringMode::Walls,
+            AuthoringMode::Tokens,
+        ] {
+            assert!(tool_is_allowed(mode));
+        }
+    }
+
+    /// The whole of SC-012 at this boundary: a request made directly, with no
+    /// rail involved, is refused for a tool the viewer does not hold.
+    #[test]
+    fn a_direct_request_for_a_forbidden_tool_is_refused() {
+        set_allowed_authoring_tools("select,walls");
+
+        assert!(set_authoring_mode("walls"), "a granted tool is accepted");
+        assert!(
+            !set_authoring_mode("lights"),
+            "a tool the viewer does not hold must be refused even when asked for directly"
+        );
+
+        clear_allowed_authoring_tools();
+    }
+
+    /// An empty grant is a real answer, not a missing one. A player whose Game
+    /// Master has granted nothing holds nothing — the reading that treats an
+    /// empty list as "no restriction" is the one that would hand every tool to
+    /// everybody.
+    #[test]
+    fn granting_nothing_forbids_everything() {
+        set_allowed_authoring_tools("");
+        assert!(!tool_is_allowed(AuthoringMode::Walls));
+        assert!(!tool_is_allowed(AuthoringMode::Select));
+        assert!(!set_authoring_mode("walls"));
+        clear_allowed_authoring_tools();
+    }
+
+    /// One unknown name must not cost a person the tools they do hold — a
+    /// build that lacks a tool cannot grant it, and refusing the whole list
+    /// would fail *open* on the wrong side by disarming a legitimate grant.
+    #[test]
+    fn an_unknown_name_in_a_grant_does_not_void_the_rest() {
+        set_allowed_authoring_tools("walls, wombat ,shapes");
+        assert!(tool_is_allowed(AuthoringMode::Walls));
+        assert!(tool_is_allowed(AuthoringMode::Shapes));
+        assert!(!tool_is_allowed(AuthoringMode::Lights));
+        clear_allowed_authoring_tools();
     }
 }

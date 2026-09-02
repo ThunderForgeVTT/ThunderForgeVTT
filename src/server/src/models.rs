@@ -12,7 +12,8 @@ use crate::schema::{
     world_genie_resource_holdings, world_genie_sessions, world_genie_shop_listings,
     world_genie_trade_proposals, world_invites, world_item_effects, world_item_permissions,
     world_item_prices, world_item_shares, world_items, world_lore_entries, world_lore_image_assets, world_lore_links,
-    world_lore_permissions, world_lore_revisions, world_members, world_roll_records, world_tokens,
+    world_lore_permissions, world_lore_revisions, world_lore_tags, world_members,
+    world_roll_records, world_tokens,
     worlds,
 };
 use diesel::prelude::*;
@@ -1207,6 +1208,14 @@ pub struct LoreEntry {
     pub created_by: uuid::Uuid,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// Spec 031 (FR-038): the entry this one sits under, or `None` for a
+    /// root. Nullable because a root's absent parent is a fact about the
+    /// tree, not a value nobody got around to filling in.
+    ///
+    /// Last, matching the column order `schema.rs` gives the table — the
+    /// plain `load::<LoreEntry>` calls in `queries/lore.rs` read by
+    /// position, so struct order and column order are the same statement.
+    pub parent_id: Option<uuid::Uuid>,
 }
 
 /// New lore entry for insertion.
@@ -1325,6 +1334,22 @@ pub struct LoreImageAsset {
     pub original_filename: Option<String>,
     pub content_type: String,
     pub byte_size: i64,
+    pub created_at: chrono::NaiveDateTime,
+}
+
+/// Spec 031 (FR-038): one tag on one lore entry.
+///
+/// Append-only — a tag is added or removed, never edited — so provenance is
+/// `created_by`/`created_at` alone, matching `LoreImageAsset` rather than the
+/// fuller `created_by`/`updated_by` shape a mutable row needs.
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_lore_tags)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct LoreTag {
+    pub id: uuid::Uuid,
+    pub lore_entry_id: uuid::Uuid,
+    pub tag: String,
+    pub created_by: uuid::Uuid,
     pub created_at: chrono::NaiveDateTime,
 }
 

@@ -628,6 +628,11 @@ pub struct GraphQLLoreEntry {
     pub created_by: uuid::Uuid,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    /// Spec 031 (FR-038): the entry this one sits under, `null` for a root.
+    /// A plain column rather than a nested `parent` object — the client
+    /// already loads the world's entries to draw the tree, and an object
+    /// here would be the same rows fetched twice.
+    pub parent_id: Option<uuid::Uuid>,
     /// Spec 015: true when this entry is currently disabled in response to
     /// a DMCA takedown notice — `title`/`content` are a placeholder, not
     /// the real content (contracts/graphql-moderation.md).
@@ -675,6 +680,30 @@ impl GraphQLLoreEntry {
     ) -> async_graphql::Result<Vec<GraphQLLoreEntry>> {
         crate::graphql::queries::lore::lore_entries_linking_to(ctx, self.id).await
     }
+
+    /// Spec 031 (FR-038): this entry's tags, normalised and alphabetical.
+    ///
+    /// A resolver rather than a column, for the same reason `price` is one on
+    /// an item: tags live in their own table, and a moderation placeholder
+    /// must not carry any — a blanked entry still labelled "ancient ruins"
+    /// would be the one piece of real content left on it.
+    async fn tags(&self, ctx: &async_graphql::Context<'_>) -> async_graphql::Result<Vec<String>> {
+        if self.moderated {
+            return Ok(Vec::new());
+        }
+        let state = crate::graphql::app_state(ctx)?;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| async_graphql::Error::new("Failed to get DB connection"))?;
+        let entry_id = self.id;
+        tokio::task::spawn_blocking(move || {
+            crate::graphql::mutations_lore_tree::tags_for_entry(&mut conn, entry_id)
+        })
+        .await
+        .map_err(|_| async_graphql::Error::new("Failed to spawn blocking task"))?
+        .map_err(|_| async_graphql::Error::new("Failed to load lore tags"))
+    }
 }
 
 impl From<LoreEntry> for GraphQLLoreEntry {
@@ -689,6 +718,7 @@ impl From<LoreEntry> for GraphQLLoreEntry {
             created_by: row.created_by,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            parent_id: row.parent_id,
             moderated: false,
             moderation_case_id: None,
         }

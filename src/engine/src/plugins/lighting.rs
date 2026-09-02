@@ -59,7 +59,16 @@ impl Plugin for LightingPlugin {
                 // `plugins/wall.rs`. Every authoring system was previously
                 // armed at once for a Game Master, so one click was offered to
                 // all of them and whichever claimed it won (spec 031 FR-040a).
-                handle_light_input.run_if(in_state(AuthoringMode::Lights)),
+                handle_light_input
+                    .run_if(in_state(AuthoringMode::Lights))
+                    // And only while this viewer may use the tool at all.
+                    // The mode gate above cannot cover a revocation: the
+                    // state change that takes a lost tool away lands a frame
+                    // later, and a click in that frame would still draw
+                    // (spec 031 SC-012).
+                    .run_if(crate::plugins::authoring_mode::authoring_tool_allowed(
+                        AuthoringMode::Lights,
+                    )),
                 handle_light_resize,
                 handle_light_keyboard_toggles,
                 handle_light_undo,
@@ -75,7 +84,6 @@ impl Plugin for LightingPlugin {
         );
     }
 }
-
 
 /// Discard this tool's unfinished gesture when its mode is left.
 ///

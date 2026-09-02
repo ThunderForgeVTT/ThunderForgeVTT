@@ -4,6 +4,8 @@
 //! The main graphql.rs merges all queries into the QueryRoot for the GraphQL schema.
 
 pub mod ability;
+// Spec 031: `authoringTools(worldId)` — which tools the caller may use.
+pub mod authoring_tools;
 pub mod actor;
 pub mod admin;
 pub mod genie_session;
@@ -26,6 +28,7 @@ pub mod world_events_since;
 pub mod world_sync_plan;
 
 pub use ability::AbilityQuery;
+pub use authoring_tools::AuthoringToolsQuery;
 pub use actor::ActorQuery;
 pub use admin::AdminQuery;
 pub use genie_session::GenieSessionQuery;

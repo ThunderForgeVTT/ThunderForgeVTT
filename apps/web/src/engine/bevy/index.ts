@@ -19,6 +19,8 @@ type BevyWasmModule = {
   start: (canvasSelector: string) => void;
   apply_world_command?: (json: string) => void;
   set_authoring_mode?: (toolId: string) => boolean;
+  set_allowed_authoring_tools?: (toolIds: string) => void;
+  clear_allowed_authoring_tools?: () => void;
   set_selection_filter?: (
     tokens: boolean,
     walls: boolean,
@@ -371,6 +373,44 @@ function asInteractionUnavailable(
     : null;
 }
 
+/**
+ * A tool was taken away while this person was holding it.
+ *
+ * The engine has already dropped them back to Select and discarded whatever
+ * gesture was in flight — that part is not chrome's decision. What chrome owes
+ * is legibility: spec 031's edge case is explicit that the tool must not
+ * "silently cease to respond", which is precisely what a mid-gesture
+ * revocation looks like without this.
+ */
+export interface AuthoringToolRevokedEvent {
+  type: "authoringToolRevoked";
+  /** The tool that was being used when it was lost. */
+  tool: string;
+}
+
+function asAuthoringToolRevoked(
+  event: unknown,
+): AuthoringToolRevokedEvent | null {
+  const candidate = event as { type?: unknown };
+  return candidate.type === "authoringToolRevoked"
+    ? (event as AuthoringToolRevokedEvent)
+    : null;
+}
+
+const authoringToolRevokedListeners = new Set<
+  (event: AuthoringToolRevokedEvent) => void
+>();
+
+/** Be told when a tool was revoked mid-use. Returns the unsubscribe. */
+export function onAuthoringToolRevoked(
+  listener: (event: AuthoringToolRevokedEvent) => void,
+): () => void {
+  authoringToolRevokedListeners.add(listener);
+  return () => {
+    authoringToolRevokedListeners.delete(listener);
+  };
+}
+
 const pickUpItemListeners = new Set<(event: PickUpItemEvent) => void>();
 const unavailableListeners = new Set<
   (event: InteractionUnavailableEvent) => void
@@ -584,6 +624,17 @@ export async function bindWorldStore(worldStore: WorldStore): Promise<void> {
           return;
         }
 
+        // Nor is a revoked tool. The engine has already left the mode; this
+        // says so, so the rail can stop claiming the tool is armed and the
+        // person is told why the canvas stopped answering.
+        const revoked = asAuthoringToolRevoked(parsed);
+        if (revoked) {
+          for (const listener of authoringToolRevokedListeners) {
+            listener(revoked);
+          }
+          return;
+        }
+
         // Nor is the scene machine's request for content. It asks chrome to
         // go and fetch — the engine owns no network by design — and there is
         // no store command by that name for it to become.
@@ -676,6 +727,48 @@ export async function setAuthoringMode(toolId: string): Promise<boolean> {
     return module.set_authoring_mode(toolId);
   } catch {
     return false;
+  }
+}
+
+/**
+ * Tell the engine which tools this viewer may use.
+ *
+ * Not a hint. The engine refuses a mode request outside this set and disarms
+ * the input systems for anything outside it, so a client that skips this call
+ * gets the unrestricted default — which is why the caller must send `""` for a
+ * person with no tools rather than simply not calling (FR-045: the default the
+ * *server* declares is Game-Master-only, and an engine told nothing cannot
+ * know that).
+ *
+ * Optional by design, like `setAuthoringMode`: a bundle predating tool
+ * permissions does not export it, and the role checks that gated authoring
+ * before still apply.
+ */
+export async function setAllowedAuthoringTools(
+  toolIds: readonly string[],
+): Promise<void> {
+  try {
+    const module = await getWasmModule();
+    module.set_allowed_authoring_tools?.(toolIds.join(","));
+  } catch {
+    // A failed restriction must not take the canvas down. The server refused
+    // the write regardless; this call only decides what is offered.
+  }
+}
+
+/**
+ * Remove any tool restriction from the engine.
+ *
+ * For a viewer who holds every tool. Distinct from sending the full list so
+ * the engine's "no declaration" default and "granted everything" state stay
+ * distinguishable when reading it back.
+ */
+export async function clearAllowedAuthoringTools(): Promise<void> {
+  try {
+    const module = await getWasmModule();
+    module.clear_allowed_authoring_tools?.();
+  } catch {
+    // As above.
   }
 }
 

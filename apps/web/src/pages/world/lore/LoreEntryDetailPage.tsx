@@ -15,6 +15,7 @@ import { ModeratedContentBanner } from "@/components/world/ModeratedContentBanne
 import { useWorldRole } from "@/hooks/useWorldRole";
 import { LoreMarkdownEditor } from "@/pages/world/lore/LoreMarkdownEditor";
 import { LoreMarkdownRenderer } from "@/pages/world/lore/LoreMarkdownRenderer";
+import { LoreOrganisationPanel } from "@/pages/world/lore/LoreOrganisationPanel";
 import { LoreOwnershipBlock } from "@/pages/world/lore/LoreOwnershipBlock";
 import type { LoreEntryRecord } from "@/types/lore";
 import type { WorldRecord } from "@/types/world";
@@ -305,6 +306,17 @@ export default function LoreEntryDetailPage({
             <LoreMarkdownRenderer html={entry.renderedHtml} />
           )}
         </Card>
+
+        {/* Spec 031 (T072, FR-038): where this entry files, what it is
+            tagged, and the tree it belongs to. Above the backlinks because
+            the tree is how a reader navigates on purpose, and backlinks are
+            what they stumble into. */}
+        <LoreOrganisationPanel
+          worldId={worldId}
+          entry={entry}
+          canEdit={canEdit}
+          onEntryChanged={setEntry}
+        />
 
         {/* T036: automatically-maintained "linked from" backlink list (FR-006). */}
         <Card className="grid gap-2 p-4" data-testid="lore-linked-from">

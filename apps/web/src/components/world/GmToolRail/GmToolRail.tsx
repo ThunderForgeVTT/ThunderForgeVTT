@@ -5,13 +5,26 @@ import {
 } from "@/components/ui/fantasy-icon/FantasyIcon";
 import { cn } from "@/lib/utils";
 
-export type GmToolId =
-  | "select"
-  | "walls"
-  | "lights"
-  | "shapes"
-  | "tokens"
-  | "interactions";
+/**
+ * Every tool the rail can offer, in rail order.
+ *
+ * A runtime list with the type derived from it, rather than a type alone: the
+ * permission a tool now carries has to be *checked* against something at
+ * runtime, and a bare union compiles to nothing. A second hand-written copy of
+ * these names is exactly what already broke the e2e suite once, so there is
+ * one list and everything else — the union below, `e2e/fixtures/helpers.ts`,
+ * the permission filter — reads from it.
+ */
+export const GM_TOOL_IDS = [
+  "select",
+  "walls",
+  "lights",
+  "shapes",
+  "tokens",
+  "interactions",
+] as const;
+
+export type GmToolId = (typeof GM_TOOL_IDS)[number];
 
 export interface GmTool {
   id: GmToolId;

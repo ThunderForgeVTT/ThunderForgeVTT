@@ -66,6 +66,11 @@ pub mod scene_visibility;
 /// them. The four `*_permissions` modules below re-export from here.
 pub mod permissioned_entities;
 
+/// Spec 031 (FR-044, FR-045): which authoring tools a person may use. A
+/// sibling of `permissioned_entities` rather than an entry in it — the module
+/// says why.
+pub mod authoring_tools;
+
 pub mod actor_permissions;
 
 /// Spec 012: lore entry ownership/permission enforcement

@@ -75,7 +75,10 @@ import {
   onSceneLoadRequested,
   peerAdjudicationActive,
   setAuthoringMode,
+  onAuthoringToolRevoked,
 } from "@/engine/bevy";
+import { useAuthoringTools } from "@/hooks/useAuthoringTools";
+import { permittedTools, reconcileOpenTool } from "@/lib/authoringTools";
 import {
   getPeerTransferState,
   subscribeToPeerTransfer,
@@ -127,6 +130,7 @@ import { InteractionTool } from "@/components/canvas-tools/InteractionTool";
 import { ApprovalQueue } from "@/components/ApprovalQueue";
 import {
   GmToolRail,
+  GM_TOOL_IDS,
   type GmToolId,
 } from "@/components/world/GmToolRail/GmToolRail";
 import { SelectionFilterMenu } from "@/components/world/GmToolRail/SelectionFilterMenu";
@@ -304,6 +308,48 @@ export default function WorldPage() {
   const [openGmToolId, setOpenGmToolId] = useState<GmToolId | null>("select");
 
   /**
+   * Which tools this person may use here (spec 031 FR-044).
+   *
+   * The rail used to be a role check: Game Master, therefore all six tools.
+   * The role is still what decides whether the rail renders at all, but *which*
+   * tools it holds is now a permission the server resolves — and the same
+   * answer is pushed into the engine by this hook, so the two cannot disagree.
+   */
+  const allowedTools = useAuthoringTools(id);
+
+  /**
+   * A tool the engine took away while it was in use.
+   *
+   * The engine has already left the mode and discarded the gesture; without
+   * this the person would be left clicking at a map that had quietly stopped
+   * listening, with the rail still showing their tool as armed — the exact
+   * failure spec 031's edge case names.
+   */
+  const [revokedTool, setRevokedTool] = useState<GmToolId | null>(null);
+
+  useEffect(
+    () =>
+      onAuthoringToolRevoked((event) => {
+        // Narrowed through the rail's own list rather than cast: an id this
+        // build does not have would otherwise be rendered into the notice.
+        const tool =
+          GM_TOOL_IDS.find((toolId) => toolId === event.tool) ?? null;
+        setRevokedTool(tool);
+      }),
+    [],
+  );
+
+  /**
+   * Which tool the rail actually has open, once permission is accounted for.
+   *
+   * Derived rather than synchronised into `openGmToolId` by an effect: the
+   * chosen tool and the permitted set are two independent inputs, and copying
+   * one into the other leaves a render in which the flyout is still offering
+   * controls for a tool the engine has already refused.
+   */
+  const effectiveGmToolId = reconcileOpenTool(openGmToolId, allowedTools);
+
+  /**
    * Tell the engine which tool is armed, whenever that changes.
    *
    * This state decides which flyout renders — that is chrome's business. It is
@@ -323,9 +369,9 @@ export default function WorldPage() {
     // independently — this is the third layer, and it is here because a mode
     // request is a message chrome sends, and chrome should not be sending it
     // on a player's behalf at all. Defence in depth, not the only defence.
-    if (!isSceneOwner || !openGmToolId) return;
-    void setAuthoringMode(openGmToolId);
-  }, [isSceneOwner, openGmToolId]);
+    if (!isSceneOwner || !effectiveGmToolId) return;
+    void setAuthoringMode(effectiveGmToolId);
+  }, [isSceneOwner, effectiveGmToolId]);
 
   /**
    * Bumped whenever something might have changed the approval queue, so it
@@ -2101,99 +2147,126 @@ export default function WorldPage() {
           onDismiss={() => setStackPicker(null)}
         />
       ) : null}
+      {revokedTool ? (
+        <div
+          role="status"
+          data-testid="authoring-tool-revoked-notice"
+          className="fixed top-4 left-1/2 z-[1100] -translate-x-1/2 rounded-lg border border-border bg-background/95 px-4 py-2 text-sm shadow-xl backdrop-blur"
+        >
+          <span>
+            The {revokedTool} tool is no longer available to you. Anything you
+            were drawing with it was discarded.
+          </span>
+          <button
+            type="button"
+            className="ml-3 rounded-md px-1.5 text-muted-foreground hover:text-foreground"
+            aria-label="Dismiss"
+            onClick={() => setRevokedTool(null)}
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
       <div style={{ display: playView === "playing" ? "block" : "none" }}>
         <WorldLayout
           worldId={id}
           toolRail={
             isSceneOwner && sceneId ? (
               <GmToolRail
-                openToolId={openGmToolId}
+                openToolId={effectiveGmToolId}
                 onOpenToolChange={setOpenGmToolId}
-                tools={[
-                  {
-                    id: "select",
-                    label: "Select",
-                    icon: "select",
-                    // A panel after all, but a collapsible one that remembers
-                    // being collapsed. The original reasoning — that an
-                    // always-open panel would cover 256px of map to say "you
-                    // may now click things" — is answered by the collapse,
-                    // not contradicted: a Game Master who does not want it
-                    // never sees it again (spec 031 FR-010).
-                    content: <SelectionFilterMenu />,
-                  },
-                  {
-                    id: "walls",
-                    label: "Walls",
-                    icon: "shield",
-                    content: (
-                      <WallTool
-                        worldStore={worldStore}
-                        walls={worldState.walls}
-                        selectedWallId={worldState.selectedWallId}
-                      />
-                    ),
-                  },
-                  {
-                    id: "lights",
-                    label: "Lights",
-                    icon: "torch",
-                    content: (
-                      <LightingTool
-                        worldStore={worldStore}
-                        lights={worldState.lights}
-                        selectedLightId={worldState.selectedLightId}
-                        tokens={worldState.tokens}
-                      />
-                    ),
-                  },
-                  {
-                    id: "shapes",
-                    label: "Shapes",
-                    icon: "tokens",
-                    content: (
-                      <ShapeTool
-                        worldStore={worldStore}
-                        shapes={worldState.shapes}
-                        selectedShapeId={worldState.selectedShapeId}
-                        sceneId={sceneId}
-                        canvasContainerRef={containerRef}
-                      />
-                    ),
-                  },
-                  {
-                    id: "tokens",
-                    label: "Tokens",
-                    icon: "actors",
-                    content: (
-                      <TokenTool
-                        control={facets.tokens}
-                        selectedTokenId={worldState.selectedTokenId}
-                        worldId={id}
-                        sceneId={sceneId}
-                      />
-                    ),
-                  },
-                  {
-                    // Spec 030. Last in the rail because it is authored *onto*
-                    // what the other four place: you draw a wall, then decide
-                    // it is a door that opens.
-                    id: "interactions",
-                    label: "Interactions",
-                    icon: "rune",
-                    content: (
-                      <InteractionTool
-                        worldStore={worldStore}
-                        worldId={id}
-                        sceneId={sceneId}
-                        selectedTokenId={worldState.selectedTokenId}
-                        selectedWallId={worldState.selectedWallId}
-                        walls={worldState.walls}
-                        lights={worldState.lights}
-                      />
-                    ),
-                  },
-                ]}
+                // Filtered, not merely disabled: FR-047 says a tool a person
+                // may not use is not offered. A greyed-out button still tells
+                // them the tool exists and invites them to ask why it does not
+                // work.
+                tools={permittedTools(
+                  [
+                    {
+                      id: "select",
+                      label: "Select",
+                      icon: "select",
+                      // A panel after all, but a collapsible one that remembers
+                      // being collapsed. The original reasoning — that an
+                      // always-open panel would cover 256px of map to say "you
+                      // may now click things" — is answered by the collapse,
+                      // not contradicted: a Game Master who does not want it
+                      // never sees it again (spec 031 FR-010).
+                      content: <SelectionFilterMenu />,
+                    },
+                    {
+                      id: "walls",
+                      label: "Walls",
+                      icon: "shield",
+                      content: (
+                        <WallTool
+                          worldStore={worldStore}
+                          walls={worldState.walls}
+                          selectedWallId={worldState.selectedWallId}
+                        />
+                      ),
+                    },
+                    {
+                      id: "lights",
+                      label: "Lights",
+                      icon: "torch",
+                      content: (
+                        <LightingTool
+                          worldStore={worldStore}
+                          lights={worldState.lights}
+                          selectedLightId={worldState.selectedLightId}
+                          tokens={worldState.tokens}
+                        />
+                      ),
+                    },
+                    {
+                      id: "shapes",
+                      label: "Shapes",
+                      icon: "tokens",
+                      content: (
+                        <ShapeTool
+                          worldStore={worldStore}
+                          shapes={worldState.shapes}
+                          selectedShapeId={worldState.selectedShapeId}
+                          sceneId={sceneId}
+                          canvasContainerRef={containerRef}
+                        />
+                      ),
+                    },
+                    {
+                      id: "tokens",
+                      label: "Tokens",
+                      icon: "actors",
+                      content: (
+                        <TokenTool
+                          control={facets.tokens}
+                          selectedTokenId={worldState.selectedTokenId}
+                          worldId={id}
+                          sceneId={sceneId}
+                        />
+                      ),
+                    },
+                    {
+                      // Spec 030. Last in the rail because it is authored *onto*
+                      // what the other four place: you draw a wall, then decide
+                      // it is a door that opens.
+                      id: "interactions",
+                      label: "Interactions",
+                      icon: "rune",
+                      content: (
+                        <InteractionTool
+                          worldStore={worldStore}
+                          worldId={id}
+                          sceneId={sceneId}
+                          selectedTokenId={worldState.selectedTokenId}
+                          selectedWallId={worldState.selectedWallId}
+                          walls={worldState.walls}
+                          lights={worldState.lights}
+                        />
+                      ),
+                    },
+                  ],
+                  allowedTools,
+                )}
               />
             ) : null
           }

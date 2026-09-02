@@ -81,7 +81,16 @@ impl Plugin for WallPlugin {
                 // `IsGameMaster` stays as the inner check. The mode says *what*
                 // a click means; the role says whether this person may author
                 // at all, and that is not the mode's business.
-                handle_wall_input.run_if(in_state(AuthoringMode::Walls)),
+                handle_wall_input
+                    .run_if(in_state(AuthoringMode::Walls))
+                    // And only while this viewer may use the tool at all.
+                    // The mode gate above cannot cover a revocation: the
+                    // state change that takes a lost tool away lands a frame
+                    // later, and a click in that frame would still draw
+                    // (spec 031 SC-012).
+                    .run_if(crate::plugins::authoring_mode::authoring_tool_allowed(
+                        AuthoringMode::Walls,
+                    )),
                 handle_wall_keyboard_toggles,
                 handle_wall_undo,
                 // Spec 030: doors, contributed to the interaction seam. Reads
@@ -96,7 +105,6 @@ impl Plugin for WallPlugin {
         );
     }
 }
-
 
 /// Discard this tool's unfinished gesture when its mode is left.
 ///
@@ -115,7 +123,6 @@ fn abandon_wall_gesture(
     drag.abandon();
     chain.abandon();
 }
-
 
 /// What the web app has most recently asked the wall tool to draw.
 ///

@@ -297,6 +297,11 @@ pub async fn lore_entry_impl(
                 created_by: row.created_by,
                 created_at: now,
                 updated_at: now,
+                // Spec 031 (FR-038): a placeholder sits nowhere, for the same
+                // reason it carries no tags — where a disabled entry lived in
+                // the tree is a fact about the removed content, and the point
+                // of the placeholder is that none of that is disclosed.
+                parent_id: None,
             },
             case_id,
         )));

@@ -126,6 +126,9 @@ pub use mutations_lore::LoreMutation;
 pub mod mutations_lore_permissions;
 pub use mutations_lore_permissions::{LorePermissionMutation, LorePermissionQuery};
 
+// Spec 031 (FR-038): the lore tree and its tags — move, tag, untag
+pub mod mutations_lore_tree;
+
 // Spec 012: paste/drop image upload for lore entries
 pub mod mutations_lore_images;
 pub use mutations_lore_images::LoreImageMutation;
@@ -2810,6 +2813,8 @@ pub struct QueryRoot(
     queries::token_attributes::TokenAttributesQuery,
     // Spec 030: `effectRegistry` and `interactives(sceneId)`.
     queries::interactives::InteractiveQuery,
+    // Spec 031: `authoringTools(worldId)` — which tools the caller may use.
+    queries::AuthoringToolsQuery,
     InviteQuery,
     AssetQuery,
     ActorQuery,
@@ -2867,6 +2872,7 @@ pub struct MutationRoot(
     LoreMutation,
     LorePermissionMutation,
     LoreImageMutation,
+    mutations_lore_tree::LoreTreeMutation,
     AbilityMutation,
     AbilityPermissionMutation,
     AbilityShareMutation,

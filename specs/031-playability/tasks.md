@@ -98,11 +98,11 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 - [X] T030 [US1] Add View and Place actions to `apps/web/src/components/world/PlayDock/ActorsPanel.tsx`, replacing the link that navigates away from play (FR-001)
 - [X] T031 [US1] Open the actor in a new browser tab for a GM from `apps/web/src/components/world/PlayDock/ActorsPanel.tsx` (FR-002, GM half)
 - [X] T032 [US1] Wire Place to begin an engine placement and, on confirmation, call the token-create mutation subject to existing ownership rules, in `apps/web/src/` (FR-004, FR-007, contracts/graphql-mutations.md)
-- [ ] T032a [US1] Declare tool use as a permission in the world's single permission declaration, defaulting to Game-Master-only so existing worlds are unchanged, in `src/server/src/` (FR-044, FR-045, ADR-050)
-- [ ] T032b [US1] Let a Game Master grant specific tools to a specific player from the world's settings, in `apps/web/src/pages/world/settings/` and `src/server/src/graphql/` (FR-046)
-- [ ] T032c [US1] Resolve tool permission on the client so an unavailable tool never appears in the rail, in `apps/web/src/pages/world/WorldPage.tsx` and `apps/web/src/components/world/GmToolRail/GmToolRail.tsx` (FR-047)
-- [ ] T032d [US1] Enforce tool permission engine-side so a directly issued mode request or canvas input is refused regardless of what chrome shows, in `src/engine/src/plugins/authoring_mode.rs` and the input systems (FR-047, SC-012)
-- [ ] T032e [US1] End a gesture in flight when the acting person's permission for that tool is revoked, and make the loss legible, in `src/engine/src/` (spec edge case)
+- [X] T032a [US1] Declare tool use as a permission in the world's single permission declaration, defaulting to Game-Master-only so existing worlds are unchanged, in `src/server/src/` (FR-044, FR-045, ADR-050)
+- [ ] T032b [US1] Let a Game Master grant specific tools to a specific player from the world's settings, in `apps/web/src/pages/world/settings/` and `src/server/src/graphql/` (FR-046) — **needs a migration**: no existing table can hold `(world, user, tool)` (`world_members` carries only a role string, `worlds` has no jsonb, `policies` has no subject column), so this needs `world_authoring_tool_grants` plus a purge on member removal. The seam is ready — `granted_authoring_tools()` is the single reader, and the mutation and settings UI drop in behind it
+- [X] T032c [US1] Resolve tool permission on the client so an unavailable tool never appears in the rail, in `apps/web/src/pages/world/WorldPage.tsx` and `apps/web/src/components/world/GmToolRail/GmToolRail.tsx` (FR-047)
+- [X] T032d [US1] Enforce tool permission engine-side so a directly issued mode request or canvas input is refused regardless of what chrome shows, in `src/engine/src/plugins/authoring_mode.rs` and the input systems (FR-047, SC-012)
+- [X] T032e [US1] End a gesture in flight when the acting person's permission for that tool is revoked, and make the loss legible, in `src/engine/src/` (spec edge case)
 - [X] T033 [US1] Make an inert selection state legible when every kind is filtered out, in `apps/web/src/components/world/GmToolRail/GmToolRail.tsx` (spec edge case)
 - [X] T034 [P] [US1] Add e2e coverage for place-then-cancel leaving nothing, and for a filtered Select ignoring walls, in `apps/web/e2e/canvas-authoring.spec.ts`
 
@@ -213,7 +213,7 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 - [X] T069 [US8] Implement actor imagery upload for portrait and token roles through the existing transcode/storage path in `src/server/src/graphql/`, mirroring `mutations_lore_images.rs` (FR-036, research R4)
 - [X] T070 [US8] Add the imagery upload UI to the actor edit page in `apps/web/src/pages/world/actor/` and display each role where it belongs (FR-036)
 - [X] T071 [P] [US8] Add item price recording and display, presentational only, in `src/server/src/graphql/` and `apps/web/src/pages/world/compendium/ItemCompendiumTab.tsx` (FR-037, research R5)
-- [ ] T072 [P] [US8] Add the lore tree and tags — move, tag, and find by either — in `apps/web/src/pages/world/lore/` and `src/server/src/graphql/`, rejecting cycles at the data boundary, and re-parenting a deleted entry's children to their grandparent rather than orphaning them (FR-038, data-model.md)
+- [X] T072 [P] [US8] Add the lore tree and tags — move, tag, and find by either — in `apps/web/src/pages/world/lore/` and `src/server/src/graphql/`, rejecting cycles at the data boundary, and re-parenting a deleted entry's children to their grandparent rather than orphaning them (FR-038, data-model.md)
 - [ ] T073 [US8] Allow creating or attaching an item or lore entry from an actor's screen without leaving it, in `apps/web/src/pages/world/actor/` (FR-039)
 
 **Checkpoint**: Preparation and administration are comfortable at real world sizes.

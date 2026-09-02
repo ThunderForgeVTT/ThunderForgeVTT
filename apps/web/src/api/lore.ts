@@ -1,4 +1,8 @@
-import { postGraphQL, postGraphQLMultipart } from "@/api/graphqlClient";
+import {
+  GraphQLRequestError,
+  postGraphQL,
+  postGraphQLMultipart,
+} from "@/api/graphqlClient";
 import type {
   LoreEntryRecord,
   LoreImageAssetRecord,
@@ -22,6 +26,8 @@ const LORE_ENTRY_FIELDS = `
   createdBy
   createdAt
   updatedAt
+  parentId
+  tags
   linkedFrom {
     id
     title
@@ -130,6 +136,70 @@ export function deleteLoreEntry(loreEntryId: string): Promise<boolean> {
     `,
     { loreEntryId },
   ).then((data) => data.deleteLoreEntry);
+}
+
+/**
+ * Spec 031 (FR-038): files an entry under `parentId`, or at the top level
+ * when that is `null`.
+ *
+ * Rejected with `LORE_CYCLE` when the move would make the entry its own
+ * ancestor — including the case no client can see coming, where two moves
+ * are each legal alone and a loop together. Use `isLoreCycleRefusal` to tell
+ * that refusal from a real failure.
+ */
+export function moveLoreEntry(
+  loreEntryId: string,
+  parentId: string | null,
+): Promise<LoreEntryRecord> {
+  return postGraphQL<{ moveLoreEntry: LoreEntryRecord }>(
+    `
+      mutation MoveLoreEntry($input: MoveLoreEntryInput!) {
+        moveLoreEntry(input: $input) {
+          ${LORE_ENTRY_FIELDS}
+        }
+      }
+    `,
+    { input: { loreEntryId, parentId } },
+  ).then((data) => data.moveLoreEntry);
+}
+
+/** Whether a failed move was refused for being a loop rather than broken. */
+export function isLoreCycleRefusal(err: unknown): boolean {
+  return err instanceof GraphQLRequestError && err.hasCode("LORE_CYCLE");
+}
+
+/**
+ * Spec 031 (FR-038): tags an entry. Returns the entry's whole tag set, so
+ * the caller never has to guess what normalisation did to what it sent —
+ * "Ancient Ruins" comes back as "ancient ruins".
+ */
+export function addLoreTag(
+  loreEntryId: string,
+  tag: string,
+): Promise<string[]> {
+  return postGraphQL<{ addLoreTag: string[] }>(
+    `
+      mutation AddLoreTag($input: LoreTagInput!) {
+        addLoreTag(input: $input)
+      }
+    `,
+    { input: { loreEntryId, tag } },
+  ).then((data) => data.addLoreTag);
+}
+
+/** Idempotent: removing a tag that is not there is not an error. */
+export function removeLoreTag(
+  loreEntryId: string,
+  tag: string,
+): Promise<string[]> {
+  return postGraphQL<{ removeLoreTag: string[] }>(
+    `
+      mutation RemoveLoreTag($input: LoreTagInput!) {
+        removeLoreTag(input: $input)
+      }
+    `,
+    { input: { loreEntryId, tag } },
+  ).then((data) => data.removeLoreTag);
 }
 
 /** FR-007a: autocomplete candidates for the editor's `[[`-trigger popover. */
