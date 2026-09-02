@@ -12,6 +12,7 @@ fn stored(id: &str, value: i32) -> DeclaredValue {
         label: id.to_string(),
         abbreviation: None,
         value: DeclaredValueKind::Integer(value),
+        group: None,
         origin: Origin::Stored,
     }
 }
@@ -22,6 +23,7 @@ fn list(id: &str, items: &[&str]) -> DeclaredValue {
         label: id.to_string(),
         abbreviation: None,
         value: DeclaredValueKind::List(items.iter().map(|i| i.to_string()).collect()),
+        group: None,
         origin: Origin::Stored,
     }
 }

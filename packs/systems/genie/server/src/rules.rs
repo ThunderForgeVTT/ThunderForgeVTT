@@ -113,6 +113,7 @@ impl SystemRules for GenieRules {
             label: "Wish Points (by level)".to_string(),
             abbreviation: Some("WP/L".to_string()),
             value: DeclaredValueKind::Integer(total),
+            group: None,
             origin: Origin::Derived,
         }]
     }
@@ -136,6 +137,7 @@ mod tests {
             label: "Level".to_string(),
             abbreviation: None,
             value: DeclaredValueKind::Integer(level),
+            group: None,
             origin: Origin::Stored,
         }])
     }

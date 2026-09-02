@@ -87,6 +87,7 @@ fn context_from(slots: &ActorSlots) -> DeclaredValues {
                 label: field.clone(),
                 abbreviation: None,
                 value,
+                group: None,
                 origin: Origin::Stored,
             });
         }
@@ -139,6 +140,7 @@ fn resources_from(slots: &ActorSlots, systems_dir: &str, system_id: &str) -> Vec
                     current: entry.current,
                     max: entry.max,
                 },
+                group: None,
                 origin: Origin::Stored,
             })
         })
@@ -158,6 +160,7 @@ fn visible_from(slots: &ActorSlots, declarations: &[AttributeDeclaration]) -> Ve
             label: attribute.label,
             abbreviation: attribute.abbreviation,
             value: DeclaredValueKind::Integer(attribute.value),
+            group: None,
             origin: Origin::Stored,
         })
         .collect()

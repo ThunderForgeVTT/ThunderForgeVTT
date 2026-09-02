@@ -9,4 +9,8 @@
  * is no variant for a nested object, because a value a surface cannot render
  * without knowing what it means is a value this contract should not carry.
  */
-export type DeclaredValueKind = { "kind": "integer", "value": number } | { "kind": "number", "value": number } | { "kind": "text", "value": string } | { "kind": "boolean", "value": boolean } | { "kind": "list", "value": Array<string> } | { "kind": "fraction", "value": { current: number, max: number | null, } };
+export type DeclaredValueKind = { "kind": "integer", "value": number } | { "kind": "number", "value": number } | { "kind": "text", "value": string } | { "kind": "boolean", "value": boolean } | { "kind": "list", "value": Array<string> } | { "kind": "fraction", "value": { current: number, max: number | null, } } | { "kind": "track", "value": { filled: number, of: number, } } | { "kind": "state", "value": { current: string | null, 
+/**
+ * In the system's own order, worst last.
+ */
+options: Array<string>, } };

@@ -92,6 +92,33 @@ pub enum DeclaredValueKind {
         current: i32,
         max: Option<i32>,
     },
+    /// A bounded run of marks, and how many are filled.
+    ///
+    /// Fate Core's stress is eight of these in one track; 5e's death saves are
+    /// two separate runs of three meaning opposite things, which is why a
+    /// track carries no notion of rows — two tracks is what two tracks are.
+    ///
+    /// Distinct from [`Self::Fraction`], which it superficially resembles. A
+    /// pool is a quantity with a maximum and the numbers are the point; a
+    /// track is a set of marks and the *count* is the point. Drawing one as
+    /// the other gives a bar where a player expects boxes to tick.
+    Track {
+        filled: u32,
+        of: u32,
+    },
+    /// An ordered set of named states, of which one is current.
+    ///
+    /// Cypher's damage track — hale, impaired, debilitated, dead — has no
+    /// marks to count at all, which is why this is a separate kind rather than
+    /// a track with labels. A state set is a position on a ladder.
+    ///
+    /// `current` absent means none of them, which is a real answer: an
+    /// uninjured character is at no position on a damage track.
+    State {
+        current: Option<String>,
+        /// In the system's own order, worst last.
+        options: Vec<String>,
+    },
 }
 
 impl DeclaredValueKind {
@@ -109,6 +136,11 @@ impl DeclaredValueKind {
             // separate fact and a caller asking for "the number" means this
             // one.
             Self::Fraction { current, .. } => Some(*current),
+            // A track's integer is how many marks are filled. A state set has
+            // no number at all — asking for one is a category error, and
+            // returning its index would invent an arithmetic the system never
+            // declared.
+            Self::Track { filled, .. } => i32::try_from(*filled).ok(),
             _ => None,
         }
     }
@@ -130,6 +162,22 @@ pub struct DeclaredValue {
     /// Short form for tight layouts, where the system offers one.
     pub abbreviation: Option<String>,
     pub value: DeclaredValueKind,
+    /// The group this belongs to, when it is part of one (FR-033).
+    ///
+    /// A Fate consequence is a severity *and* the aspect written into it; a
+    /// Cypher stat is a current value, a pool and an edge. Publishing those as
+    /// unrelated identifiers loses the fact that they are one thing, which is
+    /// what a sheet shows and a player reads.
+    ///
+    /// # Why a field rather than nesting
+    ///
+    /// Because `DeclaredValue` is flat and everything downstream relies on it:
+    /// the resolver, the wire type, the layout renderer and every test all
+    /// walk a list of values with an id. Nesting would change all of them to
+    /// gain one relationship. A group id names the relationship and leaves the
+    /// list a list.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
     pub origin: Origin,
 }
 

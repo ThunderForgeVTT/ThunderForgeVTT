@@ -21,4 +21,21 @@ label: string,
 /**
  * Short form for tight layouts, where the system offers one.
  */
-abbreviation: string | null, value: DeclaredValueKind, origin: Origin, };
+abbreviation: string | null, value: DeclaredValueKind, 
+/**
+ * The group this belongs to, when it is part of one (FR-033).
+ *
+ * A Fate consequence is a severity *and* the aspect written into it; a
+ * Cypher stat is a current value, a pool and an edge. Publishing those as
+ * unrelated identifiers loses the fact that they are one thing, which is
+ * what a sheet shows and a player reads.
+ *
+ * # Why a field rather than nesting
+ *
+ * Because `DeclaredValue` is flat and everything downstream relies on it:
+ * the resolver, the wire type, the layout renderer and every test all
+ * walk a list of values with an id. Nesting would change all of them to
+ * gain one relationship. A group id names the relationship and leaves the
+ * list a list.
+ */
+group?: string | null, origin: Origin, };

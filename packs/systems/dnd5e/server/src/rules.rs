@@ -166,6 +166,7 @@ fn derived(id: String, label: String, value: i32) -> DeclaredValue {
         label,
         abbreviation: None,
         value: DeclaredValueKind::Integer(value),
+        group: None,
         origin: Origin::Derived,
     }
 }

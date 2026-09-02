@@ -44,6 +44,10 @@ fn render(value: &DeclaredValueKind) -> String {
             Some(max) => format!("{current} / {max}"),
             None => current.to_string(),
         },
+        DeclaredValueKind::Track { filled, of } => format!("{filled} / {of}"),
+        // The state itself, not its position. A ladder's rungs are named
+        // because the names are what a player reads.
+        DeclaredValueKind::State { current, .. } => current.clone().unwrap_or_default(),
     }
 }
 
@@ -62,6 +66,38 @@ fn fraction_of(value: &DeclaredValueKind) -> Option<GraphQLValueFraction> {
         DeclaredValueKind::Fraction { current, max } => Some(GraphQLValueFraction {
             current: *current,
             max: *max,
+        }),
+        _ => None,
+    }
+}
+
+/// Marks, as numbers.
+///
+/// Sent structurally for the same reason a pool is: a consumer that had to
+/// recover "three of eight ticked" from the rendered string would be branching
+/// on what a value means, which is the mistake T019a fixed once already.
+fn track_of(value: &DeclaredValueKind) -> Option<GraphQLValueTrack> {
+    match value {
+        DeclaredValueKind::Track { filled, of } => Some(GraphQLValueTrack {
+            filled: i32::try_from(*filled).unwrap_or(0),
+            of: i32::try_from(*of).unwrap_or(0),
+        }),
+        _ => None,
+    }
+}
+
+/// The ladder, with its rungs.
+///
+/// The options travel too, not just the current rung: a sheet shows the whole
+/// ladder with a position on it, and a client given only "impaired" could not
+/// draw what comes next. It is also what lets a stored state the system no
+/// longer declares be shown as unknown rather than silently as the mildest —
+/// the client can see it is not among the options.
+fn state_of(value: &DeclaredValueKind) -> Option<GraphQLValueState> {
+    match value {
+        DeclaredValueKind::State { current, options } => Some(GraphQLValueState {
+            current: current.clone(),
+            options: options.clone(),
         }),
         _ => None,
     }
@@ -108,6 +144,22 @@ pub struct GraphQLValueFraction {
     pub max: Option<i32>,
 }
 
+/// A run of marks, and how many are filled.
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLValueTrack {
+    pub filled: i32,
+    pub of: i32,
+}
+
+/// An ordered ladder of named states, and which one a character is on.
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLValueState {
+    /// Absent means none of them — an uninjured character is at no position.
+    pub current: Option<String>,
+    /// In the system's own order.
+    pub options: Vec<String>,
+}
+
 /// One value a system publishes about an actor.
 ///
 /// Superset of [`GraphQLAttribute`]: it carries derived values too, and says
@@ -128,6 +180,13 @@ pub struct GraphQLDeclaredValue {
     /// Present only for a pool. A consumer drawing a bar reads this and never
     /// parses `value`.
     pub fraction: Option<GraphQLValueFraction>,
+    /// Present only for a track. Marks to tick, not a bar to fill.
+    pub track: Option<GraphQLValueTrack>,
+    /// Present only for a state ladder.
+    pub state: Option<GraphQLValueState>,
+    /// The group this belongs to, when it is part of one — a Fate consequence
+    /// and its aspect, a Cypher stat's current value, pool and edge.
+    pub group: Option<String>,
     pub origin: GraphQLValueOrigin,
 }
 
@@ -322,6 +381,9 @@ impl TokenAttributesQuery {
                             abbreviation: value.abbreviation,
                             value: render(&value.value),
                             fraction: fraction_of(&value.value),
+                            track: track_of(&value.value),
+                            state: state_of(&value.value),
+                            group: value.group,
                             origin: match value.origin {
                                 Origin::Stored => GraphQLValueOrigin::Stored,
                                 Origin::Derived => GraphQLValueOrigin::Derived,

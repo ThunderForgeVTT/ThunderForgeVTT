@@ -19,6 +19,7 @@ fn stored(id: &str, value: i32) -> DeclaredValue {
         label: id.to_string(),
         abbreviation: None,
         value: DeclaredValueKind::Integer(value),
+        group: None,
         origin: Origin::Stored,
     }
 }
@@ -208,4 +209,136 @@ fn a_rule_can_read_context_a_sheet_does_not_show() {
     );
     let doubled = out.iter().find(|v| v.id == "doubled").expect("derived");
     assert_eq!(doubled.value.as_integer(), Some(8));
+}
+
+// ---------------------------------------------------------------------------
+// The kinds a whole character sheet needs (FR-031)
+// ---------------------------------------------------------------------------
+
+/// A track and a pool look alike and are not.
+///
+/// A pool is a quantity with a maximum and the numbers are the point; a track
+/// is a set of marks and the count is the point. Drawing one as the other
+/// gives a player a bar where they expect boxes to tick, which is why they are
+/// separate kinds rather than one with a flag.
+#[test]
+fn a_track_is_not_a_pool() {
+    let track = DeclaredValueKind::Track { filled: 3, of: 8 };
+    let pool = DeclaredValueKind::Fraction {
+        current: 3,
+        max: Some(8),
+    };
+
+    assert_ne!(track, pool, "the same numbers, and not the same thing");
+    assert_eq!(track.as_integer(), Some(3), "a track's number is its marks");
+    assert_eq!(pool.as_integer(), Some(3));
+}
+
+/// Fate's stress is one flat run of eight; 5e's death saves are two separate
+/// runs of three meaning opposite things. Two tracks is what two tracks are,
+/// which is why a track carries no notion of rows.
+#[test]
+fn the_two_shipping_track_shapes_are_both_expressible() {
+    let fate_stress = DeclaredValueKind::Track { filled: 2, of: 8 };
+    let successes = DeclaredValueKind::Track { filled: 1, of: 3 };
+    let failures = DeclaredValueKind::Track { filled: 2, of: 3 };
+
+    assert_eq!(fate_stress.as_integer(), Some(2));
+    assert_ne!(
+        successes, failures,
+        "two runs of three, and the difference between them is which one it is"
+    );
+}
+
+/// Cypher's damage track has no marks to count. Asking a state set for a
+/// number is a category error, and returning its index would invent an
+/// arithmetic the system never declared.
+#[test]
+fn a_state_set_has_no_number() {
+    let damage = DeclaredValueKind::State {
+        current: Some("impaired".to_string()),
+        options: vec![
+            "impaired".to_string(),
+            "debilitated".to_string(),
+            "dead".to_string(),
+        ],
+    };
+    assert_eq!(damage.as_integer(), None);
+}
+
+/// An uninjured character is at no position on a damage track. `None` is a
+/// real answer, not a missing one.
+#[test]
+fn a_state_set_with_nothing_current_is_a_character_who_is_fine() {
+    let damage = DeclaredValueKind::State {
+        current: None,
+        options: vec!["impaired".to_string(), "dead".to_string()],
+    };
+    match damage {
+        DeclaredValueKind::State { current, options } => {
+            assert!(current.is_none());
+            assert_eq!(options.len(), 2, "the ladder still exists");
+        }
+        _ => unreachable!(),
+    }
+}
+
+/// The edge case a saved character produces: a stored state the system no
+/// longer declares. It must read as unknown rather than as the first option,
+/// which would silently heal them.
+#[test]
+fn a_state_the_system_no_longer_declares_is_not_silently_the_first_one() {
+    let damage = DeclaredValueKind::State {
+        current: Some("shaken".to_string()),
+        options: vec!["impaired".to_string(), "dead".to_string()],
+    };
+    match &damage {
+        DeclaredValueKind::State { current, options } => {
+            let current = current.as_deref().expect("something is stored");
+            assert!(
+                !options.iter().any(|o| o == current),
+                "this is the unknown case"
+            );
+            assert_ne!(
+                current, options[0],
+                "and it must not be read as the mildest state"
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
+/// FR-033: one thing with parts, not three unrelated identifiers.
+#[test]
+fn grouped_values_carry_the_relationship_a_sheet_shows() {
+    let stat = |id: &str, value: i32| DeclaredValue {
+        id: id.to_string(),
+        label: id.to_string(),
+        abbreviation: None,
+        value: DeclaredValueKind::Integer(value),
+        group: Some("might".to_string()),
+        origin: Origin::Stored,
+    };
+
+    // A Cypher stat: a current value, the pool that is its maximum, and the
+    // edge that modifies spending from it.
+    let values = vec![
+        stat("might", 10),
+        stat("mightPool", 12),
+        stat("mightEdge", 1),
+    ];
+
+    let together: Vec<&DeclaredValue> = values
+        .iter()
+        .filter(|v| v.group.as_deref() == Some("might"))
+        .collect();
+    assert_eq!(together.len(), 3, "three parts of one thing");
+
+    // And the list is still a list — nothing downstream has to learn to nest.
+    assert_eq!(values.len(), 3);
+}
+
+#[test]
+fn an_ungrouped_value_says_so_rather_than_belonging_to_a_group_of_one() {
+    assert_eq!(stored("strength", 14).group, None);
 }
