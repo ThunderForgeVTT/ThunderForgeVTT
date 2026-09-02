@@ -94,9 +94,12 @@ test("US1: every member sees the roster paired with claimed characters, and Over
   const actorId = await createPcActor(gmPage, worldId, actorLabel);
   await markAvailable(gmPage, worldId, actorId);
 
-  // Overview no longer shows any player roster.
+  // The roster lives on its own section now, not on the overview. Asserted by
+  // the nav entry that leads there: the old overview list's testid exists
+  // nowhere, so asserting its absence passed against a blank page
+  // (docs/test-audit-2026-09-02.md).
   await gmPage.goto(`/world/${worldId}/staging`);
-  await expect(gmPage.getByTestId("staging-player-list")).toHaveCount(0);
+  await expect(gmPage.getByTestId("world-nav-players")).toBeVisible();
 
   // First member joins and claims the character.
   const inviteA = await generateInviteCode(gmPage, worldId);

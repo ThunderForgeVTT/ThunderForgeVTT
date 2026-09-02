@@ -105,13 +105,9 @@ test.describe("US1: GM sees a real staging page, not the old placeholder shell",
     await page.goBack();
     await page.waitForURL(`**/world/${worldId}/staging`, { timeout: 10_000 });
 
-    await expect(page.getByTestId("staging-player-list")).toHaveCount(0);
     await expect(page.getByTestId("world-nav-players")).toBeVisible();
     await expect(page.getByTestId("world-nav-npcs")).toBeVisible();
     await expect(page.getByTestId("session-notes-panel")).toBeVisible();
-
-    // No dead "Return to dashboard" link pointing at /counter.
-    await expect(page.getByRole("link", { name: "Return to dashboard" })).toHaveCount(0);
 
     // Play navigates to the full-screen canvas route.
     await page.getByTestId("play-button").click();

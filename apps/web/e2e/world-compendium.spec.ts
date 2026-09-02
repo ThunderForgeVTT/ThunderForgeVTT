@@ -120,7 +120,6 @@ test.describe("Compendium shell: tabs, NPC browse/search, row-select preview", (
     // Items tab (spec 013): fully real now — empty state, not "coming soon".
     await page.getByRole("tab", { name: "Items" }).click();
     await expect(page.getByText("No Items yet.")).toBeVisible();
-    await expect(page.getByTestId("compendium-coming-soon")).toHaveCount(0);
 
     // Abilities was a placeholder when this test was written. Spec 025 built
     // it, and `abilities-compendium.spec.ts` now covers it properly — so the

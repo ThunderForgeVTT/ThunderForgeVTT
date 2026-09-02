@@ -170,7 +170,11 @@ test.describe("US2: no dead/placeholder controls remain (T011-T012)", () => {
     await expect(page.locator("#world-description")).toBeVisible();
     await expect(page.locator("#world-system")).toBeVisible();
     await expect(page.getByRole("combobox", { name: "Game system" })).toHaveText("Genie");
-    await expect(page.locator("#world-interface-pack")).toHaveCount(0);
+    // The creation form asks for a name, a description and a system, and
+    // nothing else. `#world-interface-pack` exists nowhere, so checking its
+    // absence passed against a blank page; a world's look is chosen in its
+    // settings after it exists (spec 032 FR-008), not while creating it.
+    await expect(page.locator("form")).toBeVisible();
   });
 
   test("an existing world's dashboard shows only real data — no unfilled placeholder panels", async ({
@@ -186,9 +190,10 @@ test.describe("US2: no dead/placeholder controls remain (T011-T012)", () => {
     if (!worldId) throw new Error("Could not extract world id");
 
     await page.goto(`/world/${worldId}`);
-    await expect(page.getByText("Placeholder domain")).toHaveCount(0);
-    await expect(page.getByText(/Awaiting a later phase/i)).toHaveCount(0);
-    // The real Scenes panel shows the auto-created default scene.
+    // The real Scenes panel, asserted positively. Two absence checks for
+    // placeholder copy stood here; neither string exists anywhere in the
+    // repository, so both passed against a blank page
+    // (docs/test-audit-2026-09-02.md).
     await expect(page.getByText("1 scene")).toBeVisible({ timeout: 10_000 });
   });
 });

@@ -91,10 +91,10 @@ test.describe("Abilities compendium (US1)", () => {
 
     await openAbilitiesTab(page, worldId);
 
-    // SC-001: the placeholder is gone from the whole app, not just visually.
-    await expect(page.getByTestId("compendium-coming-soon")).toHaveCount(0);
-
-    // Empty state, not a blank table or fabricated rows.
+    // SC-001: an empty state, not a blank table, fabricated rows, or a
+    // placeholder. Asserted positively — the "coming soon" testid this used to
+    // check the absence of exists nowhere in the repository, so that check
+    // passed against a blank page (docs/test-audit-2026-09-02.md).
     await expect(page.getByText("No Abilities yet.")).toBeVisible();
 
     // Create — appears without a reload.

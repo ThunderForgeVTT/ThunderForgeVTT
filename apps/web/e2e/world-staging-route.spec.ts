@@ -87,6 +87,5 @@ test.describe("Spec 011 regression: staging no longer embeds the NPC catalog", (
     // longer exists anywhere, so asserting its absence would pass vacuously
     // and stop testing that staging has no NPC authoring (spec 031 FR-035).
     await expect(page.getByTestId("new-npc-link")).toHaveCount(0);
-    await expect(page.getByText("Lore — coming soon")).toHaveCount(0);
   });
 });
