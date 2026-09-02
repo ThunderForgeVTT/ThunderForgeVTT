@@ -723,7 +723,7 @@ mod tests {
             max: None,
             label: None,
         };
-        assert_eq!(quarter(&[counter.clone()]), None);
+        assert_eq!(quarter(std::slice::from_ref(&counter)), None);
         assert_eq!(proportion(&[counter]), None);
     }
 

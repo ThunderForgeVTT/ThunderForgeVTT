@@ -59,6 +59,13 @@ interface UseCanvasEngineResult {
 export function useCanvasEngine(
   options: UseCanvasEngineOptions,
 ): UseCanvasEngineResult {
+  // Destructured rather than read as `options.x` inside the effect below:
+  // the effect depends on these three fields and not on the identity of the
+  // object carrying them, and naming them here is what lets the dependency
+  // list say so — a caller passing a fresh object literal every render must
+  // not remount the engine.
+  const { canvasSelector, worldId, onError } = options;
+
   const containerRef = useRef<HTMLDivElement>(null);
   const contextMenuCleanupRef = useRef<(() => void) | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
@@ -94,8 +101,8 @@ export function useCanvasEngine(
       try {
         const mounted = await mountEngine(
           {
-            canvasSelector: options.canvasSelector,
-            worldId: options.worldId,
+            canvasSelector,
+            worldId,
           } as EngineMountOptions,
           setLoadStage,
           setLoadProgress,
@@ -107,7 +114,7 @@ export function useCanvasEngine(
         const error = err instanceof Error ? err : new Error(String(err));
         console.error("🎮 Failed to mount Bevy engine:", error);
         setError(error);
-        options.onError?.(error);
+        onError?.(error);
       }
     };
 
@@ -119,7 +126,7 @@ export function useCanvasEngine(
       // Cleanup on unmountEngine() call if needed
     };
     // `attempt` is in the dependency list so `retry()` re-runs this effect.
-  }, [options.canvasSelector, options.worldId, options.onError, attempt]);
+  }, [canvasSelector, worldId, onError, attempt]);
 
   // 📤 Setup ResizeObserver to track container size changes
   useEffect(() => {

@@ -262,6 +262,9 @@ fn emit_door(start: Vec2, end: Vec2, world_id: &str) {
 /// crate has no broader role system, so `IsGameMaster` gates it directly.
 /// T016: a press-and-release without meaningfully dragging is rejected
 /// (no wall created) rather than producing a zero-length segment.
+/// One parameter per Query/Res the interaction reads — the shape clippy.toml
+/// raised the threshold to 10 for, arrived at from the other side.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn handle_wall_input(
     windows: Query<&Window, With<PrimaryWindow>>,
     camera_query: Query<(&Camera, &GlobalTransform)>,
@@ -855,7 +858,6 @@ pub(crate) fn sync_wall_visuals(
 ///
 /// The occlusion geometry itself did not go anywhere — it is
 /// `thunderforge_canvas_core::wall::is_visible`, which that function calls.
-
 pub(crate) fn init_wall_systems_resources(app: &mut App) {
     app.init_resource::<WallDragState>()
         .init_resource::<WallChainState>()

@@ -159,7 +159,7 @@ pub async fn backfill_asset(
         )
         .set(a::content_hash.eq(Some(hash)))
         .execute(&mut conn)
-        .map_err(|e| Box::<dyn std::error::Error + Send + Sync>::from(e))
+        .map_err(Box::<dyn std::error::Error + Send + Sync>::from)
     })
     .await;
 

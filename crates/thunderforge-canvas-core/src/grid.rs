@@ -320,7 +320,7 @@ impl GridSpec {
             GridKind::HexPointyTop | GridKind::HexFlatTop => {
                 let (dq, dr) = (a.q - b.q, a.r - b.r);
                 // Cube distance via the implicit third axis s = -q - r.
-                ((dq.abs() + dr.abs() + (dq + dr).abs()) / 2) as i32
+                (dq.abs() + dr.abs() + (dq + dr).abs()) / 2
             }
         }
     }

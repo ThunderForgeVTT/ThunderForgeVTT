@@ -51,14 +51,8 @@ const BAR_Z: f32 = 5.0;
 ///
 /// A Bevy resource rather than a static, so `setDisplayAppearance` can change
 /// it at runtime and the next redraw picks it up without a restart.
-#[derive(Resource, Debug, Clone, Deref)]
+#[derive(Resource, Debug, Clone, Deref, Default)]
 pub struct Appearance(pub DisplayAppearance);
-
-impl Default for Appearance {
-    fn default() -> Self {
-        Self(DisplayAppearance::default())
-    }
-}
 
 /// Turn a canvas-core colour into a Bevy one.
 ///

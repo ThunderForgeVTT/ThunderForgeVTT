@@ -27,7 +27,6 @@ use uuid::Uuid;
 
 use thunderforge_canvas_core::interaction::{
     Activation, ActivationContext, ActivationOutcome, EffectDeclaration, EffectRegistry, FireMode,
-    SubjectKind,
 };
 
 /// Every effect this build can perform.
@@ -193,10 +192,6 @@ pub struct LoadedInteractive {
 }
 
 impl LoadedInteractive {
-    pub fn subject_kind(&self) -> Option<SubjectKind> {
-        SubjectKind::from_str_loose(&self.row.subject_kind)
-    }
-
     pub fn activation(&self) -> Activation {
         // An unrecognised stored spelling falls back to the *most* restrictive
         // mode rather than the least. A corrupt row must not become an open

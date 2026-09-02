@@ -89,14 +89,15 @@ pub(crate) fn handle_token_movement_input(
 
     // Commit.
     if keyboard.just_pressed(KeyCode::Space) {
-        if let Some(path) = plan.path.take() {
-            if !path.is_empty() {
-                let destination = grid.cell_center(path.head());
-                let snapped = grid.snap_footprint(destination, footprint);
-                transform.translation.x = snapped.x;
-                transform.translation.y = snapped.y;
+        if let Some(path) = plan.path.take()
+            && !path.is_empty()
+        {
+            let destination = grid.cell_center(path.head());
+            let snapped = grid.snap_footprint(destination, footprint);
+            transform.translation.x = snapped.x;
+            transform.translation.y = snapped.y;
 
-                emit_event(json!({
+            emit_event(json!({
                     "type": "update_token",
                     "tokenId": identity.0,
                     "changes": { "x": snapped.x, "y": snapped.y },
@@ -109,8 +110,7 @@ pub(crate) fn handle_token_movement_input(
                         .iter()
                         .map(|cell| json!([cell.q, cell.r]))
                         .collect::<Vec<_>>(),
-                }));
-            }
+            }));
         }
         return;
     }

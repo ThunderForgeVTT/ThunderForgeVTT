@@ -294,51 +294,17 @@ fn build_adjudicator() -> std::sync::Arc<dyn thunderforge_crucible::SessionAdjud
             std::sync::Arc::new(thunderforge_crucible::remote::RemoteAdjudicator::new(url))
         }
         Err(message) => {
-            eprintln!("[Server] {message} — exiting.");
-            std::process::exit(1);
+            // The one place `clippy::exit` is meant to permit: this runs at
+            // boot, before the listener is bound, so there is no request to
+            // fail and no connection to drop. A misconfigured adjudicator
+            // must stop the process here rather than surface as a confusing
+            // failure at somebody's table (SC-003).
+            #[allow(clippy::exit)]
+            {
+                eprintln!("[Server] {message} — exiting.");
+                std::process::exit(1);
+            }
         }
-    }
-}
-
-#[cfg(test)]
-mod crucible_mode_tests {
-    use super::*;
-
-    #[test]
-    fn defaults_to_local_when_unset() {
-        assert!(matches!(
-            resolve_crucible_mode(None, None),
-            Ok(CrucibleModeChoice::Local)
-        ));
-    }
-
-    #[test]
-    fn explicit_local_resolves_to_local() {
-        assert!(matches!(
-            resolve_crucible_mode(Some("local"), None),
-            Ok(CrucibleModeChoice::Local)
-        ));
-    }
-
-    #[test]
-    fn remote_with_a_valid_endpoint_resolves_to_remote() {
-        let result = resolve_crucible_mode(Some("remote"), Some("http://127.0.0.1:8090"));
-        assert!(matches!(result, Ok(CrucibleModeChoice::Remote(_))));
-    }
-
-    #[test]
-    fn remote_with_no_endpoint_is_an_error() {
-        assert!(resolve_crucible_mode(Some("remote"), None).is_err());
-    }
-
-    #[test]
-    fn remote_with_a_malformed_endpoint_is_an_error() {
-        assert!(resolve_crucible_mode(Some("remote"), Some("not a url")).is_err());
-    }
-
-    #[test]
-    fn an_unrecognized_mode_is_an_error() {
-        assert!(resolve_crucible_mode(Some("not-a-real-mode"), None).is_err());
     }
 }
 
@@ -647,4 +613,46 @@ async fn shutdown_signal() {
     }
 
     tracing::info!("signal received, starting graceful shutdown");
+}
+
+#[cfg(test)]
+mod crucible_mode_tests {
+    use super::*;
+
+    #[test]
+    fn defaults_to_local_when_unset() {
+        assert!(matches!(
+            resolve_crucible_mode(None, None),
+            Ok(CrucibleModeChoice::Local)
+        ));
+    }
+
+    #[test]
+    fn explicit_local_resolves_to_local() {
+        assert!(matches!(
+            resolve_crucible_mode(Some("local"), None),
+            Ok(CrucibleModeChoice::Local)
+        ));
+    }
+
+    #[test]
+    fn remote_with_a_valid_endpoint_resolves_to_remote() {
+        let result = resolve_crucible_mode(Some("remote"), Some("http://127.0.0.1:8090"));
+        assert!(matches!(result, Ok(CrucibleModeChoice::Remote(_))));
+    }
+
+    #[test]
+    fn remote_with_no_endpoint_is_an_error() {
+        assert!(resolve_crucible_mode(Some("remote"), None).is_err());
+    }
+
+    #[test]
+    fn remote_with_a_malformed_endpoint_is_an_error() {
+        assert!(resolve_crucible_mode(Some("remote"), Some("not a url")).is_err());
+    }
+
+    #[test]
+    fn an_unrecognized_mode_is_an_error() {
+        assert!(resolve_crucible_mode(Some("not-a-real-mode"), None).is_err());
+    }
 }

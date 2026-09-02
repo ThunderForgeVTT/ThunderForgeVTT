@@ -1632,6 +1632,20 @@ export default function WorldPage() {
     }),
     [user?.id, worldStore],
   );
+  /**
+   * The same options, read through a ref by the two reconnect listeners.
+   *
+   * They need what a reconcile may do to be *current* when a reconnect
+   * happens, but naming `reconcileOptions` as a dependency would tear down
+   * and re-establish the heartbeat and the live-sync subscription every time
+   * the signed-in user or the world store changed — restarting the very
+   * machinery whose whole job is to survive an interruption. Same reason
+   * `idRef` and `sceneIdRef` exist above.
+   */
+  const reconcileOptionsRef = useRef(reconcileOptions);
+  useEffect(() => {
+    reconcileOptionsRef.current = reconcileOptions;
+  }, [reconcileOptions]);
   // Only a transition into `live` *after* having already been live once
   // counts as a reconnect worth re-fetching for — the very first
   // `connecting` -> `live` transition on initial mount is already covered
@@ -1668,7 +1682,7 @@ export default function WorldPage() {
       // the user watches their offline work vanish and reappear.
       const worldIdNow = idRef.current;
       if (!worldIdNow) return;
-      void reconcileWorld(worldIdNow, reconcileOptions)
+      void reconcileWorld(worldIdNow, reconcileOptionsRef.current)
         .then((report) => {
           if (!report) return;
           appliedRef.current = [
@@ -1923,7 +1937,7 @@ export default function WorldPage() {
         // truth and the user would watch their offline work vanish and then
         // reappear.
         if (wasLiveRef.current && worldIdNow) {
-          void reconcileWorld(worldIdNow, reconcileOptions)
+          void reconcileWorld(worldIdNow, reconcileOptionsRef.current)
             .then((report) => {
               if (!report) return;
               // Remember what applied, so a later Game Master reconnect can

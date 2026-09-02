@@ -6,7 +6,7 @@
  */
 
 import { useContext, useState, useEffect } from "react";
-import { SystemHooksContext } from "../providers/SystemHooksProvider";
+import { SystemHooksContext } from "../providers/system-hooks-context";
 
 /**
  * Base token data (sent from server)

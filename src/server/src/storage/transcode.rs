@@ -306,6 +306,10 @@ mod texture_cap_tests {
     /// and the table moves.
     #[test]
     #[ignore = "reporting benchmark; run with --ignored --nocapture"]
+    // The table *is* the output. `print_stdout` is warned on workspace-wide
+    // because a server should log through `tracing`; a reporting benchmark
+    // read by a person at a terminal is the case that rule is not about.
+    #[allow(clippy::print_stdout)]
     fn report_import_rendition_sizes() {
         use base64::Engine as _;
 

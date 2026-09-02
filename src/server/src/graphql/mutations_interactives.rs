@@ -20,8 +20,8 @@ use diesel::result::Error as DieselError;
 use uuid::Uuid;
 
 use thunderforge_canvas_core::interaction::{
-    Activation, ActivationOutcome, EffectRegistry, FireMode, InteractiveDraft, RegionGeometry,
-    SubjectKind, Trigger, validate_draft,
+    Activation, ActivationOutcome, FireMode, InteractiveDraft, RegionGeometry, SubjectKind,
+    Trigger, validate_draft,
 };
 
 use crate::graphql::{app_state, authenticated_user};
@@ -1172,16 +1172,6 @@ fn announce_door(conn: &mut PgConnection, scene_id: Uuid, wall_id: Uuid, user_id
             user_id,
         );
     }
-}
-
-/// Assemble a registry from an explicit contribution set.
-///
-/// Exposed for the seam's own tests (US7), which need to build a registry
-/// *without* a contributor and confirm everything else still works.
-pub fn registry_from(
-    contributions: Vec<Vec<thunderforge_canvas_core::interaction::EffectDeclaration>>,
-) -> EffectRegistry {
-    EffectRegistry::assemble(contributions).expect("test contributions collide")
 }
 
 #[cfg(test)]

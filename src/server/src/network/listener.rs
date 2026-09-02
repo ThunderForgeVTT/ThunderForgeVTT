@@ -151,19 +151,16 @@ pub fn spawn_listen_task(pool: DbPool, router: SharedWorldRouter<WorldEvent>) {
 
     // Never signalled in the server; the loop runs for the life of the
     // process. The channel exists so tests can stop it.
-    let (_stop_tx, stop_rx) = tokio::sync::watch::channel(false);
-    // Held forever, because dropping the sender would resolve the watch and
-    // stop delivery.
-    std::mem::forget(_stop_tx);
+    let (stop_tx, stop_rx) = tokio::sync::watch::channel(false);
 
     eprintln!("[Server] 🚀 Starting world-event delivery loop");
-    tokio::spawn(run_delivery(
-        source,
-        sink,
-        metrics,
-        DeliveryConfig::default(),
-        stop_rx,
-    ));
+    tokio::spawn(async move {
+        // The sender is moved in rather than leaked: dropping it would
+        // resolve the watch and stop delivery, so it has to outlive the
+        // loop, and the loop's own task is exactly that lifetime.
+        let _stop_tx = stop_tx;
+        run_delivery(source, sink, metrics, DeliveryConfig::default(), stop_rx).await;
+    });
 }
 
 /// Drop world channels nobody is listening to, on their own schedule.

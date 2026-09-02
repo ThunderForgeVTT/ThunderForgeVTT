@@ -1354,6 +1354,13 @@ struct InteractionParams<'w> {
     scene_playing: Option<ResMut<'w, plugins::interaction::ScenePlaying>>,
 }
 
+// One parameter per resource the command dispatch can touch, which is what a
+// Bevy system looks like when it is the single entry point for every external
+// command. clippy.toml already raises the threshold to 10 for ordinary
+// systems; this one is past it by being the seam itself, and the related
+// parameters are already bundled into `SystemParam` structs like
+// `InteractionParams`.
+#[allow(clippy::too_many_arguments)]
 fn apply_external_commands(
     mut commands: Commands,
     mut active_world: ResMut<ActiveWorld>,

@@ -66,6 +66,26 @@ const steps = [
     ],
   },
   {
+    // The engine is excluded above because bevy is taken with no windowing
+    // backend and cannot build for the host — which left the crate with no
+    // lint gate at all, and 11 warnings nobody had seen. It builds fine for
+    // the target it actually ships to: `wasm-pack` produces
+    // wasm32-unknown-unknown, so any environment that can build the engine
+    // can lint it here. `--lib` rather than `--all-targets` because the unit
+    // tests are host tests and are covered by the workspace run above.
+    name: "engine lint (wasm)",
+    cwd: ".",
+    command: [
+      "cargo",
+      "clippy",
+      "-p",
+      "thunderforge_engine",
+      "--target",
+      "wasm32-unknown-unknown",
+      "--lib",
+    ],
+  },
+  {
     name: "web format",
     cwd: "apps/web",
     // The project's own glob, from `apps/web`'s `format` script. It excludes

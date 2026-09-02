@@ -91,7 +91,7 @@ pub async fn effective_authoring_tools(
         return Ok(AUTHORING_TOOLS.iter().map(|id| (*id).to_string()).collect());
     }
 
-    Ok(granted_authoring_tools(state, user_id, world_id).await?)
+    granted_authoring_tools(state, user_id, world_id).await
 }
 
 /// The explicit grants `user_id` holds in `world_id`, DM status aside.

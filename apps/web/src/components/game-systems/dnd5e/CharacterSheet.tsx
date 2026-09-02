@@ -34,7 +34,7 @@ import {
 } from "@/lib/systemData";
 import { useActorSystemData } from "@/hooks/useActorSystemData";
 import { useUpdateActorData } from "@/hooks/useUpdateActorData";
-import { useGameSystemManifest } from "@/contexts/GameSystemContext";
+import { useGameSystemManifest } from "@/contexts/game-system-context";
 import { AbilityScores } from "./AbilityScores";
 import { SkillsList } from "./SkillsList";
 

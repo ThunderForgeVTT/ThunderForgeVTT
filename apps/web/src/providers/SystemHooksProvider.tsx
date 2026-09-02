@@ -5,33 +5,11 @@
  * and makes hooks available to child components via React context.
  */
 
-import React, {
-  createContext,
-  useCallback,
-  useEffect,
-  useState,
-  ReactNode,
-} from "react";
+import React, { useCallback, useEffect, useState, ReactNode } from "react";
 import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { SystemHooksContract } from "../hooks/useSystemHooks";
-
-/**
- * System context value
- */
-export interface SystemContextValue {
-  systemId?: string;
-  hooks: SystemHooksContract;
-  loading: boolean;
-  error?: string;
-  reload: () => Promise<void>;
-}
-
-/**
- * Create the hooks context
- */
-export const SystemHooksContext = createContext<SystemContextValue | undefined>(
-  undefined,
-);
+import { SystemHooksContext } from "./system-hooks-context";
+import type { SystemContextValue } from "./system-hooks-context";
 
 interface SystemHooksProviderProps {
   worldId: string;

@@ -51,10 +51,10 @@ pub use input_types::{
     GraphQLCreateTokenInput, GraphQLCreateWallInput, GraphQLCreateWorldInput,
     GraphQLCreateWorldTokenInput, GraphQLDeleteMyDataPayload, GraphQLDeleteWorldPayload,
     GraphQLDoorState, GraphQLExportManifest, GraphQLExportMyDataPayload, GraphQLMoveTokenInput,
-    GraphQLPlaceholderDomainObject, GraphQLPlayerPresence, GraphQLPlayersOnlineList,
-    GraphQLShapeKind, GraphQLUpdateFogMaskInput, GraphQLUpdateLightSourceInput,
-    GraphQLUpdateSceneInput, GraphQLUpdateShapeInput, GraphQLUpdateTokenInput,
-    GraphQLUpdateWallInput, GraphQLUpsertWorldTokenInput,
+    GraphQLPlaceholderDomainObject, GraphQLPlayersOnlineList, GraphQLShapeKind,
+    GraphQLUpdateFogMaskInput, GraphQLUpdateLightSourceInput, GraphQLUpdateSceneInput,
+    GraphQLUpdateShapeInput, GraphQLUpdateTokenInput, GraphQLUpdateWallInput,
+    GraphQLUpsertWorldTokenInput,
 };
 
 // Phase 4.9.Z Step 4a: Helper functions extracted to separate module
@@ -2425,6 +2425,17 @@ pub mod subscription_metrics {
             .is_ok()
     }
 
+    /// `(sockets_open, opened, refused, delivered, lagged_events)`.
+    pub fn snapshot() -> (i64, u64, u64, u64, u64) {
+        (
+            SOCKETS_OPEN.load(Ordering::Relaxed),
+            OPENED.load(Ordering::Relaxed),
+            REFUSED.load(Ordering::Relaxed),
+            DELIVERED.load(Ordering::Relaxed),
+            LAGGED_EVENTS.load(Ordering::Relaxed),
+        )
+    }
+
     #[cfg(test)]
     mod tests {
         use super::*;
@@ -2448,17 +2459,6 @@ pub mod subscription_metrics {
                  print nothing; {printed} got through",
             );
         }
-    }
-
-    /// `(sockets_open, opened, refused, delivered, lagged_events)`.
-    pub fn snapshot() -> (i64, u64, u64, u64, u64) {
-        (
-            SOCKETS_OPEN.load(Ordering::Relaxed),
-            OPENED.load(Ordering::Relaxed),
-            REFUSED.load(Ordering::Relaxed),
-            DELIVERED.load(Ordering::Relaxed),
-            LAGGED_EVENTS.load(Ordering::Relaxed),
-        )
     }
 }
 

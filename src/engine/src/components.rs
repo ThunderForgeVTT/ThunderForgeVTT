@@ -4,6 +4,14 @@
 //! All components are designed for WASM compatibility and follow the
 //! circular event-driven architecture pattern.
 
+// `clippy::mem_forget` is warned on workspace-wide because outside FFI it is
+// near-always a bug. In this file it fires only inside what
+// `#[derive(Bundle)]` expands to — bevy's `deconstruct_moving_ptr` — and an
+// `#[allow]` on the struct does not reach a lint raised in that expansion.
+// Scoped to this module, which is component and bundle definitions and
+// contains no hand-written `mem::forget`.
+#![allow(clippy::mem_forget)]
+
 use std::collections::BTreeMap;
 
 use bevy::prelude::*;

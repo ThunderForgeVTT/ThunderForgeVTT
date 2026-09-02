@@ -346,10 +346,10 @@ pub fn visibility_of(
 ) -> Visibility {
     let distance = observer.distance(target);
 
-    if let Some(max_range) = vision.max_range {
-        if distance > max_range {
-            return Visibility::Hidden;
-        }
+    if let Some(max_range) = vision.max_range
+        && distance > max_range
+    {
+        return Visibility::Hidden;
     }
 
     if !vision.in_cone(observer, target) {

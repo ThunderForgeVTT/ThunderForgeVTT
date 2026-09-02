@@ -216,10 +216,10 @@ fn light_touches(light_pos: Vec2, radius: f32, view: Rect) -> bool {
 /// has" from "lights the GPU pays for". A 500-light dungeon only ever uploads
 /// the few whose pools reach the screen, and the fragment loop is short
 /// regardless of scene size.
-fn visible_lights<'a>(
-    light_set: &'a LightSet,
+fn visible_lights(
+    light_set: &LightSet,
     view: Option<Rect>,
-) -> Vec<&'a thunderforge_canvas_core::lighting::LightSource> {
+) -> Vec<&thunderforge_canvas_core::lighting::LightSource> {
     let mut candidates: Vec<&thunderforge_canvas_core::lighting::LightSource> = light_set
         .lights()
         .iter()
@@ -266,7 +266,7 @@ fn sync_darkness_quad(
     >,
 ) {
     let ambient = ambient.map_or_else(
-        || thunderforge_canvas_core::vision::AmbientLight::daylight(),
+        thunderforge_canvas_core::vision::AmbientLight::daylight,
         |a| a.0,
     );
     let strength = darkness_strength(ambient.level);
@@ -349,7 +349,7 @@ fn sync_shadow_quads(
     existing: Query<Entity, With<ShadowQuad>>,
 ) {
     let ambient = ambient.map_or_else(
-        || thunderforge_canvas_core::vision::AmbientLight::daylight(),
+        thunderforge_canvas_core::vision::AmbientLight::daylight,
         |a| a.0,
     );
     let strength = darkness_strength(ambient.level);

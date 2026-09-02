@@ -133,7 +133,7 @@ fn trace_main_world(
         return;
     }
     *frame += 1;
-    if *frame % TRACE_EVERY_N_FRAMES != 0 {
+    if !(*frame).is_multiple_of(TRACE_EVERY_N_FRAMES) {
         return;
     }
 
@@ -190,7 +190,7 @@ fn trace_render_phases(
         return;
     }
     *frame += 1;
-    if *frame % TRACE_EVERY_N_FRAMES != 0 {
+    if !(*frame).is_multiple_of(TRACE_EVERY_N_FRAMES) {
         return;
     }
 

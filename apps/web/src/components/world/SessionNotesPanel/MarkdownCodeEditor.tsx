@@ -1,6 +1,6 @@
 import { markdown } from "@codemirror/lang-markdown";
 import CodeMirror from "@uiw/react-codemirror";
-import { useTheme } from "@/hooks/useTheme";
+import { useTheme } from "@/hooks/theme-context";
 
 export interface MarkdownCodeEditorProps {
   value: string;

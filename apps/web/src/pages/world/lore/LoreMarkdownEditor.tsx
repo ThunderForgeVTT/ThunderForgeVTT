@@ -10,7 +10,7 @@ import { EditorView } from "@codemirror/view";
 import CodeMirror from "@uiw/react-codemirror";
 import { getLoreLinkTargets, uploadLoreImage } from "@/api/lore";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
-import { useTheme } from "@/hooks/useTheme";
+import { useTheme } from "@/hooks/theme-context";
 import type { LoreLinkTargetKind } from "@/types/lore";
 
 /** Spec 025 (T003): a total map, replacing a binary ternary that labelled every

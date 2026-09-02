@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
-import { useTheme } from "@/hooks/useTheme";
+import { useTheme } from "@/hooks/theme-context";
 
 export function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();

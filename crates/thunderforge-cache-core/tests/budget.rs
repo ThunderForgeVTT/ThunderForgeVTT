@@ -214,7 +214,10 @@ fn what_an_eviction_frees_is_admitted_afterwards() {
     let index = vec![entry(1, 1, held, 0)];
     let plan = plan_eviction(&index, limit, incoming, world(2));
     assert_eq!(plan.evict.len(), 1, "the idle world should be released");
-    assert!(!plan.insufficient, "releasing it leaves room for the incoming");
+    assert!(
+        !plan.insufficient,
+        "releasing it leaves room for the incoming"
+    );
 
     // Before the pass — what the old code handed the prefetch.
     assert_eq!(

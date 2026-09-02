@@ -52,10 +52,10 @@ impl LoadedMap {
     pub fn level_image(&self, level: u32) -> Option<Arc<DynamicImage>> {
         let info = *self.pyramid.level(level)?;
 
-        if let Ok(cache) = self.levels.lock() {
-            if let Some(existing) = cache.get(&level) {
-                return Some(Arc::clone(existing));
-            }
+        if let Ok(cache) = self.levels.lock()
+            && let Some(existing) = cache.get(&level)
+        {
+            return Some(Arc::clone(existing));
         }
 
         let image = Arc::new(if info.level == 0 {
@@ -119,10 +119,10 @@ impl MapSource {
             return Err(SourceError::NotFound(name.to_owned()));
         }
 
-        if let Ok(cache) = self.loaded.lock() {
-            if let Some(existing) = cache.get(name) {
-                return Ok(Arc::clone(existing));
-            }
+        if let Ok(cache) = self.loaded.lock()
+            && let Some(existing) = cache.get(name)
+        {
+            return Ok(Arc::clone(existing));
         }
 
         let path = self.root.join(format!("{name}.dd2vtt"));

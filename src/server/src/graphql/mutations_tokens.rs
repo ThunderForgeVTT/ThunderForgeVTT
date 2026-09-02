@@ -471,6 +471,25 @@ impl TokenMutation {
     }
 }
 
+/// Turn a client-supplied kind into a [`TokenKind`], or refuse.
+///
+/// `None` means the caller did not ask, which is the column default. An
+/// unrecognised string is an error rather than a silent fallback: falling back
+/// would put a token on the board wearing the wrong meaning, and the Game
+/// Master would have no way to tell it had happened.
+fn parse_token_kind(raw: Option<&str>) -> GraphQLResult<TokenKind> {
+    match raw {
+        None => Ok(TokenKind::default()),
+        Some(value) => TokenKind::from_stored(value).ok_or_else(|| {
+            let known: Vec<&str> = TokenKind::ALL.iter().map(|k| k.as_stored()).collect();
+            Error::new(format!(
+                "Unknown token type {value:?}. Expected one of: {}",
+                known.join(", ")
+            ))
+        }),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -988,24 +1007,5 @@ mod tests {
 
             Ok(())
         });
-    }
-}
-
-/// Turn a client-supplied kind into a [`TokenKind`], or refuse.
-///
-/// `None` means the caller did not ask, which is the column default. An
-/// unrecognised string is an error rather than a silent fallback: falling back
-/// would put a token on the board wearing the wrong meaning, and the Game
-/// Master would have no way to tell it had happened.
-fn parse_token_kind(raw: Option<&str>) -> GraphQLResult<TokenKind> {
-    match raw {
-        None => Ok(TokenKind::default()),
-        Some(value) => TokenKind::from_stored(value).ok_or_else(|| {
-            let known: Vec<&str> = TokenKind::ALL.iter().map(|k| k.as_stored()).collect();
-            Error::new(format!(
-                "Unknown token type {value:?}. Expected one of: {}",
-                known.join(", ")
-            ))
-        }),
     }
 }

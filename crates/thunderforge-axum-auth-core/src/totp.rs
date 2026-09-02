@@ -6,7 +6,7 @@
 //! so the window can be walked in a test instead.
 
 use data_encoding::BASE32_NOPAD;
-use totp_rs::{Algorithm, TOTP};
+use totp_rs::{Algorithm, Builder, Totp};
 
 /// Seconds per code. RFC 6238's default, and what every authenticator app
 /// assumes when it scans a plain `otpauth://` URI.
@@ -17,9 +17,9 @@ pub const STEP_SECONDS: u64 = 30;
 /// One, meaning a code is good for roughly 30-90 seconds. Zero would reject
 /// anyone whose phone clock is a few seconds off or who types slowly; larger
 /// values widen the window an intercepted code stays replayable in.
-pub const SKEW_STEPS: u8 = 1;
+pub const SKEW_STEPS: u16 = 1;
 
-pub const DIGITS: usize = 6;
+pub const DIGITS: u8 = 6;
 pub const ISSUER: &str = "ThunderForge";
 
 /// Build the verifier for one user's stored secret.
@@ -27,20 +27,20 @@ pub const ISSUER: &str = "ThunderForge";
 /// Fails rather than panics on a secret that is not valid base32: the value
 /// comes out of the database, and a row corrupted by a bad migration must
 /// surface as a failed login for one account, not a crashed request handler.
-pub fn totp_for(username: &str, secret_base32: &str) -> Result<TOTP, String> {
+pub fn totp_for(username: &str, secret_base32: &str) -> Result<Totp, String> {
     let secret = BASE32_NOPAD
         .decode(secret_base32.as_bytes())
         .map_err(|_| "Stored 2FA secret is not valid base32".to_string())?;
-    TOTP::new(
-        Algorithm::SHA1,
-        DIGITS,
-        SKEW_STEPS,
-        STEP_SECONDS,
-        secret,
-        Some(ISSUER.to_string()),
-        username.to_string(),
-    )
-    .map_err(|e| format!("Failed to build TOTP verifier: {e}"))
+    Builder::new()
+        .with_algorithm(Algorithm::SHA1)
+        .with_digits(DIGITS)
+        .with_skew(SKEW_STEPS)
+        .with_step_duration(STEP_SECONDS)
+        .with_secret(secret)
+        .with_issuer(Some(ISSUER))
+        .with_account_name(username)
+        .build()
+        .map_err(|e| format!("Failed to build TOTP verifier: {e}"))
 }
 
 /// Does `code` match the secret right now?

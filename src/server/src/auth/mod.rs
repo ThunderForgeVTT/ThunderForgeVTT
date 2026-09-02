@@ -2639,9 +2639,10 @@ fn decrypt_secret(ciphertext: &str, key: &[u8; 32]) -> Result<String, String> {
         .map_err(|_| "Invalid encrypted secret payload".to_string())?;
 
     let cipher = Aes256Gcm::new_from_slice(key).map_err(|e| format!("Cipher init failed: {e}"))?;
-    let nonce = Nonce::from_slice(&nonce_vec);
+    let nonce = Nonce::try_from(&nonce_vec[..])
+        .map_err(|_| "Invalid encrypted secret nonce length".to_string())?;
     let plaintext = cipher
-        .decrypt(nonce, cipher_vec.as_ref())
+        .decrypt(&nonce, cipher_vec.as_ref())
         .map_err(|e| format!("Decryption failed: {e}"))?;
 
     String::from_utf8(plaintext).map_err(|_| "Decrypted secret is not valid UTF-8".to_string())
@@ -3121,9 +3122,9 @@ fn encrypt_secret(plaintext: &str, key: &[u8; 32]) -> Result<String, String> {
     let mut nonce_bytes = [0u8; 12];
     let mut rng = rand::rng();
     rng.fill(&mut nonce_bytes);
-    let nonce = Nonce::from_slice(&nonce_bytes);
+    let nonce = Nonce::from(nonce_bytes);
     let ciphertext = cipher
-        .encrypt(nonce, plaintext.as_bytes())
+        .encrypt(&nonce, plaintext.as_bytes())
         .map_err(|e| format!("Encryption failed: {e}"))?;
 
     let nonce_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(nonce_bytes);

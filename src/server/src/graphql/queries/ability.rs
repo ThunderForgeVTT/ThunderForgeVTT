@@ -282,7 +282,6 @@ impl AbilityQuery {
 mod tests {
     use super::*;
     use crate::test_support::*;
-    use diesel::prelude::*;
 
     fn make_ability(
         conn: &mut diesel::PgConnection,

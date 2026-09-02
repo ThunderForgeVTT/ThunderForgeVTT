@@ -143,7 +143,10 @@ mod tests {
             footprint_side: -10.0,
             z: 0.0,
         };
-        assert_eq!(tokens_at(&[degenerate.clone()], Vec2::ZERO).len(), 1);
+        assert_eq!(
+            tokens_at(std::slice::from_ref(&degenerate), Vec2::ZERO).len(),
+            1
+        );
         assert_eq!(tokens_at(&[degenerate], Vec2::new(1.0, 0.0)).len(), 0);
     }
 }

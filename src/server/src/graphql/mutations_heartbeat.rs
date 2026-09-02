@@ -34,16 +34,6 @@ use uuid::Uuid;
 use crate::auth::world_membership::require_world_member;
 use crate::graphql::{GraphQLResult, app_state, authenticated_user};
 
-/// How long silence lasts before a client is considered gone.
-///
-/// Three missed beats at the client's five-second interval. One missed beat
-/// is a garbage collection pause or a train tunnel; three is someone who
-/// stopped being there. Erring long is right here because the cost of being
-/// wrong is asymmetric: announcing a player has dropped when they have not is
-/// visible to the whole table and momentarily wrong in public, while noticing
-/// fifteen seconds late costs nothing anyone can see.
-pub const PRESENCE_TIMEOUT_SECS: i64 = 15;
-
 /// One participant's presence, as everyone else sees it.
 #[derive(SimpleObject, Clone, Debug, PartialEq, Eq)]
 pub struct GraphQLPresence {
@@ -52,17 +42,17 @@ pub struct GraphQLPresence {
     pub scene_id: Option<Uuid>,
     /// Seconds since their last heartbeat.
     pub seconds_since_seen: i32,
-    /// Whether that silence has passed [`PRESENCE_TIMEOUT_SECS`].
+    /// Whether that silence has passed
+    /// [`thunderforge_presence::PRESENCE_TIMEOUT`].
+    ///
+    /// Three missed beats at the client's five-second interval. One missed
+    /// beat is a garbage collection pause or a train tunnel; three is someone
+    /// who stopped being there. Erring long is right because the cost of
+    /// being wrong is asymmetric: announcing a player has dropped when they
+    /// have not is visible to the whole table and momentarily wrong in
+    /// public, while noticing fifteen seconds late costs nothing anyone can
+    /// see.
     pub connected: bool,
-}
-
-/// Decide whether a participant counts as present.
-///
-/// Pure, and separated from the query so the rule can be tested without a
-/// database or a clock — the two things that make presence bugs hard to
-/// reproduce.
-pub fn is_connected(seconds_since_seen: i64) -> bool {
-    seconds_since_seen <= PRESENCE_TIMEOUT_SECS
 }
 
 #[derive(Default)]
@@ -159,25 +149,6 @@ impl PresenceQuery {
 mod tests {
     use super::*;
 
-    /// The threshold is three missed beats at the client's five-second
-    /// interval. One missed beat is a garbage collection pause or a tunnel.
-    #[test]
-    fn a_recent_beat_is_present_and_a_long_silence_is_not() {
-        assert!(is_connected(0), "a beat just now");
-        assert!(is_connected(5), "one interval");
-        assert!(is_connected(PRESENCE_TIMEOUT_SECS), "exactly at the edge");
-        assert!(!is_connected(PRESENCE_TIMEOUT_SECS + 1), "past the edge");
-        assert!(!is_connected(600), "gone for ten minutes");
-    }
-
-    /// A clock that stepped backwards must not make someone look present
-    /// forever, nor panic the conversion. Negative ages are clamped at the
-    /// call site; the rule itself simply treats them as recent.
-    #[test]
-    fn a_clock_that_went_backwards_still_reads_as_present() {
-        assert!(is_connected(-5));
-    }
-
     /// A second beat refreshes one person rather than adding another.
     ///
     /// This replaces a test that stood in for the mutation's body by running
@@ -204,18 +175,5 @@ mod tests {
         assert_eq!(people.len(), 1, "a beat must refresh, never accumulate");
         assert!(people[0].connected, "the refreshed beat reads as present");
         assert_eq!(people[0].scene_id, Some(scene));
-    }
-
-    /// The registry's timeout and this module's `is_connected` must agree.
-    ///
-    /// Two thresholds for one rule, in two crates. They are the same number
-    /// today and nothing but this test would notice if one moved.
-    #[test]
-    fn the_timeout_is_the_same_on_both_sides_of_the_boundary() {
-        assert_eq!(
-            u64::try_from(PRESENCE_TIMEOUT_SECS).unwrap(),
-            thunderforge_presence::PRESENCE_TIMEOUT.as_secs(),
-            "the GraphQL layer and the registry must expire people together"
-        );
     }
 }
