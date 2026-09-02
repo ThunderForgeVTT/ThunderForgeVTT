@@ -91,24 +91,24 @@ fn an_unknown_system_still_reports_nothing_rather_than_failing() {
 }
 
 /// A system that computes nothing is not a broken one.
+///
+/// Fate Core, which declares eighteen skills, **zero** abilities and no rules
+/// implementation. Originally written against 5e, which derived nothing at the
+/// time; 5e now derives most of its sheet, so the assertion moved to a system
+/// where "nothing derived" is a fact about the ruleset rather than a fact
+/// about how far the work had got.
 #[test]
 fn a_system_with_no_rules_reports_its_stored_values_unchanged() {
     let slots = ActorSlots {
-        ability_data: Some(serde_json::json!({
-            "strength": 14, "dexterity": 12, "constitution": 13,
-            "intelligence": 10, "wisdom": 8, "charisma": 15
-        })),
+        ability_data: Some(serde_json::json!({ "athletics": 3 })),
+        resource_data: Some(serde_json::json!({ "fate_points": 3, "refresh": 3 })),
         ..ActorSlots::default()
     };
-    let values = declared_values_for_actor(&packs(), "dnd5e", &slots);
+    let values = declared_values_for_actor(&packs(), "fate_core", &slots);
 
-    assert_eq!(
-        find(&values, "strength").and_then(|v| v.value.as_integer()),
-        Some(14)
-    );
     assert!(
         values.iter().all(|v| v.origin == Origin::Stored),
-        "5e derives nothing yet — that is T051, not a failure here"
+        "Fate Core computes nothing, which is a property of the ruleset"
     );
 }
 
@@ -177,5 +177,53 @@ fn an_actor_with_no_resource_data_publishes_no_pools() {
     assert!(
         find(&values, "might").is_some(),
         "and the attributes are unaffected"
+    );
+}
+
+/// 5e derives, now — the second system to do so, and the one whose derived
+/// half is most of its sheet.
+#[test]
+fn a_5e_actor_derives_its_modifiers_saves_and_skills() {
+    let slots = ActorSlots {
+        ability_data: Some(serde_json::json!({
+            "strength": 10, "dexterity": 16, "constitution": 14,
+            "intelligence": 8, "wisdom": 12, "charisma": 7
+        })),
+        resource_data: Some(serde_json::json!({ "current_hp": 22, "max_hp": 38 })),
+        proficiency_data: Some(serde_json::json!({
+            "skill_proficiencies": ["stealth", "perception"],
+            "saving_throw_proficiencies": ["dexterity"]
+        })),
+        trait_data: Some(serde_json::json!({ "level": 5 })),
+    };
+    let values = declared_values_for_actor(&packs(), "dnd5e", &slots);
+
+    let modifier = find(&values, "dexterityMod").expect("modifiers are derived");
+    assert_eq!(modifier.value.as_integer(), Some(3));
+    assert_eq!(modifier.origin, Origin::Derived);
+
+    // The charisma 7 case: floor, not truncation. -2, never -1.
+    assert_eq!(
+        find(&values, "charismaMod").and_then(|v| v.value.as_integer()),
+        Some(-2)
+    );
+
+    assert_eq!(
+        find(&values, "passivePerception").and_then(|v| v.value.as_integer()),
+        Some(14)
+    );
+
+    // And the stored half is untouched, pools included.
+    let hp = find(&values, "hitPoints").expect("5e declares a hit point pool");
+    assert_eq!(
+        hp.value,
+        DeclaredValueKind::Fraction {
+            current: 22,
+            max: Some(38)
+        }
+    );
+    assert_eq!(
+        find(&values, "strength").map(|v| v.origin),
+        Some(Origin::Stored)
     );
 }

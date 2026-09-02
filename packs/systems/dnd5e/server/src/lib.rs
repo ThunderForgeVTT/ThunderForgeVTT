@@ -24,11 +24,13 @@
 
 pub mod loader;
 pub mod models;
+pub mod rules;
 pub mod srd;
 pub mod validators;
 
 pub use loader::register_dnd5e_mutations;
 pub use models::{AbilityScores, DnD5eActorData, DnD5eItemData, Proficiencies};
+pub use rules::{ability_modifier, proficiency_bonus, DnD5eRules};
 pub use srd::{get_class, get_skill, get_spell_slots};
 pub use validators::{
     validate_ability_data, validate_ability_data_for_registry, validate_proficiency_data,
@@ -53,6 +55,7 @@ inventory::submit! {
         proficiency_data: Some(validators::validate_proficiency_data_for_registry),
         trait_data: Some(validators::validate_trait_data_for_registry),
         spell_data: Some(validators::validate_spell_data_for_registry),
+        rules: Some(|manifest| Box::new(crate::rules::DnD5eRules::from_manifest(manifest))),
         ..thunderforge_canvas_core::system_contribution::SystemContribution::new("dnd5e")
     }
 }

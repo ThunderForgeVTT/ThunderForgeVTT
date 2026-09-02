@@ -29,44 +29,29 @@ impl DnD5eSystem {
         "0.1.0".to_string()
     }
 
-    // ---------------------------------------------------------------------
-    // 5e rules staged for T051 (5e's `SystemRules` implementation).
+    // The 5e rules that were staged here are gone: T051 moved them onto
+    // `thunderforge_canvas_core::system_rules::SystemRules`, implemented in
+    // `packs/systems/dnd5e/server/src/rules.rs`, which is the one place a
+    // system says what it computes (spec 032 FR-027).
     //
-    // These bodies were the default methods of the deleted `GameSystemTrait`
-    // and are kept verbatim, numbers unchanged, so T051 can move them onto
-    // `thunderforge_canvas_core::system_rules::SystemRules` without having to
-    // re-derive the tables. Do not "tidy" the spell-slot table.
-    // ---------------------------------------------------------------------
+    // Worth knowing why they were not simply copied. The staged
+    // `ability_modifier` was `(score - 10) / 2`, and Rust's `/` rounds toward
+    // zero — so a score of 7 gave -1 where the book says -2, and every odd
+    // score below ten was wrong. The tests below it checked 10, 12, 8 and 16:
+    // even scores and one odd score above ten, which is exactly the set that
+    // cannot see the bug. The replacement uses `div_euclid` and is tested at
+    // 7, 5, 3 and 1.
 
-    /// Calculate ability modifier from ability score
-    /// Formula: (score - 10) / 2, rounded down
-    pub fn ability_modifier(&self, score: i32) -> i32 {
-        (score - 10) / 2
-    }
-
-    /// Get skill bonus (modifier + proficiency if applicable)
-    pub fn skill_bonus(
-        &self,
-        ability_mod: i32,
-        is_proficient: bool,
-        proficiency_bonus: i32,
-    ) -> i32 {
-        ability_mod + (if is_proficient { proficiency_bonus } else { 0 })
-    }
-
-    /// Get proficiency bonus for character level
-    pub fn proficiency_bonus(&self, level: u32) -> i32 {
-        match level {
-            1..=4 => 2,
-            5..=8 => 3,
-            9..=12 => 4,
-            13..=16 => 5,
-            17..=20 => 6,
-            _ => 2, // Default for out-of-range
-        }
-    }
-
-    /// Calculate maximum spell slots for a given spell level at character level
+    /// **Still staged.** The by-level spell-slot table has no home yet.
+    ///
+    /// A slot is two numbers per level — total and expended — and the layout
+    /// format cannot address them: `slotGrid` carries one identifier and a
+    /// level count, and nothing says what level three's total is called. That
+    /// is spec 032's T019a, still open. Moving this table onto `SystemRules`
+    /// before then would publish twenty rows nothing can lay out.
+    ///
+    /// Kept verbatim, numbers unchanged, with its test, so the table survives
+    /// until there is somewhere for it to go. Do not tidy it.
     pub fn max_spell_slots(&self, character_level: u32, spell_level: usize) -> i32 {
         let spell_slots = match character_level {
             1 => vec![2, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -119,33 +104,6 @@ impl Plugin for DnD5ePlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_ability_modifier() {
-        let system = DnD5eSystem;
-        assert_eq!(system.ability_modifier(10), 0);
-        assert_eq!(system.ability_modifier(12), 1);
-        assert_eq!(system.ability_modifier(8), -1);
-        assert_eq!(system.ability_modifier(16), 3);
-    }
-
-    #[test]
-    fn test_proficiency_bonus() {
-        let system = DnD5eSystem;
-        assert_eq!(system.proficiency_bonus(1), 2);
-        assert_eq!(system.proficiency_bonus(5), 3);
-        assert_eq!(system.proficiency_bonus(9), 4);
-        assert_eq!(system.proficiency_bonus(20), 6);
-    }
-
-    #[test]
-    fn test_skill_bonus() {
-        let system = DnD5eSystem;
-        // DEX modifier +3, no proficiency
-        assert_eq!(system.skill_bonus(3, false, 2), 3);
-        // DEX modifier +3, proficiency +2
-        assert_eq!(system.skill_bonus(3, true, 2), 5);
-    }
 
     #[test]
     fn test_spell_slots() {
