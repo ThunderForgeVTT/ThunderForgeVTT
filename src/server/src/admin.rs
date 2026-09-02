@@ -18,6 +18,24 @@ use std::path::{Path, PathBuf};
 const DEFAULT_MANIFEST_SCHEMA_VERSION: &str = "mvp-2026.05";
 const DEFAULT_REALM_NAME: &str = "ThunderForge VTT";
 const DEFAULT_INTERFACE_PACK_ID: &str = "guild-hall-default";
+/// The system a new world starts with, until an operator changes it.
+///
+/// This is a **seed for a settings file**, not a branch in logic, and the
+/// distinction is the whole reason it is allowed to name a system while
+/// `prepare_world_input` is not. That function consulted a hardcoded id every
+/// time a world was created; this is one value written once into a manifest an
+/// operator then owns and can change from the admin settings page. A default
+/// does not grow a case per pack, which is the property FR-029 protects.
+///
+/// It is listed in `scripts/check-system-registry.mjs`'s `KNOWN` with that
+/// reasoning rather than the check being widened, and T014a3 moves realm seed
+/// values out of Rust and into a shipped config file, which is where they
+/// belong and where this stops being an exception at all.
+///
+/// Emptying this would be a silent regression, not a tidy-up: `src/server/data`
+/// is gitignored, so no shipped manifest supplies a value, and every new world
+/// on every install would come out with no system at all.
+const DEFAULT_GAME_SYSTEM_ID: &str = "genie";
 const DEFAULT_ASSET_PACK_ID: &str = "core-preview";
 const DEFAULT_SUPPORT_EMAIL: &str = "stewards@thunderforge.local";
 
@@ -425,6 +443,21 @@ pub async fn load_admin_bootstrap_settings(
     .map_err(|_| "Failed to query bootstrap settings".to_string())
 }
 
+/// The system a new world starts with, as the operator configured it.
+///
+/// An unreadable manifest, a missing key, or an empty value all mean the same
+/// thing — no default — and a world created that way simply has no system.
+/// That is a state the product handles; guessing one instead would bind a
+/// world to a ruleset nobody chose.
+pub fn default_game_system_id(state: &AppState) -> Option<String> {
+    read_system_manifest(state)
+        .ok()?
+        .metadata
+        .get("default_game_system_id")
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
 pub fn read_system_manifest(state: &AppState) -> Result<SystemManifestDocument, String> {
     ensure_manifest_exists(&state.directories.manifest_file)?;
     let path = Path::new(&state.directories.manifest_file);
@@ -459,6 +492,10 @@ pub fn editable_manifest_keys() -> &'static [&'static str] {
         "asset_pack_id",
         "support_email",
         "welcome_message",
+        // Which system a new world starts with. An operator's decision, and
+        // deliberately not a constant in shared server code — see
+        // `prepare_world_input` and spec 032 FR-029.
+        "default_game_system_id",
     ]
 }
 
@@ -552,6 +589,10 @@ fn default_manifest() -> SystemManifestDocument {
         "welcome_message".to_string(),
         "Welcome to the ThunderForge guild hall.".to_string(),
     );
+    metadata.insert(
+        "default_game_system_id".to_string(),
+        DEFAULT_GAME_SYSTEM_ID.to_string(),
+    );
 
     SystemManifestDocument {
         schema_version: DEFAULT_MANIFEST_SCHEMA_VERSION.to_string(),
@@ -604,8 +645,12 @@ mod tests {
     #[test]
     fn editable_manifest_keys_are_whitelisted() {
         assert!(is_editable_manifest_key("interface_pack_id"));
+        // Which system a new world starts with is an operator's decision, and
+        // this is where operators make it — spec 032 FR-029 is what moved it
+        // out of `prepare_world_input`.
+        assert!(is_editable_manifest_key("default_game_system_id"));
         assert!(!is_editable_manifest_key("schema_version"));
-        assert_eq!(editable_manifest_keys().len(), 5);
+        assert_eq!(editable_manifest_keys().len(), 6);
     }
 
     #[test]

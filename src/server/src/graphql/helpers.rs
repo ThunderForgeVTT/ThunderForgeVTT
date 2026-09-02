@@ -148,8 +148,22 @@ pub struct PreparedWorldInput {
 ///
 /// # Errors
 /// Returns a user-friendly error message if any validation fails.
+/// `default_game_system_id` is passed in rather than known here.
+///
+/// Which system a new world starts with is an operator's decision, and it
+/// lives in the config manifest beside the other realm defaults. Hardcoding
+/// one here made shared server code name a game system, which is what spec
+/// 032's FR-029 forbids and what `scripts/check-system-registry.mjs` catches:
+/// a product default is not supposed to grow a branch every time a pack is
+/// added, and the way to keep that true is for this layer not to know any
+/// pack's name at all.
+///
+/// `None` is a real answer, not a missing one — a world with no system is a
+/// state the product already handles everywhere ("a world with no system has
+/// no attribute set. Not an error").
 pub fn prepare_world_input(
     input: crate::graphql::input_types::GraphQLCreateWorldInput,
+    default_game_system_id: Option<&str>,
 ) -> Result<PreparedWorldInput, String> {
     let name = normalize_world_name(&input.name);
     validate_world_name(&name)?;
@@ -164,8 +178,8 @@ pub fn prepare_world_input(
         ));
     }
 
-    let game_system_id =
-        normalize_optional_text(input.game_system_id).or_else(|| Some("genie".to_string()));
+    let game_system_id = normalize_optional_text(input.game_system_id)
+        .or_else(|| default_game_system_id.map(str::to_string));
     validate_optional_reference_id("Game system ID", game_system_id.as_deref())?;
 
     let interface_pack_id = normalize_optional_text(input.interface_pack_id);

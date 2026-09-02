@@ -125,12 +125,32 @@ function withoutTests(source) {
  */
 const KNOWN = new Map([
   [
-    "src/server/src/graphql/helpers.rs",
-    { id: "genie", why: "a new world defaults to this system id (spec 032 T014a)" },
+    "src/server/src/admin.rs",
+    {
+      id: "genie",
+      why:
+        "the seed value for a settings file an operator then owns (spec 032 " +
+        "T014a3). A default written once into a manifest is not the same as " +
+        "logic consulting a hardcoded id per world creation, which is what " +
+        "moved out of `prepare_world_input` — a default does not grow a case " +
+        "per pack. Emptying it would be a silent regression: `src/server/data` " +
+        "is gitignored, so nothing shipped supplies a value and every new " +
+        "world would come out systemless. The fix is to move realm seeds into " +
+        "a shipped config file, not to blank the constant.",
+    },
   ],
   [
     "src/server/src/graphql.rs",
-    { id: "genie", why: "world creation branches on `is_genie_world` (spec 032 T014a)" },
+    {
+      id: "genie",
+      why:
+        "world creation inserts a genie session row (spec 032 T014a). Unlike " +
+        "the default system id — which moved to the config manifest, because " +
+        "an operator's choice is not shared code's knowledge — this one is a " +
+        "pack writing to its own table during world creation. That is a pack " +
+        "contributing behaviour, which needs the world-creation hook User " +
+        "Story 2 would provide, and User Story 2 is gated on ADR-029.",
+    },
   ],
 ]);
 

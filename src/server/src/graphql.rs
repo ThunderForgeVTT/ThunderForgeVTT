@@ -1731,7 +1731,10 @@ pub async fn create_world_impl(
     user_id: uuid::Uuid,
     input: GraphQLCreateWorldInput,
 ) -> Result<GraphQLWorld, String> {
-    let prepared_input = prepare_world_input(input)?;
+    let prepared_input = prepare_world_input(
+        input,
+        crate::admin::default_game_system_id(state).as_deref(),
+    )?;
     let mut conn = state
         .db_pool
         .get()
@@ -3021,12 +3024,15 @@ mod tests {
 
     #[test]
     fn prepare_world_input_trims_optional_fields() {
-        let prepared = prepare_world_input(GraphQLCreateWorldInput {
-            name: "  The   Ember   Crown  ".to_string(),
-            description: Some("  A fallen kingdom  ".to_string()),
-            game_system_id: Some("  systemless-sandbox ".to_string()),
-            interface_pack_id: Some(" guild-hall-default ".to_string()),
-        })
+        let prepared = prepare_world_input(
+            GraphQLCreateWorldInput {
+                name: "  The   Ember   Crown  ".to_string(),
+                description: Some("  A fallen kingdom  ".to_string()),
+                game_system_id: Some("  systemless-sandbox ".to_string()),
+                interface_pack_id: Some(" guild-hall-default ".to_string()),
+            },
+            None,
+        )
         .expect("world input should be valid");
 
         assert_eq!(prepared.name, "The Ember Crown");
@@ -3092,12 +3098,15 @@ mod tests {
     // Phase 1.4: Security test - prepare_world_input rejects empty name
     #[test]
     fn prepare_world_input_rejects_empty_name() {
-        let result = prepare_world_input(GraphQLCreateWorldInput {
-            name: "  \t\n  ".to_string(), // Only whitespace
-            description: None,
-            game_system_id: None,
-            interface_pack_id: None,
-        });
+        let result = prepare_world_input(
+            GraphQLCreateWorldInput {
+                name: "  \t\n  ".to_string(), // Only whitespace
+                description: None,
+                game_system_id: None,
+                interface_pack_id: None,
+            },
+            None,
+        );
 
         assert!(result.is_err(), "Should reject empty/whitespace-only name");
     }
@@ -3459,4 +3468,43 @@ mod tests {
     // `_impl` by this feature) whose GraphQL context is impractical to
     // construct in a focused unit test without also duplicating the
     // full `MutationRoot`/`QueryRoot` wiring.
+}
+
+#[cfg(test)]
+mod world_default_system_tests {
+    use super::*;
+    use crate::graphql::input_types::GraphQLCreateWorldInput;
+
+    fn input(game_system_id: Option<&str>) -> GraphQLCreateWorldInput {
+        GraphQLCreateWorldInput {
+            name: "A World".to_string(),
+            description: None,
+            game_system_id: game_system_id.map(str::to_string),
+            interface_pack_id: None,
+        }
+    }
+
+    /// The operator's configured default applies when the caller says nothing.
+    #[test]
+    fn an_unspecified_system_takes_the_configured_default() {
+        let prepared = prepare_world_input(input(None), Some("some-system")).expect("valid");
+        assert_eq!(prepared.game_system_id.as_deref(), Some("some-system"));
+    }
+
+    /// And never overrides one the caller did specify.
+    #[test]
+    fn a_specified_system_is_never_replaced_by_the_default() {
+        let prepared =
+            prepare_world_input(input(Some("chosen")), Some("configured")).expect("valid");
+        assert_eq!(prepared.game_system_id.as_deref(), Some("chosen"));
+    }
+
+    /// No default configured is a real answer. A world with no system is a
+    /// state this product handles everywhere; inventing one would bind a world
+    /// to a ruleset nobody picked.
+    #[test]
+    fn no_configured_default_leaves_the_world_systemless() {
+        let prepared = prepare_world_input(input(None), None).expect("valid");
+        assert_eq!(prepared.game_system_id, None);
+    }
 }
