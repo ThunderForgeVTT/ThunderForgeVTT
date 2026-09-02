@@ -9,28 +9,21 @@ impl Pathfinder2eSystem {
     pub fn new() -> Self {
         Self
     }
-    pub fn register() -> Arc<dyn GameSystemTrait> {
+    pub fn register() -> Arc<Self> {
         Arc::new(Self)
+    }
+
+    pub fn name(&self) -> String {
+        "Pathfinder Second Edition (Remaster)".to_string()
+    }
+    pub fn version(&self) -> String {
+        "0.1.0".to_string()
     }
 }
 
 impl Default for Pathfinder2eSystem {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-pub trait GameSystemTrait: Send + Sync {
-    fn name(&self) -> String;
-    fn version(&self) -> String;
-}
-
-impl GameSystemTrait for Pathfinder2eSystem {
-    fn name(&self) -> String {
-        "Pathfinder Second Edition (Remaster)".to_string()
-    }
-    fn version(&self) -> String {
-        "0.1.0".to_string()
     }
 }
 

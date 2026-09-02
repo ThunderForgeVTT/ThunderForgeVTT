@@ -2,7 +2,7 @@
 
 pub mod plugin;
 
-pub use plugin::GameSystemTrait;
+pub use plugin::{Pathfinder2ePlugin, Pathfinder2eSystem};
 
 pub const VERSION: &str = "0.1.0";
 

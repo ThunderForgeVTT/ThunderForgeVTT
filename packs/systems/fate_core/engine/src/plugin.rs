@@ -9,28 +9,21 @@ impl FateSystem {
     pub fn new() -> Self {
         Self
     }
-    pub fn register() -> Arc<dyn GameSystemTrait> {
+    pub fn register() -> Arc<Self> {
         Arc::new(Self)
+    }
+
+    pub fn name(&self) -> String {
+        "Fate Core".to_string()
+    }
+    pub fn version(&self) -> String {
+        "0.1.0".to_string()
     }
 }
 
 impl Default for FateSystem {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-pub trait GameSystemTrait: Send + Sync {
-    fn name(&self) -> String;
-    fn version(&self) -> String;
-}
-
-impl GameSystemTrait for FateSystem {
-    fn name(&self) -> String {
-        "Fate Core".to_string()
-    }
-    fn version(&self) -> String {
-        "0.1.0".to_string()
     }
 }
 

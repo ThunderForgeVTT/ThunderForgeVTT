@@ -1,12 +1,12 @@
 //! Genie Bevy Plugin
 //!
-//! Implements the GameSystem trait for Genie. Mirrors
+//! Genie's system identity and rule calculations. Mirrors
 //! packs/systems/dnd5e/engine/src/plugin.rs's structure.
 
 use bevy::prelude::*;
 use std::sync::Arc;
 
-/// Genie System implementing GameSystem trait
+/// Genie System rule calculations.
 pub struct GenieSystem;
 
 impl GenieSystem {
@@ -15,31 +15,22 @@ impl GenieSystem {
     }
 
     /// Register this system with the Bevy world
-    pub fn register() -> Arc<dyn GameSystemTrait> {
+    pub fn register() -> Arc<Self> {
         Arc::new(Self)
+    }
+
+    pub fn name(&self) -> String {
+        "Genie".to_string()
+    }
+
+    pub fn version(&self) -> String {
+        "0.1.0".to_string()
     }
 }
 
 impl Default for GenieSystem {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-/// GameSystem trait - should match the one in src/engine/src/systems/core.rs
-/// Re-defined here to avoid cross-package dependency (mirrors dnd5e/engine/src/plugin.rs)
-pub trait GameSystemTrait: Send + Sync {
-    fn name(&self) -> String;
-    fn version(&self) -> String;
-}
-
-impl GameSystemTrait for GenieSystem {
-    fn name(&self) -> String {
-        "Genie".to_string()
-    }
-
-    fn version(&self) -> String {
-        "0.1.0".to_string()
     }
 }
 
