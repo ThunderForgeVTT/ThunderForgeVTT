@@ -131,8 +131,8 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 
 **Independent Test**: Place one lore marker and one item; open the lore, pick up the item, and confirm it leaves the map for exactly one inventory.
 
-- [ ] T039 [US3] Add authoring for a placed lore marker using the existing `lore.open` effect, in `src/engine/src/plugins/interaction.rs` and the interactions authoring surface in `apps/web/src/` (FR-011)
-- [ ] T040 [US3] Render the lore marker with `lucide-react`'s book icon and open the entry in a new browser tab on activation, in `apps/web/src/` (FR-012)
+- [ ] T039 [US3] Add authoring for a placed lore marker using the existing `lore.open` effect, in `src/engine/src/plugins/interaction.rs` and the interactions authoring surface in `apps/web/src/` (FR-011) — **authoring done; the placement gesture is still unwired**: `placeProp` in `apps/web/src/api/interactives.ts:264` has no caller, so a GM can author a lore interactive but cannot put one on the map
+- [X] T040 [US3] Render the lore marker with `lucide-react`'s book icon and open the entry in a new browser tab on activation, in `apps/web/src/` (FR-012)
 - [X] T041 [US3] Contribute an `item.pickup` effect **from the item subsystem**, not the interaction core, in `src/engine/src/` — `scripts/verify.mjs` enforces this seam (FR-013, ADR-054, research R3)
 - [X] T042 [US3] Offer Pickup and View on activation of a placed item, in `apps/web/src/` (FR-014)
 - [X] T043 [US3] Implement the pickup mutation in `src/server/src/graphql/` — remove the scene token and create one inventory entry, all-or-nothing (FR-015, contracts/graphql-mutations.md)
@@ -190,7 +190,7 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 - [X] T059 [US6] Apply T010's snapping rules to wall and light placement, honouring the scene's grid type including hex, in `src/engine/src/plugins/` (FR-025)
 - [X] T060 [US6] Add room and door primitives selectable while drawing, in `src/engine/src/plugins/wall.rs` (FR-026)
 - [X] T061 [US6] Ensure doors created by the primitive are functional — open, close, lock — reusing the existing door effects, in `src/engine/src/plugins/wall.rs` (FR-027)
-- [ ] T062 [US6] Add placement helper controls to the interactions authoring surface for the supported effect kinds, in `apps/web/src/` (FR-028)
+- [X] T062 [US6] Add placement helper controls to the interactions authoring surface for the supported effect kinds, in `apps/web/src/` (FR-028)
 - [X] T063 [US6] Support canvas right-click and suppress the browser context menu on the canvas surface only, in `src/engine/src/` (FR-029, research R6 caution)
 
 **Checkpoint**: A GM can build a map at speed.

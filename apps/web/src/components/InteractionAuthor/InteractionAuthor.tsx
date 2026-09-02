@@ -16,6 +16,8 @@ import {
   type Interactive,
   type SubjectKind,
 } from "@/api/interactives";
+import { EffectHelperRow } from "./EffectHelperRow";
+import { helpersFor, missingRequiredFields } from "./effectHelpers";
 
 /**
  * The Game Master's authoring panel for interactive elements.
@@ -136,6 +138,32 @@ export function InteractionAuthor({
   );
 
   /**
+   * The same set as `available`, shaped for the helper row (FR-028).
+   *
+   * Derived from the registry rather than passed in, so the row and the
+   * dropdown cannot come to offer different things — one of them being
+   * right and the other stale is exactly the drift ADR-054 is about.
+   */
+  const helpers = useMemo(
+    () => helpersFor(registry ?? [], subjectKind),
+    [registry, subjectKind],
+  );
+
+  /**
+   * What the chosen effect still needs before it is worth saving.
+   *
+   * Read from the declaration; the server refuses the same thing and remains
+   * the authority (Principle III). This exists because its refusal arrives as
+   * "that could not be saved", which names neither the field nor the reason,
+   * and the Game Master most likely to hit it is the one placing their first
+   * lore marker with the entry picker still untouched.
+   */
+  const missing = useMemo(
+    () => missingRequiredFields(selected, config),
+    [selected, config],
+  );
+
+  /**
    * Whether the effect this interactive was authored against still exists.
    *
    * Shown as a state rather than repaired (FR-041). Silently clearing it would
@@ -177,6 +205,12 @@ export function InteractionAuthor({
           perform. It has been left exactly as you set it.
         </p>
       )}
+
+      <EffectHelperRow
+        helpers={helpers}
+        selectedId={effectId === NO_EFFECT ? null : effectId}
+        onChoose={(chosen) => setEffectId(chosen ?? NO_EFFECT)}
+      />
 
       <Label htmlFor="interaction-effect">What happens</Label>
       <Select value={effectId} onValueChange={setEffectId}>
@@ -243,7 +277,16 @@ export function InteractionAuthor({
         </SelectContent>
       </Select>
 
-      <Button onClick={save}>Save</Button>
+      {missing.length > 0 && (
+        <p role="status" data-testid="interaction-incomplete">
+          Choose {missing.map((field) => field.label.toLowerCase()).join(", ")}{" "}
+          first.
+        </p>
+      )}
+
+      <Button onClick={save} disabled={missing.length > 0}>
+        Save
+      </Button>
       {onDelete && (
         <Button variant="ghost" onClick={onDelete}>
           Remove
