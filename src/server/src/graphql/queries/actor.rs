@@ -95,6 +95,91 @@ pub async fn actor_system_data_impl(
     Ok(row)
 }
 
+/// Everything one actor's system publishes about it, stored and derived.
+///
+/// The read that makes Increment E reach a player. `tokenAttributes` answers
+/// the same question for a scene's tokens, which is the canvas's need; a
+/// character sheet has an actor and no token, and until now there was no way
+/// to ask.
+///
+/// Same visibility rule as every other actor-scoped read.
+pub async fn actor_declared_values_impl(
+    state: &AppState,
+    user_id: uuid::Uuid,
+    is_admin: bool,
+    actor_id: uuid::Uuid,
+) -> GraphQLResult<Vec<thunderforge_canvas_core::system_rules::DeclaredValue>> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    let (world_id, system_id) = tokio::task::spawn_blocking(move || {
+        world_actors::table
+            .filter(world_actors::id.eq(actor_id))
+            .select((world_actors::world_id, world_actors::game_system_id))
+            .first::<(uuid::Uuid, Option<String>)>(&mut conn)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Actor not found"))?;
+
+    require_visible_world(state, user_id, is_admin, world_id).await?;
+
+    // An actor belonging to no system has nothing declared about it. Not an
+    // error: a marker on a map is a real thing with no sheet.
+    let Some(system_id) = system_id else {
+        return Ok(Vec::new());
+    };
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+    let stored = tokio::task::spawn_blocking(move || {
+        use crate::schema::world_actor_system_data as d;
+        d::table
+            .filter(d::actor_id.eq(actor_id))
+            .select((
+                d::ability_data,
+                d::resource_data,
+                d::proficiency_data,
+                d::trait_data,
+            ))
+            .first::<(
+                Option<serde_json::Value>,
+                Option<serde_json::Value>,
+                Option<serde_json::Value>,
+                Option<serde_json::Value>,
+            )>(&mut conn)
+            .optional()
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to load actor system data"))?;
+
+    let slots = match stored {
+        Some((ability_data, resource_data, proficiency_data, trait_data)) => {
+            crate::declared_values::ActorSlots {
+                ability_data,
+                resource_data,
+                proficiency_data,
+                trait_data,
+            }
+        }
+        // A sheet nobody has filled in still has its tracks and its ladders —
+        // the boxes exist whether or not any are ticked — so this resolves
+        // against empty slots rather than returning nothing.
+        None => crate::declared_values::ActorSlots::default(),
+    };
+
+    Ok(crate::declared_values::declared_values_for_actor(
+        &state.directories.systems_dir,
+        &system_id,
+        &slots,
+    ))
+}
+
 /// Testable core of `ActorQuery::search_actors`. Server-side counterpart
 /// to the client's FlexSearch index (`@/search/actorSearch.ts`) — a plain
 /// case-insensitive substring match against `label`/`description`, for
@@ -172,6 +257,24 @@ impl ActorQuery {
             actor_system_data_impl(state, auth_user.user_id, auth_user.is_admin, actor_id).await?;
 
         Ok(row.map(GraphQLActorSystemData::from))
+    }
+
+    /// Everything this actor's system publishes about it — the read a
+    /// character sheet needs, where `tokenAttributes` answers for a scene.
+    async fn actor_declared_values(
+        &self,
+        ctx: &Context<'_>,
+        actor_id: uuid::Uuid,
+    ) -> GraphQLResult<Vec<crate::graphql::queries::token_attributes::GraphQLDeclaredValue>> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        let values =
+            actor_declared_values_impl(state, auth_user.user_id, auth_user.is_admin, actor_id)
+                .await?;
+        Ok(values
+            .into_iter()
+            .map(crate::graphql::queries::token_attributes::GraphQLDeclaredValue::from)
+            .collect())
     }
 
     /// Server-side search pairing for the client's FlexSearch index —

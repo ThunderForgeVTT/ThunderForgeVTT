@@ -457,3 +457,79 @@ fn no_bundled_system_stores_a_pool_it_never_declares() {
         );
     }
 }
+
+/// The read a character sheet needs, and the one that did not exist.
+///
+/// `tokenAttributes` answers for a scene's tokens, which is the canvas's
+/// question. An actor page has an actor and no token, so everything Increment E
+/// resolved could not reach a sheet until this existed.
+#[tokio::test]
+async fn an_actor_reports_its_declared_values_without_a_token() {
+    use crate::graphql::queries::actor::actor_declared_values_impl;
+    use crate::test_support::*;
+
+    let mut state = test_app_state();
+    state.directories.systems_dir = packs();
+
+    let mut conn = state.db_pool.get().unwrap();
+    let owner = insert_test_user(&mut conn);
+    let world_id = insert_test_world(&mut conn, owner);
+    let scene_id = insert_test_scene(&mut conn, world_id, owner);
+
+    // The fixture makes a 5e actor; this one is Genie, so its system is set
+    // after insertion rather than a second fixture being invented for it.
+    let actor_id = insert_test_actor(&mut conn, world_id, scene_id, owner);
+    {
+        use crate::schema::{world_actor_system_data, world_actors};
+        use diesel::prelude::*;
+        let now = chrono::Utc::now().naive_utc();
+
+        diesel::update(world_actors::table.filter(world_actors::id.eq(actor_id)))
+            .set(world_actors::game_system_id.eq("genie"))
+            .execute(&mut conn)
+            .expect("actor bound to genie");
+
+        diesel::insert_into(world_actor_system_data::table)
+            .values((
+                world_actor_system_data::id.eq(uuid::Uuid::now_v7()),
+                world_actor_system_data::actor_id.eq(actor_id),
+                world_actor_system_data::game_system_id.eq("genie"),
+                world_actor_system_data::ability_data.eq(Some(
+                    serde_json::json!({ "might": 3, "cunning": 2, "spirit": 4 }),
+                )),
+                world_actor_system_data::resource_data.eq(Some(
+                    serde_json::json!({ "current_health": 6, "max_health": 10 }),
+                )),
+                world_actor_system_data::trait_data.eq(Some(serde_json::json!({ "level": 4 }))),
+                world_actor_system_data::created_by.eq(owner),
+                world_actor_system_data::updated_by.eq(owner),
+                world_actor_system_data::created_at.eq(now),
+                world_actor_system_data::updated_at.eq(now),
+            ))
+            .execute(&mut conn)
+            .expect("system data inserted");
+    }
+    drop(conn);
+
+    let values = actor_declared_values_impl(&state, owner, false, actor_id)
+        .await
+        .expect("the actor's own values");
+
+    assert!(
+        find(&values, "might").is_some(),
+        "a stored attribute reaches the sheet"
+    );
+    assert_eq!(
+        find(&values, "health").map(|v| v.value.clone()),
+        Some(DeclaredValueKind::Fraction {
+            current: 6,
+            max: Some(10)
+        })
+    );
+    assert_eq!(
+        find(&values, "wishPointsForLevel").map(|v| v.origin),
+        Some(Origin::Derived),
+        "and so does the derived half — which is the point of asking here \
+         rather than reading the stored row directly"
+    );
+}

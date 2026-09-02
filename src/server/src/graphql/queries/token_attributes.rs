@@ -190,6 +190,32 @@ pub struct GraphQLDeclaredValue {
     pub origin: GraphQLValueOrigin,
 }
 
+/// One conversion, shared by every caller.
+///
+/// There were about to be two — the scene query below and the actor query in
+/// `queries/actor.rs` — and two mappings of one type is how a field gets added
+/// to one and forgotten in the other. The bug would be a value that appears on
+/// a token and not on its own character sheet, which reads as data loss rather
+/// than as a missing match arm.
+impl From<thunderforge_canvas_core::system_rules::DeclaredValue> for GraphQLDeclaredValue {
+    fn from(value: thunderforge_canvas_core::system_rules::DeclaredValue) -> Self {
+        Self {
+            id: value.id,
+            label: value.label,
+            abbreviation: value.abbreviation,
+            value: render(&value.value),
+            fraction: fraction_of(&value.value),
+            track: track_of(&value.value),
+            state: state_of(&value.value),
+            group: value.group,
+            origin: match value.origin {
+                Origin::Stored => GraphQLValueOrigin::Stored,
+                Origin::Derived => GraphQLValueOrigin::Derived,
+            },
+        }
+    }
+}
+
 /// What a token's sheet says about it.
 #[derive(SimpleObject, Debug, Clone)]
 pub struct GraphQLTokenAttributes {
@@ -373,23 +399,7 @@ impl TokenAttributesQuery {
                             value: a.value,
                         })
                         .collect(),
-                    values: values
-                        .into_iter()
-                        .map(|value| GraphQLDeclaredValue {
-                            id: value.id,
-                            label: value.label,
-                            abbreviation: value.abbreviation,
-                            value: render(&value.value),
-                            fraction: fraction_of(&value.value),
-                            track: track_of(&value.value),
-                            state: state_of(&value.value),
-                            group: value.group,
-                            origin: match value.origin {
-                                Origin::Stored => GraphQLValueOrigin::Stored,
-                                Origin::Derived => GraphQLValueOrigin::Derived,
-                            },
-                        })
-                        .collect(),
+                    values: values.into_iter().map(Into::into).collect(),
                     speeds: labelled,
                 });
             }
