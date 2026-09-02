@@ -126,6 +126,7 @@ import {
   GmToolRail,
   type GmToolId,
 } from "@/components/world/GmToolRail/GmToolRail";
+import { SelectionFilterMenu } from "@/components/world/GmToolRail/SelectionFilterMenu";
 import {
   WorldDock,
   type DockSection,
@@ -1917,9 +1918,13 @@ export default function WorldPage() {
                     id: "select",
                     label: "Select",
                     icon: "select",
-                    // No panel: Select is the resting mode, not a set of
-                    // properties. See `GmTool.content`.
-                    content: null,
+                    // A panel after all, but a collapsible one that remembers
+                    // being collapsed. The original reasoning — that an
+                    // always-open panel would cover 256px of map to say "you
+                    // may now click things" — is answered by the collapse,
+                    // not contradicted: a Game Master who does not want it
+                    // never sees it again (spec 031 FR-010).
+                    content: <SelectionFilterMenu />,
                   },
                   {
                     id: "walls",
@@ -2073,7 +2078,21 @@ export default function WorldPage() {
                   />
                 </div>
               )}
-              {sceneId && sceneLoadState.status === "loading" ? (
+              {/*
+                The scene loader waits for the engine loader.
+                
+                Both are true at once during a cold load — the engine is still
+                arriving *and* the scene's content is being fetched — and both
+                render dead centre, on top of each other. That is the two
+                loaders a playtest reported, and it is a different pair from
+                the route-fallback overlap fixed alongside it.
+                
+                The engine one wins because it is the longer wait and the one
+                carrying real progress; the scene loader has nothing to add
+                while the thing that draws scenes does not yet exist. Spec 031
+                FR-041: at most one loading indicator visible at any moment.
+              */}
+              {engineReady && sceneId && sceneLoadState.status === "loading" ? (
                 <div
                   data-testid="scene-load-indicator"
                   style={{

@@ -8,6 +8,7 @@ import {
   type WorldCacheSyncSummary,
 } from "@/services/worldCacheDiagnostics";
 import { formatBytes } from "@/services/worldCacheStorage";
+import { detectCacheSupport } from "@/engine/bevy/cacheSupport";
 
 /**
  * What the local cache did for this session, in plain numbers
@@ -97,6 +98,10 @@ export function CachePanel() {
 
   useEffect(() => subscribeToWorldCacheSync(setSync), []);
 
+  // Computed once: whether a browser has these APIs does not change while the
+  // page is open, and re-probing on every sample would be noise.
+  const [support] = useState(detectCacheSupport);
+
   useEffect(() => {
     let cancelled = false;
     const sample = () => {
@@ -149,7 +154,26 @@ export function CachePanel() {
         Content on this device
       </h3>
 
-      {!tally ? (
+      {!support.supported ? (
+        <p
+          className="text-xs text-muted-foreground"
+          /*
+            A third absence, distinct from the two below and settled in a
+            different way. "Not read yet" resolves on its own; "no cache
+            running" might change on a reload; *this browser cannot* will not
+            change until the person uses a different browser, and telling them
+            so is the whole point of FR-042.
+
+            A playtest found this panel reporting nothing served and 0 B
+            downloaded against a world that genuinely had content to cache.
+            The figures were true and the impression — "nothing has happened
+            yet" — was false.
+          */
+          data-testid="cache-unsupported"
+        >
+          {`This browser cannot keep world content on your device, so everything is downloaded each time. Missing: ${support.missing.join(", ")}.`}
+        </p>
+      ) : !tally ? (
         <p
           className="text-xs text-muted-foreground"
           /*

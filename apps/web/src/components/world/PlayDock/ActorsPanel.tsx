@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { beginTokenPlacement } from "@/engine/bevy";
 import { getWorldActors } from "@/api/actors";
 import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
 import type { WorldActorRecord } from "@/types/actor";
@@ -113,19 +113,57 @@ export function ActorsPanel({ worldId }: ActorsPanelProps) {
   }
 
   const renderActor = (actor: WorldActorRecord) => (
-    <li key={actor.id}>
-      <Link
-        to={`/world/${worldId}/actor/${actor.id}/view`}
-        className="flex items-center gap-2 rounded-lg border border-border px-2 py-1.5 transition-colors hover:bg-muted"
-      >
-        <FantasyIcon name={actor.isNpc ? "skull" : "shield"} size={14} />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm">{actor.label}</span>
-          <span className="block truncate text-xs text-muted-foreground">
-            {actor.actorType}
-          </span>
+    <li
+      key={actor.id}
+      className="flex items-center gap-2 rounded-lg border border-border px-2 py-1.5"
+    >
+      <FantasyIcon name={actor.isNpc ? "skull" : "shield"} size={14} />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm">{actor.label}</span>
+        <span className="block truncate text-xs text-muted-foreground">
+          {actor.actorType}
         </span>
-      </Link>
+      </span>
+
+      {/*
+        View opens in a new tab rather than navigating.
+
+        This row used to be a `Link`, so looking at a character cost the Game
+        Master the table: the play view unmounted, the engine tore down, and
+        getting back meant a reload. Spec 031's first user story is precisely
+        that a session should not have to leave the play screen.
+
+        A new tab rather than an in-pane view because this is the *Game
+        Master's* half: they are inspecting one of many characters while
+        running a table, and want it beside the map, not on top of it. A player
+        opening their own character gets the in-pane view instead (FR-002) —
+        the two roles differ deliberately.
+      */}
+      <a
+        href={`/world/${worldId}/actor/${actor.id}/view`}
+        target="_blank"
+        rel="noreferrer"
+        data-testid={`actor-view-${actor.id}`}
+        className="rounded border border-border px-2 py-1 text-xs transition-colors hover:bg-muted"
+      >
+        View
+      </a>
+
+      {/*
+        Place hands the token to the engine, which carries it on the cursor
+        until a left click drops it. Nothing is created here: the engine
+        reports where it was dropped and the server decides whether it exists.
+      */}
+      <button
+        type="button"
+        data-testid={`actor-place-${actor.id}`}
+        className="rounded border border-border px-2 py-1 text-xs transition-colors hover:bg-muted"
+        onClick={() => {
+          void beginTokenPlacement(actor.id);
+        }}
+      >
+        Place
+      </button>
     </li>
   );
 

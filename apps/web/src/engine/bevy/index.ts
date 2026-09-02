@@ -19,6 +19,14 @@ type BevyWasmModule = {
   start: (canvasSelector: string) => void;
   apply_world_command?: (json: string) => void;
   set_authoring_mode?: (toolId: string) => boolean;
+  set_selection_filter?: (
+    tokens: boolean,
+    walls: boolean,
+    lights: boolean,
+    shapes: boolean,
+  ) => void;
+  begin_token_placement?: (actorId: string) => boolean;
+  cancel_token_placement?: () => void;
   authoring_mode?: () => string;
   set_event_callback?: (callback: (json: string) => void) => void;
   /**
@@ -514,6 +522,56 @@ export async function getAuthoringMode(): Promise<string | null> {
     return module.authoring_mode();
   } catch {
     return null;
+  }
+}
+
+/**
+ * Tell the engine which kinds the Select tool acts on.
+ *
+ * Selection is engine state; this only carries the person's preference across
+ * the boundary. Optional like the rest — a bundle without it leaves selection
+ * unfiltered, which is the pre-existing behaviour and a safe place to land.
+ */
+export async function setSelectionFilter(
+  tokens: boolean,
+  walls: boolean,
+  lights: boolean,
+  shapes: boolean,
+): Promise<void> {
+  try {
+    const module = await getWasmModule();
+    module.set_selection_filter?.(tokens, walls, lights, shapes);
+  } catch {
+    // A filter that cannot be applied is a tool that selects everything, which
+    // is what it did before this existed.
+  }
+}
+
+/**
+ * Attach an actor's token to the cursor, to be placed by a left click.
+ *
+ * The engine owns the carry: the preview, the snapping and the cancel all live
+ * there, because screen-to-world is the camera's business and a React element
+ * following the mouse would drift against it.
+ *
+ * Returns whether the carry began.
+ */
+export async function beginTokenPlacement(actorId: string): Promise<boolean> {
+  try {
+    const module = await getWasmModule();
+    return module.begin_token_placement?.(actorId) ?? false;
+  } catch {
+    return false;
+  }
+}
+
+/** Abandon a placement in progress. Leaves nothing behind. */
+export async function cancelTokenPlacement(): Promise<void> {
+  try {
+    const module = await getWasmModule();
+    module.cancel_token_placement?.();
+  } catch {
+    // Nothing to abandon.
   }
 }
 

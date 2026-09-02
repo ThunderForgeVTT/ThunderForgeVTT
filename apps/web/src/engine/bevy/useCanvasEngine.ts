@@ -54,6 +54,7 @@ export function useCanvasEngine(
   options: UseCanvasEngineOptions,
 ): UseCanvasEngineResult {
   const containerRef = useRef<HTMLDivElement>(null);
+  const contextMenuCleanupRef = useRef<(() => void) | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   // The mounted engine is state, not a ref: it is returned to the caller and
   // therefore read during render, which `react-hooks/refs` rightly rejects
@@ -133,6 +134,28 @@ export function useCanvasEngine(
       if (canvas && canvas.clientWidth > 0) {
         clearInterval(checkCanvasInterval);
 
+        /**
+         * The map owns right-click; the rest of the app does not.
+         *
+         * Spec 031 FR-029 wants right-click available as a canvas gesture,
+         * which means the browser's own context menu must not open on top of
+         * it. Bound to the canvas element itself and nowhere else: panels,
+         * lists and editors keep their normal menus, because taking those away
+         * would cost a user text selection and inspection for no benefit.
+         *
+         * It has to be bound here rather than in JSX because the element is
+         * not React's. Bevy/winit inserts the real `<canvas>` itself — which is
+         * the same fact that made text placement silently fail when a listener
+         * was attached to the React container instead.
+         */
+        const suppressContextMenu = (event: MouseEvent) => {
+          event.preventDefault();
+        };
+        canvas.addEventListener("contextmenu", suppressContextMenu);
+        contextMenuCleanupRef.current = () => {
+          canvas.removeEventListener("contextmenu", suppressContextMenu);
+        };
+
         // Canvas found, setup ResizeObserver
         resizeObserverRef.current = new ResizeObserver(() => {
           if (!canvas) return;
@@ -161,6 +184,8 @@ export function useCanvasEngine(
     // Cleanup
     return () => {
       clearInterval(checkCanvasInterval);
+      contextMenuCleanupRef.current?.();
+      contextMenuCleanupRef.current = null;
       clearTimeout(timeoutId);
       resizeObserverRef.current?.disconnect();
       resizeObserverRef.current = null;
