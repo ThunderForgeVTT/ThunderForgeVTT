@@ -7,6 +7,9 @@ version = "0.1.0"
 edition = "2024"
 license.workspace = true
 
+[dev-dependencies]
+dnd5e_server = { path = "../../packs/systems/dnd5e/server", package = "dnd5e-server" }
+
 [dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"

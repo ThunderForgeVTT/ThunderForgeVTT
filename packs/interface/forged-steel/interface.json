@@ -1,0 +1,242 @@
+{
+  "id": "forged-steel",
+  "type": "interface",
+  "title": "Forged Steel",
+  "version": "1.0.0",
+  "description": "A d20-shaped arrangement for systems with ability scores, derived modifiers and a fixed skill list.",
+  "compatibility": {
+    "minimum": "0.1.0",
+    "verified": "0.1.0",
+    "maximum": null
+  },
+  "legal": {
+    "licenseName": "AGPL-3.0-or-later",
+    "attributionText": "ThunderForgeVTT Contributors",
+    "requiredNotice": null,
+    "disclaimer": null,
+    "trademarkRestrictions": [],
+    "requiredUiPlacement": null,
+    "sourceUrl": null
+  },
+  "light": {
+    "background": "oklch(0.97 0.005 250)",
+    "card": "oklch(0.99 0.004 250)",
+    "muted": "oklch(0.93 0.008 250)",
+    "primary": "oklch(0.42 0.06 250)",
+    "accent": "oklch(0.90 0.02 250)",
+    "accentForeground": "oklch(0.25 0.04 250)",
+    "border": "oklch(0.88 0.01 250)",
+    "ring": "oklch(0.60 0.05 250)",
+    "sidebar": "oklch(0.95 0.006 250)",
+    "sidebarRing": "oklch(0.60 0.05 250)",
+    "mutedForeground": "oklch(0.53 0.01 250)"
+  },
+  "dark": {
+    "background": "oklch(0.17 0.012 250)",
+    "card": "oklch(0.23 0.014 250)",
+    "muted": "oklch(0.29 0.014 250)",
+    "primary": "oklch(0.86 0.02 250)",
+    "accent": "oklch(0.30 0.02 250)",
+    "border": "oklch(1 0 0 / 12%)",
+    "ring": "oklch(0.62 0.05 250)",
+    "sidebar": "oklch(0.22 0.014 250)",
+    "sidebarRing": "oklch(0.62 0.05 250)"
+  },
+  "targets": [
+    "dnd5e"
+  ],
+  "layout": [
+    {
+      "kind": "section",
+      "title": "Abilities",
+      "children": [
+        {
+          "kind": "row",
+          "children": [
+            {
+              "kind": "pair",
+              "value": "strength",
+              "beside": "strengthMod"
+            },
+            {
+              "kind": "pair",
+              "value": "dexterity",
+              "beside": "dexterityMod"
+            },
+            {
+              "kind": "pair",
+              "value": "constitution",
+              "beside": "constitutionMod"
+            },
+            {
+              "kind": "pair",
+              "value": "intelligence",
+              "beside": "intelligenceMod"
+            },
+            {
+              "kind": "pair",
+              "value": "wisdom",
+              "beside": "wisdomMod"
+            },
+            {
+              "kind": "pair",
+              "value": "charisma",
+              "beside": "charismaMod"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "section",
+      "title": "Vitals",
+      "children": [
+        {
+          "kind": "row",
+          "children": [
+            {
+              "kind": "column",
+              "children": [
+                {
+                  "kind": "barStack",
+                  "of": "resources"
+                }
+              ]
+            },
+            {
+              "kind": "column",
+              "children": [
+                {
+                  "kind": "value",
+                  "id": "proficiencyBonus"
+                },
+                {
+                  "kind": "value",
+                  "id": "passivePerception"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "section",
+      "title": "Saving Throws",
+      "children": [
+        {
+          "kind": "column",
+          "children": [
+            {
+              "kind": "value",
+              "id": "saveStrength"
+            },
+            {
+              "kind": "value",
+              "id": "saveDexterity"
+            },
+            {
+              "kind": "value",
+              "id": "saveConstitution"
+            },
+            {
+              "kind": "value",
+              "id": "saveIntelligence"
+            },
+            {
+              "kind": "value",
+              "id": "saveWisdom"
+            },
+            {
+              "kind": "value",
+              "id": "saveCharisma"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "section",
+      "title": "Skills",
+      "children": [
+        {
+          "kind": "column",
+          "children": [
+            {
+              "kind": "value",
+              "id": "skillAcrobatics"
+            },
+            {
+              "kind": "value",
+              "id": "skillAnimalHandling"
+            },
+            {
+              "kind": "value",
+              "id": "skillArcana"
+            },
+            {
+              "kind": "value",
+              "id": "skillAthletics"
+            },
+            {
+              "kind": "value",
+              "id": "skillDeception"
+            },
+            {
+              "kind": "value",
+              "id": "skillHistory"
+            },
+            {
+              "kind": "value",
+              "id": "skillInsight"
+            },
+            {
+              "kind": "value",
+              "id": "skillIntimidation"
+            },
+            {
+              "kind": "value",
+              "id": "skillInvestigation"
+            },
+            {
+              "kind": "value",
+              "id": "skillMedicine"
+            },
+            {
+              "kind": "value",
+              "id": "skillNature"
+            },
+            {
+              "kind": "value",
+              "id": "skillPerception"
+            },
+            {
+              "kind": "value",
+              "id": "skillPerformance"
+            },
+            {
+              "kind": "value",
+              "id": "skillPersuasion"
+            },
+            {
+              "kind": "value",
+              "id": "skillReligion"
+            },
+            {
+              "kind": "value",
+              "id": "skillSleightOfHand"
+            },
+            {
+              "kind": "value",
+              "id": "skillStealth"
+            },
+            {
+              "kind": "value",
+              "id": "skillSurvival"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

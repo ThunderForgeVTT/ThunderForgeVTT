@@ -379,3 +379,95 @@ fn the_base_pack_still_reproduces_the_stylesheet_exactly() {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// A targeted pack (T052)
+// ---------------------------------------------------------------------------
+
+fn forged_steel() -> InterfaceManifest {
+    let text = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../packs/interface/forged-steel/interface.json"),
+    )
+    .expect("the targeted pack should exist");
+    serde_json::from_str(&text).expect("forged-steel must deserialise")
+}
+
+/// 5e's declared identifiers, stored and derived, read from the pack itself.
+///
+/// Not a list restated here: a pack is validated against what a system
+/// actually publishes, and hardcoding that set would let this test pass while
+/// the real check failed.
+fn dnd5e_declares() -> Vec<String> {
+    let manifest: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../packs/systems/dnd5e/system.json"),
+        )
+        .expect("5e's manifest"),
+    )
+    .expect("valid json");
+
+    let mut ids: Vec<String> = manifest
+        .get("abilities")
+        .and_then(|a| a.as_object())
+        .map(|block| block.keys().cloned().collect())
+        .unwrap_or_default();
+
+    if let Some(resources) = manifest.get("resources").and_then(|r| r.as_array()) {
+        ids.extend(
+            resources
+                .iter()
+                .filter_map(|r| r.get("id")?.as_str().map(str::to_string)),
+        );
+    }
+
+    // The derived half, from 5e's own rules.
+    let rules = dnd5e_server::DnD5eRules::from_manifest(&manifest);
+    ids.extend(
+        thunderforge_canvas_core::system_rules::SystemRules::derived_declarations(&rules)
+            .into_iter()
+            .map(|d| d.id),
+    );
+    ids
+}
+
+#[test]
+fn the_targeted_pack_is_structurally_valid() {
+    let pack = forged_steel();
+    validate(&pack, "forged-steel", &forge()).expect("a shipped pack must validate");
+}
+
+/// FR-026, against the real system rather than a fixture. Every identifier
+/// Forged Steel names must be one 5e actually publishes — and after T051 that
+/// includes the derived half, which is most of what this pack lays out.
+#[test]
+fn the_targeted_pack_names_only_identifiers_5e_declares() {
+    let pack = forged_steel();
+    let declared = dnd5e_declares();
+
+    validate_targeting(&pack, &|system| {
+        (system == "dnd5e").then(|| declared.clone())
+    })
+    .expect("every name in the layout must be one 5e publishes");
+
+    assert!(
+        !pack.referenced_ids().is_empty(),
+        "a targeted pack that names nothing is not exercising specific \
+         addressing, and this test would pass vacuously"
+    );
+}
+
+/// The two packs must actually differ, or SC-005's "visibly and structurally
+/// different" is a claim nothing checks.
+#[test]
+fn the_two_shipped_packs_are_structurally_different() {
+    let base = forge();
+    let steel = forged_steel();
+
+    assert!(base.referenced_ids().is_empty());
+    assert!(!steel.referenced_ids().is_empty());
+    assert!(base.targets.is_empty());
+    assert_eq!(steel.targets, vec!["dnd5e".to_string()]);
+    assert_ne!(base.light, steel.light, "and they do not look the same");
+}
