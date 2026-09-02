@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { createItemViaCompendium } from "./fixtures/content";
 
 /**
  * specs/015-dmca-notice-takedown: the public, unauthenticated DMCA notice
@@ -55,10 +56,7 @@ async function createWorldWithItem(page: Page, itemName: string): Promise<{ worl
   if (!worldMatch) throw new Error(`Could not extract world id from URL: ${page.url()}`);
   const worldId = worldMatch[1];
 
-  await page.goto(`/world/${worldId}/compendium`);
-  await page.getByRole("tab", { name: "Items" }).click();
-  await page.getByTestId("new-item-name-input").fill(itemName);
-  await page.getByTestId("add-item-button").click();
+  await createItemViaCompendium(page, worldId, itemName);
   await expect(page.getByTestId("item-catalog-table")).toContainText(itemName, { timeout: 10_000 });
   await page.getByTestId("item-catalog-table").getByText(itemName).click();
   await page.getByTestId("item-preview-panel-view").click();

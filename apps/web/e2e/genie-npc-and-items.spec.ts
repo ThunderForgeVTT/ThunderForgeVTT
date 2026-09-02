@@ -280,18 +280,20 @@ test.describe("Spec 018 Scenario 5: a Wish-Granted Item with a mechanical effect
 
     const actorId = await createGenieActor(page, worldId, "Test Genie PC", false);
 
-    // Create the Wish-Granted Item via the real compendium UI.
-    await page.goto(`/world/${worldId}/compendium`);
-    await page.getByRole("tab", { name: "Items" }).click();
-    await page.getByTestId("new-item-name-input").fill("Lamp of Minor Binding");
+    // Create the Wish-Granted Item via the real compendium UI. Spec 031
+    // FR-035 moved that off the items tab and onto an editor page; the
+    // mutation behind Save is unchanged, so the id still comes from the
+    // `createItem` response rather than from a URL.
+    await page.goto(`/world/${worldId}/compendium/item/new`);
+    await page.getByTestId("item-editor-name-input").fill("Lamp of Minor Binding");
     await page
-      .getByTestId("new-item-description-input")
+      .getByTestId("item-editor-description-input")
       .fill("A tarnished brass lamp that suppresses a bound Genie's power while held.");
     const [createItemResp] = await Promise.all([
       page.waitForResponse(
         (r) => r.url().includes("/api/graphql") && (r.request().postData() ?? "").includes("createItem"),
       ),
-      page.getByTestId("add-item-button").click(),
+      page.getByTestId("item-editor-save").click(),
     ]);
     const createItemBody = (await createItemResp.json()) as { data?: { createItem?: { id?: string } } };
     const itemId = createItemBody.data?.createItem?.id;
@@ -311,7 +313,6 @@ test.describe("Spec 018 Scenario 5: a Wish-Granted Item with a mechanical effect
     await expect(page.getByTestId("actor-inventory-panel")).toBeVisible({ timeout: 10_000 });
     await page.getByTestId("inventory-add-item-select").selectOption({ label: "Lamp of Minor Binding" });
     await page.getByTestId("inventory-add-quantity-input").fill("1");
-    await page.getByTestId("add-item-button").isVisible().catch(() => false); // no-op guard
     await page.getByTestId("inventory-add-button").click();
 
     // Scope to the entry row specifically (not `inventory-add-item-select`'s

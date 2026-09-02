@@ -1,4 +1,8 @@
 import { test, expect, type Page } from "@playwright/test";
+import {
+  createItemViaCompendium,
+  createNpcViaCompendium,
+} from "./fixtures/content";
 
 /**
  * specs/012-lore-wiki: the world-scoped lore wiki — GFM authoring/render,
@@ -221,12 +225,10 @@ test.describe("US2: correlate lore entries with each other and with actors", () 
   }) => {
     const worldId = await registerAndCreateWorld(page, `E2E Lore Correlate ${uniqueSuffix()}`);
 
-    // Seed an actor (NPC) to link to, via the Compendium's NPC tab.
+    // Seed an actor (NPC) to link to. This spec needs one to exist; it is
+    // not about how one is made, so it uses the shared fixture.
     const npcName = `Linked NPC ${uniqueSuffix()}`;
-    await page.goto(`/world/${worldId}/compendium`);
-    await page.getByPlaceholder("New NPC name").fill(npcName);
-    await page.getByRole("button", { name: "Add NPC" }).click();
-    await expect(page.getByText(npcName)).toBeVisible({ timeout: 10_000 });
+    await createNpcViaCompendium(page, worldId, npcName);
 
     const entryBTitle = `Entry B ${uniqueSuffix()}`;
     await createLoreEntry(page, worldId, entryBTitle);
@@ -290,10 +292,7 @@ test.describe("US2: correlate lore entries with each other and with actors", () 
     const worldId = await registerAndCreateWorld(page, `E2E Lore Item Correlate ${uniqueSuffix()}`);
 
     const itemName = `Amulet of Linking ${uniqueSuffix()}`;
-    await page.goto(`/world/${worldId}/compendium`);
-    await page.getByRole("tab", { name: "Items" }).click();
-    await page.getByTestId("new-item-name-input").fill(itemName);
-    await page.getByTestId("add-item-button").click();
+    await createItemViaCompendium(page, worldId, itemName);
     await expect(page.getByTestId("item-catalog-table")).toContainText(itemName, { timeout: 10_000 });
 
     const entryTitle = `Entry Linking an Item ${uniqueSuffix()}`;

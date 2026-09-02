@@ -80,7 +80,10 @@ test("Session Setup shows exactly Play, Players, and Last Session Notes", async 
   await expect(page.getByText("Players")).toBeVisible();
   await expect(page.getByTestId("session-notes-panel")).toBeVisible();
   await expect(page.getByText("Lore — coming soon")).toHaveCount(0);
-  await expect(page.getByPlaceholder("New NPC name")).toHaveCount(0);
+  // The authoring entry point, not the old inline form's placeholder: that
+  // placeholder no longer exists anywhere, so asserting its absence here
+  // would pass without testing anything (spec 031 FR-035).
+  await expect(page.getByTestId("new-npc-link")).toHaveCount(0);
 });
 
 test("DM edits and saves Last Session Notes; a Player sees it read-only", async ({

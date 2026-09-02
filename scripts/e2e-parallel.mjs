@@ -426,6 +426,16 @@ async function startShard(index) {
 
 /** Runs one Playwright shard against an already-started stack. */
 function runShard(shard, files, label = "parallel") {
+  // An empty list is not "run nothing" to Playwright — `playwright test` with
+  // no positional arguments runs the *entire* suite. So a shard that legitimately
+  // drew no files (a small `--only`, more shards than specs) would quietly run
+  // everything, on every empty shard at once. This cost a real 3-minute run
+  // that looked like a hang before anyone noticed what it was doing.
+  if (files.length === 0) {
+    log("e2e", `  shard ${shard.index}: no files, skipped.`);
+    return Promise.resolve({ index: shard.index, code: 0, label });
+  }
+
   const demoDir = join(SHARD_DIR, `shard-${shard.index}`, "demo");
   mkdirSync(demoDir, { recursive: true });
 
@@ -556,6 +566,18 @@ async function main() {
   }
   const parallelSpecs = args.all ? specs : specs.filter((file) => !isPerfSpec(file));
   const serialSpecs = args.all ? [] : specs.filter(isPerfSpec);
+
+  // `--only` naming nothing but measured specs is almost always a mistake: the
+  // sharded lane gets no files, and the whole run collapses to the serial lane
+  // on one shard, which is not what someone asking for shards wanted. Say so,
+  // and name the flag that does what they meant.
+  if (parallelSpecs.length === 0 && serialSpecs.length > 0 && onlyPatterns) {
+    log(
+      "e2e",
+      `--only=${args.only} matched only measured specs (${serialSpecs.join(", ")}).` +
+        " Pass --all to shard them, or expect the serial lane alone.",
+    );
+  }
   log("e2e", `${parallelSpecs.length} spec files sharded, ${serialSpecs.length} measured serially.`);
 
   const durations = readDurations();

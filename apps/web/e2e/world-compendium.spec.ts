@@ -52,15 +52,23 @@ async function registerAndCreateWorld(
   return match[1];
 }
 
-/** Seeds an NPC via the Compendium's own "Add NPC" control (US1, T010). */
+/**
+ * Seeds an NPC through the compendium's own authoring route (US1, T010).
+ *
+ * Kept local rather than moved to `fixtures/content.ts`: this spec is *about*
+ * the compendium, so it should break when the compendium's own flow changes.
+ * The fixture exists for specs that merely need an actor to exist.
+ */
 async function addNpcFromStaging(
   page: Page,
   worldId: string,
   name: string,
 ): Promise<void> {
+  await page.goto(`/world/${worldId}/compendium/npc/new`);
+  await page.getByTestId("npc-editor-name-input").fill(name);
+  await page.getByTestId("npc-editor-save").click();
+  await page.waitForURL(/\/compendium\/npc\/[^/]+\/edit$/, { timeout: 15_000 });
   await page.goto(`/world/${worldId}/compendium`);
-  await page.getByPlaceholder("New NPC name").fill(name);
-  await page.getByRole("button", { name: "Add NPC" }).click();
   await expect(page.getByText(name)).toBeVisible({ timeout: 10_000 });
 }
 
@@ -190,12 +198,17 @@ test.describe("US1: DM adds and edits an NPC from the Compendium", () => {
       timeout: 15_000,
     });
 
-    // Add NPC control is present for the DM, directly on the Compendium.
-    await page.getByTestId("new-npc-name-input").fill(npcName);
+    // The DM's route to a new NPC is a link to an editor page. Spec 031
+    // FR-035 took the form off the list: authoring an NPC in a cramped block
+    // inside the catalogue it was about to appear in was the complaint.
+    await expect(page.getByTestId("new-npc-link")).toBeVisible();
+    await page.goto(`/world/${worldId}/compendium/npc/new`);
+    await page.getByTestId("npc-editor-name-input").fill(npcName);
     await page
-      .getByTestId("new-npc-description-input")
+      .getByTestId("npc-editor-description-input")
       .fill("Original description");
-    await page.getByTestId("add-npc-button").click();
+    await page.getByTestId("npc-editor-save").click();
+    await page.goto(`/world/${worldId}/compendium`);
     await expect(page.getByTestId("npc-catalog-table")).toContainText(npcName, {
       timeout: 10_000,
     });
@@ -284,9 +297,9 @@ test.describe("US2: a Player browses the Compendium with the same read access, m
         npcName,
       );
 
-      // No Add NPC control for a non-DM.
-      await expect(playerPage.getByTestId("new-npc-name-input")).toHaveCount(0);
-      await expect(playerPage.getByTestId("add-npc-button")).toHaveCount(0);
+      // No route to authoring for a non-DM. The control is now a link
+      // rather than a form, so its absence is what there is to assert.
+      await expect(playerPage.getByTestId("new-npc-link")).toHaveCount(0);
 
       // Default-Viewer access on this NPC (DM never granted the Player
       // Editor/Owner) — no Edit action in the preview panel, and the
@@ -310,10 +323,11 @@ async function addItemFromCompendium(
   worldId: string,
   name: string,
 ): Promise<void> {
-  await page.goto(`/world/${worldId}/compendium`);
-  await page.getByRole("tab", { name: "Items" }).click();
-  await page.getByTestId("new-item-name-input").fill(name);
-  await page.getByTestId("add-item-button").click();
+  await page.goto(`/world/${worldId}/compendium/item/new`);
+  await page.getByTestId("item-editor-name-input").fill(name);
+  await page.getByTestId("item-editor-save").click();
+  // Saving returns to the items tab, where the new item is listed.
+  await page.waitForURL(/\/compendium\?tab=items$/, { timeout: 15_000 });
   await expect(page.getByText(name)).toBeVisible({ timeout: 10_000 });
 }
 
@@ -429,11 +443,8 @@ test.describe("Spec 013 US4: a Player browses the Items tab with the same read a
         itemName,
       );
 
-      // No Add Item control for a non-DM (FR-002/FR-008).
-      await expect(playerPage.getByTestId("new-item-name-input")).toHaveCount(
-        0,
-      );
-      await expect(playerPage.getByTestId("add-item-button")).toHaveCount(0);
+      // No route to authoring for a non-DM (FR-002/FR-008).
+      await expect(playerPage.getByTestId("new-item-link")).toHaveCount(0);
 
       // Default-Viewer access on this Item — no Edit action anywhere.
       await expect(

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { createNpcViaCompendium } from "./fixtures/content";
 
 /**
  * specs/010-world-staging-actors (US4): dedicated `/world/:id/actor/:actorId/view`
@@ -79,21 +80,11 @@ test.describe("US4: Viewer can view but is redirected away from /edit", () => {
     const worldId = await registerAndCreateWorld(page, worldName);
 
     const npcName = `Bo Jangles ${uniqueSuffix()}`;
-    // Spec 011: NPC creation moved from staging to /compendium.
-    await page.goto(`/world/${worldId}/compendium`);
-    await page.getByPlaceholder("New NPC name").fill(npcName);
-    await page.getByRole("button", { name: "Add NPC" }).click();
-    await page
-      .getByTestId("npc-catalog-table")
-      .locator("tr", { hasText: npcName })
-      .getByRole("link", { name: "View" })
-      .click();
-    await page.waitForURL(new RegExp(`/world/${worldId}/actor/([^/]+)/view$`), { timeout: 15_000 });
-    const actorMatch = new RegExp(`/world/${worldId}/actor/([^/]+)/view$`).exec(
-      new URL(page.url()).pathname,
-    );
-    if (!actorMatch) throw new Error(`Could not extract actor id from URL: ${page.url()}`);
-    const actorId = actorMatch[1];
+    // Spec 011 moved NPC creation from staging to the compendium; spec 031
+    // FR-035 moved it again, onto its own page. The fixture hands back the
+    // id, so there is no row to find and no View link to follow.
+    const actorId = await createNpcViaCompendium(page, worldId, npcName);
+    await page.goto(`/world/${worldId}/actor/${actorId}/view`);
 
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     await page.goto(`/world/${worldId}`);
@@ -142,21 +133,11 @@ test.describe("US4: Viewer can view but is redirected away from /edit", () => {
     const worldId = await registerAndCreateWorld(page, worldName);
 
     const npcName = `Bo Jangles ${uniqueSuffix()}`;
-    // Spec 011: NPC creation moved from staging to /compendium.
-    await page.goto(`/world/${worldId}/compendium`);
-    await page.getByPlaceholder("New NPC name").fill(npcName);
-    await page.getByRole("button", { name: "Add NPC" }).click();
-    await page
-      .getByTestId("npc-catalog-table")
-      .locator("tr", { hasText: npcName })
-      .getByRole("link", { name: "View" })
-      .click();
-    await page.waitForURL(new RegExp(`/world/${worldId}/actor/([^/]+)/view$`), { timeout: 15_000 });
-    const actorMatch = new RegExp(`/world/${worldId}/actor/([^/]+)/view$`).exec(
-      new URL(page.url()).pathname,
-    );
-    if (!actorMatch) throw new Error(`Could not extract actor id from URL: ${page.url()}`);
-    const actorId = actorMatch[1];
+    // Spec 011 moved NPC creation from staging to the compendium; spec 031
+    // FR-035 moved it again, onto its own page. The fixture hands back the
+    // id, so there is no row to find and no View link to follow.
+    const actorId = await createNpcViaCompendium(page, worldId, npcName);
+    await page.goto(`/world/${worldId}/actor/${actorId}/view`);
 
     const outsiderContext = await browser.newContext();
     const outsiderPage = await outsiderContext.newPage();

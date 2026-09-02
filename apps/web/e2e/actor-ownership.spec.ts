@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { createNpcViaCompendium } from "./fixtures/content";
 
 /**
  * specs/010-world-staging-actors (US3): the DM-only "ownership block" —
@@ -83,13 +84,11 @@ async function currentUserId(page: Page): Promise<string> {
 async function createNpcAndOpenEdit(page: Page, worldId: string, npcName: string): Promise<string> {
   // Spec 011: NPC creation moved from staging to /compendium.
   await page.goto(`/world/${worldId}/compendium`);
-  await page.getByPlaceholder("New NPC name").fill(npcName);
-  await page.getByRole("button", { name: "Add NPC" }).click();
-  await page
-    .getByTestId("npc-catalog-table")
-    .locator("tr", { hasText: npcName })
-    .getByRole("link", { name: "View" })
-    .click();
+  // Spec 031 FR-035 moved NPC authoring onto its own page, so the
+  // fixture creates it and hands back the id — no row to find, no View
+  // link to follow.
+  const seededActorId = await createNpcViaCompendium(page, worldId, npcName);
+  await page.goto(`/world/${worldId}/actor/${seededActorId}/view`);
   await page.waitForURL(new RegExp(`/world/${worldId}/actor/[^/]+/view$`), { timeout: 15_000 });
   await page.getByRole("button", { name: "Edit" }).click();
   await page.waitForURL(new RegExp(`/world/${worldId}/actor/([^/]+)/edit$`), { timeout: 15_000 });
