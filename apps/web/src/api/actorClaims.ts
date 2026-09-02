@@ -1,4 +1,4 @@
-import { postGraphQL } from "@/api/graphqlClient";
+import { GraphQLRequestError, postGraphQL } from "@/api/graphqlClient";
 import type { ActorClaimRecord, WorldActorRecord } from "@/types/actor";
 
 const WORLD_ACTOR_FIELDS = `
@@ -128,4 +128,63 @@ export function createAndClaimActor(
     `,
     { worldId, name, description },
   ).then((data) => data.createAndClaimActor);
+}
+
+/**
+ * The extension code the server sets when a character is already played.
+ *
+ * Spec 031 FR-034. Three surfaces write this one relation — this module's
+ * `claimActor` and `setPlayerCharacterBinding`, and the actor page's release
+ * — and all three lose the same race in the same way. Keyed on the code
+ * rather than the message, which is written for a person and will change.
+ */
+export const ALREADY_CLAIMED = "ALREADY_CLAIMED";
+
+/**
+ * The extension code the server sets when a release names a claim that has
+ * since moved to somebody else.
+ *
+ * The screen that offered the release was reading a state that no longer
+ * exists; the honest response is to re-read it, not to retry the write.
+ */
+export const CLAIM_CHANGED = "CLAIM_CHANGED";
+
+/** Whether a failed claim or binding was somebody else being quicker. */
+export function isAlreadyClaimed(error: unknown): boolean {
+  return error instanceof GraphQLRequestError && error.hasCode(ALREADY_CLAIMED);
+}
+
+/** Whether a failed release was aimed at a claim that had already moved. */
+export function isClaimChanged(error: unknown): boolean {
+  return error instanceof GraphQLRequestError && error.hasCode(CLAIM_CHANGED);
+}
+
+type SetPlayerCharacterBindingMutation = {
+  setPlayerCharacterBinding: WorldActorRecord | null;
+};
+
+/**
+ * Spec 031 (FR-034): a GM sets which character a player is playing, from
+ * the players section. `null` for `actorId` clears the binding.
+ *
+ * GM authority over the world is checked server-side, and the write goes
+ * through the same arbiter as a player's own `claimActor` — so a picker
+ * that shows a character as free cannot produce a second claim on it
+ * (Constitution Principle III).
+ */
+export function setPlayerCharacterBinding(
+  worldId: string,
+  worldMemberId: string,
+  actorId: string | null,
+): Promise<WorldActorRecord | null> {
+  return postGraphQL<SetPlayerCharacterBindingMutation>(
+    `
+      mutation SetPlayerCharacterBinding($worldId: UUID!, $worldMemberId: UUID!, $actorId: UUID) {
+        setPlayerCharacterBinding(worldId: $worldId, worldMemberId: $worldMemberId, actorId: $actorId) {
+          ${WORLD_ACTOR_FIELDS}
+        }
+      }
+    `,
+    { worldId, worldMemberId, actorId },
+  ).then((data) => data.setPlayerCharacterBinding);
 }

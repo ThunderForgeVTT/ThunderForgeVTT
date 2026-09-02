@@ -106,14 +106,18 @@ test("US1: every member sees the roster paired with claimed characters, and Over
   // The Players section, opened from the sidebar, shows all three members
   // correctly paired/marked — verified from a non-GM member's own view.
   await pageA.goto(`/world/${worldId}/players`);
-  await expect(pageA.getByTestId("players-table")).toBeVisible({ timeout: 10_000 });
-  const rows = pageA.getByTestId("players-table").locator("tbody tr");
+  await expect(pageA.getByTestId("players-list")).toBeVisible({ timeout: 10_000 });
+  // Cards, not rows: the Players section became a searchable card grid in
+  // spec 031 (FR-033) because a bare table showed neither who a player is
+  // playing nor any way to set it. The card's testid is the stable handle.
+  const rows = pageA.getByTestId("players-list").locator('[data-testid^="player-card-"]');
   await expect(rows).toHaveCount(3);
   await expect(pageA.getByText(actorLabel)).toBeVisible();
   // Both the GM/Owner (synthesized into the roster — they have no real
   // world_members row of their own) and the non-claiming second member
   // show this label.
-  await expect(pageA.getByText("No character claimed")).toHaveCount(2);
+  // The card says "No character" where the table said "No character claimed".
+  await expect(pageA.getByText("No character", { exact: true })).toHaveCount(2);
 
   await gmContext.close();
   await contextA.close();
@@ -146,15 +150,15 @@ test("US2: GM changes a role and removes a member from the Players section; non-
 
   // GM promotes member A to GM, and removes member B.
   await gmPage.goto(`/world/${worldId}/players`);
-  await expect(gmPage.getByTestId("players-table")).toBeVisible({ timeout: 10_000 });
-  const rows = gmPage.getByTestId("players-table").locator("tbody tr");
+  await expect(gmPage.getByTestId("players-list")).toBeVisible({ timeout: 10_000 });
+  const rows = gmPage.getByTestId("players-list").locator('[data-testid^="player-card-"]');
   await expect(rows).toHaveCount(3);
 
   // Capture stable per-row test ids up front — after the role change
   // below, the "Player"-role text filter would otherwise re-match a
   // *different* row (the one not yet promoted), not the row just
   // changed, since Locators are re-evaluated lazily at assertion time.
-  const playerRoleSelects = gmPage.getByTestId("players-table").locator('select[data-testid^="player-role-select-"]');
+  const playerRoleSelects = gmPage.getByTestId("players-list").locator('select[data-testid^="player-role-select-"]');
   await expect(playerRoleSelects).toHaveCount(2);
   const rowATestId = await playerRoleSelects.nth(0).getAttribute("data-testid");
   const rowBTestId = await playerRoleSelects.nth(1).getAttribute("data-testid");
@@ -172,7 +176,7 @@ test("US2: GM changes a role and removes a member from the Players section; non-
   // A non-GM member sees no role-change or removal controls.
   await pageA.reload();
   await pageA.goto(`/world/${worldId}/players`);
-  await expect(pageA.getByTestId("players-table")).toBeVisible({ timeout: 10_000 });
+  await expect(pageA.getByTestId("players-list")).toBeVisible({ timeout: 10_000 });
   await expect(pageA.locator('select[data-testid^="player-role-select-"]')).toHaveCount(0);
   await expect(pageA.getByRole("button", { name: "Remove" })).toHaveCount(0);
 

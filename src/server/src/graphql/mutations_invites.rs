@@ -197,6 +197,31 @@ impl WorldMembershipPayload {
         let state = get_app_state(ctx)?;
         crate::graphql::mutations_actor_claims::claimed_actor_impl(&state, self.id).await
     }
+
+    /// Spec 031 (FR-033): the name to put on a player's card.
+    ///
+    /// Computed here rather than stored on the payload for the same reason
+    /// `claimed_actor` is: it lives in `users`, not in `world_members`, and
+    /// every existing caller of this type builds it from a membership row
+    /// alone. A card headed by a UUID is not a roster anyone can search.
+    async fn username(&self, ctx: &Context<'_>) -> GraphQLResult<String> {
+        let state = get_app_state(ctx)?;
+        let user_id = self.user_id;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        tokio::task::spawn_blocking(move || {
+            crate::schema::users::table
+                .filter(crate::schema::users::id.eq(user_id))
+                .select(crate::schema::users::username)
+                .first::<String>(&mut conn)
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(|e| Error::new(format!("Failed to look up username: {e}")))
+    }
 }
 
 // ========== Helper Functions ==========

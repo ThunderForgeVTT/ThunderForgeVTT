@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import {
   getAdminSettingsData,
   recalculateDiskUsage,
@@ -8,13 +7,10 @@ import {
   updateTwoFactorPolicy,
 } from "@/api/admin";
 import { SEO } from "@/components/seo/SEO";
-import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
-import { Container } from "@/components/ui/container/Container";
 import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
 import { Loader } from "@/components/ui/loader/Loader";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
-import { cn } from "@/lib/utils";
 import type {
   AdminBootstrapSettings,
   AdminSettingsData,
@@ -24,6 +20,7 @@ import type {
   UpdateOAuthProviderInput,
 } from "@/types/admin";
 import type { SeoConfig } from "@/types/seo";
+import { AdminSectionShell } from "./components/AdminSectionShell";
 import { DiskUsageChart } from "./components/DiskUsageChart";
 import { ManifestEditor } from "./components/ManifestEditor";
 import { MetricsCard } from "./components/MetricsCard";
@@ -150,33 +147,6 @@ export default function SettingsPage({
     [data],
   );
 
-  const sectionLinks: Array<{
-    section: AdminSettingsSection;
-    path: string;
-    description: string;
-  }> = [
-    {
-      section: "overview",
-      path: "/admin",
-      description: "System analytics and live counts",
-    },
-    {
-      section: "configuration",
-      path: "/admin/configuration",
-      description: "OAuth providers and manifest editing",
-    },
-    {
-      section: "storage",
-      path: "/admin/storage",
-      description: "Disk posture and persisted footprint",
-    },
-    {
-      section: "security",
-      path: "/admin/security",
-      description: "2FA enforcement and bootstrap record",
-    },
-  ];
-
   const updateProvider = async (
     providerId: string,
     config: UpdateOAuthProviderInput,
@@ -257,21 +227,23 @@ export default function SettingsPage({
   }
 
   if (!data) {
+    // The shell stays even when the payload didn't arrive: a failed load
+    // is exactly when an administrator most needs a way off this page.
     return (
-      <Container>
+      <AdminSectionShell>
         <main className="py-8">
           <StatusBadge variant="danger">
             {pageStatus ?? "Admin settings are unavailable."}
           </StatusBadge>
         </main>
-      </Container>
+      </AdminSectionShell>
     );
   }
 
   return (
     <>
       <SEO {...settingsPageSeo} />
-      <Container>
+      <AdminSectionShell>
         <main className="grid gap-6 pb-12">
           <section className="grid grid-cols-1 gap-4 rounded-xl border border-border bg-card p-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(13rem,0.7fr)]">
             <div className="grid gap-2.5">
@@ -300,37 +272,12 @@ export default function SettingsPage({
             </div>
           </section>
 
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(15rem,0.8fr)_minmax(0,2fr)]">
-            <aside className="min-w-0">
-              <Card surface="leather" className="grid gap-4 p-5">
-                <div className="grid gap-1">
-                  <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-                    Admin navigation
-                  </p>
-                  <h2 className="text-lg font-semibold">Sections</h2>
-                </div>
-                <nav className="grid gap-3">
-                  {sectionLinks.map((item) => (
-                    <Link
-                      key={item.section}
-                      to={item.path}
-                      className={cn(
-                        "grid gap-1 rounded-md border border-border bg-background/40 p-4",
-                        section === item.section &&
-                          "border-primary/40 ring-1 ring-primary/30",
-                      )}
-                    >
-                      <span>{sectionLabel(item.section)}</span>
-                      <small className="text-muted-foreground">
-                        {item.description}
-                      </small>
-                    </Link>
-                  ))}
-                </nav>
-              </Card>
-            </aside>
-
-            <div className="grid gap-5">
+          {/* Spec 031 FR-032: one section at a time. Stacking all four and
+              letting the links scroll was what the playtest was looking at
+              when it reported no navigation — every link led to the same
+              screen, so nothing appeared to happen. */}
+          <div className="grid gap-5">
+            {section === "overview" ? (
               <section className="grid gap-3" id="overview">
                 <div className="flex items-start justify-between gap-4">
                   <div>
@@ -340,11 +287,6 @@ export default function SettingsPage({
                     </p>
                     <h2 className="text-xl font-semibold">System analytics</h2>
                   </div>
-                  {section !== "overview" ? (
-                    <Button asChild variant="secondary" size="sm" icon="crown">
-                      <Link to="/admin">Return to admin overview</Link>
-                    </Button>
-                  ) : null}
                 </div>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {metricItems.map((item) => (
@@ -352,7 +294,9 @@ export default function SettingsPage({
                   ))}
                 </div>
               </section>
+            ) : null}
 
+            {section === "configuration" ? (
               <section className="grid gap-3" id="configuration">
                 <div className="flex items-start justify-between gap-4">
                   <div>
@@ -404,7 +348,9 @@ export default function SettingsPage({
                   </Card>
                 </div>
               </section>
+            ) : null}
 
+            {section === "storage" ? (
               <section className="grid gap-3" id="storage">
                 <div className="flex items-start justify-between gap-4">
                   <div>
@@ -425,7 +371,9 @@ export default function SettingsPage({
                   />
                 </Card>
               </section>
+            ) : null}
 
+            {section === "security" ? (
               <section className="grid gap-3" id="security">
                 <div className="flex items-start justify-between gap-4">
                   <div>
@@ -448,14 +396,14 @@ export default function SettingsPage({
                   />
                 </Card>
               </section>
+            ) : null}
 
-              {pageStatus ? (
-                <StatusBadge variant="info">{pageStatus}</StatusBadge>
-              ) : null}
-            </div>
+            {pageStatus ? (
+              <StatusBadge variant="info">{pageStatus}</StatusBadge>
+            ) : null}
           </div>
         </main>
-      </Container>
+      </AdminSectionShell>
     </>
   );
 }

@@ -254,16 +254,26 @@ type UnclaimActorMutation = {
  * Spec 017 (FR-013): GM-only. Frees a claimed character (e.g. a player
  * left, or a mistake was made) without removing the prior claimant from
  * the world.
+ *
+ * Spec 031 (FR-034): `expectedWorldMemberId` names the claim the caller was
+ * looking at when it offered the release. The players section writes the
+ * same relation, so a page left open can be describing a binding that has
+ * already moved; the server refuses such a release as `CLAIM_CHANGED`
+ * rather than erasing a binding this screen never showed. Callers that
+ * genuinely mean "whoever holds it" omit it.
  */
-export function unclaimActor(actorId: string): Promise<WorldActorRecord> {
+export function unclaimActor(
+  actorId: string,
+  expectedWorldMemberId?: string,
+): Promise<WorldActorRecord> {
   return postGraphQL<UnclaimActorMutation>(
     `
-      mutation UnclaimActor($actorId: UUID!) {
-        unclaimActor(actorId: $actorId) {
+      mutation UnclaimActor($actorId: UUID!, $expectedWorldMemberId: UUID) {
+        unclaimActor(actorId: $actorId, expectedWorldMemberId: $expectedWorldMemberId) {
           ${WORLD_ACTOR_FIELDS}
         }
       }
     `,
-    { actorId },
+    { actorId, expectedWorldMemberId: expectedWorldMemberId ?? null },
   ).then((data) => data.unclaimActor);
 }

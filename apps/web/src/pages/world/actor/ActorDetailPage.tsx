@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
+import { isClaimChanged } from "@/api/actorClaims";
 import { createActorShareLink, revokeActorShareLink } from "@/api/actorShares";
 import {
   getActor,
@@ -174,16 +175,42 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
     }
   };
 
+  /**
+   * Spec 031 FR-034: the release names the claim this page is showing.
+   *
+   * This screen is one of three writers of the claim relation, and the
+   * slowest to notice a change — it is opened, read once, and left sitting.
+   * Naming the claimant makes the server refuse a release aimed at a
+   * binding made since, instead of erasing a player nobody here ever saw.
+   * A re-read before releasing was the alternative and settles nothing: it
+   * would just move the same stale window a few milliseconds later.
+   */
   const handleUnclaim = async () => {
+    const claimant = actor?.claimedBy;
+    if (!claimant) {
+      return;
+    }
     setIsUpdatingClaim(true);
     setStatus(null);
     try {
-      const updated = await unclaimActor(actorId);
+      const updated = await unclaimActor(actorId, claimant.id);
       setActor(updated);
     } catch (err) {
-      setStatus(
-        err instanceof Error ? err.message : "Failed to unclaim character",
-      );
+      if (isClaimChanged(err)) {
+        // Show what is actually true now rather than what the button
+        // was offering to undo.
+        const refreshed = await getActor(worldId, actorId).catch(() => null);
+        if (refreshed) {
+          setActor(refreshed);
+        }
+        setStatus(
+          "Another Game Master changed this character's player — showing who has it now.",
+        );
+      } else {
+        setStatus(
+          err instanceof Error ? err.message : "Failed to unclaim character",
+        );
+      }
     } finally {
       setIsUpdatingClaim(false);
     }

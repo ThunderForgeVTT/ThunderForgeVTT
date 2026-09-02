@@ -205,10 +205,10 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 
 **Depends on**: T006 (fixture) must land before T068.
 
-- [ ] T064 [P] [US8] Add persistent sidebar navigation between admin sections in `apps/web/src/pages/admin/` (FR-032)
-- [ ] T065 [P] [US8] Convert the players table to searchable cards showing each player's bound character in `apps/web/src/pages/world/players/PlayersRoutePage.tsx` (FR-033)
-- [ ] T066 [US8] Let a GM set a player's character binding from the players section in `apps/web/src/pages/world/players/PlayersRoutePage.tsx` and `src/server/src/graphql/` (FR-034)
-- [ ] T067 [US8] Make the three writers of the claim relation agree — players section, `apps/web/src/pages/world/actor/ActorDetailPage.tsx`, and the player's own claim — so concurrent binding cannot double-claim (FR-034, contracts/graphql-mutations.md)
+- [X] T064 [P] [US8] Add persistent sidebar navigation between admin sections in `apps/web/src/pages/admin/` (FR-032)
+- [X] T065 [P] [US8] Convert the players table to searchable cards showing each player's bound character in `apps/web/src/pages/world/players/PlayersRoutePage.tsx` (FR-033)
+- [X] T066 [US8] Let a GM set a player's character binding from the players section in `apps/web/src/pages/world/players/PlayersRoutePage.tsx` and `src/server/src/graphql/` (FR-034)
+- [X] T067 [US8] Make the three writers of the claim relation agree — players section, `apps/web/src/pages/world/actor/ActorDetailPage.tsx`, and the player's own claim — so concurrent binding cannot double-claim (FR-034, contracts/graphql-mutations.md)
 - [ ] T068 [US8] Move NPC and item creation to a dedicated editing page with explicit save and remove the inline forms from `apps/web/src/pages/world/compendium/NpcCompendiumTab.tsx` and `ItemCompendiumTab.tsx` (FR-035)
 - [ ] T069 [US8] Implement actor imagery upload for portrait and token roles through the existing transcode/storage path in `src/server/src/graphql/`, mirroring `mutations_lore_images.rs` (FR-036, research R4)
 - [ ] T070 [US8] Add the imagery upload UI to the actor edit page in `apps/web/src/pages/world/actor/` and display each role where it belongs (FR-036)

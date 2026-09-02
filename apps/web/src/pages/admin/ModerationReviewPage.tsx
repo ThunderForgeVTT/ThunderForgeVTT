@@ -7,11 +7,11 @@ import {
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
-import { Container } from "@/components/ui/container/Container";
 import { Loader } from "@/components/ui/loader/Loader";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import type { ModerationCaseRecord } from "@/types/moderation";
 import type { SeoConfig } from "@/types/seo";
+import { AdminSectionShell } from "./components/AdminSectionShell";
 
 export const moderationReviewPageSeo: SeoConfig = {
   title: "Content moderation review",
@@ -84,92 +84,96 @@ export default function ModerationReviewPage() {
   return (
     <>
       <SEO {...moderationReviewPageSeo} />
-      <Container className="grid gap-6 py-10">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-            Compliance
-          </p>
-          <h1 className="text-2xl font-semibold">Content moderation review</h1>
-        </div>
-
-        {error ? <StatusBadge variant="danger">{error}</StatusBadge> : null}
-
-        <Card className="grid gap-3 p-6">
-          <h2 className="text-lg font-semibold">Repeat-infringer flags</h2>
-          {flaggedAccountIds === null ? (
-            <Loader label="Loading flags" />
-          ) : flaggedAccountIds.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No accounts currently flagged.
+      <AdminSectionShell>
+        <div className="grid gap-6">
+          <div>
+            <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+              Compliance
             </p>
-          ) : (
-            <ul className="grid gap-2">
-              {flaggedAccountIds.map((accountId) => (
-                <li
-                  key={accountId}
-                  className="flex items-center justify-between gap-3"
-                >
-                  <code className="text-sm">{accountId}</code>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => void loadHistory(accountId)}
-                  >
-                    View history
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+            <h1 className="text-2xl font-semibold">
+              Content moderation review
+            </h1>
+          </div>
 
-        {selectedAccountId ? (
+          {error ? <StatusBadge variant="danger">{error}</StatusBadge> : null}
+
           <Card className="grid gap-3 p-6">
-            <h2 className="text-lg font-semibold">
-              Case history — {selectedAccountId}
-            </h2>
-            {history === null ? (
-              <Loader label="Loading case history" />
-            ) : history.length === 0 ? (
+            <h2 className="text-lg font-semibold">Repeat-infringer flags</h2>
+            {flaggedAccountIds === null ? (
+              <Loader label="Loading flags" />
+            ) : flaggedAccountIds.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No cases found for this account.
+                No accounts currently flagged.
               </p>
             ) : (
-              <ul className="grid gap-3">
-                {history.map((moderationCase) => (
+              <ul className="grid gap-2">
+                {flaggedAccountIds.map((accountId) => (
                   <li
-                    key={moderationCase.caseId}
-                    className="grid gap-1 border-b pb-3 last:border-0"
+                    key={accountId}
+                    className="flex items-center justify-between gap-3"
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <code className="text-sm">{moderationCase.caseId}</code>
-                      <StatusBadge variant="warning">
-                        {moderationCase.currentStatus}
-                      </StatusBadge>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {moderationCase.entityType} · {moderationCase.entityId}
-                    </p>
-                    {moderationCase.currentStatus ===
-                    "COUNTER_NOTICE_FORWARDED" ? (
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        className="justify-self-start"
-                        onClick={() =>
-                          void handleResolve(moderationCase.caseId)
-                        }
-                      >
-                        Block restoration (content remains disabled)
-                      </Button>
-                    ) : null}
+                    <code className="text-sm">{accountId}</code>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => void loadHistory(accountId)}
+                    >
+                      View history
+                    </Button>
                   </li>
                 ))}
               </ul>
             )}
           </Card>
-        ) : null}
-      </Container>
+
+          {selectedAccountId ? (
+            <Card className="grid gap-3 p-6">
+              <h2 className="text-lg font-semibold">
+                Case history — {selectedAccountId}
+              </h2>
+              {history === null ? (
+                <Loader label="Loading case history" />
+              ) : history.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No cases found for this account.
+                </p>
+              ) : (
+                <ul className="grid gap-3">
+                  {history.map((moderationCase) => (
+                    <li
+                      key={moderationCase.caseId}
+                      className="grid gap-1 border-b pb-3 last:border-0"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <code className="text-sm">{moderationCase.caseId}</code>
+                        <StatusBadge variant="warning">
+                          {moderationCase.currentStatus}
+                        </StatusBadge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {moderationCase.entityType} · {moderationCase.entityId}
+                      </p>
+                      {moderationCase.currentStatus ===
+                      "COUNTER_NOTICE_FORWARDED" ? (
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          className="justify-self-start"
+                          onClick={() =>
+                            void handleResolve(moderationCase.caseId)
+                          }
+                        >
+                          Block restoration (content remains disabled)
+                        </Button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          ) : null}
+        </div>
+      </AdminSectionShell>
     </>
   );
 }

@@ -9,6 +9,8 @@ export interface WorldMemberClaimedActor {
 export interface WorldMemberRecord {
   id: string;
   userId: string;
+  /** Spec 031 (FR-033): the name a player's card is headed by. */
+  username: string;
   role: string;
   joinedAt: string;
   worldId?: string;
@@ -39,6 +41,7 @@ export function getWorldMembers(worldId: string): Promise<WorldMemberRecord[]> {
           id
           worldId
           userId
+          username
           role
           joinedAt
           createdAt
@@ -71,6 +74,7 @@ export function updateMemberRole(
           id
           worldId
           userId
+          username
           role
           joinedAt
           createdAt
