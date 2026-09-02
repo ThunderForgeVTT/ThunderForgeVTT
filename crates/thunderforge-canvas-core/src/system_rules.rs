@@ -178,6 +178,32 @@ pub struct DeclaredValue {
     /// list a list.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<String>,
+    /// The group's own name, when its system gave it one (T019g).
+    ///
+    /// Without this a group was named after whichever member happened to be
+    /// declared first, which is a guess that was right by luck: Cypher's
+    /// `might` group leads with `might`, so it read "Might". Reorder the
+    /// manifest and the same group reads "Might Edge". A Fate consequence
+    /// group wants to read "Mild Consequence" whatever its parts are called.
+    ///
+    /// Repeated on every member of the group, and that repetition cannot
+    /// drift: the manifest declares a group **once**, in its own `groups`
+    /// block, and the server stamps the answer onto each value. Nothing
+    /// hand-writes it twice.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_label: Option<String>,
+    /// This is the member to show when there is room for one (T019g).
+    ///
+    /// A group is several values and a compact layout has space for one of
+    /// them. Which one is a fact about the ruleset — a Cypher stat shows its
+    /// current value, not its edge — and nothing in the format could say it,
+    /// so the renderer took the first and hoped.
+    ///
+    /// False for a value in no group, and false for every member when the
+    /// system named no headline; a renderer with no headline falls back to
+    /// the first member, which is where this started.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub headline: bool,
     pub origin: Origin,
 }
 

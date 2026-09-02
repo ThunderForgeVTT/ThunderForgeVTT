@@ -59,6 +59,20 @@ pub struct ResolvedResource {
 pub struct DeclaredResource {
     pub definition: ResourceDefinition,
     pub source: ResourceSource,
+    /// The group this pool belongs to on a sheet, when it is part of one
+    /// (FR-033).
+    ///
+    /// Kept here rather than on [`ResourceDefinition`] because that type is
+    /// the engine's: a bar drawn over a token has no groups, and widening a
+    /// wire type shared with the canvas to carry a sheet's concern would put
+    /// the field somewhere nothing reads it.
+    ///
+    /// Cypher is why this exists. Its `mightEdge` declares itself in the group
+    /// `mightPool`, and `mightPool` is a **resource** — so before this, the
+    /// group had exactly one member, the pool sat in a different construct
+    /// entirely, and the relationship the group was added to carry was the one
+    /// thing that did not survive.
+    pub group: Option<String>,
 }
 
 /// Read a system's resource declarations out of its manifest.
@@ -103,6 +117,10 @@ pub fn declarations_for_system(systems_dir: &str, system_id: &str) -> Vec<Declar
                         .unwrap_or(false),
                 },
                 source,
+                group: raw
+                    .get("group")
+                    .and_then(|g| g.as_str())
+                    .map(str::to_string),
             })
         })
         .collect()
@@ -252,6 +270,7 @@ mod tests {
                     optional: false,
                 }],
             },
+            group: None,
         }
     }
 

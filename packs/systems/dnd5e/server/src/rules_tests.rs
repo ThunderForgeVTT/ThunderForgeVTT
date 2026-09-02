@@ -13,6 +13,8 @@ fn stored(id: &str, value: i32) -> DeclaredValue {
         abbreviation: None,
         value: DeclaredValueKind::Integer(value),
         group: None,
+        group_label: None,
+        headline: false,
         origin: Origin::Stored,
     }
 }
@@ -24,6 +26,8 @@ fn list(id: &str, items: &[&str]) -> DeclaredValue {
         abbreviation: None,
         value: DeclaredValueKind::List(items.iter().map(|i| i.to_string()).collect()),
         group: None,
+        group_label: None,
+        headline: false,
         origin: Origin::Stored,
     }
 }

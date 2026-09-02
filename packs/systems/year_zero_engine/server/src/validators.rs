@@ -149,7 +149,6 @@ mod tests {
         assert!(validate_ability_data(&valid_abilities()).is_ok());
     }
 
-    #[test]
     /// **The boundaries themselves**, which the interior fixture cannot see.
     ///
     /// A mutation audit on 2026-09-02 narrowed this range from 1-5 to 2-4 and
@@ -187,6 +186,7 @@ mod tests {
         );
     }
 
+    #[test]
     fn ability_data_rejects_score_below_standard_dice_pool_range() {
         // research/system_year_zero_engine.json core_stats[].scale: standard
         // d6-pool variant range is 1-5; 0 is below the minimum.

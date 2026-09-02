@@ -61,6 +61,7 @@ import {
   shapeOf,
   stateReading,
   unitsOf,
+  unitReading,
   type Resolution,
   type ValueUnit,
 } from "./resolve";
@@ -473,12 +474,18 @@ function Unit({
       <ValueLine value={value} onValueChange={at.onValueChange} short={short} />
     );
   }
+  // T019g: the group's name and its headline member are the system's to
+  // state. `unitReading` falls back to the first member when it did not,
+  // which is what this component used to do unconditionally.
+  const reading = unitReading(unit);
+
   return (
     <div
       data-slot="value-group"
       data-group={unit.group}
+      data-group-headline={reading.headline?.id}
       role="group"
-      aria-label={unit.values[0]?.label ?? unit.group}
+      aria-label={reading.label}
       className="flex flex-col gap-1 rounded-lg border border-border p-2"
     >
       {unit.values.map((value) => (
@@ -583,12 +590,33 @@ function RowList({
 function Node({ node, at }: { node: LayoutNode; at: Resolution }) {
   switch (node.kind) {
     case "section":
+      // T019b. `collapsed` reached the DOM as `data-collapsed` and collapsed
+      // nothing, so a pack author could declare it and watch it do nothing at
+      // all. The format already defines what it means — "starts collapsed, and
+      // a reader who opens it stays opened, and nothing here can force it shut
+      // again" — and `<details>` is that sentence, natively, with the keyboard
+      // and screen-reader behaviour already right and no state to persist.
+      //
+      // Only a *titled* section can collapse: the title is the summary, and a
+      // collapsed section with nothing to click would be a section a reader
+      // cannot open. `collapsed` on a titleless one is ignored rather than
+      // honoured into an unreachable sheet.
+      if (node.collapsed && node.title) {
+        return (
+          <details
+            data-slot="layout-section"
+            data-collapsed="true"
+            className="flex flex-col gap-2"
+          >
+            <summary className="cursor-pointer text-sm font-semibold tracking-wide">
+              {node.title}
+            </summary>
+            <Children nodes={node.children} at={at} />
+          </details>
+        );
+      }
       return (
-        <section
-          data-slot="layout-section"
-          data-collapsed={node.collapsed ? "true" : undefined}
-          className="flex flex-col gap-2"
-        >
+        <section data-slot="layout-section" className="flex flex-col gap-2">
           {node.title ? (
             <h3 className="text-sm font-semibold tracking-wide">
               {node.title}

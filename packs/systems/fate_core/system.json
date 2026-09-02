@@ -402,5 +402,27 @@
       "slot": "traitData",
       "source": "stunts"
     }
+  ],
+  "groups": [
+    {
+      "id": "consequenceMild",
+      "label": "Mild Consequence",
+      "headline": "consequenceMild"
+    },
+    {
+      "id": "consequenceModerate",
+      "label": "Moderate Consequence",
+      "headline": "consequenceModerate"
+    },
+    {
+      "id": "consequenceSevere",
+      "label": "Severe Consequence",
+      "headline": "consequenceSevere"
+    },
+    {
+      "id": "consequenceExtreme",
+      "label": "Extreme Consequence",
+      "headline": "consequenceExtreme"
+    }
   ]
 }

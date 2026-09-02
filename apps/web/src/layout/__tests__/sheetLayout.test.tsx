@@ -5,6 +5,11 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { SheetLayout } from "../SheetLayout";
 import { resetUnknownKindWarnings } from "../resolve";
+import {
+  declarationsDrift,
+  declarationsFrom,
+  resetDeclarationDriftWarnings,
+} from "../declarations";
 import type {
   LayoutDeclaration,
   LayoutNode,
@@ -455,6 +460,26 @@ describe("a state set is a ladder with a rung marked", () => {
     expect(markup).not.toContain("data-state-unknown");
   });
 
+  it("tells a rung named with an empty string apart from no rung at all", () => {
+    // T019i. `stateReading` folded `""` into null, so a system that named a
+    // rung with an empty string read as a character standing on none of them.
+    // The flattened `value` string renders both as empty — which is exactly
+    // why the structured `state` field exists, and reading the string's
+    // ambiguity back into it gave the string the last word after all.
+    const markup = render(layout, {
+      resources: [ladder("damage", "Damage Track", "", ["", "impaired"])],
+    });
+    // The empty rung is current, and it is a *known* rung: it is declared.
+    expect(markup).toContain('data-current="true"');
+    expect(markup).not.toContain("data-state-unknown");
+
+    // Contrast, on the same declaration: null really is no rung.
+    const none = render(layout, {
+      resources: [ladder("damage", "Damage Track", null, ["", "impaired"])],
+    });
+    expect(none).not.toContain('data-current="true"');
+  });
+
   /**
    * The failure this prevents is specific and quiet: a saved character whose
    * condition was renamed reading as the *first* option — which on a damage
@@ -551,6 +576,44 @@ describe("values sharing a group render as one thing", () => {
     // One row, not two: the group is the unit the list holds.
     expect(markup.match(/data-slot="row"/g)).toHaveLength(1);
     expect(markup).toContain("Sprained ankle");
+  });
+
+  it("names a group as the system named it, not after its first member", () => {
+    // T019g. The frame's accessible name was `unit.values[0].label`, so a
+    // Cypher stat group read "Might" only because `might` happens to be
+    // declared before `mightEdge`. Reorder the manifest and the same group
+    // reads "Might Edge" — a rendering decision made by declaration order,
+    // which is not a thing declaration order should decide.
+    const markup = render([{ kind: "rowList", of: "other" }], {
+      all: [
+        {
+          ...grouped(stored("mightEdge", "Might Edge", "1"), "might"),
+          groupLabel: "Might",
+        },
+        {
+          ...grouped(stored("mightPool", "Might Pool", "12"), "might"),
+          groupLabel: "Might",
+          headline: true,
+        },
+      ],
+    });
+    // The group *frame*'s own name — the inner value lines carry their own
+    // labels, so this has to name the frame rather than search the document.
+    expect(markup).toContain('role="group" aria-label="Might"');
+    expect(markup).not.toContain('role="group" aria-label="Might Edge"');
+    // And the headline is the member the system named, declared second.
+    expect(markup).toContain('data-group-headline="mightPool"');
+  });
+
+  it("falls back to the first member when the system named neither", () => {
+    // The old behaviour, kept — a system may group values purely to keep them
+    // together and have nothing to add about the grouping. Now an explicit
+    // fallback rather than an unstated assumption.
+    const markup = render([{ kind: "rowList", of: "other" }], {
+      all: CONSEQUENCE,
+    });
+    expect(markup).toContain('role="group" aria-label="Severity"');
+    expect(markup).toContain('data-group-headline="mildSeverity"');
   });
 
   it("keeps declaration order within the group", () => {
@@ -684,5 +747,102 @@ describe("a node kind this build does not know", () => {
     expect(markup).toContain('data-value-id="might"');
     expect(markup).not.toContain('data-slot="tracker"');
     warn.mockRestore();
+  });
+});
+
+describe("the declared sets and `all` can disagree, and now say so (T019h)", () => {
+  /**
+   * Six lists arrive and nothing checked they agreed. `other` is computed as
+   * the part of `all` the named sets did not claim, so `all` being incomplete
+   * does not break the named sets — it quietly loses the values that are in
+   * *no* named set, which is FR-035's failure exactly: a value missing from a
+   * sheet is indistinguishable from the character not having it.
+   */
+  it("names the ids a set claims that `all` has never heard of", () => {
+    expect(
+      declarationsDrift({
+        attributes: [stored("might", "Might", "3")],
+        all: [stored("cunning", "Cunning", "2")],
+      }),
+    ).toEqual(["might"]);
+  });
+
+  it("is silent when the sets and `all` agree", () => {
+    const might = stored("might", "Might", "3");
+    expect(declarationsDrift({ attributes: [might], all: [might] })).toEqual(
+      [],
+    );
+  });
+
+  it("is silent when a caller supplies no `all` at all", () => {
+    // The documented old behaviour: nothing was published, so nothing went
+    // unclaimed and there is nothing for the two to disagree about. Reporting
+    // here would make every existing caller noisy for doing nothing wrong.
+    expect(
+      declarationsDrift({ attributes: [stored("might", "Might", "3")] }),
+    ).toEqual([]);
+  });
+
+  it("warns once rather than once per render", () => {
+    resetDeclarationDriftWarnings();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const drifting = {
+      attributes: [stored("might", "Might", "3")],
+      all: [stored("cunning", "Cunning", "2")],
+    };
+    declarationsFrom(drifting);
+    declarationsFrom(drifting);
+    declarationsFrom(drifting);
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+});
+
+describe("a section that declares itself collapsed actually collapses (T019b)", () => {
+  const body: LayoutNode[] = [{ kind: "badgeGrid", of: "attributes" }];
+
+  it("renders a closed disclosure a reader can open", () => {
+    // The bug: `collapsed` reached the DOM as `data-collapsed` and collapsed
+    // nothing, so the format admitted a field that did not work and a pack
+    // author had no way to find that out except by looking.
+    const markup = render(
+      [
+        {
+          kind: "section",
+          title: "Spellcasting",
+          collapsed: true,
+          children: body,
+        },
+      ],
+      GENIE,
+    );
+    expect(markup).toContain("<details");
+    expect(markup).toContain("<summary");
+    expect(markup).toContain("Spellcasting");
+    // Closed: no `open` attribute. The content is still in the document, so
+    // nothing is lost and find-in-page still reaches it.
+    expect(markup).not.toContain("<details open");
+    expect(markup).toContain("Might");
+  });
+
+  it("leaves a section that did not ask to collapse exactly as it was", () => {
+    const markup = render(
+      [{ kind: "section", title: "Attributes", children: body }],
+      GENIE,
+    );
+    expect(markup).not.toContain("<details");
+    expect(markup).toContain("<h3");
+    expect(markup).not.toContain("data-collapsed");
+  });
+
+  it("ignores `collapsed` on a section with no title", () => {
+    // There would be nothing to click. Honouring it would render a section a
+    // reader cannot open, which is worse than not honouring it.
+    const markup = render(
+      [{ kind: "section", collapsed: true, children: body }],
+      GENIE,
+    );
+    expect(markup).not.toContain("<details");
+    expect(markup).toContain("Might");
   });
 });

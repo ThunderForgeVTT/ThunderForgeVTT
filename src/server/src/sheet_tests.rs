@@ -217,3 +217,126 @@ fn the_two_newly_declared_manifests_are_actually_parsed() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// Groups (T019g)
+// ---------------------------------------------------------------------------
+
+/// A group used to be an identifier and nothing else, which left a renderer
+/// guessing at two things the system knows: what the group is called, and
+/// which member to show when there is room for one. It answered both by
+/// taking the first member — right by luck for Cypher, wrong the moment a
+/// manifest is reordered.
+mod groups {
+    use super::*;
+
+    fn manifest() -> serde_json::Value {
+        serde_json::json!({
+            "groups": [
+                { "id": "might", "label": "Might", "headline": "mightPool" },
+                { "id": "loose" }
+            ]
+        })
+    }
+
+    fn value(id: &str, group: Option<&str>) -> DeclaredValue {
+        DeclaredValue {
+            id: id.to_string(),
+            label: id.to_string(),
+            abbreviation: None,
+            value: DeclaredValueKind::Integer(1),
+            group: group.map(str::to_string),
+            group_label: None,
+            headline: false,
+            origin: Origin::Stored,
+        }
+    }
+
+    #[test]
+    fn a_declared_group_names_every_one_of_its_members() {
+        let groups = groups_from_manifest(&manifest());
+        let mut values = vec![
+            value("mightPool", Some("might")),
+            value("mightEdge", Some("might")),
+        ];
+        apply_groups(&mut values, &groups);
+
+        // Both members carry it, and the repetition cannot drift: the manifest
+        // said it once and this stamped it twice.
+        assert_eq!(values[0].group_label.as_deref(), Some("Might"));
+        assert_eq!(values[1].group_label.as_deref(), Some("Might"));
+    }
+
+    #[test]
+    fn exactly_the_named_member_is_the_headline() {
+        let groups = groups_from_manifest(&manifest());
+        let mut values = vec![
+            // Declared second, and still the headline. The whole point: a
+            // Cypher stat shows its pool, not its edge, whatever the order.
+            value("mightEdge", Some("might")),
+            value("mightPool", Some("might")),
+        ];
+        apply_groups(&mut values, &groups);
+
+        assert!(!values[0].headline, "the edge is not the headline");
+        assert!(values[1].headline, "the pool is");
+    }
+
+    #[test]
+    fn a_group_the_manifest_did_not_name_is_left_for_the_renderer_to_infer() {
+        // Not an error. A system may group values purely to keep them together
+        // on the sheet, with nothing to add about the grouping itself — and
+        // the first-member fallback is a reasonable answer for that.
+        let groups = groups_from_manifest(&manifest());
+        let mut values = vec![value("a", Some("loose")), value("b", Some("loose"))];
+        apply_groups(&mut values, &groups);
+
+        assert!(values.iter().all(|v| v.group_label.is_none()));
+        assert!(values.iter().all(|v| !v.headline));
+    }
+
+    #[test]
+    fn a_value_in_no_group_is_untouched() {
+        let groups = groups_from_manifest(&manifest());
+        let mut values = vec![value("solo", None)];
+        apply_groups(&mut values, &groups);
+
+        assert!(values[0].group_label.is_none());
+        assert!(!values[0].headline);
+    }
+
+    #[test]
+    fn a_manifest_with_no_groups_block_declares_none() {
+        assert!(groups_from_manifest(&serde_json::json!({})).is_empty());
+    }
+
+    #[test]
+    fn cypher_declares_a_group_for_each_of_its_three_stats() {
+        // Read from the shipping manifest rather than a fixture, because the
+        // failure this guards is the manifest and the code disagreeing. Cypher
+        // is the system the group model was built for: each stat is a current
+        // value, a pool and an edge, and before this the pool lived in the
+        // `resources` block where nothing could put it in a group at all — so
+        // every Cypher group had exactly one member.
+        let groups = crate::sheet::groups_from_manifest(
+            &serde_json::from_str::<serde_json::Value>(
+                &std::fs::read_to_string("../../packs/systems/cypher_system/system.json")
+                    .expect("cypher manifest"),
+            )
+            .expect("cypher manifest parses"),
+        );
+
+        for stat in ["mightPool", "speedPool", "intellectPool"] {
+            let group = groups
+                .iter()
+                .find(|g| g.id == stat)
+                .unwrap_or_else(|| panic!("{stat} declares no group"));
+            assert!(group.label.is_some(), "{stat} group has no name");
+            assert_eq!(
+                group.headline.as_deref(),
+                Some(stat),
+                "{stat} group should headline its pool"
+            );
+        }
+    }
+}

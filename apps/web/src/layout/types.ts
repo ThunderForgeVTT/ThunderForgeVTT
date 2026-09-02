@@ -163,6 +163,17 @@ export interface SheetValue {
    * unrelated rows would have lost that.
    */
   group?: string | null;
+  /**
+   * The group's own name, when its system gave it one (T019g).
+   *
+   * Repeated on every member and unable to drift: the manifest declares a
+   * group once and the server stamps the answer onto each value. Absent means
+   * the group was never named, and a renderer falls back to its first
+   * member — which is what it always did, and was right by luck.
+   */
+  groupLabel?: string | null;
+  /** This is the member to show when there is room for one (T019g). */
+  headline?: boolean;
   origin: ValueOrigin;
 }
 

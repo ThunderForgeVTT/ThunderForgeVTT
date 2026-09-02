@@ -20,6 +20,8 @@ fn stored(id: &str, value: i32) -> DeclaredValue {
         abbreviation: None,
         value: DeclaredValueKind::Integer(value),
         group: None,
+        group_label: None,
+        headline: false,
         origin: Origin::Stored,
     }
 }
@@ -317,6 +319,8 @@ fn grouped_values_carry_the_relationship_a_sheet_shows() {
         abbreviation: None,
         value: DeclaredValueKind::Integer(value),
         group: Some("might".to_string()),
+        group_label: None,
+        headline: false,
         origin: Origin::Stored,
     };
 

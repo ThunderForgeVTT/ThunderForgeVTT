@@ -114,6 +114,8 @@ impl SystemRules for GenieRules {
             abbreviation: Some("WP/L".to_string()),
             value: DeclaredValueKind::Integer(total),
             group: None,
+            group_label: None,
+            headline: false,
             origin: Origin::Derived,
         }]
     }
@@ -138,6 +140,8 @@ mod tests {
             abbreviation: None,
             value: DeclaredValueKind::Integer(level),
             group: None,
+            group_label: None,
+            headline: false,
             origin: Origin::Stored,
         }])
     }

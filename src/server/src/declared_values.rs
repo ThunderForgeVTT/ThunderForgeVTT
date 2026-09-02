@@ -88,6 +88,8 @@ fn context_from(slots: &ActorSlots) -> DeclaredValues {
                 abbreviation: None,
                 value,
                 group: None,
+                group_label: None,
+                headline: false,
                 origin: Origin::Stored,
             });
         }
@@ -119,6 +121,7 @@ fn resources_from(slots: &ActorSlots, systems_dir: &str, system_id: &str) -> Vec
     crate::status_display::declarations_for_system(systems_dir, system_id)
         .into_iter()
         .filter_map(|declared| {
+            let group = declared.group.clone();
             let slot = match declared.source.slot.as_str() {
                 "resourceData" | "resource_data" => slots.resource_data.as_ref(),
                 "traitData" | "trait_data" => slots.trait_data.as_ref(),
@@ -140,7 +143,9 @@ fn resources_from(slots: &ActorSlots, systems_dir: &str, system_id: &str) -> Vec
                     current: entry.current,
                     max: entry.max,
                 },
-                group: None,
+                group,
+                group_label: None,
+                headline: false,
                 origin: Origin::Stored,
             })
         })
@@ -161,6 +166,8 @@ fn visible_from(slots: &ActorSlots, declarations: &[AttributeDeclaration]) -> Ve
             abbreviation: attribute.abbreviation,
             value: DeclaredValueKind::Integer(attribute.value),
             group: None,
+            group_label: None,
+            headline: false,
             origin: Origin::Stored,
         })
         .collect()
@@ -215,7 +222,16 @@ pub fn declared_values_for_actor(
         .as_ref()
         .and_then(|m| crate::systems::rules_for_system(system_id, m));
 
-    resolve(rules.as_deref(), visible, &context)
+    let mut values = resolve(rules.as_deref(), visible, &context);
+
+    // After `resolve`, not before: a derived value can belong to a group too,
+    // and stamping the stored half only would give one member of a group a
+    // name and its neighbour none (T019g).
+    if let Some(manifest) = manifest.as_ref() {
+        crate::sheet::apply_groups(&mut values, &crate::sheet::groups_from_manifest(manifest));
+    }
+
+    values
 }
 
 fn read_manifest(systems_dir: &str, system_id: &str) -> Option<serde_json::Value> {

@@ -52,6 +52,79 @@ pub enum SheetKind {
     Number,
 }
 
+/// What a system says about a group of its values (T019g).
+///
+/// A group used to be nothing but an identifier shared by its members, which
+/// left a renderer with two questions the format could not answer: what is
+/// this group called, and which member is the one to show when there is room
+/// for one. It answered both by taking the first member — right by luck for
+/// Cypher's `might` group and wrong the moment a manifest is reordered.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SheetGroup {
+    pub id: String,
+    /// The group's own name. Absent means "call it after its first member",
+    /// which is the old behaviour and stays available: a group whose members
+    /// already read well together does not need naming twice.
+    pub label: Option<String>,
+    /// The id of the member to show when there is room for one.
+    ///
+    /// A Cypher stat shows its current value, not its edge. Absent means the
+    /// renderer falls back to the first member.
+    pub headline: Option<String>,
+}
+
+/// Read a system's group declarations.
+///
+/// Declared **once**, in the manifest's own `groups` block, and stamped onto
+/// each member by [`apply_groups`]. The alternative — a `groupLabel` beside
+/// every member — is the same fact written four times for a Fate consequence
+/// set, and four places to disagree.
+pub fn groups_from_manifest(manifest: &serde_json::Value) -> Vec<SheetGroup> {
+    let Some(entries) = manifest.get("groups").and_then(|g| g.as_array()) else {
+        return Vec::new();
+    };
+
+    entries
+        .iter()
+        .filter_map(|entry| {
+            Some(SheetGroup {
+                id: entry.get("id")?.as_str()?.to_string(),
+                label: entry
+                    .get("label")
+                    .and_then(|l| l.as_str())
+                    .map(str::to_string),
+                headline: entry
+                    .get("headline")
+                    .and_then(|h| h.as_str())
+                    .map(str::to_string),
+            })
+        })
+        .collect()
+}
+
+/// Attach each group's name and headline to its members.
+///
+/// A value in no group, or in one the manifest never declared, is left
+/// untouched: the renderer's first-member fallback is what it had before and
+/// is still a reasonable answer. An undeclared group is not an error — a
+/// system may group values purely to keep them together on the sheet, with
+/// nothing to add about the grouping itself.
+pub fn apply_groups(values: &mut [DeclaredValue], groups: &[SheetGroup]) {
+    if groups.is_empty() {
+        return;
+    }
+    for value in values.iter_mut() {
+        let Some(group_id) = value.group.as_deref() else {
+            continue;
+        };
+        let Some(group) = groups.iter().find(|g| g.id == group_id) else {
+            continue;
+        };
+        value.group_label.clone_from(&group.label);
+        value.headline = group.headline.as_deref() == Some(value.id.as_str());
+    }
+}
+
 /// Read a system's sheet declarations.
 ///
 /// A system that declares none yields an empty list, which is correct rather
@@ -151,6 +224,10 @@ pub fn values_from(declaration: &SheetDeclaration, slot: &serde_json::Value) -> 
         abbreviation: None,
         value,
         group: declaration.group.clone(),
+        // Stamped later by `apply_groups`, from the manifest's one `groups`
+        // block — never written per member, so members cannot disagree.
+        group_label: None,
+        headline: false,
         origin: Origin::Stored,
     };
 
@@ -242,6 +319,8 @@ pub fn values_from(declaration: &SheetDeclaration, slot: &serde_json::Value) -> 
                             None => DeclaredValueKind::Text(String::new()),
                         },
                         group: declaration.group.clone(),
+                        group_label: None,
+                        headline: false,
                         origin: Origin::Stored,
                     })
                 })

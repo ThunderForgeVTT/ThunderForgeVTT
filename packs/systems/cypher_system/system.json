@@ -160,7 +160,8 @@
             "max": "might_pool"
           }
         ]
-      }
+      },
+      "group": "mightPool"
     },
     {
       "id": "speedPool",
@@ -176,7 +177,8 @@
             "max": "speed_pool"
           }
         ]
-      }
+      },
+      "group": "speedPool"
     },
     {
       "id": "intellectPool",
@@ -192,7 +194,8 @@
             "max": "intellect_pool"
           }
         ]
-      }
+      },
+      "group": "intellectPool"
     }
   ],
   "sheet": [
@@ -323,6 +326,23 @@
       "kind": "text",
       "slot": "traitData",
       "source": "notes"
+    }
+  ],
+  "groups": [
+    {
+      "id": "mightPool",
+      "label": "Might",
+      "headline": "mightPool"
+    },
+    {
+      "id": "speedPool",
+      "label": "Speed",
+      "headline": "speedPool"
+    },
+    {
+      "id": "intellectPool",
+      "label": "Intellect",
+      "headline": "intellectPool"
     }
   ]
 }

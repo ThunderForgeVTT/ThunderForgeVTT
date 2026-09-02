@@ -72,7 +72,13 @@ export function stateReading(value: SheetValue): StateReading | null {
   const state = value.state;
   if (!state) return null;
   const options = state.options ?? [];
-  const current = state.current === "" ? null : (state.current ?? null);
+  // `null` is the only "no rung" (T019i). An empty string used to be folded
+  // into it, which made a system that named a rung `""` read as a character
+  // standing on none of them — the flattened `value` string renders both as
+  // empty, and this was reading that ambiguity back into the structured field
+  // that exists precisely to resolve it. Same lesson as T019a: trust the
+  // structured field, never the string.
+  const current = state.current ?? null;
   return {
     options,
     current,
@@ -98,6 +104,39 @@ export interface ValueUnit {
   /** In declaration order within the group. The system's order, never ours. */
   values: readonly SheetValue[];
   key: string;
+}
+
+/**
+ * What to call a unit, and which of its values to show when there is room for
+ * one (T019g).
+ *
+ * Both used to be the first member, taken silently. That is right for Cypher's
+ * `might` group only because `might` happens to be declared before
+ * `mightPool` — reorder the manifest and the group reads "Might Edge". The
+ * system can now say, and when it does not, the old answer is still the
+ * answer: an explicit fallback rather than an unstated assumption.
+ */
+export interface UnitReading {
+  label: string;
+  headline: SheetValue;
+  /** True when the system named neither, and both are the first member. */
+  assumed: boolean;
+}
+
+export function unitReading(unit: ValueUnit): UnitReading {
+  const [first] = unit.values;
+  const named = unit.values.find((value) => value.headline) ?? null;
+  const label =
+    unit.values.find((value) => value.groupLabel)?.groupLabel ??
+    first?.label ??
+    unit.group ??
+    "";
+
+  return {
+    label,
+    headline: named ?? first,
+    assumed: named === null && !unit.values.some((value) => value.groupLabel),
+  };
 }
 
 /**

@@ -11,7 +11,9 @@ export { SheetLayout, type SheetLayoutProps } from "./SheetLayout";
 export {
   declarationsFrom,
   emptyDeclarations,
+  declarationsDrift,
   indexById,
+  resetDeclarationDriftWarnings,
   valuesIn,
 } from "./declarations";
 export {
@@ -19,9 +21,11 @@ export {
   resolutionFrom,
   shapeOf,
   stateReading,
+  unitReading,
   unitsOf,
   type Resolution,
   type StateReading,
+  type UnitReading,
   type ValueShape,
   type ValueUnit,
 } from "./resolve";

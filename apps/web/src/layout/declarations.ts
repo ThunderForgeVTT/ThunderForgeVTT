@@ -54,6 +54,8 @@ export function declarationsFrom(
     for (const value of values) claimed.add(value.id);
   }
 
+  reportDrift(partial, claimed);
+
   const other: SheetValue[] = [];
   const seen = new Set<string>();
   for (const value of partial.all ?? []) {
@@ -64,6 +66,67 @@ export function declarationsFrom(
   full.other = other;
 
   return full;
+}
+
+/**
+ * Identifiers a named set claims that `all` does not contain (T019h).
+ *
+ * Six lists arrive and nothing checks they agree with each other. Five of them
+ * are the named sets and the sixth is `all`, which is supposed to be
+ * everything the system publishes — and `other` is computed as the part of
+ * `all` that the named sets did not claim.
+ *
+ * So an id in a named set but missing from `all` proves `all` is *not* the
+ * whole published set. Nothing visibly breaks in that case, which is what
+ * makes it worth reporting: the value in the named set still renders, and it
+ * is the values in **no** named set that `all` is then also likely to be
+ * missing — and those are the ones that vanish, which is precisely FR-035's
+ * failure, absence being indistinguishable from the character not having it.
+ *
+ * Exported so a test can assert the condition rather than watch for a console
+ * line. This is a detector, not the fix: carrying set membership on each value
+ * would make the six lists one, and that is a wire change beyond this task.
+ */
+export function declarationsDrift(
+  partial: Partial<SheetDeclarations> | undefined,
+): string[] {
+  if (!partial) return [];
+  const all = new Set((partial.all ?? []).map((value) => value.id));
+  // No `all` at all is the documented "old behaviour" case — nothing was
+  // published, so nothing went unclaimed, and there is nothing to disagree.
+  if (partial.all === undefined) return [];
+
+  const missing: string[] = [];
+  for (const set of NAMED_DECLARATION_SETS) {
+    for (const value of partial[set] ?? []) {
+      if (!all.has(value.id) && !missing.includes(value.id)) {
+        missing.push(value.id);
+      }
+    }
+  }
+  return missing;
+}
+
+/** Sets already complained about, so drift costs one line and not one per render. */
+const driftWarned = new Set<string>();
+
+/** Test seam: forget what has already been warned about. */
+export function resetDeclarationDriftWarnings(): void {
+  driftWarned.clear();
+}
+
+function reportDrift(
+  partial: Partial<SheetDeclarations>,
+  _claimed: ReadonlySet<string>,
+): void {
+  const missing = declarationsDrift(partial);
+  if (missing.length === 0) return;
+  const key = missing.join(",");
+  if (driftWarned.has(key)) return;
+  driftWarned.add(key);
+  console.warn(
+    `[layout] declared sets disagree with \`all\`: ${key} — \`other\` is computed from \`all\`, so values in no named set may be missing from the sheet`,
+  );
 }
 
 /**
