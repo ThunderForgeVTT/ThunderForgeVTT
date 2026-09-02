@@ -1068,6 +1068,8 @@ pub fn start(canvas_selector: &str) {
         // plugins will gate their input systems on it; adds no behaviour on
         // its own (see plugins/authoring_mode.rs).
         .add_plugins(plugins::authoring_mode::AuthoringModePlugin)
+        .add_plugins(plugins::placement::PlacementPlugin)
+        .add_plugins(plugins::selection_filter::SelectionFilterPlugin)
         .add_plugins(ScenePlugin)
         .add_plugins(GridPlugin)
         .add_plugins(TokenPlugin)
