@@ -1,0 +1,1 @@
+DROP TABLE world_authoring_tool_grants;

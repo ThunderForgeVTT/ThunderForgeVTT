@@ -31,6 +31,7 @@ import { SystemLegalNotice } from "@/components/game-systems/legal/SystemLegalNo
 import type { SystemManifest } from "@/contexts/GameSystemContext";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import { WorldSectionShell } from "@/layouts/world-layout/WorldSectionShell";
+import { AuthoringToolGrantsCard } from "@/pages/world/settings/AuthoringToolGrantsCard";
 import { CompendiumOverviewSettingsCard } from "@/pages/world/settings/CompendiumOverviewSettingsCard";
 import type { WorldRecord } from "@/types/world";
 
@@ -236,6 +237,11 @@ export default function WorldSystemSettingsPage() {
           </Card>
 
           {isGm ? <CompendiumOverviewSettingsCard worldId={worldId} /> : null}
+
+          {/* Spec 031 (FR-046). GM-only chrome over a GM-only mutation: a
+              player who reached this markup would still be refused by
+              `is_dm_of_world` on the write. */}
+          {isGm ? <AuthoringToolGrantsCard worldId={worldId} /> : null}
 
           {isGm ? (
             <Card className="grid gap-4 p-6" data-testid="system-picker-card">

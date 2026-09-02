@@ -163,6 +163,11 @@ pub use mutations_inventory::InventoryMutation;
 pub mod mutations_pickup;
 pub use mutations_pickup::PickupMutation;
 
+// Spec 031 (T032b, FR-046): `setAuthoringToolGrant` — a Game Master handing
+// one player one authoring tool.
+pub mod mutations_authoring_tools;
+pub use mutations_authoring_tools::AuthoringToolMutation;
+
 // Spec 031 (T055, FR-019): `bringPartyToScene` — the party's characters get a
 // token in the destination, and no character gets a second one.
 pub mod mutations_party;
@@ -2888,6 +2893,8 @@ pub struct MutationRoot(
     RollMutation,
     GenieSessionMutation,
     ActorClaimMutation,
+    // Spec 031 (FR-046): per-player authoring tool grants.
+    AuthoringToolMutation,
     ChatMutation,
     CombatMutation,
     ReconcileMutation,

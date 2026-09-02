@@ -31,18 +31,24 @@
 //!
 //! # Where the mutation-side gate is
 //!
-//! Nowhere yet, deliberately. A wall or light mutation gated on this today
-//! would be a no-op — every caller who passes `is_dm_of_scene` also holds
-//! every tool — bought at the price of a second permission query on every
-//! authoring write. The gate belongs with the grants it would enforce
-//! (FR-046). Until then the refusals that matter are this resolver, which
-//! decides what a client is told it may use, and the engine, which refuses
-//! input for anything outside that answer.
+//! Still not on the individual authoring mutations. Now that FR-046's grants
+//! exist a wall or light mutation gated on this would no longer be a pure
+//! no-op, but the writes it would admit are the ones a Game Master has
+//! deliberately handed out, and the price is a second permission query on
+//! every authoring write. The refusals that matter remain this resolver,
+//! which decides what a client is told it may use, and the engine, which
+//! refuses input for anything outside that answer.
+//!
+//! The gate that *is* here is on the grant itself: only a DM may write a row
+//! (`graphql::mutations_authoring_tools`), so nobody can widen their own
+//! answer.
 
-use async_graphql::Result as GraphQLResult;
+use async_graphql::{Error, Result as GraphQLResult};
+use diesel::prelude::*;
 use uuid::Uuid;
 
 use crate::auth::world_membership::is_dm_of_world;
+use crate::schema::{world_authoring_tool_grants, world_members};
 use crate::state::AppState;
 
 /// Every authoring tool that can be permissioned, by the identifier the rail
@@ -69,12 +75,12 @@ pub const AUTHORING_TOOLS: [&str; 6] = [
 /// holds everything, implicitly and un-removably; everyone else holds only
 /// what has been granted to them.
 ///
-/// **Nobody but a DM has been granted anything yet**, so this returns the empty
-/// list for a player. That is not a placeholder — FR-045 requires exactly this
-/// default, so that a world deployed before this feature existed behaves after
-/// it precisely as it did before: the Game Master authors, players do not.
-/// Per-player grants (FR-046) add rows to a store consulted here; they cannot
-/// change what this returns for a world that has none.
+/// A world with no `world_authoring_tool_grants` rows resolves a player to the
+/// empty list. That is not a gap waiting to be filled — FR-045 requires
+/// exactly this default, so that a world deployed before this feature existed
+/// behaves after it precisely as it did before: the Game Master authors,
+/// players do not. FR-046's grants add rows; they cannot change what this
+/// returns for a world that has none.
 pub async fn effective_authoring_tools(
     state: &AppState,
     user_id: Uuid,
@@ -93,18 +99,48 @@ pub async fn effective_authoring_tools(
 /// Separated from [`effective_authoring_tools`] so the DM rule and the grant
 /// lookup do not have to be untangled from each other later, and so the one
 /// place that reads grants is greppable.
+///
+/// Rows hang off the *membership*, not off `(world_id, user_id)`, which is why
+/// this joins rather than filtering two columns: a grant is a fact about
+/// somebody's membership, and keying it that way is what makes removal
+/// cascade instead of needing a cleanup block (see the migration).
+///
+/// An empty result is "no tools", never "unrestricted" — every consumer reads
+/// it that way, which is why a player with no rows gets no rail and why the
+/// engine refuses their mode requests.
 async fn granted_authoring_tools(
-    _state: &AppState,
-    _user_id: Uuid,
-    _world_id: Uuid,
+    state: &AppState,
+    user_id: Uuid,
+    world_id: Uuid,
 ) -> GraphQLResult<Vec<String>> {
-    // No grant rows exist to read. Returning empty here is the GM-only default
-    // stated above, and it is the whole of FR-045.
-    //
-    // A caller must not read "empty" as "unrestricted": every consumer treats
-    // an empty list as no tools, which is why a player currently gets no rail
-    // and why the engine refuses their mode requests.
-    Ok(Vec::new())
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    let granted = tokio::task::spawn_blocking(move || {
+        world_authoring_tool_grants::table
+            .inner_join(world_members::table)
+            .filter(world_members::world_id.eq(world_id))
+            .filter(world_members::user_id.eq(user_id))
+            .select(world_authoring_tool_grants::tool)
+            .load::<String>(&mut conn)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to load authoring tool grants"))?;
+
+    // Returned in [`AUTHORING_TOOLS`] order, and filtered through it rather
+    // than returned raw. Two things fall out of that: the rail is ordered by
+    // the declaration instead of by whatever order a Game Master clicked in,
+    // and a row naming a tool this build does not have resolves to nothing
+    // rather than being handed on to a client that would ask the engine about
+    // it. The declaration is the vocabulary; the table only records answers.
+    Ok(AUTHORING_TOOLS
+        .iter()
+        .filter(|tool| granted.iter().any(|held| held == *tool))
+        .map(|tool| (*tool).to_string())
+        .collect())
 }
 
 #[cfg(test)]

@@ -7,7 +7,8 @@ use crate::schema::{
     world_ability_effects, world_ability_permissions, world_ability_shares, world_actor_abilities,
     world_actor_claims, world_actor_images, world_actor_inventory, world_actor_permissions,
     world_actor_shares,
-    world_actor_system_data, world_actors, world_chat_messages, world_combatants, world_combats,
+    world_actor_system_data, world_actors, world_authoring_tool_grants,
+    world_chat_messages, world_combatants, world_combats,
     world_events, world_genie_puzzle_clock_rewards, world_genie_puzzle_clocks,
     world_genie_resource_holdings, world_genie_sessions, world_genie_shop_listings,
     world_genie_trade_proposals, world_invites, world_item_effects, world_item_permissions,
@@ -2075,6 +2076,31 @@ pub struct NewWorldItemPrice {
     pub amount: i32,
     pub currency_label: Option<String>,
     pub is_suggested: bool,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+}
+
+/// Spec 031 (FR-046): one authoring tool a Game Master has granted to one
+/// player of their world.
+///
+/// Keyed on the *membership* rather than on `(world_id, user_id)` so that
+/// removing a member takes their grants with them by `ON DELETE CASCADE`
+/// rather than by a cleanup block somebody has to remember to write — the
+/// omission ADR-050 was written about. `world_actor_claims` keys the same way.
+///
+/// A row means "granted". Revoking deletes it; there is no `granted BOOLEAN`,
+/// because a false row and no row would be the same permission with two
+/// spellings, and only one of them survives the cascade.
+///
+/// Insert-only here: no `Queryable` twin, because nothing reads the whole row.
+/// Both readers — the resolver and the settings query — want the `tool`
+/// column and nothing else, and a struct that exists to be selected but never
+/// is would be a claim about this table that no code makes.
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_authoring_tool_grants)]
+pub struct NewWorldAuthoringToolGrant {
+    pub world_member_id: uuid::Uuid,
+    pub tool: String,
     pub created_by: uuid::Uuid,
     pub updated_by: uuid::Uuid,
 }

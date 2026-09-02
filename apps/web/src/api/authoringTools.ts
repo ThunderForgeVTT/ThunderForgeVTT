@@ -40,3 +40,78 @@ export async function getAuthoringTools(worldId: string): Promise<GmToolId[]> {
   // thing. Dropping it here keeps the failure at the boundary that noticed.
   return (payload?.authoringTools ?? []).filter(isGmToolId);
 }
+
+/**
+ * What one member of a world has been *granted*, for the Game Master looking
+ * at the toggles (spec 031 FR-046).
+ *
+ * Not the same question as `getAuthoringTools`, which answers "what may I
+ * use" and folds in a Game Master's implicit everything. A member absent from
+ * this list holds nothing, which is the server's default (FR-045) rather than
+ * a gap in the response.
+ */
+export interface MemberAuthoringTools {
+  worldMemberId: string;
+  userId: string;
+  tools: GmToolId[];
+}
+
+/** Every grant handed out in one world. GM-only, refused server-side. */
+export async function getAuthoringToolGrants(
+  worldId: string,
+): Promise<MemberAuthoringTools[]> {
+  const payload = await postGraphQL<{
+    authoringToolGrants: {
+      worldMemberId: string;
+      userId: string;
+      tools: string[];
+    }[];
+  }>(
+    `query ($worldId: UUID!) {
+      authoringToolGrants(worldId: $worldId) {
+        worldMemberId
+        userId
+        tools
+      }
+    }`,
+    { worldId },
+  );
+
+  return (payload?.authoringToolGrants ?? []).map((entry) => ({
+    worldMemberId: entry.worldMemberId,
+    userId: entry.userId,
+    // Same filter as `getAuthoringTools`, for the same reason: a tool this
+    // build does not have cannot be rendered as a toggle, and a toggle that
+    // controls a name nothing recognises is worse than its absence.
+    tools: entry.tools.filter(isGmToolId),
+  }));
+}
+
+/**
+ * Grant or revoke one tool for one member. Returns that member's grants after
+ * the write — the table's answer, not the click's.
+ *
+ * The refusal lives on the server (`is_dm_of_world`), per Constitution
+ * Principle III; hiding this card from a player is chrome, and a player
+ * calling this directly is refused there.
+ */
+export async function setAuthoringToolGrant(input: {
+  worldId: string;
+  worldMemberId: string;
+  tool: GmToolId;
+  granted: boolean;
+}): Promise<GmToolId[]> {
+  const payload = await postGraphQL<{ setAuthoringToolGrant: string[] }>(
+    `mutation ($worldId: UUID!, $worldMemberId: UUID!, $tool: String!, $granted: Boolean!) {
+      setAuthoringToolGrant(
+        worldId: $worldId
+        worldMemberId: $worldMemberId
+        tool: $tool
+        granted: $granted
+      )
+    }`,
+    input,
+  );
+
+  return (payload?.setAuthoringToolGrant ?? []).filter(isGmToolId);
+}
