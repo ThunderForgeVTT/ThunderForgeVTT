@@ -34,7 +34,7 @@ use plugins::{
     BackgroundPlugin, CachedAssetsPlugin, CameraPlugin, CanvasLayerPlugin, DarknessPlugin,
     DiceRollPlugin, GridPlugin, LightingOverlayPlugin, LightingPlugin, RenderProbeEnabled,
     RenderProbePlugin, ResolvedResource, ScenePlugin, SelectionPlugin, ShapePlugin,
-    StatusDisplayPlugin, SystemRegistrationPlugin, TokenPlugin, TokenStatus, WallPlugin,
+    StatusDisplayPlugin, TokenPlugin, TokenStatus, WallPlugin,
 };
 use resources::{
     CameraManager, DoorState, GridSnapEnabled, GridVisible, IsGameMaster, LightSet,
@@ -1075,7 +1075,6 @@ pub fn start(canvas_selector: &str) {
         // — see the module docs in `plugins/cached_assets.rs`).
         .add_plugins(CachedAssetsPlugin)
         // Phase 4.7.F2: System Registration & Plugin Setup
-        .add_plugins(SystemRegistrationPlugin)
         // Phase 4.7: Canvas Rendering Infrastructure
         // Which authoring tool is armed. Registered early because other
         // plugins will gate their input systems on it; adds no behaviour on

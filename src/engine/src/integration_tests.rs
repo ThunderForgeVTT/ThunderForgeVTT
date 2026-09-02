@@ -198,22 +198,6 @@ mod e2e_canvas_tests {
     }
 
     #[test]
-    fn test_e2e_system_registry_active_system() {
-        // Scenario: Load a game system, verify it's active
-        let mut registry = crate::systems::core::SystemRegistry::new();
-
-        let basic = crate::systems::builtin::BasicSystem;
-        registry.register(std::sync::Arc::new(basic));
-        registry
-            .activate("basic")
-            .expect("basic system should register under id \"basic\"");
-
-        let active = registry.get_active();
-        assert!(active.is_some());
-        assert_eq!(active.unwrap().id(), "basic");
-    }
-
-    #[test]
     fn test_e2e_full_canvas_startup_sequence() {
         // Scenario: Verify complete startup: scene load -> camera ready -> selection ready -> system registry ready
         let mut app = App::new();
@@ -239,10 +223,11 @@ mod e2e_canvas_tests {
         let selected = app.world().resource::<SelectedToken>();
         assert!(selected.get_selected().is_none());
 
-        let mut registry = crate::systems::core::SystemRegistry::new();
-        registry.register(std::sync::Arc::new(crate::systems::builtin::BasicSystem));
-        registry.activate("basic").unwrap();
-        assert!(registry.get_active().is_some());
+        // A fourth assertion stood here, that a `SystemRegistry` resource was
+        // ready. It has gone with the registry: nothing ever read that
+        // resource, so "ready" was a claim about a value no code consulted.
+        // What a system contributes is now resolved server-side and arrives
+        // as declared values — see ADR-060.
     }
 
     #[test]
