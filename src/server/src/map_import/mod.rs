@@ -1024,38 +1024,38 @@ mod tests {
         );
     }
 
-    /// T015 (SC-006): a documented, one-time verification that the
-    /// round-trip check above actually has teeth — i.e. it would fail if
-    /// a real fidelity bug were introduced, not just pass vacuously.
-    ///
-    /// Verification actually performed during this feature's
-    /// implementation (not just described): temporarily changed
-    /// `WallSignature::from(crate::models::Wall)` above to
-    /// `x1: w.x1 + 1.0` (simulating a coordinate-fidelity bug on
-    /// reload). Result: `cargo test map_import::tests::round_trip`
-    /// failed immediately and specifically — every one of
-    /// `round_trip_demo_matches_fixture_exactly`,
-    /// `round_trip_dwarven_forge_walls_only_matches_fixture_exactly`,
-    /// and `round_trip_road_side_in_matches_fixture_exactly` failed at
-    /// their `assert_eq!(sorted(reloaded_walls), expected_walls, ...)`
-    /// line with a clear "reloaded walls must exactly match ...'s source
-    /// geometry" message showing the off-by-one `x1` values — not a
-    /// silent pass. (An earlier attempt hard-coding
-    /// `blocks_movement: false` in the same spot did *not* catch
-    /// anything, because every wall this importer produces already has
-    /// `blocks_movement: false` — a useful negative-control finding in
-    /// its own right, showing the check's teeth are in the coordinate/
-    /// door-state fields, not the always-false import-time
-    /// `blocks_movement` default.) The change was then reverted; `cargo
-    /// test map_import::tests::round_trip` passed again with the fix
-    /// undone. This confirms the round-trip tests genuinely detect
-    /// fidelity regressions rather than trivially passing regardless of
-    /// what's persisted.
-    #[test]
-    fn round_trip_tests_have_teeth_verification_is_documented_not_a_live_test() {
-        // Intentionally a no-op: see this test's doc comment above for
-        // the one-time verification this documents.
-    }
+    // This note was carried by a `#[test]` with an empty body. The note is
+    // worth keeping; the green tick was not — a passing test named for a
+    // verification it does not perform is a claim of coverage the suite
+    // cannot honour. A comment keeps the record and leaves the count honest.
+    //
+    // T015 (SC-006): a documented, one-time verification that the
+    // round-trip check above actually has teeth — i.e. it would fail if
+    // a real fidelity bug were introduced, not just pass vacuously.
+    //
+    // Verification actually performed during this feature's
+    // implementation (not just described): temporarily changed
+    // `WallSignature::from(crate::models::Wall)` above to
+    // `x1: w.x1 + 1.0` (simulating a coordinate-fidelity bug on
+    // reload). Result: `cargo test map_import::tests::round_trip`
+    // failed immediately and specifically — every one of
+    // `round_trip_demo_matches_fixture_exactly`,
+    // `round_trip_dwarven_forge_walls_only_matches_fixture_exactly`,
+    // and `round_trip_road_side_in_matches_fixture_exactly` failed at
+    // their `assert_eq!(sorted(reloaded_walls), expected_walls, ...)`
+    // line with a clear "reloaded walls must exactly match ...'s source
+    // geometry" message showing the off-by-one `x1` values — not a
+    // silent pass. (An earlier attempt hard-coding
+    // `blocks_movement: false` in the same spot did *not* catch
+    // anything, because every wall this importer produces already has
+    // `blocks_movement: false` — a useful negative-control finding in
+    // its own right, showing the check's teeth are in the coordinate/
+    // door-state fields, not the always-false import-time
+    // `blocks_movement` default.) The change was then reverted; `cargo
+    // test map_import::tests::round_trip` passed again with the fix
+    // undone. This confirms the round-trip tests genuinely detect
+    // fidelity regressions rather than trivially passing regardless of
+    // what's persisted.
 
     // -------------------------------------------------------------
     // User Story 3: import result field-gap disclosure (T017-T019)
