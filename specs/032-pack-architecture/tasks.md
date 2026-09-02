@@ -110,13 +110,13 @@ can be validated until identifiers resolve, so this phase blocks that one.
 
 ### Server
 
-- [ ] T029 [US1] Create `src/server/src/interface_packs.rs` with `GET /` (list: id, title, version, description, targets, sorted by title, no special position for Forge) and `GET /{id}/manifest.json` (validate before serving, failing closed as `get_system_manifest` does), reading from `state.directories.interface_packs_dir`
-- [ ] T030 [US1] Mount it in `src/server/src/main.rs` as `api_router.nest("/interface-packs", …)`, mirroring the `/systems` mount
-- [ ] T031 [P] [US1] Add `EVENT_CODE_WORLD_APPEARANCE_CHANGED: i32 = 23` to `src/server/src/world_events.rs` with the doc-comment convention its siblings use
-- [ ] T032 [US1] Add `UpdateWorldInterfacePackInput` to `src/server/src/graphql/input_types.rs` with a **nullable** `interfacePackId` — clearing the binding is a real thing a GM may do
-- [ ] T033 [US1] Implement `update_world_interface_pack_impl` in `src/server/src/graphql.rs`: authorize with `is_dm_of_world`, refusing with *"Only the DM (Owner or GM) may change a world's interface pack"*; reject a pack that does not exist, does not validate, **or does not target this world's system**; write the column; record the T031 event (FR-010, Constitution III)
-- [ ] T034 [US1] Expose it as the `updateWorldInterfacePack` mutation on the mutation root
-- [ ] T035 [US1] Server tests: a GM succeeds, a player is refused, an unknown pack is refused, a pack not targeting the world's system is refused, `null` clears the binding, and the event is recorded on each success
+- [X] T029 [US1] Create `src/server/src/interface_packs.rs` with `GET /` (list: id, title, version, description, targets, sorted by title, no special position for Forge) and `GET /{id}/manifest.json` (validate before serving, failing closed as `get_system_manifest` does), reading from `state.directories.interface_packs_dir`
+- [X] T030 [US1] Mount it in `src/server/src/main.rs` as `api_router.nest("/interface-packs", …)`, mirroring the `/systems` mount
+- [X] T031 [P] [US1] Add `EVENT_CODE_WORLD_APPEARANCE_CHANGED: i32 = 23` to `src/server/src/world_events.rs` with the doc-comment convention its siblings use
+- [X] T032 [US1] Add `UpdateWorldInterfacePackInput` to `src/server/src/graphql/input_types.rs` with a **nullable** `interfacePackId` — clearing the binding is a real thing a GM may do
+- [X] T033 [US1] Implement `update_world_interface_pack_impl` in `src/server/src/graphql.rs`: authorize with `is_dm_of_world`, refusing with *"Only the DM (Owner or GM) may change a world's interface pack"*; reject a pack that does not exist, does not validate, **or does not target this world's system**; write the column; record the T031 event (FR-010, Constitution III)
+- [X] T034 [US1] Expose it as the `updateWorldInterfacePack` mutation on the mutation root
+- [X] T035 [US1] Server tests: a GM succeeds, a player is refused, an unknown pack is refused, a pack not targeting the world's system is refused, `null` clears the binding, and the event is recorded on each success
 
 ### Web — resolution and rendering
 

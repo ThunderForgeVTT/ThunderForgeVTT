@@ -414,3 +414,15 @@ pub struct GraphQLUpdateFogMaskInput {
 // UpdateMemberRoleInput, WorldInvitePayload, WorldMembershipPayload) — the
 // GraphQL*-prefixed versions once here were an orphaned earlier draft,
 // never wired into any resolver, and have been removed.
+
+/// Spec 032 (FR-010): a world's chosen interface pack.
+///
+/// `interfacePackId` is **nullable**, unlike `UpdateWorldGameSystemInput`'s
+/// required id. Clearing the binding is a real thing a Game Master may want:
+/// it means "the default", and after this feature the default has a name to
+/// show for it rather than reading as an empty value.
+#[derive(async_graphql::InputObject, Debug, Clone)]
+pub struct UpdateWorldInterfacePackInput {
+    pub world_id: uuid::Uuid,
+    pub interface_pack_id: Option<String>,
+}

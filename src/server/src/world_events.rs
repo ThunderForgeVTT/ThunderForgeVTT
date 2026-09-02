@@ -84,6 +84,18 @@ pub const EVENT_CODE_DOOR_CHANGED: i32 = 21;
 /// whatever the approved effect did, which is a different event.
 pub const EVENT_CODE_INTERACTION_REQUEST: i32 = 22;
 
+/// Spec 032 (SC-001): the world's interface pack changed.
+///
+/// Carried on the world-event channel rather than through a mechanism of its
+/// own, because every other cross-participant change in this product travels
+/// this way — walls, lights, tokens, doors, combat — and a second path would
+/// be a second thing to get wrong on reconnect. It also means the spec 028
+/// catch-up covers a client that was offline when the look changed, at no
+/// additional cost.
+///
+/// Payload: `{"action": "changed", "interfacePackId": <id> | null}`.
+pub const EVENT_CODE_WORLD_APPEARANCE_CHANGED: i32 = 23;
+
 /// Record a world event to the audit trail and trigger NOTIFY for real-time sync.
 ///
 /// # Failures are logged here, not at the call sites

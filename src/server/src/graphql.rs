@@ -1903,6 +1903,79 @@ pub struct UpdateWorldGameSystemInput {
 /// DM/GM-only — mirrors `update_world_session_notes_impl`'s permission
 /// check exactly, since assigning a world's ruleset is as GM-scoped a
 /// decision as its session recap.
+/// Spec 032 (FR-010): set or clear a world's interface pack.
+///
+/// Mirrors `update_world_game_system_impl`, including its refusal wording,
+/// because this is the same kind of fact about a world and the two should not
+/// be reached for differently. It differs in two ways, both deliberate: the id
+/// is nullable, since clearing a binding means "the default" and that is a
+/// real thing to want; and the pack must both exist and validate, because
+/// accepting an id for a pack that cannot be applied would manufacture
+/// FR-019's degraded state from the one place that knows better.
+pub async fn update_world_interface_pack_impl(
+    state: &AppState,
+    user_id: uuid::Uuid,
+    is_admin: bool,
+    input: crate::graphql::input_types::UpdateWorldInterfacePackInput,
+) -> GraphQLResult<GraphQLWorld> {
+    if !crate::auth::world_membership::is_dm_of_world(state, user_id, is_admin, input.world_id)
+        .await?
+    {
+        return Err(Error::new(
+            "Only the DM (Owner or GM) may change a world's interface pack",
+        ));
+    }
+
+    let world_id = input.world_id;
+    let requested = input
+        .interface_pack_id
+        .map(|id| id.trim().to_string())
+        .filter(|id| !id.is_empty());
+
+    if let Some(id) = requested.as_deref() {
+        let packs_dir = state.directories.interface_packs_dir.clone();
+        crate::interface_packs::load_validated(&packs_dir, id).map_err(|findings| {
+            Error::new(format!(
+                "Interface pack '{id}' cannot be applied: {}",
+                findings.join("; ")
+            ))
+        })?;
+    }
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    let stored = requested.clone();
+    let updated = tokio::task::spawn_blocking(move || {
+        diesel::update(worlds::table.filter(worlds::id.eq(world_id)))
+            .set(worlds::interface_pack_id.eq(stored))
+            .returning(World::as_returning())
+            .get_result::<World>(&mut conn)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to update world"))?;
+
+    // Everyone in the world re-resolves on receipt, so the table sees the
+    // change without reloading (SC-001).
+    if let Ok(mut conn) = state.db_pool.get() {
+        let _ = crate::world_events::record_world_event(
+            &mut conn,
+            world_id,
+            crate::world_events::EVENT_CODE_WORLD_APPEARANCE_CHANGED,
+            Some(serde_json::json!({
+                "action": "changed",
+                "interfacePackId": requested,
+            })),
+            user_id,
+        );
+    }
+
+    Ok(GraphQLWorld::from(updated))
+}
+
 pub async fn update_world_game_system_impl(
     state: &AppState,
     user_id: uuid::Uuid,
@@ -2121,6 +2194,18 @@ impl WorldMutation {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;
         update_world_game_system_impl(state, auth_user.user_id, auth_user.is_admin, input).await
+    }
+
+    /// Spec 032 (FR-010). `null` clears the binding, returning the world to
+    /// the base pack.
+    async fn update_world_interface_pack(
+        &self,
+        ctx: &Context<'_>,
+        input: crate::graphql::input_types::UpdateWorldInterfacePackInput,
+    ) -> GraphQLResult<GraphQLWorld> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        update_world_interface_pack_impl(state, auth_user.user_id, auth_user.is_admin, input).await
     }
 
     async fn update_world_allow_player_created_actors(
@@ -3506,5 +3591,161 @@ mod world_default_system_tests {
     fn no_configured_default_leaves_the_world_systemless() {
         let prepared = prepare_world_input(input(None), None).expect("valid");
         assert_eq!(prepared.game_system_id, None);
+    }
+}
+
+#[cfg(test)]
+mod world_interface_pack_tests {
+    use super::update_world_interface_pack_impl;
+    use crate::graphql::input_types::UpdateWorldInterfacePackInput;
+    use crate::test_support::*;
+
+    /// Test state's directories point at a temp dir, so the pack directory has
+    /// to be aimed at the repository's real packs — this mutation's whole job
+    /// is refusing a pack that cannot be applied, and it cannot do that
+    /// against an empty directory.
+    fn state_with_real_packs() -> crate::state::AppState {
+        let mut state = test_app_state();
+        state.directories.interface_packs_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../packs/interface")
+            .to_string_lossy()
+            .into_owned();
+        state
+    }
+
+    fn input(world_id: uuid::Uuid, pack: Option<&str>) -> UpdateWorldInterfacePackInput {
+        UpdateWorldInterfacePackInput {
+            world_id,
+            interface_pack_id: pack.map(str::to_string),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_dm_can_choose_the_worlds_interface_pack() {
+        let state = state_with_real_packs();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner);
+        drop(conn);
+
+        let updated =
+            update_world_interface_pack_impl(&state, owner, false, input(world_id, Some("forge")))
+                .await
+                .expect("the DM chooses the world's look");
+
+        assert_eq!(updated.interface_pack_id.as_deref(), Some("forge"));
+    }
+
+    #[tokio::test]
+    async fn a_player_is_refused_and_told_what_authority_is_required() {
+        let state = state_with_real_packs();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner);
+        let player = insert_test_user(&mut conn);
+        insert_test_world_member(&mut conn, world_id, player, "Player");
+        drop(conn);
+
+        let error =
+            update_world_interface_pack_impl(&state, player, false, input(world_id, Some("forge")))
+                .await
+                .expect_err("a player does not choose the table's look");
+
+        assert!(
+            error.message.contains("DM"),
+            "the refusal names the authority required rather than failing \
+             silently: {}",
+            error.message
+        );
+    }
+
+    /// Accepting an id for a pack that cannot be applied would manufacture the
+    /// degraded state of FR-019 from the one place that knows better.
+    #[tokio::test]
+    async fn a_pack_that_is_not_installed_is_refused() {
+        let state = state_with_real_packs();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner);
+        drop(conn);
+
+        let error = update_world_interface_pack_impl(
+            &state,
+            owner,
+            false,
+            input(world_id, Some("no-such-pack")),
+        )
+        .await
+        .expect_err("an uninstallable pack must not be stored");
+
+        assert!(error.message.contains("no-such-pack"), "{}", error.message);
+    }
+
+    /// Clearing is a real thing a Game Master may want: it means "the
+    /// default", and the default now has a name to show for it.
+    #[tokio::test]
+    async fn null_clears_the_binding() {
+        let state = state_with_real_packs();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner);
+        drop(conn);
+
+        update_world_interface_pack_impl(&state, owner, false, input(world_id, Some("forge")))
+            .await
+            .expect("set");
+        let cleared = update_world_interface_pack_impl(&state, owner, false, input(world_id, None))
+            .await
+            .expect("clear");
+
+        assert_eq!(cleared.interface_pack_id, None);
+    }
+
+    /// Whitespace is not a pack id. Treated as clearing rather than as a
+    /// lookup for `"  "`, which would fail with a message about a pack nobody
+    /// typed.
+    #[tokio::test]
+    async fn a_blank_id_clears_rather_than_failing_to_find_a_pack_called_nothing() {
+        let state = state_with_real_packs();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner);
+        drop(conn);
+
+        let updated =
+            update_world_interface_pack_impl(&state, owner, false, input(world_id, Some("   ")))
+                .await
+                .expect("blank clears");
+        assert_eq!(updated.interface_pack_id, None);
+    }
+
+    /// Everyone in the world re-resolves on receipt, which is what makes
+    /// SC-001's "without reloading" true.
+    #[tokio::test]
+    async fn choosing_a_pack_records_a_world_event() {
+        use crate::schema::world_events;
+        use diesel::prelude::*;
+
+        let state = state_with_real_packs();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner);
+        drop(conn);
+
+        update_world_interface_pack_impl(&state, owner, false, input(world_id, Some("forge")))
+            .await
+            .expect("set");
+
+        let mut conn = state.db_pool.get().unwrap();
+        let codes: Vec<i32> = world_events::table
+            .filter(world_events::world_id.eq(world_id))
+            .select(world_events::event_code)
+            .load(&mut conn)
+            .expect("events readable");
+
+        assert!(
+            codes.contains(&crate::world_events::EVENT_CODE_WORLD_APPEARANCE_CHANGED),
+            "the table has to be told, or it sees the change only on reload"
+        );
     }
 }

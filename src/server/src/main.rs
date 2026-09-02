@@ -23,6 +23,7 @@ mod door_effects; // Spec 030: doors, as a contributor to the interaction seam
 mod errors;
 mod graphql;
 mod interaction; // Spec 030: the effect registry, and the rules the GraphQL layer obeys
+mod interface_packs; // Spec 032: the interface packs on disk
 mod light_effects; // Spec 030: lighting, as a contributor to the interaction seam
 mod lore_assets_serve; // Spec 012: authenticated proxy for lore image assets (mirrors canvas_assets_serve)
 mod map_import;
@@ -553,7 +554,9 @@ async fn main() {
     let app = Router::new()
         .nest(
             "/api",
-            api_router.nest("/systems", systems::router().merge(systems_admin_router)),
+            api_router
+                .nest("/systems", systems::router().merge(systems_admin_router))
+                .nest("/interface-packs", interface_packs::router()),
         )
         .merge(serve::router(&directories))
         .fallback(errors::handler_404)
