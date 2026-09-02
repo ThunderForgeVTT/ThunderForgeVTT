@@ -158,8 +158,15 @@ codebase before.
    indicator at any moment.
 3. **FR-042**: open a world in **each supported browser**. Either content is
    served from the device and reported, or the user is told this browser cannot
-   keep content — never a silent zero. (Firefox is the known case; see research
-   R7. The supported-browser set must be decided first.)
+   keep content — never a silent zero.
+
+   The supported set is **decided: Chromium-based browsers only for now, with
+   Firefox a later target** (constitution, and MVP.md "Supported browsers").
+   So this check is Chromium for the served-and-reported path. Firefox remains
+   the known unsupported case from research R7, and the honest thing to verify
+   there is the *other* branch — that it says plainly it cannot keep content.
+   That branch is now covered twice: a capability probe before anything is
+   attempted, and the engine's own degradation reason afterwards.
 4. **FR-043**: with the console open, browse actors and scenes → no repeated
    failed request for an absent identifier.
 

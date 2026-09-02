@@ -249,6 +249,32 @@ Two rules earned the hard way, and worth more than any individual fix:
 
 Always `--workers=1` for anything touching the engine.
 
+## Supported browsers
+
+**Chromium-based browsers only, for now. Firefox is a later target.**
+
+This is a real constraint rather than a preference, and it is worth stating
+here because it decides who can use MVP 1 at all. The world cache is built on
+OPFS, WebCrypto and IndexedDB (`thunderforge-cache-browser`), and a browser
+missing any of the three cannot keep world content on the device.
+
+What that costs elsewhere is small and deliberate: the crate degrades rather
+than crashing, so an unsupported browser still *plays* — it re-downloads
+content every session instead of keeping it. What it must never do is imply
+nothing happened. A playtest found the diagnostics panel reporting "nothing
+served, 0 B downloaded" against a world that genuinely had content to cache:
+every figure true, the impression false. Spec 031 FR-042 fixed that, in two
+places — a capability probe answering "could this work here?" before anything
+is attempted, and the engine's own degradation reason answering "did it?".
+
+The end-to-end suite runs Chromium alone, so **any claim about another browser
+is untested by construction**, not merely unverified. Firefox support means
+running the suite against it, not reasoning about feature tables.
+
+Recorded in the constitution as a project-wide constraint; see also the
+Post-MVP note on connections below, which is the other place MVP 1's operating
+envelope is stated rather than assumed.
+
 ## Post-MVP
 
 **Metered and constrained connections.** Explicitly not in MVP scope, and
