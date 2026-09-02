@@ -36,9 +36,10 @@ The pattern has bitten this repository repeatedly:
 | 7. Name promised coverage it lacked | `src/core/src/policies/mod.rs` | ✓ `remove` gutted to a no-op |
 | Web: `missing` reported for a loaded pack | `appearance-context.test.ts` | ✓ `missing = requestedId` |
 | Web: CSRF never asserted | `api/__tests__/graphqlClient.test.ts` | ✓ both `withCsrf(...)` call sites stripped |
-| 6. Six vacuous e2e absence assertions | six spec files | replaced with positive assertions; **pending a live re-run** |
+| 6. Vacuous e2e absence assertions | seven spec files | nine replaced/removed; **all 35 tests re-run green** |
 | 3. Engine suite never built | `src/engine/` — see below | **done: 0 tests → 192, all passing** |
 | 4. Green ticks asserting nothing | `tests_f1_unit.rs`, `tests_f2_f4_integration.rs` | deleted |
+| 8. Fifteen empty test bodies | 7 packs × server + engine, `map_import` | ✓ submission removed; ✓ `rules` dropped; ✓ plugin reads an uninserted resource |
 
 **A note on fixing these.** The first attempt at the Year Zero boundary test
 used `super::ABILITY_MIN` and `super::ABILITY_MAX`, which made it assert that
@@ -130,10 +131,21 @@ exist; the adjacent line is the vacuous one.
 `remove`. **Mutation**: `Policy::remove` gutted to a no-op — this test passed.
 The same mutation showed the `remove(id, None)` branch has no test at all.
 
-### 8. Seventeen tests that cannot fail
+### 8. Fifteen tests that cannot fail — **fixed**
 
-`test_loader_stub` and `test_module_loads` have empty bodies in all eight
-packs, server and engine. Plus one honestly-named no-op in `map_import`.
+`test_loader_stub` and `test_module_loads` had empty bodies in all seven
+packs, server and engine, plus one honestly-named no-op in `map_import`.
+(Counted as seventeen on the first pass; there are seven packs, not eight —
+`basic-game-system` has neither file.)
+
+Each now asserts what a compile cannot. Server-side that is linkage:
+`inventory` collects through the linker, so a deleted `submit!` block or a
+validator quietly dropped to `None` is invisible to every other test in the
+crate. Engine-side it is plugin self-sufficiency: a Bevy plugin reading a
+resource it never inserts builds cleanly and panics on the first update,
+which is the `WallPlugin`/`LightingPlugin` bug this repo has shipped twice.
+`map_import`'s prose is a comment now — worth keeping, not worth a green
+tick beside it.
 
 ### 9. Long-standing skips
 
