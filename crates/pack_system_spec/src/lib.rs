@@ -1,3 +1,7 @@
+pub mod contrast;
+pub mod interface;
+pub mod layout;
+
 use schemars::{JsonSchema, schema_for};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
