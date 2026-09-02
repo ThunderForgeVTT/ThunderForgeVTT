@@ -279,7 +279,21 @@ export async function waitForEngineReady(page: Page): Promise<void> {
 }
 
 /** The GM's authoring tools, as the left-hand rail names them. */
-export type GmToolId = "walls" | "lights" | "shapes" | "tokens";
+/**
+ * Re-exported from the rail itself rather than restated.
+ *
+ * This was a hand-written copy — `"walls" | "lights" | "shapes" | "tokens"` —
+ * and it had drifted: the rail has grown `select` and `interactions` since,
+ * and nothing noticed because `e2e/` was outside the typechecked set. A test
+ * that armed either one was a type error nobody was told about.
+ *
+ * `openGmTool` below still only works for tools that *have* a panel, which is
+ * a runtime property rather than a type one: Select renders no flyout by
+ * design, so waiting for `gm-tool-panel-select` waits forever. That is a
+ * caller's problem to know, and is documented on the function.
+ */
+export type { GmToolId } from "@/components/world/GmToolRail/GmToolRail";
+import type { GmToolId } from "@/components/world/GmToolRail/GmToolRail";
 
 /**
  * Open one of the GM's authoring tools and wait for its panel.

@@ -81,7 +81,11 @@ export async function canvasHistogram(page: Page): Promise<CanvasHistogram> {
   // Inset by a quarter on each side: the tool rail (3rem) and dock (3rem
   // collapsed, 22rem open) both live at the edges, and this keeps the sample
   // inside the map area even with a section expanded.
-  const png = await canvas.screenshot({
+  // `clip` is a page-screenshot option; a locator screenshot is already
+  // cropped to the element, so the two cannot be combined. Taking the clip
+  // from the page keeps the intent — sample the middle of the canvas, away
+  // from the rail and dock — and is what the option actually supports.
+  const png = await canvas.page().screenshot({
     clip: {
       x: box.x + box.width * 0.25,
       y: box.y + box.height * 0.25,

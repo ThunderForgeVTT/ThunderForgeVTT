@@ -9,6 +9,7 @@
     "generate": "pnpm run build",
     "generate:seo": "node ./scripts/generate-seo-files.mjs",
     "lint": "eslint . --ext .ts,.tsx --max-warnings=0",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "format": "prettier --check \"{index.html,vite.config.mts,eslint.config.mjs,.prettierrc.json,src/**/*.{ts,tsx,scss},scripts/**/*.mjs}\"",
     "start:vite": "vite build --watch",
     "dev": "vite",

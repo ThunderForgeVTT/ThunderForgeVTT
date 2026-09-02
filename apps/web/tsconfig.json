@@ -3,10 +3,22 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "@thunderforge/genie": ["../../packs/systems/genie/web/src/index.ts"]
+      "@/*": [
+        "./src/*"
+      ],
+      "@thunderforge/genie": [
+        "../../packs/systems/genie/web/src/index.ts"
+      ]
     },
-    "types": ["vite/client"]
+    "types": [
+      "vite/client"
+    ]
   },
-  "include": ["src", "eslint.config.mjs", "vite.config.mts", "scripts"]
+  "include": [
+    "src",
+    "e2e",
+    "eslint.config.mjs",
+    "vite.config.mts",
+    "scripts"
+  ]
 }

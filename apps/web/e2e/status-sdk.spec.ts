@@ -234,9 +234,13 @@ test("a refused command leaves a correct display exactly as it was", async ({
   );
 
   await page.goto(`/world/${worldId}/play`);
+  // Narrowed rather than asserted: if the token was never created, failing here
+  // says so, instead of writing `undefined` into the page and failing later
+  // somewhere that looks unrelated.
+  expect(tokenId, "the token under test should have been created").toBeTruthy();
   await page.evaluate((id) => {
     (window as unknown as { __keepToken: string }).__keepToken = id;
-  }, tokenId);
+  }, tokenId as string);
   await waitForEngineReady(page);
 
   const read = () =>

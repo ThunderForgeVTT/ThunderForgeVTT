@@ -72,9 +72,13 @@ async function serveCorruptedBytes(context: BrowserContext): Promise<void> {
         // One flipped byte in the payload is enough, and is the hardest
         // version of the test: everything else about the transfer is right.
         copy[HEADER + SEQ] = copy[HEADER + SEQ] ^ 0xff;
-        return send.call(this, copy.buffer as ArrayBuffer);
+        // `copy` is already a Uint8Array view; `send` takes the view, not the
+        // raw buffer. Passing `.buffer` happened to work at runtime and is a
+        // type error — one that could only be seen once `e2e/` was actually
+        // typechecked.
+        return send.call(this, copy);
       }
-      return send.call(this, data as ArrayBuffer);
+      return send.call(this, data as ArrayBufferView<ArrayBuffer>);
     };
   });
 }
@@ -104,7 +108,7 @@ async function resyncWorldCache(page: Page, worldId: string): Promise<void> {
     async ([world, user]) => {
       const bevy = (await import(
         /* @vite-ignore */ "/src/engine/bevy/index.ts"
-      )) as typeof import("../../src/engine/bevy/index");
+      )) as typeof import("../src/engine/bevy/index");
       await bevy.syncWorldCache(world, user);
     },
     [worldId, userId] as const,
