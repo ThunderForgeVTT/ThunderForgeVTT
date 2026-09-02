@@ -259,8 +259,12 @@ export async function launchSceneByName(
     throw new Error(`could not read a scene id from ${page.url()}`);
   }
   await page.getByTestId("launch-scene-button").click();
-  await expect(page.getByText("Scene launched.")).toBeVisible({
-    timeout: 10_000,
+  // Launch enters play (spec 031 FR-021), so arriving at the play view *is*
+  // the confirmation. It used to leave the GM on the scene page with a "Scene
+  // launched." message, which is what this waited for — and which meant the
+  // players were looking at a map the person who launched it was not.
+  await page.waitForURL(new RegExp(`/world/${worldId}/play`), {
+    timeout: 15_000,
   });
   return sceneId;
 }

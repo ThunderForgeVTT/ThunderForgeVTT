@@ -77,7 +77,8 @@ test("GM creates a scene, imports a map, writes a summary, toggles hidden, and l
   await page.getByTestId("scene-hidden-toggle").click();
   await expect(page.getByTestId("scene-hidden-toggle")).toBeChecked({ timeout: 10_000 });
 
-  // Launch it.
+  // Launch it. Launch moves the table here *and* takes the GM there
+  // (spec 031 FR-021), so the navigation is the confirmation.
   await page.getByTestId("launch-scene-button").click();
-  await expect(page.getByText("Scene launched.")).toBeVisible({ timeout: 10_000 });
+  await page.waitForURL(/\/world\/[^/]+\/play/, { timeout: 15_000 });
 });
