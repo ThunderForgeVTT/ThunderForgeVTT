@@ -7,6 +7,17 @@
 //! dragged token would, and is dropped by a left click. Escape — or losing the
 //! right to the tool, or the connection — abandons it, leaving nothing.
 //!
+//! # Why the carry is a kind and a reference rather than an actor
+//!
+//! Spec 031 FR-011 asks for a lore marker to be placed on a map, and that is
+//! the same gesture with a different thing in hand: a prop, which is a token
+//! with no actor at all. So what is carried is a `kind` and an opaque
+//! `reference`, neither of which this module interprets — the confirmation
+//! hands both back and chrome, which asked for the carry, knows what they
+//! meant. A second placement machine for props was the alternative, and it
+//! would have had to re-derive snapping, the preview, the mode-change abandon
+//! and the one-frame gap `abandon_on_mode_change` documents below.
+//!
 //! # Why this is a state and not a boolean
 //!
 //! `Carrying` has an exit, and everything that matters here happens on it.
@@ -57,8 +68,15 @@ pub enum PlacementState {
 /// cancelled placement leaves nothing behind.
 #[derive(Resource, Default)]
 pub struct CarriedToken {
-    /// The actor whose token this will become. Empty when nothing is carried.
-    pub actor_id: String,
+    /// What sort of thing is in hand — `actor`, `prop`. Chrome's word, and
+    /// empty when nothing is carried. Nothing here branches on its value:
+    /// the engine's job is the gesture, and what the drop becomes is decided
+    /// by whoever asked for it.
+    pub kind: String,
+    /// Opaque to the engine, handed back on the drop. The actor for an
+    /// actor's token; for anything else, whatever chrome needs to recognise
+    /// its own request.
+    pub reference: String,
     /// Where the preview currently sits, already snapped.
     pub at: Vec2,
 }
@@ -76,11 +94,11 @@ struct PlacementPreview;
 const PREVIEW_COLOR: Color = Color::srgba(0.55, 0.78, 1.0, 0.55);
 const PREVIEW_SIZE: f32 = 48.0;
 
-/// What the web app has asked to carry, if anything.
-static REQUESTED_PLACEMENT: std::sync::OnceLock<std::sync::Mutex<Option<String>>> =
+/// What the web app has asked to carry, if anything: its kind and reference.
+static REQUESTED_PLACEMENT: std::sync::OnceLock<std::sync::Mutex<Option<(String, String)>>> =
     std::sync::OnceLock::new();
 
-fn requested_placement_slot() -> &'static std::sync::Mutex<Option<String>> {
+fn requested_placement_slot() -> &'static std::sync::Mutex<Option<(String, String)>> {
     REQUESTED_PLACEMENT.get_or_init(|| std::sync::Mutex::new(None))
 }
 
@@ -88,20 +106,45 @@ fn requested_placement_slot() -> &'static std::sync::Mutex<Option<String>> {
 static CANCEL_REQUESTED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
+/// Begin carrying something of `kind`, described to chrome by `reference`.
+///
+/// Returns false for an empty kind, because a confirmation chrome cannot
+/// attribute to a request is worse than a carry that never began. The
+/// reference may be empty: a prop placed from the interactions panel is
+/// described entirely by the draft chrome is holding, and inventing an id
+/// here would be a second name for it.
+///
+/// Whether this person may place anything is decided by the same rules that
+/// govern creating a token, server-side; this only begins a gesture, and a
+/// gesture creates nothing.
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn begin_placement(kind: &str, reference: &str) -> bool {
+    if kind.is_empty() {
+        return false;
+    }
+    // A cancel that arrived while nothing was being carried was for a carry
+    // that has already ended, and `resolve_placement` only ever reads the flag
+    // while `Carrying` — so left set, it would abandon *this* request the
+    // frame after it began. Chrome cancels on its way out of a panel, which
+    // makes that the ordinary order rather than a rare race.
+    CANCEL_REQUESTED.store(false, std::sync::atomic::Ordering::SeqCst);
+    if let Ok(mut slot) = requested_placement_slot().lock() {
+        *slot = Some((kind.to_string(), reference.to_string()));
+    }
+    true
+}
+
 /// Begin carrying `actor_id`'s token.
 ///
-/// Returns false for an empty id. Whether this person may place anything is
-/// decided by the same rules that govern creating a token, server-side; this
-/// only begins a gesture, and a gesture creates nothing.
+/// Kept as its own entry point rather than folded into `begin_placement`: it
+/// is what the actors pane calls, and an actor with no id is a request that
+/// cannot be honoured, which `begin_placement` alone would accept.
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub fn begin_token_placement(actor_id: &str) -> bool {
     if actor_id.is_empty() {
         return false;
     }
-    if let Ok(mut slot) = requested_placement_slot().lock() {
-        *slot = Some(actor_id.to_string());
-    }
-    true
+    begin_placement("actor", actor_id)
 }
 
 /// Abandon a placement in progress, from outside the engine.
@@ -121,14 +164,15 @@ fn begin_requested_placement(
         .ok()
         .and_then(|mut slot| slot.take());
 
-    let Some(actor_id) = requested else {
+    let Some((kind, reference)) = requested else {
         return;
     };
     if !is_gm.0 {
         return;
     }
 
-    carried.actor_id = actor_id;
+    carried.kind = kind;
+    carried.reference = reference;
     next.set(PlacementState::Carrying);
 }
 
@@ -177,7 +221,8 @@ fn resolve_placement(
         // decides; a refusal is simply a token that never came to exist.
         emit_event(json!({
             "type": "token_placement_confirmed",
-            "actorId": carried.actor_id,
+            "kind": carried.kind,
+            "reference": carried.reference,
             "x": carried.at.x,
             "y": carried.at.y,
         }));
@@ -238,7 +283,8 @@ fn abandon_on_mode_change(
 ) {
     if *state.get() == PlacementState::Carrying {
         emit_event(json!({ "type": "token_placement_cancelled" }));
-        carried.actor_id.clear();
+        carried.kind.clear();
+        carried.reference.clear();
         next.set(PlacementState::Idle);
     }
 }
@@ -249,7 +295,7 @@ fn abandon_on_mode_change(
 /// the gesture has not formally ended, and this says it has not been abandoned
 /// within the frame. See `abandon_on_mode_change` for why one frame matters.
 fn carry_is_live(carried: Res<CarriedToken>) -> bool {
-    !carried.actor_id.is_empty()
+    !carried.kind.is_empty()
 }
 
 /// Duplicated from the other canvas-authoring modules, which each keep their

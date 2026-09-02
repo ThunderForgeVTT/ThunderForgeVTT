@@ -28,6 +28,13 @@ type BevyWasmModule = {
     shapes: boolean,
   ) => void;
   begin_token_placement?: (actorId: string) => boolean;
+  /**
+   * Spec 031 (US3, FR-011). Optional like every other entry point here: a
+   * bundle built before props could be carried still mounts, and chrome is
+   * told the carry did not begin rather than waiting for a drop that can
+   * never come.
+   */
+  begin_placement?: (kind: string, reference: string) => boolean;
   cancel_token_placement?: () => void;
   authoring_mode?: () => string;
   /**
@@ -411,6 +418,66 @@ export function onAuthoringToolRevoked(
   };
 }
 
+/**
+ * A carry that ended, one way or the other.
+ *
+ * `kind` is the word chrome used when it asked for the carry — `actor` for a
+ * token from the actors pane, `prop` for something authored in the
+ * interactions panel — and `reference` is whatever it handed over with it.
+ * The engine interprets neither: it reports where the drop happened and this
+ * side decides what, if anything, comes to exist there.
+ */
+export interface PlacementConfirmedEvent {
+  type: "token_placement_confirmed";
+  kind: string;
+  reference: string;
+  x: number;
+  y: number;
+}
+
+function asPlacementConfirmed(event: unknown): PlacementConfirmedEvent | null {
+  const candidate = event as { type?: unknown };
+  return candidate.type === "token_placement_confirmed"
+    ? (event as PlacementConfirmedEvent)
+    : null;
+}
+
+const placementConfirmedListeners = new Set<
+  (event: PlacementConfirmedEvent) => void
+>();
+const placementCancelledListeners = new Set<() => void>();
+
+/**
+ * Be told where a carried thing was dropped.
+ *
+ * Nothing exists yet when this fires. The engine has reported a position and
+ * gone back to `Idle`; whether a token is created is the server's decision,
+ * asked for from here (Constitution Principle I).
+ */
+export function onPlacementConfirmed(
+  listener: (event: PlacementConfirmedEvent) => void,
+): () => void {
+  placementConfirmedListeners.add(listener);
+  return () => {
+    placementConfirmedListeners.delete(listener);
+  };
+}
+
+/**
+ * Be told that a carry ended with nothing placed.
+ *
+ * Subscribed to as well as the confirmation because a panel that only hears
+ * about drops would go on claiming it is placing something after Escape, a
+ * tool change or a scene change abandoned the carry — and the engine treats
+ * all four identically, which is the point of its one `OnExit`.
+ */
+export function onPlacementCancelled(listener: () => void): () => void {
+  placementCancelledListeners.add(listener);
+  return () => {
+    placementCancelledListeners.delete(listener);
+  };
+}
+
 const pickUpItemListeners = new Set<(event: PickUpItemEvent) => void>();
 const unavailableListeners = new Set<
   (event: InteractionUnavailableEvent) => void
@@ -624,6 +691,25 @@ export async function bindWorldStore(worldStore: WorldStore): Promise<void> {
           return;
         }
 
+        // Nor is either end of a placement. Both report a gesture, and the
+        // one that matters carries no world change at all: nothing has been
+        // created when a drop is confirmed, which is precisely why chrome
+        // hears about it. Dispatching either would put a command nothing
+        // reduces into the store.
+        const placed = asPlacementConfirmed(parsed);
+        if (placed) {
+          for (const listener of placementConfirmedListeners) {
+            listener(placed);
+          }
+          return;
+        }
+        if ((parsed as { type?: unknown }).type === "token_placement_cancelled") {
+          for (const listener of placementCancelledListeners) {
+            listener();
+          }
+          return;
+        }
+
         // Nor is a revoked tool. The engine has already left the mode; this
         // says so, so the rail can stop claiming the tool is armed and the
         // person is told why the canvas stopped answering.
@@ -823,6 +909,27 @@ export async function beginTokenPlacement(actorId: string): Promise<boolean> {
   try {
     const module = await getWasmModule();
     return module.begin_token_placement?.(actorId) ?? false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Carry something that is not an actor's token, to be placed by a left click.
+ *
+ * The same gesture as `beginTokenPlacement`, and deliberately the same machine
+ * (`src/engine/src/plugins/placement.rs`): a second one would have to re-derive
+ * snapping, the preview, and abandoning the carry when the tool or the scene
+ * changes. `reference` is opaque to the engine and comes back on the drop.
+ *
+ * Returns whether the carry began. `false` means this bundle predates
+ * `begin_placement`, so no drop will ever be reported and a caller waiting for
+ * one would wait forever.
+ */
+export async function beginPropPlacement(reference = ""): Promise<boolean> {
+  try {
+    const module = await getWasmModule();
+    return module.begin_placement?.("prop", reference) ?? false;
   } catch {
     return false;
   }

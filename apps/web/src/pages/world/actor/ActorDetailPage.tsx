@@ -24,6 +24,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import { ActorAbilitiesPanel } from "@/pages/world/actor/ActorAbilitiesPanel";
 import { ActorInventoryPanel } from "@/pages/world/actor/ActorInventoryPanel";
+import { ActorLorePanel } from "@/pages/world/actor/ActorLorePanel";
 import { ActorOwnershipBlock } from "@/pages/world/actor/ActorOwnershipBlock";
 import { SYSTEM_ACTOR_SHEETS } from "@/pages/world/actor/systemActorSheets";
 import type { WorldActorRecord } from "@/types/actor";
@@ -126,6 +127,21 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
   }
 
   const canEdit = actor.myPermissionLevel !== "VIEWER";
+
+  /**
+   * Re-read the actor from the server.
+   *
+   * Handed to the lore panel rather than letting it hold its own copy of the
+   * backlinks: whether an entry links here is the server's answer, and a panel
+   * that appended to a list of its own would show a link this page's next load
+   * would not.
+   */
+  const refreshActor = async () => {
+    const fresh = await getActor(worldId, actorId);
+    if (fresh) {
+      setActor(fresh);
+    }
+  };
   const canShare = actor.myPermissionLevel === "OWNER";
 
   const handleSave = async () => {
@@ -376,30 +392,18 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
           )}
         </Card>
 
-        {/* Spec 012 (T037, FR-006): lore entries that reference this actor. */}
-        <Card className="grid gap-2 p-4" data-testid="actor-lore-linked-from">
-          <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
-            Linked from (lore)
-          </h2>
-          {actor.loreLinkedFrom.length === 0 ? (
-            <p className="text-sm text-muted-foreground italic">
-              No lore entries link here yet.
-            </p>
-          ) : (
-            <ul className="grid gap-1">
-              {actor.loreLinkedFrom.map((source) => (
-                <li key={source.id}>
-                  <Link
-                    to={`/world/${worldId}/lore/${source.slug}/view`}
-                    className="text-sm text-primary hover:underline"
-                  >
-                    {source.title}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+        {/* Spec 012 (T037, FR-006): lore entries that reference this actor —
+            and, since spec 031 (FR-039), the place to write or attach one
+            without leaving this page. The list itself is unchanged; it moved
+            into the panel because a list and the controls that add to it are
+            one thing to the person looking at them. */}
+        <ActorLorePanel
+          worldId={worldId}
+          actorLabel={actor.label}
+          linkedFrom={actor.loreLinkedFrom}
+          canManage={canEdit}
+          onChanged={refreshActor}
+        />
 
         {(() => {
           const ActorSheet = actor.gameSystemId

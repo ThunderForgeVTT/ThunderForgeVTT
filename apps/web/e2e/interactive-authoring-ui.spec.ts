@@ -152,3 +152,154 @@ test("a Game Master reaches interactions from the tool rail", async ({
     `[rail] toolReachable=true registryDriven=true saved=lore.open queueReachable=true`,
   );
 });
+
+/**
+ * Spec 031 FR-011 — the half of the lore marker that was missing.
+ *
+ * Authoring one has worked since spec 030, and there was no way to put one on
+ * a map: `placeProp` had no caller anywhere in the application. This drives
+ * the gesture the way a Game Master does — choose what it does, then click the
+ * map — and checks what the server ended up with, because "a token appeared"
+ * and "a token appeared with a lore page attached to it" are different claims
+ * and only the second one is the feature.
+ *
+ * The engine side is deliberately not asserted by looking at pixels. What is
+ * checked instead is that the token reached the world store through the
+ * ordinary sync, which is what the badge is drawn from — a canvas holding
+ * something chrome does not know about, or the reverse, is the failure this
+ * suite exists to catch.
+ */
+test("a Game Master carries a lore marker onto the map", async ({ page }) => {
+  test.setTimeout(4 * 60_000);
+
+  const suffix = uniqueSuffix();
+  const worldId = await registerAndCreateWorld(page, `Carry ${suffix}`);
+  const [sceneId] = await sceneIds(page, worldId);
+
+  const entryTitle = `Ledger ${suffix}`;
+  await gql<{ createLoreEntry: { id: string } }>(
+    page,
+    `mutation ($input: CreateLoreEntryInput!) {
+      createLoreEntry(input: $input) { id }
+    }`,
+    {
+      input: {
+        worldId,
+        title: entryTitle,
+        content: "Debts nobody wishes to settle.",
+      },
+    },
+  );
+
+  await page.goto(`/world/${worldId}/play`);
+  await waitForEngineReady(page);
+  await openGmTool(page, "interactions");
+
+  // With nothing selected, the panel offers to place something new — which is
+  // the only moment a Game Master has nothing to author onto.
+  const placer = page.getByTestId("prop-placer");
+  await expect(placer).toBeVisible({ timeout: 10_000 });
+
+  // The helper button, not the dropdown: it is what a GM placing their first
+  // marker reaches for, and it is registry-driven, so its presence is also a
+  // check that `lore.open` is contributed to this build for a prop.
+  await placer.getByTestId("interaction-helper-lore.open").click();
+
+  const entryField = page.locator("#interaction-config-entry");
+  await expect(entryField).toBeVisible();
+  await entryField.click();
+  await page.getByRole("option", { name: entryTitle }).click();
+
+  const tokensBefore = await page.evaluate(
+    () => window.__worldProbe?.state().counts.tokens ?? -1,
+  );
+  expect(
+    tokensBefore,
+    "the world probe should be available in a dev build",
+  ).toBeGreaterThanOrEqual(0);
+
+  await page.getByTestId("interaction-save").click();
+  await expect(page.getByTestId("prop-placer-carrying")).toBeVisible({
+    timeout: 10_000,
+  });
+
+  // Nothing exists yet: the carry is a gesture, and the engine has created
+  // nothing (FR-040's sibling claim — arming a tool places nothing).
+  expect(
+    await page.evaluate(() => window.__worldProbe?.state().counts.tokens ?? -1),
+    "carrying a marker must not create anything",
+  ).toBe(tokensBefore);
+
+  // Drop it. Down and up are separated because Bevy reads `just_pressed` per
+  // polled frame, and a zero-delay synthetic click can collapse into one.
+  const box = await page.locator("canvas").boundingBox();
+  if (!box) {
+    throw new Error("the canvas should have a box");
+  }
+  await page.mouse.move(
+    box.x + box.width / 2 + 60,
+    box.y + box.height / 2 + 40,
+  );
+  await page.waitForTimeout(150);
+  await page.mouse.down();
+  await page.waitForTimeout(80);
+  await page.mouse.up();
+
+  // What the server ended up with: a prop, with the lore page attached.
+  await expect
+    .poll(
+      async () => {
+        const data = await gql<{
+          interactives: {
+            subjectKind: string;
+            subjectRef: string | null;
+            effectId: string | null;
+          }[];
+        }>(
+          page,
+          `query ($s: UUID!) {
+            interactives(sceneId: $s) { subjectKind subjectRef effectId }
+          }`,
+          { s: sceneId },
+        );
+        const marker = data.interactives.find(
+          (i) => i.effectId === "lore.open",
+        );
+        return marker
+          ? `${marker.subjectKind}:${marker.subjectRef !== null}`
+          : null;
+      },
+      {
+        message: "the drop should reach the server as a prop with an effect",
+        timeout: 30_000,
+      },
+    )
+    .toBe("prop:true");
+
+  // A prop is a token with no actor — the whole implementation, and the thing
+  // that makes it drawable at all.
+  const tokens = await gql<{
+    tokens: { tokenType: string | null; actorId: string | null }[];
+  }>(page, `query ($s: UUID!) { tokens(sceneId: $s) { tokenType actorId } }`, {
+    s: sceneId,
+  });
+  expect(
+    tokens.tokens.some((t) => t.tokenType === "object" && t.actorId === null),
+  ).toBe(true);
+
+  // And it reached the canvas the ordinary way, rather than only the server.
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => window.__worldProbe?.state().counts.tokens ?? -1),
+      {
+        message: "the placed prop should arrive on the canvas through sync",
+        timeout: 30_000,
+      },
+    )
+    .toBeGreaterThan(tokensBefore);
+
+  await expect(page.getByTestId("prop-placer-placed")).toBeVisible();
+
+  console.log(`[place] carried=true placed=lore.open onProp=true`);
+});

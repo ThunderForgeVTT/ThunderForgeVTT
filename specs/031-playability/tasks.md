@@ -131,7 +131,7 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 
 **Independent Test**: Place one lore marker and one item; open the lore, pick up the item, and confirm it leaves the map for exactly one inventory.
 
-- [ ] T039 [US3] Add authoring for a placed lore marker using the existing `lore.open` effect, in `src/engine/src/plugins/interaction.rs` and the interactions authoring surface in `apps/web/src/` (FR-011) — **authoring done; the placement gesture is still unwired**: `placeProp` in `apps/web/src/api/interactives.ts:264` has no caller, so a GM can author a lore interactive but cannot put one on the map
+- [X] T039 [US3] Add authoring for a placed lore marker using the existing `lore.open` effect, in `src/engine/src/plugins/interaction.rs` and the interactions authoring surface in `apps/web/src/` (FR-011)
 - [X] T040 [US3] Render the lore marker with `lucide-react`'s book icon and open the entry in a new browser tab on activation, in `apps/web/src/` (FR-012)
 - [X] T041 [US3] Contribute an `item.pickup` effect **from the item subsystem**, not the interaction core, in `src/engine/src/` — `scripts/verify.mjs` enforces this seam (FR-013, ADR-054, research R3)
 - [X] T042 [US3] Offer Pickup and View on activation of a placed item, in `apps/web/src/` (FR-014)
@@ -214,7 +214,7 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 - [X] T070 [US8] Add the imagery upload UI to the actor edit page in `apps/web/src/pages/world/actor/` and display each role where it belongs (FR-036)
 - [X] T071 [P] [US8] Add item price recording and display, presentational only, in `src/server/src/graphql/` and `apps/web/src/pages/world/compendium/ItemCompendiumTab.tsx` (FR-037, research R5)
 - [X] T072 [P] [US8] Add the lore tree and tags — move, tag, and find by either — in `apps/web/src/pages/world/lore/` and `src/server/src/graphql/`, rejecting cycles at the data boundary, and re-parenting a deleted entry's children to their grandparent rather than orphaning them (FR-038, data-model.md)
-- [ ] T073 [US8] Allow creating or attaching an item or lore entry from an actor's screen without leaving it, in `apps/web/src/pages/world/actor/` (FR-039)
+- [X] T073 [US8] Allow creating or attaching an item or lore entry from an actor's screen without leaving it, in `apps/web/src/pages/world/actor/` (FR-039)
 
 **Checkpoint**: Preparation and administration are comfortable at real world sizes.
 

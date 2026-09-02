@@ -74,6 +74,18 @@ export interface InteractionAuthorProps {
     fireMode: string;
   }) => void;
   onDelete?: () => void;
+  /**
+   * What the save control says.
+   *
+   * The same panel authors an interactive onto something already on the map
+   * and authors one that is about to be carried there (FR-011), and those are
+   * different sentences to the person clicking: "Save" describes a change to a
+   * thing they selected, and describes nothing at all when the next thing to
+   * happen is a token following their cursor. A second panel for placement was
+   * the alternative and would duplicate the registry-driven form this exists
+   * to be.
+   */
+  saveLabel?: string;
 }
 
 const ACTIVATION_OPTIONS = [
@@ -96,6 +108,7 @@ export function InteractionAuthor({
   references = {},
   onSave,
   onDelete,
+  saveLabel = "Save",
 }: InteractionAuthorProps) {
   const [registry, setRegistry] = useState<EffectDeclaration[] | null>(null);
   const [effectId, setEffectId] = useState<string>(
@@ -284,8 +297,12 @@ export function InteractionAuthor({
         </p>
       )}
 
-      <Button onClick={save} disabled={missing.length > 0}>
-        Save
+      <Button
+        onClick={save}
+        disabled={missing.length > 0}
+        data-testid="interaction-save"
+      >
+        {saveLabel}
       </Button>
       {onDelete && (
         <Button variant="ghost" onClick={onDelete}>

@@ -1,13 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button/Button";
 import {
   createInteractive,
   deleteInteractive,
   getInteractives,
+  placeProp,
   updateInteractive,
   type Interactive,
   type SubjectKind,
 } from "@/api/interactives";
+import {
+  beginPropPlacement,
+  cancelTokenPlacement,
+  onPlacementCancelled,
+  onPlacementConfirmed,
+} from "@/engine/bevy";
 import { getWorldLoreEntries } from "@/api/lore";
 import {
   InteractionAuthor,
@@ -17,6 +24,7 @@ import {
 import type { WorldStore } from "@/engine/world/store";
 import { refreshInteractives } from "@/engine/world/sync/interactives";
 import type { WorldLight, WorldWall } from "@/engine/world/types";
+import { placeAuthoredProp, type PropDraft } from "./placeAuthoredProp";
 
 /**
  * The GM's rail panel for interactive elements (spec 030).
@@ -31,6 +39,20 @@ import type { WorldLight, WorldWall } from "@/engine/world/types";
  * The split matters because the author panel is driven entirely by the effect
  * registry: it must not learn what a wall or a light is, or adding a subsystem
  * would mean editing it too.
+ *
+ * # Placing, as well as authoring (spec 031 FR-011)
+ *
+ * Authoring an interactive needed something already on the map to author it
+ * onto, so a lore marker could be configured and never placed. The missing
+ * half is a *gesture*, and the engine already has it: the carry the actors
+ * pane uses to put an actor's token down. This panel asks for the same carry
+ * with a different kind, and creates what the drop turns out to mean.
+ *
+ * Chrome never positions anything — it hands the engine a request and is told
+ * where the drop landed (Constitution Principle I). What it does own is the
+ * pair of server calls that follow, because knowing that a prop is a token and
+ * an interactive points at one is this application's knowledge, not the
+ * canvas's.
  */
 
 export interface InteractionToolProps {
@@ -55,6 +77,28 @@ export function InteractionTool({
   const [interactives, setInteractives] = useState<Interactive[]>([]);
   const [lore, setLore] = useState<ReferenceChoice[]>([]);
   const [problem, setProblem] = useState<string | null>(null);
+  /** Whether a carry this panel began is still in flight. */
+  const [carrying, setCarrying] = useState(false);
+  /** What the last drop turned into, in the Game Master's words. */
+  const [placed, setPlaced] = useState<string | null>(null);
+  /**
+   * The draft the carry was begun with.
+   *
+   * A ref rather than state because the confirmation arrives from the engine
+   * on its own frame, and re-subscribing the listener on every keystroke in
+   * the form would mean a drop landing between renders on a listener that had
+   * already been torn down.
+   */
+  const draft = useRef<PropDraft | null>(null);
+  /**
+   * The same answer as `carrying`, readable from a cleanup function.
+   *
+   * Needed because the cleanup must tell the engine to abandon the carry when
+   * this panel goes away mid-gesture, and must *not* when the carry has just
+   * ended normally — a cancel sent while nothing is carried would otherwise be
+   * waiting for the next one.
+   */
+  const carryingRef = useRef(false);
 
   const reload = useCallback(async () => {
     try {
@@ -186,6 +230,85 @@ export function InteractionTool({
     }
   }, [existing, reload]);
 
+  /**
+   * Hand the engine a carry, and remember what it is for.
+   *
+   * Nothing is created here and nothing is positioned here. If the engine
+   * cannot take the request — a bundle without the placement machine — the
+   * Game Master is told, rather than left holding a form whose button appears
+   * to do nothing.
+   */
+  const beginPlacing = useCallback(async (drafted: PropDraft) => {
+    setProblem(null);
+    setPlaced(null);
+    const began = await beginPropPlacement();
+    if (!began) {
+      setProblem("This build cannot place things on the map.");
+      return;
+    }
+    draft.current = drafted;
+    carryingRef.current = true;
+    setCarrying(true);
+  }, []);
+
+  useEffect(() => {
+    if (!carrying) {
+      return;
+    }
+
+    const stopConfirmed = onPlacementConfirmed((event) => {
+      // An actor's token is somebody else's carry. Only one can be in flight
+      // at a time, but the listener is global and the kind is what says whose
+      // drop this was.
+      if (event.kind !== "prop") {
+        return;
+      }
+      const drafted = draft.current;
+      carryingRef.current = false;
+      setCarrying(false);
+      draft.current = null;
+      if (!drafted) {
+        return;
+      }
+
+      void (async () => {
+        const outcome = await placeAuthoredProp(
+          { placeProp, createInteractive },
+          sceneId,
+          event,
+          drafted,
+        );
+        if (outcome.kind === "placed") {
+          setPlaced("Placed. Click the button again to place another.");
+        } else {
+          setProblem(outcome.message);
+        }
+        // Whatever happened, the scene's list and the canvas are re-read from
+        // the server rather than guessed at: a badge drawn from a list this
+        // panel assembled would be a second opinion about what exists.
+        await reload();
+      })();
+    });
+
+    const stopCancelled = onPlacementCancelled(() => {
+      carryingRef.current = false;
+      setCarrying(false);
+      draft.current = null;
+    });
+
+    return () => {
+      stopConfirmed();
+      stopCancelled();
+      // Only if it is still in hand. The engine holds the cancel until the
+      // next carry reads it, so sending one after a drop would abandon the
+      // *following* placement.
+      if (carryingRef.current) {
+        carryingRef.current = false;
+        void cancelTokenPlacement();
+      }
+    };
+  }, [carrying, reload, sceneId]);
+
   const selectedWall = selectedWallId ? walls[selectedWallId] : null;
 
   return (
@@ -211,9 +334,52 @@ export function InteractionTool({
           onDelete={existing ? () => void remove() : undefined}
         />
       ) : (
-        <p className="text-xs text-muted-foreground">
-          Select a token or a wall to give it something to do.
-        </p>
+        <>
+          <p className="text-xs text-muted-foreground">
+            Select a token or a wall to give it something to do.
+          </p>
+
+          {/*
+            Or make something new to do it with. Offered here, where the GM
+            has just been told they have nothing selected, because that is
+            the moment they are looking for a way to put one down — and
+            because two author panels at once would be two forms with one
+            Save each and no way to tell which is which.
+          */}
+          <section className="grid gap-2" data-testid="prop-placer">
+            <p className="text-xs text-muted-foreground">
+              Or place something new: choose what it does, then click the map.
+            </p>
+            <InteractionAuthor
+              subjectKind="prop"
+              references={references}
+              onSave={(drafted) => void beginPlacing(drafted)}
+              saveLabel="Place on the map"
+            />
+            {carrying ? (
+              <div className="flex items-center gap-2">
+                <p
+                  className="text-xs text-muted-foreground"
+                  data-testid="prop-placer-carrying"
+                >
+                  Click the map to drop it, or press Escape.
+                </p>
+                <Button
+                  variant="ghost"
+                  onClick={() => void cancelTokenPlacement()}
+                  data-testid="prop-placer-cancel"
+                >
+                  Cancel
+                </Button>
+              </div>
+            ) : null}
+            {placed ? (
+              <p className="text-xs" data-testid="prop-placer-placed">
+                {placed}
+              </p>
+            ) : null}
+          </section>
+        </>
       )}
 
       {existing?.firedAt ? (
