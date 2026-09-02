@@ -102,13 +102,18 @@ const PERF_LANE_SPECS = [
 ];
 
 /**
- * Which measured specs this invocation would run, before the lanes are split.
+ * Which measured specs this invocation will run *at all*.
  *
- * Needed early: whether to skip `wasm-opt` has to be decided before the engine
- * is built, and that is well before `allSpecFiles()` is partitioned below.
+ * Deliberately ignores `--all`. That flag decides whether the measured specs
+ * get a lane of their own, not whether they run — and conflating the two is a
+ * mistake this function already made once: a run with `--all` chose a dev
+ * build, `canvas-authoring` went into the parallel lane anyway, and its map
+ * import blew a 120-second timeout it clears in about 22 on release.
+ *
+ * Needed early, because the engine profile has to be decided before the build
+ * and that is well before the lanes are partitioned below.
  */
-function serialSpecsFor(args) {
-  if (args.all) return [];
+function measuredSpecsSelected(args) {
   const onlyPatterns = args.only?.split(",").map((p) => p.trim()).filter(Boolean);
   return allSpecFiles()
     .filter((file) => !onlyPatterns || onlyPatterns.some((p) => file.includes(p)))
@@ -508,12 +513,15 @@ async function main() {
   //
   // So: the lane that measures gets the build worth measuring, and everything
   // else gets its result minutes sooner. `ENGINE_PROFILE` still overrides both.
-  const measuredLaneWillRun = serialSpecsFor(args).length > 0;
-  const profile = engineProfile(measuredLaneWillRun ? "release" : "dev");
-  if (measuredLaneWillRun && profile === "release") {
-    log("e2e", "This run includes the measured specs, so the engine is built release.");
+  const measuredWillRun = measuredSpecsSelected(args).length > 0;
+  const profile = engineProfile(measuredWillRun ? "release" : "dev");
+  if (measuredWillRun && profile === "release") {
+    log(
+      "e2e",
+      "This run includes specs that measure the engine, so it is built release.",
+    );
   }
-  await ensureEngineBuild({ profile, noOpt: skipWasmOpt() });
+  await ensureEngineBuild({ profile, noOpt: skipWasmOpt() && !measuredWillRun });
 
   // Once, before any shard starts. N concurrent `cargo run`s would serialise
   // on the target-directory lock anyway, and the first shard would look hung.
