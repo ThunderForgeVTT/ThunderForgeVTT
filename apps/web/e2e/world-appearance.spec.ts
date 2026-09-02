@@ -60,7 +60,7 @@ test.describe("a world's interface pack", () => {
     page,
   }) => {
     const worldId = await registerAndCreateWorld(page, `Appearance ${uniqueSuffix()}`);
-    await page.goto(`/world/${worldId}/settings`);
+    await page.goto(`/world/${worldId}/settings/system`);
 
     const card = page.getByTestId("world-appearance-card");
     await expect(card).toBeVisible({ timeout: 15_000 });
@@ -81,7 +81,7 @@ test.describe("a world's interface pack", () => {
     page,
   }) => {
     const worldId = await registerAndCreateWorld(page, `Peer ${uniqueSuffix()}`);
-    await page.goto(`/world/${worldId}/settings`);
+    await page.goto(`/world/${worldId}/settings/system`);
 
     const trigger = page.getByTestId("interface-pack-select");
     await expect(trigger).toBeVisible({ timeout: 15_000 });
@@ -125,44 +125,19 @@ test.describe("a world's interface pack", () => {
   });
 
   /**
-   * T019a's regression, at the only layer that can see it end to end.
+   * T019a's regression is asserted in `interface_packs_integration_tests.rs`,
+   * not here, and the reason is worth recording.
    *
-   * A pool's two numbers must survive the wire as numbers. When the bar was
-   * recovered by parsing the rendered string, this passed for the wrong reason
-   * — and would have started failing the day a system rendered its pool with
-   * any wording but `"4 / 7"`.
+   * A browser test cannot reach `/api/graphql` by hand: the endpoint requires
+   * a CSRF token that `postGraphQL` attaches and a raw `fetch` does not, so a
+   * hand-rolled request gets a 401 with an **empty body**. The first version
+   * of this test asserted the response did not say `Unknown field "fraction"`
+   * — which passed against that empty body, and would have passed just as
+   * happily with the field deleted. A negative assertion against a string that
+   * can be empty is not an assertion at all.
+   *
+   * Reimplementing CSRF here would couple this file to an internal and could
+   * mask a genuine auth regression. Asserting the shape where the schema is
+   * actually executed is both honest and stronger.
    */
-  test("a pool arrives with its maximum as a number, not as text to parse", async ({
-    page,
-  }) => {
-    const worldId = await registerAndCreateWorld(page, `Pools ${uniqueSuffix()}`);
-    await page.goto(`/world/${worldId}/settings`);
-    await expect(page.getByTestId("world-appearance-card")).toBeVisible({
-      timeout: 15_000,
-    });
-
-    // The shape of the contract, asserted where a change to it would be felt:
-    // `fraction` is a field on the value, and a bar is drawn from it.
-    const shape = await page.evaluate(async () => {
-      const response = await fetch("/api/graphql", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          query: `{ __type(name: "GraphQLDeclaredValue") { fields { name } } }`,
-        }),
-      });
-      return response.json();
-    });
-
-    const fields = (
-      shape as {
-        data?: { __type?: { fields?: { name: string }[] } };
-      }
-    ).data?.__type?.fields?.map((field) => field.name);
-
-    expect(fields, "GraphQLDeclaredValue should be in the schema").toBeTruthy();
-    expect(fields).toContain("fraction");
-    expect(fields).toContain("origin");
-  });
 });

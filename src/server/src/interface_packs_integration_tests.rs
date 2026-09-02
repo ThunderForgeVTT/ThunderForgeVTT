@@ -295,3 +295,56 @@ async fn an_explicit_null_clears_the_binding_through_the_schema() {
         "null must return the world to the base pack: {data}"
     );
 }
+
+/// Spec 032 T019a, at the layer that can prove it.
+///
+/// A pool's two numbers must reach the client *as numbers*. When they did not,
+/// the only way to draw a bar was to parse the rendered string back apart, and
+/// a system writing "4 of 7" instead of "4 / 7" lost its bar with nothing
+/// failing anywhere.
+///
+/// Executed against the built schema rather than asserted against the SDL as a
+/// string: a query naming a field the schema does not have is rejected, and
+/// one naming a field it does have validates. Deliberately not attempted from
+/// the browser — `/api/graphql` requires a CSRF token a hand-rolled `fetch`
+/// does not carry, so an e2e version of this returned an empty 401 body and
+/// its "does not say unknown field" assertion passed vacuously.
+#[tokio::test]
+async fn a_declared_value_exposes_its_pool_as_two_numbers() {
+    let state = state_with_real_packs();
+    let mut conn = state.db_pool.get().unwrap();
+    let owner = insert_test_user(&mut conn);
+    let world_id = insert_test_world(&mut conn, owner);
+    let scene_id = insert_test_scene(&mut conn, world_id, owner);
+    drop(conn);
+
+    let request = async_graphql::Request::new(
+        r#"
+            query Probe($sceneId: UUID!) {
+                tokenAttributes(sceneId: $sceneId) {
+                    tokenId
+                    values { id label origin fraction { current max } }
+                }
+            }
+        "#,
+    )
+    .variables(async_graphql::Variables::from_json(
+        serde_json::json!({ "sceneId": scene_id }),
+    ))
+    .data(AuthenticatedUser {
+        user_id: owner,
+        session_id: uuid::Uuid::now_v7(),
+        expires_at: chrono::Utc::now().naive_utc() + chrono::Duration::hours(1),
+        is_admin: false,
+        role: "User".to_string(),
+    });
+
+    let response = schema(&state).execute(request).await;
+
+    assert!(
+        response.errors.is_empty(),
+        "a query naming `fraction` must validate — without that field a bar \
+         has no maximum and the renderer goes back to parsing text: {:?}",
+        response.errors
+    );
+}

@@ -38,6 +38,7 @@
 
 import { execFileSync } from "node:child_process";
 import {
+  existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
@@ -327,27 +328,35 @@ function cloneShardDatabase(index) {
 }
 
 /**
- * Give a shard the installed game systems, the way a dev stack has them.
+ * Give a shard the installed packs, the way a dev stack has them.
  *
- * `config/mod.rs` resolves `systems_dir` as `<data path>/packs/systems`, and
- * the server reads `<systems_dir>/<system id>/system.json` to answer for a
- * system's attributes and status resources. A shard pointed at a fresh data
- * path therefore has *no systems installed* — `updateWorldGameSystem`
- * succeeds, a token is created, and `tokenAttributes` then returns nothing for
- * it, which surfaces as "genie must resolve attributes for its token" rather
- * than as anything about a missing directory.
+ * `config/mod.rs` resolves `systems_dir` as `<data path>/packs/systems` and
+ * `interface_packs_dir` as `<data path>/packs/interface`, and the server reads
+ * a pack's manifest from under those. A shard pointed at a fresh data path
+ * therefore has *nothing installed* — and the failure never mentions a
+ * directory. For systems: `updateWorldGameSystem` succeeds, a token is
+ * created, and `tokenAttributes` returns nothing, which surfaces as "genie
+ * must resolve attributes for its token". For interface packs: the picker
+ * renders with an empty list and the world's look silently stays the
+ * stylesheet default, which reads as a broken component.
  *
- * Symlinks rather than copies, which is exactly what `data/packs/systems`
- * already is on a dev machine: the eight shipping packs are 110MB, and copying
- * them per shard would cost more than the parallelism saves.
+ * Both were found the same way — by an e2e failing against a real stack — and
+ * the second one is why this takes a list rather than naming one directory.
+ *
+ * Symlinks rather than copies, which is exactly what `data/packs` already is
+ * on a dev machine: the shipping system packs are 110MB, and copying them per
+ * shard would cost more than the parallelism saves.
  */
-function linkSystemPacks(dataPath) {
-  const source = join(ROOT_DIR, "packs/systems");
-  const target = join(dataPath, "packs", "systems");
-  mkdirSync(target, { recursive: true });
-  for (const entry of readdirSync(source, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    symlinkSync(join(source, entry.name), join(target, entry.name), "dir");
+function linkPacks(dataPath) {
+  for (const kind of ["systems", "interface"]) {
+    const source = join(ROOT_DIR, "packs", kind);
+    if (!existsSync(source)) continue;
+    const target = join(dataPath, "packs", kind);
+    mkdirSync(target, { recursive: true });
+    for (const entry of readdirSync(source, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      symlinkSync(join(source, entry.name), join(target, entry.name), "dir");
+    }
   }
 }
 
@@ -373,7 +382,7 @@ async function startShard(index) {
   const webPort = WEB_PORT_BASE + index;
   const dataPath = join(SHARD_DIR, `shard-${index}`, "data");
   mkdirSync(dataPath, { recursive: true });
-  linkSystemPacks(dataPath);
+  linkPacks(dataPath);
 
   const shared = {
     DATABASE_URL: `postgres://${DB_USER}:password@localhost:5432/${database}`,
