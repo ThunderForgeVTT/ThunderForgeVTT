@@ -74,7 +74,7 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 - [ ] T017 [US9] Ensure a gesture in flight — a drag or a carried placement — cannot complete under a newly entered mode's rules, in `src/engine/src/plugins/` (spec edge case)
 - [X] T018 [P] [US9] Remove the overlapping loader on the play route so exactly one indicator shows: reconcile the route Suspense fallback in `apps/web/src/routes/AppRoutes.tsx` with `engine-load-indicator` in `apps/web/src/pages/world/WorldPage.tsx` (FR-041, research R9)
 - [X] T019 [P] [US9] Guard `apps/web/src/hooks/useActorSystemData.ts` so no query is issued without an identifier, removing the repeated `Failed to parse "UUID": invalid length: found 0` (FR-043)
-- [ ] T020 [US9] Report unsupported client storage plainly instead of an empty cache — surface `CacheError::Unsupported` from `crates/thunderforge-cache-browser/` through to the diagnostics panel in `apps/web/src/components/` (FR-042, research R7, depends on T007)
+- [X] T020 [US9] Report unsupported client storage plainly instead of an empty cache — surface `CacheError::Unsupported` from `crates/thunderforge-cache-browser/` through to the diagnostics panel in `apps/web/src/components/` (FR-042, research R7, depends on T007)
 - [X] T021 [P] [US9] Add an e2e assertion that exactly one loading indicator is visible at any moment during world load, in `apps/web/e2e/engine-loading.spec.ts` (SC-007)
 - [X] T022 [P] [US9] Add an e2e assertion that switching between every *ordered* pair of tools places nothing, including text as the control case, in `apps/web/e2e/canvas-authoring.spec.ts` (SC-008)
 
@@ -139,7 +139,7 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 - [X] T044 [US3] Resolve concurrent pickup at the database boundary so exactly one player wins, reusing spec 017's claim-race pattern, in `src/server/src/graphql/` (FR-016)
 - [X] T045 [US3] Restore the token on a refused pickup, leaving map and inventories unchanged, in `apps/web/src/` and `src/engine/src/` (FR-017)
 - [X] T046 [US3] Report an interactive whose subsystem is absent as unavailable rather than dispatching into nothing, in `src/engine/src/plugins/interaction.rs` (ADR-054)
-- [ ] T047 [P] [US3] Add e2e coverage that two simultaneous pickups yield exactly one inventory entry, in `apps/web/e2e/` (SC-006)
+- [X] T047 [P] [US3] Add e2e coverage that two simultaneous pickups yield exactly one inventory entry, in `apps/web/e2e/` (SC-006)
 
 **Checkpoint**: A map is a place, not a picture.
 
@@ -155,7 +155,7 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 - [X] T049 [US5] Keep Launch as the only action that sets the table's scene and navigates into play, in `apps/web/src/pages/world/scenes/SceneDetailPage.tsx` (FR-021)
 - [X] T050 [US5] Build the scene action table showing each scene's description and its render from `scene_preview_images`, in `apps/web/src/pages/world/scenes/ScenesPage.tsx` (FR-023)
 - [X] T051 [US5] State the difference between Launch and Preload in the interface, in `apps/web/src/pages/world/scenes/` (FR-022)
-- [ ] T052 [P] [US5] Add e2e coverage that a connected player observes no change when a GM Preloads, in `apps/web/e2e/` (SC-004)
+- [X] T052 [P] [US5] Add e2e coverage that a connected player observes no change when a GM Preloads, in `apps/web/e2e/` (SC-004)
 
 **Checkpoint**: Preparation no longer reveals itself. **Validate research R1's assumption here** — it is the one most likely to be wrong.
 
@@ -239,7 +239,7 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 
 - [ ] T077 [P] Run the full quickstart manual validation in `specs/031-playability/quickstart.md` on a running dev instance (Constitution V — this feature came from a playtest, so hand-verification is not optional)
 - [ ] T078 [P] Run `node scripts/e2e-parallel.mjs --shards=4` and confirm no regression against the pre-feature baseline
-- [ ] T079 [P] Update `docs/adrs/README.md` index rows for every ADR added in Phase 1
+- [X] T079 [P] Update `docs/adrs/README.md` index rows for every ADR added in Phase 1
 - [ ] T080 Run `pnpm verify` (rustfmt, clippy, prettier, eslint) and fix what it reports **in the code this feature added**. Keep it to that: a repo-wide lint remediation folded into a feature phase buries the feature work, and every line then has to be read to be sure nothing behavioural slipped in. Wide passes get their own commit. `pnpm verify:fix` rewrites what can be rewritten mechanically
 - [ ] T081 Confirm the release engine bundle size delta from T001 is acceptable and record it
 

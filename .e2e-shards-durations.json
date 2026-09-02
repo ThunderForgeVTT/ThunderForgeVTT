@@ -82,5 +82,7 @@
   "e2e/world-compendium.spec.ts": 35.961,
   "e2e/world-event-catchup.spec.ts": 13.214,
   "e2e/world-staging-route.spec.ts": 4.916,
-  "e2e/tmp-livesync-probe.spec.ts": 16.962
+  "e2e/tmp-livesync-probe.spec.ts": 16.962,
+  "e2e/item-pickup-race.spec.ts": 5.951,
+  "e2e/scene-preload.spec.ts": 17.29
 }
