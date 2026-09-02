@@ -286,7 +286,10 @@ describe("CSRF", () => {
 
     await postGraphQL(QUERY, { worldId: "w" });
 
-    const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>;
+    const headers = fetchMock.mock.calls[0][1].headers as Record<
+      string,
+      string
+    >;
     expect(headers["x-csrf-token"]).toBe("a-real-token");
   });
 
@@ -301,7 +304,10 @@ describe("CSRF", () => {
       "variables.file",
     );
 
-    const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>;
+    const headers = fetchMock.mock.calls[0][1].headers as Record<
+      string,
+      string
+    >;
     expect(headers["x-csrf-token"]).toBe("a-real-token");
   });
 
@@ -315,7 +321,10 @@ describe("CSRF", () => {
 
     await postGraphQL(QUERY, { worldId: "w" });
 
-    const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>;
+    const headers = fetchMock.mock.calls[0][1].headers as Record<
+      string,
+      string
+    >;
     expect(headers["x-csrf-token"]).toBeUndefined();
   });
 });

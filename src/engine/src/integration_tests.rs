@@ -77,13 +77,20 @@ mod e2e_canvas_tests {
         assert_eq!(camera.translation, Vec2::ZERO);
         assert_eq!(camera.scale, 1.0);
 
+        // `pan` moves the camera's *target*; `translation` eases toward it.
+        // These assertions predate that split and read `translation`
+        // immediately after panning, so `snap_to_target` is what makes them
+        // about panning rather than about the glide.
         camera.pan(Vec2::new(100.0, 0.0));
+        camera.snap_to_target();
         assert_eq!(camera.translation, Vec2::new(100.0, 0.0));
 
-        camera.scale = 2.0;
+        camera.set_zoom(2.0);
+        camera.snap_to_target();
         assert_eq!(camera.scale, 2.0);
 
         camera.pan(Vec2::new(50.0, 50.0));
+        camera.snap_to_target();
         assert_eq!(camera.translation, Vec2::new(150.0, 50.0));
     }
 
@@ -100,19 +107,34 @@ mod e2e_canvas_tests {
         assert!(selected.get_selected().is_none());
     }
 
+    /// Scenario: user presses down on a token off-centre; the drag resource
+    /// should remember the grab offset so the token doesn't snap-recentre.
+    ///
+    /// `DraggingToken` became a `Vec` of `(id, offset)` when clicking a stack
+    /// started picking up the whole stack — this test still spoke the
+    /// `Option` it was written against, and asserted only about the single
+    /// dragged token. It now also asserts the property the `Vec` exists for:
+    /// each member of a dragged stack keeps its *own* offset, which is what
+    /// preserves their relative positions.
     #[test]
     fn test_e2e_drag_state_tracks_grab_offset() {
-        // Scenario: user presses down on a token off-center; the drag resource
-        // should remember the grab offset so the token doesn't snap-recenter.
         let mut dragging = DraggingToken::default();
-        assert!(dragging.0.is_none());
+        assert!(dragging.0.is_empty());
 
         let grab_offset = Vec2::new(-12.0, 4.0);
-        dragging.0 = Some(("token-1".to_string(), grab_offset));
+        let second_offset = Vec2::new(6.0, -3.0);
+        dragging.0 = vec![
+            ("token-1".to_string(), grab_offset),
+            ("token-2".to_string(), second_offset),
+        ];
 
-        let (id, offset) = dragging.0.as_ref().unwrap();
-        assert_eq!(id, "token-1");
-        assert_eq!(*offset, grab_offset);
+        assert_eq!(dragging.0[0].0, "token-1");
+        assert_eq!(dragging.0[0].1, grab_offset);
+        assert_eq!(dragging.0[1].0, "token-2");
+        assert_eq!(
+            dragging.0[1].1, second_offset,
+            "each token in a dragged stack keeps its own offset"
+        );
     }
 
     #[test]
@@ -140,20 +162,25 @@ mod e2e_canvas_tests {
         let mut camera = CameraManager::new();
 
         camera.pan(Vec2::new(32.0, 0.0));
+        camera.snap_to_target();
         assert_eq!(camera.translation, Vec2::new(32.0, 0.0));
 
         camera.pan(Vec2::new(0.0, 32.0));
+        camera.snap_to_target();
         assert_eq!(camera.translation, Vec2::new(32.0, 32.0));
 
         // Positive steps zoom in, which *shrinks* the scale (world units per
         // screen unit) — see `CameraManager::zoom_by`.
         camera.zoom_by(1.0);
+        camera.snap_to_target();
         assert!(camera.scale < 1.0);
 
         camera.zoom_by(-1.0);
+        camera.snap_to_target();
         assert!((camera.scale - 1.0).abs() < 0.001);
 
         camera.reset();
+        camera.snap_to_target();
         assert_eq!(camera.translation, Vec2::ZERO);
         assert_eq!(camera.scale, 1.0);
     }
@@ -338,15 +365,32 @@ mod plugin_independence_tests {
     //! driven authoring flow works (that's out of scope for a headless test,
     //! same carve-out as `handle_token_drag`).
 
+    use crate::ActiveWorld;
     use crate::plugins::{CanvasLayerPlugin, LightingPlugin, ShapePlugin, WallPlugin};
     use crate::resources::{LightSet, ShapeSet, WallSet};
     use bevy::prelude::*;
 
+    /// The app-level environment every plugin here assumes, and which
+    /// `MinimalPlugins` does not supply.
+    ///
+    /// This used to hand-insert only the two `ButtonInput` resources, which
+    /// was enough to compile and — since the suite had never run — enough to
+    /// look finished. On the first real run all three tests panicked inside
+    /// `app.update()`: the wall and shape keyboard-toggle systems take
+    /// `Res<ActiveWorld>`, which only `start()` inserts, and
+    /// `handle_light_resize` reads `MessageReader<MouseWheel>`, whose message
+    /// registration comes from `InputPlugin` — not from the bare `ButtonInput`
+    /// resources. `InputPlugin` also supplies both of those, so it replaces
+    /// the hand-inserted pair rather than joining them.
+    ///
+    /// Neither is a plugin defect: both are things the host app owns. What
+    /// the tests prove is unchanged — each plugin builds and runs with the
+    /// other two absent.
     fn headless_app_with_inputs() -> App {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins);
-        app.init_resource::<ButtonInput<KeyCode>>();
-        app.init_resource::<ButtonInput<MouseButton>>();
+        app.add_plugins(bevy::input::InputPlugin);
+        app.insert_resource(ActiveWorld("world-test".to_string()));
         app
     }
 
@@ -365,6 +409,23 @@ mod plugin_independence_tests {
         assert!(wall_set.walls().is_empty());
     }
 
+    /// FAILING, and left failing deliberately (spec 032 T083).
+    ///
+    /// `LightingPlugin` is not independently addable: `apply_light_
+    /// illumination`, which it schedules, takes `Res<WallSet>` — a resource
+    /// only `WallPlugin` registers — so `app.update()` panics with "Resource
+    /// does not exist" when the lighting plugin is added without it. The
+    /// plugin's own doc comment claims the opposite ("Independently
+    /// addable/removable per Constitution Principle II ... mirrors
+    /// `WallPlugin` exactly"), and it already registers `IsGameMaster`,
+    /// `GridSnapEnabled` and `SceneGrid` idempotently for precisely this
+    /// reason — `WallSet` was left out.
+    ///
+    /// This test has never been able to run, so the gap has never been
+    /// visible. The fix is a one-line `.init_resource::<WallSet>()` in
+    /// `plugins/lighting.rs`, which is a no-op in the shipping app (where
+    /// `WallPlugin` is always present) — but it is an engine change, not a
+    /// test repair, so it is being reported rather than made here.
     #[test]
     fn lighting_plugin_builds_and_runs_independently() {
         let mut app = headless_app_with_inputs();
@@ -408,11 +469,7 @@ mod manual_browser_test_scenarios {
     // SCENARIO 6: Movement rejection rollback (requires server configured to reject a move)
     // SCENARIO 7: Multiple clients: token moves sync via server, camera stays local per-client
 
-    #[test]
-    fn test_manual_scenarios_documented() {
-        assert!(
-            true,
-            "See manual_browser_test_scenarios for the E2E checklist"
-        );
-    }
+    // `test_manual_scenarios_documented` was here: `assert!(true, "See
+    // manual_browser_test_scenarios ...")`. The checklist above is the
+    // deliverable; a test that cannot fail does not make it any more true.
 }

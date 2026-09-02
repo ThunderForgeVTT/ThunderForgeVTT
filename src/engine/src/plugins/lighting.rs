@@ -2,7 +2,9 @@ use bevy::prelude::*;
 
 use crate::plugins::authoring_mode::AuthoringMode;
 
-use crate::resources::{GridSnapEnabled, IsGameMaster, LightSet, SceneGrid, SelectedLight};
+use crate::resources::{
+    GridSnapEnabled, IsGameMaster, LightSet, SceneGrid, SelectedLight, WallSet,
+};
 use crate::systems::lighting::{
     apply_light_illumination, handle_light_input, handle_light_keyboard_toggles,
     handle_light_resize, handle_light_undo, handle_switch_effects, init_lighting_systems_resources,
@@ -37,6 +39,15 @@ impl Plugin for LightingPlugin {
             // nothing when they have been (Constitution Principle II).
             .init_resource::<GridSnapEnabled>()
             .init_resource::<SceneGrid>()
+            // And the walls light is occluded by, read by
+            // `apply_light_illumination`. Missed when the two above were added
+            // — spec 031 fixed this same Principle II violation in this same
+            // plugin and left one resource out, and the test that would have
+            // caught it could not be built until spec 032 T083. Adding this
+            // plugin without `WallPlugin` panicked on the first update with
+            // "Resource does not exist", while the doc comment above claimed
+            // the opposite.
+            .init_resource::<WallSet>()
             // Registered here as well as in `InteractionPlugin`, idempotently.
             // A contributor that could only be added after the seam would not
             // be independently addable (Principle II).

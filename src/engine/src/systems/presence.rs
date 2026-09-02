@@ -11,10 +11,7 @@
 //! 3. Remote: Subscriptions receive playerPresenceUpdated events
 //! 4. Render: Presence components display cursors/names
 
-#![cfg(target_arch = "wasm32")]
-
 use bevy::prelude::*;
-use serde_json::json;
 
 /// Component: Represents a remote player's presence
 #[derive(Component, Clone, Debug)]
@@ -32,11 +29,7 @@ pub struct PlayerPresence {
 }
 
 impl PlayerPresence {
-    pub fn new(
-        player_id: String,
-        player_name: String,
-        world_id: String,
-    ) -> Self {
+    pub fn new(player_id: String, player_name: String, world_id: String) -> Self {
         Self {
             player_id,
             player_name,
@@ -117,11 +110,7 @@ pub struct LocalPlayerPresence {
 }
 
 impl LocalPlayerPresence {
-    pub fn new(
-        player_id: String,
-        player_name: String,
-        world_id: String,
-    ) -> Self {
+    pub fn new(player_id: String, player_name: String, world_id: String) -> Self {
         Self {
             player_id,
             player_name,
@@ -141,10 +130,7 @@ impl LocalPlayerPresence {
 }
 
 /// System: Broadcast local player camera position periodically
-pub fn broadcast_player_presence(
-    mut local_player: ResMut<LocalPlayerPresence>,
-    time: Res<Time>,
-) {
+pub fn broadcast_player_presence(mut local_player: ResMut<LocalPlayerPresence>, time: Res<Time>) {
     let current_time = time.elapsed_secs() as f64;
 
     if !local_player.should_broadcast(current_time) {
@@ -167,10 +153,7 @@ pub fn broadcast_player_presence(
 }
 
 /// System: Update presence indicators based on registry
-pub fn update_presence_indicators(
-    presence_registry: Res<PresenceRegistry>,
-    time: Res<Time>,
-) {
+pub fn update_presence_indicators(presence_registry: Res<PresenceRegistry>, time: Res<Time>) {
     let current_time = time.elapsed_secs() as f64;
 
     // Log updates
@@ -191,8 +174,8 @@ pub fn update_presence_indicators(
 
 /// System: Receive and process playerPresenceUpdated subscription events
 pub fn process_presence_updates(
-    mut presence_registry: ResMut<PresenceRegistry>,
-    world_event_queue: Res<crate::systems::event_dispatcher::WorldEventQueue>,
+    presence_registry: ResMut<PresenceRegistry>,
+    _world_event_queue: Res<crate::systems::event_dispatcher::WorldEventQueue>,
 ) {
     // In production, subscribe to worldEventCreated and filter for presence_updated events
     // For now, this is a stub that receives events from the server
@@ -225,8 +208,11 @@ pub fn log_presence_events(presence_registry: Res<PresenceRegistry>) {
         for presence in presence_registry.get_all() {
             eprintln!(
                 "  - {}: camera=({:.1}, {:.1}), cursor=({:.1}, {:.1})",
-                presence.player_name, presence.camera_x, presence.camera_y,
-                presence.cursor_x, presence.cursor_y
+                presence.player_name,
+                presence.camera_x,
+                presence.camera_y,
+                presence.cursor_x,
+                presence.cursor_y
             );
         }
     }

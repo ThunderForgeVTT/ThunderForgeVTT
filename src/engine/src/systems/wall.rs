@@ -1000,6 +1000,8 @@ mod tests {
             blocks_vision: true,
             blocks_movement: false,
             door_state: DoorState::Closed,
+            locked: false,
+            secret: false,
         };
         assert_eq!(wall_color(&wall, true), SELECTED_COLOR);
         assert_eq!(wall_color(&wall, false), DOOR_COLOR);

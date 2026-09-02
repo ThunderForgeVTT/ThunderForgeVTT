@@ -143,6 +143,26 @@ impl CameraManager {
 mod tests {
     use super::*;
 
+    // # Why almost every test in here changed
+    //
+    // These had never been compiled, let alone run: the crate's test build was
+    // broken (spec 032 T081-T083). In the meantime `pan` and `zoom_by` stopped
+    // writing `translation`/`scale` and started writing `target_translation`/
+    // `target_scale`, with the visible values easing toward them — so tests
+    // that panned and then read `cam.translation` were reading a value the
+    // call no longer touches, and would have failed on the first run. They now
+    // call `snap_to_target()`, which exists for exactly this, before asserting
+    // on the observable value.
+    //
+    // `zoom_in()`, `zoom_out()` and `zoom(factor)` are gone; `zoom_by(steps)`
+    // (positive is in) and `set_zoom(scale)` replaced them.
+
+    /// Pan and zoom, applied.
+    fn settled(cam: &mut CameraManager) -> &mut CameraManager {
+        cam.snap_to_target();
+        cam
+    }
+
     #[test]
     fn test_camera_manager_default() {
         let cam = CameraManager::default();
@@ -154,10 +174,10 @@ mod tests {
     fn test_pan() {
         let mut cam = CameraManager::default();
         cam.pan(Vec2::new(50.0, 30.0));
-        assert_eq!(cam.translation, Vec2::new(50.0, 30.0));
+        assert_eq!(settled(&mut cam).translation, Vec2::new(50.0, 30.0));
 
         cam.pan(Vec2::new(-20.0, 10.0));
-        assert_eq!(cam.translation, Vec2::new(30.0, 40.0));
+        assert_eq!(settled(&mut cam).translation, Vec2::new(30.0, 40.0));
     }
 
     // These previously asserted the inverted behaviour: `zoom_in()` multiplied
@@ -170,25 +190,53 @@ mod tests {
     fn zooming_in_shrinks_the_scale() {
         let mut cam = CameraManager::default();
         cam.zoom_by(1.0);
-        assert!(cam.scale < 1.0, "zooming in should shrink the scale");
+        assert!(
+            settled(&mut cam).scale < 1.0,
+            "zooming in should shrink the scale"
+        );
     }
 
     #[test]
     fn zooming_out_grows_the_scale() {
         let mut cam = CameraManager::default();
         cam.zoom_by(-1.0);
-        assert!(cam.scale > 1.0, "zooming out should grow the scale");
+        assert!(
+            settled(&mut cam).scale > 1.0,
+            "zooming out should grow the scale"
+        );
+    }
+
+    /// One notch is exactly one `ZOOM_STEP`, in the direction the name says.
+    ///
+    /// Replaces `test_zoom_with_specific_factors`, which asserted
+    /// `zoom_in()` landed on 1.1 — the inverted factor, written as the
+    /// expectation.
+    #[test]
+    fn one_notch_is_one_zoom_step() {
+        use thunderforge_canvas_core::camera::ZOOM_STEP;
+
+        let mut cam = CameraManager::default();
+        cam.zoom_by(1.0);
+        assert!((settled(&mut cam).scale - 1.0 / ZOOM_STEP).abs() < 1e-6);
+
+        cam.zoom_by(-1.0);
+        assert!((settled(&mut cam).scale - 1.0).abs() < 1e-6);
+
+        cam.set_zoom(2.0);
+        assert!((settled(&mut cam).scale - 2.0).abs() < 1e-6);
     }
 
     #[test]
     fn test_zoom_clamped() {
         let mut cam = CameraManager::default();
+        let (min, max) = (cam.zoom_min, cam.zoom_max);
 
         for _ in 0..200 {
             cam.zoom_by(1.0);
         }
         assert_eq!(
-            cam.scale, cam.zoom_min,
+            settled(&mut cam).scale,
+            min,
             "zooming in clamps at the min scale"
         );
 
@@ -196,9 +244,27 @@ mod tests {
             cam.zoom_by(-1.0);
         }
         assert_eq!(
-            cam.scale, cam.zoom_max,
+            settled(&mut cam).scale,
+            max,
             "zooming out clamps at the max scale"
         );
+    }
+
+    /// `set_zoom` is clamped too, not only the stepped path.
+    #[test]
+    fn setting_an_absolute_zoom_is_clamped_at_both_ends() {
+        let mut cam = CameraManager::default();
+        let (min, max) = (cam.zoom_min, cam.zoom_max);
+
+        cam.set_zoom(0.0001);
+        assert_eq!(settled(&mut cam).scale, min);
+
+        cam.set_zoom(10_000.0);
+        assert_eq!(settled(&mut cam).scale, max);
+
+        // And a value inside the range is taken exactly.
+        cam.set_zoom(3.0);
+        assert_eq!(settled(&mut cam).scale, 3.0);
     }
 
     #[test]
@@ -207,7 +273,7 @@ mod tests {
 
         // Pan far beyond scene bounds (infinite canvas)
         cam.pan(Vec2::new(10000.0, -5000.0));
-        assert_eq!(cam.translation, Vec2::new(10000.0, -5000.0));
+        assert_eq!(settled(&mut cam).translation, Vec2::new(10000.0, -5000.0));
         // No clamp, pan is unbounded
     }
 
@@ -217,14 +283,14 @@ mod tests {
 
         // Pan and zoom
         cam.pan(Vec2::new(100.0, -50.0));
-        cam.zoom_in();
-        cam.zoom_in();
+        cam.zoom_by(2.0);
+        cam.snap_to_target();
         assert_ne!(cam.translation, Vec2::ZERO);
         assert_ne!(cam.scale, 1.0);
 
         // Reset
         cam.reset();
-        assert_eq!(cam.translation, Vec2::ZERO);
+        assert_eq!(settled(&mut cam).translation, Vec2::ZERO);
         assert_eq!(cam.scale, 1.0);
     }
 
@@ -238,7 +304,7 @@ mod tests {
         cam.pan(Vec2::new(5.0, -10.0));
         cam.pan(Vec2::new(-15.0, 30.0));
 
-        assert_eq!(cam.translation, Vec2::new(0.0, 40.0));
+        assert_eq!(settled(&mut cam).translation, Vec2::new(0.0, 40.0));
     }
 
     #[test]
@@ -246,23 +312,23 @@ mod tests {
         let mut cam = CameraManager::default();
         let initial_scale = cam.scale;
 
-        for _ in 0..5 {
-            cam.zoom_in();
-        }
+        cam.zoom_by(5.0);
+        cam.snap_to_target();
 
-        assert!(cam.scale > initial_scale);
-        assert!(cam.scale <= cam.zoom_max);
+        assert!(cam.scale < initial_scale, "five notches in, scale shrinks");
+        assert!(cam.scale >= cam.zoom_min);
     }
 
     #[test]
     fn test_zoom_out_multiple_times() {
         let mut cam = CameraManager::default();
+        let initial_scale = cam.scale;
 
-        for _ in 0..5 {
-            cam.zoom_out();
-        }
+        cam.zoom_by(-5.0);
+        cam.snap_to_target();
 
-        assert!(cam.scale >= cam.zoom_min);
+        assert!(cam.scale > initial_scale, "five notches out, scale grows");
+        assert!(cam.scale <= cam.zoom_max);
     }
 
     #[test]
@@ -271,9 +337,10 @@ mod tests {
         let initial_scale = cam.scale;
 
         for _ in 0..10 {
-            cam.zoom_in();
-            cam.zoom_out();
+            cam.zoom_by(1.0);
+            cam.zoom_by(-1.0);
         }
+        cam.snap_to_target();
 
         // After zoom in/out cycles, scale should be close to initial
         assert!((cam.scale - initial_scale).abs() < 0.01);
@@ -285,28 +352,11 @@ mod tests {
 
         // Pan into negative space (infinite canvas)
         cam.pan(Vec2::new(-10000.0, -5000.0));
-        assert_eq!(cam.translation, Vec2::new(-10000.0, -5000.0));
+        assert_eq!(settled(&mut cam).translation, Vec2::new(-10000.0, -5000.0));
 
         // Pan back
         cam.pan(Vec2::new(10000.0, 5000.0));
-        assert_eq!(cam.translation, Vec2::ZERO);
-    }
-
-    #[test]
-    fn test_zoom_clamped_exactly_on_boundaries() {
-        let mut cam = CameraManager::default();
-
-        // Zoom to exact min
-        for _ in 0..1000 {
-            cam.zoom_out();
-        }
-        assert_eq!(cam.scale, cam.zoom_min);
-
-        // Zoom to exact max
-        for _ in 0..1000 {
-            cam.zoom_in();
-        }
-        assert_eq!(cam.scale, cam.zoom_max);
+        assert_eq!(settled(&mut cam).translation, Vec2::ZERO);
     }
 
     #[test]
@@ -315,43 +365,39 @@ mod tests {
 
         // Very large pan values (beyond typical viewport)
         cam.pan(Vec2::new(1_000_000.0, -500_000.0));
-        assert_eq!(cam.translation, Vec2::new(1_000_000.0, -500_000.0));
+        assert_eq!(
+            settled(&mut cam).translation,
+            Vec2::new(1_000_000.0, -500_000.0)
+        );
 
         cam.reset();
-        assert_eq!(cam.translation, Vec2::ZERO);
+        assert_eq!(settled(&mut cam).translation, Vec2::ZERO);
     }
 
+    /// The glide is the reason every other test in here calls `snap_to_target`:
+    /// a pan is a request, and `advance` is what carries the camera there.
     #[test]
-    fn test_zoom_with_specific_factors() {
+    fn the_camera_eases_toward_its_target_rather_than_jumping() {
         let mut cam = CameraManager::default();
-        let initial = 1.0;
+        cam.pan(Vec2::new(100.0, 0.0));
 
-        // Test 1.1x factor
-        cam.zoom_in();
-        assert!((cam.scale - 1.1).abs() < 0.001);
+        assert_eq!(
+            cam.translation,
+            Vec2::ZERO,
+            "panning moves the target, not the camera"
+        );
 
-        // Test 0.909x factor
-        cam.zoom_out();
-        assert!((cam.scale - 1.0).abs() < 0.001);
+        cam.advance(1.0 / 60.0);
+        assert!(
+            cam.translation.x > 0.0 && cam.translation.x < 100.0,
+            "one frame gets part of the way, not all of it: {}",
+            cam.translation.x
+        );
 
-        // Test exact zoom(factor)
-        cam.zoom(2.0);
-        assert!((cam.scale - 2.0).abs() < 0.001);
-    }
-
-    #[test]
-    fn test_zoom_below_minimum() {
-        let mut cam = CameraManager::default();
-        cam.zoom(0.1); // Try to zoom below min
-
-        assert!(cam.scale >= cam.zoom_min);
-    }
-
-    #[test]
-    fn test_zoom_above_maximum() {
-        let mut cam = CameraManager::default();
-        cam.zoom(10.0); // Try to zoom above max
-
-        assert!(cam.scale <= cam.zoom_max);
+        // Enough frames and it settles exactly, rather than approaching forever.
+        for _ in 0..120 {
+            cam.advance(1.0 / 60.0);
+        }
+        assert_eq!(cam.translation, Vec2::new(100.0, 0.0));
     }
 }

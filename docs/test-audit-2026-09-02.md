@@ -37,7 +37,8 @@ The pattern has bitten this repository repeatedly:
 | Web: `missing` reported for a loaded pack | `appearance-context.test.ts` | ✓ `missing = requestedId` |
 | Web: CSRF never asserted | `api/__tests__/graphqlClient.test.ts` | ✓ both `withCsrf(...)` call sites stripped |
 | 6. Six vacuous e2e absence assertions | six spec files | replaced with positive assertions; **pending a live re-run** |
-| 3 (partly). Engine suite never built | `src/engine/Cargo.toml` — winit confined to wasm | one blocker of two; see T082-T084 |
+| 3. Engine suite never built | `src/engine/` — see below | **done: 0 tests → 192, all passing** |
+| 4. Green ticks asserting nothing | `tests_f1_unit.rs`, `tests_f2_f4_integration.rs` | deleted |
 
 **A note on fixing these.** The first attempt at the Year Zero boundary test
 used `super::ABILITY_MIN` and `super::ABILITY_MAX`, which made it assert that

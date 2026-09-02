@@ -293,6 +293,14 @@ mod tests {
         assert_eq!(pos1.distance_to(pos2), 5.0);
     }
 
+    /// Health is the only thing `DerivedStats::calculate` still derives.
+    ///
+    /// This test used to build a `TokenAbilities { dexterity: 14 }` and assert
+    /// an armour class of 12 and an initiative of 2. Both fields, and the
+    /// abilities struct itself, were deleted when D&D 5e's rules were taken
+    /// out of the renderer (see the comment inside `calculate`, and ADR-060) —
+    /// so those three assertions described a concept the engine no longer has,
+    /// and are gone rather than disabled. What remains is what is still true.
     #[test]
     fn test_derived_stats_calculation() {
         let token = Token {
@@ -301,10 +309,6 @@ mod tests {
             label: Some("Test Token".to_string()),
             health: Some(50),
             max_health: Some(100),
-            abilities: TokenAbilities {
-                dexterity: Some(14),
-                ..Default::default()
-            },
             schema_version: 1,
             ..Default::default()
         };
@@ -312,10 +316,36 @@ mod tests {
         let stats = DerivedStats::calculate(&token);
 
         assert_eq!(stats.health_percentage, Some(50.0));
-        assert_eq!(stats.is_dead, false);
-        assert_eq!(stats.is_full_health, false);
-        assert_eq!(stats.armor_class, Some(12)); // 10 + 2 (DEX mod)
-        assert_eq!(stats.initiative, Some(2));
+        assert!(!stats.is_dead);
+        assert!(!stats.is_full_health);
+    }
+
+    /// The boundaries `test_derived_stats_calculation` steps over: dead at
+    /// zero and below, full at max and above.
+    #[test]
+    fn derived_stats_mark_the_health_boundaries() {
+        let at_zero = DerivedStats::calculate(&Token {
+            health: Some(0),
+            max_health: Some(100),
+            ..Default::default()
+        });
+        assert!(at_zero.is_dead);
+        assert_eq!(at_zero.health_percentage, Some(0.0));
+
+        let at_max = DerivedStats::calculate(&Token {
+            health: Some(100),
+            max_health: Some(100),
+            ..Default::default()
+        });
+        assert!(at_max.is_full_health);
+        assert!(!at_max.is_dead);
+        assert_eq!(at_max.health_percentage, Some(100.0));
+
+        // No health declared at all: nothing is derived, and in particular the
+        // token is not reported dead for want of a number.
+        let unknown = DerivedStats::calculate(&Token::default());
+        assert_eq!(unknown.health_percentage, None);
+        assert!(!unknown.is_dead);
     }
 
     #[test]
@@ -325,6 +355,6 @@ mod tests {
 
         assert_eq!(cache.last_server_position, pos);
         assert_eq!(cache.last_server_health, Some(100));
-        assert_eq!(cache.is_pending, false);
+        assert!(!cache.is_pending);
     }
 }

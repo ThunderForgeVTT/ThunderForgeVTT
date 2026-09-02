@@ -11,14 +11,10 @@
 //! 5. On conflict (event_code=2), fire Trigger<ConflictDetected>
 //! 6. sync_token_positions_from_server applies server position
 
-#![cfg(target_arch = "wasm32")]
-
 use bevy::prelude::*;
-use serde_json::json;
 use std::collections::HashMap;
 
 use crate::systems::token_sync_d2::{GraphQLMutationQueue, PendingMutationInfo};
-use crate::components::Token;
 
 /// Event: Server rejected mutation (validation error, permission denied, etc)
 #[derive(Event, Clone, Debug)]
@@ -46,12 +42,18 @@ pub fn send_pending_mutations(
 
     for mutation_info in pending {
         // Skip if already sent (waiting for response)
-        if sender_state.in_flight.contains_key(&mutation_info.mutation_id) {
+        if sender_state
+            .in_flight
+            .contains_key(&mutation_info.mutation_id)
+        {
             continue;
         }
 
         // Skip if recently sent (batching + backpressure)
-        if sender_state.recently_sent.contains(&mutation_info.mutation_id) {
+        if sender_state
+            .recently_sent
+            .contains(&mutation_info.mutation_id)
+        {
             continue;
         }
 
@@ -90,7 +92,7 @@ pub fn handle_mutation_responses(
 
     // Collect completed mutation IDs first (avoid borrow issues)
     {
-        for (mutation_id, _info) in sender_state.in_flight.iter() {
+        for mutation_id in sender_state.in_flight.keys() {
             // Simulate server response delay (2 frames minimum)
             let frames_in_flight = sender_state.frames_since_clear;
 
@@ -150,14 +152,20 @@ impl Default for MutationSenderState {
     }
 }
 
-/// GraphQL mutation for upsertToken
+/// GraphQL mutation for upsertToken.
+///
+/// `pub` because nothing in the crate calls it: the sender that would have
+/// posted this body is still a simulation (see `handle_mutation_response`
+/// above). It is the module's statement of the wire format, and its tests
+/// cover it, so it is exported rather than deleted or `#[allow]`ed.
+///
 /// Example payload:
 /// ```json
 /// {
 ///   "query": "mutation { upsertToken(input: { world_id: \"...\", scene_id: \"...\", token_id: \"...\", x: 100, y: 200 }) { id, x, y, event_code } }"
 /// }
 /// ```
-fn build_upsert_token_mutation(
+pub fn build_upsert_token_mutation(
     world_id: &str,
     scene_id: &str,
     token_id: &str,
@@ -204,13 +212,7 @@ mod tests {
 
     #[test]
     fn test_build_upsert_token_mutation() {
-        let mutation = build_upsert_token_mutation(
-            "world-1",
-            "scene-1",
-            "token-1",
-            100,
-            200,
-        );
+        let mutation = build_upsert_token_mutation("world-1", "scene-1", "token-1", 100, 200);
 
         assert!(mutation.contains("upsertToken"));
         assert!(mutation.contains("world-1"));

@@ -145,7 +145,7 @@ mod tests {
         );
 
         let tokens = load_test_tokens(&scene);
-        let valid_types = vec!["character", "npc", "object"];
+        let valid_types = ["character", "npc", "object"];
         for token in &tokens {
             assert!(
                 valid_types.contains(&token.token_type.as_str()),

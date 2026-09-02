@@ -1,31 +1,47 @@
-//! Phase 4.9.F.1: Comprehensive Unit Tests for Phase 4.9 Systems
+//! Phase 4.9.F.1: Unit Tests for Phase 4.9 Systems
 //!
-//! This module contains 60+ unit tests covering:
+//! # This file had never been compiled
+//!
+//! It was gated `#![cfg(all(test, target_arch = "wasm32"))]` **and** never
+//! declared as a module anywhere, so none of it was reachable on any target.
+//! Its header claimed "60+ unit tests" and its summary "50+"; there are 33.
+//! Both claims, and the `test_suite_coverage` function that printed the
+//! second one, are gone (spec 032 T083/T084).
+//!
+//! Covers:
 //! - Token sync systems (D.2)
 //! - Mutation sender (D.2.2)
 //! - Conflict visualization (D.2.3)
 //! - Presence systems (D.3)
 //! - WebSocket connectivity (D.1)
 //! - Event dispatcher (D.1)
-//!
-//! Run with: cargo test --lib --all
 
-#![cfg(all(test, target_arch = "wasm32"))]
+#![cfg(test)]
 
 use bevy::prelude::*;
-use std::collections::HashMap;
 
 // Import all Phase 4.9.D systems for testing
-use crate::systems::token_sync_d2::{
-    GraphQLMutationQueue, PendingMutation, RollbackState,
-};
-use crate::systems::mutation_sender::{MutationSenderState, MutationRejected, ConflictDetected};
 use crate::systems::conflict_visualization::ConflictMarker;
+use crate::systems::event_dispatcher::{WorldEventQueue, WorldEventReceived};
+use crate::systems::mutation_sender::{ConflictDetected, MutationRejected, MutationSenderState};
 use crate::systems::presence::{
-    PlayerPresence, PresenceRegistry, LocalPlayerPresence, PresenceCursor, PresenceLabel,
+    LocalPlayerPresence, PlayerPresence, PresenceCursor, PresenceLabel, PresenceRegistry,
 };
-use crate::systems::event_dispatcher::WorldEventQueue;
-use crate::components::Token;
+use crate::systems::token_sync_d2::{GraphQLMutationQueue, PendingMutation, RollbackState};
+
+/// `GraphQLMutationQueue` stores pending mutations in a `HashMap`, so
+/// `get_pending()` comes back in whatever order the map iterates. Several
+/// tests here indexed it positionally and asserted `pending[0]` was the token
+/// they pushed first, which is not a property the queue has.
+fn pending_for<'a>(
+    pending: &'a [crate::systems::token_sync_d2::PendingMutationInfo],
+    token_id: &str,
+) -> &'a crate::systems::token_sync_d2::PendingMutationInfo {
+    pending
+        .iter()
+        .find(|info| info.token_id == token_id)
+        .unwrap_or_else(|| panic!("no pending mutation for {token_id}"))
+}
 
 // ============================================================================
 // F.1.1: Token Sync System Tests (D.2)
@@ -69,9 +85,10 @@ fn test_graphql_mutation_queue_push_and_get() {
 
     let pending = queue.get_pending();
     assert_eq!(pending.len(), 2);
-    assert_eq!(pending[0].token_id, "token-1");
-    assert_eq!(pending[1].x, 150);
-    assert_eq!(pending[1].y, 250);
+    assert_eq!(pending_for(&pending, "token-1").x, 100);
+    assert_eq!(pending_for(&pending, "token-1").y, 200);
+    assert_eq!(pending_for(&pending, "token-2").x, 150);
+    assert_eq!(pending_for(&pending, "token-2").y, 250);
 }
 
 #[test]
@@ -86,6 +103,12 @@ fn test_graphql_mutation_queue_mark_complete() {
     assert_eq!(queue.get_pending().len(), 0);
 }
 
+/// An unsent mutation never times out, and a sent one does.
+///
+/// The original had an empty `for` loop over the pending list with a comment
+/// saying the body belonged in real code, then asserted zero timeouts
+/// "because we haven't set sent_at" — an assertion that held for any
+/// implementation of `check_timeouts`, including one that never fires.
 #[test]
 fn test_graphql_mutation_queue_timeout_detection() {
     let mut queue = GraphQLMutationQueue::new();
@@ -93,17 +116,20 @@ fn test_graphql_mutation_queue_timeout_detection() {
     queue.push_move_token("token-1".to_string(), 100, 200);
     queue.push_move_token("token-2".to_string(), 150, 250);
 
-    // Simulate both mutations sent at time 0.0
-    let pending = queue.get_pending();
-    for mutation_info in pending.iter() {
-        // In real code, this would be set by send_pending_mutations
-    }
+    // `sent_at` is 0.0 until something actually sends: an unsent mutation is
+    // not overdue, however late it is, and it stays in the queue.
+    assert!(queue.check_timeouts(6.0).is_empty());
+    assert_eq!(queue.get_pending().len(), 2);
+    assert!(
+        queue.get_pending().iter().all(|info| info.sent_at == 0.0),
+        "push_move_token leaves sent_at at 0.0"
+    );
 
-    // Check timeout at time 6.0 (> 5.0s timeout)
-    let timed_out = queue.check_timeouts(6.0);
-    // Note: We can't directly mutate sent_at in this test, so this is a placeholder
-    // In integration tests, we'll verify full timeout detection
-    assert_eq!(timed_out.len(), 0); // Because we haven't set sent_at
+    // The overdue half of this cannot be asserted from here: `sent_at` is set
+    // by nothing in the crate and `GraphQLMutationQueue` exposes no way to set
+    // it, so `check_timeouts` cannot fire for any input. Reported rather than
+    // papered over with a setter added for the test's benefit — see spec 032
+    // T083.
 }
 
 #[test]
@@ -112,7 +138,7 @@ fn test_graphql_mutation_queue_multiple_operations() {
 
     // Add 5 mutations
     for i in 0..5 {
-        queue.push_move_token(format!("token-{}", i), 100 + i as i32, 200 + i as i32);
+        queue.push_move_token(format!("token-{i}"), 100 + i, 200 + i);
     }
 
     assert_eq!(queue.get_pending().len(), 5);
@@ -417,26 +443,48 @@ fn test_presence_label_component() {
 // F.1.5: Event Dispatcher Tests (D.1)
 // ============================================================================
 
+fn world_event(event_id: i64) -> WorldEventReceived {
+    WorldEventReceived {
+        event_id,
+        event_code: 1,
+        token_event: None,
+        token_id: Some(format!("token-{event_id}")),
+        created_by: None,
+        event_type: None,
+    }
+}
+
 #[test]
 fn test_world_event_queue_creation() {
     let queue = WorldEventQueue::new();
     // Queue should start empty
-    assert_eq!(queue.len(), 0);
+    assert!(queue.peek().is_none());
 }
 
+/// The original pushed nothing — its loop body was a comment saying real code
+/// would create events — and then asserted the drain was empty, which is true
+/// of a queue that drops everything pushed into it. It now pushes.
 #[test]
 fn test_world_event_queue_push_and_drain() {
     let mut queue = WorldEventQueue::new();
 
-    // Push some events
     for i in 0..3 {
-        // In real code, we'd create actual WorldEventReceived events
-        // For now, just verify the queue structure
+        queue.push(world_event(i));
     }
 
-    // Drain should return all events
+    // Peek does not consume.
+    assert_eq!(queue.peek().map(|e| e.event_id), Some(0));
+
+    // Drain returns everything, in the order it was pushed.
     let drained = queue.drain();
-    assert_eq!(drained.len(), 0); // Empty since we didn't actually push
+    assert_eq!(
+        drained.iter().map(|e| e.event_id).collect::<Vec<_>>(),
+        vec![0, 1, 2]
+    );
+
+    // And leaves the queue empty.
+    assert!(queue.drain().is_empty());
+    assert!(queue.peek().is_none());
 }
 
 // ============================================================================
@@ -595,34 +643,4 @@ fn test_stale_presence_cleanup_scenario() {
 
     assert_eq!(registry.count(), 1); // Only player-0 remains
     assert!(registry.get("player-0").is_some());
-}
-
-// ============================================================================
-// Summary
-// ============================================================================
-
-// Total tests: 50+
-// Coverage:
-//   - Token Sync: 6 tests
-//   - Mutation Sender: 6 tests
-//   - Conflict Visualization: 3 tests
-//   - Presence System: 10 tests
-//   - Event Dispatcher: 2 tests
-//   - Integration Scenarios: 5+ tests
-//
-// Run with: cargo test --lib --all
-
-#[cfg(test)]
-mod summary {
-    #[test]
-    fn test_suite_coverage() {
-        eprintln!("Phase 4.9.F.1 Unit Tests Summary:");
-        eprintln!("  ✅ 50+ unit tests implemented");
-        eprintln!("  ✅ Token Sync System: 6 tests");
-        eprintln!("  ✅ Mutation Sender: 6 tests");
-        eprintln!("  ✅ Conflict Visualization: 3 tests");
-        eprintln!("  ✅ Presence System: 10 tests");
-        eprintln!("  ✅ Event Dispatcher: 2 tests");
-        eprintln!("  ✅ Integration Scenarios: 5+ tests");
-    }
 }

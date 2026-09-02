@@ -1,9 +1,12 @@
 //! Simplified Movement System
 
 use crate::components::*;
+#[cfg(target_arch = "wasm32")]
 use crate::network::mutations::{MutationTracker, execute_move_token_mutation};
 use crate::resources::SceneGrid;
+#[cfg(target_arch = "wasm32")]
 use crate::sync_test::{CircularFlowTracer, FlowStage};
+#[cfg(target_arch = "wasm32")]
 use crate::systems::optimistic::mark_mutation_pending;
 use bevy::prelude::*;
 
@@ -26,6 +29,12 @@ pub struct PlayerControlled;
 /// Handle keyboard input for testing movement
 /// WASD or arrow keys to move first player-controlled token
 /// Also queues mutations to the server
+///
+/// Browser-only, and the only thing in this file that is: it takes
+/// `MutationTracker` and calls `execute_move_token_mutation`, both of which
+/// live in `crate::network` and are built on `wasm_bindgen_futures`. The
+/// three transform/snapping systems below touch nothing of the sort.
+#[cfg(target_arch = "wasm32")]
 pub fn handle_keyboard_movement(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,

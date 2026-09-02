@@ -872,11 +872,10 @@ mod tests {
     // in radius regardless of walls, short-circuiting `is_visible` entirely.
     // These drive the real Bevy system end to end (not just the pure
     // geometry) to prove that short-circuit actually takes effect. Per this
-    // crate's module doc (see `resources/wall.rs`), tests here only
-    // compile-check under `cargo check --target wasm32-unknown-unknown
-    // --tests`, they don't execute in this environment — the equivalent
-    // pure-geometry coverage that DOES execute lives in
-    // `thunderforge_canvas_core::wall`'s tests.
+    // crate's tests now build and run on the host (spec 032 T083); they used
+    // to only compile-check under `cargo check --target
+    // wasm32-unknown-unknown --tests`. The equivalent pure-geometry coverage
+    // lives in `thunderforge_canvas_core::wall`'s tests.
     mod apply_light_illumination_tests {
         use super::*;
         use crate::TokenIdentity;
@@ -898,11 +897,30 @@ mod tests {
                 blocks_vision: true,
                 blocks_movement: false,
                 door_state: CoreDoorState::Closed,
+                locked: false,
+                secret: false,
             });
             app.insert_resource(wall_set);
             app.init_resource::<EngineLightSet>();
+            // Without this the scene is in daylight — `SceneAmbient` defaults
+            // to `AmbientLight::daylight()` — and `illumination_at` reports
+            // Bright everywhere before a wall or a light is consulted. Both
+            // tests below then pass whatever the occlusion code does, which
+            // is exactly what happened while this suite could not be built:
+            // the shadow-casting case failed on its first real run, and its
+            // non-shadow-casting companion had been passing vacuously.
+            app.insert_resource(crate::resources::vision::SceneAmbient(
+                thunderforge_canvas_core::vision::AmbientLight::unlit(),
+            ));
 
+            // `Sprite` is not decoration here: `apply_light_illumination`'s
+            // token query is `(&Transform, Option<&TokenVision>, &mut Sprite,
+            // &mut Visibility)`, so an entity without one is never visited and
+            // its `Visibility` is never written. Without it both tests below
+            // read back the `Visibility::Inherited` they spawned with and drew
+            // conclusions about occlusion from it.
             app.world_mut().spawn((
+                Sprite::default(),
                 Transform::from_translation(token_pos.extend(0.0)),
                 TokenIdentity("token-1".to_string()),
                 Visibility::Inherited,

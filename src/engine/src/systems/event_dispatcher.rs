@@ -3,14 +3,9 @@
 //! Converts incoming GraphQL ServerEvent messages into an event queue,
 //! enabling systems to react to server updates in a decoupled way.
 
-#![cfg(target_arch = "wasm32")]
-
 use bevy::prelude::*;
 use serde_json::Value;
 use std::collections::VecDeque;
-
-use crate::network::ServerEvent;
-use crate::network::websocket_client::WebSocketClient;
 
 /// Bevy event representing a world event from server
 #[derive(Clone, Debug)]
@@ -59,7 +54,7 @@ impl WorldEventQueue {
 }
 
 /// Extract token ID from JSONB payload
-fn extract_token_id(payload: &Value) -> Option<String> {
+pub fn extract_token_id(payload: &Value) -> Option<String> {
     payload
         .get("token_id")
         .or_else(|| payload.get("tokenId"))
@@ -68,7 +63,7 @@ fn extract_token_id(payload: &Value) -> Option<String> {
 }
 
 /// Extract user ID from JSONB payload
-fn extract_user_id(payload: &Value) -> Option<String> {
+pub fn extract_user_id(payload: &Value) -> Option<String> {
     payload
         .get("created_by")
         .or_else(|| payload.get("createdBy"))
@@ -77,7 +72,7 @@ fn extract_user_id(payload: &Value) -> Option<String> {
 }
 
 /// Extract event type from JSONB payload
-fn extract_event_type(payload: &Value) -> Option<String> {
+pub fn extract_event_type(payload: &Value) -> Option<String> {
     payload
         .get("event_type")
         .or_else(|| payload.get("eventType"))
@@ -85,53 +80,23 @@ fn extract_event_type(payload: &Value) -> Option<String> {
         .map(|s| s.to_string())
 }
 
-/// System: Dispatch incoming server events to ECS event queue
-pub fn dispatch_world_events(
-    mut client: ResMut<WebSocketClient>,
-    mut queue: ResMut<WorldEventQueue>,
-) {
-    let server_events = client.drain_events();
-
-    for server_event in server_events {
-        let token_id = server_event
-            .token_event
-            .as_ref()
-            .and_then(|payload| extract_token_id(payload));
-
-        let created_by = server_event
-            .token_event
-            .as_ref()
-            .and_then(|payload| extract_user_id(payload));
-
-        let event_type = server_event
-            .token_event
-            .as_ref()
-            .and_then(|payload| extract_event_type(payload));
-
-        let event = WorldEventReceived {
-            event_id: server_event.id,
-            event_code: server_event.event_code,
-            token_event: server_event.token_event,
-            token_id,
-            created_by,
-            event_type,
-        };
-
-        eprintln!(
-            "[Phase4.9.D📡] Event dispatched: id={}, code={}, token_id={:?}",
-            event.event_id, event.event_code, event.token_id
-        );
-
-        queue.push(event);
-    }
-}
+// `dispatch_world_events` was here.
+//
+// It took `ResMut<WebSocketClient>` from `crate::network::websocket_client` —
+// a module `network/mod.rs` does not declare. `network/websocket_client.rs`
+// and `network/transport.rs` are files on disk that are not part of the crate
+// on any target, exactly as this module and four of its neighbours were
+// (spec 032 T083). So the function could not compile against the crate as it
+// exists, and nothing called it. Removed rather than resurrected: reviving it
+// means deciding what the WebSocket transport is, which is a decision, not a
+// test repair.
+//
+// The queue it fed, and everything that reads that queue, is intact.
 
 /// System: Log all world events (for debugging)
-pub fn log_world_events(
-    mut queue: ResMut<WorldEventQueue>,
-) {
+pub fn log_world_events(mut queue: ResMut<WorldEventQueue>) {
     let events = queue.drain();
-    
+
     for event in events {
         let event_name = match event.event_code {
             1 => "NORMAL",

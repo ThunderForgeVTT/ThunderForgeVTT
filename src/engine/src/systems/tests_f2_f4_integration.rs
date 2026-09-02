@@ -8,17 +8,20 @@
 //! - Offline/reconnect scenarios
 //!
 //! These tests verify the full circular event-driven data flow.
-//! Run with: cargo test --lib --all
+//!
+//! # This file had never been compiled
+//!
+//! Gated `#![cfg(all(test, target_arch = "wasm32"))]` and never declared as a
+//! module, so none of it was reachable on any target (spec 032 T083). Two
+//! things went with the ungating: `scenario_mutation_timeout_and_rollback`,
+//! which had no assertions at all, and `test_suite_coverage_f2_f4`, which was
+//! a wall of `eprintln!` announcing that the tests above it had passed
+//! whether or not they had. See T084.
 
-#![cfg(all(test, target_arch = "wasm32"))]
-
-use std::collections::VecDeque;
+#![cfg(test)]
 
 // Integration test scenarios
-#[cfg(test)]
 mod integration_tests_f2 {
-    use super::*;
-
     /// Test Scenario 1: Single user moves token locally
     /// Expected: Mutation queued → sent → server validates → position synced
     #[test]
@@ -28,7 +31,10 @@ mod integration_tests_f2 {
         // 1. Initial state: token at (0, 0)
         let initial_x = 0;
         let initial_y = 0;
-        eprintln!("  1. Initial token position: ({}, {})", initial_x, initial_y);
+        eprintln!(
+            "  1. Initial token position: ({}, {})",
+            initial_x, initial_y
+        );
 
         // 2. Player moves token to (100, 200)
         let target_x = 100;
@@ -36,8 +42,7 @@ mod integration_tests_f2 {
         eprintln!("  2. Player moves to: ({}, {})", target_x, target_y);
 
         // 3. Queue mutation
-        let mut queue =
-            crate::systems::token_sync_d2::GraphQLMutationQueue::new();
+        let mut queue = crate::systems::token_sync_d2::GraphQLMutationQueue::new();
         queue.push_move_token("token-1".to_string(), target_x, target_y);
 
         let pending = queue.get_pending();
@@ -48,8 +53,7 @@ mod integration_tests_f2 {
         eprintln!("  3. Mutation queued: {:?}", pending[0].mutation_id);
 
         // 4. Mutation sent
-        let mut sender_state =
-            crate::systems::mutation_sender::MutationSenderState::default();
+        let mut sender_state = crate::systems::mutation_sender::MutationSenderState::default();
         let mutation_id = pending[0].mutation_id.clone();
         sender_state.in_flight.insert(
             mutation_id.clone(),
@@ -79,12 +83,9 @@ mod integration_tests_f2 {
     /// Expected: Both mutations queued → both sent → both synced independently
     #[test]
     fn scenario_two_players_concurrent_moves_no_conflict() {
-        eprintln!(
-            "\n[SCENARIO 2] Two Players Concurrent Moves (No Conflict)"
-        );
+        eprintln!("\n[SCENARIO 2] Two Players Concurrent Moves (No Conflict)");
 
-        let mut queue =
-            crate::systems::token_sync_d2::GraphQLMutationQueue::new();
+        let mut queue = crate::systems::token_sync_d2::GraphQLMutationQueue::new();
 
         // Player 1 moves token-1
         eprintln!("  1. Player 1 moves token-1 to (100, 100)");
@@ -125,23 +126,29 @@ mod integration_tests_f2 {
     /// Expected: Both mutations sent → server detects LWW conflict → one wins
     #[test]
     fn scenario_conflict_detection_same_token() {
-        eprintln!(
-            "\n[SCENARIO 3] Conflict Detection (Same Token, Concurrent Moves)"
-        );
+        eprintln!("\n[SCENARIO 3] Conflict Detection (Same Token, Concurrent Moves)");
 
         // Both players move same token
         eprintln!("  1. Player 1 moves token-1 to (100, 100)");
         eprintln!("  2. Player 2 moves token-1 to (200, 200)");
 
-        let mut queue =
-            crate::systems::token_sync_d2::GraphQLMutationQueue::new();
+        let mut queue = crate::systems::token_sync_d2::GraphQLMutationQueue::new();
 
         // Simulate two mutations for same token
+        // Positional indexing into `get_pending()` was an order assumption a
+        // `HashMap` does not honour; the second mutation is the one that was
+        // not there a moment ago.
         queue.push_move_token("token-1".to_string(), 100, 100);
         let mut_1 = queue.get_pending()[0].mutation_id.clone();
 
         queue.push_move_token("token-1".to_string(), 200, 200);
-        let mut_2 = queue.get_pending()[1].mutation_id.clone();
+        let pending = queue.get_pending();
+        assert_eq!(pending.len(), 2, "same token, two moves, two mutations");
+        let mut_2 = pending
+            .iter()
+            .map(|info| info.mutation_id.clone())
+            .find(|id| *id != mut_1)
+            .expect("the second move gets its own mutation id");
 
         eprintln!("  3. Both mutations queued");
 
@@ -151,62 +158,31 @@ mod integration_tests_f2 {
         eprintln!("  5. mut_1 rolled back, mut_2 wins");
 
         // Mark mut_1 as conflicted
-        let conflict_event =
-            crate::systems::mutation_sender::ConflictDetected {
-                mutation_id: mut_1,
-                token_id: "token-1".to_string(),
-                conflict_code: 2,
-            };
+        let conflict_event = crate::systems::mutation_sender::ConflictDetected {
+            mutation_id: mut_1.clone(),
+            token_id: "token-1".to_string(),
+            conflict_code: 2,
+        };
 
         assert_eq!(conflict_event.conflict_code, 2);
+        assert_eq!(conflict_event.mutation_id, mut_1, "the loser is recorded");
+        assert_ne!(mut_1, mut_2, "the winner is a different mutation");
         eprintln!("  6. Conflict recorded for audit trail");
         eprintln!("  ✅ Scenario 3 passed");
     }
 
-    /// Test Scenario 4: Mutation timeout and rollback
-    /// Expected: Mutation sent but no response → timeout after 5s → rollback to original
-    #[test]
-    fn scenario_mutation_timeout_and_rollback() {
-        eprintln!("\n[SCENARIO 4] Mutation Timeout and Rollback");
-
-        eprintln!("  1. Token at (0, 0)");
-
-        // Queue mutation
-        let mut queue =
-            crate::systems::token_sync_d2::GraphQLMutationQueue::new();
-        queue.push_move_token("token-1".to_string(), 100, 100);
-
-        eprintln!("  2. Token moves to (100, 100) - optimistic");
-
-        // Simulate mutation sent but no response
-        let pending = queue.get_pending();
-        let mutation_id = pending[0].mutation_id.clone();
-
-        let mut sender_state =
-            crate::systems::mutation_sender::MutationSenderState::default();
-        sender_state.in_flight.insert(
-            mutation_id.clone(),
-            crate::systems::token_sync_d2::PendingMutationInfo {
-                mutation_id: mutation_id.clone(),
-                token_id: "token-1".to_string(),
-                x: 100,
-                y: 100,
-                sent_at: 1.0,
-                timeout_secs: 5.0,
-            },
-        );
-
-        eprintln!("  3. Mutation sent to server at t=1.0s");
-
-        // Check timeout at t=6.0 (> 5s timeout)
-        let timed_out =
-            queue.check_timeouts(6.0);
-        eprintln!("  4. At t=6.0s: timeout detected");
-
-        // Rollback to (0, 0)
-        eprintln!("  5. Rollback to original position: (0, 0)");
-        eprintln!("  ✅ Scenario 4 passed");
-    }
+    // Scenario 4 — "Mutation timeout and rollback" — is deliberately absent.
+    //
+    // It had no assertions: it bound `queue.check_timeouts(6.0)` to a
+    // variable it never read, printed five progress lines and then
+    // "✅ Scenario 4 passed" unconditionally. It could not have had a real
+    // one either: `GraphQLMutationQueue::push_move_token` sets `sent_at: 0.0`,
+    // nothing in the crate ever sets it to anything else, and
+    // `check_timeouts` skips every mutation whose `sent_at` is 0.0 — so the
+    // timeout path is unreachable, and the rollback it was named for never
+    // happens. The reachable half of that (an unsent mutation does not time
+    // out) is asserted in `tests_f1_unit::test_graphql_mutation_queue_timeout
+    // _detection`. See spec 032 T084.
 
     /// Test Scenario 5: Player presence broadcast and reception
     /// Expected: Local player broadcasts every 500ms → remote receives → displays
@@ -238,12 +214,11 @@ mod integration_tests_f2 {
         eprintln!("  5. Ready at t=1.0s (>= 0.5s interval)");
 
         // Simulate receiving remote player presence
-        let remote_presence =
-            crate::systems::presence::PlayerPresence::new(
-                "player-2".to_string(),
-                "Bob".to_string(),
-                "world-1".to_string(),
-            );
+        let remote_presence = crate::systems::presence::PlayerPresence::new(
+            "player-2".to_string(),
+            "Bob".to_string(),
+            "world-1".to_string(),
+        );
 
         let mut registry = crate::systems::presence::PresenceRegistry::default();
         registry.add_or_update(remote_presence);
@@ -286,12 +261,11 @@ mod integration_tests_f2 {
         assert_eq!(registry.count(), 2);
 
         // Alice sends update at t=5.0s
-        let mut alice_updated =
-            crate::systems::presence::PlayerPresence::new(
-                "player-1".to_string(),
-                "Alice".to_string(),
-                "world-1".to_string(),
-            );
+        let mut alice_updated = crate::systems::presence::PlayerPresence::new(
+            "player-1".to_string(),
+            "Alice".to_string(),
+            "world-1".to_string(),
+        );
         alice_updated.last_seen = 5.0;
         registry.add_or_update(alice_updated);
 
@@ -307,10 +281,7 @@ mod integration_tests_f2 {
             .map(|p| p.player_id.clone())
             .collect();
 
-        eprintln!(
-            "  3. At t=15.0s: Bob is stale (last_seen=0, > 10s)",
-            
-        );
+        eprintln!("  3. At t=15.0s: Bob is stale (last_seen=0, > 10s)",);
         assert!(stale_players.contains(&"player-2".to_string()));
 
         // Remove stale players
@@ -365,15 +336,14 @@ mod integration_tests_f2 {
     fn scenario_rapid_token_movements() {
         eprintln!("\n[SCENARIO 8] Rapid Token Movements (Multiple Queued)");
 
-        let mut queue =
-            crate::systems::token_sync_d2::GraphQLMutationQueue::new();
+        let mut queue = crate::systems::token_sync_d2::GraphQLMutationQueue::new();
 
         // Simulate rapid clicks
         eprintln!("  1. User rapidly moves token:");
         for i in 0..5 {
             let x = 100 + (i * 20);
             let y = 100 + (i * 20);
-            queue.push_move_token("token-1".to_string(), x as i32, y as i32);
+            queue.push_move_token("token-1".to_string(), x, y);
             eprintln!("     - Movement {}: ({}, {})", i + 1, x, y);
         }
 
@@ -401,27 +371,24 @@ mod performance_tests_f4 {
     fn test_performance_10_concurrent_players() {
         eprintln!("\n[PERFORMANCE TEST] 10 Concurrent Players");
 
-        let mut queue =
-            crate::systems::token_sync_d2::GraphQLMutationQueue::new();
-        let mut presence_registry =
-            crate::systems::presence::PresenceRegistry::default();
+        let mut queue = crate::systems::token_sync_d2::GraphQLMutationQueue::new();
+        let mut presence_registry = crate::systems::presence::PresenceRegistry::default();
 
         // Simulate 10 players
         for player_id in 0..10 {
             // Each player moves one token
             let token_id = format!("token-{}", player_id);
-            let x = 100 + (player_id as i32 * 20);
-            let y = 100 + (player_id as i32 * 20);
+            let x = 100 + (player_id * 20);
+            let y = 100 + (player_id * 20);
 
             queue.push_move_token(token_id.clone(), x, y);
 
             // Add player to presence registry
-            let mut presence =
-                crate::systems::presence::PlayerPresence::new(
-                    format!("player-{}", player_id),
-                    format!("Player {}", player_id),
-                    "world-1".to_string(),
-                );
+            let mut presence = crate::systems::presence::PlayerPresence::new(
+                format!("player-{}", player_id),
+                format!("Player {}", player_id),
+                "world-1".to_string(),
+            );
             presence.camera_x = x as f32;
             presence.camera_y = y as f32;
 
@@ -442,14 +409,13 @@ mod performance_tests_f4 {
     fn test_performance_100_rapid_mutations() {
         eprintln!("\n[PERFORMANCE TEST] 100 Rapid Mutations");
 
-        let mut queue =
-            crate::systems::token_sync_d2::GraphQLMutationQueue::new();
+        let mut queue = crate::systems::token_sync_d2::GraphQLMutationQueue::new();
 
         // Queue 100 mutations
         for i in 0..100 {
             let token_id = format!("token-{}", i % 10); // 10 unique tokens
-            let x = (i as i32 * 5) % 1000;
-            let y = (i as i32 * 3) % 800;
+            let x = (i * 5) % 1000;
+            let y = (i * 3) % 800;
 
             queue.push_move_token(token_id, x, y);
         }
@@ -470,12 +436,11 @@ mod performance_tests_f4 {
 
         // Add 1000 players
         for i in 0..1000 {
-            let mut presence =
-                crate::systems::presence::PlayerPresence::new(
-                    format!("player-{}", i),
-                    format!("Player {}", i),
-                    "world-1".to_string(),
-                );
+            let mut presence = crate::systems::presence::PlayerPresence::new(
+                format!("player-{}", i),
+                format!("Player {}", i),
+                "world-1".to_string(),
+            );
 
             // Half are fresh, half are stale
             if i % 2 == 0 {
@@ -499,35 +464,5 @@ mod performance_tests_f4 {
         assert_eq!(stale_count, 500); // Half should be stale
 
         eprintln!("  ✅ 1000 presence players: OK ({} stale)", stale_count);
-    }
-}
-
-// ============================================================================
-// Summary
-// ============================================================================
-
-/// Run all tests with: cargo test --lib --all
-/// Expected: All scenarios pass, demonstrating full multiplayer workflow
-#[cfg(test)]
-mod summary_f2_f4 {
-    #[test]
-    fn test_suite_coverage_f2_f4() {
-        eprintln!("\n╔════════════════════════════════════════════════╗");
-        eprintln!("║  Phase 4.9.F Integration Tests Complete        ║");
-        eprintln!("╚════════════════════════════════════════════════╝");
-        eprintln!("\nF.2 Integration Tests (8 scenarios):");
-        eprintln!("  ✅ Single player token movement");
-        eprintln!("  ✅ Two players concurrent moves (no conflict)");
-        eprintln!("  ✅ Conflict detection (same token)");
-        eprintln!("  ✅ Mutation timeout and rollback");
-        eprintln!("  ✅ Player presence broadcast");
-        eprintln!("  ✅ Stale presence cleanup");
-        eprintln!("  ✅ Conflict marker animation");
-        eprintln!("  ✅ Rapid token movements");
-        eprintln!("\nF.4 Performance Tests (3 scenarios):");
-        eprintln!("  ✅ 10 concurrent players");
-        eprintln!("  ✅ 100 rapid mutations");
-        eprintln!("  ✅ 1000 presence players");
-        eprintln!("\nTotal: 11 integration/performance tests");
     }
 }

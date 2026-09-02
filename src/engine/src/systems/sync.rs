@@ -8,8 +8,6 @@
 //!
 //! PHASE 4.5: Full implementation deferred pending Bevy event system integration
 
-#![cfg(target_arch = "wasm32")]
-
 use crate::components::*;
 use crate::sync_test::CircularFlowTracer;
 use bevy::prelude::*;
@@ -41,13 +39,7 @@ pub fn handle_mutation_errors(
     // PHASE 4.5: Actual implementation with Bevy event system
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_phase_4_5_placeholder() {
-        // Placeholder test for Phase 4.5 implementation
-        assert!(true);
-    }
-}
+// `test_phase_4_5_placeholder` was here: a single `assert!(true)`, which is
+// not a test. The two systems above are still stubs with no behaviour to
+// assert on; when they gain any, that is the moment for a test (spec 032
+// T083/T084).

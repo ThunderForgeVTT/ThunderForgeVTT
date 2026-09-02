@@ -3,8 +3,6 @@
 //! Handles entity-level mutation tracking, result correlation,
 //! and automatic rollback on server rejection.
 
-#![cfg(target_arch = "wasm32")]
-
 use bevy::prelude::*;
 
 use crate::components::{GridPosition, RollbackCache, TokenId};

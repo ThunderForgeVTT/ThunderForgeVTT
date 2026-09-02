@@ -209,10 +209,17 @@ mod tests {
             None,
         );
 
-        // Negative grid coordinates (infinite canvas, left/up from origin)
+        // Negative grid coordinates (infinite canvas, left/up from origin).
+        //
+        // The expectation used to be 480.0, with a comment deriving it as
+        // `-5 * 32 + (20*32)` — which is the *un*-inverted formula, written
+        // under the heading "Y inverted". `database_y_to_bevy_y` is
+        // `pixel_height - y * grid_size`, so a database row above the top of
+        // the map lands above the map in Bevy's Y-up space: 640 + 160 = 800.
+        // The test had never run, so nothing caught the sign.
         let pixel = grid_to_pixel(-5.0, -5.0, &scene, Vec2::ZERO, 1.0);
         assert_eq!(pixel.x, -160.0);
-        assert_eq!(pixel.y, 480.0); // Y inverted: -5 * 32 + (20*32)
+        assert_eq!(pixel.y, 800.0); // 20*32 - (-5 * 32)
     }
 
     #[test]
@@ -227,7 +234,11 @@ mod tests {
             None,
         );
 
-        let (grid_x, grid_y) = pixel_to_grid(-160.0, 480.0, &scene, Vec2::ZERO, 1.0);
+        // The exact point `test_grid_to_pixel_negative_coordinates` produces,
+        // so the two together are a round trip. It used to feed 480.0, the
+        // value that test wrongly expected, and demand -5.0 back — which
+        // `bevy_y_to_database_y` answers with +5.0.
+        let (grid_x, grid_y) = pixel_to_grid(-160.0, 800.0, &scene, Vec2::ZERO, 1.0);
         assert_eq!(grid_x, -5.0);
         assert_eq!(grid_y, -5.0);
     }

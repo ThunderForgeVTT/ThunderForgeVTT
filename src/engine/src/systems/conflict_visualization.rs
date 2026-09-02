@@ -5,17 +5,15 @@
 //! - Fade-out animation over 2 seconds
 //! - Optional conflict marker/label
 
-#![cfg(target_arch = "wasm32")]
-
 use bevy::prelude::*;
 
-use crate::systems::event_dispatcher::{WorldEventQueue, WorldEventReceived};
+use crate::systems::event_dispatcher::WorldEventQueue;
 
 /// Component: Marks a token as having a conflict
 #[derive(Component, Clone, Debug)]
 pub struct ConflictMarker {
     pub started_at: f64,
-    pub duration: f64,  // Fade-out duration in seconds
+    pub duration: f64, // Fade-out duration in seconds
     pub original_color: Color,
 }
 
@@ -69,9 +67,9 @@ pub fn mark_conflict_tokens(
         // Find token and attach conflict marker
         for (entity, token) in query.iter_mut() {
             if token.id == *token_id {
-                commands.entity(entity).insert(ConflictMarker::new(
-                    time.elapsed_secs() as f64,
-                ));
+                commands
+                    .entity(entity)
+                    .insert(ConflictMarker::new(time.elapsed_secs() as f64));
 
                 eprintln!(
                     "[Phase4.9.D⚠️] Attached conflict marker to token: {}",
@@ -92,35 +90,28 @@ pub fn animate_conflict_indicators(
 ) {
     let current_time = time.elapsed_secs() as f64;
 
-    for (entity, mut sprite, mut conflict) in query.iter_mut() {
+    for (entity, mut sprite, conflict) in query.iter_mut() {
         let alpha = conflict.get_alpha(current_time);
 
         if alpha <= 0.0 {
             // Remove expired conflict marker
             commands.entity(entity).remove::<ConflictMarker>();
-            
+
             // Restore original color
             sprite.color = Color::srgb(1.0, 1.0, 1.0);
 
-            eprintln!(
-                "[Phase4.9.D✅] Conflict marker expired, removed"
-            );
+            eprintln!("[Phase4.9.D✅] Conflict marker expired, removed");
         } else {
             // Apply red tint with fading alpha
             sprite.color = Color::srgba(1.0, 0.5, 0.5, alpha);
 
-            eprintln!(
-                "[Phase4.9.D🎨] Updating conflict color: alpha={:.2}",
-                alpha
-            );
+            eprintln!("[Phase4.9.D🎨] Updating conflict color: alpha={:.2}", alpha);
         }
     }
 }
 
 /// System: Log all conflict events (for debugging)
-pub fn log_conflict_events(
-    query: Query<&ConflictMarker>,
-) {
+pub fn log_conflict_events(query: Query<&ConflictMarker>) {
     for marker in query.iter() {
         eprintln!(
             "[Phase4.9.D🔴] Active conflict marker: started_at={:.2}, duration={:.2}",

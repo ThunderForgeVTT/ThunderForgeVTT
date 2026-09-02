@@ -86,28 +86,6 @@ fn handle_keyboard_camera_shortcuts(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // A prior version of this test tried to call `handle_keyboard_camera_shortcuts`
-    // directly with `.into()`-converted `Res`/`ResMut` values, which isn't
-    // constructible outside a running `App` — it asserted nothing and always
-    // passed. `test_camera_keyboard_integration` below exercises the same
-    // behavior through a real `App`, which is the only way to drive `Res<>`.
-
-    #[test]
-    fn test_camera_keyboard_integration() {
-        let mut app = App::new();
-        app.add_plugins(CameraPlugin);
-
-        // Initial state
-        let camera_mgr = app.world().resource::<CameraManager>();
-        assert_eq!(camera_mgr.translation, Vec2::ZERO);
-        assert_eq!(camera_mgr.scale, 1.0);
-    }
-}
-
 /// Mouse-wheel zoom, anchored at the cursor.
 ///
 /// Yields the wheel entirely while a light is selected: `systems::lighting`'s
@@ -164,5 +142,27 @@ fn handle_mouse_wheel_zoom(
     match anchor {
         Some(anchor) => camera_mgr.zoom_toward(anchor, scroll),
         None => camera_mgr.zoom_by(scroll),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // A prior version of this test tried to call `handle_keyboard_camera_shortcuts`
+    // directly with `.into()`-converted `Res`/`ResMut` values, which isn't
+    // constructible outside a running `App` — it asserted nothing and always
+    // passed. `test_camera_keyboard_integration` below exercises the same
+    // behavior through a real `App`, which is the only way to drive `Res<>`.
+
+    #[test]
+    fn test_camera_keyboard_integration() {
+        let mut app = App::new();
+        app.add_plugins(CameraPlugin);
+
+        // Initial state
+        let camera_mgr = app.world().resource::<CameraManager>();
+        assert_eq!(camera_mgr.translation, Vec2::ZERO);
+        assert_eq!(camera_mgr.scale, 1.0);
     }
 }

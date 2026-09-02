@@ -5,15 +5,11 @@
 //! - Server canonical state (authoritative position)
 //! - Conflict resolution (Last-Write-Wins with rollback)
 
-#![cfg(target_arch = "wasm32")]
-
 use bevy::prelude::*;
-use serde_json::json;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 
-use crate::components::{Token, GridPosition};
-use crate::systems::event_dispatcher::{WorldEventQueue, WorldEventReceived};
+use crate::components::Token;
+use crate::systems::event_dispatcher::WorldEventQueue;
 
 /// Counter for unique mutation IDs
 static MUTATION_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -89,10 +85,7 @@ pub fn sync_token_positions_from_server(
             if token.id == *token_id {
                 // Handle conflict event
                 if event.event_code == 2 {
-                    eprintln!(
-                        "[Phase4.9.D⚠️] Conflict detected for token: {}",
-                        token_id
-                    );
+                    eprintln!("[Phase4.9.D⚠️] Conflict detected for token: {}", token_id);
 
                     // Store original position for potential user revert
                     if let Some(mut rollback) = rollback_opt {
@@ -139,11 +132,7 @@ pub fn handle_local_token_movement(
             );
 
             // Queue mutation to server
-            mutation_queue.push_move_token(
-                token.id.clone(),
-                new_x,
-                new_y,
-            );
+            mutation_queue.push_move_token(token.id.clone(), new_x, new_y);
 
             // Update local cache
             token.base_x = new_x;
@@ -161,18 +150,12 @@ pub fn check_mutation_timeouts(
     let timed_out = mutation_queue.check_timeouts(time.elapsed_secs() as f64);
 
     for mutation_id in timed_out {
-        eprintln!(
-            "[Phase4.9.D❌] Mutation timeout: {}",
-            mutation_id
-        );
+        eprintln!("[Phase4.9.D❌] Mutation timeout: {}", mutation_id);
 
         // Find corresponding token and rollback
         for (mut transform, rollback) in query.iter_mut() {
-            transform.translation = Vec3::new(
-                rollback.original_x as f32,
-                rollback.original_y as f32,
-                0.0,
-            );
+            transform.translation =
+                Vec3::new(rollback.original_x as f32, rollback.original_y as f32, 0.0);
 
             eprintln!(
                 "[Phase4.9.D🔄] Rolled back token to: ({}, {})",
@@ -206,12 +189,7 @@ impl GraphQLMutationQueue {
     }
 
     /// Queue a moveToken mutation
-    pub fn push_move_token(
-        &mut self,
-        token_id: String,
-        x: i32,
-        y: i32,
-    ) {
+    pub fn push_move_token(&mut self, token_id: String, x: i32, y: i32) {
         let mutation_id = next_mutation_id();
 
         eprintln!(
@@ -299,14 +277,30 @@ mod tests {
         queue.push_move_token("token-1".to_string(), 100, 200);
         queue.push_move_token("token-2".to_string(), 150, 250);
 
+        // `pending` is a `HashMap` drained into a `Vec`, so it comes back in
+        // map order. This used to index it positionally and assert
+        // `pending[0]` was "token-1" — a property the queue does not have,
+        // and the first thing to fail once the suite could actually run.
         let pending = queue.get_pending();
         assert_eq!(pending.len(), 2);
-        assert_eq!(pending[0].token_id, "token-1");
-        assert_eq!(pending[1].x, 150);
+        let first = pending
+            .iter()
+            .find(|info| info.token_id == "token-1")
+            .expect("token-1 queued");
+        assert_eq!(first.x, 100);
+        assert_eq!(
+            pending
+                .iter()
+                .find(|info| info.token_id == "token-2")
+                .expect("token-2 queued")
+                .x,
+            150
+        );
 
-        queue.mark_complete(&pending[0].mutation_id);
+        queue.mark_complete(&first.mutation_id);
         let remaining = queue.get_pending();
         assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].token_id, "token-2");
     }
 
     #[test]
