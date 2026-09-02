@@ -15,7 +15,7 @@ import { LoreMarkdownRenderer } from "@/pages/world/lore/LoreMarkdownRenderer";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import type { WorldActorRecord } from "@/types/actor";
 import type { WorldAbilityRecord } from "@/types/ability";
-import type { WorldItemRecord } from "@/types/item";
+import type { WorldItemWithPrice } from "@/api/items";
 import type { AbilityFacetsLookup } from "@/utils/abilityFacets";
 import type { WorldRecord } from "@/types/world";
 
@@ -52,7 +52,7 @@ export function WorldCompendiumPage({
   const [selectedActorId, setSelectedActorId] = useState<string | null>(null);
   const [roster, setRoster] = useState<WorldActorRecord[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [itemCatalog, setItemCatalog] = useState<WorldItemRecord[]>([]);
+  const [itemCatalog, setItemCatalog] = useState<WorldItemWithPrice[]>([]);
   const [selectedAbilityId, setSelectedAbilityId] = useState<string | null>(
     null,
   );

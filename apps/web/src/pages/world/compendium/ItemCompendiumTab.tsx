@@ -1,22 +1,22 @@
 import { useEffect, useState } from "react";
 import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { Link } from "react-router-dom";
-import { createItem, getWorldItems, suggestItemName } from "@/api/items";
+import { getWorldItems, type WorldItemWithPrice } from "@/api/items";
 import { Button } from "@/components/ui/button/Button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import type { WorldItemRecord } from "@/types/item";
+import { formatItemPrice } from "@/pages/world/compendium/itemPrice";
 
 export interface ItemCompendiumTabProps {
   worldId: string;
   onSelect: (itemId: string) => void;
   selectedItemId: string | null;
-  /** DM/GM-only — gates the "Add Item" control (FR-002, spec 010 precedent). */
+  /** DM/GM-only — gates the "New item" link (FR-002, spec 010 precedent). */
   isGm: boolean;
   /** Bump to force a re-fetch (e.g. after creating a new Item). */
   refreshKey?: number;
   /** Called whenever the catalog is (re)fetched, mirrors NpcCompendiumTab's onRosterLoaded. */
-  onCatalogLoaded?: (items: WorldItemRecord[]) => void;
+  onCatalogLoaded?: (items: WorldItemWithPrice[]) => void;
 }
 
 /**
@@ -24,6 +24,12 @@ export interface ItemCompendiumTabProps {
  * placeholder. Mirrors NpcCompendiumTab's search/table/add-control shape,
  * adapted to `api/items.ts` (server-side `search` param instead of
  * client-side FlexSearch, since there's no existing item search index).
+ *
+ * Spec 031 (T068/T071, FR-035/FR-037): the inline "Add Item" form is gone —
+ * creation moved to `ItemEditorPage` behind an explicit save, and the
+ * "did you mean?" nudge went with it, since duplicate-authoring is a creation
+ * problem. What the list gained instead is the Game Master's price note,
+ * presentational only (ADR-058).
  */
 export function ItemCompendiumTab({
   worldId,
@@ -33,49 +39,15 @@ export function ItemCompendiumTab({
   refreshKey,
   onCatalogLoaded,
 }: ItemCompendiumTabProps) {
-  const [items, setItems] = useState<WorldItemRecord[] | null>(null);
+  const [items, setItems] = useState<WorldItemWithPrice[] | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [query, setQuery] = useState("");
-  const [internalRefreshTick, setInternalRefreshTick] = useState(0);
-  const [newItemName, setNewItemName] = useState("");
-  const [newItemDescription, setNewItemDescription] = useState("");
-  const [isCreatingItem, setIsCreatingItem] = useState(false);
-  // Stored against the name it was looked up for. Whether a suggestion is
-  // showing right now is then a render-time question ("is this still the
-  // name we asked about, and is it still long enough to ask?"), so the
-  // effect below never has to null it back out.
-  const [loadedSuggestion, setLoadedSuggestion] = useState<{
-    worldId: string;
-    query: string;
-    match: WorldItemRecord | null;
-  } | null>(null);
-
-  const handleAddItem = async () => {
-    const name = newItemName.trim();
-    if (!name) {
-      return;
-    }
-    setIsCreatingItem(true);
-    try {
-      await createItem({
-        worldId,
-        name,
-        description: newItemDescription.trim() || undefined,
-      });
-      setNewItemName("");
-      setNewItemDescription("");
-      setLoadedSuggestion(null);
-      setInternalRefreshTick((current) => current + 1);
-    } finally {
-      setIsCreatingItem(false);
-    }
-  };
 
   // Reset during render rather than at the top of the effect below: this
   // is state derived from the arguments, and doing it in the effect commits
   // one render pairing the new key with the previous key's data.
   useResetOnChange(
-    `${worldId}|${query}|${refreshKey ?? ""}|${internalRefreshTick}`,
+    `${worldId}|${query}|${refreshKey ?? ""}`,
     () => {
       setItems(null);
       setError(null);
@@ -103,47 +75,7 @@ export function ItemCompendiumTab({
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [worldId, query, refreshKey, internalRefreshTick]);
-
-  // FR-020: non-blocking "did you mean?" nudge as the DM types a new
-  // item's name — debounced, never blocks handleAddItem.
-  const suggestionQuery = newItemName.trim();
-  const suggestion =
-    isGm &&
-    suggestionQuery.length >= 2 &&
-    loadedSuggestion?.worldId === worldId &&
-    loadedSuggestion.query === suggestionQuery
-      ? loadedSuggestion.match
-      : null;
-
-  useEffect(() => {
-    const name = newItemName.trim();
-    if (!isGm || name.length < 2) {
-      return;
-    }
-    let active = true;
-    const timer = setTimeout(() => {
-      suggestItemName(worldId, name)
-        .then((matches) => {
-          if (active) {
-            setLoadedSuggestion({
-              worldId,
-              query: name,
-              match: matches[0] ?? null,
-            });
-          }
-        })
-        .catch(() => {
-          if (active) {
-            setLoadedSuggestion({ worldId, query: name, match: null });
-          }
-        });
-    }, 300);
-    return () => {
-      active = false;
-      clearTimeout(timer);
-    };
-  }, [worldId, newItemName, isGm]);
+  }, [worldId, query, refreshKey]);
 
   if (error) {
     return (
@@ -179,6 +111,7 @@ export function ItemCompendiumTab({
               <tr className="border-b border-border bg-muted/50 text-left text-xs tracking-wide text-muted-foreground uppercase">
                 <th className="p-2 font-semibold">Name</th>
                 <th className="p-2 font-semibold">Description</th>
+                <th className="p-2 font-semibold">Price</th>
                 <th className="p-2 font-semibold">Actions</th>
               </tr>
             </thead>
@@ -198,6 +131,14 @@ export function ItemCompendiumTab({
                   <td className="max-w-xs truncate p-2 text-muted-foreground">
                     {item.description || (
                       <span className="italic">No description</span>
+                    )}
+                  </td>
+                  <td
+                    className="p-2 text-muted-foreground"
+                    data-testid={`item-catalog-price-${item.id}`}
+                  >
+                    {formatItemPrice(item.price) ?? (
+                      <span className="italic">—</span>
                     )}
                   </td>
                   <td className="p-2">
@@ -237,44 +178,15 @@ export function ItemCompendiumTab({
       )}
 
       {isGm ? (
-        <div className="grid gap-2">
-          <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
-            <Input
-              value={newItemName}
-              onChange={(event) => setNewItemName(event.target.value)}
-              placeholder="New item name"
-              disabled={isCreatingItem}
-              data-testid="new-item-name-input"
-            />
-            <Input
-              value={newItemDescription}
-              onChange={(event) => setNewItemDescription(event.target.value)}
-              placeholder="Description (optional)"
-              disabled={isCreatingItem}
-              data-testid="new-item-description-input"
-            />
-            <Button
-              type="button"
-              size="sm"
-              icon="inventory"
-              onClick={() => void handleAddItem()}
-              disabled={isCreatingItem || !newItemName.trim()}
-              data-testid="add-item-button"
-            >
-              Add Item
-            </Button>
-          </div>
-          {suggestion ? (
-            <p
-              className="text-xs text-muted-foreground"
-              data-testid="item-name-suggestion"
-            >
-              Did you mean{" "}
-              <span className="font-medium">{suggestion.name}</span>? Names can
-              be reused if that's intentional.
-            </p>
-          ) : null}
-        </div>
+        <Button
+          asChild
+          size="sm"
+          icon="inventory"
+          className="justify-self-start"
+          data-testid="new-item-link"
+        >
+          <Link to={`/world/${worldId}/compendium/item/new`}>New item</Link>
+        </Button>
       ) : null}
     </div>
   );

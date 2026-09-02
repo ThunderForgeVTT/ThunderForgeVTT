@@ -26,6 +26,13 @@ const WORLD_ITEM_FIELDS = `
     ${ITEM_EFFECT_FIELDS}
   }
   myPermissionLevel
+  price {
+    itemId
+    amount
+    currencyLabel
+    isSuggested
+    updatedAt
+  }
   moderated
   moderationCaseId
   createdAt
@@ -37,15 +44,42 @@ const WORLD_ITEM_FIELDS = `
   }
 `;
 
+/**
+ * Spec 031 (FR-037): a Game Master's note of what an item costs.
+ *
+ * Presentational, by ADR-058 — a number, a free-text currency label and
+ * whether the Game Master meant it as a suggestion. Nothing in this client
+ * spends, converts or totals it, and nothing should: game systems own their
+ * own economies and this value is not one.
+ */
+export interface ItemPriceRecord {
+  itemId: string;
+  amount: number;
+  currencyLabel: string | null;
+  isSuggested: boolean;
+  updatedAt: string;
+}
+
+/**
+ * `WorldItemRecord` plus the price note.
+ *
+ * Widened here rather than added to `types/item.ts`'s record: every existing
+ * caller keeps the type it already reads, and only the surfaces that actually
+ * show a price have to know the field exists.
+ */
+export type WorldItemWithPrice = WorldItemRecord & {
+  price: ItemPriceRecord | null;
+};
+
 type WorldItemsQuery = {
-  worldItems: WorldItemRecord[];
+  worldItems: WorldItemWithPrice[];
 };
 
 /** Every world member sees every item at at least Viewer level by default (FR-008). */
 export function getWorldItems(
   worldId: string,
   search?: string,
-): Promise<WorldItemRecord[]> {
+): Promise<WorldItemWithPrice[]> {
   return postGraphQL<WorldItemsQuery>(
     `
       query WorldItems($worldId: UUID!, $search: String) {
@@ -59,10 +93,10 @@ export function getWorldItems(
 }
 
 type ItemQuery = {
-  item: WorldItemRecord;
+  item: WorldItemWithPrice;
 };
 
-export function getItem(itemId: string): Promise<WorldItemRecord> {
+export function getItem(itemId: string): Promise<WorldItemWithPrice> {
   return postGraphQL<ItemQuery>(
     `
       query Item($itemId: UUID!) {
@@ -76,14 +110,14 @@ export function getItem(itemId: string): Promise<WorldItemRecord> {
 }
 
 type SuggestItemNameQuery = {
-  suggestItemName: WorldItemRecord[];
+  suggestItemName: WorldItemWithPrice[];
 };
 
 /** Non-blocking "did you mean?" nudge (FR-020) — never gates createItem. */
 export function suggestItemName(
   worldId: string,
   name: string,
-): Promise<WorldItemRecord[]> {
+): Promise<WorldItemWithPrice[]> {
   return postGraphQL<SuggestItemNameQuery>(
     `
       query SuggestItemName($worldId: UUID!, $name: String!) {
@@ -97,7 +131,7 @@ export function suggestItemName(
 }
 
 type CreateItemMutation = {
-  createItem: WorldItemRecord;
+  createItem: WorldItemWithPrice;
 };
 
 /** DM-only (FR-002); description/icon optional (Clarifications). */
@@ -105,7 +139,7 @@ export function createItem(input: {
   worldId: string;
   name: string;
   description?: string | null;
-}): Promise<WorldItemRecord> {
+}): Promise<WorldItemWithPrice> {
   return postGraphQL<CreateItemMutation>(
     `
       mutation CreateItem($input: CreateItemInput!) {
@@ -286,4 +320,50 @@ export function removeItemPermission(
     `,
     { itemId, userId },
   ).then((data) => data.removeItemPermission);
+}
+
+type SetItemPriceMutation = {
+  setItemPrice: ItemPriceRecord;
+};
+
+/**
+ * FR-037: records what the Game Master says the item costs.
+ *
+ * Requires effective Editor or Owner on the item — the server settles that,
+ * and this function's callers only decide whether to *offer* the field.
+ * `isSuggested` is intent ("roughly what it goes for" versus "this is the
+ * price"), enforced nowhere.
+ */
+export function setItemPrice(input: {
+  itemId: string;
+  amount: number;
+  currencyLabel?: string | null;
+  isSuggested?: boolean;
+}): Promise<ItemPriceRecord> {
+  return postGraphQL<SetItemPriceMutation>(
+    `
+      mutation SetItemPrice($input: SetItemPriceInput!) {
+        setItemPrice(input: $input) {
+          itemId
+          amount
+          currencyLabel
+          isSuggested
+          updatedAt
+        }
+      }
+    `,
+    { input },
+  ).then((data) => data.setItemPrice);
+}
+
+/** Removes the note entirely — which is not the same as pricing it at zero. */
+export function clearItemPrice(itemId: string): Promise<boolean> {
+  return postGraphQL<{ clearItemPrice: boolean }>(
+    `
+      mutation ClearItemPrice($itemId: UUID!) {
+        clearItemPrice(itemId: $itemId)
+      }
+    `,
+    { itemId },
+  ).then((data) => data.clearItemPrice);
 }

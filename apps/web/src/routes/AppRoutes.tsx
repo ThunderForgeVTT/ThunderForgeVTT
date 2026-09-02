@@ -24,6 +24,18 @@ const WorldDashboardPage = lazy(pageLoaders.worldDashboard);
 const WorldPage = lazy(pageLoaders.worldWorkspace);
 const WorldStagingRoutePage = lazy(pageLoaders.worldStaging);
 const WorldCompendiumRoutePage = lazy(pageLoaders.worldCompendium);
+/*
+  Spec 031 (T068, FR-035): the compendium's own authoring pages. Declared here
+  rather than in `pageLoaders` because nothing prefetches them — they are
+  reached by a deliberate click on "New NPC"/"New item", not by hovering a nav
+  item, which is what that registry exists to serve.
+*/
+const NpcEditorPage = lazy(
+  () => import("@/pages/world/compendium/NpcEditorPage"),
+);
+const ItemEditorPage = lazy(
+  () => import("@/pages/world/compendium/ItemEditorPage"),
+);
 const ScenesRoutePage = lazy(pageLoaders.worldScenes);
 const SceneDetailRoutePage = lazy(pageLoaders.worldSceneDetail);
 const PlayersRoutePage = lazy(pageLoaders.worldPlayers);
@@ -483,6 +495,38 @@ export default function AppRoutes({
                 <WorldCompendiumRoutePage />,
                 "Loading world compendium",
               )}
+            </RequireAuthenticated>
+          }
+        />
+        <Route
+          path="/world/:id/compendium/npc/new"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(<NpcEditorPage mode="create" />, "Loading NPC")}
+            </RequireAuthenticated>
+          }
+        />
+        <Route
+          path="/world/:id/compendium/npc/:actorId/edit"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(<NpcEditorPage mode="edit" />, "Loading NPC")}
+            </RequireAuthenticated>
+          }
+        />
+        <Route
+          path="/world/:id/compendium/item/new"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(<ItemEditorPage mode="create" />, "Loading item")}
+            </RequireAuthenticated>
+          }
+        />
+        <Route
+          path="/world/:id/compendium/item/:itemId/edit"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(<ItemEditorPage mode="edit" />, "Loading item")}
             </RequireAuthenticated>
           }
         />

@@ -172,8 +172,8 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 - [X] T053 [US4] Add the scene-transition state machine (`ready → unloading → loading → ready`) as a Bevy plugin in `src/engine/src/plugins/scene_transition.rs`, registered in `src/engine/src/lib.rs` (FR-018, research R11)
 - [X] T054 [US4] Unload the previous scene's tokens, walls and lights on `OnEnter(unloading)` and load the new scene's on `OnEnter(loading)`, in `src/engine/src/plugins/scene_transition.rs` (FR-018)
 - [X] T054a [US4] Drive the scene-transition machine from chrome — nothing calls `begin_scene_transition`/`complete_scene_transition`, so T053/T054 are registered and inert and FR-018 is not yet delivered, in `apps/web/src/pages/world/WorldPage.tsx` and `apps/web/src/engine/bevy/index.ts` (FR-018)
-- [ ] T055 [US4] Implement party retention per T002's ADR in `src/server/src/graphql/`, ensuring a character that already has a token in the destination gains no second one (FR-019, contracts/graphql-mutations.md)
-- [ ] T056 [US4] Add the GM's bring-the-party choice to the scene-change surface in `apps/web/src/` (FR-019)
+- [X] T055 [US4] Implement party retention per T002's ADR in `src/server/src/graphql/`, ensuring a character that already has a token in the destination gains no second one (FR-019, contracts/graphql-mutations.md)
+- [X] T056 [US4] Add the GM's bring-the-party choice to the scene-change surface in `apps/web/src/` (FR-019)
 - [X] T057 [P] [US4] Add the retention predicate with unit tests in `crates/thunderforge-canvas-core/src/`
 
 **Checkpoint**: A session can move rooms without re-placing the party by hand.
@@ -209,10 +209,10 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 - [X] T065 [P] [US8] Convert the players table to searchable cards showing each player's bound character in `apps/web/src/pages/world/players/PlayersRoutePage.tsx` (FR-033)
 - [X] T066 [US8] Let a GM set a player's character binding from the players section in `apps/web/src/pages/world/players/PlayersRoutePage.tsx` and `src/server/src/graphql/` (FR-034)
 - [X] T067 [US8] Make the three writers of the claim relation agree — players section, `apps/web/src/pages/world/actor/ActorDetailPage.tsx`, and the player's own claim — so concurrent binding cannot double-claim (FR-034, contracts/graphql-mutations.md)
-- [ ] T068 [US8] Move NPC and item creation to a dedicated editing page with explicit save and remove the inline forms from `apps/web/src/pages/world/compendium/NpcCompendiumTab.tsx` and `ItemCompendiumTab.tsx` (FR-035)
-- [ ] T069 [US8] Implement actor imagery upload for portrait and token roles through the existing transcode/storage path in `src/server/src/graphql/`, mirroring `mutations_lore_images.rs` (FR-036, research R4)
-- [ ] T070 [US8] Add the imagery upload UI to the actor edit page in `apps/web/src/pages/world/actor/` and display each role where it belongs (FR-036)
-- [ ] T071 [P] [US8] Add item price recording and display, presentational only, in `src/server/src/graphql/` and `apps/web/src/pages/world/compendium/ItemCompendiumTab.tsx` (FR-037, research R5)
+- [X] T068 [US8] Move NPC and item creation to a dedicated editing page with explicit save and remove the inline forms from `apps/web/src/pages/world/compendium/NpcCompendiumTab.tsx` and `ItemCompendiumTab.tsx` (FR-035)
+- [X] T069 [US8] Implement actor imagery upload for portrait and token roles through the existing transcode/storage path in `src/server/src/graphql/`, mirroring `mutations_lore_images.rs` (FR-036, research R4)
+- [X] T070 [US8] Add the imagery upload UI to the actor edit page in `apps/web/src/pages/world/actor/` and display each role where it belongs (FR-036)
+- [X] T071 [P] [US8] Add item price recording and display, presentational only, in `src/server/src/graphql/` and `apps/web/src/pages/world/compendium/ItemCompendiumTab.tsx` (FR-037, research R5)
 - [ ] T072 [P] [US8] Add the lore tree and tags — move, tag, and find by either — in `apps/web/src/pages/world/lore/` and `src/server/src/graphql/`, rejecting cycles at the data boundary, and re-parenting a deleted entry's children to their grandparent rather than orphaning them (FR-038, data-model.md)
 - [ ] T073 [US8] Allow creating or attaching an item or lore entry from an actor's screen without leaving it, in `apps/web/src/pages/world/actor/` (FR-039)
 

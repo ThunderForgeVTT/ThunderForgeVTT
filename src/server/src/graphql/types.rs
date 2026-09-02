@@ -506,6 +506,29 @@ impl GraphQLItem {
         let state = crate::graphql::app_state(ctx)?;
         crate::graphql::queries::lore::lore_entries_linking_to_item(state, self.id).await
     }
+
+    /// Spec 031 (FR-037): the Game Master's price note, or `null` where none
+    /// was written.
+    ///
+    /// A field resolver rather than a column carried on the row, because a
+    /// price is a separate table by ADR-058's decision — and because a
+    /// moderation placeholder must not carry one: `moderated_placeholder`
+    /// builds an item with no real content, and a price left attached to it
+    /// would be the one true thing on an otherwise blanked entry.
+    async fn price(
+        &self,
+        ctx: &async_graphql::Context<'_>,
+    ) -> async_graphql::Result<Option<GraphQLItemPrice>> {
+        if self.moderated {
+            return Ok(None);
+        }
+        let state = crate::graphql::app_state(ctx)?;
+        Ok(
+            crate::graphql::mutations_item_prices::item_price_impl(state, self.id)
+                .await?
+                .map(GraphQLItemPrice::from),
+        )
+    }
 }
 
 #[derive(SimpleObject, Debug, Clone)]
@@ -1297,4 +1320,66 @@ pub struct SharedAbilityPreview {
     pub description: Option<String>,
     pub classification: AbilityClassification,
     pub effects: Vec<GraphQLAbilityEffect>,
+}
+
+// ============================================================================
+// Spec 031 (US8): actor imagery and the Game Master's item price note
+// ============================================================================
+
+use crate::models::{WorldActorImage, WorldItemPrice};
+
+/// One of an actor's images, named by what it is for (FR-036).
+///
+/// `role` is carried through as the stored string rather than mapped to an
+/// enum: the column is open by decision (ADR-057/ADR-054), so a client that
+/// does not recognise a role should be able to skip it, which requires being
+/// told what it was. `assetId` is exposed alongside the URLs because the
+/// engine's asset pipeline addresses images by id.
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLActorImage {
+    pub id: uuid::Uuid,
+    pub actor_id: uuid::Uuid,
+    pub role: String,
+    pub asset_id: uuid::Uuid,
+    pub url: String,
+    pub thumbnail_url: String,
+}
+
+impl From<WorldActorImage> for GraphQLActorImage {
+    fn from(row: WorldActorImage) -> Self {
+        Self {
+            id: row.id,
+            actor_id: row.actor_id,
+            role: row.role,
+            asset_id: row.asset_id,
+            url: format!("/api/actor-assets/{}", row.asset_id),
+            thumbnail_url: format!("/api/actor-assets/{}/thumb", row.asset_id),
+        }
+    }
+}
+
+/// What a Game Master says an item costs (FR-037).
+///
+/// Presentational (ADR-058) — the fields are a number, a free-text label and
+/// the author's intent, and there is deliberately nothing here to compute
+/// with. A system that models its own economy keeps it in its own type.
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLItemPrice {
+    pub item_id: uuid::Uuid,
+    pub amount: i32,
+    pub currency_label: Option<String>,
+    pub is_suggested: bool,
+    pub updated_at: NaiveDateTime,
+}
+
+impl From<WorldItemPrice> for GraphQLItemPrice {
+    fn from(row: WorldItemPrice) -> Self {
+        Self {
+            item_id: row.item_id,
+            amount: row.amount,
+            currency_label: row.currency_label,
+            is_suggested: row.is_suggested,
+            updated_at: row.updated_at,
+        }
+    }
 }

@@ -14,6 +14,10 @@ import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { MapImportTool } from "@/components/canvas-tools/MapImportTool/MapImportTool";
 import { LoreMarkdownRenderer } from "@/pages/world/lore/LoreMarkdownRenderer";
 import { SceneSummaryEditor } from "@/pages/world/scenes/SceneSummaryEditor";
+import {
+  bringPartyToScene,
+  describeArrival,
+} from "@/pages/world/scenes/bringParty";
 import { preloadScene } from "@/services/scenePreload";
 import type { SceneRecord } from "@/types/scene";
 
@@ -45,6 +49,11 @@ export function SceneDetailPage({
   const [isSavingHidden, setIsSavingHidden] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
   const [isPreloading, setIsPreloading] = useState(false);
+  // Spec 031 FR-019 / ADR-056: off unless the Game Master says otherwise.
+  // Most scene changes are prep, a reveal or a cutaway, and a default that
+  // moved everyone's character would have the GM undoing tokens far more
+  // often than placing them.
+  const [bringParty, setBringParty] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
   // Reset during render rather than at the top of the effect below: this
@@ -144,6 +153,23 @@ export function SceneDetailPage({
     setIsLaunching(true);
     setStatus(null);
     try {
+      // The party arrives *before* the switch is broadcast, so the table
+      // opens on a room that already has them in it. The other order shows
+      // every player an empty scene and then pops six tokens into it, which
+      // reads as a glitch rather than as the party walking in.
+      //
+      // A failure here stops the launch. The GM asked for one thing — move
+      // the table, with the party — and half of it is worse than neither:
+      // the players would be standing in the cellar without their
+      // characters, and the fix is a second scene change.
+      if (bringParty) {
+        const arrival = await bringPartyToScene(sceneId);
+        // Said here for the case where the launch below then fails and this
+        // page stays put: the party did move, and the GM needs to know that
+        // before deciding what to do next. On the ordinary path the map
+        // itself is the report, and it is a better one.
+        setStatus(describeArrival(arrival));
+      }
       await launchScene(worldId, sceneId);
       navigate(`/world/${worldId}/play`);
     } catch (err) {
@@ -238,6 +264,27 @@ export function SceneDetailPage({
                 {isLaunching ? "Launching..." : "Launch"}
               </Button>
             </div>
+            {/*
+              Attached to Launch, not offered on its own (spec 031 FR-019,
+              ADR-056). Launch is what moves the table, and bringing the
+              party is a property of that move rather than a separate errand
+              — a standalone "bring the party" button would let a GM populate
+              a scene nobody is looking at, and would leave the two actions
+              free to be done in the wrong order.
+            */}
+            <label
+              className="flex items-center gap-2 text-xs text-muted-foreground"
+              data-testid="bring-party-toggle-label"
+            >
+              <input
+                type="checkbox"
+                checked={bringParty}
+                disabled={isLaunching}
+                onChange={(event) => setBringParty(event.target.checked)}
+                data-testid="bring-party-toggle"
+              />
+              Bring the party
+            </label>
             {/*
               Said rather than inferred (spec 031 FR-022). The two buttons sit
               together and one of them changes what every player is looking

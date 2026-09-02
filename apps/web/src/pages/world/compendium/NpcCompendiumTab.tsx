@@ -1,18 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { Link } from "react-router-dom";
-import { createActor, getWorldActors } from "@/api/actors";
+import {
+  getWorldActorImages,
+  getWorldActors,
+  type ActorImageRecord,
+} from "@/api/actors";
 import { indexActors, searchActorIds } from "@/search/actorSearch";
 import { Button } from "@/components/ui/button/Button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { portraitOf } from "@/pages/world/actor/actorImagery";
 import type { WorldActorRecord } from "@/types/actor";
 
 export interface NpcCompendiumTabProps {
   worldId: string;
   onSelect: (actorId: string) => void;
   selectedActorId: string | null;
-  /** DM/GM-only — gates the "Add NPC" control (FR-006, spec 010 precedent). */
+  /** DM/GM-only — gates the "New NPC" link (FR-006, spec 010 precedent). */
   isGm: boolean;
   /** Bump to force a re-fetch (e.g. after creating a new NPC). */
   refreshKey?: number;
@@ -34,6 +39,13 @@ export interface NpcCompendiumTabProps {
  * right-side `ActorPreviewPanel`) instead of navigating away directly.
  * The inline View/Edit links remain as direct-navigation shortcuts,
  * independent of selection (contracts/compendium-npcs.md).
+ *
+ * Spec 031 (T068, FR-035): the inline "Add NPC" form is gone. Creating an NPC
+ * meant two boxes wedged under the table, with no room for a description worth
+ * reading and nowhere at all for a portrait — so it moved to `NpcEditorPage`
+ * behind an explicit save, and this tab became a list and a link. `refreshKey`
+ * survives because the parent may still have reason to refetch; the tab no
+ * longer has one of its own.
  */
 export function NpcCompendiumTab({
   worldId,
@@ -47,37 +59,18 @@ export function NpcCompendiumTab({
   const [error, setError] = useState<Error | null>(null);
   const [query, setQuery] = useState("");
   const [matchedIds, setMatchedIds] = useState<string[] | null>(null);
-  const [internalRefreshTick, setInternalRefreshTick] = useState(0);
-  const [newNpcName, setNewNpcName] = useState("");
-  const [newNpcDescription, setNewNpcDescription] = useState("");
-  const [isCreatingNpc, setIsCreatingNpc] = useState(false);
-
-  const handleAddNpc = async () => {
-    const label = newNpcName.trim();
-    if (!label) {
-      return;
-    }
-    setIsCreatingNpc(true);
-    try {
-      await createActor({
-        worldId,
-        label,
-        isNpc: true,
-        description: newNpcDescription.trim() || undefined,
-      });
-      setNewNpcName("");
-      setNewNpcDescription("");
-      setInternalRefreshTick((current) => current + 1);
-    } finally {
-      setIsCreatingNpc(false);
-    }
-  };
+  // Spec 031 (FR-036): the roster's imagery, keyed by actor. Fetched
+  // separately from the roster itself because it costs the server a query per
+  // actor, and only the screens that show a face should pay for it.
+  const [imagesByActor, setImagesByActor] = useState<
+    Record<string, ActorImageRecord[]>
+  >({});
 
   // Reset during render rather than at the top of the effect below: this
   // is state derived from the arguments, and doing it in the effect commits
   // one render pairing the new key with the previous key's data.
   useResetOnChange(
-    `${worldId}|${refreshKey ?? ""}|${internalRefreshTick}`,
+    `${worldId}|${refreshKey ?? ""}`,
     () => {
       setActors(null);
       setError(null);
@@ -110,11 +103,25 @@ export function NpcCompendiumTab({
         }
       });
 
+    getWorldActorImages(worldId)
+      .then((byActor) => {
+        if (active) {
+          setImagesByActor(byActor);
+        }
+      })
+      .catch(() => {
+        // Imagery that fails to load leaves the roster readable — a missing
+        // portrait is not a reason to hide the NPC it belongs to.
+        if (active) {
+          setImagesByActor({});
+        }
+      });
+
     return () => {
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [worldId, refreshKey, internalRefreshTick]);
+  }, [worldId, refreshKey]);
 
   useEffect(() => {
     let active = true;
@@ -177,6 +184,7 @@ export function NpcCompendiumTab({
           <table className="w-full text-sm" data-testid="npc-catalog-table">
             <thead>
               <tr className="border-b border-border bg-muted/50 text-left text-xs tracking-wide text-muted-foreground uppercase">
+                <th className="p-2 font-semibold">Portrait</th>
                 <th className="p-2 font-semibold">Name</th>
                 <th className="p-2 font-semibold">Description</th>
                 <th className="p-2 font-semibold">Actions</th>
@@ -194,6 +202,23 @@ export function NpcCompendiumTab({
                   onClick={() => onSelect(npc.id)}
                   aria-selected={selectedActorId === npc.id}
                 >
+                  <td className="p-2">
+                    {/* The list shows the portrait, never the token: a token
+                        is drawn for map scale and reads as a smudge here. */}
+                    {portraitOf(imagesByActor[npc.id]) ? (
+                      <img
+                        src={portraitOf(imagesByActor[npc.id])!.thumbnailUrl}
+                        alt=""
+                        className="h-10 w-8 rounded border border-border object-cover"
+                        data-testid={`npc-catalog-portrait-${npc.id}`}
+                      />
+                    ) : (
+                      <div
+                        className="h-10 w-8 rounded border border-dashed border-border"
+                        data-testid={`npc-catalog-portrait-empty-${npc.id}`}
+                      />
+                    )}
+                  </td>
                   <td className="p-2 font-medium">{npc.label}</td>
                   <td className="max-w-xs truncate p-2 text-muted-foreground">
                     {npc.description || (
@@ -237,32 +262,15 @@ export function NpcCompendiumTab({
       )}
 
       {isGm ? (
-        <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
-          <Input
-            value={newNpcName}
-            onChange={(event) => setNewNpcName(event.target.value)}
-            placeholder="New NPC name"
-            disabled={isCreatingNpc}
-            data-testid="new-npc-name-input"
-          />
-          <Input
-            value={newNpcDescription}
-            onChange={(event) => setNewNpcDescription(event.target.value)}
-            placeholder="Description (optional)"
-            disabled={isCreatingNpc}
-            data-testid="new-npc-description-input"
-          />
-          <Button
-            type="button"
-            size="sm"
-            icon="skull"
-            onClick={() => void handleAddNpc()}
-            disabled={isCreatingNpc || !newNpcName.trim()}
-            data-testid="add-npc-button"
-          >
-            Add NPC
-          </Button>
-        </div>
+        <Button
+          asChild
+          size="sm"
+          icon="skull"
+          className="justify-self-start"
+          data-testid="new-npc-link"
+        >
+          <Link to={`/world/${worldId}/compendium/npc/new`}>New NPC</Link>
+        </Button>
       ) : null}
     </div>
   );

@@ -1,12 +1,13 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
-import type { WorldItemRecord } from "@/types/item";
+import type { WorldItemWithPrice } from "@/api/items";
+import { formatItemPrice } from "@/pages/world/compendium/itemPrice";
 import { effectTypeLabel } from "@/utils/effectLabels";
 
 export interface ItemPreviewPanelProps {
   worldId: string;
-  item: WorldItemRecord | null;
+  item: WorldItemWithPrice | null;
   onClose: () => void;
 }
 
@@ -14,6 +15,11 @@ export interface ItemPreviewPanelProps {
  * Spec 013 (T025): the Compendium Items tab's row-select preview, mirrors
  * ActorPreviewPanel.tsx — a compact read-only summary docked next to the
  * table, with links out to the full view/edit route. Presentation-only.
+ *
+ * Spec 031 (FR-037): shows the Game Master's price note, labelled as theirs.
+ * ADR-058 allows a system's own price to exist for the same item, on the
+ * condition that the interface never shows one and means the other — hence
+ * "Game Master's price" rather than a bare number.
  */
 export function ItemPreviewPanel({
   worldId,
@@ -65,6 +71,17 @@ export function ItemPreviewPanel({
         </p>
       </div>
 
+      <div className="grid gap-1">
+        <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+          Game Master's price
+        </p>
+        <p className="text-sm" data-testid="item-preview-panel-price">
+          {formatItemPrice(item.price) ?? (
+            <span className="text-muted-foreground italic">Not priced.</span>
+          )}
+        </p>
+      </div>
+
       {item.effects.length > 0 ? (
         <div className="grid gap-1">
           <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
@@ -102,6 +119,21 @@ export function ItemPreviewPanel({
             data-testid="item-preview-panel-edit"
           >
             <Link to={`/world/${worldId}/item/${item.id}/edit`}>Edit</Link>
+          </Button>
+        ) : null}
+        {canEdit ? (
+          <Button
+            asChild
+            variant="secondary"
+            size="sm"
+            data-testid="item-preview-panel-price-edit"
+          >
+            {/* The compendium's own authoring page, which is where the price
+                note is written; the Edit link above goes to the item sheet,
+                which is where effects and sharing live. */}
+            <Link to={`/world/${worldId}/compendium/item/${item.id}/edit`}>
+              Details &amp; price
+            </Link>
           </Button>
         ) : null}
       </div>

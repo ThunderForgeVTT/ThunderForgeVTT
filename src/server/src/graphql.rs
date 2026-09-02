@@ -114,6 +114,7 @@ pub mod mutations_actor_permissions;
 pub use mutations_actor_permissions::{ActorPermissionMutation, ActorPermissionQuery};
 
 // Spec 010: actor sharing and cross-world deep copy
+pub mod mutations_actor_images; // Spec 031: portrait/token imagery, rows keyed by role
 pub mod mutations_actor_shares;
 pub use mutations_actor_shares::{ActorShareMutation, ActorShareQuery};
 
@@ -143,6 +144,7 @@ pub use mutations_items::ItemMutation;
 
 // Spec 013: the item "ownership block" (Viewer/Editor/Owner grants)
 pub mod mutations_item_permissions;
+pub mod mutations_item_prices; // Spec 031: the GM's presentational price note
 pub use mutations_item_permissions::{ItemPermissionMutation, ItemPermissionQuery};
 
 // Spec 013: item sharing and cross-world deep copy
@@ -157,6 +159,11 @@ pub use mutations_inventory::InventoryMutation;
 // transaction, exactly one winner.
 pub mod mutations_pickup;
 pub use mutations_pickup::PickupMutation;
+
+// Spec 031 (T055, FR-019): `bringPartyToScene` — the party's characters get a
+// token in the destination, and no character gets a second one.
+pub mod mutations_party;
+pub use mutations_party::PartyMutation;
 
 // Spec 015: DMCA notice-and-takedown moderation mutations
 pub mod mutations_moderation;
@@ -434,6 +441,24 @@ impl GraphQLWorldActor {
     ) -> GraphQLResult<Vec<crate::graphql::types::GraphQLLoreEntry>> {
         let state = app_state(ctx)?;
         crate::graphql::queries::lore::lore_entries_linking_to_actor(state, self.id).await
+    }
+
+    /// Spec 031 (FR-036): every image this actor has, keyed by role.
+    ///
+    /// One list rather than a `portrait`/`token` pair of fields: ADR-057 keeps
+    /// the role set open so the deferred presentation images are additive, and
+    /// a client that renders a role it knows and skips one it does not needs
+    /// no schema change when a new role appears.
+    async fn images(
+        &self,
+        ctx: &Context<'_>,
+    ) -> GraphQLResult<Vec<crate::graphql::types::GraphQLActorImage>> {
+        let state = app_state(ctx)?;
+        let rows = crate::graphql::mutations_actor_images::actor_images_impl(state, self.id).await?;
+        Ok(rows
+            .into_iter()
+            .map(crate::graphql::types::GraphQLActorImage::from)
+            .collect())
     }
 
     /// Spec 017 (FR-012): who currently has this actor claimed, if anyone.
@@ -2838,6 +2863,7 @@ pub struct MutationRoot(
     ActorMutation,
     ActorPermissionMutation,
     ActorShareMutation,
+    mutations_actor_images::ActorImageMutation,
     LoreMutation,
     LorePermissionMutation,
     LoreImageMutation,
@@ -2848,8 +2874,10 @@ pub struct MutationRoot(
     ItemMutation,
     ItemPermissionMutation,
     ItemShareMutation,
+    mutations_item_prices::ItemPriceMutation,
     InventoryMutation,
     PickupMutation,
+    PartyMutation,
     ModerationMutation,
     RollMutation,
     GenieSessionMutation,

@@ -1,4 +1,4 @@
-import { postGraphQL } from "@/api/graphqlClient";
+import { postGraphQL, postGraphQLMultipart } from "@/api/graphqlClient";
 import type {
   ActorPermissionLevel,
   ActorPermissionRecord,
@@ -276,4 +276,111 @@ export function unclaimActor(
     `,
     { actorId, expectedWorldMemberId: expectedWorldMemberId ?? null },
   ).then((data) => data.unclaimActor);
+}
+
+/**
+ * Spec 031 (FR-036): one of an actor's images, named by what it is for.
+ *
+ * `role` is the stored string rather than a union: ADR-057 keeps the set open
+ * so the deferred presentation images are additive, and a role this client
+ * does not recognise is meant to be skipped, not rendered in the wrong place.
+ */
+export interface ActorImageRecord {
+  id: string;
+  actorId: string;
+  role: string;
+  assetId: string;
+  url: string;
+  thumbnailUrl: string;
+}
+
+/** The two roles this application renders today (ADR-057). */
+export const ACTOR_IMAGE_PORTRAIT = "portrait";
+export const ACTOR_IMAGE_TOKEN = "token";
+
+/**
+ * Every actor's imagery in one world, keyed by actor id.
+ *
+ * A separate document from `WORLD_ACTOR_FIELDS` on purpose: `images` costs a
+ * query per actor server-side, and the roster is fetched on screens — the
+ * staging page, the play sidebar — that never show a picture. The surfaces
+ * that do show one ask for it.
+ */
+export async function getWorldActorImages(
+  worldId: string,
+): Promise<Record<string, ActorImageRecord[]>> {
+  const data = await postGraphQL<{
+    worldActors: { id: string; images: ActorImageRecord[] }[];
+  }>(
+    `
+      query WorldActorImages($worldId: UUID!) {
+        worldActors(worldId: $worldId) {
+          id
+          images {
+            id
+            actorId
+            role
+            assetId
+            url
+            thumbnailUrl
+          }
+        }
+      }
+    `,
+    { worldId },
+  );
+  return Object.fromEntries(
+    data.worldActors.map((actor) => [actor.id, actor.images]),
+  );
+}
+
+/**
+ * FR-036: uploads one image for one role, replacing whatever that role held.
+ *
+ * Sent as an `Upload!` scalar over the GraphQL multipart request spec, the
+ * same way `uploadLoreImage`/`uploadCanvasImage` send theirs — a JSON body
+ * cannot carry the bytes. The server transcodes to WebP and refuses an
+ * oversized or undecodable file before writing anything, so a rejection here
+ * means the actor's imagery is exactly as it was.
+ */
+export async function uploadActorImage(
+  actorId: string,
+  role: string,
+  file: Blob,
+): Promise<ActorImageRecord> {
+  const data = await postGraphQLMultipart<{
+    uploadActorImage: ActorImageRecord;
+  }>(
+    `
+      mutation UploadActorImage($actorId: UUID!, $role: String!, $file: Upload!) {
+        uploadActorImage(actorId: $actorId, role: $role, file: $file) {
+          id
+          actorId
+          role
+          assetId
+          url
+          thumbnailUrl
+        }
+      }
+    `,
+    { actorId, role },
+    file,
+    "file",
+  );
+  return data.uploadActorImage;
+}
+
+/** Removes one role's image, leaving the actor's other roles untouched. */
+export function removeActorImage(
+  actorId: string,
+  role: string,
+): Promise<boolean> {
+  return postGraphQL<{ removeActorImage: boolean }>(
+    `
+      mutation RemoveActorImage($actorId: UUID!, $role: String!) {
+        removeActorImage(actorId: $actorId, role: $role)
+      }
+    `,
+    { actorId, role },
+  ).then((data) => data.removeActorImage);
 }

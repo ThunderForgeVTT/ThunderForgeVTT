@@ -22,6 +22,7 @@ mod errors;
 mod graphql;
 mod interaction; // Spec 030: the effect registry, and the rules the GraphQL layer obeys
 mod light_effects; // Spec 030: lighting, as a contributor to the interaction seam
+mod actor_assets_serve; // Spec 031: authenticated proxy for actor portrait/token images (mirrors lore_assets_serve)
 mod lore_assets_serve; // Spec 012: authenticated proxy for lore image assets (mirrors canvas_assets_serve)
 mod map_import;
 mod markdown; // Spec 012: lore wiki GFM rendering, [[link]] resolution, slug generation
@@ -527,6 +528,10 @@ async fn main() {
         app_state.clone(),
         auth_middleware::require_authenticated_user,
     ));
+    let actor_assets_router = actor_assets_serve::router().route_layer(from_fn_with_state(
+        app_state.clone(),
+        auth_middleware::require_authenticated_user,
+    ));
     let scene_assets_router = scene_assets_serve::router().route_layer(from_fn_with_state(
         app_state.clone(),
         auth_middleware::require_authenticated_user,
@@ -569,6 +574,7 @@ async fn main() {
         .merge(map_import_router)
         .merge(canvas_assets_router)
         .merge(lore_assets_router)
+        .merge(actor_assets_router)
         .merge(scene_assets_router);
 
     let systems_admin_router = systems::admin_router().route_layer(from_fn_with_state(

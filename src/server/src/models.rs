@@ -5,12 +5,13 @@ use crate::schema::{
     oauth_link_challenges, oauth_providers, players_online, scene_state_fingerprints, scenes,
     shapes, tokens, user_oauth_accounts, user_sessions, users, walls, world_abilities,
     world_ability_effects, world_ability_permissions, world_ability_shares, world_actor_abilities,
-    world_actor_claims, world_actor_inventory, world_actor_permissions, world_actor_shares,
+    world_actor_claims, world_actor_images, world_actor_inventory, world_actor_permissions,
+    world_actor_shares,
     world_actor_system_data, world_actors, world_chat_messages, world_combatants, world_combats,
     world_events, world_genie_puzzle_clock_rewards, world_genie_puzzle_clocks,
     world_genie_resource_holdings, world_genie_sessions, world_genie_shop_listings,
     world_genie_trade_proposals, world_invites, world_item_effects, world_item_permissions,
-    world_item_shares, world_items, world_lore_entries, world_lore_image_assets, world_lore_links,
+    world_item_prices, world_item_shares, world_items, world_lore_entries, world_lore_image_assets, world_lore_links,
     world_lore_permissions, world_lore_revisions, world_members, world_roll_records, world_tokens,
     worlds,
 };
@@ -1981,4 +1982,74 @@ pub struct NewAbilityShare {
     pub ability_id: uuid::Uuid,
     pub share_code: String,
     pub created_by: uuid::Uuid,
+}
+
+// ============================================================================
+// Spec 031 (US8): actor imagery and the Game Master's item price note
+// ============================================================================
+
+/// Spec 031 (FR-036): one image an actor has, named by what it is *for*.
+///
+/// Rows keyed by role rather than `portrait_asset_id`/`token_asset_id`
+/// columns on `world_actors` — ADR-057 argues the case, and the deferred
+/// talking/not-talking/background set is what settles it: three more roles,
+/// not three more columns and a second mechanism to read them through.
+///
+/// `role` is open text. `mutations_actor_images.rs` names the two this
+/// feature uses; a role no code recognises is ignored rather than rendered.
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_actor_images)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct WorldActorImage {
+    pub id: uuid::Uuid,
+    pub actor_id: uuid::Uuid,
+    pub role: String,
+    pub asset_id: uuid::Uuid,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_actor_images)]
+pub struct NewWorldActorImage {
+    pub actor_id: uuid::Uuid,
+    pub role: String,
+    pub asset_id: uuid::Uuid,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+}
+
+/// Spec 031 (FR-037): what a Game Master says an item costs.
+///
+/// Presentational only (ADR-058). Nothing spends, deducts or settles with
+/// this value; a game system with its own economy — `world_genie_shop_listings`
+/// prices per *vendor* — continues to own trade and may display, ignore or
+/// override this. `currency_label` is free text because this layer names no
+/// currency system, and `is_suggested` carries intent, not behaviour.
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_item_prices)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct WorldItemPrice {
+    pub id: uuid::Uuid,
+    pub item_id: uuid::Uuid,
+    pub amount: i32,
+    pub currency_label: Option<String>,
+    pub is_suggested: bool,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_item_prices)]
+pub struct NewWorldItemPrice {
+    pub item_id: uuid::Uuid,
+    pub amount: i32,
+    pub currency_label: Option<String>,
+    pub is_suggested: bool,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
 }
