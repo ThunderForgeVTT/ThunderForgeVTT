@@ -1,0 +1,28 @@
+{
+  "_comment": [
+    "What a realm is seeded with the first time this server starts, before an",
+    "operator has changed anything. Every value here is editable afterwards",
+    "from the admin settings page; this file only decides where a fresh",
+    "install begins.",
+    "",
+    "It lives here, in version control, rather than as constants in",
+    "src/server/src/admin.rs (spec 032 T014a3). Seeding a realm is",
+    "configuration, and `default_game_system_id` in particular was the last",
+    "system identifier written into shared server code — the exact thing",
+    "FR-029 and scripts/check-system-registry.mjs exist to keep out of it.",
+    "",
+    "It cannot live in src/server/data: that directory is gitignored, so a",
+    "file there ships with no install and every new world would come out with",
+    "no system at all. It is compiled in with include_str! for the same",
+    "reason — a seed that can go missing at runtime is a seed that will."
+  ],
+  "schema_version": "mvp-2026.05",
+  "metadata": {
+    "realm_name": "ThunderForge VTT",
+    "interface_pack_id": "guild-hall-default",
+    "asset_pack_id": "core-preview",
+    "support_email": "stewards@thunderforge.local",
+    "welcome_message": "Welcome to the ThunderForge guild hall.",
+    "default_game_system_id": "genie"
+  }
+}

@@ -45,4 +45,27 @@ mod tests {
         assert!(contributed.spell_data.is_none());
         assert!(contributed.rules.is_some());
     }
+
+    /// The Rust constant and the pack's manifest name the same system (T014b).
+    ///
+    /// A pack used to say its id three times: `SYSTEM_ID`, a literal passed to
+    /// `SystemContribution::new`, and the manifest's `id`. The literal is gone
+    /// — the submission passes the constant now — and this is what holds the
+    /// remaining two together. They are read by different halves of the
+    /// product and nothing else compares them, so a rename in either one is
+    /// exactly the silent drift `check-system-registry.mjs` polices in shared
+    /// code, happening inside a pack where that checker does not look.
+    #[test]
+    fn the_constant_and_the_manifest_name_the_same_system() {
+        let manifest: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string("../system.json").expect("this pack's system.json"),
+        )
+        .expect("system.json parses");
+
+        assert_eq!(
+            manifest.get("id").and_then(|id| id.as_str()),
+            Some(crate::SYSTEM_ID),
+            "SYSTEM_ID and system.json disagree about this pack's id"
+        );
+    }
 }

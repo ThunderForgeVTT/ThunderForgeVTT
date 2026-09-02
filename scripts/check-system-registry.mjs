@@ -125,21 +125,6 @@ function withoutTests(source) {
  */
 const KNOWN = new Map([
   [
-    "src/server/src/admin.rs",
-    {
-      id: "genie",
-      why:
-        "the seed value for a settings file an operator then owns (spec 032 " +
-        "T014a3). A default written once into a manifest is not the same as " +
-        "logic consulting a hardcoded id per world creation, which is what " +
-        "moved out of `prepare_world_input` — a default does not grow a case " +
-        "per pack. Emptying it would be a silent regression: `src/server/data` " +
-        "is gitignored, so nothing shipped supplies a value and every new " +
-        "world would come out systemless. The fix is to move realm seeds into " +
-        "a shipped config file, not to blank the constant.",
-    },
-  ],
-  [
     "src/server/src/graphql.rs",
     {
       id: "genie",

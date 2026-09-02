@@ -56,7 +56,7 @@ inventory::submit! {
         trait_data: Some(validators::validate_trait_data_for_registry),
         spell_data: Some(validators::validate_spell_data_for_registry),
         rules: Some(|manifest| Box::new(crate::rules::DnD5eRules::from_manifest(manifest))),
-        ..thunderforge_canvas_core::system_contribution::SystemContribution::new("dnd5e")
+        ..thunderforge_canvas_core::system_contribution::SystemContribution::new(SYSTEM_ID)
     }
 }
 

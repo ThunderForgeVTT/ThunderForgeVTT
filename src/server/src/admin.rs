@@ -15,29 +15,39 @@ use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const DEFAULT_MANIFEST_SCHEMA_VERSION: &str = "mvp-2026.05";
-const DEFAULT_REALM_NAME: &str = "ThunderForge VTT";
-const DEFAULT_INTERFACE_PACK_ID: &str = "guild-hall-default";
-/// The system a new world starts with, until an operator changes it.
+/// What a fresh realm is seeded with, as shipped.
 ///
-/// This is a **seed for a settings file**, not a branch in logic, and the
-/// distinction is the whole reason it is allowed to name a system while
-/// `prepare_world_input` is not. That function consulted a hardcoded id every
-/// time a world was created; this is one value written once into a manifest an
-/// operator then owns and can change from the admin settings page. A default
-/// does not grow a case per pack, which is the property FR-029 protects.
+/// Six `const`s stood here — the realm's name, its support address, its
+/// welcome message, and `default_game_system_id`, which was the last system
+/// identifier written into shared server code and the standing exception in
+/// `scripts/check-system-registry.mjs`'s `KNOWN` list (T014a3).
 ///
-/// It is listed in `scripts/check-system-registry.mjs`'s `KNOWN` with that
-/// reasoning rather than the check being widened, and T014a3 moves realm seed
-/// values out of Rust and into a shipped config file, which is where they
-/// belong and where this stops being an exception at all.
+/// Seeding a realm is configuration, not logic. It belongs in a file an
+/// operator can read and a diff can show, and moving it there is what takes
+/// the last system name out of `src/server`.
 ///
-/// Emptying this would be a silent regression, not a tidy-up: `src/server/data`
-/// is gitignored, so no shipped manifest supplies a value, and every new world
-/// on every install would come out with no system at all.
-const DEFAULT_GAME_SYSTEM_ID: &str = "genie";
-const DEFAULT_ASSET_PACK_ID: &str = "core-preview";
-const DEFAULT_SUPPORT_EMAIL: &str = "stewards@thunderforge.local";
+/// `include_str!` rather than a runtime read, and the two reasons are
+/// different. `src/server/data` is gitignored, so a config file placed there
+/// ships with no install and every new world would come out systemless — the
+/// silent regression the old comment warned about. And a seed read from disk
+/// is a seed that can be absent at exactly the moment it is needed, which is
+/// the first boot, on someone else's machine. Compiled in, the file is
+/// editable, reviewable and versioned, and cannot go missing.
+const REALM_DEFAULTS_JSON: &str = include_str!("../../../config/realm-defaults.json");
+
+#[derive(Debug, Deserialize)]
+struct RealmDefaults {
+    schema_version: String,
+    metadata: BTreeMap<String, String>,
+}
+
+fn realm_defaults() -> RealmDefaults {
+    // A parse failure here is a malformed file that shipped, which a test in
+    // this module fails on. Panicking is right: a realm seeded from a
+    // half-read config is worse than one that refuses to start, and the
+    // condition cannot arise from anything an operator does at runtime.
+    serde_json::from_str(REALM_DEFAULTS_JSON).expect("config/realm-defaults.json is malformed")
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemManifestDocument {
@@ -571,33 +581,12 @@ fn write_manifest(path: &str, manifest: &SystemManifestDocument) -> Result<(), S
 }
 
 fn default_manifest() -> SystemManifestDocument {
-    let mut metadata = BTreeMap::new();
-    metadata.insert("realm_name".to_string(), DEFAULT_REALM_NAME.to_string());
-    metadata.insert(
-        "interface_pack_id".to_string(),
-        DEFAULT_INTERFACE_PACK_ID.to_string(),
-    );
-    metadata.insert(
-        "asset_pack_id".to_string(),
-        DEFAULT_ASSET_PACK_ID.to_string(),
-    );
-    metadata.insert(
-        "support_email".to_string(),
-        DEFAULT_SUPPORT_EMAIL.to_string(),
-    );
-    metadata.insert(
-        "welcome_message".to_string(),
-        "Welcome to the ThunderForge guild hall.".to_string(),
-    );
-    metadata.insert(
-        "default_game_system_id".to_string(),
-        DEFAULT_GAME_SYSTEM_ID.to_string(),
-    );
+    let defaults = realm_defaults();
 
     SystemManifestDocument {
-        schema_version: DEFAULT_MANIFEST_SCHEMA_VERSION.to_string(),
+        schema_version: defaults.schema_version,
         updated_at: Utc::now(),
-        metadata,
+        metadata: defaults.metadata,
     }
 }
 
@@ -640,7 +629,51 @@ fn to_i64(value: u64) -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{editable_manifest_keys, is_editable_manifest_key, user_role};
+    use super::{default_manifest, editable_manifest_keys, is_editable_manifest_key, user_role};
+
+    /// The shipped seed file parses, and seeds what it says it seeds.
+    ///
+    /// It is compiled in with `include_str!`, so a malformed or renamed key is
+    /// a runtime panic on first boot rather than a compile error — the one
+    /// failure mode this arrangement has, and the reason this test exists. It
+    /// caught exactly that: the file shipped `schemaVersion` while the struct
+    /// expected `schema_version`, and everything still built.
+    #[test]
+    fn the_shipped_realm_defaults_parse_and_seed_a_manifest() {
+        let manifest = default_manifest();
+
+        assert!(
+            !manifest.schema_version.is_empty(),
+            "a realm seeded with no schema version"
+        );
+        // Every key the settings page offers to edit must actually be seeded,
+        // or an operator opens the page to a blank field for a setting the
+        // product claims to have.
+        for key in editable_manifest_keys() {
+            assert!(
+                manifest.metadata.contains_key(*key),
+                "editable setting `{key}` is not seeded by config/realm-defaults.json"
+            );
+        }
+    }
+
+    /// Blanking the seeded system would make every new world systemless on
+    /// every install, which is a silent regression rather than a tidy-up: no
+    /// world would name a system and nothing would say why.
+    #[test]
+    fn a_fresh_realm_is_seeded_with_a_game_system() {
+        let manifest = default_manifest();
+        let seeded = manifest
+            .metadata
+            .get("default_game_system_id")
+            .map(String::as_str)
+            .unwrap_or("");
+
+        assert!(!seeded.is_empty(), "a realm seeded with no game system");
+        // Deliberately not asserting *which*. That is an operator's choice and
+        // a shipped default, and pinning it here would put the system's name
+        // back into src/server — which is the thing T014a3 just removed.
+    }
 
     #[test]
     fn editable_manifest_keys_are_whitelisted() {

@@ -39,7 +39,7 @@ inventory::submit! {
         proficiency_data: Some(validators::validate_proficiency_data_for_registry),
         trait_data: Some(validators::validate_trait_data_for_registry),
         rules: Some(|manifest| Box::new(crate::rules::GenieRules::from_manifest(manifest))),
-        ..thunderforge_canvas_core::system_contribution::SystemContribution::new("genie")
+        ..thunderforge_canvas_core::system_contribution::SystemContribution::new(SYSTEM_ID)
     }
 }
 

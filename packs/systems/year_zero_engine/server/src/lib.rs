@@ -30,7 +30,7 @@ inventory::submit! {
         resource_data: Some(validators::validate_resource_data_for_registry),
         proficiency_data: Some(validators::validate_proficiency_data_for_registry),
         trait_data: Some(validators::validate_trait_data_for_registry),
-        ..thunderforge_canvas_core::system_contribution::SystemContribution::new("year_zero_engine")
+        ..thunderforge_canvas_core::system_contribution::SystemContribution::new(SYSTEM_ID)
     }
 }
 
