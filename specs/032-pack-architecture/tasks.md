@@ -223,6 +223,18 @@ is here.
 
 ---
 
+## Phase 5c: The engine's test suite has never run
+
+Found by the 2026-09-02 mutation audit, which could not break the engine's
+tests because it could not build them. See `docs/test-audit-2026-09-02.md`.
+
+- [X] T081 `bevy_winit` and `webgl2` were unconditional features, and winit does not compile for a plain Linux host. Both are browser-only and are now confined to the wasm32 target section, which is the pattern this manifest already praises for `thunderforge_cache_browser`. Cargo unions features across target sections, so the shipping build is unchanged
+- [ ] T082 **The crate is wasm-only far more deeply than winit.** `network`, `optimistic`, `sync`, `conflict_visualization`, `token_sync_d2`, `mutation_sender`, `presence`, `event_dispatcher` and both websocket modules carry `#![cfg(target_arch = "wasm32")]`; `movement.rs` and `plugins/websocket_plugin.rs` import from them **without** being gated, so they compile nowhere else and the gate was implicit. Gating them cascades into `systems/token_move.rs`, `systems/mod.rs`'s re-exports and `lib.rs`. This is a module-graph refactor and wants deciding, not forcing — an attempt was reverted rather than pushed through
+- [ ] T083 Decide **where** the engine's tests should run. Two honest options. (a) Gate the wasm-only half consistently and move genuinely portable logic into `thunderforge-canvas-core`, which is the pattern this repo already uses and the reason that crate exists — `attributes.rs` says outright that rules live there "where tests execute". (b) Run them under wasm32 with `wasm-bindgen-test` and headless Chromium, which tests them where they actually run. (a) shrinks what the engine crate contains; (b) keeps it and makes the suite real. Doing neither leaves ~45 tests that cannot fail
+- [ ] T084 Whichever wins, `tests_f2_f4_integration.rs::scenario_mutation_timeout_and_rollback` has **zero assertions** — it binds `check_timeouts(6.0)`, never reads it, and unconditionally prints "✅ Scenario 4 passed". And both `test_suite_coverage` functions are pure `eprintln!`, one claiming "50+ unit tests implemented" where the file holds 33
+
+---
+
 ## Phase 6: Polish & Cross-Cutting Concerns
 
 - [ ] T062 Run `quickstart.md` by hand, end to end — including §1's "open a dialog", §3 step 4's light/dark check, and §6 step 4's derived-value editability check. Constitution V

@@ -107,14 +107,12 @@ bevy = { version = "0.19.1", default-features = false, features = [
   "bevy_text",
   "bevy_ui",
   "bevy_window",
-  "bevy_winit",
   "default_font",
   "png",
   # Native canvas authoring: DungeonDraft's Universal VTT exporter uses
   # WebP for background map art (verified against examples/maps/demo.dd2vtt),
   # not just PNG — src/server/src/map_import.rs accepts and saves both.
   "webp",
-  "webgl2",
 ] }
 console_error_panic_hook = "0.1.7"
 serde = { version = "1.0.229", features = ["derive"] }
@@ -132,6 +130,32 @@ uuid = { version = "1.26.0", features = ["serde"] }
 # to the wasm target the way `thunderforge-cache-browser` confines its own
 # web-sys, so a native `cargo check` of this crate never pulls it in.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+# The windowing backend and the WebGL2 renderer, confined to the only target
+# that ships.
+#
+# # Why this moved
+#
+# `bevy_winit` was an unconditional feature, and winit does not compile for a
+# plain Linux host without a platform backend feature. That made
+# `cargo test -p thunderforge_engine` fail at the *linker for a dependency* —
+# not at any of this crate's code — so roughly forty-five tests in
+# `tests_f1_unit.rs`, `tests_f2_f4_integration.rs`, `sync_test.rs` and
+# `integration_tests.rs` had **never run**. A mutation audit on 2026-09-02
+# found them by trying to break the things they test and discovering the suite
+# could not be built at all.
+#
+# Neither feature is needed to compile or run those tests: they build `App`s
+# with no window and assert on resources and systems. Both are needed in a
+# browser, where the engine actually ships. Cargo unions features across target
+# sections, so the wasm build is byte-identical to before.
+#
+# Same shape as `thunderforge_cache_browser` above, and for the same reason:
+# a wasm-only toolchain confined to a wasm-only section costs a native build
+# nothing.
+bevy = { version = "0.19.1", default-features = false, features = [
+  "bevy_winit",
+  "webgl2",
+] }
 web-sys = { version = "0.3.104", features = [
   "Document",
   "Element",
