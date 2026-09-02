@@ -11,7 +11,6 @@ export {
   declarationsFrom,
   emptyDeclarations,
   indexById,
-  parseFraction,
   valuesIn,
 } from "./declarations";
 export {

@@ -72,6 +72,26 @@ pub enum DeclaredValueKind {
     Text(String),
     Boolean(bool),
     List(Vec<String>),
+    /// A pool: a current value and, when the system gives one, a maximum.
+    ///
+    /// # Why this is a variant and not two values
+    ///
+    /// A bar is a proportion, and a proportion needs both halves *together*.
+    /// Publishing a resource as one rendered string — "4 / 7" — forced the
+    /// only consumer that draws bars to parse it back apart, which is exactly
+    /// the branching-on-what-a-value-means this contract exists to prevent: a
+    /// system writing "4 of 7" would have silently lost its bar. Found by
+    /// building the renderer against the format, and recorded as spec 032's
+    /// T019a before it was fixed.
+    ///
+    /// `max` is absent for a counter rather than zero. A pool with no maximum
+    /// is not a pool that is empty — Blades in the Dark's coin counts up with
+    /// nothing to be a proportion of — and this is the same distinction
+    /// [`crate::resource_display::ResourceEntry`] already draws.
+    Fraction {
+        current: i32,
+        max: Option<i32>,
+    },
 }
 
 impl DeclaredValueKind {
@@ -85,6 +105,10 @@ impl DeclaredValueKind {
         match self {
             Self::Integer(value) => Some(*value),
             Self::Number(value) if value.fract() == 0.0 => i32::try_from(*value as i64).ok(),
+            // A pool's integer is its current value; the maximum is a
+            // separate fact and a caller asking for "the number" means this
+            // one.
+            Self::Fraction { current, .. } => Some(*current),
             _ => None,
         }
     }

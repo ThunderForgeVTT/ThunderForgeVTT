@@ -95,6 +95,56 @@ fn context_from(slots: &ActorSlots) -> DeclaredValues {
     DeclaredValues::new(values)
 }
 
+/// The resources a system declares, as declared values.
+///
+/// # Why resources are published here at all
+///
+/// They were not, and the omission was invisible: a layout could say
+/// `barStack of resources` and the renderer would find nothing to draw. Worse,
+/// the shape it *would* have found was a rendered string, so the only way to
+/// recover a bar was to parse `"4 / 7"` back apart — the exact
+/// branching-on-meaning the declared-value contract exists to prevent, and a
+/// system writing `"4 of 7"` would have lost its bar with nothing failing.
+///
+/// So a resource arrives as a [`DeclaredValueKind::Fraction`], with its
+/// maximum intact and absent when the system gives none.
+///
+/// Only the base entry is published. A stacking resource — a shield over a
+/// health pool — is more than one bar, and flattening its layers into one
+/// identifier would misreport the character. That is worth doing properly
+/// rather than approximately, and the canvas already draws the stack from its
+/// own path.
+fn resources_from(slots: &ActorSlots, systems_dir: &str, system_id: &str) -> Vec<DeclaredValue> {
+    crate::status_display::declarations_for_system(systems_dir, system_id)
+        .into_iter()
+        .filter_map(|declared| {
+            let slot = match declared.source.slot.as_str() {
+                "resourceData" | "resource_data" => slots.resource_data.as_ref(),
+                "traitData" | "trait_data" => slots.trait_data.as_ref(),
+                "abilityData" | "ability_data" => slots.ability_data.as_ref(),
+                "proficiencyData" | "proficiency_data" => slots.proficiency_data.as_ref(),
+                _ => None,
+            }?;
+
+            let entry =
+                thunderforge_canvas_core::resource_display::entries_from(slot, &declared.source)
+                    .into_iter()
+                    .next()?;
+
+            Some(DeclaredValue {
+                id: declared.definition.id,
+                label: declared.definition.label,
+                abbreviation: None,
+                value: DeclaredValueKind::Fraction {
+                    current: entry.current,
+                    max: entry.max,
+                },
+                origin: Origin::Stored,
+            })
+        })
+        .collect()
+}
+
 /// The attributes a system declares, as declared values.
 fn visible_from(slots: &ActorSlots, declarations: &[AttributeDeclaration]) -> Vec<DeclaredValue> {
     let Some(abilities) = slots.ability_data.as_ref() else {
@@ -124,7 +174,8 @@ pub fn declared_values_for_actor(
     slots: &ActorSlots,
 ) -> Vec<DeclaredValue> {
     let declarations = crate::attributes::attribute_declarations_for_system(systems_dir, system_id);
-    let visible = visible_from(slots, &declarations);
+    let mut visible = visible_from(slots, &declarations);
+    visible.extend(resources_from(slots, systems_dir, system_id));
     let context = context_from(slots);
 
     // Rules are built from the pack's own manifest, so tables like Genie's

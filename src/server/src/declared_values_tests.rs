@@ -111,3 +111,71 @@ fn a_system_with_no_rules_reports_its_stored_values_unchanged() {
         "5e derives nothing yet — that is T051, not a failure here"
     );
 }
+
+// ---------------------------------------------------------------------------
+// T019a: a pool arrives as two numbers, not as text to be parsed
+// ---------------------------------------------------------------------------
+
+/// The regression this exists to prevent: a bar recovered by parsing `"4 / 7"`
+/// back apart. That is branching on what a value means, and a system writing
+/// `"4 of 7"` would have lost its bar with nothing failing anywhere.
+#[test]
+fn a_genie_actors_pools_arrive_with_their_maximums_intact() {
+    let values = declared_values_for_actor(&packs(), "genie", &genie_actor(Some(4)));
+
+    let health = find(&values, "health").expect("genie declares a health pool");
+    assert_eq!(
+        health.value,
+        DeclaredValueKind::Fraction {
+            current: 8,
+            max: Some(10)
+        },
+        "both halves together, as numbers"
+    );
+    assert_eq!(
+        health.origin,
+        Origin::Stored,
+        "a pool is typed in, not derived"
+    );
+
+    let wish = find(&values, "wishPoints").expect("genie declares Wish Points");
+    assert_eq!(
+        wish.value,
+        DeclaredValueKind::Fraction {
+            current: 1,
+            max: Some(5)
+        }
+    );
+}
+
+/// A system that declares no pools gets none — which is correct for a ruleset
+/// that tracks none, not a gap to fill with a default.
+#[test]
+fn a_system_with_no_declared_resources_publishes_none() {
+    let slots = ActorSlots {
+        ability_data: Some(serde_json::json!({ "athletics": 2 })),
+        ..ActorSlots::default()
+    };
+    let values = declared_values_for_actor(&packs(), "fate_core", &slots);
+    assert!(
+        values
+            .iter()
+            .all(|v| !matches!(v.value, DeclaredValueKind::Fraction { .. })),
+        "Fate Core declares no pools"
+    );
+}
+
+/// An actor whose sheet has no resource slot is not an actor with empty pools.
+#[test]
+fn an_actor_with_no_resource_data_publishes_no_pools() {
+    let slots = ActorSlots {
+        ability_data: Some(serde_json::json!({ "might": 3 })),
+        ..ActorSlots::default()
+    };
+    let values = declared_values_for_actor(&packs(), "genie", &slots);
+    assert!(find(&values, "health").is_none());
+    assert!(
+        find(&values, "might").is_some(),
+        "and the attributes are unaffected"
+    );
+}

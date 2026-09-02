@@ -40,6 +40,30 @@ fn render(value: &DeclaredValueKind) -> String {
         DeclaredValueKind::Text(v) => v.clone(),
         DeclaredValueKind::Boolean(v) => v.to_string(),
         DeclaredValueKind::List(items) => items.join(", "),
+        DeclaredValueKind::Fraction { current, max } => match max {
+            Some(max) => format!("{current} / {max}"),
+            None => current.to_string(),
+        },
+    }
+}
+
+/// A pool's two numbers, sent as numbers.
+///
+/// The string above is for reading; this is for drawing. A bar is a
+/// proportion and a proportion needs both halves together — sending only the
+/// rendered text forced the one consumer that draws bars to parse it back
+/// apart, which is branching on what a value means and is exactly what the
+/// declared-value contract exists to prevent (spec 032 T019a).
+///
+/// `max` absent means a counter, not an empty pool: Blades in the Dark's coin
+/// counts up with nothing to be a proportion of.
+fn fraction_of(value: &DeclaredValueKind) -> Option<GraphQLValueFraction> {
+    match value {
+        DeclaredValueKind::Fraction { current, max } => Some(GraphQLValueFraction {
+            current: *current,
+            max: *max,
+        }),
+        _ => None,
     }
 }
 
@@ -76,6 +100,14 @@ pub enum GraphQLValueOrigin {
     Derived,
 }
 
+/// A pool's current value and, where the system gives one, its maximum.
+#[derive(SimpleObject, Debug, Clone)]
+pub struct GraphQLValueFraction {
+    pub current: i32,
+    /// Absent for a counter, which has no maximum to be a proportion of.
+    pub max: Option<i32>,
+}
+
 /// One value a system publishes about an actor.
 ///
 /// Superset of [`GraphQLAttribute`]: it carries derived values too, and says
@@ -93,6 +125,9 @@ pub struct GraphQLDeclaredValue {
     /// would have to branch on, and branching on a value's type is the first
     /// step towards knowing what it means.
     pub value: String,
+    /// Present only for a pool. A consumer drawing a bar reads this and never
+    /// parses `value`.
+    pub fraction: Option<GraphQLValueFraction>,
     pub origin: GraphQLValueOrigin,
 }
 
@@ -286,6 +321,7 @@ impl TokenAttributesQuery {
                             label: value.label,
                             abbreviation: value.abbreviation,
                             value: render(&value.value),
+                            fraction: fraction_of(&value.value),
                             origin: match value.origin {
                                 Origin::Stored => GraphQLValueOrigin::Stored,
                                 Origin::Derived => GraphQLValueOrigin::Derived,

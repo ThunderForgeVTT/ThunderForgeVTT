@@ -38,7 +38,7 @@ import { useId } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { declarationsFrom, parseFraction, valuesIn } from "./declarations";
+import { declarationsFrom, valuesIn } from "./declarations";
 import {
   rendersAnything,
   resolutionFrom,
@@ -189,10 +189,15 @@ function BarStack({
   return (
     <div data-slot="bar-stack" className="flex flex-col gap-2">
       {values.map((value) => {
-        const fraction = parseFraction(value.value);
-        const filled = fraction
-          ? Math.max(0, Math.min(1, fraction.current / fraction.max))
-          : null;
+        // Read, never parsed. The server sends a pool's two numbers as
+        // numbers; recovering them from the rendered string was branching on
+        // what a value means, and a system writing "4 of 7" lost its bar.
+        const fraction = value.fraction ?? null;
+        const max = fraction?.max ?? null;
+        const filled =
+          fraction && max !== null && max > 0
+            ? Math.max(0, Math.min(1, fraction.current / max))
+            : null;
         return (
           <div
             key={value.id}
@@ -210,7 +215,7 @@ function BarStack({
                 aria-label={value.label}
                 aria-valuenow={fraction?.current}
                 aria-valuemin={0}
-                aria-valuemax={fraction?.max}
+                aria-valuemax={max ?? undefined}
                 className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
               >
                 <div

@@ -51,6 +51,29 @@ function stored(
   return { id, label, abbreviation, value, origin: "stored" };
 }
 
+/**
+ * A pool, with both numbers as numbers.
+ *
+ * The `value` string is deliberately *not* parseable here in some tests: the
+ * bar comes from `fraction`, and that is the whole point of T019a.
+ */
+function pool(
+  id: string,
+  label: string,
+  current: number,
+  max: number | null,
+  rendered = max === null ? String(current) : `${current} / ${max}`,
+): SheetValue {
+  return {
+    id,
+    label,
+    abbreviation: null,
+    value: rendered,
+    fraction: { current, max },
+    origin: "stored",
+  };
+}
+
 function derived(
   id: string,
   label: string,
@@ -242,14 +265,45 @@ describe("generic constructs keep the system's declaration order", () => {
     ]);
   });
 
-  it("draws a bar only where the rendered value carries a maximum", () => {
+  it("draws a bar only for a pool that has a maximum", () => {
     const markup = render([{ kind: "barStack", of: "resources" }], {
       resources: [
-        stored("stress", "Stress", "1 / 9"),
-        stored("insight", "Insight", "2"),
+        pool("stress", "Stress", 1, 9),
+        // A counter: no maximum to be a proportion of, so no bar. Blades in
+        // the Dark's coin counts up with nothing to fill.
+        pool("coin", "Coin", 2, null),
       ],
     });
     expect(markup.match(/role="meter"/g)).toHaveLength(1);
+  });
+
+  /**
+   * The regression T019a exists to prevent.
+   *
+   * The bar used to be recovered by parsing the rendered string, so a system
+   * whose value read "4 of 7" — or "4 out of 7", or any wording but the one
+   * shape the parser knew — silently lost its bar, with nothing failing
+   * anywhere. The numbers now arrive as numbers and the string is only read.
+   */
+  it("draws a bar from the numbers even when the text is unparseable", () => {
+    const markup = render([{ kind: "barStack", of: "resources" }], {
+      resources: [pool("health", "Health", 4, 7, "4 of 7")],
+    });
+
+    expect(markup).toContain('role="meter"');
+    expect(markup).toContain('aria-valuenow="4"');
+    expect(markup).toContain('aria-valuemax="7"');
+  });
+
+  /**
+   * And the converse: a string that *looks* like a fraction is not one. If
+   * anything ever starts parsing again, this goes red.
+   */
+  it("draws no bar for a value that merely looks like a fraction", () => {
+    const markup = render([{ kind: "barStack", of: "resources" }], {
+      resources: [stored("initiative", "Initiative", "2 / 3")],
+    });
+    expect(markup).not.toContain('role="meter"');
   });
 });
 

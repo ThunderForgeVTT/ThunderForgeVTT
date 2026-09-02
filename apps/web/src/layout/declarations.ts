@@ -71,26 +71,3 @@ export function valuesIn(
 ): readonly SheetValue[] {
   return declarations[set] ?? [];
 }
-
-/**
- * A resource's current and maximum, where the rendered string carries both.
- *
- * The wire type sends one already-rendered string per value, so a bar has no
- * structured maximum to draw against (see the note in `SheetLayout.tsx`).
- * `"7 / 12"` is the one shape a bar can be recovered from without knowing
- * what the value means; anything else renders as text with no fill.
- */
-export function parseFraction(
-  rendered: string,
-): { current: number; max: number } | null {
-  const match = /^\s*(-?\d+(?:\.\d+)?)\s*\/\s*(-?\d+(?:\.\d+)?)\s*$/.exec(
-    rendered,
-  );
-  if (!match) return null;
-  const current = Number(match[1]);
-  const max = Number(match[2]);
-  if (!Number.isFinite(current) || !Number.isFinite(max) || max <= 0) {
-    return null;
-  }
-  return { current, max };
-}

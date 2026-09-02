@@ -67,11 +67,28 @@ export type ValueOrigin = "stored" | "derived";
  * value's type — and branching on a value's type is the first step towards
  * knowing what it means.
  */
+/** A pool's two numbers, as numbers. */
+export interface ValueFraction {
+  current: number;
+  /** Absent for a counter, which has no maximum to be a proportion of. */
+  max?: number | null;
+}
+
 export interface SheetValue {
   id: string;
   label: string;
   abbreviation?: string | null;
+  /** Already rendered, for reading. */
   value: string;
+  /**
+   * Present only for a pool, and the only thing a bar is drawn from.
+   *
+   * The server sends both halves as numbers precisely so nothing here has to
+   * parse `value` back apart — doing that was branching on what a value means,
+   * and a system writing "4 of 7" instead of "4 / 7" silently lost its bar
+   * (spec 032 T019a).
+   */
+  fraction?: ValueFraction | null;
   origin: ValueOrigin;
 }
 
