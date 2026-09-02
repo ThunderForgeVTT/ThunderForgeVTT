@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+#
+# Everything, before it leaves the machine.
+#
+# Push is where the unbounded checks belong: clippy and eslint compile, so
+# they are quick on a warm tree and slow exactly when a lot has changed —
+# which is also when they are most worth running. Pushing is rare enough to
+# absorb that, and it is the last point where a failure costs one person a
+# minute instead of costing CI a run and everyone else a red main.
+#
+# The formatters run again here. They are seconds, and re-running them is
+# what makes `git commit --no-verify` a deferral rather than an escape.
+#
+# Bypass with `git push --no-verify`.
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+# Not the test suites. Those need a database and a dev server and take
+# minutes — `scripts/e2e-parallel.mjs` is a deliberate, separate act.
+exec node ./scripts/verify.mjs

@@ -27,8 +27,20 @@
  * # Scope
  *
  * Deliberately *not* the test suites. Those take minutes, need a database
- * and a dev server, and answer a different question. This one is meant to be
- * cheap enough to run before every commit.
+ * and a dev server, and answer a different question.
+ *
+ * # Cost, and what the hooks make of it
+ *
+ * This was written expecting to be cheap enough to run before every commit.
+ * Measured, it is two things rather than one. rustfmt, prettier and the two
+ * node checkers read files and exit — about 3.6s together, and that number
+ * does not move. clippy and eslint compile, so they are sub-second on a warm
+ * tree and minutes after a rebase or a change to a widely-included header.
+ *
+ * So `.hooks/pre-commit` runs the flat-cost four by id and `.hooks/pre-push`
+ * runs all eight. The point of the split is not that the compiled checks
+ * matter less; it is that a hook with an unbounded worst case teaches people
+ * to pass `--no-verify`, and a gate that is routinely bypassed gates nothing.
  */
 
 import { spawnSync } from "node:child_process";
@@ -39,17 +51,31 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const fix = process.argv.includes("--fix");
 
 /**
+ * `--only=<id>,<id>` runs a subset, by the `id` on each step below.
+ *
+ * This exists so the git hooks in `.hooks/` can select from *this* list
+ * rather than restating the commands. A hook holding its own copy of
+ * `cargo fmt --all --check` is a second gate that drifts from the first, and
+ * the drift is silent: both keep passing, they just stop checking the same
+ * thing. The hooks name ids; the commands live here only.
+ */
+const onlyArg = process.argv.find((arg) => arg.startsWith("--only="));
+const only = onlyArg ? onlyArg.slice("--only=".length).split(",").filter(Boolean) : null;
+
+/**
  * One check. `cwd` is relative to the repo root so this works from anywhere,
  * which matters: `cargo test` from `apps/web` cannot find the root `.env`,
  * and the same class of mistake is easy to make here.
  */
 const steps = [
   {
+    id: "rust-fmt",
     name: "rust format",
     cwd: ".",
     command: fix ? ["cargo", "fmt", "--all"] : ["cargo", "fmt", "--all", "--check"],
   },
   {
+    id: "rust-lint",
     name: "rust lint",
     cwd: ".",
     // `--all-targets` includes tests and benches, which is where lint debt
@@ -73,6 +99,7 @@ const steps = [
     // wasm32-unknown-unknown, so any environment that can build the engine
     // can lint it here. `--lib` rather than `--all-targets` because the unit
     // tests are host tests and are covered by the workspace run above.
+    id: "engine-lint",
     name: "engine lint (wasm)",
     cwd: ".",
     command: [
@@ -86,6 +113,7 @@ const steps = [
     ],
   },
   {
+    id: "web-fmt",
     name: "web format",
     cwd: "apps/web",
     // The project's own glob, from `apps/web`'s `format` script. It excludes
@@ -100,6 +128,7 @@ const steps = [
     ],
   },
   {
+    id: "web-lint",
     name: "web lint",
     cwd: "apps/web",
     command: fix
@@ -115,6 +144,7 @@ const steps = [
     //
     // `--fix` regenerates; a plain run only reports, so the gate cannot
     // quietly rewrite the tree it is meant to be checking.
+    id: "sdk",
     name: "sdk bindings",
     cwd: ".",
     command: fix
@@ -130,6 +160,7 @@ const steps = [
     // Not affected by `--fix`: a violation is shared code that has learned a
     // system's name, and moving that knowledge back into the pack needs a
     // person.
+    id: "registry",
     name: "system registry",
     cwd: ".",
     command: ["node", "./scripts/check-system-registry.mjs"],
@@ -142,14 +173,30 @@ const steps = [
     // Not affected by `--fix`: there is nothing mechanical to rewrite. A
     // violation is either an effect that belongs in a contributor or a word in
     // a comment, and both need a person.
+    id: "seam",
     name: "interaction seam",
     cwd: ".",
     command: ["node", "./scripts/check-interaction-seam.mjs"],
   },
 ];
 
+// An unknown id is a failure, not an empty run: a hook whose step was renamed
+// must say so rather than quietly gating on nothing.
+if (only) {
+  const known = new Set(steps.map((step) => step.id));
+  const unknown = only.filter((id) => !known.has(id));
+  if (unknown.length > 0) {
+    process.stdout.write(
+      `unknown --only id(s): ${unknown.join(", ")}\nknown: ${[...known].join(", ")}\n`,
+    );
+    process.exit(2);
+  }
+}
+
+const selected = only ? steps.filter((step) => only.includes(step.id)) : steps;
+
 const results = [];
-for (const step of steps) {
+for (const step of selected) {
   process.stdout.write(`\n── ${step.name}${fix ? " (fixing)" : ""}\n`);
   const [command, ...args] = step.command;
   const run = spawnSync(command, args, {

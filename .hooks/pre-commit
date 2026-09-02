@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+#
+# The gates that cost the same every time.
+#
+# `scripts/verify.mjs` has eight checks and they fall into two cost classes.
+# rustfmt, prettier and the two node checkers read files and exit — about
+# 3.6s together, and that figure does not move. clippy and eslint compile,
+# so their cost is bounded by what changed: sub-second on a warm tree,
+# minutes after a rebase, a dependency bump, or an edit to a widely-included
+# header. Those run on push instead.
+#
+# The split is not about which checks matter. It is about which ones can be
+# put in front of every single commit without teaching everyone to reach for
+# `--no-verify`, because a hook that is routinely bypassed gates nothing.
+#
+# Bypass deliberately with `git commit --no-verify`. The same checks run
+# again on push, so a bypass here defers the gate rather than removing it.
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+# Checks the working tree, not the index. With a partial stage — `git add -p`,
+# or staging one of several changed files — this reports on content that is
+# not being committed. Deliberately not fixed by stashing: a hook that stashes
+# is a hook that can lose work when it is interrupted, and formatting is not
+# worth that risk.
+exec node ./scripts/verify.mjs --only=rust-fmt,web-fmt,registry,seam

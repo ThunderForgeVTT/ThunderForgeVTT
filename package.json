@@ -21,7 +21,9 @@
     "torture:10": "./scripts/torture.mjs 10",
     "torture:25": "./scripts/torture.mjs 25",
     "torture:50": "./scripts/torture.mjs 50",
-    "torture:100": "./scripts/torture.mjs 100"
+    "torture:100": "./scripts/torture.mjs 100",
+    "prepare": "node ./scripts/install-hooks.mjs",
+    "hooks:install": "node ./scripts/install-hooks.mjs"
   },
   "devDependencies": {
     "rimraf": "6.1.3"
