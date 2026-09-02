@@ -116,10 +116,10 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 
 **Independent Test**: As a connected non-GM, open your character and roll — the play view stays mounted.
 
-- [ ] T035 [US2] Render the active game system's character sheet in a compact in-pane presentation in `apps/web/src/components/world/PlayDock/`, reusing `SYSTEM_ACTOR_SHEETS` rather than adding a second sheet (FR-002 player half)
-- [ ] T036 [US2] Trigger stat and ability rolls from the in-pane view through the existing dice path so results reach the table identically, in `apps/web/src/components/world/PlayDock/` (FR-003)
-- [ ] T037 [US2] Dismiss the in-pane view back to the pane's previous content with the map still live, in `apps/web/src/components/world/PlayDock/`
-- [ ] T038 [US2] Handle a game system that supplies no sheet, per the spec edge case, in `apps/web/src/pages/world/actor/systemActorSheets.ts`
+- [X] T035 [US2] Render the active game system's character sheet in a compact in-pane presentation in `apps/web/src/components/world/PlayDock/`, reusing `SYSTEM_ACTOR_SHEETS` rather than adding a second sheet (FR-002 player half)
+- [X] T036 [US2] Trigger stat and ability rolls from the in-pane view through the existing dice path so results reach the table identically, in `apps/web/src/components/world/PlayDock/` (FR-003)
+- [X] T037 [US2] Dismiss the in-pane view back to the pane's previous content with the map still live, in `apps/web/src/components/world/PlayDock/`
+- [X] T038 [US2] Handle a game system that supplies no sheet, per the spec edge case, in `apps/web/src/pages/world/actor/systemActorSheets.ts`
 
 **Checkpoint**: A player can act from the table. Note: generality across systems is bounded by spec 032.
 
@@ -171,6 +171,7 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 
 - [ ] T053 [US4] Add the scene-transition state machine (`ready → unloading → loading → ready`) as a Bevy plugin in `src/engine/src/plugins/scene_transition.rs`, registered in `src/engine/src/lib.rs` (FR-018, research R11)
 - [ ] T054 [US4] Unload the previous scene's tokens, walls and lights on `OnEnter(unloading)` and load the new scene's on `OnEnter(loading)`, in `src/engine/src/plugins/scene_transition.rs` (FR-018)
+- [ ] T054a [US4] Drive the scene-transition machine from chrome — nothing calls `begin_scene_transition`/`complete_scene_transition`, so T053/T054 are registered and inert and FR-018 is not yet delivered, in `apps/web/src/pages/world/WorldPage.tsx` and `apps/web/src/engine/bevy/index.ts` (FR-018)
 - [ ] T055 [US4] Implement party retention per T002's ADR in `src/server/src/graphql/`, ensuring a character that already has a token in the destination gains no second one (FR-019, contracts/graphql-mutations.md)
 - [ ] T056 [US4] Add the GM's bring-the-party choice to the scene-change surface in `apps/web/src/` (FR-019)
 - [ ] T057 [P] [US4] Add the retention predicate with unit tests in `crates/thunderforge-canvas-core/src/`

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { beginTokenPlacement } from "@/engine/bevy";
+import { getMyActorClaim } from "@/api/actorClaims";
 import { getWorldActors } from "@/api/actors";
 import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
 import type { WorldActorRecord } from "@/types/actor";
+import { InPaneCharacterSheet } from "./InPaneCharacterSheet";
 
 export interface ActorsPanelProps {
   worldId: string;
@@ -73,6 +75,29 @@ export function ActorsPanel({ worldId }: ActorsPanelProps) {
   const [query, setQuery] = useState("");
   const [pcsOpen, setPcsOpen] = useState(true);
   const [npcsOpen, setNpcsOpen] = useState(true);
+  /**
+   * The character the viewer is playing, if any.
+   *
+   * `getMyActorClaim` is the world's one answer to "who am I at this table"
+   * (spec 017) and already drives the actor-selection gate and the pickup
+   * prompt. Asking it again here rather than inventing a dock-local notion of
+   * ownership keeps one mechanism: `null` for a Game Master, an Owner, or a
+   * member who has not claimed anybody, and every one of those cases wants the
+   * Game Master's new-tab View.
+   *
+   * A claim that cannot be read is the same as no claim — View opens a tab,
+   * which is what it did before this existed. Nothing is worth failing the
+   * roster over.
+   */
+  const [claimedActorId, setClaimedActorId] = useState<string | null>(null);
+  /**
+   * Spec 031 US2 #3: the pane's previous content is the roster, so "dismiss"
+   * is this going back to null. Held here rather than in `WorldDock` because
+   * the dock's job is which *section* is open, and a character is not a
+   * section — routing it through the dock would put one panel's internal state
+   * in a component the other four share.
+   */
+  const [viewing, setViewing] = useState<WorldActorRecord | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -91,6 +116,20 @@ export function ActorsPanel({ worldId }: ActorsPanelProps) {
     };
   }, [worldId]);
 
+  useEffect(() => {
+    let active = true;
+    getMyActorClaim(worldId)
+      .then((claim) => {
+        if (active) setClaimedActorId(claim?.actorId ?? null);
+      })
+      .catch(() => {
+        if (active) setClaimedActorId(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [worldId]);
+
   const { pcs, npcs } = useMemo(() => {
     const needle = query.trim().toLowerCase();
     const matches = (actor: WorldActorRecord) =>
@@ -103,6 +142,23 @@ export function ActorsPanel({ worldId }: ActorsPanelProps) {
   }, [actors, query]);
 
   const searching = query.trim() !== "";
+
+  /*
+    The character replaces the roster rather than opening over it. The dock is
+    one column wide, and a sheet floating above a list it cannot fully cover
+    reads as a stuck overlay; going back is one control (FR-002/US2 #3). The
+    map behind the dock is untouched either way — nothing here is canvas state,
+    and no section is unmounted, so the engine keeps running (Principle I).
+  */
+  if (viewing) {
+    return (
+      <InPaneCharacterSheet
+        worldId={worldId}
+        actor={viewing}
+        onDismiss={() => setViewing(null)}
+      />
+    );
+  }
 
   if (error) {
     return <p className="text-sm text-destructive">{error}</p>;
@@ -126,28 +182,45 @@ export function ActorsPanel({ worldId }: ActorsPanelProps) {
       </span>
 
       {/*
-        View opens in a new tab rather than navigating.
+        View never navigates.
 
-        This row used to be a `Link`, so looking at a character cost the Game
-        Master the table: the play view unmounted, the engine tore down, and
-        getting back meant a reload. Spec 031's first user story is precisely
-        that a session should not have to leave the play screen.
+        This row used to be a `Link`, so looking at a character cost whoever
+        clicked it the table: the play view unmounted, the engine tore down,
+        and getting back meant a reload. Spec 031 US1 and US2 are both about
+        that, and answer it differently by role.
 
-        A new tab rather than an in-pane view because this is the *Game
-        Master's* half: they are inspecting one of many characters while
-        running a table, and want it beside the map, not on top of it. A player
-        opening their own character gets the in-pane view instead (FR-002) —
-        the two roles differ deliberately.
+        A Game Master gets a new tab: they are inspecting one of many
+        characters while running a table, and want it beside the map, not on
+        top of it. A player opening the character they are actually playing
+        gets it inside the pane (FR-002), because a new tab is where they stop
+        being at the table — the map is no longer in front of them at the
+        moment they most need it. Same control, same test id, two behaviours,
+        deliberately.
+
+        The condition is the claim, not the role: anybody whose claim is this
+        actor is playing it. A Game Master has no claim (spec 017), so they
+        fall through to the tab without a role check written here.
       */}
-      <a
-        href={`/world/${worldId}/actor/${actor.id}/view`}
-        target="_blank"
-        rel="noreferrer"
-        data-testid={`actor-view-${actor.id}`}
-        className="rounded border border-border px-2 py-1 text-xs transition-colors hover:bg-muted"
-      >
-        View
-      </a>
+      {actor.id === claimedActorId ? (
+        <button
+          type="button"
+          onClick={() => setViewing(actor)}
+          data-testid={`actor-view-${actor.id}`}
+          className="rounded border border-border px-2 py-1 text-xs transition-colors hover:bg-muted"
+        >
+          View
+        </button>
+      ) : (
+        <a
+          href={`/world/${worldId}/actor/${actor.id}/view`}
+          target="_blank"
+          rel="noreferrer"
+          data-testid={`actor-view-${actor.id}`}
+          className="rounded border border-border px-2 py-1 text-xs transition-colors hover:bg-muted"
+        >
+          View
+        </a>
+      )}
 
       {/*
         Place hands the token to the engine, which carries it on the cursor

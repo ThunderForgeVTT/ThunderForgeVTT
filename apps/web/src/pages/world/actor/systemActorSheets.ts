@@ -35,3 +35,29 @@ export const SYSTEM_ACTOR_SHEETS: Record<
 > = {
   genie: GenieActorSheet,
 };
+
+/**
+ * The sheet for a system, or `null` where that system ships none.
+ *
+ * Spec 031's edge case — "a game system that defines no character sheet, when
+ * a player chooses View" — is asking for the absence to be an *answer* rather
+ * than an accident. `ActorDetailPage.tsx` open-codes the two-step lookup
+ * (`gameSystemId ? SYSTEM_ACTOR_SHEETS[id] : undefined`), which collapses
+ * three different situations into `undefined`: an actor belonging to no
+ * system, a system with no sheet, and a typo. They are the same answer to the
+ * person looking at the screen — there is nothing systemic to draw — so they
+ * are one answer here, and the caller renders whatever it can render without
+ * a sheet.
+ *
+ * What it deliberately does not do is substitute a generic sheet. Inventing
+ * stats a system never declared would be this app forming an opinion about
+ * rules it does not own, and a wrong sheet is worse at a table than no sheet.
+ */
+export function resolveActorSheet(
+  gameSystemId: string | null | undefined,
+): ComponentType<ActorSheetProps> | null {
+  if (!gameSystemId) {
+    return null;
+  }
+  return SYSTEM_ACTOR_SHEETS[gameSystemId] ?? null;
+}
