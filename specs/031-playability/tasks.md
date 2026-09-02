@@ -228,8 +228,8 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 
 **⚠️ FR-031 is blocked on spec 032** — the static `SYSTEM_ACTOR_SHEETS` registry cannot express system-supplied combat structure. FR-030 ships independently.
 
-- [ ] T074 [US7] Offer the currently selected tokens as the combat roster in `apps/web/src/components/world/PlayDock/CombatPanel.tsx` (FR-030)
-- [ ] T075 [US7] Keep round and turn presentation for systems that use rounds, unchanged, in `apps/web/src/components/world/PlayDock/CombatPanel.tsx`
+- [X] T074 [US7] Offer the currently selected tokens as the combat roster in `apps/web/src/components/world/PlayDock/CombatPanel.tsx` (FR-030)
+- [X] T075 [US7] Keep round and turn presentation for systems that use rounds, unchanged, in `apps/web/src/components/world/PlayDock/CombatPanel.tsx`
 - [ ] T076 [US7] **BLOCKED on spec 032** — make turn structure system-supplied so a ruleset without rounds shows no round counter (FR-031, SC-011)
 
 **Checkpoint**: Combat starts from what the GM selected.
