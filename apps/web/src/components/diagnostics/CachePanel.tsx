@@ -154,6 +154,30 @@ export function CachePanel() {
         Content on this device
       </h3>
 
+      {sync?.status === "degraded" && sync.reason ? (
+        <p
+          className="text-xs text-muted-foreground"
+          /*
+            What the engine actually reported, as opposed to what this browser
+            looks capable of. The capability probe above answers "could this
+            work?" before anything has been attempted; this answers "did it?",
+            and the two disagree in exactly the cases that matter — storage
+            present but denied, a quota refusal, an index that would not open.
+
+            The reason string was already crossing the boundary
+            (`cached_assets.rs` reports every degradation with one, including
+            `CacheError::Unsupported`) and was being dropped on this side. So
+            the panel had the answer in hand and showed a column of zeros
+            instead — which is the shape of the playtest complaint that
+            produced FR-042, arrived at by a different route.
+          */
+          data-testid="cache-degraded"
+          data-reason={sync.reason}
+        >
+          {`The local cache is not keeping this world's content: ${sync.reason}.`}
+        </p>
+      ) : null}
+
       {!support.supported ? (
         <p
           className="text-xs text-muted-foreground"
