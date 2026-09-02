@@ -2,6 +2,10 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { deleteWorld, getWorld } from "@/api/world";
 import { getScenes } from "@/api/scenes";
+import {
+  interfacePackLabel,
+  useInterfacePacks,
+} from "@/appearance/interface-pack-label";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
@@ -44,6 +48,7 @@ export default function WorldDashboardPage() {
     isLoading: true,
   });
   const [isDeleting, setIsDeleting] = useState(false);
+  const packs = useInterfacePacks();
   // T015 (US2): the dashboard's old "Scenes" panel read from `world.scenes`,
   // a GraphQLWorld field that's permanently hardcoded to an empty array at
   // the resolver (never real data). Real scene data lives behind the
@@ -228,10 +233,10 @@ export default function WorldDashboardPage() {
                     </div>
                     <div>
                       <dt className="text-xs text-muted-foreground">
-                        Interface pack ID
+                        Interface pack
                       </dt>
                       <dd className="font-medium">
-                        {world.interfacePackId ?? "Not yet assigned"}
+                        {interfacePackLabel(world.interfacePackId, packs)}
                       </dd>
                     </div>
                     <div>

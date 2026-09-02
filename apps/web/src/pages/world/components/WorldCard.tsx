@@ -1,4 +1,8 @@
 import { Link } from "react-router-dom";
+import {
+  interfacePackLabel,
+  useInterfacePacks,
+} from "@/appearance/interface-pack-label";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
@@ -18,6 +22,8 @@ function shortenId(value: string) {
 }
 
 export function WorldCard({ world, showOwner = false }: WorldCardProps) {
+  const packs = useInterfacePacks();
+
   return (
     <Card surface="parchment" className="grid gap-4 p-5">
       <div className="flex items-start justify-between gap-3">
@@ -56,7 +62,7 @@ export function WorldCard({ world, showOwner = false }: WorldCardProps) {
             Interface pack
           </span>
           <strong className="font-medium">
-            {world.interfacePackId ?? "Unbound placeholder"}
+            {interfacePackLabel(world.interfacePackId, packs)}
           </strong>
         </div>
         <div>

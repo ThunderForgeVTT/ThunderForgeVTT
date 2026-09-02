@@ -164,10 +164,10 @@ can be validated until identifiers resolve, so this phase blocks that one.
 - [X] T053 [US1] Confirm the layout vocabulary in `crates/pack_system_spec/src/layout.rs` can actually express `packs/interface/forged-steel/interface.json` without a conditional or an expression. If it cannot, that is a finding about the format and belongs back in T019 — not a new construct bolted on to unblock one pack
 - [X] T054 [US1] Delete `apps/web/src/systems/dnd5e/` and `apps/web/src/components/game-systems/dnd5e/`, repointing consumers at the pack (FR-030, SC-004). `dnd5e` is the only system with a module in shared app code; after this, none is
 - [X] T055 [US1] Before T054 lands, grep `apps/web/e2e/` for the placeholders and accessible names of every control being removed, not only their testids, and check whether any absence assertion has become vacuous
-- [ ] T056 [P] [US3] Fall back to Forge when the world's pack is absent or fails validation, setting `missing` on the resolved appearance (FR-018)
-- [ ] T057 [US3] Tell the participant **once** — not once per navigation — naming the missing pack, and block nothing, from `apps/web/src/appearance/AppearanceProvider.tsx` (FR-018)
-- [ ] T058 [P] [US3] Replace `"Unbound placeholder"` in `apps/web/src/pages/world/components/WorldCard.tsx` with the active pack's title, which is "Forge" when unset (FR-022, FR-023, SC-008)
-- [ ] T059 [P] [US3] Replace `"Not yet assigned"` for the interface pack in `apps/web/src/pages/world/WorldDashboardPage.tsx` with the same. Leave the **`gameSystemId`** labels on both screens alone — there the unset state is real, and it belongs to User Story 2
+- [X] T056 [P] [US3] Fall back to Forge when the world's pack is absent or fails validation, setting `missing` on the resolved appearance (FR-018)
+- [X] T057 [US3] Tell the participant **once** — not once per navigation — naming the missing pack, and block nothing, from `apps/web/src/appearance/AppearanceProvider.tsx` (FR-018)
+- [X] T058 [P] [US3] Replace `"Unbound placeholder"` in `apps/web/src/pages/world/components/WorldCard.tsx` with the active pack's title, which is "Forge" when unset (FR-022, FR-023, SC-008)
+- [X] T059 [P] [US3] Replace `"Not yet assigned"` for the interface pack in `apps/web/src/pages/world/WorldDashboardPage.tsx` with the same. Leave the **`gameSystemId`** labels on both screens alone — there the unset state is real, and it belongs to User Story 2
 - [ ] T060 [US1] E2E in `apps/web/e2e/world-appearance.spec.ts`: two worlds on two systems, each under a pack targeting it, render visibly and structurally different sheets with the shared application unchanged between them (SC-005)
 - [ ] T061 [US3] E2E in `apps/web/e2e/world-appearance.spec.ts`: a world bound to a pack that is not installed opens in Forge, says so once, blocks nothing, and returns when the pack is restored with no re-binding step; and both labels read the same true thing (SC-008)
 
