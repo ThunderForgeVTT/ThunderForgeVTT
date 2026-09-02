@@ -288,8 +288,9 @@ one is a product decision rather than a switch.
   figure is **UNTESTED** — a starting recommendation, not a measurement, and
   labelled that way deliberately, because this document already carried one
   number that drifted 16% before anyone noticed.
-- What _has_ been measured bounds the guess from below: 4.15MB brotli for the
-  engine bundle, plus a world's art. Steady-state play is small — token moves
+- What _has_ been measured bounds the guess from below: 4.92MB brotli for the
+  engine bundle (2026-09-01, after spec 031; it was 4.15MB before), plus a
+  world's art. Steady-state play is small — token moves
   and dice over one WebSocket.
 - **If you play on something slower, on a metered link, or on mobile data, we
   want to hear about it.** That evidence is worth more than our estimate, and
@@ -319,6 +320,23 @@ was always more alarming than the program it described.
 **1,861 bytes** less brotli, at ~6 extra minutes of optimiser time. Stay on
 wasm-pack's default `-O`.
 
+**Re-measured after spec 031 (2026-09-01): 29.83 MB raw, 7.91 MB gzip -9,
+4.92 MB brotli -q11.** That is **+18.5% on the wire** against the row above —
+0.77MB more brotli — and it is the whole spec, not one flag: `bevy_state` plus
+six new engine plugins (authoring mode, placement, selection filter, scene
+transition, interaction marker, context menu).
+
+The `bevy_state`-only delta that spec 031's T001 was meant to record **cannot
+now be recovered**. The engine uses `States`/`NextState` throughout, so a build
+without the feature no longer compiles — the measurement had to be taken when
+the flag landed and was not. Recorded here as the process lesson it is: a
+"record the delta" step gets skipped unless the number has somewhere to live,
+which is the same failure mode that let this document carry a figure that
+drifted 16%.
+
+Both figures above are measured, not estimated: `brotli -q11` via Python's
+`brotli`, `gzip -9` via `gzip`, on the release build wasm-pack produced.
+
 - **Done** — `scripts/shared.mjs` selects the profile per caller: the dev loop
   keeps `--dev` (a 7-minute rebuild after every engine edit is not a dev loop),
   everything else defaults to `--release`. `ENGINE_PROFILE` overrides. The
@@ -339,8 +357,8 @@ wasm-pack's default `-O`.
   shipped `.wasm` unless each piece compiles to its own binary, fetched and
   instantiated over a stable JS-glue boundary. The natural seam is
   `packs/systems/*/engine` — a world needs only its active system. Real
-  architectural work, and at 4.15MB brotli the case is much weaker than it
-  looked.
+  architectural work, and at 4.92MB brotli the case is still much weaker than
+  it looked — though 18.5% closer than it was before spec 031.
 - **Open — Bevy feature trim.** `bevy_ui`/`bevy_ui_render` are unused (the
   debug HUD that needed them was removed) but deliberately retained; `webp`
   appears unreferenced in the engine crate; `bevy_gizmos` is diagnostic-only and

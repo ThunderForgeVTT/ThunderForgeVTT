@@ -194,7 +194,8 @@ function getEngineInputsHash(profile = engineProfile()) {
  * Which wasm-pack profile to build the engine with.
  *
  * `--dev` is seconds to build and 220MB to ship; `--release` is ~7 minutes to
- * build and 24.7MB, of which 4.15MB after brotli. The gap is not mostly code:
+ * build and 29.8MB, of which 4.92MB after brotli (2026-09-01, after spec 031;
+ * it was 24.7MB and 4.15MB before). The gap is not mostly code:
  * 71% of the dev bundle is the wasm `name` section — unmangled Rust and Bevy
  * symbols — which is why it gzips 10:1 and why stripping it is worth so much.
  *
