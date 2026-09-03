@@ -172,3 +172,57 @@ needs on the interface side: fall back, say so once, block nothing (FR-018).
 There is no "world will not open" case here — a look cannot fail in a way that
 costs content, which is the asymmetry between the two pack types stated in
 data form.
+
+---
+
+# Increment F (User Story 2) — 2026-09-03
+
+## Installed system (read model)
+
+Not a table. The row of record is the directory `packs/systems/<id>/`, and
+`system.json` is the row. `/api/systems` projects it, mirroring
+`interface_packs::list_installed`:
+
+| Field | Source | Notes |
+|---|---|---|
+| `id` | `system.json` `id` | Matches the directory name; a pack test already asserts the two agree |
+| `title` | `system.json` `title` | Replaces `BUNDLED_SYSTEM_LABELS` |
+| `version` | `system.json` `version` | |
+| `description` | `system.json` `description` | |
+| `legal` | `system.json` `legal` | Already served by `/api/systems/:id/manifest.json` |
+
+**`game_systems` (existing table)**: 0 rows, read by `/api/systems` today, and
+the reason the client hardcodes a list. Its fate is ADR-028's to record — see
+research F-1. Nothing in this increment writes to it.
+
+## World-creation hook (contract, shape open)
+
+The behaviour a pack contributes when a world on its system is created.
+`genie` is the only current implementer: a `world_genie_sessions` row with
+`doom_clock_max: 6`.
+
+Shape depends on research F-2's unresolved decision, so it is recorded as a
+contract rather than a signature:
+
+- **Input**: the world that was created (`world_id`, `created_by`), inside the
+  same transaction as the world and its default scene — a hook that commits
+  separately can leave a world without the row its system expects.
+- **Output**: success, or a failure that aborts the whole world creation. A
+  half-created world is worse than a refused one.
+- **Registration**: `inventory`, alongside `SystemContribution`, so discovery
+  stays "what is linked" and no list names a system.
+
+## Surface failure boundary (client state)
+
+Per mounted pack surface, not per page:
+
+| Field | Meaning |
+|---|---|
+| `packId` | Which pack this boundary wraps — the name SC-009 requires in the message |
+| `surface` | Which surface failed, so the message can say *what* is unavailable |
+| `error` | Captured for diagnostics, never rendered raw to a player |
+
+The state transition is one-way within a mount: **rendering → failed**. It
+resets when the boundary remounts (a different actor, a different world),
+because a failure caused by one actor's data should not condemn the next.
+

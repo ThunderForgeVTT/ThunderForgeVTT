@@ -139,3 +139,72 @@ says only "contrast too low" sends an author to the wrong half of their file.
 Run them with `pnpm verify` for the lint gates and the suites named above for
 behaviour. Neither answers §1's "did you look at a dialog", which is why this
 document exists.
+
+---
+
+# Increment F (User Story 2) — validation
+
+Run against a live stack. Start it with the rate-limit bypass, or repeated page
+loads trip `/authentication/*`'s 40-per-minute cap and the app renders "could
+not load the current instance state", which looks exactly like a broken
+feature:
+
+```bash
+THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT=1 node scripts/dev.mjs
+```
+
+## F1 — the application no longer knows which systems exist
+
+```bash
+# Every bundled pack, read from the directory rather than an empty table.
+curl -s localhost:30000/api/systems | python3 -m json.tool | head -20
+
+# And nothing in shared web code names a system.
+grep -rn "BUNDLED_SYSTEM_IDS\|BUNDLED_SYSTEM_LABELS" apps/web/src/   # expect: no matches
+```
+
+**Expected**: the route lists all bundled systems with their titles; both
+literals are gone; the create-world and system-settings pickers still offer
+every system, now sourced from the server.
+
+**The real test of SC-004**: add a directory under `packs/systems/`, restart,
+and confirm it is offered — with no other file edited.
+
+## F2 — a pack contributes behaviour
+
+```bash
+node scripts/check-system-registry.mjs    # expect: 0 known violations
+```
+
+**Expected**: zero. That script's `KNOWN` list is empty and the exemption for
+`graphql.rs` is gone, because world creation no longer branches on `"genie"`.
+
+By hand: create a world on Genie, then confirm its session row exists and was
+created by the pack's hook rather than by shared code. Create a world on 5e and
+confirm no genie row appears.
+
+## F3 — a failing surface is contained and named
+
+Injected, not waited for. With a surface made to throw:
+
+1. Open an actor in a world whose system contributes that surface.
+2. **Expected**: the surface is replaced by a message naming the pack and
+   saying what is unavailable. The rest of the page — navigation, inventory,
+   abilities, lore — still works. Nothing is blank.
+3. Navigate to a different actor. **Expected**: the boundary resets and the
+   next actor renders; one actor's bad data does not condemn the next.
+
+## F4 — the contract stands on its own
+
+The honest test of SC-010 is not mechanical, and this is the part that needs a
+person:
+
+1. Read `packs/systems/README.md` **without opening any source file**.
+2. Write a minimal system pack from it alone: a manifest, one ability, one
+   resource, and a turn structure.
+3. Install it and bind a world to it.
+
+**Expected**: it works, and every document the README references exists.
+Anywhere step 2 required reading `sheet.rs` or `attributes.rs` to proceed is a
+gap in the contract, and the gap is the finding.
+

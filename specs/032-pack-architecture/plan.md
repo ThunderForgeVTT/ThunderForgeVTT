@@ -12,7 +12,14 @@ statement of that is the first thing this revision owes the reader.
 ## Summary
 
 This increment builds **User Story 1**, plus the interface-pack half of User
-Story 3. User Story 2 remains gated on ADR-029; spec 031's T076 stays blocked.
+Story 3.
+
+> **Increment F (2026-09-03) plans User Story 2.** ADR-029 is written and the
+> gate has closed: outside code is not executed, and executable extension is
+> bundled-only, so a bundled pack contributing behaviour is permitted. Spec
+> 031's T076 shipped separately — it turned out never to have needed pack code
+> at all. See [Increment F](#f--user-story-2-a-system-brings-its-own-way-of-working)
+> below; everything above this line is delivered history.
 
 What changed: an interface pack is no longer only a palette. It also declares
 **layout** over the values a system declares, which means three things have to
@@ -238,6 +245,111 @@ bundled manifests are completed to declare what their sheets actually track.
 under the base pack alone. Every system has a sheet worth reading, and none of
 them needed a pack written for it.
 
+### F — User Story 2: a system brings its own way of working
+
+Planned 2026-09-03, after ADR-029 closed the gate. **Three of the six
+acceptance scenarios are already satisfied** by Increments A–E, and saying so
+is what keeps this increment honest about its actual size:
+
+| Scenario | State |
+|---|---|
+| 1. A system's sheet is presented with no shared branch naming it | **Done** — `PackActorSheet` renders from declarations |
+| 2. Two worlds, two systems, visibly different sheets | **Done** — `world-appearance.spec.ts` T080 proves it |
+| 3. A system declaring no sheet gets a system-agnostic default | **Done** — Forge, plus a named empty state |
+| 4. Installation is validated against the recorded security terms | **Open**, and now trivial: ADR-029 says bundled-only |
+| 5. A failing pack surface is contained and names the pack | **Open** — nothing contains it today |
+| 6. A published contract exists for pack authors | **Open** — no author-facing document |
+
+So what is left is **not** "mount a sheet". It is four things: stop the shared
+application naming systems, let a pack contribute *behaviour* rather than only
+declarations, contain a pack's failure, and write the contract down.
+
+#### F1 — The application stops knowing which systems exist (FR-005, SC-004)
+
+`apps/web/src/api/gameSystems.ts` holds `BUNDLED_SYSTEM_IDS` and
+`BUNDLED_SYSTEM_LABELS`: two hand-kept lists naming all seven systems and
+their titles, in shared web code. SC-004 says adding a system must touch only
+that system's own pack directory, and today it demands an edit here.
+
+The lists exist for a stated reason — the `/api/systems` route reads the
+`game_systems` **database table**, and that table has **0 rows**. It has never
+been seeded with the bundled packs. So the honest server answers an empty list
+and the client compensates with a literal.
+
+The fix already exists one directory over: `/api/interface-packs` lists packs
+by reading `packs/interface/`, which is why nothing on the client hardcodes
+interface pack names. `/api/systems` does the same for `packs/systems/`, and
+both web lists are deleted.
+
+This makes ADR-028 (*Game Systems DB Model and Ownership Rules*, also an empty
+stub) a live question — what is the `game_systems` table **for**, if the
+directory is the source of truth? That question is in scope here, and its
+answer is likely "installed third-party systems, which ADR-029 says there are
+none of" — i.e. the table is premature and the row of record is the directory.
+
+#### F2 — A pack contributes behaviour, not only declarations (FR-004, T014a2)
+
+`graphql.rs` branches on `game_system_id == "genie"` at world creation and
+inserts a `world_genie_sessions` row. That is the last system name in shared
+server code, and the only remaining entry in `check-system-registry.mjs`'s
+`KNOWN` list.
+
+The real obstacle is not the hook — it is **table ownership**. `genie-server`
+has no `diesel` dependency, and `world_genie_sessions` lives in the server's
+generated `schema.rs`, produced by `diesel print-schema` from migrations that
+are also the server's. A pack cannot write to its own table because it does
+not have one, in any sense the code recognises.
+
+Three sub-decisions, all genuinely open, all in Phase 0's remit:
+
+- **Where a pack's migrations live.** Diesel expects one migrations directory.
+  A pack owning `migrations/` under its own directory needs either a merged
+  migration source or an embedded-migrations-per-pack arrangement.
+- **Whether `schema.rs` keeps pack tables.** It is generated from the database,
+  so it will keep producing them. Two `table!` declarations for one table is
+  exactly the drift this spec has spent five increments removing.
+- **The hook's signature.** `inventory` + a typed `fn(&mut PgConnection, ...)`
+  is the proven pattern from `SystemContribution`, and it requires `diesel` in
+  the pack crate — which is the decision above, restated.
+
+**This is the increment's hard part and its main risk.** A cheap answer here
+produces the schema duplication the whole feature exists to retire.
+
+#### F3 — A pack's failure is contained and named (FR-016, SC-009)
+
+Nothing contains a pack-contributed surface today. `PackActorSheet` catches a
+*fetch* failure and says the sheet could not load, which is not the same as a
+surface that throws while rendering — that takes the page with it, and the
+message names nothing.
+
+SC-009 measures both halves: the rest of the session stays usable, and the
+message names the responsible pack. An error boundary around each mounted
+surface, told which pack it wraps, is the shape. `MissingPackNotice`'s
+precedent applies — say it plainly, block nothing.
+
+#### F4 — The contract exists as a document (FR-015, SC-010)
+
+SC-010: an author can produce a working pack **from the published contract
+alone, without reading shared application source**, and the contract has zero
+references to documents that do not exist.
+
+`packs/interface/README.md` does this for interface packs. There is no
+equivalent for system packs, and `contracts/system-contract.md` in this spec
+directory is a design artefact for us rather than a document for an author.
+The deliverable is an author-facing `packs/systems/README.md` describing every
+declaration block — `abilities`, `resources`, `movement`, `sheet`, `groups`,
+`turnStructure` — and every hook a pack may contribute.
+
+Note this is testable rather than merely assertable: a check that every
+document the contract references exists is the same shape as
+`check-system-registry.mjs`.
+
+*Checkpoint*: a second bundled pack contributes a world-creation behaviour and
+a surface; `check-system-registry.mjs` reports **zero** outstanding violations;
+an injected failure in a pack surface leaves the session usable and names the
+pack; and `packs/systems/README.md` describes what a pack may declare with no
+dangling references.
+
 ## Risks
 
 Recorded because the previous plan's confidence did not survive contact with
@@ -270,11 +382,6 @@ than one that does.
 
 ## Deferred
 
-- **User Story 2 (system packs mounting their own surfaces), and spec 031's
-  T076.** Gated on ADR-029. Note the distinction this increment relies on:
-  ADR-029 governs loading *third-party* code at runtime. Bundled pack crates
-  are Cargo workspace members compiled into the product, which is why
-  Increment A is not gated.
 - **The system-pack half of User Story 3** (FR-019 to FR-021).
 - **An `interface_packs` table and an upload flow.** Bundled packs only.
 - **Third-party system packs**, per FR-017's interim restriction.
