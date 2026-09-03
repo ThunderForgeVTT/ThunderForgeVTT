@@ -150,10 +150,26 @@ execute":
    into a running wasm engine the way server crates link into the binary.
 2. **Validation is not enforcement.** Rejecting a bad ability score is not the
    same as gating movement on a computed speed. See Phase 5's open item.
-3. **A vestigial trait.** `src/engine/src/systems/core.rs` still declares
-   `GameSystem` with `ability_names()`, one stub implementation and no
-   dependents, duplicating a list the manifests now own. That is the piece to
-   resolve first.
+3. ~~**A vestigial trait.**~~ Resolved by spec 032: `src/engine/src/systems/core.rs`
+   is gone, and the one contract a system implements is
+   `thunderforge_canvas_core::system_rules::SystemRules` — in the crate both the
+   engine and the server already depend on, and the only one whose tests execute
+   natively.
+
+**Spec 032 closed the presentation half.** A system's sheet was a hand-written
+React container per system, mounted from a `Record<string, ComponentType>` that
+held exactly one entry, so six of the seven bundled packs had no character sheet
+at all and were disabled in every picker as "(TBD)". A sheet is now what a
+system *declares* — abilities, resources, movement, tracks, ladders, player-named
+slots — laid out by whichever interface pack the world has chosen, with `forge`
+as the generic default that renders any system. A pack gets a sheet by having a
+manifest. `apps/web/e2e/world-appearance.spec.ts` opens 5e, Fate Core and Cypher
+under the base pack alone and asserts the three sheets are not the same sheet.
+
+The `interface_pack_id` field on a world is live: `packs/interface/` ships four
+packs, three of them targeting a system, and the binding is validated before it
+is stored and falls back to the base pack when the pack it names is not
+installed.
 
 ### [x] Phase 9 — Multiplayer
 

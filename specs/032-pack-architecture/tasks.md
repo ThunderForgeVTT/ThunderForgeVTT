@@ -240,8 +240,8 @@ tests because it could not build them. See `docs/test-audit-2026-09-02.md`.
 
 - [ ] T062 Run `quickstart.md` by hand, end to end — including §1's "open a dialog", §3 step 4's light/dark check, and §6 step 4's derived-value editability check. Constitution V
 - [ ] T063 Do the SC-002 pass against a running `node scripts/dev.mjs`: walk the product under both packs and confirm 100% of available actions, permissions and displayed values are identical and only presentation differs
-- [ ] T064 [P] Update `MVP.md` and `docs/adrs/README.md` where either describes the interface-pack field as unused, or 5e's presentation as living in the app
-- [ ] T065 Run `pnpm verify` and fix what it reports **in the code this feature added**. Keep it to that; wide passes get their own commit
+- [X] T064 [P] Update `MVP.md` and `docs/adrs/README.md` where either describes the interface-pack field as unused, or 5e's presentation as living in the app
+- [X] T065 Run `pnpm verify` and fix what it reports **in the code this feature added**. Keep it to that; wide passes get their own commit
 
 ---
 
