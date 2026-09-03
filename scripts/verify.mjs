@@ -178,6 +178,20 @@ const steps = [
     cwd: ".",
     command: ["node", "./scripts/check-interaction-seam.mjs"],
   },
+  {
+    // Spec 032 SC-010: a pack author works from the published contract alone,
+    // and that contract has zero references to documents that do not exist.
+    // The tree moves under a document that is written once, and a dead link
+    // sends an author to read something that is not there — with no way to
+    // tell whether it was renamed or never written.
+    //
+    // Not affected by `--fix`: the choice between correcting a link and
+    // writing the document it promises is not one a script can make.
+    id: "packdocs",
+    name: "pack contracts",
+    cwd: ".",
+    command: ["node", "./scripts/check-pack-docs.mjs"],
+  },
 ];
 
 // An unknown id is a failure, not an empty run: a hook whose step was renamed
