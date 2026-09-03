@@ -54,7 +54,7 @@ async function createWorld(page: Page, worldName: string): Promise<string> {
 }
 
 test.describe("Spec 016: GM assigns a game system and its legal notice is persistently visible", () => {
-  test("GM sees Genie already assigned, unimplemented systems marked TBD and disabled, and re-confirming Genie's legal notice persists across a revisit", async ({
+  test("GM sees Genie already assigned, every bundled system offered, and re-confirming Genie's legal notice persists across a revisit", async ({
     page,
   }) => {
     await register(page, freshCredentials("e2esystem"));
@@ -68,12 +68,16 @@ test.describe("Spec 016: GM assigns a game system and its legal notice is persis
 
     await page.getByTestId("system-picker").click();
 
-    // Spec 021: Genie is the only system with a real, data-connected actor
-    // sheet — every other bundled pack is marked "(TBD)" and disabled in
-    // the picker rather than silently accepting a non-functional choice.
+    // Spec 021 marked every pack but Genie "(TBD)" and disabled it, because
+    // Genie was the only system with a real, data-connected actor sheet.
+    // Spec 032 removed that condition rather than the caution: a sheet is
+    // what a system declares, laid out by the world's interface pack, so a
+    // bundled pack works in play by having a manifest — and all seven do.
+    // `world-appearance.spec.ts` opens three of them and reads their sheets.
     const dnd5eOption = page.getByRole("option", { name: "5E System Core" });
-    await expect(dnd5eOption).toContainText("(TBD)");
-    await expect(dnd5eOption).toHaveAttribute("aria-disabled", "true");
+    await expect(dnd5eOption).toBeVisible();
+    await expect(dnd5eOption).not.toContainText("(TBD)");
+    await expect(dnd5eOption).not.toHaveAttribute("aria-disabled", "true");
 
     // Re-picking the already-active system still exercises the "review the
     // legal notice before confirming" flow (FR-004's "point of selection"

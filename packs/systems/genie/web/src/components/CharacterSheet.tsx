@@ -151,9 +151,18 @@ export const CharacterSheet: React.FC<CharacterSheetProps> = ({
 
   return (
     <div className="w-full max-w-4xl mx-auto p-4 bg-white rounded-lg shadow-lg">
-      <div className="mb-6 border-b pb-4">
-        <h1 className="text-3xl font-bold">{character.name}</h1>
-      </div>
+      {/*
+        No heading here. This sheet named the character in an `h1`, and both
+        places that mount it — the actor page and the play dock — already name
+        the character directly above it. So the document carried two headings
+        with identical text, the outer one an `h1` and this one another `h1`:
+        a real accessibility fault, and a pack reaching out to decide the
+        page's heading structure, which is not a pack's to decide.
+
+        Invisible until spec 032. An actor created through the compendium used
+        to be given the system `"generic"`, so this sheet never mounted for one
+        and the duplication never reached a screen.
+      */}
 
       <Tabs.Root value={selectedTab} onValueChange={setSelectedTab} className="w-full">
         <Tabs.List className="flex gap-2 border-b mb-4">
