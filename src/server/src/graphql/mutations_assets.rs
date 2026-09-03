@@ -151,10 +151,31 @@ pub async fn upload_canvas_image_impl(
     let content_hash =
         thunderforge_cache_core::Fingerprint::of_bytes(&transcoded.webp_bytes).to_hex();
 
-    let cfg = RustFsConfig::from_env();
-    write_object(&cfg, &key, transcoded.webp_bytes, "image/webp")
+    // Reuse the object if these exact bytes are already stored. The new asset
+    // row is still this world's, with its own id and its own permissions —
+    // only the bytes are shared. See `storage::dedupe`.
+    let existing_object = {
+        let hash = content_hash.clone();
+        let pool = state.db_pool.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut conn = pool.get().ok()?;
+            crate::storage::dedupe::object_holding(&mut conn, &hash)
+        })
         .await
-        .map_err(|e| UploadCanvasImageError::Storage(e.to_string()))?;
+        .ok()
+        .flatten()
+    };
+
+    let key = match existing_object {
+        Some(path) => path,
+        None => {
+            let cfg = RustFsConfig::from_env();
+            write_object(&cfg, &key, transcoded.webp_bytes, "image/webp")
+                .await
+                .map_err(|e| UploadCanvasImageError::Storage(e.to_string()))?;
+            key
+        }
+    };
 
     // 4. Persist the row — only reached after a successful write, so no
     //    partial asset is ever recorded (FR-013, data-model.md).

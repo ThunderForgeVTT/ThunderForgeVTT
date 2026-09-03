@@ -118,6 +118,7 @@ pub async fn save_background_image(
     scene_id: Uuid,
     image_base64: &str,
     pixels_per_grid: f64,
+    db_pool: Option<crate::state::DbPool>,
 ) -> Result<SavedBackgroundImage, MapImportError> {
     let bytes = BASE64_STANDARD
         .decode(image_base64)
@@ -149,10 +150,33 @@ pub async fn save_background_image(
     let content_hash =
         thunderforge_cache_core::Fingerprint::of_bytes(&transcoded.webp_bytes).to_hex();
 
-    let cfg = crate::storage::rustfs::RustFsConfig::from_env();
-    crate::storage::rustfs::write_object(&cfg, &key, transcoded.webp_bytes, "image/webp")
-        .await
-        .map_err(|e| MapImportError::Storage(e.to_string()))?;
+    // The same map imported into a second world stores no second copy. The
+    // scene still gets its own asset row, with its own world, scene and owner
+    // — only the object is shared. See `storage::dedupe`.
+    let existing_object = match db_pool {
+        None => None,
+        Some(pool) => {
+            let hash = content_hash.clone();
+            tokio::task::spawn_blocking(move || {
+                let mut conn = pool.get().ok()?;
+                crate::storage::dedupe::object_holding(&mut conn, &hash)
+            })
+            .await
+            .ok()
+            .flatten()
+        }
+    };
+
+    let key = match existing_object {
+        Some(path) => path,
+        None => {
+            let cfg = crate::storage::rustfs::RustFsConfig::from_env();
+            crate::storage::rustfs::write_object(&cfg, &key, transcoded.webp_bytes, "image/webp")
+                .await
+                .map_err(|e| MapImportError::Storage(e.to_string()))?;
+            key
+        }
+    };
 
     Ok(SavedBackgroundImage {
         asset_id,
@@ -197,7 +221,7 @@ mod tests {
         let source = crate::test_support::tiny_png_bytes();
         let encoded = BASE64_STANDARD.encode(&source);
 
-        let saved = save_background_image(owner_id, world_id, scene_id, &encoded, 128.0)
+        let saved = save_background_image(owner_id, world_id, scene_id, &encoded, 128.0, None)
             .await
             .expect("saving a valid png background should succeed");
 
