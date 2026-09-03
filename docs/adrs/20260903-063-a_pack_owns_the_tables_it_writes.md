@@ -1,7 +1,7 @@
 # A Pack Owns the Tables It Writes
 
 - **Date**: 2026-09-03
-- **Status**: Accepted (destination), with the work sized and deferred
+- **Status**: Accepted, and **implemented the same day** — see *Outcome*
 - **Spec**: `specs/032-pack-architecture/` Increment F, F2 (FR-004, T014a2)
 - **Related**: ADR-029 (a bundled pack may contribute behaviour), ADR-061
   (a pack's implementation is discovered, not listed), ADR-028 (the directory
@@ -139,11 +139,42 @@ So, concretely:
    implementation cannot own its table would fix the check and not the code.
 3. Spec 032's T014a2 stays open, re-scoped to what it actually needs.
 
+## Outcome
+
+**Done, 2026-09-03.** This ADR was written expecting the move to be a later
+increment, and it was carried out within the day once research § F-5 found
+that the obstacle was not what it looked like.
+
+What shipped:
+
+- `src/server` became the library `thunderforge-server`; `src/app` is a thin
+  binary that links the packs, merges their GraphQL, and runs `main`. Two
+  lines were needed to make the library compile.
+- Genie's six tables, eleven models, thirteen mutations and its queries moved
+  to `packs/systems/genie/server/src/session/`. `diesel.toml` excludes those
+  tables from `print-schema`, so there is one declaration of each.
+- The world-creation branch became `world_hooks.rs`: packs submit a
+  `WorldCreatedHook`, the server runs whichever match, inside the creation
+  transaction. It lives in the server rather than beside `SystemContribution`
+  in canvas-core, because it takes a `&mut PgConnection` and canvas-core is
+  compiled to wasm.
+- **`check-system-registry.mjs` reports zero violations and nothing exempted.**
+
+Two constraints the spike had not found, both worth carrying forward:
+
+1. **`allow_tables_to_appear_in_same_query!` cannot span crates.** It emits an
+   impl in each direction and the reverse lands on a foreign type, which the
+   orphan rule refuses. Genie needed no cross-crate join; a pack that does
+   will have to split the query or leave the join on the server's side.
+2. **A dev-dependency cycle produces two compiled instances of the library**,
+   and `inventory` collects into one. Anything collected in the crate under
+   test is invisible to that crate's own tests, which is why hook discovery is
+   asserted in the binary.
+
 ## Consequences
 
-- **`check-system-registry.mjs` continues to report one outstanding
-  violation.** That is the honest state, and the number staying at one is
-  itself the signal: the list may not grow without a task id.
+- ~~`check-system-registry.mjs` continues to report one outstanding
+  violation.~~ **Superseded by the outcome above** — the list is empty.
 - The claim Increment F can make is narrower and true: the shared *application*
   no longer knows which systems exist (ADR-028), a failing pack surface is
   contained and named, and the contract is published. A pack contributing

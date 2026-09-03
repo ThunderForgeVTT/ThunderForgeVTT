@@ -430,3 +430,44 @@ mutation, `GenieActorSheet`'s reason for living in shared web code — that it
 edits `trait_data.level` and recomputes max Wish Points, which a declared-value
 sheet cannot express — becomes a thing the pack can own too. All three
 remaining hardcoded-system violations close on the same work.
+
+
+## F-6. What the move actually cost (recorded 2026-09-03, after doing it)
+
+F-5 predicted the shape and got it right. Two constraints it did not find,
+because both are only visible from inside the work:
+
+**`allow_tables_to_appear_in_same_query!` cannot span crates.** The macro
+emits an impl of a Diesel trait for *each* ordering of every pair it is given.
+For a pair spanning two crates, one of those impls has a foreign self type and
+a foreign trait, and the orphan rule refuses it. There is no invocation order
+that avoids this — it is not a matter of which crate declares it.
+
+Genie needed no cross-crate join, which was established by removing them and
+watching it compile rather than by reading the code. A pack that *does* need
+one has two options — split it into two queries, or leave that query on the
+server's side of the line — and neither is a disaster, but the constraint
+should be known before designing around it.
+
+**A dev-dependency cycle produces two compiled instances of the library.** The
+packs link against the normal build; `cargo test` compiles a second copy under
+`cfg(test)`. `inventory` collects into one registry per instance, so a pack's
+submissions are invisible to the tests of the crate they submit *to*. This
+surfaced as a discovery test failing for reasons that had nothing to do with
+the product.
+
+`SystemContribution` never had this problem because it collects in
+`thunderforge-canvas-core` — a plain dependency, compiled once, shared by
+both sides. `WorldCreatedHook` cannot live there: it takes a
+`&mut PgConnection`, and canvas-core is compiled to wasm as part of the
+engine.
+
+So the rule is: **a registry collected in the crate under test can only be
+asserted from a binary that links everything.** Selection logic is testable in
+the library; discovery is not. That is why the hook's discovery test lives in
+`src/app` beside `system_packs.rs`, which had already made the same argument
+for the same reason.
+
+**What the move did not cost**: any of the extraction F-5 sized as the
+fallback. No module moved out of `src/server` except Genie's own, and the
+~4,000-line, ~100-file rewrite never happened.
