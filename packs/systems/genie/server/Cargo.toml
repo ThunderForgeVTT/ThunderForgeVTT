@@ -16,6 +16,33 @@ async-trait = "0.1"
 inventory = "0.3"
 thunderforge_canvas_core = { path = "../../../../crates/thunderforge-canvas-core" }
 
+# This pack owns its tables and contributes its own GraphQL (spec 032,
+# ADR-063), so it needs what any code touching the database needs. The server
+# is a library precisely so this dependency can exist.
+thunderforge-server = { path = "../../../../src/server" }
+diesel = { version = "2.3.12", features = [
+  "postgres",
+  "r2d2",
+  "chrono",
+  "uuid",
+  "serde_json",
+] }
+async-graphql = { version = "7.2.1", features = [
+  "chrono",
+  "dataloader",
+  "log",
+  "uuid",
+] }
+chrono = { version = "0.4.45", features = ["serde"] }
+uuid = { version = "1.26.0", features = ["serde", "v7"] }
+
+[dev-dependencies]
+# The server's shared fixtures — `insert_test_world`, `test_app_state` — which
+# its own tests use. Behind a feature so a normal build never compiles them.
+thunderforge-server = { path = "../../../../src/server", features = [
+  "test-support",
+] }
+
 [lib]
 name = "genie_server"
 path = "src/lib.rs"

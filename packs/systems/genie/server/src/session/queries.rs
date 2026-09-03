@@ -6,22 +6,22 @@ use async_graphql::{Context, Error, Result as GraphQLResult};
 use diesel::prelude::*;
 use uuid::Uuid;
 
-use crate::auth::world_membership::require_world_member;
-use crate::graphql::mutations_genie_session::{
-    GraphQLGeniePuzzleClockReward, GraphQLGenieResourceHolding, GraphQLGenieSession,
-    GraphQLGenieShopListing, GraphQLGenieTradeProposal, require_caller_controls_actor,
-};
-use crate::graphql::{app_state, authenticated_user};
-use crate::models::{
+use super::models::{
     GeniePuzzleClock, GeniePuzzleClockReward, GenieResourceHolding, GenieSession, GenieShopListing,
     GenieTradeProposal,
 };
-use crate::schema::{
-    world_actor_inventory, world_genie_puzzle_clock_rewards, world_genie_puzzle_clocks,
-    world_genie_resource_holdings, world_genie_sessions, world_genie_shop_listings,
-    world_genie_trade_proposals,
+use super::mutations::{
+    require_caller_controls_actor, GraphQLGeniePuzzleClockReward, GraphQLGenieResourceHolding,
+    GraphQLGenieSession, GraphQLGenieShopListing, GraphQLGenieTradeProposal,
 };
-use crate::state::AppState;
+use super::schema::{
+    world_genie_puzzle_clock_rewards, world_genie_puzzle_clocks, world_genie_resource_holdings,
+    world_genie_sessions, world_genie_shop_listings, world_genie_trade_proposals,
+};
+use thunderforge_server::auth::world_membership::require_world_member;
+use thunderforge_server::graphql::{app_state, authenticated_user};
+use thunderforge_server::schema::world_actor_inventory;
+use thunderforge_server::state::AppState;
 
 fn build_graphql_session(
     session: GenieSession,
@@ -30,7 +30,7 @@ fn build_graphql_session(
     // Local re-implementation of mutations_genie_session's private
     // builder (kept private there); trivial enough to duplicate rather
     // than widen that module's visibility for one call site.
-    use crate::graphql::mutations_genie_session::GraphQLGeniePuzzleClock;
+    use crate::session::mutations::GraphQLGeniePuzzleClock;
     GraphQLGenieSession {
         id: session.id,
         world_id: session.world_id,
@@ -38,9 +38,9 @@ fn build_graphql_session(
         doom_clock_current: session.doom_clock_current,
         doom_clock_max: session.doom_clock_max,
         status: match session.status.as_str() {
-            "won" => crate::graphql::mutations_genie_session::GenieSessionStatus::Won,
-            "lost" => crate::graphql::mutations_genie_session::GenieSessionStatus::Lost,
-            _ => crate::graphql::mutations_genie_session::GenieSessionStatus::Active,
+            "won" => super::mutations::GenieSessionStatus::Won,
+            "lost" => super::mutations::GenieSessionStatus::Lost,
+            _ => super::mutations::GenieSessionStatus::Active,
         },
         puzzle_clocks: clocks
             .into_iter()
@@ -197,7 +197,7 @@ pub async fn genie_shop_listings_impl(
     user_id: Uuid,
     actor_id: Uuid,
 ) -> GraphQLResult<Vec<GraphQLGenieShopListing>> {
-    use crate::schema::world_actors;
+    use thunderforge_server::schema::world_actors;
 
     let mut conn = state
         .db_pool
@@ -379,10 +379,10 @@ impl GenieSessionQuery {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graphql::mutations_genie_session::{
-        StartGenieSessionInput, propose_resource_trade_impl, start_genie_session_impl,
+    use crate::session::mutations::{
+        propose_resource_trade_impl, start_genie_session_impl, StartGenieSessionInput,
     };
-    use crate::test_support::{
+    use thunderforge_server::test_support::{
         insert_test_scene, insert_test_user, insert_test_world, insert_test_world_member,
         test_app_state,
     };
@@ -393,7 +393,7 @@ mod tests {
         scene_id: Uuid,
         owner_id: Uuid,
     ) -> Uuid {
-        use crate::schema::world_actors;
+        use thunderforge_server::schema::world_actors;
         let now = chrono::Utc::now().naive_utc();
         let actor_id = Uuid::now_v7();
         diesel::insert_into(world_actors::table)
@@ -581,9 +581,7 @@ mod tests {
 
     #[tokio::test]
     async fn genie_shop_listings_readable_by_any_world_member_and_derives_stock() {
-        use crate::graphql::mutations_genie_session::{
-            GenieShopPriceKind, create_shop_listing_impl,
-        };
+        use crate::session::mutations::{create_shop_listing_impl, GenieShopPriceKind};
 
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
@@ -594,7 +592,7 @@ mod tests {
         let scene_id = insert_test_scene(&mut conn, world_id, owner_id);
         let npc = insert_test_actor(&mut conn, world_id, scene_id, owner_id);
 
-        use crate::schema::{world_actor_inventory, world_items};
+        use thunderforge_server::schema::{world_actor_inventory, world_items};
         let item_id = Uuid::now_v7();
         let now = chrono::Utc::now().naive_utc();
         diesel::insert_into(world_items::table)

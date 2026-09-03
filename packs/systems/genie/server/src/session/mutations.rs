@@ -40,25 +40,27 @@
 
 use async_graphql::{Context, Error, InputObject, Result as GraphQLResult};
 use chrono::Utc;
-use diesel::PgConnection;
 use diesel::prelude::*;
+use diesel::PgConnection;
 use uuid::Uuid;
 
-use crate::auth::world_membership::is_dm_of_world;
-use crate::auth::world_membership::require_world_member;
-use crate::graphql::{app_state, authenticated_user};
-use crate::models::{
+use super::models::{
     GeniePuzzleClock, GeniePuzzleClockReward, GenieResourceHolding, GenieSession, GenieShopListing,
     GenieTradeProposal, NewGeniePuzzleClock, NewGeniePuzzleClockReward, NewGenieSession,
     NewGenieShopListing, NewGenieTradeProposal,
 };
-use crate::schema::{
-    world_actor_inventory, world_actors, world_genie_puzzle_clock_rewards,
-    world_genie_puzzle_clocks, world_genie_resource_holdings, world_genie_sessions,
-    world_genie_shop_listings, world_genie_trade_proposals, world_items, worlds,
+use super::schema::{
+    world_genie_puzzle_clock_rewards, world_genie_puzzle_clocks, world_genie_resource_holdings,
+    world_genie_sessions, world_genie_shop_listings, world_genie_trade_proposals,
 };
-use crate::state::AppState;
-use crate::world_events::{EVENT_CODE_GENIE_SESSION_STATE, record_world_event};
+use thunderforge_server::auth::world_membership::is_dm_of_world;
+use thunderforge_server::auth::world_membership::require_world_member;
+use thunderforge_server::graphql::{app_state, authenticated_user};
+use thunderforge_server::schema::{world_actor_inventory, world_actors, world_items, worlds};
+use thunderforge_server::state::AppState;
+use thunderforge_server::world_events::record_world_event;
+
+use super::EVENT_CODE_GENIE_SESSION_STATE;
 
 // ============================================================================
 // GraphQL-facing types
@@ -433,7 +435,7 @@ async fn caller_controls_actor(
         .map_err(|_| Error::new("Failed to get DB connection"))?;
     let (world_id, owned_by, claimed_by_user_id) =
         tokio::task::spawn_blocking(move || -> Result<(Uuid, Uuid, Option<Uuid>), String> {
-            use crate::schema::{world_actor_claims, world_actors, world_members};
+            use thunderforge_server::schema::{world_actor_claims, world_actors, world_members};
 
             let (world_id, owned_by) = world_actors::table
                 .filter(world_actors::id.eq(actor_id))
@@ -2386,7 +2388,7 @@ impl GenieSessionMutation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{
+    use thunderforge_server::test_support::{
         insert_test_user, insert_test_world, insert_test_world_member, test_app_state,
     };
 
@@ -2396,7 +2398,7 @@ mod tests {
         scene_id: Uuid,
         owner_id: Uuid,
     ) -> Uuid {
-        use crate::schema::world_actors;
+        use thunderforge_server::schema::world_actors;
         let now = Utc::now().naive_utc();
         let actor_id = Uuid::now_v7();
         diesel::insert_into(world_actors::table)
@@ -2421,7 +2423,7 @@ mod tests {
     }
 
     fn insert_test_scene(conn: &mut PgConnection, world_id: Uuid, owner_id: Uuid) -> Uuid {
-        use crate::schema::scenes;
+        use thunderforge_server::schema::scenes;
         let now = Utc::now().naive_utc();
         let scene_id = Uuid::now_v7();
         diesel::insert_into(scenes::table)
@@ -2880,7 +2882,7 @@ mod tests {
         // the actor, a player then claims it via world_actor_claims).
         // Found live: a claimed-not-owned player got "You do not control
         // this actor" on every Session Resource action for their own PC.
-        use crate::graphql::mutations_actor_claims::claim_actor_impl;
+        use thunderforge_server::graphql::mutations_actor_claims::claim_actor_impl;
 
         let state = test_app_state();
         let (world_id, owner_id, player_id, session_id) = setup_active_session(&state).await;
@@ -2891,10 +2893,10 @@ mod tests {
         let claimed_actor = insert_test_actor(&mut conn, world_id, scene_id, owner_id);
         let other_actor = insert_test_actor(&mut conn, world_id, scene_id, owner_id);
         diesel::update(
-            crate::schema::world_actors::table
-                .filter(crate::schema::world_actors::id.eq(claimed_actor)),
+            thunderforge_server::schema::world_actors::table
+                .filter(thunderforge_server::schema::world_actors::id.eq(claimed_actor)),
         )
-        .set(crate::schema::world_actors::available_for_claim.eq(true))
+        .set(thunderforge_server::schema::world_actors::available_for_claim.eq(true))
         .execute(&mut conn)
         .unwrap();
         drop(conn);
@@ -3117,7 +3119,7 @@ mod tests {
         owner_id: Uuid,
         name: &str,
     ) -> Uuid {
-        use crate::schema::world_items;
+        use thunderforge_server::schema::world_items;
         let now = Utc::now().naive_utc();
         let item_id = Uuid::now_v7();
         diesel::insert_into(world_items::table)
@@ -3141,7 +3143,7 @@ mod tests {
         quantity: i32,
         owner_id: Uuid,
     ) {
-        use crate::schema::world_actor_inventory;
+        use thunderforge_server::schema::world_actor_inventory;
         diesel::insert_into(world_actor_inventory::table)
             .values((
                 world_actor_inventory::actor_id.eq(actor_id),

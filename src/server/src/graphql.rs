@@ -19,12 +19,11 @@ use crate::admin::{
 };
 use crate::auth::world_membership::require_world_member;
 use crate::models::{
-    NewGenieSession,
     World,
     WorldActor,
     // Policy - disabled pending schema
 };
-use crate::schema::{world_actors, world_genie_sessions, worlds}; // policies disabled
+use crate::schema::{world_actors, worlds}; // policies disabled
 use crate::state::AppState;
 use crate::users::{UserDataDeleteSummary, UserDataExport, delete_user_data_owned};
 // Phase 4.8.1: dnd5e_server will be loaded at runtime via game system registry
@@ -68,9 +67,9 @@ pub use helpers::{
 // Phase 4.9.Z Step 5: Query extraction into separate modules
 pub mod queries;
 pub use queries::{
-    AbilityQuery, ActorQuery, AdminQuery, GenieSessionQuery, HealthcheckQuery, InventoryQuery,
-    InviteQuery, ItemQuery, LoreQuery, ModerationQuery, RollQuery, SceneQuery, UserQuery,
-    WorldEventsSinceQuery, WorldSyncPlanQuery,
+    AbilityQuery, ActorQuery, AdminQuery, HealthcheckQuery, InventoryQuery, InviteQuery, ItemQuery,
+    LoreQuery, ModerationQuery, RollQuery, SceneQuery, UserQuery, WorldEventsSinceQuery,
+    WorldSyncPlanQuery,
 };
 
 // Phase 4.10.B: Invite & Membership mutations for multiplayer campaigns
@@ -178,10 +177,12 @@ pub use mutations_moderation::ModerationMutation;
 pub mod mutations_roll;
 pub use mutations_roll::RollMutation;
 
-// Spec 018 (User Story 7): the Genie session loop — Session Wish Pool,
-// Doom Clock, Puzzle Clocks, and Session Resource trades.
-pub mod mutations_genie_session;
-pub use mutations_genie_session::GenieSessionMutation;
+// Spec 018's Genie session loop used to be declared here — thirteen
+// mutations and the queries beside them, 2,763 lines of one ruleset's rules
+// in shared server code. It lives in `packs/systems/genie/server` now, which
+// is where a pack's behaviour belongs (spec 032 FR-004, ADR-063). The
+// binary merges what packs contribute into the schema roots; this file does
+// not know they exist.
 
 // Play-view Chat + Combat. Both are built on the existing `world_events`
 // bus rather than a separate transport — see each module's doc comment.
@@ -1796,7 +1797,7 @@ pub async fn create_world_impl(
     // stays null for a world where nothing has ever been created/launched
     // (not reachable via normal world creation).
     let default_scene_id = uuid::Uuid::now_v7();
-    let is_genie_world = inserted_world.game_system_id.as_deref() == Some("genie");
+    let world_system_id = inserted_world.game_system_id.clone();
     tokio::task::spawn_blocking(move || {
         use crate::schema::scenes;
 
@@ -1829,22 +1830,25 @@ pub async fn create_world_impl(
                 .set(worlds::active_scene_id.eq(default_scene_id))
                 .execute(conn)?;
 
-            // Genie session UI (GenieSessionPanel.tsx) previously required
-            // the GM to manually click "Start Genie session" before Wish
-            // Pool/Doom Clock/grants became usable. Removed that manual
-            // gate in favor of the session simply existing from world
-            // creation on — doomClockMax 6 matches that button's prior
-            // hardcoded default.
-            if is_genie_world {
-                let new_session = NewGenieSession {
+            // Whatever the world's system wants doing when a world appears.
+            //
+            // This was a branch on one system's name inserting that system's
+            // session row — the last game system named in shared server code,
+            // and the only entry left in `check-system-registry.mjs`'s known
+            // list. The row still gets inserted; the pack does it now, and
+            // this file no longer knows which system that is or what the row
+            // is for (spec 032 T014a2, FR-004, ADR-063).
+            //
+            // Inside the transaction deliberately: a system that could not set
+            // itself up should not leave a half-made world behind.
+            crate::world_hooks::run_world_created(
+                conn,
+                world_system_id.as_deref(),
+                crate::world_hooks::WorldCreated {
                     world_id: inserted_world.id,
-                    doom_clock_max: 6,
                     created_by: user_id,
-                };
-                diesel::insert_into(world_genie_sessions::table)
-                    .values(&new_session)
-                    .execute(conn)?;
-            }
+                },
+            )?;
 
             Ok::<_, diesel::result::Error>(())
         })
@@ -2977,7 +2981,6 @@ pub struct QueryRoot(
     ModerationQuery,
     RollQuery,
     ActorClaimQuery,
-    GenieSessionQuery,
     ChatQuery,
     CombatQuery,
     // Spec 028: `worldSyncPlan` — what a returning client must fetch and
@@ -3030,7 +3033,6 @@ pub struct MutationRoot(
     PartyMutation,
     ModerationMutation,
     RollMutation,
-    GenieSessionMutation,
     ActorClaimMutation,
     // Spec 031 (FR-046): per-player authoring tool grants.
     AuthoringToolMutation,

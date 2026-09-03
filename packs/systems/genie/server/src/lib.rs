@@ -7,11 +7,13 @@
 pub mod loader;
 pub mod models;
 pub mod rules;
+pub mod session;
 pub mod validators;
 
 pub use loader::register_genie_mutations;
 pub use models::{GenieAbilityData, GenieProficiencyData, GenieResourceData, GenieTraitData};
 pub use rules::{GenieRules, WISH_POINTS_FOR_LEVEL};
+pub use session::{GenieSessionMutation, GenieSessionQuery};
 pub use validators::{
     validate_ability_data, validate_ability_data_for_registry, validate_proficiency_data,
     validate_proficiency_data_for_registry, validate_resource_data,

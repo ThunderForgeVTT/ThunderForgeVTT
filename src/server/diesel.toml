@@ -12,5 +12,27 @@ file = "src/schema.rs"
 # T003, and the matching comment previously hand-maintained in schema.rs).
 custom_type_derives = ["diesel::query_builder::QueryId"]
 
+# Tables a system pack owns, kept out of this crate's generated schema.
+#
+# Spec 032 FR-004 / ADR-063: a pack owns the tables it writes. These six are
+# declared in `packs/systems/genie/server/src/session/schema.rs`, and without
+# this filter `diesel print-schema` would helpfully add a second declaration
+# of each one here — which is exactly the drift this feature spent six
+# increments removing, and it would come back silently on somebody's next
+# `make schema`.
+#
+# The migrations that create them still live in this crate's `migrations/`;
+# Diesel reads one directory per invocation, and splitting that is a separate
+# decision from owning the declaration.
+[print_schema.filter]
+except_tables = [
+  "world_genie_puzzle_clock_rewards",
+  "world_genie_puzzle_clocks",
+  "world_genie_resource_holdings",
+  "world_genie_sessions",
+  "world_genie_shop_listings",
+  "world_genie_trade_proposals",
+]
+
 [migrations_directory]
 dir = "migrations"

@@ -57,13 +57,20 @@ pub mod storage;
 pub mod systems;
 #[cfg(test)]
 pub mod test_packs;
-#[cfg(test)]
+/// Shared database fixtures.
+///
+/// Compiled for this crate's own tests, and for anyone who turns on
+/// `test-support` — which the system packs' dev-dependencies do, because a
+/// pack that owns its tables tests them against a real database the same way
+/// this crate always has.
+#[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
 pub mod turn_structure;
 pub mod users;
 pub mod utils;
 pub mod world;
 pub mod world_events;
+pub mod world_hooks;
 
 /// Modules reach this as `crate::AppState`, which `main.rs` used to provide at
 /// its own crate root.

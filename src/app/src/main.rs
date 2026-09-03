@@ -9,8 +9,10 @@
 // query/mutation module will need this headroom too.
 #![recursion_limit = "512"]
 
+mod schema_roots;
 mod system_packs; // Spec 032 FR-029: which packs are linked, and nothing more
 
+use crate::schema_roots::{AppMutationRoot, AppQueryRoot, AppSchema};
 use async_graphql::http::{ALL_WEBSOCKET_PROTOCOLS, GraphQLPlaygroundConfig, playground_source};
 use async_graphql::{Data, Schema}; // Added Data
 use async_graphql_axum::{GraphQLProtocol, GraphQLRequest, GraphQLResponse, GraphQLWebSocket}; // Added GraphQLWebSocket
@@ -28,7 +30,7 @@ use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::{RunQueryDsl, pg::PgConnection};
 use std::net::SocketAddr;
 use thunderforge_server::config::{Config, Directories};
-use thunderforge_server::graphql::{AppSchema, MutationRoot, QueryRoot, SubscriptionRoot}; // Added SubscriptionRoot
+use thunderforge_server::graphql::SubscriptionRoot;
 use thunderforge_server::state::AppState;
 use tokio::sync::broadcast;
 use tower_cookies::{CookieManagerLayer, Key};
@@ -407,8 +409,8 @@ async fn main() {
     thunderforge_server::storage::backfill::spawn_content_hash_backfill_task(db_pool.clone());
 
     let schema = Schema::build(
-        QueryRoot::default(),
-        MutationRoot::default(),
+        AppQueryRoot::default(),
+        AppMutationRoot::default(),
         SubscriptionRoot,
     )
     .data(app_state.clone())

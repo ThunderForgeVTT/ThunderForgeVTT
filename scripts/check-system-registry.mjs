@@ -136,25 +136,17 @@ function withoutTests(source) {
  * Adding to this list requires a task id. If the list ever grows without one,
  * the check has become the thing it was written to prevent.
  */
-const KNOWN = new Map([
-  [
-    "src/server/src/graphql.rs",
-    {
-      id: "genie",
-      why:
-        "world creation inserts a genie session row (spec 032 T014a2). Not " +
-        "gated on a decision any more — ADR-029 permits a bundled pack to " +
-        "contribute behaviour, and ADR-063 settles that a pack owns the " +
-        "tables it writes. It is gated on the size of getting there: the " +
-        "pack cannot own `world_genie_sessions` while 2,763 lines of " +
-        "`graphql/mutations_genie_session.rs` and `graphql/queries/" +
-        "genie_session.rs` query that table and five siblings through the " +
-        "server's generated `schema.rs`. Moving the branch alone would " +
-        "need a second `table!` for one table, which is the drift this " +
-        "spec spent five increments removing. See ADR-063 for the sizing.",
-    },
-  ],
-]);
+const KNOWN = new Map();
+// Empty, as of 2026-09-03, and that is the point of the list rather than a
+// gap in it.
+//
+// It held one entry for the whole of spec 032: `graphql.rs` branched on one
+// system's name during world creation to insert that system's session row.
+// Retiring it took the increment ADR-063 sized — the server became a library
+// so a pack could depend on it, and Genie's six tables, eleven models and
+// 2,763 lines of GraphQL moved into `packs/systems/genie/server`. The row is
+// still written; the pack writes it, through a world-creation hook the server
+// runs without knowing whose it is.
 
 const ids = bundledSystemIds();
 const failures = [];
@@ -210,5 +202,7 @@ if (stale.size > 0) {
 
 process.stdout.write(
   `[system-registry] shared server code names none of: ${ids.join(", ")}\n` +
-    `                  (${KNOWN.size} known violation(s) outstanding, see T014a2 / ADR-063)\n`,
+    (KNOWN.size === 0
+      ? `                  and nothing is exempted.\n`
+      : `                  (${KNOWN.size} known violation(s) outstanding)\n`),
 );
