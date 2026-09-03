@@ -9,7 +9,7 @@ use crate::auth::world_membership::is_dm_of_world;
 use crate::graphql::types::ActorPermissionLevel;
 use crate::graphql::{GraphQLWorldActor, app_state, authenticated_user};
 use crate::models::{NewWorldActor, WorldActor};
-use crate::schema::{scenes, world_actors};
+use crate::schema::{scenes, world_actors, worlds};
 use crate::state::AppState;
 
 #[derive(InputObject, Debug, Clone)]
@@ -65,15 +65,34 @@ pub async fn create_actor_impl(
     // hazard/prop/light_source require it to be null) — default to a
     // generic placeholder when the caller doesn't supply one, since this
     // feature doesn't ask the DM to pick a game system up front.
-    let game_system_id = Some(
-        input
-            .game_system_id
-            .clone()
-            .unwrap_or_else(|| "generic".to_string()),
-    );
+    // An explicit choice wins; otherwise the actor takes its world's system,
+    // resolved below where a connection is available.
+    //
+    // It used to fall straight to "generic", which is a system nothing
+    // declares — so every actor created through the compendium published no
+    // values and rendered an empty sheet, whatever its world was playing.
+    // Invisible until spec 032 made a sheet out of what a system declares:
+    // before that the only sheet was Genie's hand-written one, which read the
+    // actor's stored slots directly and never asked what system it was.
+    let requested_system_id = input.game_system_id.clone();
     let description = input.description.clone();
 
     tokio::task::spawn_blocking(move || {
+        let game_system_id = Some(match requested_system_id {
+            Some(chosen) => chosen,
+            None => worlds::table
+                .filter(worlds::id.eq(world_id))
+                .select(worlds::game_system_id)
+                .first::<Option<String>>(&mut conn)
+                .ok()
+                .flatten()
+                // A world that has itself chosen nothing. The DB check
+                // requires a non-null id for npc/character actors, so this is
+                // the placeholder of last resort rather than a default anyone
+                // picked.
+                .unwrap_or_else(|| "generic".to_string()),
+        });
+
         let scene_id = scenes::table
             .filter(scenes::world_id.eq(world_id))
             .order(scenes::created_at.asc())

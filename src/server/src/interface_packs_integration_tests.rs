@@ -348,3 +348,117 @@ async fn a_declared_value_exposes_its_pool_as_two_numbers() {
         response.errors
     );
 }
+
+// ---------------------------------------------------------------------------
+// T061: a bound pack that is no longer installed
+// ---------------------------------------------------------------------------
+
+/// FR-018 and FR-020, proved where the condition can actually be created.
+///
+/// `updateWorldInterfacePack` validates a pack before storing it, so the
+/// product refuses on purpose to bind a world to something that is not there.
+/// The state this covers arises the other way round: a pack is bound, and later
+/// removed from the deployment. An end-to-end test cannot reach it without
+/// moving files under a running server, so it is done here against a temporary
+/// packs directory instead — `world-appearance.spec.ts` carries the half that
+/// *is* reachable from a browser, which is that every surface words the unset
+/// state identically.
+mod a_bound_pack_that_goes_missing {
+    use std::fs;
+    use std::path::Path;
+
+    fn repo_packs() -> std::path::PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../packs/interface")
+    }
+
+    fn copy_pack(from: &Path, into: &Path, id: &str) {
+        let target = into.join(id);
+        fs::create_dir_all(&target).expect("create pack dir");
+        fs::copy(
+            from.join(id).join("interface.json"),
+            target.join("interface.json"),
+        )
+        .expect("copy manifest");
+    }
+
+    /// The whole cycle: present, gone, restored — with nothing re-bound.
+    ///
+    /// The world's stored `interface_pack_id` is not touched at any point
+    /// here, and that is the point of FR-020: restoring a pack must cost no
+    /// manual step. Nothing in this test writes a binding, because nothing in
+    /// the product should have to.
+    #[test]
+    fn is_refused_while_absent_and_loads_again_when_restored_with_no_rebinding() {
+        let source = repo_packs();
+        let temp = tempfile::tempdir().expect("temp packs dir");
+        let dir = temp.path();
+        let packs_dir = dir.to_string_lossy().into_owned();
+
+        // A deployment with the base pack and one targeted pack installed.
+        copy_pack(&source, dir, "forge");
+        copy_pack(&source, dir, "forged-steel");
+
+        assert!(
+            crate::interface_packs::load_validated(&packs_dir, "forged-steel").is_ok(),
+            "the pack loads while it is installed"
+        );
+
+        // The operator removes it. The world's binding is untouched — this is
+        // a change to the deployment, not to the world.
+        fs::remove_dir_all(dir.join("forged-steel")).expect("uninstall the pack");
+
+        assert!(
+            crate::interface_packs::load_validated(&packs_dir, "forged-steel").is_err(),
+            "a pack that is not installed must fail closed rather than serve something"
+        );
+
+        // FR-018: and the base pack is still there to fall back to, which is
+        // what makes the failure above cost nothing. A deployment that lost
+        // its fallback along with its pack would have no look at all.
+        assert!(
+            crate::interface_packs::load_validated(&packs_dir, "forge").is_ok(),
+            "the base pack still loads while the chosen one is missing"
+        );
+
+        // FR-020: restored, and working again, with no re-binding step —
+        // there was no step to take, because the binding never changed.
+        copy_pack(&source, dir, "forged-steel");
+        assert!(
+            crate::interface_packs::load_validated(&packs_dir, "forged-steel").is_ok(),
+            "restoring the pack restores full function"
+        );
+    }
+
+    /// The listing drops it too, so a picker cannot offer what is gone.
+    #[test]
+    fn is_no_longer_offered_while_it_is_absent() {
+        let source = repo_packs();
+        let temp = tempfile::tempdir().expect("temp packs dir");
+        let dir = temp.path();
+        let packs_dir = dir.to_string_lossy().into_owned();
+
+        copy_pack(&source, dir, "forge");
+        copy_pack(&source, dir, "forged-steel");
+
+        let listed = |dir: &str| -> Vec<String> {
+            crate::interface_packs::list_installed(dir)
+                .into_iter()
+                .map(|pack| pack.id)
+                .collect()
+        };
+
+        assert!(listed(&packs_dir).iter().any(|id| id == "forged-steel"));
+
+        fs::remove_dir_all(dir.join("forged-steel")).expect("uninstall the pack");
+
+        let after = listed(&packs_dir);
+        assert!(
+            !after.iter().any(|id| id == "forged-steel"),
+            "an uninstalled pack must not be offered"
+        );
+        assert!(
+            after.iter().any(|id| id == "forge"),
+            "and the base pack is still offered"
+        );
+    }
+}

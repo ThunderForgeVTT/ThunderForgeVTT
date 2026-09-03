@@ -34,14 +34,20 @@ export const BUNDLED_SYSTEM_LABELS: Readonly<Record<string, string>> = {
 };
 
 /**
- * Which bundled systems have a real, data-connected actor sheet wired up
- * (`SYSTEM_ACTOR_SHEETS` in `systemActorSheets.ts`) — today, only Genie.
- * The other packs ship a manifest and a presentational `CharacterSheet`
- * component, but nothing renders/edits real actor data for them yet, so
- * pickers mark them "(TBD)" and disable selecting them rather than
- * silently accepting a choice that doesn't actually work in play.
+ * `IMPLEMENTED_SYSTEM_IDS` stood here, holding only `genie`.
+ *
+ * Its reason was true when written: "the other packs ship a manifest ... but
+ * nothing renders/edits real actor data for them yet, so pickers mark them
+ * (TBD) and disable selecting them rather than silently accepting a choice
+ * that doesn't actually work in play."
+ *
+ * Spec 032 removed that condition rather than the caution. `PackActorSheet`
+ * renders any system's sheet from what its manifest declares and what its
+ * interface pack lays out, so a bundled pack now works in play by having a
+ * manifest — which every one of them has. Six of the seven were disabled in
+ * every picker for the absence of a hand-written React container, and there
+ * is no longer such a thing to be missing.
  */
-export const IMPLEMENTED_SYSTEM_IDS: ReadonlySet<string> = new Set(["genie"]);
 
 /** Fetches one system pack's full manifest — including its required
  * `legal` object — straight from the server's static-pack-serving route

@@ -1,10 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import {
-  BUNDLED_SYSTEM_IDS,
-  BUNDLED_SYSTEM_LABELS,
-  IMPLEMENTED_SYSTEM_IDS,
-} from "@/api/gameSystems";
+import { BUNDLED_SYSTEM_IDS, BUNDLED_SYSTEM_LABELS } from "@/api/gameSystems";
 import { createWorld } from "@/api/world";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
@@ -143,16 +139,9 @@ export default function CreateWorldPage() {
                   </SelectTrigger>
                   <SelectContent>
                     {BUNDLED_SYSTEM_IDS.map((systemId) => {
-                      const isImplemented =
-                        IMPLEMENTED_SYSTEM_IDS.has(systemId);
                       return (
-                        <SelectItem
-                          key={systemId}
-                          value={systemId}
-                          disabled={!isImplemented}
-                        >
+                        <SelectItem key={systemId} value={systemId}>
                           {BUNDLED_SYSTEM_LABELS[systemId] ?? systemId}
-                          {isImplemented ? null : " (TBD)"}
                         </SelectItem>
                       );
                     })}

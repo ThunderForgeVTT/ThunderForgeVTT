@@ -141,3 +141,263 @@ test.describe("a world's interface pack", () => {
    * actually executed is both honest and stronger.
    */
 });
+
+/**
+ * Increment E's acceptance, at the table rather than in a unit test.
+ *
+ * `src/layout/` — the whole declared-value renderer, its vocabulary and its
+ * forty-eight tests — was imported by nothing in the application. It rendered
+ * in test files and nowhere else, which is why none of this was noticed: the
+ * only sheet any player could open was `GenieActorSheet`, a hand-written
+ * container for one of the seven bundled systems.
+ */
+
+/** Bind the world to a system through the settings page a Game Master uses. */
+async function chooseSystem(
+  page: Page,
+  worldId: string,
+  systemId: string,
+  title: string,
+): Promise<void> {
+  await page.goto(`/world/${worldId}/settings/system`);
+  const picker = page.getByTestId("system-picker");
+  await expect(picker).toBeVisible({ timeout: 15_000 });
+  await picker.click();
+  await page.getByRole("option", { name: title }).click();
+
+  // The legal notice has to be acknowledged before a system is assigned.
+  const confirmation = page.getByTestId("pending-system-confirmation");
+  await expect(confirmation).toBeVisible({ timeout: 15_000 });
+  await confirmation.getByRole("button", { name: /confirm|assign/i }).click();
+
+  await expect(page.getByTestId("active-system-card")).toContainText(title, {
+    timeout: 15_000,
+  });
+}
+
+async function createActor(
+  page: Page,
+  worldId: string,
+  label: string,
+): Promise<string> {
+  await page.goto(`/world/${worldId}/compendium/npc/new`);
+  await page.locator('[data-testid="npc-editor-name-input"]').fill(label);
+  await page.locator('[data-testid="npc-editor-save"]').click();
+  await page.waitForURL(/\/compendium\/npc\/[^/]+\/edit$/, { timeout: 15_000 });
+  const match = /\/compendium\/npc\/([^/]+)\/edit$/.exec(
+    new URL(page.url()).pathname,
+  );
+  if (!match) throw new Error(`Could not extract actor id from ${page.url()}`);
+  return match[1];
+}
+
+interface SystemUnderTest {
+  id: string;
+  title: string;
+  /**
+   * Something this system's sheet says for a character nobody has filled in.
+   *
+   * Deliberately not an ability score. Stored values are **omitted when
+   * absent** — a blank sheet is the absence of a score, not a zero — so a
+   * fresh actor publishes only what exists whether or not anyone has touched
+   * it: a speed with a manifest default, a track whose boxes exist unticked,
+   * a ladder standing at no rung. That those three are what differ between
+   * these systems is the point rather than a limitation.
+   */
+  expects: string[];
+}
+
+/**
+ * Three rulesets whose sheets are shaped differently on purpose.
+ *
+ * 5e tracks speeds and derives modifiers; Fate has no abilities at all and
+ * counts stress in boxes; Cypher's damage track is named states with no boxes
+ * to count. If one renderer draws all three from their manifests alone, the
+ * format carries what it claims to (SC-012).
+ */
+const SYSTEMS: SystemUnderTest[] = [
+  { id: "dnd5e", title: "5E System Core", expects: ["Walk"] },
+  { id: "fate_core", title: "Fate Core", expects: ["Stress"] },
+  { id: "cypher_system", title: "Cypher System", expects: ["Damage Track"] },
+];
+
+test.describe("T080: every bundled system gets its own sheet from the base pack", () => {
+  /** What each system's sheet said, for the cross-check below. */
+  const rendered = new Map<string, string>();
+
+  for (const system of SYSTEMS) {
+    test(`${system.title} renders its own declared values under Forge alone`, async ({
+      page,
+    }) => {
+      const worldId = await registerAndCreateWorld(
+        page,
+        `${system.id} ${uniqueSuffix()}`,
+      );
+      await chooseSystem(page, worldId, system.id, system.title);
+
+      const actorId = await createActor(
+        page,
+        worldId,
+        `Sheet ${uniqueSuffix()}`,
+      );
+      await page.goto(`/world/${worldId}/actor/${actorId}/view`);
+
+      // Drawn by Forge, because this world has chosen no interface pack —
+      // which is the point. No pack was written for any of these three and
+      // all three get a sheet.
+      const sheet = page.locator('[data-slot="sheet-layout"]');
+      await expect(sheet).toBeVisible({ timeout: 20_000 });
+
+      for (const expected of system.expects) {
+        await expect(sheet).toContainText(expected);
+      }
+
+      rendered.set(system.id, (await sheet.innerText()).trim());
+    });
+  }
+
+  test("and the three sheets are not the same sheet", async () => {
+    // The claim T080 actually makes. One renderer drawing three rulesets is
+    // only worth anything if the three come out different — a generic sheet
+    // that showed every system the same thing would pass every assertion
+    // above and mean nothing.
+    expect(rendered.size).toBe(SYSTEMS.length);
+
+    const texts = [...rendered.values()];
+    expect(new Set(texts).size).toBe(texts.length);
+  });
+});
+
+/** Bind the world to an interface pack through the settings card. */
+async function choosePack(
+  page: Page,
+  worldId: string,
+  packTitle: string,
+): Promise<void> {
+  await page.goto(`/world/${worldId}/settings/system`);
+  const trigger = page.getByTestId("interface-pack-select");
+  await expect(trigger).toBeVisible({ timeout: 15_000 });
+  await trigger.click();
+  await page.getByRole("option", { name: packTitle }).click();
+  await expect(page.getByTestId("world-appearance-card")).toContainText(
+    packTitle,
+    { timeout: 15_000 },
+  );
+}
+
+/**
+ * T060 (SC-005): two worlds, two systems, two packs written for them.
+ *
+ * The claim is narrow and worth stating exactly: the *sheets* differ in what
+ * they show and how it is arranged, while the application around them does
+ * not change at all. A pack that could alter the shell would be a pack that
+ * could hide a control (FR-012), and the value of a pack is that it cannot.
+ */
+test.describe("T060: a targeted pack dresses the sheet and nothing else", () => {
+  test("two systems under their own packs render different sheets inside identical chrome", async ({
+    page,
+  }) => {
+    // Fate and Cypher rather than 5e, and the reason is worth stating: both
+    // declare a track or a ladder, which exist on a sheet whether or not
+    // anyone has ticked them. Forged Steel's layout is `pair` and `value`
+    // throughout, so for a character nobody has filled in it correctly draws
+    // nothing — a true answer, and a poor subject for a test about two sheets
+    // differing.
+    const steelWorld = await registerAndCreateWorld(page, `Silver ${uniqueSuffix()}`);
+    await chooseSystem(page, steelWorld, "fate_core", "Fate Core");
+    await choosePack(page, steelWorld, "Forged Silver");
+    const steelActor = await createActor(page, steelWorld, `Fate ${uniqueSuffix()}`);
+
+    await page.goto(`/world/${steelWorld}/actor/${steelActor}/view`);
+    const sheet = page.locator('[data-slot="sheet-layout"]');
+    await expect(sheet).toBeVisible({ timeout: 20_000 });
+    const steelSheet = (await sheet.innerText()).trim();
+    // The chrome around it, which must be the same on both worlds.
+    const steelNav = (
+      await page.getByRole("navigation", { name: "Primary" }).innerText()
+    ).trim();
+
+    // A second world, a second ruleset, a second pack — same browser, same
+    // account, same application.
+    await page.goto("/worlds/create");
+    await page.locator("#world-name").fill(`Bronze ${uniqueSuffix()}`);
+    await page.getByRole("button", { name: /create world/i }).click();
+    await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
+    const silverWorld = /\/world\/([^/]+)\/staging$/.exec(
+      new URL(page.url()).pathname,
+    )![1];
+
+    await chooseSystem(page, silverWorld, "cypher_system", "Cypher System");
+    await choosePack(page, silverWorld, "Forged Bronze");
+    const silverActor = await createActor(
+      page,
+      silverWorld,
+      `Silver ${uniqueSuffix()}`,
+    );
+
+    await page.goto(`/world/${silverWorld}/actor/${silverActor}/view`);
+    await expect(sheet).toBeVisible({ timeout: 20_000 });
+    const silverSheet = (await sheet.innerText()).trim();
+    const silverNav = (
+      await page.getByRole("navigation", { name: "Primary" }).innerText()
+    ).trim();
+
+    // Different sheets...
+    expect(steelSheet).not.toBe(silverSheet);
+    expect(steelSheet.length).toBeGreaterThan(0);
+    expect(silverSheet.length).toBeGreaterThan(0);
+
+    // ...inside an application that did not change.
+    expect(steelNav).toBe(silverNav);
+  });
+});
+
+/**
+ * T061 / SC-008: every surface showing an unset binding says the same true
+ * thing.
+ *
+ * Measured as zero distinct strings for the unset state. There were two —
+ * "Unbound placeholder" on the hub card and "Not yet assigned" on the
+ * dashboard — and both described a state this product does not have: a world
+ * that has chosen no pack is drawn in the base pack, which is on screen and
+ * has a name.
+ *
+ * The other half of T061 — a world whose bound pack is no longer installed —
+ * is not reachable from here. `updateWorldInterfacePack` validates the pack
+ * before storing it, so the product refuses to create that state on purpose;
+ * it arises only from a pack being removed from a deployment after the fact.
+ * Simulating that means moving files under a running server, so it is proved
+ * in `src/server/src/interface_packs_integration_tests.rs` against a
+ * temporary packs directory instead.
+ */
+test.describe("T061: one wording for an unset pack binding", () => {
+  test("the hub card and the world dashboard both name the pack in force", async ({
+    page,
+  }) => {
+    const worldId = await registerAndCreateWorld(page, `Label ${uniqueSuffix()}`);
+
+    await page.goto("/worlds");
+    const card = page.getByText("Interface pack").first();
+    await expect(card).toBeVisible({ timeout: 15_000 });
+    const hub = await page
+      .locator("div", { has: page.getByText("Interface pack") })
+      .last()
+      .innerText();
+
+    await page.goto(`/world/${worldId}`);
+    await expect(page.getByText("Interface pack")).toBeVisible({
+      timeout: 15_000,
+    });
+    const dashboard = await page.locator("body").innerText();
+
+    // The true thing, on both.
+    expect(hub).toContain("Forge");
+    expect(dashboard).toContain("Forge");
+
+    // And neither of the two strings that were not true.
+    for (const surface of [hub, dashboard]) {
+      expect(surface).not.toContain("Unbound placeholder");
+      expect(surface).not.toContain("Not yet assigned");
+    }
+  });
+});

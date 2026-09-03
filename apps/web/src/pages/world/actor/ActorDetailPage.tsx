@@ -26,6 +26,8 @@ import { ActorAbilitiesPanel } from "@/pages/world/actor/ActorAbilitiesPanel";
 import { ActorInventoryPanel } from "@/pages/world/actor/ActorInventoryPanel";
 import { ActorLorePanel } from "@/pages/world/actor/ActorLorePanel";
 import { ActorOwnershipBlock } from "@/pages/world/actor/ActorOwnershipBlock";
+import { WorldAppearance } from "@/appearance/WorldAppearance";
+import { PackActorSheet } from "@/pages/world/actor/PackActorSheet";
 import { SYSTEM_ACTOR_SHEETS } from "@/pages/world/actor/systemActorSheets";
 import type { WorldActorRecord } from "@/types/actor";
 import type { WorldRecord } from "@/types/world";
@@ -253,7 +255,13 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
   };
 
   return (
-    <>
+    // Spec 032: the actor route sits outside `WorldSectionShell`, so nothing
+    // here was inside an `AppearanceProvider` — the world's chosen pack
+    // stopped at the door of the page showing its characters, and a
+    // pack-driven sheet would have resolved against an empty layout and drawn
+    // nothing. Mounted per world, as everywhere else, so two open worlds
+    // cannot leak one look into the other.
+    <WorldAppearance worldId={worldId}>
       <SEO
         title={`${actor.label} — ${mode === "edit" ? "Edit" : "View"}`}
         description="Actor detail"
@@ -406,12 +414,27 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
         />
 
         {(() => {
-          const ActorSheet = actor.gameSystemId
+          // Spec 032. `SYSTEM_ACTOR_SHEETS` had one entry, so six of the seven
+          // bundled systems had no character sheet at all — the registry's own
+          // header says adding a system should not mean editing this page, and
+          // it meant exactly that.
+          //
+          // The pack-driven sheet is the sheet now: the server publishes what
+          // the system declares and the world's interface pack says how to lay
+          // it out, so a system gets a sheet by having a manifest. The registry
+          // survives only for containers that do something a declared-value
+          // sheet cannot — `GenieActorSheet` edits `trait_data.level` and
+          // recomputes max Wish Points from it — and where one exists it is
+          // still what mounts, because replacing it would be removing working
+          // behaviour rather than generalising it.
+          const SystemEditor = actor.gameSystemId
             ? SYSTEM_ACTOR_SHEETS[actor.gameSystemId]
             : undefined;
-          return ActorSheet ? (
-            <ActorSheet actor={actor} canEdit={canEdit && mode === "edit"} />
-          ) : null;
+          return SystemEditor ? (
+            <SystemEditor actor={actor} canEdit={canEdit && mode === "edit"} />
+          ) : (
+            <PackActorSheet actorId={actorId} />
+          );
         })()}
 
         <ActorInventoryPanel
@@ -493,6 +516,6 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
           />
         ) : null}
       </Container>
-    </>
+    </WorldAppearance>
   );
 }

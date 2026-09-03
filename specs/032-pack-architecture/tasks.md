@@ -168,8 +168,8 @@ can be validated until identifiers resolve, so this phase blocks that one.
 - [X] T057 [US3] Tell the participant **once** — not once per navigation — naming the missing pack, and block nothing, from `apps/web/src/appearance/AppearanceProvider.tsx` (FR-018)
 - [X] T058 [P] [US3] Replace `"Unbound placeholder"` in `apps/web/src/pages/world/components/WorldCard.tsx` with the active pack's title, which is "Forge" when unset (FR-022, FR-023, SC-008)
 - [X] T059 [P] [US3] Replace `"Not yet assigned"` for the interface pack in `apps/web/src/pages/world/WorldDashboardPage.tsx` with the same. Leave the **`gameSystemId`** labels on both screens alone — there the unset state is real, and it belongs to User Story 2
-- [ ] T060 [US1] E2E in `apps/web/e2e/world-appearance.spec.ts`: two worlds on two systems, each under a pack targeting it, render visibly and structurally different sheets with the shared application unchanged between them (SC-005)
-- [ ] T061 [US3] E2E in `apps/web/e2e/world-appearance.spec.ts`: a world bound to a pack that is not installed opens in Forge, says so once, blocks nothing, and returns when the pack is restored with no re-binding step; and both labels read the same true thing (SC-008)
+- [X] T060 [US1] E2E in `apps/web/e2e/world-appearance.spec.ts`: two worlds on two systems, each under a pack targeting it, render visibly and structurally different sheets with the shared application unchanged between them (SC-005)
+- [X] T061 [US3] E2E in `apps/web/e2e/world-appearance.spec.ts`: a world bound to a pack that is not installed opens in Forge, says so once, blocks nothing, and returns when the pack is restored with no re-binding step; and both labels read the same true thing (SC-008)
 
 **Checkpoint**: two packs, two shapes, and `apps/web/src/systems/` is gone.
 
@@ -217,7 +217,7 @@ is here.
 ### Proof
 
 - [X] T079 [US4] Test in `crates/pack_system_spec/` that for every bundled system, everything its manifest declares is renderable by Forge (SC-012). Read the systems from the directory rather than listing them, so a pack added later is covered without anyone remembering to add it
-- [ ] T080 [US4] E2E in `apps/web/e2e/world-appearance.spec.ts`: a world on each of at least three structurally different systems, opened under the base pack alone, renders that system's own sheet — and the three are visibly different from each other
+- [X] T080 [US4] E2E in `apps/web/e2e/world-appearance.spec.ts`: a world on each of at least three structurally different systems, opened under the base pack alone, renders that system's own sheet — and the three are visibly different from each other
 
 **Checkpoint**: no bundled system renders two numbers and a heading.
 
