@@ -332,6 +332,26 @@ page and names nothing.
 - [X] T105 [US2] [P] Document the two things a pack has that are not declarations — the `server/` crate and its `SystemContribution` submission, and the `use <pack> as _;` line in `src/server/src/system_packs.rs` that keeps the linker from discarding it. That line is the one thing adding a system touches outside its own directory, and SC-004 is measured against the change set; say so plainly rather than letting an author find it by having their pack silently do nothing
 - [X] T106 [US2] [P] Add `scripts/check-pack-docs.mjs`, modelled on `check-system-registry.mjs`, failing if `packs/systems/README.md` or `packs/interface/README.md` links a path that does not exist — SC-010's "zero references to documents that do not exist" is testable rather than merely assertable. Add it as a step in `scripts/verify.mjs`
 
+### F5 — the browser half of the thing ADR-029 ruled out (FR-017, FR-028)
+
+Found 2026-09-03 while auditing US2 scenario 4 ("installation is validated
+against the recorded security terms"), which the plan called open and trivial.
+
+- [X] T107 [US2] Delete `apps/web/src/hooks/useSystemHooks.ts`, `apps/web/src/providers/SystemHooksProvider.tsx` and `apps/web/src/providers/system-hooks-context.ts`. The provider did `await import("/api/systems/<id>/<path>")` — **dynamically importing and executing a system pack's JavaScript in a participant's browser**, which is what ADR-029 forbids and what `system_hooks.rs` was deleted for last session. This is the same machinery on the other side of the wire. Its `SystemHooksContract` carried `armorClass` and `initiative`, and its `BaseTokenStats` hardcoded 5e's six ability scores into a supposedly system-agnostic contract — FR-028's prohibition stated exactly. Nothing mounted the provider, the three files imported only each other, and the `web/dist/index.js` the bundled manifests point at does not exist in any pack, so this was dead code that would have become a live violation the moment somebody wired it up
+
+**Note for whoever revisits `POST /api/systems/install`.** That route is
+admin-gated and unpacks an uploaded archive into the systems directory. With
+the loader gone, an installed pack is data — read for its manifest and served
+as static files — which is what ADR-029 permits. The route was never the
+violation; the `import()` was.
+
+**Left alone deliberately**: every bundled manifest still declares
+`esmodules: ["web/dist/index.js"]` and a `styles` entry, and nothing reads
+either now. Those files do not exist in any pack. Removing the keys means
+touching eight manifests and `SystemManifest`'s required fields in
+`pack_system_spec`, which is a schema change and wants its own change set —
+`packs/systems/README.md` deliberately does not document either key.
+
 ### Checkpoint
 
 Amended 2026-09-03 to what F actually delivers, because the original said

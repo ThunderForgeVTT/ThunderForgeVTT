@@ -140,6 +140,10 @@ says only "contrast too low" sends an author to the wrong half of their file.
 | GM sets a pack and a second browser context sees it without reloading | `apps/web/e2e/world-appearance.spec.ts` |
 | A player is refused | same |
 | The two labels say the same true thing | same |
+| Systems listed from the directory, never seeded, template pack omitted, title order | `cargo test -p thunderforge` (`systems::`) |
+| A failing pack surface is contained, names its pack, and the session stays usable | `apps/web/e2e/world-appearance.spec.ts` § T103 |
+| The failure message names the pack and blocks nothing | `pnpm --filter web test` (`packSurfaceBoundary`) |
+| Every document the published pack contracts reference exists (SC-010) | `node scripts/check-pack-docs.mjs` |
 
 Run them with `pnpm verify` for the lint gates and the suites named above for
 behaviour. Neither answers §1's "did you look at a dialog", which is why this
