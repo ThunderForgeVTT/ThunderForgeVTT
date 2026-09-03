@@ -25,6 +25,8 @@ import { useEffect, useState } from "react";
 
 import { fetchActorSheet } from "@/api/actorSheet";
 import { useAppearance } from "@/appearance/appearance-context";
+import { BASE_PACK_ID } from "@/appearance/appearance-context";
+import { PackSurfaceBoundary } from "@/appearance/PackSurfaceBoundary";
 import { SheetLayout } from "@/layout/SheetLayout";
 import { declarationsFrom } from "@/layout/declarations";
 import { rendersAnything, resolutionFrom } from "@/layout/resolve";
@@ -95,6 +97,45 @@ export function PackActorSheet({ actorId, emptyMessage }: PackActorSheetProps) {
   // is better than showing nothing and then the sheet.
   const layout = (appearance?.layout ?? []) as LayoutDeclaration;
 
+  // Everything the pack drives is inside the boundary, deliberately.
+  //
+  // It was not, and the gap was real: `rendersAnything` walks the pack's
+  // layout to decide whether to draw at all, and a malformed node throws
+  // there — one call *above* where the boundary used to start. A boundary
+  // that wraps only the render and not the decision to render contains the
+  // second half of a surface and lets the first half take the page.
+  //
+  // The pack named is the one in force, which is the base pack when the
+  // world's own could not be applied: naming the absent pack would send a
+  // Game Master to look at something that never ran.
+  return (
+    <PackSurfaceBoundary
+      packId={appearance?.packId ?? BASE_PACK_ID}
+      surface="character sheet"
+    >
+      <PackSheet
+        layout={layout}
+        declarations={declarations}
+        emptyMessage={emptyMessage}
+      />
+    </PackSurfaceBoundary>
+  );
+}
+
+interface PackSheetProps {
+  layout: LayoutDeclaration;
+  declarations: Partial<SheetDeclarations>;
+  emptyMessage?: string;
+}
+
+/**
+ * The pack-driven half: what this pack lays out for this character.
+ *
+ * Split from `PackActorSheet` so that a boundary can sit between them. Fetch
+ * failures and loading belong to the component that fetches; everything that
+ * reads a pack's layout belongs here, where a failure is contained.
+ */
+function PackSheet({ layout, declarations, emptyMessage }: PackSheetProps) {
   // Whether this pack draws anything at all for this character.
   //
   // `SheetLayout` returns null when no node in the layout has anything to

@@ -421,3 +421,103 @@ test.describe("T061: one wording for an unset pack binding", () => {
     }
   });
 });
+
+test.describe("T103: a failing pack surface is contained and names the pack", () => {
+  /**
+   * Spec 032 FR-016 and SC-009, which measure two separate things: the rest
+   * of the session stays usable, and the message names the responsible pack.
+   *
+   * # How the failure is injected
+   *
+   * By serving a malformed layout to the browser and nothing else. The pack's
+   * manifest response is rewritten in flight so that its layout carries a
+   * container node with no `children` — the renderer walks `children` to
+   * decide whether the node draws anything, and walking a missing array
+   * throws.
+   *
+   * Deliberately not by adding a fault switch to the product. A test-only
+   * branch in shipping code is a branch that has to be kept working and can
+   * be reached by accident, and it would prove that the boundary catches a
+   * fault the product was asked to raise rather than one a pack caused.
+   *
+   * This also covers the gap the boundary originally had: the throw happens
+   * in the *decision* to render, one call above the renderer, which an
+   * earlier version of this boundary did not wrap.
+   */
+  async function serveABrokenLayout(page: Page): Promise<void> {
+    await page.route("**/api/interface-packs/*/manifest.json", async (route) => {
+      const response = await route.fetch();
+      const manifest = (await response.json()) as Record<string, unknown>;
+      // A container that promises children and has none.
+      manifest.layout = [{ kind: "column" }];
+      await route.fulfill({ response, json: manifest });
+    });
+  }
+
+  test("the sheet is replaced by a named notice, and the session stays usable", async ({
+    page,
+  }) => {
+    const worldId = await registerAndCreateWorld(page, `Fault ${uniqueSuffix()}`);
+    // Fate Core rather than Genie, and the reason is worth stating: Genie is
+    // the one bundled system with a hand-written container in
+    // `systemActorSheets.ts`, so `PackActorSheet` never mounts for it and
+    // there is no pack-drawn surface to break. Every other system's sheet is
+    // drawn by the pack, which is what this test is about.
+    await chooseSystem(page, worldId, "fate_core", "Fate Core");
+    await choosePack(page, worldId, "Forge");
+    const actorId = await createActor(page, worldId, `Fault ${uniqueSuffix()}`);
+
+    await serveABrokenLayout(page);
+    await page.goto(`/world/${worldId}/actor/${actorId}/view`);
+
+    // SC-009's second half: the message names the pack that was rendering.
+    const notice = page.locator('[data-slot="pack-surface-failed"]');
+    await expect(notice).toBeVisible({ timeout: 20_000 });
+    await expect(notice).toHaveAttribute("data-pack", "forge");
+    await expect(notice).toContainText("forge");
+
+    // And the sheet it replaced is genuinely not there — a notice rendered
+    // beside a half-drawn sheet would be a worse outcome than either.
+    await expect(page.locator('[data-slot="sheet-layout"]')).toHaveCount(0);
+
+    // SC-009's first half: the rest of the session is usable. Not "the page
+    // did not go blank" — actually leave, arrive somewhere else, and find it
+    // working.
+    await page.goto(`/world/${worldId}/settings/system`);
+    await expect(page.getByTestId("active-system-card")).toContainText(
+      "Fate Core",
+      { timeout: 20_000 },
+    );
+
+    await page.goto(`/world/${worldId}/compendium`);
+    await expect(page.locator("body")).toContainText(/compendium/i, {
+      timeout: 20_000,
+    });
+  });
+
+  test("a sound pack still draws after a broken one has failed in the same session", async ({
+    page,
+  }) => {
+    // The half a boundary gets wrong quietly: having caught once, it stays
+    // caught, and the next sheet mounted into it shows the previous one's
+    // error. Proved by fixing the pack and going back.
+    const worldId = await registerAndCreateWorld(page, `Recover ${uniqueSuffix()}`);
+    await chooseSystem(page, worldId, "fate_core", "Fate Core");
+    await choosePack(page, worldId, "Forge");
+    const actorId = await createActor(page, worldId, `Recover ${uniqueSuffix()}`);
+
+    await serveABrokenLayout(page);
+    await page.goto(`/world/${worldId}/actor/${actorId}/view`);
+    await expect(page.locator('[data-slot="pack-surface-failed"]')).toBeVisible({
+      timeout: 20_000,
+    });
+
+    await page.unroute("**/api/interface-packs/*/manifest.json");
+    await page.goto(`/world/${worldId}/actor/${actorId}/view`);
+
+    await expect(page.locator('[data-slot="sheet-layout"]')).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.locator('[data-slot="pack-surface-failed"]')).toHaveCount(0);
+  });
+});
