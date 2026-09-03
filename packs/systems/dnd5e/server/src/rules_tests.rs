@@ -229,3 +229,41 @@ fn deriving_twice_from_the_same_input_gives_the_same_answer() {
         assert_eq!(rules.derive(&a_character()), first);
     }
 }
+
+/// The manifest's declared ability order survives into the derived values.
+///
+/// It did not. `DnD5eRules` held its abilities in a `BTreeMap`, so a populated
+/// 5e sheet listed Charisma Modifier, Charisma Save, Constitution Modifier and
+/// onward alphabetically, while the six ability scores immediately above it
+/// read STR, DEX, CON, INT, WIS, CHA as the book does. Found by looking at a
+/// seeded character, which is the only way it could have been found: every
+/// test here checked values, and the values were all correct.
+#[test]
+fn derived_values_follow_the_manifests_ability_order_not_the_alphabet() {
+    let manifest: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string("../system.json").expect("5e manifest"))
+            .expect("5e manifest parses");
+
+    let rules = DnD5eRules::from_manifest(&manifest);
+    let declared = rules.derived_declarations();
+
+    // The modifiers, in the order the sheet will show them.
+    let modifiers: Vec<&str> = declared
+        .iter()
+        .filter(|d| d.id.ends_with("Mod"))
+        .map(|d| d.id.as_str())
+        .collect();
+
+    assert_eq!(
+        modifiers,
+        vec![
+            "strengthMod",
+            "dexterityMod",
+            "constitutionMod",
+            "intelligenceMod",
+            "wisdomMod",
+            "charismaMod",
+        ],
+        "5e's abilities are ordered by the book, not by their spelling"
+    );
+}

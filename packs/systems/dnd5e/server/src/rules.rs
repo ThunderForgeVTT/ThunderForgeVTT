@@ -71,14 +71,21 @@ struct Skill {
 }
 
 pub struct DnD5eRules {
-    /// Ability id to label, from the manifest.
-    abilities: BTreeMap<String, String>,
+    /// Ability id and label, **in the manifest's declared order**.
+    ///
+    /// A `BTreeMap` stood here, which sorted the six alphabetically: a 5e
+    /// sheet listed Charisma Modifier, Charisma Save, Constitution Modifier
+    /// and so on, while the ability scores directly above it read STR, DEX,
+    /// CON, INT, WIS, CHA as the book does. The manifest gives each an
+    /// `order` and this discarded it — the same mistake `resolve` was making
+    /// one layer up, found the same way, by looking at a populated sheet.
+    abilities: Vec<(String, String)>,
     skills: Vec<Skill>,
 }
 
 impl DnD5eRules {
     pub fn from_manifest(manifest: &serde_json::Value) -> Self {
-        let abilities = manifest
+        let mut abilities: Vec<(u64, String, String)> = manifest
             .get("abilities")
             .and_then(|a| a.as_object())
             .map(|block| {
@@ -90,11 +97,23 @@ impl DnD5eRules {
                             .and_then(|l| l.as_str())
                             .unwrap_or(id)
                             .to_string();
-                        (id.clone(), label)
+                        // An ability the manifest forgot to order sorts last
+                        // rather than first, so a missing field cannot quietly
+                        // push a new ability to the top of the sheet.
+                        let order = spec
+                            .get("order")
+                            .and_then(|o| o.as_u64())
+                            .unwrap_or(u64::MAX);
+                        (order, id.clone(), label)
                     })
                     .collect()
             })
             .unwrap_or_default();
+        abilities.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+        let abilities: Vec<(String, String)> = abilities
+            .into_iter()
+            .map(|(_, id, label)| (id, label))
+            .collect();
 
         let skills = manifest
             .get("skills")
