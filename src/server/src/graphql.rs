@@ -67,9 +67,9 @@ pub use helpers::{
 // Phase 4.9.Z Step 5: Query extraction into separate modules
 pub mod queries;
 pub use queries::{
-    AbilityQuery, ActorQuery, AdminQuery, HealthcheckQuery, InventoryQuery, InviteQuery, ItemQuery,
-    LoreQuery, ModerationQuery, RollQuery, SceneQuery, UserQuery, WorldEventsSinceQuery,
-    WorldSyncPlanQuery,
+    AbilityQuery, AbilityVocabularyQuery, ActorQuery, AdminQuery, HealthcheckQuery, InventoryQuery,
+    InviteQuery, ItemQuery, LoreQuery, ModerationQuery, RollQuery, SceneQuery, UserQuery,
+    WorldEventsSinceQuery, WorldSyncPlanQuery,
 };
 
 // Phase 4.10.B: Invite & Membership mutations for multiplayer campaigns
@@ -2971,6 +2971,7 @@ pub struct QueryRoot(
     LoreQuery,
     LorePermissionQuery,
     AbilityQuery,
+    AbilityVocabularyQuery,
     AbilityPermissionQuery,
     AbilityShareQuery,
     ActorAbilityQuery,

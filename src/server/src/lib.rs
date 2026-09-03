@@ -21,6 +21,7 @@
 // type-layout recursion limit is not enough for this many.
 #![recursion_limit = "512"]
 
+pub mod ability_vocabulary;
 pub mod actor_assets_serve;
 pub mod adapters;
 pub mod admin;
