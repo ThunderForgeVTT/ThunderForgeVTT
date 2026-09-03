@@ -243,6 +243,13 @@ test.describe("T080: every bundled system gets its own sheet from the base pack"
       );
       await chooseSystem(page, worldId, system.id, system.title);
 
+      // Explicitly Forge. A world on a ruleset that has a pack written for it
+      // now *starts* in that pack, so "the base pack alone" is something this
+      // test has to ask for rather than something it gets by default — and
+      // asking for it is the honest version: the claim is that a system needs
+      // no pack of its own, which means choosing the generic one on purpose.
+      await choosePack(page, worldId, "Forge");
+
       const actorId = await createActor(
         page,
         worldId,
@@ -286,7 +293,12 @@ async function choosePack(
   const trigger = page.getByTestId("interface-pack-select");
   await expect(trigger).toBeVisible({ timeout: 15_000 });
   await trigger.click();
-  await page.getByRole("option", { name: packTitle }).click();
+  // Anchored, because an option's accessible name now carries the line saying
+  // what the pack is for — so a bare "Forge" substring-matches "Forged Silver"
+  // as well. `\b` after the title is what separates "Forge" from "Forged".
+  await page
+    .getByRole("option", { name: new RegExp(`^${packTitle}\\b`) })
+    .click();
   await expect(page.getByTestId("world-appearance-card")).toContainText(
     packTitle,
     { timeout: 15_000 },

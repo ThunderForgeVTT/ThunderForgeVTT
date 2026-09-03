@@ -473,8 +473,33 @@ pub fn read_system_manifest(state: &AppState) -> Result<SystemManifestDocument, 
     let path = Path::new(&state.directories.manifest_file);
     let contents =
         fs::read_to_string(path).map_err(|_| "Failed to read manifest file".to_string())?;
-    serde_json::from_str::<SystemManifestDocument>(&contents)
-        .map_err(|_| "Failed to parse manifest file".to_string())
+    let mut manifest = serde_json::from_str::<SystemManifestDocument>(&contents)
+        .map_err(|_| "Failed to parse manifest file".to_string())?;
+
+    backfill_missing_seeds(&mut manifest);
+    Ok(manifest)
+}
+
+/// Give a stored manifest the seeds it was written before we shipped.
+///
+/// The manifest file is created once, on first boot, and `ensure_manifest_exists`
+/// returns early forever after. So a seed key added to the product later is
+/// absent on every install that already existed — permanently, and silently.
+///
+/// That is not hypothetical. `default_game_system_id` arrived after this
+/// machine's manifest was written, so `default_game_system_id()` returned
+/// `None` and a world created without naming a system came out with **no
+/// system at all** — no error, no default, and a character sheet with nothing
+/// on it. Traced from exactly that symptom.
+///
+/// **Absent keys only.** A value an operator has set is theirs, including one
+/// they deliberately set to something other than the shipped default, and this
+/// must never reach in and correct it. Only a key that is not there at all
+/// gets filled, which is the difference between a migration and an override.
+fn backfill_missing_seeds(manifest: &mut SystemManifestDocument) {
+    for (key, value) in realm_defaults().metadata {
+        manifest.metadata.entry(key).or_insert(value);
+    }
 }
 
 pub fn update_manifest_key(
@@ -655,6 +680,53 @@ mod tests {
                 "editable setting `{key}` is not seeded by config/realm-defaults.json"
             );
         }
+    }
+
+    /// A manifest written before a seed key existed gains it (traced bug).
+    ///
+    /// `ensure_manifest_exists` returns early once the file is there, so a key
+    /// added to the product later was absent on every install that already
+    /// existed — permanently and silently. This machine's manifest predated
+    /// `default_game_system_id`, so `default_game_system_id()` answered `None`
+    /// and a world created without naming a system came out with **no system
+    /// at all**: no error, no default, and a sheet with nothing on it.
+    #[test]
+    fn a_manifest_written_before_a_seed_existed_gains_it_on_read() {
+        let mut stored = default_manifest();
+        stored.metadata.remove("default_game_system_id");
+        assert!(!stored.metadata.contains_key("default_game_system_id"));
+
+        super::backfill_missing_seeds(&mut stored);
+
+        assert_eq!(
+            stored.metadata.get("default_game_system_id"),
+            default_manifest().metadata.get("default_game_system_id"),
+            "a key the stored manifest never had must arrive from the shipped seeds"
+        );
+    }
+
+    /// And a value an operator set is theirs, including one that differs from
+    /// the shipped default on purpose. Backfilling absent keys is a migration;
+    /// correcting present ones would be an override, and would silently undo
+    /// somebody's decision on every read.
+    #[test]
+    fn an_operators_own_value_is_never_corrected_to_the_shipped_one() {
+        let mut stored = default_manifest();
+        stored
+            .metadata
+            .insert("realm_name".to_string(), "The Iron Table".to_string());
+        stored.metadata.insert(
+            "default_game_system_id".to_string(),
+            "fate_core".to_string(),
+        );
+
+        super::backfill_missing_seeds(&mut stored);
+
+        assert_eq!(stored.metadata.get("realm_name").unwrap(), "The Iron Table");
+        assert_eq!(
+            stored.metadata.get("default_game_system_id").unwrap(),
+            "fate_core"
+        );
     }
 
     /// Blanking the seeded system would make every new world systemless on

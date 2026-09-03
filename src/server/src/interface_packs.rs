@@ -179,3 +179,48 @@ pub fn pack_targeting(packs_dir: &str, system_id: &str) -> Option<String> {
         Some(_) => None,
     }
 }
+
+/// What a world's pack binding should be after its system changes.
+///
+/// `current` is what the world is bound to now; the answer is what it should
+/// be bound to for `system_id`, with `None` meaning the base pack.
+///
+/// # Why a binding cannot simply be left alone
+///
+/// Because a pack that targets a ruleset is *written against it*. Forged
+/// Steel's layout names 5e's identifiers — `strengthMod`, `passivePerception`
+/// — so a world that moved to Fate while keeping it renders a sheet built for
+/// a character it no longer has: almost nothing, with no explanation. Worse,
+/// the settings picker only offers packs that target the world's system, so
+/// the stale binding is *invisible* there — bound, breaking the sheet, and
+/// impossible to see or change from the screen that owns it.
+///
+/// # What survives, and what does not
+///
+/// A pack that targets nothing composes against any system, so a GM who chose
+/// the base pack, or any other generic one, keeps it: that choice is still
+/// true after the change. A pack that names the new system keeps it too, for
+/// the same reason.
+///
+/// Only a pack written for a *different* ruleset is replaced, and then by the
+/// same rule that binds one at creation — the pack that targets the new
+/// system when exactly one does, and otherwise nothing, because two is a
+/// question this is not entitled to answer.
+pub fn pack_after_system_change(
+    packs_dir: &str,
+    current: Option<&str>,
+    system_id: &str,
+) -> Option<String> {
+    if let Some(current) = current {
+        let still_fits = list_installed(packs_dir).into_iter().any(|pack| {
+            pack.id == current
+                && (pack.targets.is_empty()
+                    || pack.targets.iter().any(|target| target == system_id))
+        });
+        if still_fits {
+            return Some(current.to_string());
+        }
+    }
+
+    pack_targeting(packs_dir, system_id)
+}

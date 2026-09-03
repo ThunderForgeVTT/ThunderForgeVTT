@@ -559,3 +559,122 @@ mod pack_targeting {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// A pack binding when the world's system changes
+// ---------------------------------------------------------------------------
+
+mod repairing_a_pairing {
+    use std::fs;
+    use std::path::Path;
+
+    fn install(into: &Path, id: &str) {
+        let target = into.join(id);
+        fs::create_dir_all(&target).expect("create pack dir");
+        fs::copy(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../packs/interface")
+                .join(id)
+                .join("interface.json"),
+            target.join("interface.json"),
+        )
+        .expect("copy manifest");
+    }
+
+    fn packs() -> (tempfile::TempDir, String) {
+        let temp = tempfile::tempdir().expect("temp packs dir");
+        for id in ["forge", "forged-steel", "forged-silver", "forged-bronze"] {
+            install(temp.path(), id);
+        }
+        let dir = temp.path().to_string_lossy().into_owned();
+        (temp, dir)
+    }
+
+    /// The bug, stated: a pack written for one ruleset stayed bound after the
+    /// world moved to another. Forged Steel's layout names 5e identifiers, so
+    /// a Fate world kept a sheet built for a character it no longer had — and
+    /// because the picker only offers packs targeting the current system, the
+    /// stale binding was invisible on the very screen that owns it.
+    #[test]
+    fn a_pack_written_for_the_old_ruleset_is_replaced_not_kept() {
+        let (_temp, dir) = packs();
+        assert_eq!(
+            crate::interface_packs::pack_after_system_change(
+                &dir,
+                Some("forged-steel"),
+                "fate_core"
+            )
+            .as_deref(),
+            Some("forged-silver")
+        );
+    }
+
+    /// The ordinary flow, and the one that was reported: a world is created on
+    /// the default system and the GM picks its real ruleset afterwards.
+    #[test]
+    fn a_world_that_had_no_pack_gains_the_one_for_its_new_system() {
+        let (_temp, dir) = packs();
+        assert_eq!(
+            crate::interface_packs::pack_after_system_change(&dir, None, "dnd5e").as_deref(),
+            Some("forged-steel")
+        );
+    }
+
+    /// A generic pack composes against anything, so choosing one is a choice
+    /// that is still true after the system changes. Replacing it would be
+    /// overruling a decision that has not become wrong.
+    #[test]
+    fn a_generic_pack_the_gm_chose_survives_the_change() {
+        let (_temp, dir) = packs();
+        assert_eq!(
+            crate::interface_packs::pack_after_system_change(&dir, Some("forge"), "fate_core")
+                .as_deref(),
+            Some("forge")
+        );
+    }
+
+    #[test]
+    fn a_pack_that_already_targets_the_new_system_is_left_alone() {
+        let (_temp, dir) = packs();
+        assert_eq!(
+            crate::interface_packs::pack_after_system_change(
+                &dir,
+                Some("forged-silver"),
+                "fate_core"
+            )
+            .as_deref(),
+            Some("forged-silver")
+        );
+    }
+
+    /// Moving to a ruleset nothing was written for lands on the base pack,
+    /// which is generic and correct, rather than keeping a pack that is not.
+    #[test]
+    fn moving_to_a_system_no_pack_targets_clears_the_binding() {
+        let (_temp, dir) = packs();
+        assert!(
+            crate::interface_packs::pack_after_system_change(
+                &dir,
+                Some("forged-steel"),
+                "blades_in_the_dark"
+            )
+            .is_none()
+        );
+    }
+
+    /// A pack that has been uninstalled cannot "still fit" — it is not there
+    /// to ask. The world moves to whatever targets its new system.
+    #[test]
+    fn a_binding_naming_an_absent_pack_is_not_treated_as_valid() {
+        let (_temp, dir) = packs();
+        assert_eq!(
+            crate::interface_packs::pack_after_system_change(
+                &dir,
+                Some("forged-obsidian"),
+                "dnd5e"
+            )
+            .as_deref(),
+            Some("forged-steel")
+        );
+    }
+}

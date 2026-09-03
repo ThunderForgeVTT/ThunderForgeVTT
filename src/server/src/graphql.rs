@@ -2012,9 +2012,33 @@ pub async fn update_world_game_system_impl(
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
+    let packs_dir = state.directories.interface_packs_dir.clone();
+    let system_for_pairing = game_system_id.clone();
+
     let updated = tokio::task::spawn_blocking(move || {
+        // The pack binding is repaired in the same statement that changes the
+        // system, because between the two a world is bound to a pack written
+        // for a ruleset it no longer plays — and the settings picker only
+        // offers packs targeting the current system, so that state is not
+        // merely wrong but invisible from the screen that owns it.
+        let current: Option<String> = worlds::table
+            .filter(worlds::id.eq(world_id))
+            .select(worlds::interface_pack_id)
+            .first::<Option<String>>(&mut conn)
+            .ok()
+            .flatten();
+
+        let interface_pack_id = crate::interface_packs::pack_after_system_change(
+            &packs_dir,
+            current.as_deref(),
+            &system_for_pairing,
+        );
+
         diesel::update(worlds::table.filter(worlds::id.eq(world_id)))
-            .set(worlds::game_system_id.eq(Some(game_system_id)))
+            .set((
+                worlds::game_system_id.eq(Some(game_system_id)),
+                worlds::interface_pack_id.eq(interface_pack_id),
+            ))
             .returning(World::as_returning())
             .get_result::<World>(&mut conn)
     })
