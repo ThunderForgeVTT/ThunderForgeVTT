@@ -13,6 +13,7 @@ const SCENE_FIELDS = `
   height
   backgroundImagePath
   backgroundUrl
+  backgroundGridMismatch
   ownerId
   createdAt
   updatedAt

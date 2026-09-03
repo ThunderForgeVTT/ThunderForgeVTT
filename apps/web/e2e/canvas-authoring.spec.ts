@@ -363,7 +363,7 @@ async function expectSceneGridMatchesMap(
         ...(token ? { "x-csrf-token": token } : {}),
       },
       body: JSON.stringify({
-        query: `query S($worldId: UUID!) { scenes(worldId: $worldId) { gridSize width height backgroundAssetId } }`,
+        query: `query S($worldId: UUID!) { scenes(worldId: $worldId) { gridSize width height backgroundAssetId backgroundGridMismatch } }`,
         variables: { worldId },
       }),
     });
@@ -373,6 +373,7 @@ async function expectSceneGridMatchesMap(
       width?: number;
       height?: number;
       backgroundAssetId?: string | null;
+      backgroundGridMismatch?: string | null;
     }[];
     return scenes.find((s) => s.backgroundAssetId) ?? null;
   }, worldId);
@@ -391,6 +392,16 @@ async function expectSceneGridMatchesMap(
     Math.abs(cellsY - file.resolution.map_size.y),
     `scene is ${cellsY.toFixed(2)} cells tall (${height}px / ${gridSize}px) but the file says ${file.resolution.map_size.y}`,
   ).toBeLessThan(0.5);
+
+  // And the server agrees, through the field the GM's notice is drawn from.
+  // Asserting the ratio alone would leave the detector free to be broken in
+  // the opposite direction — silent about a scene that really is misaligned,
+  // or crying wolf over one that is not.
+  expect(
+    scene!.backgroundGridMismatch ?? null,
+    "a correctly imported map must not be reported as misaligned",
+  ).toBeNull();
+  await expect(page.getByTestId("map-import-grid-mismatch")).toHaveCount(0);
 }
 
 test.describe("Native canvas authoring: map import and scene switching", () => {

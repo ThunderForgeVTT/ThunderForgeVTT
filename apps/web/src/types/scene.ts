@@ -18,6 +18,13 @@ export type SceneRecord = {
    * `backgroundImagePath` directly (which dd2vtt/map import never sets).
    */
   backgroundUrl: string | null;
+
+  /**
+   * Why this scene's grid does not match the background under it, or absent
+   * when they agree. Server-computed — see `map_import::alignment`.
+   */
+
+  backgroundGridMismatch?: string | null;
   ownerId: string;
   createdAt: string;
   updatedAt: string;

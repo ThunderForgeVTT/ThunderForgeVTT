@@ -43,6 +43,7 @@ use crate::auth_middleware::AuthenticatedUser;
 use crate::state::AppState;
 use crate::world_events::{EVENT_CODE_MAP_IMPORTED, record_world_event};
 
+pub mod alignment;
 mod geometry;
 mod image;
 mod parse;
@@ -179,6 +180,14 @@ pub async fn import_uvtt_impl(
 
     let new_grid_size = saved_background.grid_size;
     let target_grid_size = f64::from(new_grid_size);
+
+    // Recorded alongside the scene below. Read from the file rather than
+    // derived from the stored image, because the point of keeping it is to
+    // have a statement of what the map *is* that is independent of whatever
+    // the storage path did to the picture.
+    let source_map_cells_x = parsed.file.resolution.map_size.x;
+    let source_map_cells_y = parsed.file.resolution.map_size.y;
+    let source_pixels_per_grid = parsed.file.resolution.pixels_per_grid;
     // Spec 022 (FR-012): a preview/thumbnail rendition, generated
     // alongside the full-resolution background from the same source
     // bytes. Best-effort — a preview-generation failure must not fail the
@@ -286,6 +295,11 @@ pub async fn import_uvtt_impl(
             // here: `grid_size` above is already the file's own
             // `pixels_per_grid`, so image-pixel width/height makes the
             // grid line up 1:1 with the art.
+            let existing_metadata: Option<serde_json::Value> = scenes::table
+                .filter(scenes::scene_id.eq(scene_id))
+                .select(scenes::metadata)
+                .first::<Option<serde_json::Value>>(conn)?;
+
             diesel::update(scenes::table.filter(scenes::scene_id.eq(scene_id)))
                 .set((
                     scenes::background_asset_id.eq(saved_background.asset_id),
@@ -293,6 +307,17 @@ pub async fn import_uvtt_impl(
                     scenes::grid_type.eq("square"),
                     scenes::width.eq(saved_background.width_px),
                     scenes::height.eq(saved_background.height_px),
+                    // What the file said the map is, so a later disagreement
+                    // between the grid and the background is answerable at all.
+                    // Without it the worst case is undetectable: 4096/128 is
+                    // exactly 32 and 2304/128 exactly 18, so a scene that is
+                    // uniformly 1.5x wrong looks perfectly self-consistent.
+                    scenes::metadata.eq(Some(crate::map_import::alignment::record_source_map(
+                        existing_metadata,
+                        source_map_cells_x,
+                        source_map_cells_y,
+                        source_pixels_per_grid,
+                    ))),
                 ))
                 .execute(conn)?;
 

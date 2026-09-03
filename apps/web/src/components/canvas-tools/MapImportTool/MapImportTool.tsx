@@ -15,6 +15,14 @@ export interface MapImportResult {
 export interface MapImportToolProps {
   sceneId: string;
   onImportComplete?: (result: MapImportResult) => void;
+  /**
+   * Why this scene's grid and its background disagree, when they do.
+   *
+   * Server-computed and passed straight through — the rule lives in
+   * `map_import::alignment` so there is one of it. Shown here because this is
+   * the tool that fixes it: the only remedy is to import the file again.
+   */
+  gridMismatch?: string | null;
 }
 
 type ImportStatus = "idle" | "uploading" | "error";
@@ -41,6 +49,7 @@ interface ErrorPayload {
 export function MapImportTool({
   sceneId,
   onImportComplete,
+  gridMismatch,
 }: MapImportToolProps) {
   const [status, setStatus] = useState<ImportStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -145,6 +154,25 @@ export function MapImportTool({
             Import failed
           </p>
           <p className="text-sm text-destructive">{errorMessage}</p>
+        </Panel>
+      ) : null}
+
+      {gridMismatch ? (
+        // A warning, not an error, and it blocks nothing: the map is still
+        // usable, its squares are just the wrong size. Shown whenever it is
+        // true rather than once after an import, because the state it
+        // describes is stored — it survives a reload, and so should the
+        // notice, until someone re-imports.
+        <Panel
+          variant="stone"
+          className="grid gap-1"
+          role="status"
+          data-testid="map-import-grid-mismatch"
+        >
+          <p className="text-xs font-semibold tracking-widest text-warning uppercase">
+            Grid does not match the map
+          </p>
+          <p className="text-sm text-muted-foreground">{gridMismatch}</p>
         </Panel>
       ) : null}
 

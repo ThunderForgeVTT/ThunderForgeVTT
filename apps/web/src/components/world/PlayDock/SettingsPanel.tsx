@@ -77,6 +77,10 @@ export function SettingsPanel({
             key={sceneId}
             sceneId={sceneId}
             onImportComplete={onMapImportComplete}
+            gridMismatch={
+              scenes.find((scene) => scene.sceneId === sceneId)
+                ?.backgroundGridMismatch
+            }
           />
         </section>
       ) : null}

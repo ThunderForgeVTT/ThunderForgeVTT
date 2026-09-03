@@ -323,6 +323,7 @@ export function SceneDetailPage({
             <MapImportTool
               sceneId={sceneId}
               onImportComplete={handleMapImported}
+              gridMismatch={scene?.backgroundGridMismatch}
             />
           </Card>
 

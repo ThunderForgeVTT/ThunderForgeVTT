@@ -341,10 +341,26 @@ pub struct GraphQLScene {
     /// Spec 022 (FR-011): computed URL for the scene's reduced-size
     /// preview image, `None` until one has been generated.
     preview_url: Option<String>,
+    /// Why this scene's grid does not match the background under it, or
+    /// `None` when they agree.
+    ///
+    /// A sentence rather than a flag, because the useful thing to show is the
+    /// two numbers that differ — and computed here rather than in the client
+    /// so the rule has one home. See `map_import::alignment`.
+    background_grid_mismatch: Option<String>,
 }
 
 impl From<crate::models::Scene> for GraphQLScene {
     fn from(scene: crate::models::Scene) -> Self {
+        // Computed first: the struct literal below moves the fields it reads.
+        let background_grid_mismatch = crate::map_import::alignment::grid_mismatch(
+            scene.background_asset_id.is_some() || scene.background_image_path.is_some(),
+            scene.width,
+            scene.height,
+            scene.grid_size,
+            scene.metadata.as_ref(),
+        );
+
         Self {
             scene_id: scene.scene_id,
             world_id: scene.world_id,
@@ -389,6 +405,7 @@ impl From<crate::models::Scene> for GraphQLScene {
             preview_url: scene
                 .preview_asset_id
                 .map(|id| format!("/api/scene-assets/{id}/thumb")),
+            background_grid_mismatch,
         }
     }
 }
