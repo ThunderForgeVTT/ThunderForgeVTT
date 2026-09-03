@@ -230,7 +230,7 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 
 - [X] T074 [US7] Offer the currently selected tokens as the combat roster in `apps/web/src/components/world/PlayDock/CombatPanel.tsx` (FR-030)
 - [X] T075 [US7] Keep round and turn presentation for systems that use rounds, unchanged, in `apps/web/src/components/world/PlayDock/CombatPanel.tsx`
-- [ ] T076 [US7] **Unblocked (2026-09-03)** — make turn structure system-supplied so a ruleset without rounds shows no round counter (FR-031, SC-011). Recorded as blocked on spec 032, and then on ADR-029 behind it; neither holds. This needs no pack code: turn structure is a manifest declaration in the shape `abilities`/`resources`/`movement` already use, read server-side, with `world_combats.round` and its counter shown only for a system that declares rounds. The declaration mechanism shipped with spec 032 Increment A
+- [X] T076 [US7] Turn structure is system-supplied: a ruleset without rounds presents no round counter (FR-031, SC-011). Never actually needed pack code — `turnStructure` is a manifest block in the shape `abilities`/`resources`/`movement` already use, read server-side by `src/server/src/turn_structure.rs` and published as `combat.roundLabel`. Each bundled system declares from its own research digest's `action_economy`: rounds for 5e, Pathfinder, Cypher and Year Zero; **Exchange** for Fate, which is why the label travels with the flag; **none** for Blades in the Dark, whose digest records "no strict turn order or initiative". Verified live across four systems. No combat e2e exists in the suite to extend — recorded as a gap rather than papered over
 
 **Checkpoint**: Combat starts from what the GM selected.
 

@@ -226,5 +226,8 @@
       "slot": "traitData",
       "source": "notes"
     }
-  ]
+  ],
+  "turnStructure": {
+    "rounds": false
+  }
 }

@@ -47,6 +47,7 @@ mod system_packs; // Spec 032 FR-029: which packs are linked, and nothing more
 mod systems;
 #[cfg(test)]
 mod test_support; // Spec 002: shared fixtures for tests/tests requiring a live DB + RustFS
+mod turn_structure; // Spec 031 T076 (FR-031): does this ruleset count rounds
 mod users;
 mod utils;
 mod world;

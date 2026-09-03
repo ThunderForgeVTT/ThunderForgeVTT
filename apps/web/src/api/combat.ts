@@ -13,6 +13,7 @@ const COMBAT_FIELDS = `
   worldId
   sceneId
   round
+  roundLabel
   activeCombatantId
   endedAt
   combatants {

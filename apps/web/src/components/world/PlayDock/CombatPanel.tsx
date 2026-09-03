@@ -228,9 +228,19 @@ export function CombatPanel({ worldId, sceneId, isGm }: CombatPanelProps) {
   return (
     <div className="grid gap-3" data-testid="combat-panel">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-          Round {combat.round}
-        </span>
+        {combat.roundLabel ? (
+          <span
+            className="text-xs font-semibold tracking-widest text-muted-foreground uppercase"
+            data-testid="combat-round-counter"
+          >
+            {combat.roundLabel} {combat.round}
+          </span>
+        ) : (
+          // Deliberately an empty span rather than nothing: the row is a
+          // space-between, and dropping the element entirely would slide the
+          // GM's controls to the left only for systems without rounds.
+          <span />
+        )}
         {isGm ? (
           <div className="flex gap-2">
             <Button

@@ -154,5 +154,9 @@
       "slot": "traitData",
       "source": "notes"
     }
-  ]
+  ],
+  "turnStructure": {
+    "rounds": true,
+    "roundLabel": "Round"
+  }
 }

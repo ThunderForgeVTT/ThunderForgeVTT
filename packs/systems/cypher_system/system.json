@@ -344,5 +344,9 @@
       "label": "Intellect",
       "headline": "intellectPool"
     }
-  ]
+  ],
+  "turnStructure": {
+    "rounds": true,
+    "roundLabel": "Round"
+  }
 }

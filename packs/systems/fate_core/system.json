@@ -424,5 +424,9 @@
       "label": "Extreme Consequence",
       "headline": "consequenceExtreme"
     }
-  ]
+  ],
+  "turnStructure": {
+    "rounds": true,
+    "roundLabel": "Exchange"
+  }
 }

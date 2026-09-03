@@ -19,7 +19,7 @@
 //! through a different sequence on the GM's screen than on a player's —
 //! precisely the disagreement a shared tracker exists to prevent.
 
-use async_graphql::{Context, Error, InputObject, Result as GraphQLResult};
+use async_graphql::{ComplexObject, Context, Error, InputObject, Result as GraphQLResult};
 use chrono::Utc;
 use diesel::PgConnection;
 use diesel::prelude::*;
@@ -62,6 +62,7 @@ impl From<Combatant> for GraphQLCombatant {
 }
 
 #[derive(async_graphql::SimpleObject, Debug, Clone)]
+#[graphql(complex)]
 pub struct GraphQLCombat {
     pub id: Uuid,
     pub world_id: Uuid,
@@ -72,6 +73,49 @@ pub struct GraphQLCombat {
     /// Already in turn order — clients render this as given and never
     /// re-sort, so there is one ordering rule in the system, not two.
     pub combatants: Vec<GraphQLCombatant>,
+}
+
+#[ComplexObject]
+impl GraphQLCombat {
+    /// What this ruleset calls a round, or `null` when it does not count them.
+    ///
+    /// Spec 031 FR-031: turn structure is the *system's* to determine and must
+    /// not be imposed on rulesets that do not use it. A client renders this
+    /// label beside `round` and shows nothing at all when it is absent, which
+    /// is SC-011 — Blades in the Dark has no turn order, so it gets no counter.
+    ///
+    /// A computed field rather than a column on the row: it is a fact about
+    /// the world's *system*, not about this combat, and stamping it at each of
+    /// the nine places a combat is loaded would be nine chances to forget.
+    async fn round_label(&self, ctx: &Context<'_>) -> GraphQLResult<Option<String>> {
+        use crate::schema::worlds;
+
+        let state = app_state(ctx)?;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+        let system_id = worlds::table
+            .filter(worlds::id.eq(self.world_id))
+            .select(worlds::game_system_id)
+            .first::<Option<String>>(&mut conn)
+            .optional()
+            .map_err(|_| Error::new("Failed to load world"))?
+            .flatten();
+
+        // A world bound to no system is told nothing about rounds, for the
+        // same reason a system that declares none is: the product does not
+        // supply a structure nobody asked for.
+        let Some(system_id) = system_id else {
+            return Ok(None);
+        };
+
+        Ok(
+            crate::turn_structure::for_system(&state.directories.systems_dir, &system_id)
+                .round_label,
+        )
+    }
 }
 
 /// The single definition of turn order. See this module's doc comment for
