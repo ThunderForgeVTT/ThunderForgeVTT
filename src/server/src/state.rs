@@ -1,6 +1,5 @@
 use crate::config::{Config, Directories};
 use crate::models::WorldEvent;
-use crate::system_hooks::SystemHookRegistry;
 use axum::extract::FromRef;
 use thunderforge_pg_sockets::SharedWorldRouter;
 use tokio::sync::broadcast::Sender;
@@ -34,7 +33,6 @@ pub struct AppState {
     pub presence: std::sync::Arc<thunderforge_presence::PresenceRegistry>,
     pub key: Key,
     pub db_pool: DbPool,
-    pub system_hooks: std::sync::Arc<tokio::sync::RwLock<SystemHookRegistry>>,
     // Spec 024, ADR-047: which `SessionAdjudicator` implementation is active
     // (`LocalAdjudicator` by default, or `RemoteAdjudicator` when
     // `CRUCIBLE_MODE=remote` — selected once at startup in `main.rs`).

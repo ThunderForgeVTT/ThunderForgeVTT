@@ -42,7 +42,6 @@ mod sheet; // Spec 032: the rest of a character sheet, from the manifest
 mod state;
 mod status_display; // Spec 029: resolving what each viewer is told
 mod storage; // Spec 002: RustFS canvas image asset storage
-mod system_hooks;
 mod system_packs; // Spec 032 FR-029: which packs are linked, and nothing more
 mod systems;
 #[cfg(test)]
@@ -395,9 +394,6 @@ async fn main() {
         presence: presence.clone(),
         key,
         db_pool: db_pool.clone(),
-        system_hooks: std::sync::Arc::new(tokio::sync::RwLock::new(
-            system_hooks::SystemHookRegistry::new(),
-        )),
         adjudicator,
     };
 

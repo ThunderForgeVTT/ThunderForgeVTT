@@ -66,9 +66,6 @@ pub fn test_app_state() -> AppState {
         presence: std::sync::Arc::new(thunderforge_presence::PresenceRegistry::new()),
         key: Key::generate(),
         db_pool,
-        system_hooks: std::sync::Arc::new(tokio::sync::RwLock::new(
-            crate::system_hooks::SystemHookRegistry::new(),
-        )),
         adjudicator: std::sync::Arc::new(thunderforge_crucible::local::LocalAdjudicator),
     }
 }

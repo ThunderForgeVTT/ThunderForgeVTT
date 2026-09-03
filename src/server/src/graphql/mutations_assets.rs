@@ -348,11 +348,20 @@ mod tests {
         assert_eq!(asset.scene_id, Some(scene_id));
         assert_eq!(asset.original_format, "png");
         assert!(asset.storage_path.ends_with(".webp"));
-        assert_eq!(
-            asset.storage_path,
-            crate::storage::rustfs::object_key(owner_id, world_id, Some(scene_id), asset.asset_id)
-        );
 
+        // **Not** the key derived from this asset's own id.
+        //
+        // That is what this asserted, and it encoded the pre-deduplication
+        // invariant "one row, one freshly written object". `storage::dedupe`
+        // made it false on purpose: an upload whose bytes are already stored
+        // references that object instead of writing another, so the path can
+        // legitimately belong to an asset uploaded months ago in a different
+        // world. This test image is the same every run, so after the first it
+        // is always the reused case.
+        //
+        // What must still hold is that the row names an object holding exactly
+        // these bytes — which is what `content_hash` means, and what the
+        // reload below checks.
         // Verify the row is really persisted (SC-005: format is verified
         // by inspecting the stored asset).
         let mut conn = state.db_pool.get().unwrap();
@@ -363,6 +372,28 @@ mod tests {
             .first::<CanvasImageAsset>(&mut conn)
             .expect("row should exist");
         assert_eq!(reloaded.original_format, "png");
+
+        // The object it names holds exactly these bytes.
+        //
+        // This is the assertion deduplication actually needs, and it is
+        // stronger than the one it replaces. A path pointing at somebody
+        // else's image would be the worst possible failure of reuse — one
+        // world silently showing another's picture — and comparing the stored
+        // object's digest against the row's own `content_hash` is what rules
+        // it out, whether the object was written by this upload or found.
+        let stored =
+            crate::storage::rustfs::read_object(&RustFsConfig::from_env(), &reloaded.storage_path)
+                .await
+                .expect("the object the row names must exist");
+
+        assert_eq!(
+            thunderforge_cache_core::Fingerprint::of_bytes(&stored).to_hex(),
+            reloaded
+                .content_hash
+                .as_deref()
+                .expect("an uploaded asset records its hash"),
+            "the object this row names must hold this row's bytes"
+        );
     }
 
     /// Spec 028 T019 (FR-005): the persisted `content_hash` is the hash of
