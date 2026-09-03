@@ -11,8 +11,13 @@ The backend is on **30000**, not 3000.
 
 Prerequisites: a world you are the Game Master of, a second signed-in account
 that is a player in that world, both interface packs present in
-`packs/interface/`, and at least two worlds bound to different game systems —
-one of them Genie, which is the only system `IMPLEMENTED_SYSTEM_IDS` contains.
+`packs/interface/`, and at least two worlds bound to different game systems.
+
+Any two bundled systems will do. `IMPLEMENTED_SYSTEM_IDS` used to make Genie
+the only real choice; it is long gone, and every bundled pack now works in
+play by having a manifest. Prefer a **non-Genie** system wherever a step is
+about a pack-drawn sheet: Genie is the one system with a hand-written
+container in `systemActorSheets.ts`, so `PackActorSheet` never mounts for it.
 
 ---
 
@@ -163,31 +168,61 @@ curl -s localhost:30000/api/systems | python3 -m json.tool | head -20
 grep -rn "BUNDLED_SYSTEM_IDS\|BUNDLED_SYSTEM_LABELS" apps/web/src/   # expect: no matches
 ```
 
-**Expected**: the route lists all bundled systems with their titles; both
-literals are gone; the create-world and system-settings pickers still offer
-every system, now sourced from the server.
+**Expected**: the route answers `{ "systems": [...], "defaultId": ... }`,
+listing every bundled pack in title order with its title and description, and
+both literals are gone. The create-world and system-settings pickers still
+offer every system, now sourced from the server, and the create form opens
+with the realm's configured default already selected rather than a name
+written into the app.
 
-**The real test of SC-004**: add a directory under `packs/systems/`, restart,
-and confirm it is offered — with no other file edited.
+The table is still empty, and that is the point — nothing was seeded to make
+this work. `defaultId` is `null` on a realm that configured no default, and a
+world created that way has no system, which the product handles.
 
-## F2 — a pack contributes behaviour
+**The real test of SC-004**: add a directory under `packs/systems/` holding
+only a `system.json` (id, title, version, and a `legal` block with
+`licenseName` and `attributionText`), restart the stack, and confirm it is
+offered in both pickers — with no other file edited, no database row, and no
+symlink made by hand. `dev.mjs` links it in on start and says
+`Linked 1 new systems pack(s)`; delete the directory and restart, and the link
+is pruned. Done during the increment and expected to still hold.
+
+Also confirm the template pack is **not** offered: `basic-game-system`
+declares `"template": true` and a picker showing it would mean the declaration
+stopped being honoured.
+
+## F2 — a pack contributes behaviour: **not delivered, deliberately**
+
+This section originally read "expect: 0 known violations". That is not what
+shipped, and checking it would report a failure that is actually a decision.
 
 ```bash
-node scripts/check-system-registry.mjs    # expect: 0 known violations
+node scripts/check-system-registry.mjs    # expect: exactly 1, and no more
 ```
 
-**Expected**: zero. That script's `KNOWN` list is empty and the exemption for
-`graphql.rs` is gone, because world creation no longer branches on `"genie"`.
+**Expected**: **one** outstanding violation — `graphql.rs`, whose world
+creation still branches on one system's name to insert its session row. The
+number staying at **one** is the thing to verify; the list may not grow
+without a task id, and that is what the check is for.
 
-By hand: create a world on Genie, then confirm its session row exists and was
-created by the pack's hook rather than by shared code. Create a world on 5e and
-confirm no genie row appears.
+Why it stayed: ADR-063. The pack cannot own `world_genie_sessions` while 2,763
+lines of `graphql/mutations_genie_session.rs` and
+`graphql/queries/genie_session.rs` query that table and five siblings through
+the server's generated `schema.rs`, and moving the branch alone would need a
+second `table!` for one table — the drift this spec spent five increments
+removing. Research § F-5 has the route out, and it is an increment.
+
+Nothing to do by hand here.
 
 ## F3 — a failing surface is contained and named
 
-Injected, not waited for. With a surface made to throw:
+Injected, not waited for. The automated version is
+`world-appearance.spec.ts` § T103, which rewrites the pack manifest in flight
+so its layout carries a container with no children — the renderer walks those
+children to decide whether to draw, and walking a missing array throws. To do
+it by hand, break `packs/interface/forge/interface.json`'s layout the same way.
 
-1. Open an actor in a world whose system contributes that surface.
+1. Open an actor in a world on a **non-Genie** system (see Prerequisites).
 2. **Expected**: the surface is replaced by a message naming the pack and
    saying what is unavailable. The rest of the page — navigation, inventory,
    abilities, lore — still works. Nothing is blank.

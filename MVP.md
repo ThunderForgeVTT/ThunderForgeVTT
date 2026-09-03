@@ -171,6 +171,25 @@ packs, three of them targeting a system, and the binding is validated before it
 is stored and falls back to the base pack when the pack it names is not
 installed.
 
+**And the application stopped knowing which systems exist.** `/api/systems`
+read the `game_systems` table, which has never held a row, so the client
+carried two hand-kept literals naming all seven bundled systems and their
+titles. The route now lists `packs/systems/` — the same directory listing
+`/api/interface-packs` always used — and both literals are gone, along with an
+unread `gameSystems` GraphQL query. **Adding a system pack that ships no code
+is now one directory**, proved by creating one against a running stack and
+watching it appear in the pickers. ADR-028 records why the table stays and
+what it means now.
+
+What is *not* done, and is recorded rather than glossed: a system pack cannot
+yet contribute **behaviour**. World creation still branches on one system's
+name to insert its session row, because that pack cannot own the table it
+writes while 2,763 lines of that ruleset's GraphQL live in the server. ADR-063
+sizes the move and research § F-5 finds the route — the server compiles as a
+library, which is what lets a pack depend on it. A failing pack surface is
+contained and names its pack, and `packs/systems/README.md` is the published
+contract for authors.
+
 ### [x] Phase 9 — Multiplayer
 
 Invite codes and shareable links, `joinWorld`, `world_members` and

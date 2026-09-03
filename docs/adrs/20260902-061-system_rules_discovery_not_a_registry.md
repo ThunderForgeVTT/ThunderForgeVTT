@@ -40,13 +40,19 @@ SC-004 measures exactly this:
 Two edits to shared code, both required, is the failure that success criterion
 names.
 
-The same failure has a second instance on the web side.
-`apps/web/src/api/gameSystems.ts` holds `BUNDLED_SYSTEM_IDS` (the seven ids
-again), `BUNDLED_SYSTEM_LABELS` — titles the comment says are "mirrored from
+The same failure had a second instance on the web side.
+`apps/web/src/api/gameSystems.ts` held `BUNDLED_SYSTEM_IDS` (the seven ids
+again), `BUNDLED_SYSTEM_LABELS` — titles the comment said were "mirrored from
 each pack's `system.json` `title` field" — and `IMPLEMENTED_SYSTEM_IDS`, which
-is `new Set(["genie"])`. Three hand-maintained lists of the same seven things,
-one of them a copy of data that already exists in each pack. The file is honest
-about being a stopgap; it is still a third place to edit.
+was `new Set(["genie"])`. Three hand-maintained lists of the same seven things,
+one of them a copy of data that already existed in each pack. The file was
+honest about being a stopgap; it was still a third place to edit.
+
+**All three are gone** (spec 032 T085–T091, 2026-09-03). `/api/systems` lists
+`packs/systems/` the way `/api/interface-packs` always listed its own
+directory, and the client asks the server. ADR-028 records what became of the
+`game_systems` table, which is why those lists existed in the first place: it
+was what the route read, and it has never held a row.
 
 ## Decision
 
