@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "src/app",
     "src/server", 
     "src/core", 
     "src/engine", 
@@ -34,7 +35,7 @@ members = [
     "packs/systems/year_zero_engine/server",
     "packs/systems/year_zero_engine/engine"
 ]
-default-members = ["src/server", "src/core"]
+default-members = ["src/app", "src/server", "src/core"]
 
 [workspace.package]
 # Relicensed from BSD 3-Clause to AGPL-3.0-or-later (2026-08-25) — see

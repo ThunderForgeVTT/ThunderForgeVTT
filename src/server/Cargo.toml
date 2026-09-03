@@ -2,7 +2,7 @@
 workspace = true
 
 [package]
-name = "thunderforge"
+name = "thunderforge-server"
 version = "0.1.0"
 authors = ["mbround18 <michael.bruno1337@gmail.com>"]
 edition = "2024"
@@ -11,8 +11,9 @@ license.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[[bin]]
-name = "thunderforge"
+[lib]
+name = "thunderforge_server"
+path = "src/lib.rs"
 
 [features]
 # Spec 030 US7. Whether the seam probe is offered as an authorable effect.
@@ -129,30 +130,42 @@ path = "../../crates/pack_system_spec"
 [dependencies.thunderforge_crucible]
 path = "../../crates/thunderforge-crucible"
 
-[dependencies.dnd5e_server]
+
+
+
+
+
+
+
+# The bundled packs, for this crate's tests only.
+#
+# A dev-dependency cycle, which Cargo permits deliberately: a pack depends on
+# this library, and this library's *tests* depend on the pack. See
+# `src/test_packs.rs` for why linking them at all is necessary.
+[dev-dependencies.dnd5e_server]
 path = "../../packs/systems/dnd5e/server"
 package = "dnd5e-server"
 
-[dependencies.genie_server]
+[dev-dependencies.genie_server]
 path = "../../packs/systems/genie/server"
 package = "genie-server"
 
-[dependencies.pathfinder2e_server]
+[dev-dependencies.pathfinder2e_server]
 path = "../../packs/systems/pathfinder2e/server"
 package = "pathfinder2e-server"
 
-[dependencies.cypher_server]
+[dev-dependencies.cypher_server]
 path = "../../packs/systems/cypher_system/server"
 package = "cypher-server"
 
-[dependencies.fate_server]
+[dev-dependencies.fate_server]
 path = "../../packs/systems/fate_core/server"
 package = "fate-server"
 
-[dependencies.blades_server]
+[dev-dependencies.blades_server]
 path = "../../packs/systems/blades_in_the_dark/server"
 package = "blades-server"
 
-[dependencies.yze_server]
+[dev-dependencies.yze_server]
 path = "../../packs/systems/year_zero_engine/server"
 package = "yze-server"

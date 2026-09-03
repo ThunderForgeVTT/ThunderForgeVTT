@@ -4,11 +4,14 @@ use std::path::Path;
 
 pub mod oauth_env;
 
+/// Fields are `pub` rather than `pub(crate)` because the binary that builds
+/// `AppState` now lives in a different crate (`src/app`) — see `lib.rs` for
+/// why the server became a library. Nothing else about their meaning changed.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Config {
-    pub(crate) secret: String,
-    pub(crate) data_path: String,
-    pub(crate) secure_cookies: bool,
+    pub secret: String,
+    pub data_path: String,
+    pub secure_cookies: bool,
 }
 
 impl Config {

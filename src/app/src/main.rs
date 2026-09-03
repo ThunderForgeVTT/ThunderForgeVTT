@@ -9,52 +9,8 @@
 // query/mutation module will need this headroom too.
 #![recursion_limit = "512"]
 
-mod actor_assets_serve; // Spec 031: authenticated proxy for actor portrait/token images (mirrors lore_assets_serve)
-mod adapters;
-mod admin;
-mod attributes; // Phase 8: a system's own attribute set, from its manifest
-mod auth;
-mod auth_middleware;
-mod canvas_assets_serve;
-mod config;
-mod db_types;
-mod declared_values; // Spec 032: an actor's values, stored and derived, in one set
-mod door_effects; // Spec 030: doors, as a contributor to the interaction seam
-mod errors;
-mod graphql;
-mod interaction; // Spec 030: the effect registry, and the rules the GraphQL layer obeys
-mod interface_packs; // Spec 032: the interface packs on disk
-mod light_effects; // Spec 030: lighting, as a contributor to the interaction seam
-mod lore_assets_serve; // Spec 012: authenticated proxy for lore image assets (mirrors canvas_assets_serve)
-mod map_import;
-mod markdown; // Spec 012: lore wiki GFM rendering, [[link]] resolution, slug generation
-mod models;
-mod moderation; // Spec 015: DMCA notice-and-takedown content moderation
-mod network;
-mod peer_signaling; // Spec 028: opaque WebRTC signaling relay between live sessions
-mod pubsub;
-mod scene_assets_serve; // Spec 022: authenticated proxy for scene preview images (mirrors lore_assets_serve)
-mod scene_fingerprint; // Spec 028: derived scene content fingerprints
-mod schema; // Add this line
-mod serve;
-mod session; // Phase 4.9.B.2: Session lifecycle management
-mod sheet; // Spec 032: the rest of a character sheet, from the manifest
-mod state;
-mod status_display; // Spec 029: resolving what each viewer is told
-mod storage; // Spec 002: RustFS canvas image asset storage
 mod system_packs; // Spec 032 FR-029: which packs are linked, and nothing more
-mod systems;
-#[cfg(test)]
-mod test_support; // Spec 002: shared fixtures for tests/tests requiring a live DB + RustFS
-mod turn_structure; // Spec 031 T076 (FR-031): does this ruleset count rounds
-mod users;
-mod utils;
-mod world;
-mod world_events;
 
-use crate::config::{Config, Directories};
-use crate::graphql::{AppSchema, MutationRoot, QueryRoot, SubscriptionRoot}; // Added SubscriptionRoot
-use crate::state::AppState;
 use async_graphql::http::{ALL_WEBSOCKET_PROTOCOLS, GraphQLPlaygroundConfig, playground_source};
 use async_graphql::{Data, Schema}; // Added Data
 use async_graphql_axum::{GraphQLProtocol, GraphQLRequest, GraphQLResponse, GraphQLWebSocket}; // Added GraphQLWebSocket
@@ -71,6 +27,9 @@ use clap::Parser;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::{RunQueryDsl, pg::PgConnection};
 use std::net::SocketAddr;
+use thunderforge_server::config::{Config, Directories};
+use thunderforge_server::graphql::{AppSchema, MutationRoot, QueryRoot, SubscriptionRoot}; // Added SubscriptionRoot
+use thunderforge_server::state::AppState;
 use tokio::sync::broadcast;
 use tower_cookies::{CookieManagerLayer, Key};
 use tower_http::compression::CompressionLayer;
@@ -87,7 +46,7 @@ async fn graphql_playground() -> impl IntoResponse {
 
 async fn graphql_handler(
     Extension(schema): Extension<AppSchema>,
-    Extension(auth_user): Extension<auth_middleware::AuthenticatedUser>,
+    Extension(auth_user): Extension<thunderforge_server::auth_middleware::AuthenticatedUser>,
     req: GraphQLRequest,
 ) -> GraphQLResponse {
     schema
@@ -117,7 +76,7 @@ async fn graphql_public_handler(
 
 async fn graphql_ws_handler(
     Extension(schema): Extension<AppSchema>, // Changed from State to Extension
-    Extension(auth_user): Extension<auth_middleware::AuthenticatedUser>,
+    Extension(auth_user): Extension<thunderforge_server::auth_middleware::AuthenticatedUser>,
     protocol: GraphQLProtocol,
     ws: WebSocketUpgrade,
 ) -> Response {
@@ -128,8 +87,8 @@ async fn graphql_ws_handler(
             // to say how many sockets are attached *now* — which is what
             // separates "the server stopped sending" from "the clients went
             // away". It is reported with the delivery counters every 10s.
-            use crate::graphql::subscription_metrics::SOCKETS_OPEN;
             use std::sync::atomic::Ordering;
+            use thunderforge_server::graphql::subscription_metrics::SOCKETS_OPEN;
             SOCKETS_OPEN.fetch_add(1, Ordering::Relaxed);
             GraphQLWebSocket::new(socket, schema, protocol)
                 .on_connection_init(move |_value| {
@@ -191,8 +150,10 @@ async fn status_handler(State(state): State<AppState>) -> impl IntoResponse {
     let db_latency_ms = db_start.elapsed().as_millis();
 
     let storage_start = std::time::Instant::now();
-    let rustfs_cfg = storage::rustfs::RustFsConfig::from_env();
-    let storage_up = storage::rustfs::health_check(&rustfs_cfg).await.is_ok();
+    let rustfs_cfg = thunderforge_server::storage::rustfs::RustFsConfig::from_env();
+    let storage_up = thunderforge_server::storage::rustfs::health_check(&rustfs_cfg)
+        .await
+        .is_ok();
     let storage_latency_ms = storage_start.elapsed().as_millis();
 
     axum::Json(StatusPageResponse {
@@ -401,13 +362,13 @@ async fn main() {
     // before the app starts accepting connections, so the sign-in screen's
     // first load already reflects them.
     eprintln!("[Server] 🚀 Materializing environment-configured OAuth providers");
-    if let Err(err) = admin::materialize_env_oauth_providers(&db_pool).await {
+    if let Err(err) = thunderforge_server::admin::materialize_env_oauth_providers(&db_pool).await {
         eprintln!("[Server] ⚠️  Failed to materialize env-configured OAuth providers: {err}");
     }
 
     // Spawn the PostgreSQL LISTEN background task
     eprintln!("[Server] 🚀 Starting PostgreSQL LISTEN background task");
-    network::spawn_listen_task(db_pool.clone(), world_events);
+    thunderforge_server::network::spawn_listen_task(db_pool.clone(), world_events);
 
     // Drop presence for worlds everyone has left.
     //
@@ -431,11 +392,11 @@ async fn main() {
 
     // Spawn the presence listener task (Phase 4.9.B.3)
     eprintln!("[Server] 🚀 Starting presence listener task");
-    network::spawn_presence_listener_task(presence_sender);
+    thunderforge_server::network::spawn_presence_listener_task(presence_sender);
 
     // Spawn the session cleanup task (Phase 4.9.B.2)
     eprintln!("[Server] 🚀 Starting session cleanup task");
-    session::spawn_session_cleanup_task(db_pool.clone());
+    thunderforge_server::session::spawn_session_cleanup_task(db_pool.clone());
 
     // Spec 028 T125: fill in `content_hash` for assets written before the
     // column existed. Paced deliberately and allowed to take as long as it
@@ -443,7 +404,7 @@ async fn main() {
     // the system is correct the whole time this is unfinished, merely
     // wasteful. Nothing waits on it.
     eprintln!("[Server] 🚀 Starting canvas asset content-hash backfill task");
-    storage::backfill::spawn_content_hash_backfill_task(db_pool.clone());
+    thunderforge_server::storage::backfill::spawn_content_hash_backfill_task(db_pool.clone());
 
     let schema = Schema::build(
         QueryRoot::default(),
@@ -453,10 +414,10 @@ async fn main() {
     .data(app_state.clone())
     .finish();
 
-    auth::ensure_admin_bootstrap_code(&app_state)
+    thunderforge_server::auth::ensure_admin_bootstrap_code(&app_state)
         .await
         .expect("Failed to initialize bootstrap admin setup state");
-    admin::ensure_admin_defaults(&app_state)
+    thunderforge_server::admin::ensure_admin_defaults(&app_state)
         .await
         .expect("Failed to initialize admin configuration state");
 
@@ -467,42 +428,47 @@ async fn main() {
     // configured yet) should still come up; the first asset write will
     // surface a clear storage error instead.
     {
-        let rustfs_cfg = storage::rustfs::RustFsConfig::from_env();
-        if let Err(e) = storage::rustfs::ensure_bucket(&rustfs_cfg).await {
+        let rustfs_cfg = thunderforge_server::storage::rustfs::RustFsConfig::from_env();
+        if let Err(e) = thunderforge_server::storage::rustfs::ensure_bucket(&rustfs_cfg).await {
             eprintln!(
                 "[Server] ⚠️  RustFS bucket bootstrap failed (asset uploads will fail until this is resolved): {e}"
             );
         }
     }
 
-    let world_router = world::router().route_layer(from_fn_with_state(
+    let world_router = thunderforge_server::world::router().route_layer(from_fn_with_state(
         app_state.clone(),
-        auth_middleware::require_authenticated_user,
+        thunderforge_server::auth_middleware::require_authenticated_user,
     ));
-    let user_router = users::router().route_layer(from_fn_with_state(
+    let user_router = thunderforge_server::users::router().route_layer(from_fn_with_state(
         app_state.clone(),
-        auth_middleware::require_authenticated_user,
+        thunderforge_server::auth_middleware::require_authenticated_user,
     ));
-    let map_import_router = map_import::router().route_layer(from_fn_with_state(
-        app_state.clone(),
-        auth_middleware::require_authenticated_user,
-    ));
-    let canvas_assets_router = canvas_assets_serve::router().route_layer(from_fn_with_state(
-        app_state.clone(),
-        auth_middleware::require_authenticated_user,
-    ));
-    let lore_assets_router = lore_assets_serve::router().route_layer(from_fn_with_state(
-        app_state.clone(),
-        auth_middleware::require_authenticated_user,
-    ));
-    let actor_assets_router = actor_assets_serve::router().route_layer(from_fn_with_state(
-        app_state.clone(),
-        auth_middleware::require_authenticated_user,
-    ));
-    let scene_assets_router = scene_assets_serve::router().route_layer(from_fn_with_state(
-        app_state.clone(),
-        auth_middleware::require_authenticated_user,
-    ));
+    let map_import_router =
+        thunderforge_server::map_import::router().route_layer(from_fn_with_state(
+            app_state.clone(),
+            thunderforge_server::auth_middleware::require_authenticated_user,
+        ));
+    let canvas_assets_router =
+        thunderforge_server::canvas_assets_serve::router().route_layer(from_fn_with_state(
+            app_state.clone(),
+            thunderforge_server::auth_middleware::require_authenticated_user,
+        ));
+    let lore_assets_router =
+        thunderforge_server::lore_assets_serve::router().route_layer(from_fn_with_state(
+            app_state.clone(),
+            thunderforge_server::auth_middleware::require_authenticated_user,
+        ));
+    let actor_assets_router =
+        thunderforge_server::actor_assets_serve::router().route_layer(from_fn_with_state(
+            app_state.clone(),
+            thunderforge_server::auth_middleware::require_authenticated_user,
+        ));
+    let scene_assets_router =
+        thunderforge_server::scene_assets_serve::router().route_layer(from_fn_with_state(
+            app_state.clone(),
+            thunderforge_server::auth_middleware::require_authenticated_user,
+        ));
 
     let graphql_router = Router::new()
         .route(
@@ -515,13 +481,18 @@ async fn main() {
                 // reject any real image well before storage/transcode's
                 // own MAX_UPLOAD_BYTES check ever runs, mirroring the
                 // same fix already applied to map_import's REST route.
-                .route_layer(DefaultBodyLimit::max(storage::transcode::MAX_UPLOAD_BYTES)),
+                .route_layer(DefaultBodyLimit::max(
+                    thunderforge_server::storage::transcode::MAX_UPLOAD_BYTES,
+                )),
         )
         .route("/ws", get(graphql_ws_handler))
-        .route("/events/{world_id}", get(network::websocket_handler)) // Phase 4.9.B.2: Event WebSocket with session tracking
+        .route(
+            "/events/{world_id}",
+            get(thunderforge_server::network::websocket_handler),
+        ) // Phase 4.9.B.2: Event WebSocket with session tracking
         .route_layer(from_fn_with_state(
             app_state.clone(),
-            auth_middleware::require_authenticated_user,
+            thunderforge_server::auth_middleware::require_authenticated_user,
         ));
 
     // Spec 015 (FR-002): deliberately NOT wrapped in
@@ -535,7 +506,7 @@ async fn main() {
         .route("/status", get(status_handler))
         .merge(graphql_router)
         .merge(public_graphql_router)
-        .merge(auth::router())
+        .merge(thunderforge_server::auth::router())
         .merge(user_router)
         .merge(world_router)
         .merge(map_import_router)
@@ -544,25 +515,34 @@ async fn main() {
         .merge(actor_assets_router)
         .merge(scene_assets_router);
 
-    let systems_admin_router = systems::admin_router().route_layer(from_fn_with_state(
-        app_state.clone(),
-        auth_middleware::require_admin_user,
-    ));
+    let systems_admin_router =
+        thunderforge_server::systems::admin_router().route_layer(from_fn_with_state(
+            app_state.clone(),
+            thunderforge_server::auth_middleware::require_admin_user,
+        ));
 
     let app = Router::new()
         .nest(
             "/api",
             api_router
-                .nest("/systems", systems::router().merge(systems_admin_router))
-                .nest("/interface-packs", interface_packs::router()),
+                .nest(
+                    "/systems",
+                    thunderforge_server::systems::router().merge(systems_admin_router),
+                )
+                .nest(
+                    "/interface-packs",
+                    thunderforge_server::interface_packs::router(),
+                ),
         )
-        .merge(serve::router(&directories))
-        .fallback(errors::handler_404)
+        .merge(thunderforge_server::serve::router(&directories))
+        .fallback(thunderforge_server::errors::handler_404)
         .with_state(app_state.clone())
-        .layer(from_fn(auth_middleware::rate_limit_auth_requests))
+        .layer(from_fn(
+            thunderforge_server::auth_middleware::rate_limit_auth_requests,
+        ))
         .layer(from_fn_with_state(
             app_state.clone(),
-            auth_middleware::require_csrf_for_session,
+            thunderforge_server::auth_middleware::require_csrf_for_session,
         ))
         .layer(
             CorsLayer::new()

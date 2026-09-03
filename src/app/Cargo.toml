@@ -1,0 +1,104 @@
+[lints]
+workspace = true
+
+[package]
+name = "thunderforge"
+version = "0.1.0"
+authors = ["mbround18 <michael.bruno1337@gmail.com>"]
+edition = "2024"
+repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
+license.workspace = true
+
+# The composition root, and deliberately nothing else.
+#
+# `src/server` is the server as a library; this crate links it to the system
+# packs, merges what they contribute, and runs `main`. The split exists so a
+# pack can depend on the server — which a binary crate made impossible — and
+# so the one place that knows a pack exists is the one place whose job is
+# knowing that (spec 032 ADR-063, research § F-5).
+[[bin]]
+name = "thunderforge"
+path = "src/main.rs"
+
+[features]
+default = ["seam-probe"]
+# Forwarded to the library, whose `seam_probe` contributor this gates.
+seam-probe = ["thunderforge-server/seam-probe"]
+
+[dependencies]
+thunderforge-server = { path = "../server", default-features = false }
+
+# What `main.rs` itself touches: the router, the schema, the CLI, logging.
+# Versions and features mirror `src/server/Cargo.toml` exactly — the two
+# compile against the same types, so a drift here is a type error there.
+async-graphql = { version = "7.2.1", features = [
+  "chrono",
+  "dataloader",
+  "log",
+  "uuid",
+] }
+async-graphql-axum = "7.2.1"
+axum = { version = "0.8.9", features = ["multipart"] }
+base64 = "0.23.1"
+clap = { version = "4.6.6", features = ["derive"] }
+diesel = { version = "2.3.12", features = [
+  "postgres",
+  "r2d2",
+  "chrono",
+  "uuid",
+  "serde_json",
+] }
+dotenvy = "0.15.7"
+tokio = { version = "1.53.1", features = ["full"] }
+tower-cookies = { version = "0.11.0", features = ["private"] }
+tower-http = { version = "0.7.0", features = [
+  "fs",
+  "trace",
+  "cors",
+  "compression-br",
+  "compression-gzip",
+] }
+tracing = "0.1.44"
+tracing-bunyan-formatter = "0.3.10"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
+uuid = { version = "1.26.0", features = ["serde", "v7"] }
+serde = { version = "1.0.229", features = ["derive"] }
+reqwest = { version = "0.13.4", default-features = false, features = [
+  "form",
+  "json",
+  "rustls",
+] }
+thunderforge_canvas_core = { path = "../../crates/thunderforge-canvas-core" }
+thunderforge_pg = { path = "../../crates/thunderforge-pg" }
+thunderforge_pg_sockets = { path = "../../crates/thunderforge-pg-sockets" }
+thunderforge_presence = { path = "../../crates/thunderforge-presence" }
+thunderforge_crucible = { path = "../../crates/thunderforge-crucible" }
+
+# Linked for their `inventory::submit!` blocks alone — see `system_packs.rs`.
+[dependencies.dnd5e_server]
+path = "../../packs/systems/dnd5e/server"
+package = "dnd5e-server"
+
+[dependencies.genie_server]
+path = "../../packs/systems/genie/server"
+package = "genie-server"
+
+[dependencies.pathfinder2e_server]
+path = "../../packs/systems/pathfinder2e/server"
+package = "pathfinder2e-server"
+
+[dependencies.cypher_server]
+path = "../../packs/systems/cypher_system/server"
+package = "cypher-server"
+
+[dependencies.fate_server]
+path = "../../packs/systems/fate_core/server"
+package = "fate-server"
+
+[dependencies.blades_server]
+path = "../../packs/systems/blades_in_the_dark/server"
+package = "blades-server"
+
+[dependencies.yze_server]
+path = "../../packs/systems/year_zero_engine/server"
+package = "yze-server"

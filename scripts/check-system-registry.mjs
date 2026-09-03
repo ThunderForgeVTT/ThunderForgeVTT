@@ -21,7 +21,7 @@
  *
  * # What is allowed, and why
  *
- * `src/server/src/system_packs.rs` is exempt. It holds one `use <pack> as _;`
+ * `src/app/src/system_packs.rs` is exempt. It holds one `use <pack> as _;`
  * line per bundled pack, and those lines are load-bearing for a reason that
  * was measured rather than assumed: a statically linked Rust crate nothing
  * references is never linked, and its `inventory` submissions vanish with it.
@@ -68,7 +68,16 @@ function bundledSystemIds() {
  * wired with `#[path]`, excluded here.
  */
 function sharedServerSources() {
-  const root = path.join(repoRoot, "src", "server", "src");
+  // Two roots since the crate split: `src/server` is the server as a library
+  // and `src/app` is the binary that composes it with the packs. Both are
+  // shared code, and the binary is *especially* worth scanning — it is the one
+  // place that legitimately knows packs exist, which makes it the comfortable
+  // place for knowledge that should not be there. Missing it would have left
+  // the rule enforced on the larger half and unenforced on the tempting one.
+  const roots = [
+    path.join(repoRoot, "src", "server", "src"),
+    path.join(repoRoot, "src", "app", "src"),
+  ];
   const out = [];
   const walk = (dir) => {
     for (const entry of readdirSync(dir)) {
@@ -80,12 +89,16 @@ function sharedServerSources() {
       }
     }
   };
-  walk(root);
+  for (const root of roots) walk(root);
   return out.filter((file) => {
     const name = path.basename(file);
     return (
-      // The linkage module, exempt for the reason in its own header.
+      // The linkage modules, exempt for the reason in their own headers: one
+      // `use <pack> as _;` line each, carrying no information that can drift.
+      // `system_packs.rs` links the application; `test_packs.rs` links this
+      // library's test binary, which links nothing on its own.
       name !== "system_packs.rs" &&
+      name !== "test_packs.rs" &&
       // Test-support fixtures have to name systems to build one.
       name !== "test_support.rs" &&
       // This crate keeps some test modules in sibling `*_tests.rs` files
