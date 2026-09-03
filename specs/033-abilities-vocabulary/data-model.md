@@ -93,7 +93,7 @@ AbilityTypeDeclaration
 ├── label / plural_label: String  # never empty; falls back to the id
 ├── order: i32
 ├── builtin: bool                 # true for the four; a GM cannot tell
-├── binds: Character | Item | Nothing
+├── binds: Character | Item | Nothing   # exactly one, never a set
 └── grade: Option<{ label, min, max }>
 ```
 
@@ -109,12 +109,20 @@ AbilityTypeDeclaration
    behaviour `abilityFacets.ts:78-110` already implements.
 6. Two declarations irreconcilably claiming one identity are reported **at
    assembly** (FR-015), not when a GM first authors one.
+7. A built-in is **present** when the system declares or re-labels it, or when
+   the world holds at least one ability of that type (FR-011a). Presence is
+   therefore a function of the world as well as the system — which is why the
+   vocabulary is assembled per world and not cached per system.
 
 ### Unrecognised-Type Ability
 
 A stored ability whose `classification` is not in the assembled vocabulary. A
 **presentation state**: nothing about the row changes when it enters or leaves
 this state, and switching the system back restores it exactly (FR-036, SC-008).
+
+Presented as a **final tab** in the same tab set, only while such abilities
+exist, offering no creation, and labelled with the stored identity itself
+(FR-035, FR-035a).
 
 This is the state that today's `unwrap_or(AbilityClassification::Spell)` at
 `types.rs:1210` silently erases, and it is why that fallback goes.
@@ -123,9 +131,13 @@ This is the state that today's `unwrap_or(AbilityClassification::Spell)` at
 
 Counted per world when a system-change confirmation opens; never stored.
 
+**Actors, abilities and items only.** Scenes and lore are excluded: every world
+ships with a default scene (spec 010), so counting scenes would make every
+world non-empty and FR-029's one-click path unreachable.
+
 ```text
 ContentInventory
-├── counts: [ { kind, system_id, count } ]   # actors, abilities, items, …
+├── counts: [ { kind, system_id, count } ]   # actors, abilities, items — and nothing else
 ├── becoming_unrecognised: u32               # requires the target vocabulary (FR-037)
 └── digest: String                           # over the above; see the guard contract
 ```

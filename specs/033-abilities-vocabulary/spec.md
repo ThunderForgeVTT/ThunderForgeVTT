@@ -29,6 +29,18 @@ if only one half exists.
 
 ---
 
+## Clarifications
+
+### Session 2026-09-03
+
+- Q: When a system declares its own ability types, should the four built-in types still get a tab even if that system has no use for them? → A: A built-in gets a tab when the system declares or re-labels it, **or** when the world holds at least one ability of that type. Unused-and-empty built-ins are not shown; content is never hidden.
+- Q: Which kinds of thing count as "content" when deciding whether a world switches system without the warning? → A: Actors, abilities and items only. Scenes and lore do not count, so a world holding only its auto-created default scene is empty and switches in one click.
+- Q: Can one ability be attached to a character and an item at the same time? → A: No. A type declares exactly one binding target, so an ability of that type can only ever attach to that one kind of subject.
+- Q: What label is shown for an ability whose type the active system does not recognise? → A: The stored type identity itself, presented plainly, inside a section that explains these types are not recognised. No other system's manifest is consulted, and no label is copied onto the ability.
+- Q: Where do abilities of unrecognised types appear — a tab in the same row, or a separate area? → A: A final tab in the same row, shown only when such abilities exist, clearly marked, offering no creation.
+
+---
+
 ### User Story 1 - The compendium breaks out ability types, in the system's own words (Priority: P1)
 
 A GM opens their world's compendium. Today they find a single flat list of
@@ -318,6 +330,14 @@ does the reverse.
 - **FR-011**: The set of ability types available in a world MUST be the union of
   the application's built-in types and the types declared by that world's active
   game system.
+- **FR-011a**: A built-in type MUST be presented as a tab when the active system
+  declares or re-labels it, **or** when the world holds at least one ability of
+  that type. A built-in that the active system does not use and the world has no
+  abilities of MUST NOT be shown. This makes the union a rule about what may be
+  *authored*, and presence a rule about what is *shown* — a 5e world does not
+  carry empty "Powers" and "Talents" tabs it can never clear, and no ability is
+  ever hidden by the rule, because holding one is itself sufficient to show the
+  tab.
 - **FR-012**: Adding a new ability type for one game system MUST NOT require
   modifying anything shared with other game systems. This MUST be verifiable by
   an automated repository check, in the manner ADR-054 established for
@@ -336,12 +356,17 @@ does the reverse.
   blank or missing label.
 - **FR-017**: The four ability types that exist today MUST remain permanently
   available as built-ins. Existing worlds and existing abilities MUST require no
-  migration, no re-typing and no GM action.
+  migration, no re-typing and no GM action. "Available" is about what may be
+  authored and what remains readable, not about tab presence — see FR-011a.
 
 **Binding and grading facets (User Story 4)**
 
 - **FR-018**: An ability type MUST be able to declare what an ability of that
-  type may be attached to: a character, an item, or nothing.
+  type may be attached to: a character, an item, or nothing. The choice is
+  **exclusive** — a type names exactly one target, so an ability of that type is
+  never attachable to both. This keeps FR-019's refusal a single comparison
+  against the declared facet rather than a set membership test, and it keeps a
+  Spell a thing characters have and an Enchantment a thing items carry.
 - **FR-019**: The application MUST refuse to attach an ability to a subject its
   type does not permit, and MUST enforce that refusal at the data boundary, not
   only in the interface.
@@ -380,7 +405,13 @@ does the reverse.
   unless the request carries the acknowledgement the confirmation flow collects,
   so the guard cannot be bypassed by invoking the operation directly.
 - **FR-029**: A world containing no authored content MUST be switchable without
-  the red warning and without a second confirmation.
+  the red warning and without a second confirmation. "Authored content" means
+  **actors, abilities and items** — the kinds FR-025 counts. Scenes and lore
+  entries do not count: every world is created with a default scene already
+  made, so counting scenes would mean no world is ever empty, this requirement
+  could never fire, and a GM would meet the red warning on a world they created
+  a minute earlier. A warning shown when nothing is at stake is one people learn
+  to click through.
 - **FR-030**: Selecting the system the world already uses MUST be a no-op with
   no warning.
 - **FR-031**: Only a world's DM (Owner or GM) MUST be able to change its system;
@@ -396,7 +427,18 @@ does the reverse.
   system MUST remain listed, viewable, editable and deletable by its GM. It MUST
   NOT be hidden, deleted or silently assigned a different type.
 - **FR-035**: Such abilities MUST be grouped under a clearly-marked section for
-  unrecognised types, each labelled with the type identity it was authored under.
+  unrecognised types, each labelled with the type identity it was authored under
+  — the stored identity itself, shown plainly. The application MUST NOT read
+  another system's manifest to find a prettier label, and MUST NOT copy a label
+  onto the ability at authoring time: the first consults a system the world is
+  not running, and the second duplicates the manifest into content, where it
+  goes stale the moment that pack re-labels the type.
+- **FR-035a**: That section MUST be a final tab in the same tab set as the
+  recognised types, present only when the world holds at least one such ability,
+  and MUST NOT offer creation — FR-013 forbids authoring a type the active
+  system does not recognise. It carries a count like any other tab, so a GM has
+  one place to look for a world's abilities rather than a tab set plus an
+  exception below it.
 - **FR-036**: Such abilities MUST return to their own tab, with the system's
   labels, when a system recognising their type is active again.
 - **FR-037**: The counts in FR-025's warning MUST include abilities that will

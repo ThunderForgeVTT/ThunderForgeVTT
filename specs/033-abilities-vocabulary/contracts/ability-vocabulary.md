@@ -36,14 +36,21 @@ required, and every part is optional.
 | `types[].id` | Stable identity. Matches a built-in to re-label it; anything else adds a type | — (required) |
 | `types[].label` / `pluralLabel` | What a person reads | The id, never blank |
 | `types[].order` | Display order of the tab | Declaration order, after the built-ins |
-| `types[].binds` | `character`, `item`, or `nothing` | `character` |
+| `types[].binds` | `character`, `item`, or `nothing` — **exactly one**, never a list | `character` |
 | `types[].grade` | `{ label, min, max }` — the system's word for an ordered value and its range | The type is ungraded, and no surface shows a grade for it |
 
 ## The four built-in types
 
-`spell`, `feat`, `power`, `talent`. **Permanently available** (FR-017), in
-every world, whatever the system says. Declaring one of these ids re-labels it;
-it does not create a second tab and it does not remove the built-in.
+`spell`, `feat`, `power`, `talent`. **Permanently available** for authoring
+(FR-017) — declaring one of these ids re-labels it, and never creates a second
+tab.
+
+**A built-in is shown when the system uses it, or when the world holds one**
+(FR-011a). A built-in the active system neither declares nor re-labels, and of
+which the world holds no abilities, gets no tab. So a 5e pack declaring Spells,
+Feats and Enchantments does not saddle every 5e world with permanently empty
+"Powers" and "Talents" tabs — and no ability is ever hidden by this rule,
+because holding one is itself enough to show the tab.
 
 A system that declares nothing gets all four, correctly labelled, in a complete
 tab set. That is not a degraded mode — it is what most systems will want.
@@ -87,8 +94,14 @@ world is running. When the active system does not recognise that type, the
 ability:
 
 - stays listed, viewable, editable and deletable by its GM;
-- appears in a clearly-marked section for unrecognised types, labelled with the
-  identity it was authored under;
+- appears in a **final tab** in the same tab set, present only while such
+  abilities exist, clearly marked, and offering no creation — FR-013 forbids
+  authoring a type the active system does not recognise;
+- is labelled with the **stored identity itself**, shown plainly. No other
+  system's manifest is consulted to prettify it, and no label is copied onto the
+  ability at authoring time: the first reads a system this world is not running,
+  and the second duplicates the manifest into content, where it goes stale as
+  soon as that pack re-labels the type;
 - returns to its own tab, with the system's labels, when a system recognising
   it is active again;
 - is **never** re-typed automatically. A GM may re-type it deliberately, and

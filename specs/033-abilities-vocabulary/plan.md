@@ -254,6 +254,28 @@ never automatic. The FR-025 counts include what will become unrecognised.
 *Checkpoint*: switch a 5e world with Enchantments to Genie and back; nothing is
 renamed, re-typed or lost, and the count in the warning said so beforehand.
 
+## Clarifications applied (2026-09-03)
+
+`/speckit-clarify` ran after this plan rather than before it, and five answers
+landed. Three changed the design; all five are in `spec.md` § Clarifications.
+
+- **A built-in type is shown when the system uses it, or when the world holds
+  one** (FR-011a, new). The literal union in FR-011 would have given every 5e
+  world permanently empty "Powers" and "Talents" tabs. Presence is now a
+  function of the world as well as the system, which is why the vocabulary is
+  assembled per world and cannot be cached per system.
+- **"No content" means actors, abilities and items** (FR-029, tightened).
+  Scenes and lore are excluded because every world is created with a default
+  scene, so counting them would make FR-029's one-click path unreachable and
+  put the red warning in front of a GM on a world a minute old.
+- **A type binds to exactly one subject** (FR-018, tightened). FR-019's refusal
+  is a comparison, not a set membership test.
+- **An unrecognised type is labelled with its stored identity**, plainly
+  (FR-035). No other system's manifest is read, and no label is copied onto the
+  ability.
+- **The unrecognised group is a final tab in the same row** (FR-035a, new),
+  present only while such abilities exist, offering no creation.
+
 ## Risks
 
 - **The CHECK constraint's removal is the part that can break quietly.** The

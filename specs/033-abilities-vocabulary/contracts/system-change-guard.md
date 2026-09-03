@@ -106,6 +106,12 @@ weaken both.
 ## What "empty" means
 
 A world with zero actors, zero abilities and zero items switches with no
-warning and one action (FR-029). This is the common case — a GM configuring a
-world they just made — and it must stay cheap, or the guard becomes something
-people learn to click through before it ever protects anything.
+warning and one action (FR-029).
+
+**Scenes and lore do not count**, and that is load-bearing rather than an
+oversight. Spec 010 guarantees every world is created with a default scene
+already made, so counting scenes would mean no world is ever empty, FR-029
+could never fire, and a GM would meet the red warning on a world they created a
+minute earlier. This is the common case — a GM configuring a world they just
+made — and it must stay cheap, or the guard becomes something people learn to
+click through before it ever protects anything.

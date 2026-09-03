@@ -43,6 +43,14 @@ Then a system that declares nothing — **blades_in_the_dark**:
    the one most likely to be broken by a change that only ever got tested
    against genie.
 
+Then the rule that keeps the tab set honest (FR-011a) — a system that declares
+some built-ins but not others:
+
+8. **Expected**: a built-in the system neither uses nor the world holds any of
+   gets **no tab**. Author one ability of that type. **Expected**: the tab
+   appears. Delete it again. **Expected**: the tab goes. Presence follows use,
+   and content is never hidden.
+
 ---
 
 ## 2. The guarded switch (US2)
@@ -66,9 +74,12 @@ Then a system that declares nothing — **blades_in_the_dark**:
 8. Switch back. **Expected**: everything visible again, nothing renamed or
    re-typed (SC-008).
 
-**On a fresh, empty world:**
+**On a fresh, empty world** — one created a minute ago and not touched:
 
-9. **Expected**: no red warning, one action, done (FR-029).
+9. **Expected**: no red warning, one action, done (FR-029). Its auto-created
+   default scene does **not** make it non-empty; only actors, abilities and
+   items count. If this world gets the warning, the empty check is counting
+   scenes and FR-029 has become unreachable.
 
 **Selecting the system already active:**
 
@@ -93,11 +104,12 @@ curl -s -b cookies -X POST localhost:5173/api/graphql \
 
 1. In a 5e world, author an ability of a 5e-declared type (an Enchantment).
 2. Switch the world to genie, acknowledging the warning.
-3. **Expected**: the Enchantment is **still listed**, under a marked
-   unrecognised-types section, labelled with the identity it was authored
-   under. It opens, it edits, it deletes. It is **not** shown as a Spell — the
-   behaviour today's `unwrap_or(AbilityClassification::Spell)` would produce,
-   and the thing FR-034 forbids.
+3. **Expected**: the Enchantment is **still listed**, in a **final tab** of the
+   same tab row, clearly marked as unrecognised and offering no creation. It is
+   labelled `enchantment` — the stored identity, plainly, not a label fetched
+   from 5e's manifest. It opens, it edits, it deletes. It is **not** shown as a
+   Spell — the behaviour today's `unwrap_or(AbilityClassification::Spell)`
+   would produce, and the thing FR-034 forbids.
 4. **Expected**: the warning in step 2 counted it (FR-037).
 5. Switch back to 5e. **Expected**: it returns to its own tab with its own
    label, unchanged (SC-008).
@@ -118,7 +130,8 @@ curl -s -b cookies -X POST localhost:5173/api/graphql \
 4. Attach an item-binding ability to an item. **Expected**: it appears on the
    item, beside that item's effects, identified as what it is, not duplicated.
 5. Attach it to a character instead — through the API, bypassing the interface.
-   **Expected**: refused server-side (FR-019, SC-011).
+   **Expected**: refused server-side (FR-019, SC-011). A type binds to exactly
+   one kind of subject, so there is no arrangement in which both succeed.
 
 ---
 
