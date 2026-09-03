@@ -99,4 +99,52 @@ mod tests {
              about the ruleset rather than an omission"
         );
     }
+
+    /// A pack's world-creation hook reaches the registry, in the binary where
+    /// the linkage is the real one.
+    ///
+    /// This cannot be asserted in `thunderforge-server`'s own tests:
+    /// `inventory` collects into one compiled crate instance, and `cargo test`
+    /// builds that library a second time under `cfg(test)` while the packs
+    /// were built against the first. Here there is one of everything.
+    ///
+    /// It matters because a hook that is never collected looks exactly like a
+    /// system that contributes nothing — world creation succeeds, quietly
+    /// missing whatever the pack meant to do.
+    #[test]
+    fn a_pack_contributes_a_world_creation_hook() {
+        let hooks: Vec<&str> = thunderforge_server::world_hooks::hooks()
+            .map(|hook| hook.system_id)
+            .collect();
+
+        assert!(
+            !hooks.is_empty(),
+            "no world-creation hook was collected; if the `use <pack> as _;` \
+             lines above are gone, every pack's hooks vanish with them"
+        );
+    }
+
+    /// Every contributed hook belongs to a pack this build actually has.
+    ///
+    /// A hook for a system with no manifest on disk would run against worlds
+    /// nobody can create, which is dead code that looks live.
+    #[test]
+    fn every_hook_belongs_to_a_bundled_system() {
+        let installed: Vec<String> = std::fs::read_dir(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../packs/systems"),
+        )
+        .expect("packs/systems must exist")
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().is_dir())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+
+        for hook in thunderforge_server::world_hooks::hooks() {
+            assert!(
+                installed.iter().any(|id| id == hook.system_id),
+                "a hook claims {:?}, which is not a pack in packs/systems",
+                hook.system_id
+            );
+        }
+    }
 }

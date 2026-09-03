@@ -19,9 +19,8 @@
 //! Splitting the migration directory is a separate decision — Diesel reads one
 //! per invocation — and nothing about owning the *declaration* depends on it.
 
-use thunderforge_server::schema::{
-    users, world_actor_inventory, world_actors, world_items, worlds,
-};
+// Named only so `joinable!` below can point this pack's foreign keys at them.
+use thunderforge_server::schema::{users, world_actors, world_items, worlds};
 
 diesel::table! {
     world_genie_puzzle_clock_rewards (id) {

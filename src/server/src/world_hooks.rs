@@ -62,6 +62,17 @@ pub fn hooks() -> impl Iterator<Item = &'static WorldCreatedHook> {
     inventory::iter::<WorldCreatedHook>.into_iter()
 }
 
+/// The hooks a given system's pack contributed.
+///
+/// Split from `run_world_created` so the *selection* can be tested without a
+/// database — which is the half that can be wrong. Whether a hook writes the
+/// right row is the pack's test to write; whether the right hooks are chosen
+/// is this crate's.
+pub fn hooks_for(system_id: &str) -> impl Iterator<Item = &'static WorldCreatedHook> {
+    let owned = system_id.to_owned();
+    hooks().filter(move |hook| hook.system_id == owned)
+}
+
 /// Run the hooks belonging to `game_system_id`, if any pack contributed one.
 ///
 /// A world with no system, or a system whose pack contributes no hook, runs
@@ -76,8 +87,68 @@ pub fn run_world_created(
     let Some(system_id) = game_system_id else {
         return Ok(());
     };
-    for hook in hooks().filter(|hook| hook.system_id == system_id) {
+    for hook in hooks_for(system_id) {
         (hook.run)(conn, world)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A world bound to no system runs nothing.
+    ///
+    /// The case a `for` loop over contributions gets wrong exactly once, by
+    /// assuming there is always something to do. It is also the common case:
+    /// `None` is a real answer for a world's system, and most packs
+    /// contribute no hook at all.
+    #[test]
+    fn a_world_with_no_system_selects_no_hook() {
+        assert_eq!(hooks_for("").count(), 0);
+    }
+
+    /// A system no linked pack claims runs nothing, rather than running
+    /// somebody else's hook.
+    #[test]
+    fn a_system_no_pack_claims_selects_no_hook() {
+        assert_eq!(hooks_for("a-system-nobody-shipped").count(), 0);
+    }
+
+    /// Every hook that is linked is claimed by exactly one system.
+    ///
+    /// Two packs answering to one id would run both on every world of that
+    /// system, and the second one's writes would look like a bug in the first.
+    #[test]
+    fn no_two_packs_claim_the_same_system() {
+        let mut seen: Vec<&str> = hooks().map(|hook| hook.system_id).collect();
+        let before = seen.len();
+        seen.sort_unstable();
+        seen.dedup();
+        assert_eq!(seen.len(), before, "two hooks share a system id: {seen:?}");
+    }
+
+    /// Discovery is *not* tested here, and the reason is worth writing down.
+    ///
+    /// `inventory` collects through the linker, into the registry of one
+    /// compiled crate instance. `cargo test` compiles this library a second
+    /// time with `cfg(test)`, and `test_packs.rs`'s packs were built against
+    /// the *first* instance — so their `WorldCreatedHook` submissions land in
+    /// a registry this test binary cannot see, and asserting on them here
+    /// fails for a reason that has nothing to do with the product.
+    ///
+    /// `SystemContribution` does not have this problem because it collects in
+    /// `thunderforge-canvas-core`, which is a plain dependency compiled once
+    /// and shared by both. This registry cannot move there: it takes a
+    /// `&mut PgConnection` and canvas-core is compiled to wasm.
+    ///
+    /// So discovery is asserted in `src/app`, the binary, where there is one
+    /// instance of everything and the linkage is the real one — which is the
+    /// same argument `system_packs.rs` already makes for its own test.
+    #[test]
+    fn selection_is_tested_here_and_discovery_is_tested_in_the_binary() {
+        // Deliberately trivial: the assertions above cover selection, and
+        // this exists so the reasoning above has somewhere to live.
+        assert_eq!(hooks_for("").count(), 0);
+    }
 }

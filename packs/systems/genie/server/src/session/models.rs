@@ -5,7 +5,6 @@
 //! Clock, and holding one is what made `models.rs` a place every ruleset
 //! eventually adds to.
 
-use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 
