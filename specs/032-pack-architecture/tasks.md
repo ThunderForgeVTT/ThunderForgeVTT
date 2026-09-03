@@ -14,7 +14,9 @@ scoped User Story 1 as colours and spacing. This one is roughly twice its size,
 which is the honest consequence of "the system computes, the interface
 arranges" and not a change of ambition.
 
-**Scope**: **User Story 1**, plus the interface-pack half of User Story 3.
+**Scope**: **User Story 1**, plus the interface-pack half of User Story 3 —
+and, since 2026-09-03, **User Story 2** as Increment F. See
+[Phase 5d](#phase-5d-increment-f--user-story-2-priority-p2).
 
 **ADR-029 is now written (2026-09-03), and the gate has moved.** It ratifies
 what three ADRs had already established in practice: packs from outside the
@@ -30,9 +32,11 @@ makes the validator's tests part of the requirement. `derive` being pure is
 likewise a property, not a preference — two viewers of one character seeing
 two sheets is the failure it prevents.
 
-**Organization**: Four increments from plan.md. A and B are prerequisites with
+**Organization**: Six increments from plan.md. A and B are prerequisites with
 nothing a Game Master can see; that is stated rather than disguised. C is the
-MVP checkpoint. D is where it gets hard.
+MVP checkpoint. D is where it gets hard, E grew the vocabulary to cover a whole
+sheet, and F is User Story 2 — three of whose six scenarios A–E already
+satisfied.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -242,6 +246,111 @@ tests because it could not build them. See `docs/test-audit-2026-09-02.md`.
 
 ---
 
+## Phase 5d: Increment F — User Story 2 (Priority: P2)
+
+Planned 2026-09-03, after ADR-029 closed the gate. **Three of User Story 2's
+six acceptance scenarios already pass** — a system's sheet mounts with no
+shared branch naming it, two worlds render structurally different sheets, and
+a system declaring no sheet gets Forge's generic one. Increments A–E did that,
+and saying so is what keeps this increment honest about its actual size.
+
+**Independent test**: bind two worlds to two bundled systems, add a third
+system by dropping a directory under `packs/systems/` and changing nothing
+else, and confirm all three are offered, mount, and fail independently.
+
+**Story goal**: the shared application stops knowing which systems exist, a
+pack contributes behaviour rather than only declarations, a failing pack
+surface is contained and named, and the contract exists for authors.
+
+### F1 — The application stops knowing which systems exist (FR-005, SC-004)
+
+- [X] T085 [US2] Replace the `game_systems` table query in `list_systems` (`src/server/src/systems.rs:31`) with a directory listing over `state.directories.systems_dir`, modelled line for line on `interface_packs::list_installed` — read each `<id>/system.json`, project `id`, `title`, `description` and `version`, sort by title, and omit a pack whose manifest fails to parse rather than listing something that cannot be chosen. The route path `/api/systems` and its response shape stay put so the client change is separable
+- [X] T086 [US2] Decide what `packs/systems/basic-game-system/` is, because a directory listing offers **eight** systems where `BUNDLED_SYSTEM_IDS` named seven. It has a complete manifest — `abilities`, `resources`, `skills`, `sheet`, `turnStructure`, a compliant `legal` — so under Increment E's rules it renders a real sheet, but its own description calls it "a blank-slate template ... meant to be forked". Either it is genuinely selectable and every picker gains a row, or the manifest declares itself a template and `list_installed` honours that **declaration** — never a name in shared code. Record the answer where a pack author will find it (T104)
+- [X] T087 [US2] Give `load_game_systems` (`src/server/src/graphql/helpers.rs:218`) the same directory source, or delete the `gameSystems` GraphQL field outright if `src/server/src/graphql.rs:277`'s export is its only reader. Two code paths answering "which systems exist" from two stores is the asymmetry this increment is closing, and fixing one of them leaves the bug with a second address
+- [X] T088 [US2] Add `listGameSystems(): Promise<GameSystemSummary[]>` to `apps/web/src/api/gameSystems.ts` fetching `/api/systems`, mirroring `listInterfacePacks()` including its `readJson` error handling, and **delete `BUNDLED_SYSTEM_IDS`, `BUNDLED_SYSTEM_LABELS` and the comment that explains why they exist**. That comment is the deleted requirement: "there is no reconciled installed system packs catalog yet"
+- [X] T089 [US2] Move the three consumers onto the fetched list: the picker in `apps/web/src/pages/world/CreateWorldPage.tsx:141`, the picker in `apps/web/src/pages/world/settings/WorldSystemSettingsPage.tsx:281`, and `apps/web/src/pages/world/settings/WorldAppearanceSettingsCard.tsx:53`, which maps a pack's `targets` through `BUNDLED_SYSTEM_LABELS` for display. The card needs an id→title map from the same fetch; note it renders a *label for a pack's target*, so a system the deployment does not have must still read as something rather than vanish
+- [X] T090 [US2] `CreateWorldPage`'s `useState("genie")` default is a system name in shared web code by another route. The realm's `default_game_system_id` already lives in the config manifest (T014a3) and is the operator's answer; take the default from what the server reports rather than from a literal, and let "no system" stay a real answer
+- [X] T091 [US2] [P] Fix the two references that outlive the constants: `apps/web/src/api/interfacePacks.ts:9`, whose header cites `BUNDLED_SYSTEM_IDS` as the asymmetry it is unlike, and `apps/web/e2e/onboarding-flow.spec.ts:165`, which names it in a comment. Both become descriptions of a thing that no longer exists
+- [X] T092 [US2] [P] Add a server test beside `get_system_manifest_serves_a_manifest_with_valid_legal` in `src/server/src/systems.rs` proving `list_systems` reports a system written into a temp `systems_dir` and never seeded into `game_systems`, and omits a directory whose `system.json` is malformed. Mutation-test it: break the sort, break the omission, watch each fail with the right message
+- [X] T093 [US2] Write ADR-028 — `docs/adrs/` currently holds it as an empty stub, and T085 makes it a live question: what is the `game_systems` **table** for, if `packs/systems/` is the row of record? Record the answer research §F-1 expects (the directory is authoritative; the table is premature, since a row per installed system earns its place only when a system can be installed at runtime, which ADR-029 says it cannot), whether the table is dropped or reserved, and what would change the answer. Index it in `docs/adrs/README.md`
+
+### F2 — A pack contributes behaviour, not only declarations (FR-004)
+
+**Spiked 2026-09-03. The answer is recorded in ADR-063, and the work is
+larger than this increment.** The spike is what the plan asked for and its
+result is not what the plan expected, so the tasks below are rewritten rather
+than ticked.
+
+What was expected: choose a shape for a world-creation hook, add it to
+`SystemContribution`, implement it in `genie-server`, delete twenty lines from
+`graphql.rs`.
+
+What measuring found: **Genie's session domain already lives in the shared
+server, and it is 2,763 production lines** — `graphql/mutations_genie_session.rs`
+(2,385 lines, thirteen mutations: Wish Pool, Doom Clock, Puzzle Clocks,
+Session Resources, shop listings, two-party trades) and
+`graphql/queries/genie_session.rs` (378), reaching six `world_genie_*` tables
+through the server's generated `schema.rs`, plus fourteen models and one event
+code. `check-system-registry.mjs` passes over all of it honestly: those files
+quote `"genie"` only inside `#[cfg(test)]`, which is correctly exempt. The
+check measures what it says it measures; this is a larger thing standing
+beside it.
+
+So the world-creation insert is twenty lines of a 2,763-line problem, and the
+shape that resolves it properly — a pack owning its tables, with
+`print_schema`'s `except_tables` keeping them out of the server's schema
+(verified available in `diesel_cli` 2.3.12) — **cannot be applied to one table
+for one hook**: excluding those six tables breaks the 2,763 lines on the next
+build. Shape 3 is now closed rather than open: the server would have to write
+to a table with bespoke columns it does not know, which is either
+pack-supplied SQL or a generic key-value store, and either way it addresses
+only the insert.
+
+- [X] T094 [US2] **Done — the spike ran and answered.** Three shapes evaluated against the code rather than in the abstract; `diesel_cli` 2.3.12 confirmed to support `filter = { except_tables = [...] }`; shape 3 shown to be unable to express the row; and the 2,763-line footprint measured, which is the finding that changes the plan
+- [X] T095 [US2] **Done — ADR-063 (`docs/adrs/20260903-063-a_pack_owns_the_tables_it_writes.md`), indexed in `docs/adrs/README.md`.** Records the destination (a pack owns the tables it writes), the two rejected shapes with why, the rejected-outright dodge (moving the branch into `system_packs.rs`, the one file the checker exempts), the sizing, and what would change the answer
+- [X] T099 [US2] **Done, differently than written.** The `graphql.rs` entry stays in `KNOWN` — removing it was conditional on the hook landing — but its stated reason was false: it said User Story 2 is "gated on ADR-029", which ADR-029 settled. It now cites ADR-063 and says what the block actually is
+- [ ] T096 [US2] **Blocked on the move below, and deliberately not done.** Adding `on_world_created` to `SystemContribution` whose only implementation cannot own its table would turn `check-system-registry.mjs` green without making anything true. Do this *after* Genie's tables move, when the hook is small
+- [ ] T097 [US2] **Blocked, as T096.** Implementing the hook in `packs/systems/genie/server/` means `genie-server` gains `diesel` and a `table!` for a table the server also declares — the two-declarations-for-one-table drift Increments A–E spent their length removing
+- [ ] T098 [US2] **Blocked, as T096.** The `is_genie_world` branch in `src/server/src/graphql.rs` stays until there is a hook that can replace it honestly
+- [ ] T100 [US2] **Blocked, as T096.** The discovery test has nothing to discover yet
+- [ ] T014a2 **Re-scoped, not closed.** No longer "needs the world-creation hook User Story 2 would provide" and no longer gated on ADR-029. It needs Genie's session domain to move into its pack, which is an increment with its own research — including the question this codebase has not answered: **how a pack contributes GraphQL mutations**, given `async-graphql` composes its schema from types named at compile time, which is a registry again and ADR-061's argument applies to it unchanged
+
+### F3 — A pack's failure is contained and named (FR-016, SC-009)
+
+`apps/web` has no error boundary at all — no `componentDidCatch`, no
+`getDerivedStateFromError`, nothing (verified 2026-09-03). `PackActorSheet`
+catches a *fetch* rejection; a surface that throws while rendering takes the
+page and names nothing.
+
+- [X] T101 [US2] Add `apps/web/src/appearance/PackSurfaceBoundary.tsx` — a class component with `getDerivedStateFromError`, taking the pack id it wraps and rendering a named message in its place. Not a boundary at the app root: that satisfies "does not crash" and fails "the rest of the session remains usable", because the whole page is the thing replaced. `MissingPackNotice` is the tonal precedent — name the pack, block nothing
+- [X] T102 [US2] Wrap each mounted pack surface in it, starting with `PackActorSheet` in `apps/web/src/pages/world/actor/`, passing the pack id the appearance context resolved rather than the one the world *names* — a world falling back to Forge should say Forge failed, because Forge is what rendered
+- [X] T103 [US2] [P] Add a vitest that a throwing child renders the boundary's message with the pack named, and a Playwright spec that injects a throwing surface and confirms the surrounding session stays usable — navigation, the world nav, and a second surface all still work. SC-009 measures those two things **separately**, so assert them separately
+
+### F4 — The contract exists as a document (FR-015, SC-010)
+
+- [X] T104 [US2] Write `packs/systems/README.md`, modelled on `packs/interface/README.md`, describing every declaration block a system pack may carry — `abilities`, `abilityFacets`, `resources`, `skills`, `movement`, `sheet`, `groups`, `conditions`, `sizeCategories`, `turnStructure`, `data_types`, `legal` — and every hook it may contribute, including T096's. Written for an author who has not read shared application source, which is what SC-010 measures. Note per block which systems actually use it: `groups` is Fate's, `movement` is absent from Fate entirely, and absence is a fact about the ruleset rather than an omission
+- [X] T105 [US2] [P] Document the two things a pack has that are not declarations — the `server/` crate and its `SystemContribution` submission, and the `use <pack> as _;` line in `src/server/src/system_packs.rs` that keeps the linker from discarding it. That line is the one thing adding a system touches outside its own directory, and SC-004 is measured against the change set; say so plainly rather than letting an author find it by having their pack silently do nothing
+- [X] T106 [US2] [P] Add `scripts/check-pack-docs.mjs`, modelled on `check-system-registry.mjs`, failing if `packs/systems/README.md` or `packs/interface/README.md` links a path that does not exist — SC-010's "zero references to documents that do not exist" is testable rather than merely assertable. Add it as a step in `scripts/verify.mjs`
+
+### Checkpoint
+
+Amended 2026-09-03 to what F actually delivers, because the original said
+"zero outstanding violations" and F2's spike found that costs more than this
+increment holds.
+
+**Delivered**: the shared application no longer knows which systems exist — a
+system is added by creating a directory and nothing else, proved end to end
+against a running stack; an injected failure in a pack surface leaves the
+session usable and names the pack; and `packs/systems/README.md` describes
+what a pack may declare, with a check that its references exist.
+
+**Not delivered**: a pack contributing behaviour.
+`check-system-registry.mjs` still reports **one** outstanding violation, which
+is the honest state rather than a miss — see F2 and ADR-063 for what it costs
+and why it is an increment rather than a task.
+
+---
+
 ## Phase 6: Polish & Cross-Cutting Concerns
 
 - [ ] T062 Run `quickstart.md` by hand, end to end — including §1's "open a dialog", §3 step 4's light/dark check, and §6 step 4's derived-value editability check. Constitution V
@@ -253,7 +362,7 @@ tests because it could not build them. See `docs/test-audit-2026-09-02.md`.
 
 ## Deferred
 
-- **User Story 2 — system packs mounting their own surfaces (FR-004, FR-005, FR-013 to FR-016, SC-004's mounting half, SC-009, SC-010).** Deferred as scope, **no longer gated**. ADR-029 (2026-09-03) governs loading *third-party* code; `packs/systems/*/server` are Cargo workspace members compiled into the product, and the ADR states plainly that a bundled pack may contribute behaviour. This is now work to schedule rather than a decision to wait for.
+- **User Story 2 — no longer deferred.** It was deferred as scope and never gated: ADR-029 (2026-09-03) governs loading *third-party* code, `packs/systems/*/server` are Cargo workspace members compiled into the product, and the ADR states plainly that a bundled pack may contribute behaviour. It is now [Increment F](#phase-5d-increment-f--user-story-2-priority-p2). What remains deferred out of it is **FR-013 and FR-014** — a pack contributing an *editing* surface and an items/inventory presentation of its own. F contributes one behaviour and contains one surface; the surface catalogue is a separate increment.
 - **Spec 031 T076 — system-supplied turn structure.** **Never actually inside the gate.** FR-031 says turn structure is "determined by the active game system", and SC-011 that a system without rounds shows no round counter — which is a manifest *declaration* plus conditional rendering, in the shape `abilities`, `resources` and `movement` already use. No pack code is involved, and the mechanism it needed shipped with Increment A.
 - **The system-pack half of User Story 3 (FR-019 to FR-021).** Degrading a world is a different problem from degrading a look.
 - **Third-party system packs**, per FR-017's interim restriction.
@@ -272,6 +381,8 @@ tests because it could not build them. See `docs/test-audit-2026-09-02.md`.
 - **Increment B (3)**: needs A; **blocks Increment C**
 - **Increment C (4)**: needs B. MVP checkpoint
 - **Increment D (5)**: needs C. T051 blocks T052 blocks T053. T055 precedes T054
+- **Increment E (5b)**: needs C
+- **Increment F (5d)**: needs A (the contribution mechanism) and C (a mounted surface to contain). Independent of D and E
 - **Polish (6)**: needs C and D
 
 ### Within Increment A
@@ -285,6 +396,16 @@ The server half (T029–T035) and the web half (T036–T048) meet only at
 `contracts/graphql-appearance.md` and can run in parallel. T037 blocks T038,
 which blocks T039, T040, T043 and T056. T041 blocks T042. T045 needs T036 and T034.
 
+### Within Increment F
+
+Its four parts are independent of each other and can run in any order or at
+once. **F1**: T085 blocks T088, which blocks T089, T090 and T091; T086 blocks
+T085's final shape; T087 and T092 are independent; T093 wants T085 and T086
+decided. **F2** is strictly serial — T094 blocks T095 blocks T096 blocks T097
+blocks T098 blocks T099 — and T100 needs T096. **F3**: T101 blocks T102 blocks
+T103. **F4**: T104 blocks T106; T105 is independent, and T104 wants T086 and
+T096 settled so it documents what is true.
+
 ### Parallel opportunities
 
 - T001, T002, T003, T005 across Setup
@@ -292,6 +413,8 @@ which blocks T039, T040, T043 and T056. T041 blocks T042. T045 needs T036 and T0
 - T020/T021, T028 within B
 - T031, T036, T044, T049 within C
 - T056, T058, T059 within D
+- F1, F2, F3 and F4 alongside each other — four people, four parts, one merge
+- T091, T092, T100, T103, T105, T106 within F
 - The whole server half and the whole web half of Increment C, with two people
 
 ---
@@ -302,6 +425,18 @@ which blocks T039, T040, T043 and T056. T041 blocks T042. T045 needs T036 and T0
 
 Setup, A, B, C. At T050 a Game Master can dress the table and an actor renders
 in its system's shape. Stop and validate before D.
+
+### Where to start in Increment F
+
+**F1 first.** It is the smallest of the four, it closes SC-004's measurable
+half, and it deletes the last hardcoded list of systems in the product. F3 and
+F4 are independent of everything and can be picked up by anyone at any time.
+
+**F2 last, and deliberately.** It is the only part that needs a decision rather
+than typing, its cheap answer produces exactly the schema duplication five
+increments have been spent removing, and it is the one part where a rushed
+choice is worse than no choice. T094 is a spike whose output is evidence; do
+not skip it to T096.
 
 ### Why A and B come first, with nothing to show
 

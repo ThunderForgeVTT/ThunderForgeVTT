@@ -115,10 +115,10 @@ function withoutTests(source) {
  * Known violations, dated, each with the task that retires it.
  *
  * Not a hole in the check — a hole would be widening the rule so these stop
- * being violations. They *are* violations: both are shared code that decides
- * something per game system, which is precisely what FR-029 forbids. They are
- * listed because they are behavioural and pre-date this feature, and a gate
- * that fails on day one is a gate somebody turns off.
+ * being violations. Each *is* a violation: shared code that decides something
+ * per game system, which is precisely what FR-029 forbids. They are listed
+ * because they are behavioural and pre-date this feature, and a gate that
+ * fails on day one is a gate somebody turns off.
  *
  * Adding to this list requires a task id. If the list ever grows without one,
  * the check has become the thing it was written to prevent.
@@ -129,12 +129,16 @@ const KNOWN = new Map([
     {
       id: "genie",
       why:
-        "world creation inserts a genie session row (spec 032 T014a). Unlike " +
-        "the default system id — which moved to the config manifest, because " +
-        "an operator's choice is not shared code's knowledge — this one is a " +
-        "pack writing to its own table during world creation. That is a pack " +
-        "contributing behaviour, which needs the world-creation hook User " +
-        "Story 2 would provide, and User Story 2 is gated on ADR-029.",
+        "world creation inserts a genie session row (spec 032 T014a2). Not " +
+        "gated on a decision any more — ADR-029 permits a bundled pack to " +
+        "contribute behaviour, and ADR-063 settles that a pack owns the " +
+        "tables it writes. It is gated on the size of getting there: the " +
+        "pack cannot own `world_genie_sessions` while 2,763 lines of " +
+        "`graphql/mutations_genie_session.rs` and `graphql/queries/" +
+        "genie_session.rs` query that table and five siblings through the " +
+        "server's generated `schema.rs`. Moving the branch alone would " +
+        "need a second `table!` for one table, which is the drift this " +
+        "spec spent five increments removing. See ADR-063 for the sizing.",
     },
   ],
 ]);
@@ -193,5 +197,5 @@ if (stale.size > 0) {
 
 process.stdout.write(
   `[system-registry] shared server code names none of: ${ids.join(", ")}\n` +
-    `                  (${KNOWN.size} known violations outstanding, see T014a)\n`,
+    `                  (${KNOWN.size} known violation(s) outstanding, see T014a2 / ADR-063)\n`,
 );
