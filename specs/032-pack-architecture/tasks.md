@@ -83,7 +83,7 @@ can be validated until identifiers resolve, so this phase blocks that one.
 - [X] T015 [P] Add `scripts/check-system-registry.mjs`, modelled on `scripts/check-interaction-seam.mjs`, failing the build if a hand-maintained list of system identifiers reappears in shared server code — and add it as a step in `scripts/verify.mjs`
 - [X] T014a **Half done.** Of the two violations the checker found, the default system id is fixed: `prepare_world_input` now takes it as an argument and it lives in the config manifest beside the other realm defaults, where an operator already looks. A product default is not supposed to grow a branch per pack, and the way to keep that true is for that layer to know no pack's name. `None` is a real answer — a world with no system is a state the product handles.
 - [X] T014a3 Realm seed values — `DEFAULT_GAME_SYSTEM_ID` and its siblings in `src/server/src/admin.rs` — live in Rust and are written into the config manifest at bootstrap. They belong in a shipped, version-controlled config file that `default_manifest()` reads, so seeding a realm stops being a thing shared code knows. Note `src/server/data` is gitignored, so the file cannot go there; blanking the constant without a replacement makes every new world systemless on every install
-- [ ] T014a2 The remaining violation: `src/server/src/graphql.rs` inserts a genie session row during world creation. This one is not configuration — it is a pack writing to its own table, which is a pack contributing behaviour and needs the world-creation hook User Story 2 would provide. **No longer gated**: ADR-029 permits a bundled pack contributing behaviour, and genie's pack is compiled into the product. It stays in the checker's dated `KNOWN` list until the hook lands
+- [X] T014a2 **Closed 2026-09-03.** World creation no longer branches on a system id; the pack contributes a world-creation hook and the server runs whatever is linked. See Increment F2.
 - [X] T014b Every pack still declares `pub const SYSTEM_ID: &str = "..."` alongside the id it now passes to `SystemContribution::new`. Two places inside one pack naming the same thing, with nothing checking they agree. Harmless today and invisible to `check-system-registry.mjs`, which only polices shared code — but it is the same drift in miniature
 - [X] T016 [P] Server tests in `src/server/src/attributes.rs`'s test module: an actor in a Genie world reports stored and derived values through one path, and the same stored input always yields the same derived output
 
@@ -309,11 +309,27 @@ only the insert.
 - [X] T094 [US2] **Done — the spike ran and answered.** Three shapes evaluated against the code rather than in the abstract; `diesel_cli` 2.3.12 confirmed to support `filter = { except_tables = [...] }`; shape 3 shown to be unable to express the row; and the 2,763-line footprint measured, which is the finding that changes the plan
 - [X] T095 [US2] **Done — ADR-063 (`docs/adrs/20260903-063-a_pack_owns_the_tables_it_writes.md`), indexed in `docs/adrs/README.md`.** Records the destination (a pack owns the tables it writes), the two rejected shapes with why, the rejected-outright dodge (moving the branch into `system_packs.rs`, the one file the checker exempts), the sizing, and what would change the answer
 - [X] T099 [US2] **Done, differently than written.** The `graphql.rs` entry stays in `KNOWN` — removing it was conditional on the hook landing — but its stated reason was false: it said User Story 2 is "gated on ADR-029", which ADR-029 settled. It now cites ADR-063 and says what the block actually is
-- [ ] T096 [US2] **Blocked on the move below, and deliberately not done.** Adding `on_world_created` to `SystemContribution` whose only implementation cannot own its table would turn `check-system-registry.mjs` green without making anything true. Do this *after* Genie's tables move, when the hook is small
-- [ ] T097 [US2] **Blocked, as T096.** Implementing the hook in `packs/systems/genie/server/` means `genie-server` gains `diesel` and a `table!` for a table the server also declares — the two-declarations-for-one-table drift Increments A–E spent their length removing
-- [ ] T098 [US2] **Blocked, as T096.** The `is_genie_world` branch in `src/server/src/graphql.rs` stays until there is a hook that can replace it honestly
-- [ ] T100 [US2] **Blocked, as T096.** The discovery test has nothing to discover yet
-- [ ] T014a2 **Re-scoped, not closed.** No longer "needs the world-creation hook User Story 2 would provide" and no longer gated on ADR-029. It needs Genie's session domain to move into its pack, which is an increment with its own research — including the question this codebase has not answered: **how a pack contributes GraphQL mutations**, given `async-graphql` composes its schema from types named at compile time, which is a registry again and ADR-061's argument applies to it unchanged
+- [X] T096 [US2] **Done.** The hook is `WorldCreatedHook` in `src/server/src/world_hooks.rs`, not a field on `SystemContribution` in canvas-core as planned — it takes a `&mut PgConnection`, and canvas-core is compiled to wasm, so putting it beside the other contributions would have dragged Diesel into the browser. It runs inside the world-creation transaction, so a system that cannot set itself up rolls the world back rather than leaving half of one
+- [X] T097 [US2] **Done.** `packs/systems/genie/server/src/session/` — six `table!` declarations, eleven models, thirteen mutations and the queries beside them, and the hook that writes the session row with the `doom_clock_max: 6` that was that ruleset's number sitting in shared code. `diesel.toml` excludes the six tables from `print-schema`, so there is one declaration of each and regenerating cannot quietly add a second
+- [X] T098 [US2] **Done.** `is_genie_world` and its branch are gone from `src/server/src/graphql.rs`, along with `NewGenieSession` and `world_genie_sessions` from its imports. Full `cargo test` per crate, not a filtered subset
+- [X] T100 [US2] **Done, and it moved.** Selection is tested in the library; **discovery is tested in `src/app`**, because `inventory` collects into one compiled crate instance and `cargo test` builds the library a second time under `cfg(test)` while the dev-dependency packs were built against the first. Both mutation-tested: removing the pack's `submit!` fails the discovery test, and pointing the hook at a system that does not exist fails the second by name
+- [X] T014a2 **Closed.** The last game system named in shared server code is gone, and `check-system-registry.mjs` reports zero violations with nothing exempted
+
+### F2a — what the move actually required (recorded 2026-09-03)
+
+Two things the F-5 spike had not found, both discovered by doing the work
+rather than planning it:
+
+- **`allow_tables_to_appear_in_same_query!` cannot span crates.** It emits an
+  impl in each direction, so the reverse one lands on a foreign type and the
+  orphan rule refuses it. This would have been a wall had the code needed
+  cross-crate joins; it does not, which was established by removing them and
+  watching it compile.
+- **A dev-dependency cycle gives you two instances of the library.** The packs
+  linked against the normal build; the test harness compiles a second copy
+  under `cfg(test)`. Anything collected through `inventory` in the crate under
+  test is therefore invisible to its own tests. `SystemContribution` escapes
+  this only because it collects in canvas-core, which is compiled once.
 
 ### F3 — A pack's failure is contained and named (FR-016, SC-009)
 
@@ -354,29 +370,59 @@ touching eight manifests and `SystemManifest`'s required fields in
 
 ### Checkpoint
 
-Amended 2026-09-03 to what F actually delivers, because the original said
-"zero outstanding violations" and F2's spike found that costs more than this
-increment holds.
+Amended twice on 2026-09-03. It first read "zero outstanding violations",
+which F2's spike found cost more than the increment held; it was rewritten to
+say so, and then the work was done. Both amendments are left visible because
+the second only means anything beside the first.
 
-**Delivered**: the shared application no longer knows which systems exist — a
-system is added by creating a directory and nothing else, proved end to end
-against a running stack; an injected failure in a pack surface leaves the
-session usable and names the pack; and `packs/systems/README.md` describes
-what a pack may declare, with a check that its references exist.
+**Delivered, all of it**: the shared application no longer knows which systems
+exist — a system is added by creating a directory, proved end to end against a
+running stack; a pack contributes **behaviour**, with Genie's six tables,
+eleven models and 2,763 lines of GraphQL living in its own crate and a
+world-creation hook the server runs without knowing whose it is; a failing
+pack surface is contained and names the pack; and `packs/systems/README.md`
+describes what a pack may declare, with a check that its references exist.
 
-**Not delivered**: a pack contributing behaviour.
-`check-system-registry.mjs` still reports **one** outstanding violation, which
-is the honest state rather than a miss — see F2 and ADR-063 for what it costs
-and why it is an increment rather than a task.
+**`check-system-registry.mjs` reports zero violations and nothing exempted.**
+The `KNOWN` list is empty for the first time since it was written.
 
 ---
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T062 Run `quickstart.md` by hand, end to end — including §1's "open a dialog", §3 step 4's light/dark check, and §6 step 4's derived-value editability check. Constitution V
-- [ ] T063 Do the SC-002 pass against a running `node scripts/dev.mjs`: walk the product under both packs and confirm 100% of available actions, permissions and displayed values are identical and only presentation differs
+- [~] T062 **Deferred to the playtest pass (2026-09-03), not dropped.** Run `quickstart.md` by hand, end to end — §1's "open a dialog", §3 step 4's light/dark check, §6 step 4's derived-value editability check. Constitution V still wants a person here; the decision is that it happens once, across every spec, after the spec list is wrapped rather than as a gate on each one. See [Manual passes](#manual-passes-deferred-to-the-playtest).
+- [~] T063 **Deferred to the playtest pass**, as T062. The SC-002 walk: under both packs, confirm 100% of available actions, permissions and displayed values are identical and only presentation differs.
 - [X] T064 [P] Update `MVP.md` and `docs/adrs/README.md` where either describes the interface-pack field as unused, or 5e's presentation as living in the app
 - [X] T065 Run `pnpm verify` and fix what it reports **in the code this feature added**. Keep it to that; wide passes get their own commit
+
+---
+
+## Manual passes, deferred to the playtest
+
+Decided 2026-09-03. Constitution V says hand-verification is not optional, and
+this does not change that — it changes **when**. These passes were gating each
+spec's completion individually, which meant either stopping the spec list to
+run them piecemeal or leaving specs open indefinitely. They are marked `[~]`:
+not done, not dropped, and not blocking.
+
+They happen together, once, as a playtest across the whole product after the
+current spec list is wrapped. That is also the better test: SC-002's "only
+presentation differs" and §1's "open a dialog" are judgements about a product
+being *used*, and using it for an hour surfaces more than walking a checklist
+per feature.
+
+What is deferred here, and where it lives:
+
+| Pass | Spec |
+|---|---|
+| `quickstart.md` end to end, including the light/dark and derived-value checks | 032 T062 |
+| The SC-002 walk under both packs | 032 T063 |
+| The playability quickstart | 031 T077 |
+| Wall passability, torch placement, left-click behaviour | 003 T007–T009 |
+| The canvas-authoring e2e run by hand | 002 T040 |
+
+Nothing mechanical is deferred with them. Every one of these specs' automated
+checks passes now, and the e2e suite covers what a suite can.
 
 ---
 
@@ -384,7 +430,7 @@ and why it is an increment rather than a task.
 
 - **User Story 2 — no longer deferred.** It was deferred as scope and never gated: ADR-029 (2026-09-03) governs loading *third-party* code, `packs/systems/*/server` are Cargo workspace members compiled into the product, and the ADR states plainly that a bundled pack may contribute behaviour. It is now [Increment F](#phase-5d-increment-f--user-story-2-priority-p2). What remains deferred out of it is **FR-013 and FR-014** — a pack contributing an *editing* surface and an items/inventory presentation of its own. F contributes one behaviour and contains one surface; the surface catalogue is a separate increment.
 - **Spec 031 T076 — system-supplied turn structure.** **Never actually inside the gate.** FR-031 says turn structure is "determined by the active game system", and SC-011 that a system without rounds shows no round counter — which is a manifest *declaration* plus conditional rendering, in the shape `abilities`, `resources` and `movement` already use. No pack code is involved, and the mechanism it needed shipped with Increment A.
-- **The system-pack half of User Story 3 (FR-019 to FR-021).** Degrading a world is a different problem from degrading a look.
+- **The system-pack half of User Story 3 (FR-019 to FR-021, and the success criteria that measure it — SC-006 and SC-007).** Degrading a world is a different problem from degrading a look. Named with its criteria because an audit of SC coverage otherwise finds two with no tasks and no reason, which reads as an oversight rather than a decision.
 - **Third-party system packs**, per FR-017's interim restriction.
 - **An `interface_packs` table and an upload flow.** Bundled packs only.
 - **Web fonts in a pack.** A real want, a separate decision, and one involving a fetch this format deliberately does not make.

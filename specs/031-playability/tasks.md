@@ -238,7 +238,7 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 
 ## Phase 12: Polish & Cross-Cutting Concerns
 
-- [ ] T077 [P] Run the full quickstart manual validation in `specs/031-playability/quickstart.md` on a running dev instance (Constitution V — this feature came from a playtest, so hand-verification is not optional)
+- [~] T077 [P] Run the full quickstart manual validation in `specs/031-playability/quickstart.md` on a running dev instance (Constitution V — this feature came from a playtest, so hand-verification is not optional) — **Deferred to the playtest pass (2026-09-03).** Constitution V still wants a person here; the decision is that hand-verification happens once, across the whole product, after the current spec list is wrapped — rather than gating each spec separately. Not done, not dropped, not blocking. See spec 032's tasks.md § *Manual passes, deferred to the playtest*.
 - [X] T078 [P] Run `node scripts/e2e-parallel.mjs --shards=4` and confirm no regression against the pre-feature baseline
 - [X] T079 [P] Update `docs/adrs/README.md` index rows for every ADR added in Phase 1
 - [X] T080 Run `pnpm verify` (rustfmt, clippy, prettier, eslint) and fix what it reports **in the code this feature added**. Keep it to that: a repo-wide lint remediation folded into a feature phase buries the feature work, and every line then has to be read to be sure nothing behavioural slipped in. Wide passes get their own commit. `pnpm verify:fix` rewrites what can be rewritten mechanically
