@@ -15,8 +15,14 @@ which is the honest consequence of "the system computes, the interface
 arranges" and not a change of ambition.
 
 **Scope**: **User Story 1**, plus the interface-pack half of User Story 3.
-User Story 2 and spec 031's T076 stay gated on ADR-029. See
-[Deferred](#deferred).
+
+**ADR-029 is now written (2026-09-03), and the gate has moved.** It ratifies
+what three ADRs had already established in practice: packs from outside the
+product are data, and executable extension is bundled-only. So a *bundled*
+pack contributing behaviour is permitted, and User Story 2 is no longer
+blocked on a security decision — only on being built. What stays forbidden is
+third-party executable packs, which is FR-017 as a decision rather than an
+interim measure. See [Deferred](#deferred).
 
 **Tests**: Included, and not optional. FR-003, FR-012a and FR-026 all say
 rejection is by automated validation rather than reviewer judgement, which
@@ -73,7 +79,7 @@ can be validated until identifiers resolve, so this phase blocks that one.
 - [X] T015 [P] Add `scripts/check-system-registry.mjs`, modelled on `scripts/check-interaction-seam.mjs`, failing the build if a hand-maintained list of system identifiers reappears in shared server code — and add it as a step in `scripts/verify.mjs`
 - [X] T014a **Half done.** Of the two violations the checker found, the default system id is fixed: `prepare_world_input` now takes it as an argument and it lives in the config manifest beside the other realm defaults, where an operator already looks. A product default is not supposed to grow a branch per pack, and the way to keep that true is for that layer to know no pack's name. `None` is a real answer — a world with no system is a state the product handles.
 - [X] T014a3 Realm seed values — `DEFAULT_GAME_SYSTEM_ID` and its siblings in `src/server/src/admin.rs` — live in Rust and are written into the config manifest at bootstrap. They belong in a shipped, version-controlled config file that `default_manifest()` reads, so seeding a realm stops being a thing shared code knows. Note `src/server/data` is gitignored, so the file cannot go there; blanking the constant without a replacement makes every new world systemless on every install
-- [ ] T014a2 The remaining violation: `src/server/src/graphql.rs` inserts a genie session row during world creation. This one is not configuration — it is a pack writing to its own table, which is a pack contributing behaviour and needs the world-creation hook User Story 2 would provide. Gated on ADR-029 with the rest of US2, and left in the checker's dated `KNOWN` list until then
+- [ ] T014a2 The remaining violation: `src/server/src/graphql.rs` inserts a genie session row during world creation. This one is not configuration — it is a pack writing to its own table, which is a pack contributing behaviour and needs the world-creation hook User Story 2 would provide. **No longer gated**: ADR-029 permits a bundled pack contributing behaviour, and genie's pack is compiled into the product. It stays in the checker's dated `KNOWN` list until the hook lands
 - [X] T014b Every pack still declares `pub const SYSTEM_ID: &str = "..."` alongside the id it now passes to `SystemContribution::new`. Two places inside one pack naming the same thing, with nothing checking they agree. Harmless today and invisible to `check-system-registry.mjs`, which only polices shared code — but it is the same drift in miniature
 - [X] T016 [P] Server tests in `src/server/src/attributes.rs`'s test module: an actor in a Genie world reports stored and derived values through one path, and the same stored input always yields the same derived output
 
@@ -247,8 +253,8 @@ tests because it could not build them. See `docs/test-audit-2026-09-02.md`.
 
 ## Deferred
 
-- **User Story 2 — system packs mounting their own surfaces (FR-004, FR-005, FR-013 to FR-016, SC-004's mounting half, SC-009, SC-010).** Gated on ADR-029. Note the distinction this whole increment rests on: ADR-029 governs loading **third-party** code at runtime. `packs/systems/*/server` are Cargo workspace members compiled into the product, which is why Increment A is not gated.
-- **Spec 031 T076 — system-supplied turn structure.** Inside that gate. Spec 031 cannot close on this increment.
+- **User Story 2 — system packs mounting their own surfaces (FR-004, FR-005, FR-013 to FR-016, SC-004's mounting half, SC-009, SC-010).** Deferred as scope, **no longer gated**. ADR-029 (2026-09-03) governs loading *third-party* code; `packs/systems/*/server` are Cargo workspace members compiled into the product, and the ADR states plainly that a bundled pack may contribute behaviour. This is now work to schedule rather than a decision to wait for.
+- **Spec 031 T076 — system-supplied turn structure.** **Never actually inside the gate.** FR-031 says turn structure is "determined by the active game system", and SC-011 that a system without rounds shows no round counter — which is a manifest *declaration* plus conditional rendering, in the shape `abilities`, `resources` and `movement` already use. No pack code is involved, and the mechanism it needed shipped with Increment A.
 - **The system-pack half of User Story 3 (FR-019 to FR-021).** Degrading a world is a different problem from degrading a look.
 - **Third-party system packs**, per FR-017's interim restriction.
 - **An `interface_packs` table and an upload flow.** Bundled packs only.

@@ -230,7 +230,7 @@ Three surfaces, per plan.md: `src/engine/` (Bevy, wasm32 only),
 
 - [X] T074 [US7] Offer the currently selected tokens as the combat roster in `apps/web/src/components/world/PlayDock/CombatPanel.tsx` (FR-030)
 - [X] T075 [US7] Keep round and turn presentation for systems that use rounds, unchanged, in `apps/web/src/components/world/PlayDock/CombatPanel.tsx`
-- [ ] T076 [US7] **BLOCKED on spec 032** — make turn structure system-supplied so a ruleset without rounds shows no round counter (FR-031, SC-011)
+- [ ] T076 [US7] **Unblocked (2026-09-03)** — make turn structure system-supplied so a ruleset without rounds shows no round counter (FR-031, SC-011). Recorded as blocked on spec 032, and then on ADR-029 behind it; neither holds. This needs no pack code: turn structure is a manifest declaration in the shape `abilities`/`resources`/`movement` already use, read server-side, with `world_combats.round` and its counter shown only for a system that declares rounds. The declaration mechanism shipped with spec 032 Increment A
 
 **Checkpoint**: Combat starts from what the GM selected.
 
@@ -330,7 +330,7 @@ server or e2e only and can be verified without a rebuild at all.
 - **Phase 8 (US4)**: Depends on T002's ADR and T053.
 - **Phase 9 (US6)**: Depends on T010 and T008.
 - **Phase 10 (US8)**: Depends on T011–T014 for T069–T072; T006 before T068.
-- **Phase 11 (US7)**: T074–T075 independent; T076 blocked on spec 032.
+- **Phase 11 (US7)**: T074–T075 independent; T076 unblocked 2026-09-03 (see its entry).
 
 ### Parallel Opportunities
 

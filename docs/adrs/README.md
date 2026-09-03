@@ -36,7 +36,7 @@ This directory contains architecture decisions for ThunderForgeVTT, captured usi
 | [20260504-026](./20260504-026-pack_architecture_and_pack_type_standard.md)            | Stub     | Pack Architecture and Pack Type Standard _(file is empty — content not yet written)_          |
 | [20260504-027](./20260504-027-game_system_packaging_and_manifest_contract.md)         | Stub     | Game System Packaging and Manifest Contract _(file is empty — content not yet written)_       |
 | [20260504-028](./20260504-028-game_systems_db_model_and_ownership_rules.md)           | Stub     | Game Systems DB Model and Ownership Rules _(file is empty — content not yet written)_         |
-| [20260504-029](./20260504-029-runtime_module_loading_and_security.md)                 | Stub     | Runtime Module Loading and Security _(file is empty — content not yet written)_               |
+| [20260504-029](./20260504-029-runtime_module_loading_and_security.md)                 | Accepted | Runtime Module Loading and Security                                                           |
 | [20260504-030](./20260504-030-compendium_pack_format.md)                              | Stub     | Compendium Pack Format _(file is empty — content not yet written)_                            |
 | [20260505-031](./20260505-031-scene_domain_model.md)                                  | Accepted | Scene Domain Model                                                                            |
 | [20260505-032](./20260505-032-canvas_rendering_strategy_bevy.md)                      | Accepted | Canvas Rendering Strategy (Bevy)                                                              |
