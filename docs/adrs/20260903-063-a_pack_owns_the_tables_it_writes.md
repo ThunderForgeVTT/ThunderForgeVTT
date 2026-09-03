@@ -102,11 +102,33 @@ server's generated schema.** That is shape 2, and it is the destination.
 **It is not reached in Increment F.** Reaching it requires moving Genie's
 session domain — six tables, 2,763 lines of GraphQL, fourteen models and one
 event code — out of the server and into `packs/systems/genie/server/`. That
-is an increment with its own research, not a task inside this one, and it
-raises a question this codebase has not answered: **a pack contributing
-GraphQL mutations**. `async-graphql` composes its schema from types named at
-compile time, so a pack's mutation type would have to be named by shared code
-— which is a registry again, and ADR-061's argument applies to it unchanged.
+is an increment with its own research, not a task inside this one.
+
+> **Amended the same day.** This ADR originally closed by naming an
+> unanswered question — how a pack contributes GraphQL mutations, given
+> `async-graphql` composes its schema from types named at compile time — and
+> treating it as the increment's open risk. It has since been researched and
+> answered; see `specs/032-pack-architecture/research.md` § F-5. Two things
+> changed:
+>
+> 1. **A `MergedObject` entry naming a pack's type is not a registry.** It
+>    carries no information that can drift — the same argument that exempts
+>    `system_packs.rs`'s `use <pack> as _;` lines. Composing at build time is
+>    a different act from deciding per system at runtime, which is the thing
+>    FR-029 forbids.
+> 2. **The real obstacle was never GraphQL — it is that `thunderforge` is a
+>    binary-only crate**, so a pack cannot import from it at all. That looked
+>    like it demanded extracting `state`, `models`, `schema` and
+>    `auth::world_membership` into a shared crate: ~4,000 lines across ~100 of
+>    136 files. It does not. **The server compiles as a library, and it takes
+>    two lines** — verified by doing it, zero errors, 655 of 659 tests coming
+>    along. The whole server→pack cycle is seven `use` lines in one file and
+>    seven Cargo blocks, all of which move to a thin binary crate.
+>
+> So the move is a workspace restructure plus the domain migration — an
+> increment, still, but standard Cargo mechanics against a proven-compilable
+> library rather than an open-ended extraction. The sizing below stands; the
+> *risk* does not.
 
 So, concretely:
 
@@ -138,6 +160,6 @@ So, concretely:
 - **A second pack needs a world-creation hook.** One pack wanting something is
   a case; two is a shape, and it would be worth paying shape 1's cost
   temporarily to learn what the hook's signature should be.
-- **The GraphQL contribution question gets an answer.** It is the harder half
-  of moving a domain into a pack, and it is unanswered rather than answered
-  negatively.
+- ~~The GraphQL contribution question gets an answer.~~ **Answered
+  2026-09-03** — see the amendment above and research § F-5. What remains is
+  the work, not the doubt.

@@ -335,3 +335,98 @@ wraps, rendering a named message in place of the surface.
 satisfies "does not crash" and fails "the rest of the session remains usable",
 because the whole page is the thing replaced.
 
+
+## F-5. How does a pack contribute GraphQL mutations?
+
+Researched 2026-09-03, after ADR-063 named this the unanswered question
+blocking the move of Genie's session domain into its pack. **It is answered,
+and the answer is much cheaper than ADR-063 assumed.**
+
+**Decision**: invert the server↔pack dependency. The server becomes a
+**library** crate, packs depend on it, and a thin **binary** crate depends on
+both — holding `system_packs.rs`'s linkage lines and composing the GraphQL
+roots. A pack contributes mutations as an ordinary `MergedObject` member.
+
+### What was measured, in order
+
+**1. `async_graphql::dynamic` is available and is the wrong tool.**
+`dynamic-schema` is a default feature of async-graphql 7.2.1 and is enabled
+here. But the dynamic API has **no interop with the static one**: there is no
+way to register a `#[derive(Object)]` type into a `dynamic::Schema`. Using it
+means rewriting the entire schema — every type in the product — as runtime
+values, losing compile-time type safety everywhere to make one pack's
+mutations discoverable. Rejected.
+
+**2. `MergedObject` naming a pack's type is not the violation it looks like.**
+`QueryRoot` and `MutationRoot` are tuples naming every contributing type at
+compile time, `GenieSessionQuery` and `GenieSessionMutation` among them. That
+reads like the registry FR-029 forbids, and it is not: it carries **no
+information that can drift**. Compare `system_packs.rs`'s `use genie_server as
+_;`, exempt for exactly this reason — a tuple entry says a type exists and
+should be merged, and says nothing about that system's data shapes, validators
+or rules. If the pack changes its mutations, the entry does not; if the type
+goes away, the build fails loudly rather than drifting quietly.
+
+The distinction worth holding: `match game_system_id { "genie" => … }` is
+shared code **deciding** something per system at runtime, which is the
+violation. A merge tuple is shared code **composing** at build time, which is
+the same category as a dependency.
+
+**3. The real obstacle was never GraphQL. It was that `thunderforge` is a
+binary-only crate.** There is no `[lib]` target — which is why
+`cargo test -p thunderforge --lib` answers "no library targets found". A pack
+crate cannot import from it at all, so the 2,763 lines of Genie GraphQL cannot
+move: they need `AppState`, `is_dm_of_world`, `require_world_member`,
+`record_world_event`, `app_state`, `authenticated_user`, and the shared
+`models`/`schema`.
+
+**4. Extracting those into a shared crate would be enormous — and is not
+necessary.** Measured first, in case it was the only way: of 136 server source
+files, **91 reference `crate::schema`, 68 `crate::state`, 65 `crate::models`,
+50 `crate::auth::world_membership`**. Extraction would touch roughly 100 files
+and move ~4,000 lines before one line of Genie moved.
+
+**5. The server compiles as a library, and it takes two lines.** Verified by
+doing it: a generated `lib.rs` declaring the same 41 modules compiled with
+**zero errors** after adding `#![recursion_limit = "512"]` (the same attribute
+`main.rs` already carries, for the same MergedObject nesting reason) and one
+`pub use state::AppState;` (which `main.rs` provides at its crate root).
+**655 of the 659 tests** come along to the lib target; the remainder live in
+`main.rs` itself. The spike was reverted — a permanent lib target beside the
+bin compiles everything twice, and that cost is only worth paying as part of
+the restructure.
+
+**6. The whole server→pack coupling is seven lines and seven Cargo blocks.**
+`src/server/src/system_packs.rs` holds `use <pack> as _;` seven times, and
+`src/server/Cargo.toml` seven `[dependencies.*_server]` blocks. Nothing else
+in the server names a pack crate. That is the entire cycle, and it moves to
+the binary.
+
+### The shape
+
+```text
+crates/thunderforge-server/     the current src/server, as a library
+packs/systems/*/server/         depend on it; own their tables and mutations
+src/server/  (bin)              depends on both: system_packs.rs, the merged
+                                GraphQL roots, main(), the CLI
+```
+
+`MergedObject` nests, so the binary composes `MutationRoot(CoreMutation,
+GenieSessionMutation, …)` where `CoreMutation` is itself a merged root in the
+library. The pack half of `QueryRoot`/`MutationRoot` lives with the linkage
+lines, in the one place whose job is composition.
+
+### What this costs, honestly
+
+A workspace restructure — moving a crate, splitting a binary out of it, and
+rewriting seven pack manifests — plus the domain move itself: six tables, six
+migrations, `print_schema`'s `except_tables`, 2,763 lines of GraphQL, fourteen
+models and one event code. It is an increment. But it is **standard Cargo
+mechanics on a proven-compilable library**, not the open-ended extraction
+ADR-063 sized it as, and the risky unknown is now closed.
+
+**It also unblocks `systemActorSheets.ts`.** Once a pack can own a table and a
+mutation, `GenieActorSheet`'s reason for living in shared web code — that it
+edits `trait_data.level` and recomputes max Wish Points, which a declared-value
+sheet cannot express — becomes a thing the pack can own too. All three
+remaining hardcoded-system violations close on the same work.
