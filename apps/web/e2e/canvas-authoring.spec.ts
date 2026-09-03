@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import type { WorldProbe } from "../src/engine/world/probe";
 import path from "node:path";
+import { readFileSync } from "node:fs";
 import {
   launchSceneByName,
   openDockTab,
@@ -331,6 +332,67 @@ async function dragCanvas(
   await page.mouse.up();
 }
 
+/**
+ * Assert the launched scene's grid and background agree with the source file.
+ *
+ * Reads the scene back through the app's own GraphQL rather than inspecting
+ * the canvas: the claim is about what was *stored*, and a pixel-level check on
+ * a WebGL canvas would be measuring the renderer instead.
+ */
+async function expectSceneGridMatchesMap(
+  page: Page,
+  fixturePath: string,
+): Promise<void> {
+  const file = JSON.parse(readFileSync(fixturePath, "utf8")) as {
+    resolution: { map_size: { x: number; y: number } };
+  };
+
+  const worldId = /\/world\/([^/]+)\//.exec(new URL(page.url()).pathname)?.[1];
+  if (!worldId) throw new Error(`No world id in ${page.url()}`);
+
+  const scene = await page.evaluate(async (worldId) => {
+    const token = document.cookie
+      .split("; ")
+      .find((c) => c.startsWith("csrf_token="))
+      ?.split("=")[1];
+    const response = await fetch("/api/graphql", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { "x-csrf-token": token } : {}),
+      },
+      body: JSON.stringify({
+        query: `query S($worldId: UUID!) { scenes(worldId: $worldId) { gridSize width height backgroundAssetId } }`,
+        variables: { worldId },
+      }),
+    });
+    const body = await response.json();
+    const scenes = (body?.data?.scenes ?? []) as {
+      gridSize?: number;
+      width?: number;
+      height?: number;
+      backgroundAssetId?: string | null;
+    }[];
+    return scenes.find((s) => s.backgroundAssetId) ?? null;
+  }, worldId);
+
+  expect(scene, "a scene with an imported background should exist").not.toBeNull();
+  const { gridSize, width, height } = scene!;
+  expect(gridSize).toBeGreaterThan(0);
+
+  const cellsX = width! / gridSize!;
+  const cellsY = height! / gridSize!;
+  expect(
+    Math.abs(cellsX - file.resolution.map_size.x),
+    `scene is ${cellsX.toFixed(2)} cells wide (${width}px / ${gridSize}px) but the file says ${file.resolution.map_size.x}`,
+  ).toBeLessThan(0.5);
+  expect(
+    Math.abs(cellsY - file.resolution.map_size.y),
+    `scene is ${cellsY.toFixed(2)} cells tall (${height}px / ${gridSize}px) but the file says ${file.resolution.map_size.y}`,
+  ).toBeLessThan(0.5);
+}
+
 test.describe("Native canvas authoring: map import and scene switching", () => {
   test("importing a map into one scene, creating a second scene, importing a different map, and switching between them keeps each scene's content isolated", async ({
     page,
@@ -380,6 +442,24 @@ test.describe("Native canvas authoring: map import and scene switching", () => {
     // borderline failure is read as the debug backend and not a regression.
     expect(importDurationMs).toBeLessThan(30_000);
     console.log(`SC-007: demo.dd2vtt import took ${importDurationMs}ms`);
+
+    // The imported scene is as many cells across as the file says the map is.
+    //
+    // The regression: a background wider than the GPU texture cap is stored
+    // resized, and the importer kept the *source* file's `pixels_per_grid` as
+    // the scene's `grid_size` — a number describing an image that was never
+    // written. demo.dd2vtt is 4480x2560 at 128px, so it was stored at
+    // 4096x2304 under a 128px grid: thirty-two cells across a map with
+    // thirty-five, and every wall, portal and light out by the same factor.
+    // Reported from a real import, where the only visible symptom was "the
+    // grid is off".
+    //
+    // Asserted as a ratio, deliberately. The server-side test that should have
+    // caught this checked `grid_size == pixels_per_grid` — a *value* — and so
+    // asserted the bug as correct behaviour for every map big enough to be
+    // resized. What has to hold is that the stored picture and the stored grid
+    // describe the same map.
+    await expectSceneGridMatchesMap(page, DEMO_MAP);
 
     // --- Scene Two: import the simpler chamber map ---
     await createScene(page, "Scene Two");

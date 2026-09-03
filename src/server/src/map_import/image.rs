@@ -39,6 +39,14 @@ pub(super) fn detect_image_extension(bytes: &[u8]) -> Option<&'static str> {
 /// `scenes::background_asset_id` (FR-018 migration).
 pub struct SavedBackgroundImage {
     pub asset_id: Uuid,
+    /// The **stored** image's cell size in pixels, which is the scene's
+    /// `grid_size` and the scale every imported coordinate must use.
+    ///
+    /// Not the source file's `pixels_per_grid`. A map wider than the GPU
+    /// texture cap is stored smaller than it arrived, and reporting the
+    /// source's cell size for a resized image is what drew a 128px grid over
+    /// a two-thirds-scale background.
+    pub grid_size: i32,
     pub storage_path: String,
     pub original_format: String,
     pub width_px: i32,
@@ -109,6 +117,7 @@ pub async fn save_background_image(
     world_id: Uuid,
     scene_id: Uuid,
     image_base64: &str,
+    pixels_per_grid: f64,
 ) -> Result<SavedBackgroundImage, MapImportError> {
     let bytes = BASE64_STANDARD
         .decode(image_base64)
@@ -118,8 +127,12 @@ pub async fn save_background_image(
     // more expensive decode/transcode path runs.
     detect_image_extension(&bytes).ok_or(MapImportError::InvalidImageMagicBytes)?;
 
-    let transcoded = crate::storage::transcode::transcode_to_webp(&bytes)
+    // Grid-aware: the image and its cell size are decided together, so the
+    // scene's `grid_size` describes the picture that was actually stored.
+    let background = crate::storage::transcode::transcode_map_background(&bytes, pixels_per_grid)
         .map_err(|e| MapImportError::Storage(e.to_string()))?;
+    let grid_size = i32::try_from(background.grid_size).unwrap_or(i32::MAX);
+    let transcoded = background.image;
 
     let asset_id = Uuid::now_v7();
     let key = crate::storage::rustfs::object_key(owner_user_id, world_id, Some(scene_id), asset_id);
@@ -143,6 +156,7 @@ pub async fn save_background_image(
 
     Ok(SavedBackgroundImage {
         asset_id,
+        grid_size,
         storage_path: key,
         original_format: transcoded.original_format,
         width_px: transcoded.width as i32,
@@ -183,7 +197,7 @@ mod tests {
         let source = crate::test_support::tiny_png_bytes();
         let encoded = BASE64_STANDARD.encode(&source);
 
-        let saved = save_background_image(owner_id, world_id, scene_id, &encoded)
+        let saved = save_background_image(owner_id, world_id, scene_id, &encoded, 128.0)
             .await
             .expect("saving a valid png background should succeed");
 

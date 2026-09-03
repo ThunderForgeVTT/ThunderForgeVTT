@@ -68,6 +68,117 @@ pub fn transcode_to_webp(bytes: &[u8]) -> Result<TranscodedImage, TranscodeError
     })
 }
 
+/// A map background, resized so a whole number of grid cells fits it.
+///
+/// # The bug this exists to prevent
+///
+/// `transcode_to_webp` caps every image at `MAX_CANVAS_TEXTURE_DIMENSION`,
+/// because the result has to survive being uploaded as a GPU texture. The map
+/// importer then stored the *source* file's `pixels_per_grid` as the scene's
+/// `grid_size` — a number describing an image that no longer existed. A
+/// 6144x3456 map became a 4096x2304 background under a 128px grid: thirty-two
+/// cells drawn across a map with forty-eight, every square exactly 1.5 times
+/// too large, and every wall, portal and light misplaced by the same factor.
+///
+/// Five of the eight bundled fixtures were affected. The two that were not are
+/// the two small enough to skip the resize entirely, which is why nothing
+/// caught it.
+///
+/// # Why the image is resized to fit the grid, rather than the grid to fit the
+/// image
+///
+/// Because the honest scale factor is `4096/6144`, which turns a 128px cell
+/// into 85.33px, and `scenes.grid_size` is an `i32`. Rounding it would put the
+/// grid back out of step with the image — smaller error, same class of bug.
+///
+/// So the *cell* is chosen first, as the largest whole pixel size that keeps
+/// the image within the cap, and the image is resized to an exact multiple of
+/// it. 4080x2295 rather than 4096x2304: sixteen pixels narrower, and a grid
+/// that lands exactly where the map says it should.
+pub struct MapBackground {
+    pub image: TranscodedImage,
+    /// The stored image's cell size, in its own pixels. This is the scene's
+    /// `grid_size`, and the scale every imported coordinate must use.
+    pub grid_size: u32,
+}
+
+/// Transcode a map background, keeping its grid and its pixels in step.
+///
+/// `pixels_per_grid` is the source file's own cell size. The returned
+/// `grid_size` describes the image that was actually stored, and the two are
+/// only equal when the image was small enough to need no resizing at all.
+pub fn transcode_map_background(
+    bytes: &[u8],
+    pixels_per_grid: f64,
+) -> Result<MapBackground, TranscodeError> {
+    if bytes.len() > MAX_UPLOAD_BYTES {
+        return Err(TranscodeError::TooLarge {
+            max: MAX_UPLOAD_BYTES,
+            actual: bytes.len(),
+        });
+    }
+
+    let format = image::guess_format(bytes).map_err(|e| TranscodeError::Decode(e.to_string()))?;
+    let img = image::load_from_memory_with_format(bytes, format)
+        .map_err(|e| TranscodeError::Decode(e.to_string()))?;
+
+    let (source_width, source_height) = (img.width(), img.height());
+    let cell = stored_cell_size(source_width, source_height, pixels_per_grid);
+
+    let img = match cell {
+        // Either no resize was needed, or the cell is unusable — see
+        // `stored_cell_size`. Both fall back to the plain cap.
+        None => resize_to_max_dimension(&img, MAX_CANVAS_TEXTURE_DIMENSION),
+        Some(cell) => {
+            // An exact multiple of the source, so the factor `cell /
+            // pixels_per_grid` describes the stored image precisely rather
+            // than approximately.
+            let scale = f64::from(cell) / pixels_per_grid;
+            let width = (f64::from(source_width) * scale).round().max(1.0) as u32;
+            let height = (f64::from(source_height) * scale).round().max(1.0) as u32;
+            img.resize_exact(width, height, image::imageops::FilterType::Lanczos3)
+        }
+    };
+
+    let width = img.width();
+    let height = img.height();
+    let webp_bytes = encode_webp(&img)?;
+
+    Ok(MapBackground {
+        image: TranscodedImage {
+            webp_bytes,
+            width,
+            height,
+            original_format: format!("{format:?}").to_lowercase(),
+        },
+        grid_size: cell.unwrap_or_else(|| pixels_per_grid.round().max(1.0) as u32),
+    })
+}
+
+/// The largest whole-pixel cell that keeps the image inside the texture cap.
+///
+/// `None` means leave it alone: either the image already fits — in which case
+/// the source's own `pixels_per_grid` is exactly right and rescaling it would
+/// introduce the error this function exists to avoid — or the numbers are
+/// degenerate enough that no whole cell survives the cap, which would be a map
+/// more than four thousand cells across.
+fn stored_cell_size(width: u32, height: u32, pixels_per_grid: f64) -> Option<u32> {
+    if width <= MAX_CANVAS_TEXTURE_DIMENSION && height <= MAX_CANVAS_TEXTURE_DIMENSION {
+        return None;
+    }
+    if !pixels_per_grid.is_finite() || pixels_per_grid < 1.0 {
+        return None;
+    }
+
+    let longest = f64::from(width.max(height));
+    let scale = f64::from(MAX_CANVAS_TEXTURE_DIMENSION) / longest;
+
+    // Floored, never rounded: a cell one pixel too large puts the image back
+    // over the cap, which is the one thing the resize is for.
+    let cell = (pixels_per_grid * scale).floor();
+    if cell < 1.0 { None } else { Some(cell as u32) }
+}
+
 /// Spec 012 (FR-010): the lore-image-specific upload cap — distinct from
 /// (and smaller than) `MAX_UPLOAD_BYTES` above, which stays 50 MB for
 /// existing canvas-image uploads; lore images use the 25 MB fixed
@@ -269,6 +380,105 @@ mod texture_cap_tests {
             .write_image(img.as_bytes(), width, height, ExtendedColorType::Rgba8)
             .expect("encoding a blank png should succeed");
         bytes
+    }
+
+    /// The bug the cap above quietly caused.
+    ///
+    /// Capping the image was right; keeping the source file's cell size beside
+    /// the capped image was not. A 6144x3456 map stored at 4096x2304 under a
+    /// 128px grid draws thirty-two cells across a map with forty-eight — every
+    /// square 1.5x too large, and every wall, portal and light out by the same
+    /// factor. The test directly above proved the resize happened and never
+    /// asked what it invalidated.
+    #[test]
+    fn a_capped_map_background_keeps_its_grid_in_step_with_its_pixels() {
+        // grassy-path-ambush, little-fish-academy and road-side-in's shape:
+        // 48 x 27 cells of 128px.
+        let source = png_of(6144, 3456);
+        let background = transcode_map_background(&source, 128.0).expect("should transcode");
+
+        assert!(
+            background.image.width <= MAX_CANVAS_TEXTURE_DIMENSION
+                && background.image.height <= MAX_CANVAS_TEXTURE_DIMENSION,
+            "the cap still holds: stored {}x{}",
+            background.image.width,
+            background.image.height
+        );
+
+        // The property: the stored image is still exactly the map's size in
+        // cells. 48 x 85 = 4080, 27 x 85 = 2295.
+        assert_eq!(background.grid_size, 85);
+        assert_eq!(background.image.width, 4080);
+        assert_eq!(background.image.height, 2295);
+        assert_eq!(background.image.width / background.grid_size, 48);
+        assert_eq!(background.image.height / background.grid_size, 27);
+    }
+
+    /// A map that needs no resizing must not be rescaled at all.
+    ///
+    /// Its `pixels_per_grid` already describes the stored image exactly, and
+    /// recomputing a cell size for it could only introduce the error this
+    /// whole path exists to avoid.
+    #[test]
+    fn a_background_under_the_cap_keeps_the_files_own_grid_untouched() {
+        // azheim-meeting's shape: 8 x 8 cells of 256px.
+        let source = png_of(2048, 2048);
+        let background = transcode_map_background(&source, 256.0).expect("should transcode");
+
+        assert_eq!(background.grid_size, 256);
+        assert_eq!(background.image.width, 2048);
+        assert_eq!(background.image.height, 2048);
+    }
+
+    /// Every bundled fixture's shape, as one property.
+    ///
+    /// Stated as a ratio rather than as expected numbers, because the numbers
+    /// are what was wrong: an assertion naming 128 would have passed against
+    /// the bug. What must hold is that the stored image is the same number of
+    /// cells across as the source was.
+    #[test]
+    fn a_stored_background_is_the_same_number_of_cells_across_as_its_source() {
+        // (source width, source height, pixels_per_grid) for the real fixtures
+        // plus the user-reported Simple Beach, which shares the 6144x3456 shape.
+        for (width, height, ppg) in [
+            (6144u32, 3456u32, 128.0f64), // three fixtures, and Simple Beach
+            (4480, 2560, 128.0),          // demo
+            (3072, 4608, 128.0),          // dwarven-forge
+            (2048, 2048, 256.0),          // azheim-meeting, under the cap
+            (1280, 1280, 128.0),          // chamber-of-echoing-grief, under the cap
+        ] {
+            let background = transcode_map_background(&png_of(width, height), ppg)
+                .unwrap_or_else(|e| panic!("{width}x{height} should transcode: {e:?}"));
+
+            let source_cells_x = f64::from(width) / ppg;
+            let stored_cells_x =
+                f64::from(background.image.width) / f64::from(background.grid_size);
+
+            assert!(
+                (source_cells_x - stored_cells_x).abs() < 0.5,
+                "{width}x{height} @ {ppg}ppg: source is {source_cells_x:.2} cells wide, \
+                 stored is {stored_cells_x:.2} ({}px / {}px)",
+                background.image.width,
+                background.grid_size
+            );
+            assert!(
+                background.image.width <= MAX_CANVAS_TEXTURE_DIMENSION
+                    && background.image.height <= MAX_CANVAS_TEXTURE_DIMENSION,
+                "{width}x{height} exceeded the cap after resizing"
+            );
+        }
+    }
+
+    /// A file claiming a nonsensical cell size must not panic or divide by it.
+    #[test]
+    fn a_degenerate_pixels_per_grid_falls_back_rather_than_failing() {
+        let source = png_of(6144, 3456);
+        for ppg in [0.0, -12.0, f64::NAN, f64::INFINITY] {
+            let background = transcode_map_background(&source, ppg)
+                .unwrap_or_else(|e| panic!("{ppg} should still transcode: {e:?}"));
+            assert!(background.grid_size >= 1, "grid_size must stay usable");
+            assert!(background.image.width <= MAX_CANVAS_TEXTURE_DIMENSION);
+        }
     }
 
     /// The regression this guards: five of this project's seven example maps

@@ -156,14 +156,29 @@ pub async fn import_uvtt_impl(
     // tokens already placed on the scene keep their absolute pixel
     // position — only the grid overlay/new geometry moves to the file's
     // native scale.
-    let target_grid_size = parsed.file.resolution.pixels_per_grid;
-    let new_grid_size = target_grid_size.round() as i32;
-
     // Decode + transcode + write the background image to RustFS outside
     // the DB transaction (the RustFS write isn't transactional with
     // Postgres anyway); if it fails we bail before any DB writes happen.
-    let saved_background =
-        save_background_image(user_id, world_id, scene_id, &parsed.file.image).await?;
+    //
+    // This happens **before** the grid is decided, and that ordering is the
+    // fix rather than an accident. A background wider than the GPU texture cap
+    // is stored smaller than it arrived, so the file's own `pixels_per_grid`
+    // describes an image that no longer exists: a 6144x3456 map became a
+    // 4096x2304 background under a 128px grid — thirty-two cells drawn across
+    // a map with forty-eight, and every wall, portal and light out by the same
+    // 1.5x. `transcode_map_background` picks the stored cell size and the
+    // stored image together, and reports the one that survived.
+    let saved_background = save_background_image(
+        user_id,
+        world_id,
+        scene_id,
+        &parsed.file.image,
+        parsed.file.resolution.pixels_per_grid,
+    )
+    .await?;
+
+    let new_grid_size = saved_background.grid_size;
+    let target_grid_size = f64::from(new_grid_size);
     // Spec 022 (FR-012): a preview/thumbnail rendition, generated
     // alongside the full-resolution background from the same source
     // bytes. Best-effort — a preview-generation failure must not fail the
@@ -604,9 +619,15 @@ mod tests {
         let world_id = Uuid::now_v7();
         let scene_id = Uuid::now_v7();
 
-        let saved = save_background_image(owner_user_id, world_id, scene_id, &demo.file.image)
-            .await
-            .expect("save_background_image should succeed against a reachable RustFS");
+        let saved = save_background_image(
+            owner_user_id,
+            world_id,
+            scene_id,
+            &demo.file.image,
+            demo.file.resolution.pixels_per_grid,
+        )
+        .await
+        .expect("save_background_image should succeed against a reachable RustFS");
 
         assert!(saved.storage_path.ends_with(".webp"));
         assert_eq!(
@@ -782,10 +803,28 @@ mod tests {
         let raw = read_fixture(fixture_name);
         let parsed = parse_uvtt(&raw).expect("fixture should parse");
 
-        // Import now adopts the source file's own grid (regardless of
-        // `test_support::insert_test_scene`'s fixed grid_size of 5) — see
-        // `import_uvtt_impl`'s comment on why.
-        let target_grid_size = parsed.file.resolution.pixels_per_grid;
+        let result = import_uvtt_impl(&state, owner_id, false, scene_id, raw.clone())
+            .await
+            .expect("import should succeed");
+
+        // The scale the expectations are built at is the scale the import
+        // actually stored, read back rather than assumed.
+        //
+        // It used to be `parsed.file.resolution.pixels_per_grid`, the *source*
+        // file's cell size. That is only the stored cell size for a map small
+        // enough to skip the GPU texture cap's resize — five of the eight
+        // bundled fixtures are not, and for those this test was comparing the
+        // database against coordinates for an image that was never written.
+        let stored_grid_size = {
+            use crate::schema::scenes;
+            let mut conn = state.db_pool.get().unwrap();
+            scenes::table
+                .filter(scenes::scene_id.eq(scene_id))
+                .select(scenes::grid_size)
+                .first::<i32>(&mut conn)
+                .expect("scene should reload")
+        };
+        let target_grid_size = f64::from(stored_grid_size);
 
         let mut expected_walls: Vec<WallSignature> =
             walls_from_line_of_sight(&parsed.file.line_of_sight, target_grid_size)
@@ -805,10 +844,6 @@ mod tests {
                 .map(LightSignature::from)
                 .collect();
         expected_lights = sorted(expected_lights);
-
-        let result = import_uvtt_impl(&state, owner_id, false, scene_id, raw)
-            .await
-            .expect("import should succeed");
 
         assert_eq!(
             result.walls_created + result.doors_created,
@@ -848,19 +883,50 @@ mod tests {
             "reloaded lights must exactly match {fixture_name}'s source lights"
         );
 
-        let (background_asset_id, reloaded_grid_size) = scenes::table
+        let (background_asset_id, reloaded_grid_size, scene_width, scene_height) = scenes::table
             .filter(scenes::scene_id.eq(scene_id))
-            .select((scenes::background_asset_id, scenes::grid_size))
-            .first::<(Option<Uuid>, i32)>(&mut conn)
+            .select((
+                scenes::background_asset_id,
+                scenes::grid_size,
+                scenes::width,
+                scenes::height,
+            ))
+            .first::<(Option<Uuid>, i32, i32, i32)>(&mut conn)
             .expect("scene should reload");
         assert!(
             background_asset_id.is_some(),
             "reloaded scene must reference the background image asset created by import"
         );
-        assert_eq!(
-            reloaded_grid_size,
-            target_grid_size.round() as i32,
-            "import must adopt {fixture_name}'s own pixels_per_grid as the scene's grid_size"
+
+        // **The property, not the value.** This asserted
+        // `grid_size == pixels_per_grid`, which is the source file's cell size
+        // — a number describing an image the importer does not necessarily
+        // store. A background wider than the GPU texture cap is written out
+        // smaller, so five of the eight bundled fixtures were saved with a
+        // grid up to 1.5x too large and this test called it correct. It could
+        // not have caught that: the two fixtures small enough to skip the
+        // resize are the only two where the old assertion and the truth agree.
+        //
+        // What matters is that the stored picture and the stored grid describe
+        // the same map, so that is what is checked: the scene must be exactly
+        // as many cells across as the file says the map is.
+        let cells_x = f64::from(scene_width) / f64::from(reloaded_grid_size);
+        let cells_y = f64::from(scene_height) / f64::from(reloaded_grid_size);
+        let expected = &parsed.file.resolution.map_size;
+
+        assert!(
+            (cells_x - expected.x).abs() < 0.5,
+            "{fixture_name}: scene is {cells_x:.2} cells wide ({scene_width}px / \
+             {reloaded_grid_size}px) but the file says the map is {} — the stored \
+             image and the stored grid disagree",
+            expected.x
+        );
+        assert!(
+            (cells_y - expected.y).abs() < 0.5,
+            "{fixture_name}: scene is {cells_y:.2} cells tall ({scene_height}px / \
+             {reloaded_grid_size}px) but the file says the map is {} — the stored \
+             image and the stored grid disagree",
+            expected.y
         );
     }
 
