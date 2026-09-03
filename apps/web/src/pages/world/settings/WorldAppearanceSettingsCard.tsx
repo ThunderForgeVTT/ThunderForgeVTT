@@ -13,6 +13,7 @@ import {
   listInterfacePacks,
   type InterfacePackSummary,
 } from "@/api/interfacePacks";
+import { BUNDLED_SYSTEM_LABELS } from "@/api/gameSystems";
 import { updateWorldInterfacePack } from "@/api/world";
 import { BASE_PACK_ID } from "@/appearance/appearance-context";
 import { Card } from "@/components/ui/card/Card";
@@ -33,6 +34,25 @@ interface WorldAppearanceSettingsCardProps {
   gameSystemId: string | null;
   isGm: boolean;
   onChanged?: (interfacePackId: string | null) => void;
+}
+
+/**
+ * Who a pack is for, in the reader's terms rather than the manifest's.
+ *
+ * `targets` holds system *ids* — `dnd5e`, `fate_core` — which is right for a
+ * manifest and wrong for a person choosing between three metals. A pack that
+ * targets nothing composes against any system, and saying so is the honest
+ * version of the base pack's position: not a default that beats the others,
+ * just the one that fits everywhere.
+ */
+function packAudience(pack: InterfacePackSummary): string {
+  if (pack.targets.length === 0) {
+    return "Works with any system";
+  }
+  const named = pack.targets
+    .map((id) => BUNDLED_SYSTEM_LABELS[id] ?? id)
+    .join(", ");
+  return `For ${named}`;
 }
 
 export function WorldAppearanceSettingsCard({
@@ -135,8 +155,21 @@ export function WorldAppearanceSettingsCard({
             {offered.map((pack) => (
               // In title order, as the server listed them, with no pinned
               // position and no badge for the base pack (FR-007).
+              //
+              // Each says what it is for. "Forged Steel" is a code name and
+              // reads like one: nothing on the screen connected it to 5e, so
+              // choosing a look meant picking between three metals and finding
+              // out afterwards. The pack already carries both facts — which
+              // systems it targets, and a sentence about its arrangement — and
+              // they were only ever shown for the pack already in force.
               <SelectItem key={pack.id} value={pack.id}>
-                {pack.title}
+                <span className="flex flex-col gap-0.5 py-0.5">
+                  <span className="font-medium">{pack.title}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {packAudience(pack)}
+                    {pack.description ? ` · ${pack.description}` : ""}
+                  </span>
+                </span>
               </SelectItem>
             ))}
           </SelectContent>

@@ -146,3 +146,36 @@ mod tests;
 #[cfg(test)]
 #[path = "interface_packs_integration_tests.rs"]
 mod integration_tests;
+
+/// The pack to bind a new world to, given the system it is being created on.
+///
+/// # Why a world gets one at all
+///
+/// A world created on 5e came out bound to nothing, so it opened in the base
+/// pack while `forged-steel` sat installed and unused — a pack written for
+/// that ruleset, offered nowhere the person creating the world was looking.
+/// The binding is theirs to change from the moment it exists; what this
+/// removes is the step of discovering that it should.
+///
+/// # Why only when the choice is unambiguous
+///
+/// Exactly one targeting pack is an answer. Two is a **question**, and
+/// answering it here — by title order, by directory order, by whatever
+/// happens to be first — would be shared code forming a preference between
+/// two packs on a table's behalf. So two or more leaves the world on the base
+/// pack, which is generic, correct for every system, and visibly a default
+/// rather than a silent pick.
+///
+/// Names no system, in keeping with FR-029: it asks each installed pack what
+/// it targets rather than knowing anything itself.
+pub fn pack_targeting(packs_dir: &str, system_id: &str) -> Option<String> {
+    let mut targeting = list_installed(packs_dir)
+        .into_iter()
+        .filter(|pack| pack.targets.iter().any(|target| target == system_id));
+
+    let first = targeting.next()?;
+    match targeting.next() {
+        None => Some(first.id),
+        Some(_) => None,
+    }
+}

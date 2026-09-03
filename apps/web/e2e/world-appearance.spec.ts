@@ -87,10 +87,18 @@ test.describe("a world's interface pack", () => {
     await expect(trigger).toBeVisible({ timeout: 15_000 });
     await trigger.click();
 
-    const forge = page.getByRole("option", { name: "Forge" });
+    const forge = page.getByRole("option", { name: /^Forge\b/ });
     await expect(forge).toBeVisible();
-    // No "(default)", no "recommended", no marker of any kind.
-    await expect(forge).toHaveText("Forge");
+
+    // No "(default)", no "recommended", no marker of any kind. Asserted as
+    // the absence of a marker rather than as exact text, because every option
+    // now carries a line saying what it is for — "Forged Steel" is a code name
+    // and read like one. Forge gets the same line as the rest, which is the
+    // point: it says "works with any system", not that it is the right one.
+    await expect(forge).toContainText("Works with any system");
+    for (const marker of ["default", "recommended", "Recommended", "★"]) {
+      await expect(forge).not.toContainText(marker);
+    }
   });
 
   /**

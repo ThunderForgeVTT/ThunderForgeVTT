@@ -1741,12 +1741,23 @@ pub async fn create_world_impl(
         .map_err(|_| "Failed to get DB connection".to_string())?;
     let now = Utc::now().naive_utc();
 
+    // A world created on a ruleset that has a pack written for it starts in
+    // that pack. Without this a 5e world opened in the generic base pack while
+    // `forged-steel` sat installed and unmentioned, and the only way to find
+    // it was to go looking in settings for something you had no reason to
+    // think existed. An explicit choice always wins; see `pack_targeting` for
+    // why an ambiguous one is declined rather than guessed.
+    let interface_pack_id = prepared_input.interface_pack_id.or_else(|| {
+        let system_id = prepared_input.game_system_id.as_deref()?;
+        crate::interface_packs::pack_targeting(&state.directories.interface_packs_dir, system_id)
+    });
+
     let new_world = World {
         id: uuid::Uuid::now_v7(),
         name: prepared_input.name,
         description: prepared_input.description,
         game_system_id: prepared_input.game_system_id,
-        interface_pack_id: prepared_input.interface_pack_id,
+        interface_pack_id,
         created_by: user_id,
         updated_by: user_id,
         created_at: now,

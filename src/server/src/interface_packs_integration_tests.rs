@@ -462,3 +462,100 @@ mod a_bound_pack_that_goes_missing {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// A new world starts in the pack written for its ruleset
+// ---------------------------------------------------------------------------
+
+mod pack_targeting {
+    use std::fs;
+    use std::path::Path;
+
+    fn repo_packs() -> std::path::PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../packs/interface")
+    }
+
+    fn install(into: &Path, id: &str) {
+        let target = into.join(id);
+        fs::create_dir_all(&target).expect("create pack dir");
+        fs::copy(
+            repo_packs().join(id).join("interface.json"),
+            target.join("interface.json"),
+        )
+        .expect("copy manifest");
+    }
+
+    /// Read from the shipping packs, so the mapping this relies on is the real
+    /// one: `forged-steel` targets `dnd5e`, and if that ever stops being true
+    /// this fails rather than a 5e world quietly opening in the base pack.
+    #[test]
+    fn a_system_with_one_pack_written_for_it_gets_that_pack() {
+        let temp = tempfile::tempdir().expect("temp packs dir");
+        let dir = temp.path();
+        for id in ["forge", "forged-steel", "forged-silver", "forged-bronze"] {
+            install(dir, id);
+        }
+        let packs_dir = dir.to_string_lossy().into_owned();
+
+        assert_eq!(
+            crate::interface_packs::pack_targeting(&packs_dir, "dnd5e").as_deref(),
+            Some("forged-steel")
+        );
+        assert_eq!(
+            crate::interface_packs::pack_targeting(&packs_dir, "fate_core").as_deref(),
+            Some("forged-silver")
+        );
+        assert_eq!(
+            crate::interface_packs::pack_targeting(&packs_dir, "cypher_system").as_deref(),
+            Some("forged-bronze")
+        );
+    }
+
+    #[test]
+    fn a_system_nothing_targets_gets_nothing_rather_than_the_base_pack() {
+        // Not `forge`: binding the base pack explicitly would make "chose the
+        // default" and "never chose" two different worlds, which is precisely
+        // the distinction `WorldAppearanceSettingsCard` stores null to avoid.
+        let temp = tempfile::tempdir().expect("temp packs dir");
+        let dir = temp.path();
+        install(dir, "forge");
+        install(dir, "forged-steel");
+
+        assert!(
+            crate::interface_packs::pack_targeting(&dir.to_string_lossy(), "blades_in_the_dark")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn two_packs_targeting_one_system_is_a_question_this_does_not_answer() {
+        // Deciding by title order, directory order, or anything else would be
+        // shared code forming a preference between two packs on a table's
+        // behalf. The base pack is generic and correct; the GM picks.
+        let temp = tempfile::tempdir().expect("temp packs dir");
+        let dir = temp.path();
+        install(dir, "forge");
+        install(dir, "forged-steel");
+
+        // A second pack claiming the same ruleset.
+        let rival = dir.join("forged-rival");
+        fs::create_dir_all(&rival).expect("create rival");
+        let mut manifest: serde_json::Value = serde_json::from_str(
+            &fs::read_to_string(dir.join("forged-steel").join("interface.json"))
+                .expect("read steel"),
+        )
+        .expect("parse steel");
+        manifest["id"] = serde_json::json!("forged-rival");
+        manifest["title"] = serde_json::json!("Forged Rival");
+        fs::write(
+            rival.join("interface.json"),
+            serde_json::to_string(&manifest).expect("serialise"),
+        )
+        .expect("write rival");
+
+        assert!(
+            crate::interface_packs::pack_targeting(&dir.to_string_lossy(), "dnd5e").is_none(),
+            "an ambiguous choice must be declined, not guessed"
+        );
+    }
+}
