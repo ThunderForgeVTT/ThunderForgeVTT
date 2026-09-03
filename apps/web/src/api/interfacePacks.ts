@@ -6,10 +6,14 @@
  * routing it through the typed graph would gain nothing while putting a JSON
  * blob in it.
  *
- * Unlike `BUNDLED_SYSTEM_IDS` in `gameSystems.ts`, there is no hand-kept list
- * here. The server discovers packs by listing a directory, so a pack that
- * exists is a pack that is offered, and nothing on this side has to be kept in
- * step with what is installed.
+ * There is no hand-kept list here. The server discovers packs by listing a
+ * directory, so a pack that exists is a pack that is offered, and nothing on
+ * this side has to be kept in step with what is installed.
+ *
+ * That was once the difference between this file and `gameSystems.ts`, which
+ * carried `BUNDLED_SYSTEM_IDS` — seven system ids and their titles, written
+ * out by hand. Spec 032 T085 pointed `/api/systems` at `packs/systems/` the
+ * same way, and the asymmetry is gone: both halves discover, neither lists.
  */
 
 /** Enough to choose from, without fetching every manifest. */

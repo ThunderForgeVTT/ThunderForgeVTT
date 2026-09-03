@@ -1,6 +1,10 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { BUNDLED_SYSTEM_IDS, BUNDLED_SYSTEM_LABELS } from "@/api/gameSystems";
+import {
+  listGameSystems,
+  titleFor,
+  type GameSystemSummary,
+} from "@/api/gameSystems";
 import { createWorld } from "@/api/world";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
@@ -29,9 +33,45 @@ export default function CreateWorldPage() {
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [gameSystemId, setGameSystemId] = useState("genie");
+  /**
+   * What this deployment offers, and what it preselects.
+   *
+   * Both come from `/api/systems`. This form opened with `useState("genie")`
+   * and a picker over a hand-kept list of all seven bundled systems — one
+   * system named in shared web code, and one list to keep in step with what
+   * is installed. The server reads `packs/systems/` and the realm's
+   * configured default, so both answers now come from where they are true
+   * (spec 032 T088, T090).
+   */
+  const [systems, setSystems] = useState<GameSystemSummary[]>([]);
+  const [gameSystemId, setGameSystemId] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+
+    listGameSystems()
+      .then((installed) => {
+        if (!live) return;
+        setSystems(installed.systems);
+        // Only preselect; never overwrite a choice the GM has already made.
+        if (installed.defaultId) {
+          setGameSystemId((current) => current || installed.defaultId!);
+        }
+      })
+      .catch(() => {
+        // A picker with nothing in it is honest about the failure, and the
+        // form still creates a world — the server applies the realm default
+        // when no system is named, so this failing costs the GM the choice
+        // rather than the world.
+        if (live) setSystems([]);
+      });
+
+    return () => {
+      live = false;
+    };
+  }, []);
 
   const descriptionCount = useMemo(
     () => description.trim().length,
@@ -44,7 +84,14 @@ export default function CreateWorldPage() {
     setStatus(null);
 
     try {
-      const world = await createWorld({ name, description, gameSystemId });
+      // Unset means unset. `prepare_world_input` falls back to the realm's
+      // configured default, and a realm with no default makes a world with no
+      // system — a state the product handles, unlike a guess made here.
+      const world = await createWorld({
+        name,
+        description,
+        gameSystemId: gameSystemId || null,
+      });
       // Spec 010: straight to staging (not the canvas, and not the
       // dashboard) — the world now always has a default scene already
       // rendered (FR-004, FR-006), via create_world's atomic transaction
@@ -133,18 +180,48 @@ export default function CreateWorldPage() {
                 htmlFor="world-system"
                 hint="You can change this later from the world's system settings."
               >
-                <Select value={gameSystemId} onValueChange={setGameSystemId}>
+                <Select
+                  value={gameSystemId || undefined}
+                  /*
+                   * An empty value is discarded rather than stored.
+                   *
+                   * No `SelectItem` here has an empty value, so "" can never
+                   * be a system a person chose. Radix emits one anyway while
+                   * the options are still arriving, and taking it at face
+                   * value silently un-picked the preselected system one
+                   * render after it was set — the picker read "Select a
+                   * system" with the realm default already chosen underneath.
+                   */
+                  onValueChange={(value) => {
+                    if (value) setGameSystemId(value);
+                  }}
+                  disabled={systems.length === 0}
+                >
                   <SelectTrigger id="world-system" aria-label="Game system">
-                    <SelectValue placeholder="Select a system" />
+                    {/*
+                     * The label is rendered here rather than left to
+                     * `SelectValue` to resolve.
+                     *
+                     * Radix reads the trigger's text from the `SelectItem`
+                     * matching the value — and those live inside
+                     * `SelectContent`, which is not mounted while the
+                     * dropdown is closed. That worked while the options were
+                     * a module-level literal available on the first render;
+                     * once they arrive from `/api/systems` a moment later,
+                     * the trigger kept showing "Select a system" with a
+                     * system genuinely selected underneath. Caught by an
+                     * e2e, invisible to every unit test.
+                     */}
+                    <SelectValue placeholder="Select a system">
+                      {gameSystemId ? titleFor(systems, gameSystemId) : null}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    {BUNDLED_SYSTEM_IDS.map((systemId) => {
-                      return (
-                        <SelectItem key={systemId} value={systemId}>
-                          {BUNDLED_SYSTEM_LABELS[systemId] ?? systemId}
-                        </SelectItem>
-                      );
-                    })}
+                    {systems.map((system) => (
+                      <SelectItem key={system.id} value={system.id}>
+                        {system.title}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </Field>

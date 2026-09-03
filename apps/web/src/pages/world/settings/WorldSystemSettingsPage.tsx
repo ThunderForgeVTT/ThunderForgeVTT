@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
-  BUNDLED_SYSTEM_IDS,
-  BUNDLED_SYSTEM_LABELS,
   getGameSystemManifest,
+  listGameSystems,
+  titleFor,
+  type GameSystemSummary,
 } from "@/api/gameSystems";
 import {
   getWorld,
@@ -53,6 +54,8 @@ export default function WorldSystemSettingsPage() {
   const [activeManifest, setActiveManifest] = useState<SystemManifest | null>(
     null,
   );
+  /** Offered by the deployment, read from `packs/systems/` (spec 032 T089). */
+  const [systems, setSystems] = useState<GameSystemSummary[]>([]);
   const [pendingSystemId, setPendingSystemId] = useState<string | null>(null);
   const [pendingManifest, setPendingManifest] = useState<SystemManifest | null>(
     null,
@@ -67,6 +70,20 @@ export default function WorldSystemSettingsPage() {
   useResetOnChange(worldId, () => {
     setIsLoading(true);
   });
+
+  useEffect(() => {
+    let live = true;
+    listGameSystems()
+      .then((installed) => {
+        if (live) setSystems(installed.systems);
+      })
+      .catch(() => {
+        if (live) setSystems([]);
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -268,23 +285,35 @@ export default function WorldSystemSettingsPage() {
               <Field label="Change System" htmlFor="system-picker">
                 <Select
                   value={pendingSystemId ?? undefined}
-                  onValueChange={(v) => void handlePickSystem(v)}
+                  /* No item here has an empty value, so "" is never a choice
+                   * a person made — Radix emits one while the options are
+                   * still arriving. Passing it through would ask the server
+                   * for the manifest of a system with no id. */
+                  onValueChange={(v) => {
+                    if (v) void handlePickSystem(v);
+                  }}
+                  disabled={systems.length === 0}
                 >
                   <SelectTrigger
                     id="system-picker"
                     aria-label="Change System"
                     data-testid="system-picker"
                   >
-                    <SelectValue placeholder="Select a system" />
+                    {/* Rendered here rather than resolved by Radix from a
+                        `SelectItem`, which is only mounted while the dropdown
+                        is open. See `CreateWorldPage` for the failure. */}
+                    <SelectValue placeholder="Select a system">
+                      {pendingSystemId
+                        ? titleFor(systems, pendingSystemId)
+                        : null}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    {BUNDLED_SYSTEM_IDS.map((systemId) => {
-                      return (
-                        <SelectItem key={systemId} value={systemId}>
-                          {BUNDLED_SYSTEM_LABELS[systemId] ?? systemId}
-                        </SelectItem>
-                      );
-                    })}
+                    {systems.map((system) => (
+                      <SelectItem key={system.id} value={system.id}>
+                        {system.title}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </Field>

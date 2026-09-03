@@ -161,15 +161,33 @@ test.describe("US2: no dead/placeholder controls remain (T011-T012)", () => {
   }) => {
     // Spec 008 (FR-005) originally removed game-system selection from this
     // form because it was non-functional at the time; it's since been
-    // re-added as a real picker over the bundled system packs
-    // (BUNDLED_SYSTEM_IDS), defaulting to Genie.
+    // re-added as a real picker.
+    //
+    // Spec 032 T088/T090: the options come from `/api/systems`, which lists
+    // `packs/systems/`, and the preselection is the realm's configured
+    // default rather than a literal in this app. So this asserts the picker
+    // has *a* system chosen and that the choice is one the server offers —
+    // not that it says "Genie", which was only ever true because
+    // `CreateWorldPage` opened with `useState("genie")`.
     await register(page, freshCredentials("e2eonb"));
     await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
 
     await expect(page.locator("#world-name")).toBeVisible();
     await expect(page.locator("#world-description")).toBeVisible();
     await expect(page.locator("#world-system")).toBeVisible();
-    await expect(page.getByRole("combobox", { name: "Game system" })).toHaveText("Genie");
+    const offered = await page
+      .request.get("/api/systems")
+      .then((response) => response.json() as Promise<{
+        systems: { id: string; title: string }[];
+        defaultId: string | null;
+      }>);
+    const expectedTitle = offered.systems.find(
+      (system) => system.id === offered.defaultId,
+    )?.title;
+    expect(expectedTitle, "the realm default must be a system on offer").toBeTruthy();
+    await expect(
+      page.getByRole("combobox", { name: "Game system" }),
+    ).toHaveText(expectedTitle!);
     // The creation form asks for a name, a description and a system, and
     // nothing else. `#world-interface-pack` exists nowhere, so checking its
     // absence passed against a blank page; a world's look is chosen in its
@@ -360,3 +378,4 @@ test.describe("Polish: create-world form preserves input on error (T024)", () =>
     await expect(page.locator("#world-description")).toHaveValue("Keep me around");
   });
 });
+

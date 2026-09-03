@@ -149,13 +149,6 @@ impl UserQuery {
         Ok(user.map(GraphQLUser::from))
     }
 
-    async fn game_systems(&self, ctx: &Context<'_>) -> GraphQLResult<Vec<GraphQLGameSystem>> {
-        let state = app_state(ctx)?;
-        load_game_systems(state)
-            .await
-            .map(|items| items.into_iter().map(GraphQLGameSystem::from).collect())
-    }
-
     async fn my_worlds(&self, ctx: &Context<'_>) -> GraphQLResult<Vec<GraphQLWorld>> {
         let state = app_state(ctx)?;
         let auth_user = authenticated_user(ctx)?;

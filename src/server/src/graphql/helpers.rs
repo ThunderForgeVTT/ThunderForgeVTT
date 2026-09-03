@@ -214,24 +214,6 @@ pub fn world_write_error(error: DieselError, fallback_message: &str) -> Error {
 // DATA LOADERS
 // ============================================================================
 
-/// Load all available game systems, ordered by title.
-pub async fn load_game_systems(state: &AppState) -> GraphQLResult<Vec<GameSystem>> {
-    let mut conn = state
-        .db_pool
-        .get()
-        .map_err(|_| Error::new("Failed to get DB connection"))?;
-
-    tokio::task::spawn_blocking(move || {
-        game_systems::table
-            .order(game_systems::title.asc())
-            .select(GameSystem::as_select())
-            .load::<GameSystem>(&mut conn)
-    })
-    .await
-    .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to query game systems"))
-}
-
 /// Load all worlds owned by the given user, ordered by most recently updated.
 pub async fn load_owned_worlds(state: &AppState, user_id: uuid::Uuid) -> GraphQLResult<Vec<World>> {
     let mut conn = state

@@ -2,14 +2,13 @@
 //!
 //! This module contains the GraphQL object type definitions for core entities:
 //! - GraphQLUser (identity)
-//! - GraphQLGameSystem (game system metadata)
 //! - GraphQLWorld (world/session container)
 //! - GraphQLWorldToken (game token/character)
 //! - GraphQLWorldEvent (change log entry)
 //!
 //! These types are foundational and referenced by queries/mutations throughout.
 
-use crate::models::{GameSystem, User, World, WorldEvent, WorldToken};
+use crate::models::{User, World, WorldEvent, WorldToken};
 use async_graphql::Json;
 use async_graphql::SimpleObject;
 use chrono::NaiveDateTime;
@@ -43,37 +42,6 @@ impl From<User> for GraphQLUser {
             is_admin: user.is_admin,
             created_at: user.created_at,
             updated_at: user.updated_at,
-        }
-    }
-}
-
-// ============================================================================
-// Game System Metadata
-// ============================================================================
-
-#[derive(SimpleObject, Debug, Clone)]
-pub struct GraphQLGameSystem {
-    pub id: uuid::Uuid,
-    pub slug: String,
-    pub title: String,
-    pub manifest_url: String,
-    pub version: String,
-    pub installed_by: uuid::Uuid,
-    pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
-}
-
-impl From<GameSystem> for GraphQLGameSystem {
-    fn from(system: GameSystem) -> Self {
-        Self {
-            id: system.id,
-            slug: system.slug,
-            title: system.title,
-            manifest_url: system.manifest_url,
-            version: system.version,
-            installed_by: system.installed_by,
-            created_at: system.created_at,
-            updated_at: system.updated_at,
         }
     }
 }

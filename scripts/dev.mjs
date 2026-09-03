@@ -1,7 +1,16 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { readFileSync, readlinkSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  readlinkSync,
+  symlinkSync,
+  unlinkSync,
+} from "node:fs";
 import path from "node:path";
 
 import {
@@ -199,6 +208,63 @@ async function reclaimPorts(ports) {
   }
 }
 
+/**
+ * Give the dev stack the packs that are in the repo, every start.
+ *
+ * `config/mod.rs` resolves `systems_dir` as `<data path>/packs/systems` and
+ * `interface_packs_dir` as `<data path>/packs/interface`, and since spec 032
+ * T085 the server *lists those directories* to answer which systems exist.
+ * So a pack that is not linked here is a pack the product does not have.
+ *
+ * # Why this exists
+ *
+ * It did not, and the omission was invisible. `data/packs/systems/` was a
+ * farm of symlinks made by hand on one afternoon in August, and nothing kept
+ * it in step with `packs/systems/`. Adding a system pack to the repo and
+ * starting the dev stack simply did not offer it — no error, no warning, just
+ * a picker that did not list the thing you had just written. That is another
+ * hand-kept list of systems, in a costume that made it hard to see as one.
+ *
+ * `scripts/e2e-parallel.mjs` already got this right: it derives the links
+ * from the directory on every run. This is the same loop, for the same
+ * reason, so that SC-004's "adding a system touches only that system's own
+ * pack directory" is true of a dev machine and not only of CI.
+ *
+ * Symlinks rather than copies: the shipping system packs are 110MB.
+ */
+function linkPacks(dataPath) {
+  for (const kind of ["systems", "interface"]) {
+    const source = path.join(ROOT_DIR, "packs", kind);
+    if (!existsSync(source)) continue;
+    const target = path.join(dataPath, "packs", kind);
+    mkdirSync(target, { recursive: true });
+
+    const wanted = readdirSync(source, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+
+    // A link to a pack that has been renamed or removed points at nothing,
+    // and a dangling entry is worse than a missing one: it is a pack the
+    // server tries to read and cannot.
+    for (const entry of readdirSync(target)) {
+      const link = path.join(target, entry);
+      if (!lstatSync(link).isSymbolicLink()) continue;
+      if (!wanted.includes(entry) || !existsSync(link)) unlinkSync(link);
+    }
+
+    let linked = 0;
+    for (const name of wanted) {
+      const link = path.join(target, name);
+      if (existsSync(link)) continue;
+      symlinkSync(path.join(source, name), link, "dir");
+      linked += 1;
+    }
+    if (linked > 0) {
+      log("dev", `Linked ${linked} new ${kind} pack(s) into the data directory.`);
+    }
+  }
+}
+
 async function run() {
   const args = parseArgs(process.argv.slice(2), { allowOnlyWasm: false, allowTunnel: true });
 
@@ -241,6 +307,10 @@ async function run() {
     { port: 5173, what: "frontend" },
     { port: 30000, what: "backend" },
   ]);
+
+  // Before the backend starts, because the backend reads these directories
+  // to answer which systems and interface packs exist.
+  linkPacks(process.env.THUNDERFORGE_DATA_PATH ?? path.join(ROOT_DIR, "data"));
 
   await ensureEngineBuild({ force: args.force, profile: engineProfile("dev") });
 

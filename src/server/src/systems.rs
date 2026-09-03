@@ -1,5 +1,5 @@
 use crate::auth_middleware::AuthenticatedUser;
-use crate::models::{GameSystem, NewGameSystem};
+use crate::models::NewGameSystem;
 use crate::schema::game_systems;
 use crate::state::AppState;
 use axum::{
@@ -28,37 +28,120 @@ pub fn admin_router() -> Router<AppState> {
     Router::new().route("/install", post(install_game_system))
 }
 
-async fn list_systems(
-    State(state): State<AppState>,
-) -> Result<Json<Vec<GameSystem>>, (StatusCode, Json<serde_json::Value>)> {
-    let mut conn = state.db_pool.get().map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": format!("Failed to get DB connection: {}", e)})),
-        )
-    })?;
+/// What a Game Master choosing a system needs to see in a list.
+///
+/// Mirrors `crate::interface_packs::InterfacePackSummary` — same four fields,
+/// same reason. A summary is what a picker needs; the manifest is served whole
+/// by `get_system_manifest` for anything that needs more.
+#[derive(serde::Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GameSystemSummary {
+    pub id: String,
+    pub title: String,
+    pub description: String,
+    pub version: String,
+}
 
-    let systems = tokio::task::spawn_blocking(move || {
-        game_systems::table
-            .order(game_systems::title.asc())
-            .select(GameSystem::as_select())
-            .load::<GameSystem>(&mut conn)
+/// Every system pack in the directory, in title order.
+///
+/// # Why the directory and not the `game_systems` table
+///
+/// This route read that table until spec 032 T085, and the table holds **zero
+/// rows** — measured, not assumed. Nothing has ever seeded it with the bundled
+/// packs, so the honest answer it gave was an empty list, and
+/// `apps/web/src/api/gameSystems.ts` compensated with two hand-kept literals
+/// naming all seven systems and their titles. That is the hardcoded list
+/// SC-004 forbids, and it existed because this function was looking in the
+/// wrong place.
+///
+/// `interface_packs::list_installed` already reads its directory, which is why
+/// nothing on the client hardcodes interface pack names. The asymmetry was the
+/// bug. A row per installed system earns its place when a system can be
+/// installed at runtime; ADR-029 says it cannot.
+///
+/// A pack that fails to parse is omitted rather than listed — offering a Game
+/// Master something that cannot be chosen is worse than not offering it, and
+/// it is the same call `list_installed` makes.
+pub fn list_installed(systems_dir: &str) -> Vec<GameSystemSummary> {
+    let Ok(entries) = std::fs::read_dir(systems_dir) else {
+        return Vec::new();
+    };
+
+    let mut out: Vec<GameSystemSummary> = entries
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().is_dir())
+        .filter_map(|entry| {
+            let text = std::fs::read_to_string(entry.path().join("system.json")).ok()?;
+            let manifest: serde_json::Value = serde_json::from_str(&text).ok()?;
+
+            // A pack may declare itself a starting point rather than a
+            // ruleset — one bundled pack does, describing itself as a
+            // blank-slate template meant to be forked. Offering it in a picker
+            // beside the real rulesets would be offering a fork of somebody's
+            // future work as a thing to play.
+            //
+            // A *declaration*, deliberately, not a name in this file. The
+            // whole point of reading the directory is that shared code knows
+            // no system's identity, and comparing the id against a literal
+            // here would put back exactly what T085 took out.
+            if manifest
+                .get("template")
+                .and_then(serde_json::Value::as_bool)
+                == Some(true)
+            {
+                return None;
+            }
+
+            Some(GameSystemSummary {
+                id: manifest.get("id")?.as_str()?.to_owned(),
+                title: manifest.get("title")?.as_str()?.to_owned(),
+                description: manifest
+                    .get("description")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned(),
+                version: manifest
+                    .get("version")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned(),
+            })
+        })
+        .collect();
+
+    out.sort_by(|a, b| a.title.cmp(&b.title));
+    out
+}
+
+/// What `/api/systems` answers: the systems, and which one a new world gets.
+///
+/// The default belongs here rather than in a second route because it is the
+/// same question — "what does this deployment offer, and what does it pick" —
+/// and because the alternative was the client answering the second half from
+/// a literal — `CreateWorldPage` opened with one system's id hardcoded as its
+/// initial state, which is shared web code naming a system by another route.
+///
+/// `null` is a real answer. An operator who configured no default gets a
+/// world with no system, which is a state the product handles; guessing one
+/// would bind a world to a ruleset nobody chose.
+#[derive(serde::Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct InstalledSystems {
+    pub systems: Vec<GameSystemSummary>,
+    pub default_id: Option<String>,
+}
+
+async fn list_systems(State(state): State<AppState>) -> Json<InstalledSystems> {
+    let systems = list_installed(&state.directories.systems_dir);
+    // A default naming a system this deployment does not have is not a
+    // default — offering it would preselect a choice that cannot be honoured.
+    let default_id = crate::admin::default_game_system_id(&state)
+        .filter(|id| systems.iter().any(|system| &system.id == id));
+
+    Json(InstalledSystems {
+        systems,
+        default_id,
     })
-    .await
-    .map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": format!("Failed to spawn blocking task: {}", e)})),
-        )
-    })?
-    .map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": format!("Failed to query game systems: {}", e)})),
-        )
-    })?;
-
-    Ok(Json(systems))
 }
 
 async fn get_system_manifest(
@@ -748,6 +831,138 @@ mod manifest_legal_enforcement_tests {
         let pack_dir = systems_dir.join(slug);
         std::fs::create_dir_all(&pack_dir).unwrap();
         std::fs::write(pack_dir.join("system.json"), manifest_json).unwrap();
+    }
+
+    /// Spec 032 T085: the list comes from the directory, not the table.
+    ///
+    /// The point of this test is what it does *not* do — it never touches
+    /// `game_systems`. That table holds zero rows on every install, which is
+    /// why the client had to carry a hand-kept list of all seven systems; a
+    /// pack written into a temp directory and seeded nowhere must be listed.
+    #[test]
+    fn list_installed_reports_a_pack_that_was_never_seeded_into_the_table() {
+        let (_state, systems_dir) = state_with_temp_systems_dir();
+        write_manifest(
+            &systems_dir,
+            "unseeded-pack",
+            r#"{"id": "unseeded-pack", "title": "Unseeded Pack",
+                "description": "Never inserted anywhere.", "version": "2.1.0"}"#,
+        );
+
+        let listed = list_installed(systems_dir.to_str().unwrap());
+
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].id, "unseeded-pack");
+        assert_eq!(listed[0].title, "Unseeded Pack");
+        assert_eq!(listed[0].version, "2.1.0");
+        assert_eq!(listed[0].description, "Never inserted anywhere.");
+    }
+
+    /// Title order, not directory order, which is whatever the filesystem
+    /// hands back. A picker that reorders itself between two machines is a
+    /// picker nobody can be told where to click.
+    #[test]
+    fn list_installed_orders_by_title() {
+        let (_state, systems_dir) = state_with_temp_systems_dir();
+        for (slug, title) in [("zzz", "Aardvark"), ("aaa", "Zeppelin"), ("mmm", "Middle")] {
+            write_manifest(
+                &systems_dir,
+                slug,
+                &format!(r#"{{"id": "{slug}", "title": "{title}", "version": "1.0.0"}}"#),
+            );
+        }
+
+        let listed = list_installed(systems_dir.to_str().unwrap());
+        let titles: Vec<&str> = listed.iter().map(|s| s.title.as_str()).collect();
+
+        assert_eq!(titles, vec!["Aardvark", "Middle", "Zeppelin"]);
+    }
+
+    /// A directory that is not a readable pack is omitted, not listed with a
+    /// blank name. Offering a Game Master something that cannot be chosen is
+    /// worse than not offering it.
+    #[test]
+    fn list_installed_omits_a_pack_it_cannot_read() {
+        let (_state, systems_dir) = state_with_temp_systems_dir();
+        write_manifest(&systems_dir, "broken", "{ this is not json");
+        write_manifest(
+            &systems_dir,
+            "untitled",
+            r#"{"id": "untitled", "version": "1.0.0"}"#,
+        );
+        write_manifest(
+            &systems_dir,
+            "fine",
+            r#"{"id": "fine", "title": "Fine", "version": "1.0.0"}"#,
+        );
+
+        let listed = list_installed(systems_dir.to_str().unwrap());
+        let ids: Vec<&str> = listed.iter().map(|s| s.id.as_str()).collect();
+
+        assert_eq!(ids, vec!["fine"]);
+    }
+
+    /// A pack may say it is a starting point rather than a ruleset, and be
+    /// believed. `basic-game-system` is the one that does.
+    ///
+    /// The declaration is the mechanism on purpose: shared code omitting a
+    /// pack by name would put back exactly the hardcoded knowledge T085 took
+    /// out, and this test would pass either way — which is why the second
+    /// assertion is here, naming a template this file has never heard of.
+    #[test]
+    fn list_installed_omits_a_pack_that_declares_itself_a_template() {
+        let (_state, systems_dir) = state_with_temp_systems_dir();
+        write_manifest(
+            &systems_dir,
+            "starting-point",
+            r#"{"id": "starting-point", "title": "Starting Point",
+                "version": "1.0.0", "template": true}"#,
+        );
+        write_manifest(
+            &systems_dir,
+            "a-ruleset",
+            r#"{"id": "a-ruleset", "title": "A Ruleset", "version": "1.0.0"}"#,
+        );
+
+        let listed = list_installed(systems_dir.to_str().unwrap());
+        let ids: Vec<&str> = listed.iter().map(|s| s.id.as_str()).collect();
+
+        assert_eq!(ids, vec!["a-ruleset"]);
+    }
+
+    /// The bundled packs, listed from the real directory this deployment
+    /// ships — the case the client used to answer from a literal.
+    #[test]
+    fn the_bundled_packs_directory_lists_every_shipping_system() {
+        let packs = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../packs/systems")
+            .canonicalize()
+            .expect("packs/systems must exist");
+
+        let listed = list_installed(packs.to_str().unwrap());
+
+        // Every directory that is not a declared template, and nothing else.
+        let expected = std::fs::read_dir(&packs)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|e| e.path().is_dir())
+            .filter(|e| {
+                let text = std::fs::read_to_string(e.path().join("system.json")).unwrap();
+                let m: serde_json::Value = serde_json::from_str(&text).unwrap();
+                m.get("template").and_then(serde_json::Value::as_bool) != Some(true)
+            })
+            .count();
+
+        assert_eq!(listed.len(), expected);
+        assert!(
+            listed.len() >= 7,
+            "expected the shipping rulesets, got {listed:?}"
+        );
+        assert!(
+            !listed.iter().any(|s| s.id == "basic-game-system"),
+            "the template pack must not be offered as a ruleset"
+        );
+        assert!(listed.iter().all(|s| !s.title.is_empty()));
     }
 
     #[tokio::test]

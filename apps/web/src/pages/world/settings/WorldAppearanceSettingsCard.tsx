@@ -13,7 +13,11 @@ import {
   listInterfacePacks,
   type InterfacePackSummary,
 } from "@/api/interfacePacks";
-import { BUNDLED_SYSTEM_LABELS } from "@/api/gameSystems";
+import {
+  listGameSystems,
+  titleFor,
+  type GameSystemSummary,
+} from "@/api/gameSystems";
 import { updateWorldInterfacePack } from "@/api/world";
 import { BASE_PACK_ID } from "@/appearance/appearance-context";
 import { Card } from "@/components/ui/card/Card";
@@ -45,13 +49,17 @@ interface WorldAppearanceSettingsCardProps {
  * version of the base pack's position: not a default that beats the others,
  * just the one that fits everywhere.
  */
-function packAudience(pack: InterfacePackSummary): string {
+function packAudience(
+  pack: InterfacePackSummary,
+  systems: GameSystemSummary[],
+): string {
   if (pack.targets.length === 0) {
     return "Works with any system";
   }
-  const named = pack.targets
-    .map((id) => BUNDLED_SYSTEM_LABELS[id] ?? id)
-    .join(", ");
+  // `titleFor` falls back to the id, which matters here: a pack may target a
+  // system this deployment does not have, and that target must still read as
+  // something rather than vanish from the sentence.
+  const named = pack.targets.map((id) => titleFor(systems, id)).join(", ");
   return `For ${named}`;
 }
 
@@ -63,6 +71,8 @@ export function WorldAppearanceSettingsCard({
   onChanged,
 }: WorldAppearanceSettingsCardProps) {
   const [packs, setPacks] = useState<InterfacePackSummary[]>([]);
+  /** Only so a pack's `targets` can be shown as titles rather than ids. */
+  const [systems, setSystems] = useState<GameSystemSummary[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /**
@@ -75,6 +85,12 @@ export function WorldAppearanceSettingsCard({
    */
   const [pending, setPending] = useState<string | null>(null);
   const selected = pending ?? interfacePackId ?? BASE_PACK_ID;
+
+  useEffect(() => {
+    listGameSystems()
+      .then((installed) => setSystems(installed.systems))
+      .catch(() => setSystems([]));
+  }, []);
 
   useEffect(() => {
     listInterfacePacks()
@@ -166,7 +182,7 @@ export function WorldAppearanceSettingsCard({
                 <span className="flex flex-col gap-0.5 py-0.5">
                   <span className="font-medium">{pack.title}</span>
                   <span className="text-xs text-muted-foreground">
-                    {packAudience(pack)}
+                    {packAudience(pack, systems)}
                     {pack.description ? ` · ${pack.description}` : ""}
                   </span>
                 </span>

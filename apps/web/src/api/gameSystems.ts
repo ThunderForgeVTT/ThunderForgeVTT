@@ -1,37 +1,80 @@
 import type { SystemManifest } from "@/contexts/GameSystemContext";
 
 /**
- * Spec 016 (T008), extended for the six research-digest-backed packs: the
- * set of system packs actually bundled with this deployment today. There is
- * no reconciled "installed system packs" catalog yet — the existing
- * `gameSystems` GraphQL query and `/api/systems` REST list both read from a
- * `game_systems` database table that nothing currently seeds with the
- * bundled packs under `packs/systems/` (a pre-existing gap). This constant
- * is the honest, minimal picker source for what's actually selectable right
- * now; extend it (or replace it with a real catalog query) as more packs
- * are added.
+ * Enough to choose a system from, without fetching every manifest.
+ *
+ * Mirrors `InterfacePackSummary` in `interfacePacks.ts`, because the two
+ * questions are the same question.
  */
-export const BUNDLED_SYSTEM_IDS: readonly string[] = [
-  "dnd5e",
-  "genie",
-  "pathfinder2e",
-  "cypher_system",
-  "fate_core",
-  "blades_in_the_dark",
-  "year_zero_engine",
-];
+export interface GameSystemSummary {
+  id: string;
+  title: string;
+  description: string;
+  version: string;
+}
 
-/** Display titles for `BUNDLED_SYSTEM_IDS`, mirrored from each pack's
- * `system.json` `title` field so pickers don't have to show raw ids. */
-export const BUNDLED_SYSTEM_LABELS: Readonly<Record<string, string>> = {
-  dnd5e: "5E System Core",
-  genie: "Genie",
-  pathfinder2e: "Pathfinder Second Edition",
-  cypher_system: "Cypher System",
-  fate_core: "Fate Core",
-  blades_in_the_dark: "Blades in the Dark",
-  year_zero_engine: "Year Zero Engine",
-};
+/**
+ * What this deployment offers, and which system a new world gets.
+ *
+ * The default arrives with the list rather than from a second call, because
+ * it is the same question and because the client used to answer its second
+ * half from a literal. `null` means the operator configured no default, which
+ * is a real answer: a world created without naming a system has none.
+ */
+export interface InstalledSystems {
+  systems: GameSystemSummary[];
+  defaultId: string | null;
+}
+
+/**
+ * Every system pack this deployment has, in title order.
+ *
+ * # What this replaces
+ *
+ * `BUNDLED_SYSTEM_IDS` and `BUNDLED_SYSTEM_LABELS` stood here: two hand-kept
+ * literals naming all seven bundled systems and their titles. Their comment
+ * was honest about why — "there is no reconciled installed system packs
+ * catalog yet ... extend it as more packs are added" — and that is the
+ * hardcoded list spec 032's SC-004 forbids, since adding a system is supposed
+ * to touch only that system's own pack directory.
+ *
+ * They existed because `/api/systems` read the `game_systems` database table,
+ * and that table has never been seeded with the bundled packs, so the server
+ * honestly answered an empty list and the client compensated with a literal.
+ * Spec 032 T085 pointed the route at `packs/systems/` instead — the same
+ * directory listing `/api/interface-packs` has always used, which is why
+ * nothing here ever hardcoded interface pack names. The asymmetry was the bug.
+ *
+ * A pack that declares itself a template is not offered; that is the pack's
+ * declaration, not a decision taken here.
+ */
+export async function listGameSystems(): Promise<InstalledSystems> {
+  const response = await fetch("/api/systems", { credentials: "same-origin" });
+  const body = (await response.json().catch(() => null)) as
+    | (InstalledSystems & { error?: string })
+    | null;
+
+  if (!response.ok) {
+    throw new Error(
+      body?.error ?? `Failed to load game systems (${response.status})`,
+    );
+  }
+  if (!body || !Array.isArray(body.systems)) {
+    throw new Error("Game systems response was not valid JSON");
+  }
+  return body;
+}
+
+/**
+ * A system's title, for a place that has an id and needs a name.
+ *
+ * Falls back to the id rather than to nothing: a pack that names a target
+ * this deployment does not have must still read as *something*, and the id
+ * is the truest thing left to say about it.
+ */
+export function titleFor(systems: GameSystemSummary[], id: string): string {
+  return systems.find((system) => system.id === id)?.title ?? id;
+}
 
 /**
  * `IMPLEMENTED_SYSTEM_IDS` stood here, holding only `genie`.

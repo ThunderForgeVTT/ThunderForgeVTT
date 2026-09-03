@@ -35,7 +35,7 @@ This directory contains architecture decisions for ThunderForgeVTT, captured usi
 | [20260504-025](./20260504-025-pack_crate_naming_convention.md)                        | Stub     | Pack Crate Naming Convention _(file is empty — content not yet written)_                      |
 | [20260504-026](./20260504-026-pack_architecture_and_pack_type_standard.md)            | Stub     | Pack Architecture and Pack Type Standard _(file is empty — content not yet written)_          |
 | [20260504-027](./20260504-027-game_system_packaging_and_manifest_contract.md)         | Stub     | Game System Packaging and Manifest Contract _(file is empty — content not yet written)_       |
-| [20260504-028](./20260504-028-game_systems_db_model_and_ownership_rules.md)           | Stub     | Game Systems DB Model and Ownership Rules _(file is empty — content not yet written)_         |
+| [20260504-028](./20260504-028-game_systems_db_model_and_ownership_rules.md)           | Accepted | Game Systems DB Model and Ownership Rules                                                     |
 | [20260504-029](./20260504-029-runtime_module_loading_and_security.md)                 | Accepted | Runtime Module Loading and Security                                                           |
 | [20260504-030](./20260504-030-compendium_pack_format.md)                              | Stub     | Compendium Pack Format _(file is empty — content not yet written)_                            |
 | [20260505-031](./20260505-031-scene_domain_model.md)                                  | Accepted | Scene Domain Model                                                                            |
@@ -70,6 +70,7 @@ This directory contains architecture decisions for ThunderForgeVTT, captured usi
 | [20260902-060](./20260902-060-one_system_contract_with_declared_values.md) | Accepted | One System Contract, Carrying Declared Values |
 | [20260902-061](./20260902-061-system_rules_discovery_not_a_registry.md) | Accepted | A System Pack's Rules Are Discovered, Not Listed |
 | [20260902-062](./20260902-062-packs_extend_the_engine_with_data_not_code.md) | Accepted | System Packs Extend the Engine With Data, Not Code |
+| [20260903-063](./20260903-063-a_pack_owns_the_tables_it_writes.md) | Accepted | A Pack Owns the Tables It Writes _(destination decided; the move sized and deferred)_ |
 
 > **Note (2026-08-19):** ADRs 020–024 originally collided with an unrelated "pack system" batch that reused the same day-020 through day-024 numbers. The world-domain ADRs (020–024 above) were committed first and are documented here; the colliding pack-system ADRs were renumbered to 026–030. See `docs/SYSTEM_HOOKS_API_GUIDE.md` and ADR-036's "Related Decisions" for the corrected references.
 

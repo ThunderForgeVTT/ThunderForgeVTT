@@ -3,7 +3,8 @@
   "title": "Basic Game System",
   "version": "0.1.0",
   "author": "ThunderForgeVTT Contributors",
-  "description": "A minimal, generic starter system pack for ThunderForgeVTT \u2014 a blank-slate template with a small ability score block and no bespoke mechanics, meant to be forked as the starting point for a new system pack.",
+  "description": "A minimal, generic starter system pack for ThunderForgeVTT — a blank-slate template with a small ability score block and no bespoke mechanics, meant to be forked as the starting point for a new system pack.",
+  "template": true,
   "license": "ThunderForgeVTT Original Content",
   "url": "https://github.com/ThunderForgeVTT/ThunderForgeVTT",
   "compatibility": {

@@ -32,8 +32,7 @@ use crate::users::{UserDataDeleteSummary, UserDataExport, delete_user_data_owned
 // Phase 4.9.Z Step 1: Core entity types extracted to separate module
 pub mod types;
 pub use types::{
-    GraphQLGameSystem, GraphQLMyWorldEntry, GraphQLUser, GraphQLWorld, GraphQLWorldEvent,
-    GraphQLWorldToken,
+    GraphQLMyWorldEntry, GraphQLUser, GraphQLWorld, GraphQLWorldEvent, GraphQLWorldToken,
 };
 
 // Phase 4.9.Z Step 2: Admin types extracted to separate module
@@ -61,10 +60,9 @@ pub use input_types::{
 pub mod helpers;
 pub use helpers::{
     admin_user, app_state, authenticated_user, get_world_id_from_scene, load_all_worlds,
-    load_game_systems, load_owned_world_event_by_id, load_owned_world_events,
-    load_owned_world_token_by_id, load_owned_world_tokens, load_owned_worlds,
-    load_visible_world_by_id, normalize_world_name, prepare_world_input, require_visible_world,
-    validate_world_name, world_write_error,
+    load_owned_world_event_by_id, load_owned_world_events, load_owned_world_token_by_id,
+    load_owned_world_tokens, load_owned_worlds, load_visible_world_by_id, normalize_world_name,
+    prepare_world_input, require_visible_world, validate_world_name, world_write_error,
 };
 
 // Phase 4.9.Z Step 5: Query extraction into separate modules
