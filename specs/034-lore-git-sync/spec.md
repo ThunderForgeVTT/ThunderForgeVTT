@@ -58,6 +58,16 @@ token, deleted repository, host outage — loses nothing either. In-app lore is
 authoritative at all times, and no failure on the far side of the network may
 alter, block, or degrade it.
 
+## Clarifications
+
+### Session 2026-09-04
+
+- Q: Should this feature ship export-first, or is writing lore in the repository the primary way it will be used? → A: Export-first — Stories 1 and 2 are the first delivery; Story 3 is a later, separately-scheduled increment.
+- Q: Must the first delivery connect to more than one repository host? → A: One host (GitHub). Multi-host is an architectural constraint on the seam, not a first-delivery feature.
+- Q: How does the platform notice a push to the connected repository — webhook or polling? → A: Polling only; the outbound job reads the remote head on the same pass. No inbound endpoint.
+- Q: How does a Game Master grant repository write access? → A: A GitHub App the instance operator registers, installed by the Game Master on one repository. Not a pasted token, not OAuth `repo` scope.
+- Q: Where does FR-004's host-neutrality seam begin, given an App installation is host-specific? → A: After the grant. The credential-granting step may be host-specific; everything downstream of it is host-neutral.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A Game Master mirrors a world's lore into a repository they own (Priority: P1)
@@ -261,9 +271,28 @@ confirm the app presents both versions and applies only the one chosen.
   given world MUST derive from that user's authority over that world at the
   time of each synchronisation, re-checked rather than captured at connection
   time.
-- **FR-004**: The system MUST support connecting to more than one repository
-  host, and MUST NOT expose host-specific concepts in the user-facing
-  connection flow beyond what the user must supply to grant access.
+- **FR-004**: The system MUST NOT expose host-specific concepts in the
+  user-facing connection flow, the data model, or the synchronisation logic
+  beyond what the user must supply to grant access, so that supporting a second
+  repository host is the addition of an adapter rather than a change to this
+  feature. **A first delivery supports exactly one host** (clarified
+  2026-09-04); this requirement constrains the architecture, and is satisfied by
+  a design that could take a second host, not by shipping two.
+- **FR-004a**: The seam FR-004 requires MUST be demonstrated rather than
+  asserted — by naming, for the one host built, every place a host-specific
+  concept is confined to, so that a reviewer can check the claim without
+  building the second host. A seam nobody can point at is not a seam.
+- **FR-004b**: The seam begins **after the credential grant**. The act of
+  granting access MAY be as host-specific as the host requires — an application
+  installation on GitHub is not expressible on a host that has no such concept —
+  and FR-004 does not apply to it. Everything downstream of the grant MUST be
+  host-neutral: the connection record, the path mapping, commit synthesis,
+  attribution, divergence detection, and write verification MUST NOT branch on
+  which host is in use.
+- **FR-004c**: What crosses that boundary MUST be a credential the rest of the
+  system can use without knowing how it was obtained. No component beyond the
+  grant may read an installation identifier, an App id, or any other artefact
+  of how access was arranged.
 - **FR-005**: Removing a connection MUST leave the world's lore entirely intact
   and MUST leave the repository's existing contents untouched.
 - **FR-006**: A world with no connection MUST behave exactly as it does today
@@ -360,6 +389,13 @@ confirm the app presents both versions and applies only the one chosen.
   same repository.
 - **FR-034**: The system MUST be able to verify that the repository's contents
   match what it believes it wrote, rather than assuming a reported success.
+- **FR-034a**: The system MUST learn the repository's state by reading it on a
+  schedule, not by receiving a notification from the host. It MUST NOT expose
+  an inbound endpoint for a repository host to call.
+- **FR-034b**: The scheduled read that FR-034a requires MUST be the same pass
+  that writes, so that divergence detection (FR-031) and write verification
+  (FR-034) are answered by the remote state already fetched rather than by an
+  additional round trip.
 
 **Credentials and privacy**
 
@@ -370,6 +406,26 @@ confirm the app presents both versions and applies only the one chosen.
 - **FR-036**: The system MUST request the narrowest access the feature needs —
   write access to the connected repository and nothing else — and MUST show the
   user what access is being granted before they grant it.
+- **FR-036a**: Access MUST be granted by the Game Master installing an
+  application the instance operator has registered with the repository host,
+  scoped at installation to the single repository being connected. The system
+  MUST NOT accept a pasted long-lived user token, and MUST NOT request a scope
+  that confers access to repositories other than the one connected.
+- **FR-036b**: Because FR-036a requires per-instance registration, an instance
+  whose operator has not registered an application MUST NOT present the feature
+  as broken. The connection surface MUST state that this instance has no
+  repository integration configured, name what the operator must do, and remain
+  entirely absent from a world's settings in every other respect. A Game Master
+  MUST NOT be shown a flow that cannot complete.
+- **FR-036c**: The operator-facing configuration MUST report whether its
+  registration is complete and usable — the same diagnostic posture spec 007
+  requires of a partially-configured OAuth provider — rather than failing at the
+  moment a Game Master first tries to connect.
+- **FR-036d**: Credentials obtained from an installation are short-lived and
+  MUST be refreshed rather than stored beyond their lifetime. Revocation
+  performed at the host — uninstalling the application — MUST be detected and
+  surfaced as a connection needing attention (FR-029), not as a synchronisation
+  error the Game Master cannot interpret.
 - **FR-037**: Before a first synchronisation, the system MUST tell the Game
   Master, in plain language, that per-entry lore permissions do not survive the
   mirror: everything exported is visible to everyone with access to the
@@ -462,14 +518,18 @@ confirm the app presents both versions and applies only the one chosen.
 
 ## Assumptions
 
-- **The translation direction is export-first, and the user's cut-off sentence
-  is resolved that way.** The recorded request ends mid-sentence at "a job that
-  can translate our [format]". This spec reads it as translating *our* content
-  *into* a repository — outward — and treats incoming changes as a separate,
-  later, explicitly-accepted path (User Story 3). If the intent was inbound
-  authoring as the primary mode, Stories 1 and 3 swap priority and this
-  assumption must be revisited before planning. **This needs the user's
-  confirmation.**
+- **The translation direction is export-first. Confirmed 2026-09-04.** The
+  recorded request ends mid-sentence at "a job that can translate our
+  [format]". This spec reads it as translating *our* content *into* a
+  repository — outward — and treats incoming changes as a separate, later,
+  explicitly-accepted path (User Story 3). That reading is confirmed: the
+  first delivery is Stories 1 and 2, and Story 3 is a separately-scheduled
+  increment that is not part of it.
+
+  Two consequences worth stating, because they are what the confirmation buys:
+  a first delivery cannot alter in-app lore *by construction*, since nothing in
+  Stories 1 and 2 writes to a world; and Story 3 may be re-evaluated on its own
+  merits later, including being dropped, without invalidating anything shipped.
 - **This is not a format-translation problem.** Lore is already markdown with a
   revision history carrying author, timestamp, and restore lineage. The work is
   path mapping, commit synthesis, and reconciliation. Any plan that budgets
@@ -511,10 +571,82 @@ confirm the app presents both versions and applies only the one chosen.
   from repository path is what makes it independent — but the position above is
   no longer this document's to assert alone.
 
-  **This is the single most consequential decision in this spec and
-  needs the user's explicit confirmation**, because accepting it means a private
-  repository may carry readable paths the platform's own URLs deliberately will
-  not.
+  **Confirmed 2026-09-04**, by the same decision that amended 012: approving
+  FR-012a is approving this, because the two are the same choice seen from
+  either side. What was accepted, stated plainly so nobody has to reconstruct
+  it: a connected private repository carries readable, title-derived paths that
+  the platform's own URLs will deliberately stop exposing. That is not an
+  inconsistency — the repository is neither unauthenticated nor the platform's,
+  and its access control is the Game Master's (FR-037) — but it is a real
+  asymmetry, and it was chosen rather than overlooked.
+- **One repository host at first delivery, with the seam real. Confirmed
+  2026-09-04.** GitHub alone is built. The original request said "github or
+  gitlab", not both, and a second host is a second authentication integration,
+  a second API client, and a second set of failure modes to exercise — roughly
+  doubling the work to serve a user who may not exist yet. FR-004 is therefore
+  an architectural obligation rather than a feature: nothing host-specific
+  reaches the connection flow, the data model, or the synchronisation logic,
+  and FR-004a requires that confinement to be pointed at rather than claimed.
+  The cost of the seam is small; the cost of the second implementation is not,
+  and it is deferred until something asks for it.
+
+- **Incoming changes are noticed by polling, never by webhook. Confirmed
+  2026-09-04.** The synchronising job reads the remote head on the same pass it
+  writes, which answers three questions at once: has the history diverged
+  (FR-031), does the repository contain what we believe we wrote (FR-034), and —
+  once Story 3 exists — is there anything here the world does not have.
+
+  A webhook would notice sooner, and nothing in this spec's success criteria
+  puts a bound on how soon an *incoming* change must be seen; SC-003's 60
+  seconds governs the outbound direction only. Against that, a webhook requires
+  a publicly reachable endpoint, a per-connection secret, signature
+  verification and replay handling — a new externally-facing surface to secure.
+  Decisively: **a self-hosted instance behind a home network cannot receive a
+  webhook at all**, and that is precisely the operator most likely to want a
+  git mirror. An option unavailable to the primary audience is not an option.
+
+  This is settled now although Story 3 is deferred, because the connection
+  record and the job are built in the first delivery and would otherwise be
+  designed around export alone and reworked later.
+
+- **Repository access is granted by installing an operator-registered
+  application, not by a pasted token. Decided 2026-09-04.** The Game Master
+  installs it on exactly one repository, which is what makes FR-036's "narrowest
+  access" literally true, and the resulting credentials are short-lived and
+  revocable at the host by uninstalling.
+
+  OAuth's `repo` scope was rejected outright: it grants write access to every
+  repository the user owns, which FR-036 forbids. Note that signing in with a
+  repository host under spec 007 grants nothing here — a login identity carries
+  no repository authority, and the two must not be conflated.
+
+  **The cost is real and is accepted rather than hidden.** This requires every
+  instance operator to register an application before any Game Master on that
+  instance can connect, which is setup work a pasted fine-grained token would
+  not have needed. FR-036b and FR-036c exist because of it: an unconfigured
+  instance must say so plainly to the operator and show a Game Master nothing at
+  all, rather than offering a flow that dead-ends. The failure this guards
+  against is the worst version of this decision — a self-hoster's players
+  finding a connect button that cannot work.
+
+- **The host-neutrality seam begins after the credential grant. Decided
+  2026-09-04.** Choosing an application installation (FR-036a) and demanding
+  host-neutrality (FR-004) collide at exactly one point — the moment access is
+  granted — because an installation is a GitHub concept with no GitLab
+  equivalent.
+
+  The line is drawn so that the grant is exempt and everything after it is not.
+  This is the honest division rather than a convenient one: the grant genuinely
+  differs per host, while path mapping, commit synthesis, attribution,
+  divergence detection and verification genuinely do not. Abstracting the grant
+  as well would mean designing a general credential-grant flow from a single
+  example, which is how an abstraction ends up fitting nothing but the case it
+  was drawn from.
+
+  FR-004c is what keeps the line from eroding: an installation identifier must
+  not leak past the grant. The moment the synchronising job knows it is talking
+  to GitHub, the seam has stopped existing whatever the requirements say.
+
 - **Two-way sync is out of scope for a first delivery.** Story 3 is a reviewed
   import, not continuous bidirectional synchronisation. Prose does not merge;
   no automatic merge is offered anywhere in this spec, at any priority.

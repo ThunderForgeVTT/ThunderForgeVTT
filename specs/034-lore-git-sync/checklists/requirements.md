@@ -49,11 +49,11 @@
 
 ## Open Items Requiring User Confirmation
 
-- [ ] **Translation direction.** The originating request's sentence is cut off
+- [x] **Translation direction.** The originating request's sentence is cut off
   at "a job that can translate our [format]". Read here as outward export first,
   with reviewed import as P3. If inbound authoring was the primary intent,
   User Stories 1 and 3 swap priority.
-- [ ] **Repository paths stay human-readable while in-app URLs may go opaque.**
+- [x] **Repository paths stay human-readable while in-app URLs may go opaque.**
   The spec's position is that these answer different threats and do not
   conflict. Accepting it means a connected private repository carries readable
   paths that the platform's own URLs will deliberately stop exposing.
@@ -64,5 +64,5 @@
 
 ## Blocking Dependencies
 
-- [ ] `031-playability` FR-038 (lore tree and tags) must ship first; FR-008
+- [x] `031-playability` FR-038 (lore tree and tags) must ship first; FR-008
   cannot be satisfied without it.
