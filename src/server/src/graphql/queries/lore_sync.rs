@@ -352,13 +352,35 @@ pub fn integration_status(
 /// moment a Game Master presses connect. Presence is what this build can
 /// check without naming a host.
 pub fn instance_repository_integration() -> RepositoryIntegrationStatus {
-    let read = |name: &str| std::env::var(name).ok();
-    integration_status(
-        read(REPO_APP_ID_ENV).as_deref(),
-        read(REPO_APP_SLUG_ENV).as_deref(),
-        read(REPO_APP_PRIVATE_KEY_ENV).as_deref(),
-        crate::lore_sync::git::git_is_available(),
-    )
+    // Delegated to `repo_host::registration_from_env`, which does what a
+    // presence check cannot: it **parses the key**. A value that is set but is
+    // not a usable RSA private key is the case a presence check calls
+    // configured, and it is the one that turns into an unreadable signing
+    // error the first time a Game Master tries to connect — which is precisely
+    // what FR-036c exists to prevent.
+    //
+    // It also accepts the four shapes a PEM arrives in from an environment —
+    // a file path, base64, escaped newlines, real newlines — so an operator
+    // whose deployment platform only takes single-line values is configured
+    // rather than mysteriously broken.
+    match crate::repo_host::registration_from_env() {
+        Ok(_) => RepositoryIntegrationStatus {
+            configured: true,
+            operator_guidance: None,
+        },
+        Err(problems) => RepositoryIntegrationStatus {
+            configured: false,
+            // Every problem at once. An operator restarting once per missing
+            // variable is a configuration experience nobody finishes.
+            operator_guidance: Some(
+                problems
+                    .iter()
+                    .map(|p| p.guidance())
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            ),
+        },
+    }
 }
 
 /// The world's connection row, or `None`. No authority check — every caller

@@ -97,6 +97,7 @@ thunderforge_presence = { path = "../../crates/thunderforge-presence" }
 # the cache-core split, docs/CLIENT_WORLD_CACHE.md.
 thunderforge_axum_auth_core = { path = "../../crates/thunderforge-axum-auth-core" }
 thunderforge_axum_oauth = { path = "../../crates/thunderforge-axum-oauth" }
+thunderforge_repo_host = { path = "../../crates/thunderforge-repo-host" }
 thunderforge_axum_oidc = { path = "../../crates/thunderforge-axum-oidc" }
 reqwest = { version = "0.13.4", default-features = false, features = [
   "form",

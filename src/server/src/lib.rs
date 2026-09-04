@@ -48,6 +48,7 @@ pub mod moderation;
 pub mod network;
 pub mod peer_signaling;
 pub mod pubsub;
+pub mod repo_host;
 pub mod scene_assets_serve;
 pub mod scene_fingerprint;
 pub mod schema;

@@ -36,7 +36,7 @@ most of them, because Story 2 *is* the tests.
 - [X] T003 [P] Scaffold `crates/thunderforge-repo-host/` (package `thunderforge_repo_host`, `crate-type = ["rlib"]`, edition 2024, `[lints] workspace = true`), add it to the root `Cargo.toml` workspace members, and depend on it by path from `src/server/Cargo.toml`. **No `axum`, `diesel` or `reqwest` dependency** — state that constraint in the manifest as a comment the way `crates/thunderforge-axum-oauth/Cargo.toml` does, with the reason (`research.md` R5a).
 - [X] T004 [P] Add the RS256 JWT signing dependency to `crates/thunderforge-repo-host/Cargo.toml`, plus `proptest` as a dev-dependency. Nothing in the workspace signs asymmetrically today — verified 2026-09-04, the crypto surface is `aes-gcm`, `sha2`, `rand`, `totp-rs` — so this is a deliberate addition (`research.md` R5).
 - [X] T005 [P] Add a startup check for the `git` binary in `src/app/src/main.rs`, reporting its absence the way a partially-configured OAuth provider is reported rather than failing when a Game Master first connects (FR-036c). This is the server's first external binary dependency and there is no `Dockerfile` recording it (`research.md` R1).
-- [ ] T006 [P] Document the `git` requirement and the repository-application configuration in `README.md` and `docs/`, including that an instance without a registered application must answer `configured: false` (FR-036b).
+- [X] T006 [P] Document the `git` requirement and the repository-application configuration in `README.md` and `docs/`, including that an instance without a registered application must answer `configured: false` (FR-036b).
 
 ---
 
@@ -56,7 +56,7 @@ most of them, because Story 2 *is* the tests.
 - [X] T011 [P] Implement token-response parsing and the refresh decision in `crates/thunderforge-repo-host/src/token.rs` — given a cached credential and a clock, does it need refreshing. Pure, and property-testable.
 - [X] T012 [P] Implement grant hand-off construction and single-repository scope validation in `crates/thunderforge-repo-host/src/github.rs` (FR-036a: a grant covering more than the one repository is refused). The grant requests **contents write and issue write** (FR-036e) — the second is what makes FR-040b's public disassociation possible, and a disassociation the product cannot perform is a commitment it should not make. Both must be shown to the user before they grant, with the reason for the second.
 - [X] T013 Property-test the crate in `crates/thunderforge-repo-host/tests/` — refresh-window arithmetic across clock boundaries, scope validation rejecting a broader grant, claim construction. **`cargo test -p thunderforge_repo_host` must pass with no network and no application configured**; that is the whole point of the pure/effects split.
-- [ ] T014 Implement the effects half in `src/server/src/repo_host.rs` — the token-exchange HTTP call via the existing `reqwest` (rustls) client, and the credential cache. This is the only place in `src/server` that may name a host.
+- [X] T014 Implement the effects half in `src/server/src/repo_host.rs` — the token-exchange HTTP call via the existing `reqwest` (rustls) client, and the credential cache. This is the only place in `src/server` that may name a host.
 
 ### Storage
 
