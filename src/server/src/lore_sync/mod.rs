@@ -38,6 +38,7 @@
 //! host-neutral protocol, where a host's REST API would put one vendor inside
 //! this module. See `specs/034-lore-git-sync/research.md` R1.
 
+pub mod apply;
 pub mod document;
 pub mod git;
 pub mod paths;
@@ -47,3 +48,7 @@ pub mod workspace;
 #[cfg(test)]
 #[path = "constraints_tests.rs"]
 mod constraints_tests;
+
+#[cfg(test)]
+#[path = "git_roundtrip_tests.rs"]
+mod git_roundtrip_tests;
