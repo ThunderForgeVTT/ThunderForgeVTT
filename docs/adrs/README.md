@@ -32,12 +32,12 @@ This directory contains architecture decisions for ThunderForgeVTT, captured usi
 | [20260504-022](./20260504-022-world_routing_rules.md)                                 | Accepted | World Routing Rules                                                                           |
 | [20260504-023](./20260504-023-world_ownership_rules.md)                               | Accepted | World Ownership Rules                                                                         |
 | [20260504-024](./20260504-024-world_placeholder_domain_objects.md)                    | Accepted | World Placeholder Domain Objects                                                              |
-| [20260504-025](./20260504-025-pack_crate_naming_convention.md)                        | Stub     | Pack Crate Naming Convention _(file is empty — content not yet written)_                      |
-| [20260504-026](./20260504-026-pack_architecture_and_pack_type_standard.md)            | Stub     | Pack Architecture and Pack Type Standard _(file is empty — content not yet written)_          |
-| [20260504-027](./20260504-027-game_system_packaging_and_manifest_contract.md)         | Stub     | Game System Packaging and Manifest Contract _(file is empty — content not yet written)_       |
+| [20260504-025](./20260504-025-pack_crate_naming_convention.md)                        | Accepted | Pack Crate Naming Convention _(written 2026-09-04; the pack id is the directory, never the crate)_ |
+| [20260504-026](./20260504-026-pack_architecture_and_pack_type_standard.md)            | Superseded | Pack Architecture and Pack Type Standard _(answered by spec 032 and ADRs 059–066; see the file for the map)_ |
+| [20260504-027](./20260504-027-game_system_packaging_and_manifest_contract.md)         | Accepted | Game System Packaging and Manifest Contract _(amended 2026-08-23; this row said "empty" and was wrong)_ |
 | [20260504-028](./20260504-028-game_systems_db_model_and_ownership_rules.md)           | Accepted | Game Systems DB Model and Ownership Rules                                                     |
 | [20260504-029](./20260504-029-runtime_module_loading_and_security.md)                 | Accepted | Runtime Module Loading and Security                                                           |
-| [20260504-030](./20260504-030-compendium_pack_format.md)                              | Stub     | Compendium Pack Format _(file is empty — content not yet written)_                            |
+| [20260504-030](./20260504-030-compendium_pack_format.md)                              | Open     | Compendium Pack Format _(genuinely undecided; the thinking lives in specs/026-content-collections)_ |
 | [20260505-031](./20260505-031-scene_domain_model.md)                                  | Accepted | Scene Domain Model                                                                            |
 | [20260505-032](./20260505-032-canvas_rendering_strategy_bevy.md)                      | Accepted | Canvas Rendering Strategy (Bevy)                                                              |
 | [20260505-033](./20260505-033-token_data_model_and_ownership.md)                      | Accepted | Token Data Model & Ownership                                                                  |

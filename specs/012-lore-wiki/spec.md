@@ -133,9 +133,42 @@ A DM viewing a lore entry opens its revision history and sees a chronological li
 - **FR-010**: The system MUST reject an image upload larger than 25 MB, or of an unsupported format, with a clear error rather than silently failing or leaving the entry referencing a broken asset.
 - **FR-010a**: The system MUST reject saving a lore entry whose Markdown content exceeds 25 MB, with a clear error, rather than silently truncating or failing.
 - **FR-011**: Every file associated with a lore entry (its Markdown content object and every image asset) MUST be stored on disk/object storage under a UUID-based identifier; the UUID MUST NOT be derived from or expose the entry's or file's human-supplied name.
-- **FR-012**: The database MUST store, per lore entry, both the human-supplied title and a urlified slug derived from it, and MUST use the slug (not the UUID) in the entry's shareable/viewable URL.
-- **FR-013**: When two lore entries in the same world would urlify to the same slug, the system MUST disambiguate the later one's slug automatically (e.g., numeric suffix) so both remain independently reachable by URL.
-- **FR-014**: When a lore entry's title changes, the system MUST update its slug to match the new title while keeping the entry reachable (old slug may redirect or 404-gracefully, but MUST NOT serve a different entry's content).
+- **FR-012**: ~~The database MUST store, per lore entry, both the human-supplied title and a urlified slug derived from it, and MUST use the slug (not the UUID) in the entry's shareable/viewable URL.~~ **Superseded 2026-09-04 — see the amendment below.**
+- **FR-013**: ~~When two lore entries in the same world would urlify to the same slug, the system MUST disambiguate the later one's slug automatically (e.g., numeric suffix) so both remain independently reachable by URL.~~ **Moot under the FR-012 amendment** — an opaque identifier cannot collide, so there is nothing to disambiguate. Retained struck through because the *title* may still need a uniqueness rule for human legibility, and deleting this would lose the question along with the answer.
+- **FR-014**: ~~When a lore entry's title changes, the system MUST update its slug to match the new title while keeping the entry reachable (old slug may redirect or 404-gracefully, but MUST NOT serve a different entry's content).~~ **Moot under the FR-012 amendment** — an identifier that does not derive from the title does not change when the title does, which is a strictly better answer to the same problem: the entry stays reachable across a rename with no redirect and no stale slug.
+
+### Amendment 2026-09-04 — lore entry URLs become opaque identifiers
+
+**FR-012a**: A lore entry's shareable/viewable URL MUST be keyed by an opaque,
+non-guessable identifier that is not derived from the entry's title.
+
+**Why this supersedes FR-012.** The original requirement chose a title slug for
+legibility, and legibility in a URL is a real benefit. It also makes a world's
+lore *enumerable by anyone who can guess titles* — and titles in a shared
+setting are exactly the guessable kind ("the-red-keep", "session-one",
+"npcs"). An outsider who obtains one entry's URL can walk to its siblings by
+construction rather than by authorisation. That is the same enumeration
+concern ADR-049 treats as non-negotiable for shared artifacts, arriving through
+a door nobody had checked.
+
+**What this does not change.** FR-015 still governs access: a request for an
+entry is denied without at least Viewer access under its ownership block. This
+amendment does not add a permission — it removes a way to discover *what
+exists* before the permission check answers.
+
+**What it costs.** Lore URLs stop being human-readable. That is a genuine loss
+and is accepted deliberately; the title is still shown everywhere a person
+actually reads it, and `034-lore-git-sync` keeps human-meaningful **repository
+paths**, which is where legible naming has value without the enumeration
+exposure. That spec's "the slug-versus-UUID tension is resolved by separating
+URL identity from repository path" section is the companion to this amendment
+and was written before it — it treated this as a standing intent, and it is now
+a decision.
+
+**Not yet scheduled.** No migration is written. FR-011 already stores files
+under UUID-based identifiers that do not derive from human names, so the
+storage half of this position already holds; it is the routing half that
+changes.
 - **FR-015**: The system MUST deny access to a lore entry's detail route for any user without at least Viewer access under its ownership block, consistent with the actor permission model.
 - **FR-016**: Every save of a lore entry's content MUST create a new immutable revision; no prior revision MUST ever be deleted or overwritten by a subsequent save.
 - **FR-017**: The system MUST let a user with at least Viewer access to a lore entry view its full revision history (timestamp and author per revision) and open the full rendered content of any past revision.

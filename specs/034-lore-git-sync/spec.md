@@ -27,9 +27,29 @@ to translate. What this feature actually has to decide is:
   permissions, images, and cross-links to actors, items and abilities;
 - **which side wins** when both sides have changed.
 
-The first of those is blocked on lore gaining a tree and tags, which is
-specified elsewhere (`031-playability` FR-038) and is a hard dependency of this
-feature, not part of it.
+The first of those was written as blocked on lore gaining a tree and tags
+(`031-playability` FR-038). **That dependency has shipped, and this sentence is
+corrected rather than quietly deleted** — a spec that says it is blocked is
+making a claim about the past, and this one had rotted without anyone coming
+back to it.
+
+Verified in the schema on 2026-09-04, not inferred from a checked box:
+`world_lore_entries.parent_id` is the tree, `world_lore_tags` is the tags, and
+`031/T072` records that a deleted entry re-parents its children to their
+grandparent rather than orphaning them, with cycles rejected at the data
+boundary.
+
+Two things follow for this feature, and both are gains:
+
+- **The directory question is now answerable rather than deferred.** The tree
+  that decides where a file lives exists and has defined behaviour, so
+  "where does an entry live, and is that location stable across a rename" can
+  be specified against something real.
+- **Re-parenting is a rename in the repository.** An entry whose parent is
+  deleted moves to its grandparent, which moves its file. That is a
+  `git mv`-shaped event this feature has to handle, and it arrives from a
+  path — deleting a *different* entry — that nothing here would otherwise have
+  thought to test.
 
 The framing that governs every decision below: **our path stays first-class.**
 The repository is additive and optional. A world that never connects one loses
@@ -455,11 +475,16 @@ confirm the app presents both versions and applies only the one chosen.
   path mapping, commit synthesis, and reconciliation. Any plan that budgets
   significant effort for converting content between formats has misread the
   data model.
-- **Lore tree and tags (`031-playability` FR-038) are a hard dependency.**
-  Stable, human-legible repository paths require the hierarchy and tags
-  specified there. Without them, every entry lands in one flat directory and
-  FR-008 cannot be satisfied. This feature MUST NOT begin implementation before
-  that lands.
+- **Lore tree and tags (`031-playability` FR-038) were a hard dependency, and
+  have landed.** Stable, human-legible repository paths require the hierarchy
+  and tags specified there; without them every entry lands in one flat
+  directory and FR-008 cannot be satisfied. `031/T072` shipped both, verified
+  in the schema on 2026-09-04 (`world_lore_entries.parent_id`,
+  `world_lore_tags`) rather than taken from a checked box. **This assumption no
+  longer gates implementation.** It is corrected here rather than deleted
+  because a second copy of the same stale claim sat in Context and the two
+  would otherwise have disagreed — which is how a spec starts blocking itself
+  on something that shipped weeks ago.
 - **The slug-versus-UUID tension is resolved by separating URL identity from
   repository path.** There is a standing intent to move in-app lore URLs from
   title slugs to opaque identifiers, because guessable slugs let an outsider
@@ -472,7 +497,21 @@ confirm the app presents both versions and applies only the one chosen.
   feature; repository paths are human-meaningful, derived from the tree position
   and title; and identity in both directions is carried by the entry's durable
   identifier in the file header (FR-009), never by the path. A path is a label,
-  not a key. **This is the single most consequential decision in this spec and
+  not a key.
+
+  **The "standing intent" above is now a decision, recorded where it governs.**
+  It was an intent floating in this document while `012-lore-wiki` FR-012 said
+  the opposite as a `MUST` — "MUST use the slug (not the UUID) in the entry's
+  shareable/viewable URL" — with FR-013 and FR-014 built on top of it. A
+  downstream spec's aside cannot supersede a shipped requirement, so on
+  2026-09-04 012 was amended: **FR-012a** makes a lore entry's URL an opaque,
+  non-title-derived identifier, FR-012 is struck through, and FR-013 and FR-014
+  are marked moot with their reasoning kept.
+  Nothing in *this* feature depends on that outcome — separating URL identity
+  from repository path is what makes it independent — but the position above is
+  no longer this document's to assert alone.
+
+  **This is the single most consequential decision in this spec and
   needs the user's explicit confirmation**, because accepting it means a private
   repository may carry readable paths the platform's own URLs deliberately will
   not.

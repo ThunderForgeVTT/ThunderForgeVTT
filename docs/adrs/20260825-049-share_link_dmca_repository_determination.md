@@ -148,7 +148,7 @@ actor. That is the whole surface this determination evaluates.
 A future **content pack** concept — correlating items, actors, scenes,
 abilities and the rest into a single versioned bundle a user can share as a
 unit — is anticipated but not designed here. It is stubbed as
-`specs/026-content-packs/spec.md`. Packs inherit all three defaults above; the
+`specs/026-content-collections/spec.md`. Packs inherit all three defaults above; the
 bundling changes what a link points at, not whether it is discoverable. That
 spec will need its own FR-012 review before it ships.
 
