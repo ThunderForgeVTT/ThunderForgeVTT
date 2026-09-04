@@ -11,8 +11,8 @@ use uuid::Uuid;
 use crate::auth::ability_permissions::require_ability_permission;
 use crate::auth::world_membership::is_dm_of_world;
 use crate::graphql::types::{
-    AbilityClassification, AbilityEffectTrigger, AbilityEffectType, ActorPermissionLevel,
-    GraphQLAbility, GraphQLAbilityEffect,
+    AbilityEffectTrigger, AbilityEffectType, ActorPermissionLevel, GraphQLAbility,
+    GraphQLAbilityEffect,
 };
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{AbilityEffect, NewAbilityEffect, NewWorldAbility, WorldAbility};
@@ -24,7 +24,7 @@ pub struct CreateAbilityInput {
     pub world_id: Uuid,
     pub name: String,
     pub description: Option<String>,
-    pub classification: AbilityClassification,
+    pub classification: String,
     /// FR-024a: optional, defaults false. Settable at create time so a GM can
     /// author a secret ability without a visible window between insert and
     /// hide.
@@ -40,7 +40,7 @@ pub struct UpdateAbilityInput {
     pub ability_id: Uuid,
     pub name: Option<String>,
     pub description: Option<String>,
-    pub classification: Option<AbilityClassification>,
+    pub classification: Option<String>,
     /// Explicit clear, because `Option<String>` alone cannot distinguish
     /// "set to null" from "field omitted".
     ///
@@ -254,6 +254,61 @@ pub async fn remove_ability_effect_impl(
 }
 
 /// Testable core of `AbilityMutation::create_ability` (FR-002).
+/// Whether this world may author an ability of `classification`.
+///
+/// This is where "valid" lives now. The database used to answer it with a
+/// CHECK constraint listing four values, which could not express the rule that
+/// actually applies: FR-013 asks whether a type is recognised **in this
+/// world**, and a table-wide constraint cannot see the world's system.
+///
+/// A type the active system does not recognise is refused for *authoring*
+/// only. Abilities already carrying one stay readable and editable — those are
+/// different questions, and only the first is refused (FR-034).
+async fn require_authorable_type(
+    state: &AppState,
+    world_id: Uuid,
+    classification: &str,
+) -> GraphQLResult<String> {
+    let classification = crate::graphql::types::normalise_classification(classification);
+    if classification.is_empty() {
+        return Err(Error::new("An ability needs a type"));
+    }
+
+    let systems_dir = state.directories.systems_dir.clone();
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    let wanted = classification.clone();
+    let recognised = tokio::task::spawn_blocking(move || {
+        let system_id: Option<String> = crate::schema::worlds::table
+            .filter(crate::schema::worlds::id.eq(world_id))
+            .select(crate::schema::worlds::game_system_id)
+            .first::<Option<String>>(&mut conn)?;
+
+        // Assembled with the wanted type counted as in use, so a built-in the
+        // system never mentioned is still authorable — FR-011a governs what is
+        // *shown*, not what may be written (FR-017).
+        let vocabulary = crate::ability_vocabulary::for_system(
+            &systems_dir,
+            system_id.as_deref(),
+            std::slice::from_ref(&wanted),
+        );
+        Ok::<_, diesel::result::Error>(vocabulary.recognises(&wanted))
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to read this world's system"))?;
+
+    if !recognised {
+        return Err(Error::new(format!(
+            "This world's game system does not recognise the ability type \"{classification}\""
+        )));
+    }
+    Ok(classification)
+}
+
 pub async fn create_ability_impl(
     state: &AppState,
     user_id: Uuid,
@@ -264,6 +319,9 @@ pub async fn create_ability_impl(
         return Err(Error::new("Only the DM (Owner or GM) may create abilities"));
     }
 
+    let classification =
+        require_authorable_type(state, input.world_id, &input.classification).await?;
+
     let mut conn = state
         .db_pool
         .get()
@@ -273,7 +331,7 @@ pub async fn create_ability_impl(
         world_id: input.world_id,
         name: input.name,
         description: input.description,
-        classification: input.classification.as_db_str().to_string(),
+        classification: classification.clone(),
         gm_only: input.gm_only.unwrap_or(false),
         created_by: user_id,
         updated_by: user_id,
@@ -315,6 +373,27 @@ pub async fn update_ability_impl(
     let ability_id = input.ability_id;
     let clear_description = input.clear_description.unwrap_or(false);
 
+    // Re-typing is authoring by another route, and goes through the same gate
+    // (FR-013). A GM may re-type an ability deliberately (FR-038) — to a type
+    // this world recognises, which is what this checks.
+    let next_classification = match input.classification.as_deref() {
+        None => None,
+        Some(wanted) => {
+            let world_id: Uuid = {
+                let mut lookup = state
+                    .db_pool
+                    .get()
+                    .map_err(|_| Error::new("Failed to get DB connection"))?;
+                world_abilities::table
+                    .filter(world_abilities::id.eq(ability_id))
+                    .select(world_abilities::world_id)
+                    .first::<Uuid>(&mut lookup)
+                    .map_err(|_| Error::new("Ability not found"))?
+            };
+            Some(require_authorable_type(state, world_id, wanted).await?)
+        }
+    };
+
     tokio::task::spawn_blocking(move || {
         let existing = world_abilities::table
             .filter(world_abilities::id.eq(ability_id))
@@ -334,10 +413,8 @@ pub async fn update_ability_impl(
             .set((
                 world_abilities::name.eq(input.name.unwrap_or(existing.name)),
                 world_abilities::description.eq(next_description),
-                world_abilities::classification.eq(input
-                    .classification
-                    .map(|c| c.as_db_str().to_string())
-                    .unwrap_or(existing.classification)),
+                world_abilities::classification
+                    .eq(next_classification.unwrap_or(existing.classification)),
                 world_abilities::updated_by.eq(user_id),
                 world_abilities::updated_at.eq(chrono::Utc::now().naive_utc()),
             ))
@@ -571,7 +648,7 @@ mod tests {
             world_id,
             name: name.to_string(),
             description: None,
-            classification: AbilityClassification::Spell,
+            classification: "spell".to_string(),
             gm_only: None,
         }
     }
@@ -740,7 +817,7 @@ mod effect_tests {
             world_id,
             name: name.to_string(),
             description: None,
-            classification: AbilityClassification::Spell,
+            classification: "spell".to_string(),
             gm_only: None,
         }
     }

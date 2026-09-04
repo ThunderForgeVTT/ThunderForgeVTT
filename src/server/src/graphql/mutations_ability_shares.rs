@@ -24,8 +24,8 @@ use crate::auth::ability_permissions::effective_ability_permission;
 use crate::auth::world_membership::is_dm_of_world;
 use crate::graphql::share_codes::generate_link_code;
 use crate::graphql::types::{
-    AbilityClassification, ActorPermissionLevel, GraphQLAbility, GraphQLAbilityEffect,
-    GraphQLAbilityShareLink, SharedAbilityPreview,
+    ActorPermissionLevel, GraphQLAbility, GraphQLAbilityEffect, GraphQLAbilityShareLink,
+    SharedAbilityPreview,
 };
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{
@@ -124,8 +124,11 @@ pub async fn shared_ability_impl(
     Ok(SharedAbilityPreview {
         name: ability.name,
         description: ability.description,
-        classification: AbilityClassification::from_db_str(&ability.classification)
-            .unwrap_or(AbilityClassification::Spell),
+        // The identity as stored. T037: this used to resolve an unknown value
+        // to `Spell`, so a shared Enchantment read as a Spell — the silent
+        // mislabelling FR-034 forbids. The label beside it is resolved from the
+        // owning world's vocabulary.
+        classification: crate::graphql::types::normalise_classification(&ability.classification),
         classification_label,
         effects: effects
             .into_iter()
@@ -462,7 +465,7 @@ mod tests {
             world_id,
             name: name.to_string(),
             description: Some("A source ability.".to_string()),
-            classification: AbilityClassification::Spell,
+            classification: "spell".to_string(),
             gm_only: None,
         }
     }

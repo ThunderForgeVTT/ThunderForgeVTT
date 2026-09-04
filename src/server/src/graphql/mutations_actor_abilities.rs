@@ -15,9 +15,7 @@ use uuid::Uuid;
 
 use crate::auth::actor_permissions::require_actor_permission;
 use crate::auth::world_membership::is_dm_of_world;
-use crate::graphql::types::{
-    AbilityClassification, ActorPermissionLevel, GraphQLActorAbilityEntry,
-};
+use crate::graphql::types::{ActorPermissionLevel, GraphQLActorAbilityEntry};
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{ActorAbilityEntry, NewActorAbilityEntry};
 use crate::schema::{world_abilities, world_actor_abilities, world_actors};
@@ -49,9 +47,12 @@ fn to_graphql(row: EntryRow, caller_is_dm: bool) -> GraphQLActorAbilityEntry {
         } else {
             entry.ability_name_snapshot
         },
+        // The identity as stored, or `None` for a tombstoned row. Never
+        // coerced to another type: an ability whose type this world does not
+        // recognise is still that type (FR-034).
         classification: classification
             .as_deref()
-            .and_then(AbilityClassification::from_db_str),
+            .map(crate::graphql::types::normalise_classification),
         gm_only: gm_only.unwrap_or(false),
     }
 }
@@ -343,7 +344,6 @@ mod tests {
     use crate::graphql::mutations_abilities::{
         CreateAbilityInput, create_ability_impl, delete_ability_impl,
     };
-    use crate::graphql::types::AbilityClassification;
     use crate::schema::{world_ability_permissions, world_actor_permissions};
     use crate::test_support::*;
 
@@ -392,7 +392,7 @@ mod tests {
             world_id,
             name: name.to_string(),
             description: None,
-            classification: AbilityClassification::Spell,
+            classification: "spell".to_string(),
             gm_only: None,
         }
     }

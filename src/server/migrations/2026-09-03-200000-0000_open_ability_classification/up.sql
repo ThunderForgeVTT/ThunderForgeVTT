@@ -1,0 +1,25 @@
+-- Spec 033 (FR-011, FR-012, SC-003), ADR-064.
+--
+-- `classification` enumerated the four types the application shipped with:
+--
+--   CHECK (classification IN ('spell', 'feat', 'power', 'talent'))
+--
+-- SC-003 requires that adding a type for one game system change **zero** files
+-- shared with other systems, and a constraint listing the valid values makes
+-- every new type a migration — which is as shared as a file gets. The two
+-- requirements cannot both hold.
+--
+-- The constraint also could not express the rule that actually applies. FR-013
+-- says a type declared by one system must not be offered in a world running a
+-- different one; that is a *per-world* question, and no column constraint can
+-- see the world's system.
+--
+-- So validity moves to the ability mutations, where every other authoring rule
+-- in this codebase already lives (Constitution III) and where the world — and
+-- therefore its vocabulary — is known.
+--
+-- No data migration. Every existing row holds one of the four, which remain
+-- permanently authorable (FR-017); nothing is re-typed and no world needs a
+-- Game Master to do anything (SC-012).
+ALTER TABLE world_abilities
+    DROP CONSTRAINT IF EXISTS world_abilities_classification_check;

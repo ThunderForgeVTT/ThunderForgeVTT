@@ -1043,37 +1043,25 @@ impl From<RollRecord> for GraphQLRollRecord {
 
 use crate::models::{AbilityEffect, AbilityPermission, WorldAbility};
 
-/// Spec 025 (FR-009): the fixed, system-agnostic classification set. Shared by
-/// every game system so ability data stays portable across a system change
-/// (FR-013); systems re-label these via optional presentation facets
-/// (`abilityFacets` in `system.json`, FR-010) but cannot add to the set.
-#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq, Debug)]
-pub enum AbilityClassification {
-    Spell,
-    Feat,
-    Power,
-    Talent,
-}
-
-impl AbilityClassification {
-    pub fn as_db_str(self) -> &'static str {
-        match self {
-            AbilityClassification::Spell => "spell",
-            AbilityClassification::Feat => "feat",
-            AbilityClassification::Power => "power",
-            AbilityClassification::Talent => "talent",
-        }
-    }
-
-    pub fn from_db_str(value: &str) -> Option<Self> {
-        match value {
-            "spell" => Some(AbilityClassification::Spell),
-            "feat" => Some(AbilityClassification::Feat),
-            "power" => Some(AbilityClassification::Power),
-            "talent" => Some(AbilityClassification::Talent),
-            _ => None,
-        }
-    }
+/// An ability's type, as a **stable identity** rather than a closed set.
+///
+/// # Why this stopped being an enum
+///
+/// It was `enum AbilityClassification { Spell, Feat, Power, Talent }`, and its
+/// own doc said the set was fixed and systems "cannot add to it". Spec 033
+/// FR-011 makes the available types the union of the built-ins and whatever
+/// the world's system declares, so a 5e pack may name an Enchantment.
+///
+/// A GraphQL enum cannot carry a value a pack invented — introspection
+/// publishes a closed set, and a client validating against it would reject the
+/// Enchantment outright. So the wire type is the identity itself, described by
+/// `abilityVocabulary(worldId)`, which the same request can fetch. This is the
+/// move `DeclaredValue` made in spec 032, for the same reason (ADR-064).
+///
+/// Stored lowercase. `normalise` is the one place that decides so, because a
+/// client sending `"SPELL"` and one sending `"spell"` must mean the same type.
+pub fn normalise_classification(value: &str) -> String {
+    value.trim().to_lowercase()
 }
 
 /// Spec 025 (FR-016): effect types, matching `ItemEffectType`'s set exactly so
@@ -1176,7 +1164,7 @@ pub struct GraphQLAbility {
     pub world_id: uuid::Uuid,
     pub name: String,
     pub description: Option<String>,
-    pub classification: AbilityClassification,
+    pub classification: String,
     /// Spec 025 (FR-024a): visibility, deliberately separate from
     /// `my_permission_level`. Only ever `true` in a response to a DM — every
     /// non-DM read path filters GM-only abilities out entirely (FR-024b), so a
@@ -1207,8 +1195,17 @@ impl GraphQLAbility {
             // An unrecognized DB string falls back rather than erroring,
             // mirroring GraphQLItemEffect's handling — a row written by a
             // newer version must not break an older reader.
-            classification: AbilityClassification::from_db_str(&row.classification)
-                .unwrap_or(AbilityClassification::Spell),
+            // T037: this read `unwrap_or("spell".to_string())`, so an
+            // ability of a type the build did not know was silently presented
+            // as a Spell. Its comment argued a newer row must not break an
+            // older reader, which was fair — but the behaviour is exactly what
+            // FR-034 forbids, and dropping the CHECK constraint makes a fifth
+            // value writable, so the case stops being hypothetical here.
+            //
+            // The identity is carried through as itself. What a person reads
+            // comes from the world's vocabulary, which resolves an unrecognised
+            // type to the identity rather than to another type's name.
+            classification: normalise_classification(&row.classification),
             gm_only: row.gm_only,
             effects,
             my_permission_level,
@@ -1233,7 +1230,7 @@ impl GraphQLAbility {
             world_id,
             name: "[Content removed in response to a takedown notice]".to_string(),
             description: None,
-            classification: AbilityClassification::Spell,
+            classification: "spell".to_string(),
             gm_only: false,
             effects: Vec::new(),
             my_permission_level,
@@ -1293,7 +1290,7 @@ pub struct GraphQLActorAbilityEntry {
     pub actor_id: uuid::Uuid,
     pub ability_id: Option<uuid::Uuid>,
     pub ability_name: String,
-    pub classification: Option<AbilityClassification>,
+    pub classification: Option<String>,
     pub gm_only: bool,
 }
 
@@ -1316,7 +1313,7 @@ pub struct GraphQLAbilityShareLink {
 pub struct SharedAbilityPreview {
     pub name: String,
     pub description: Option<String>,
-    pub classification: AbilityClassification,
+    pub classification: String,
     /// The word the *owning world's* system uses for this ability's type.
     ///
     /// Spec 033 FR-006: every surface naming an ability type uses the system's

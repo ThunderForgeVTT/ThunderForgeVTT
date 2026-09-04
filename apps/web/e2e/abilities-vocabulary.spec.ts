@@ -71,6 +71,12 @@ async function openAbilities(page: Page, worldId: string): Promise<void> {
 /** What the server says this world calls its abilities — the same answer the
  * page renders from, so the assertions below compare the UI against the
  * system's declarations rather than against words hardcoded here. */
+async function csrfHeader(page: Page): Promise<Record<string, string>> {
+  const cookies = await page.context().cookies();
+  const csrf = cookies.find((cookie) => cookie.name === "csrf_token")?.value;
+  return csrf ? { "x-csrf-token": csrf } : {};
+}
+
 async function vocabularyOf(page: Page, worldId: string) {
   // The app sends the double-submit CSRF token on every GraphQL call
   // (`withCsrf` in `api/auth.ts`). A request made through the context shares
@@ -204,5 +210,84 @@ test.describe("US1: every system's own tab set, in its own words", () => {
     await page.getByTestId(`ability-type-tab-${second.id}`).click();
     await expect(page.getByTestId("ability-tab-empty")).toBeVisible();
     await expect(page.getByTestId("ability-catalog-table")).toHaveCount(0);
+  });
+});
+
+test.describe("US3: a system names its own ability types", () => {
+  test("5e's Enchantment is offered in a 5e world and refused in another system's", async ({
+    page,
+  }) => {
+    // SC-003's worked example. `enchantment` exists only in
+    // `packs/systems/dnd5e/system.json` — no shared file mentions it, which
+    // `scripts/check-ability-vocabulary.mjs` enforces separately.
+    await registerGm(page);
+    const worldId = await createWorld(page, `Enchant ${uniqueSuffix()}`);
+    await chooseSystem(page, worldId, "5E System Core");
+
+    const vocabulary = await vocabularyOf(page, worldId);
+    expect(
+      vocabulary.types.map((kind) => kind.id),
+      "a pack's own type joins the world's vocabulary",
+    ).toContain("enchantment");
+
+    await openAbilities(page, worldId);
+    await expect(
+      page.getByTestId("ability-type-tab-enchantment"),
+    ).toContainText("Enchantments");
+
+    // FR-013: the same type is not authorable in a world running a system
+    // that never declared it. Asked through the API, because that is where the
+    // refusal has to hold.
+    const other = await createWorld(page, `Enchant other ${uniqueSuffix()}`);
+    await chooseSystem(page, other, "Genie");
+
+    const refused = await page.request.post("/api/graphql", {
+      headers: await csrfHeader(page),
+      data: {
+        query: `mutation C($input: CreateAbilityInput!) {
+          createAbility(input: $input) { id }
+        }`,
+        variables: {
+          input: {
+            worldId: other,
+            name: `Sneaky ${uniqueSuffix()}`,
+            classification: "enchantment",
+          },
+        },
+      },
+    });
+    const body = (await refused.json()) as { errors?: { message: string }[] };
+    expect(
+      body.errors?.length,
+      "a type this world's system never declared must not be authorable here",
+    ).toBeTruthy();
+    expect(body.errors?.[0]?.message).toContain("does not recognise");
+  });
+
+  test("an ability of a pack's own type is created, listed and kept", async ({
+    page,
+  }) => {
+    await registerGm(page);
+    const worldId = await createWorld(page, `Enchant make ${uniqueSuffix()}`);
+    await chooseSystem(page, worldId, "5E System Core");
+    await openAbilities(page, worldId);
+
+    await page.getByTestId("ability-type-tab-enchantment").click();
+    const name = `Flametongue ${uniqueSuffix()}`;
+    await page.getByTestId("new-ability-name-input").fill(name);
+    await page.getByTestId("add-ability-button").click();
+
+    // The type came from the tab, and the row is stored under a value the
+    // dropped CHECK constraint would have refused (ADR-064).
+    const table = page.getByTestId("ability-catalog-table");
+    await expect(table).toBeVisible({ timeout: 15_000 });
+    await expect(table).toContainText(name);
+    await expect(
+      page.getByTestId("ability-type-count-enchantment"),
+    ).toHaveText("1");
+
+    // And it is not in the Spells tab.
+    await page.getByTestId("ability-type-tab-spell").click();
+    await expect(page.getByTestId("ability-tab-empty")).toBeVisible();
   });
 });

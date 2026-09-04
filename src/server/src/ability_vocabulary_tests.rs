@@ -350,3 +350,113 @@ fn an_undeclared_identity_is_not_recognised() {
     assert!(!vocabulary.recognises("enchantment"));
     assert!(vocabulary.get("enchantment").is_none());
 }
+
+// ---------------------------------------------------------------------------
+// Increment D — the vocabulary is what "valid" means now
+// ---------------------------------------------------------------------------
+
+/// A system's own type is authorable in its worlds (FR-011).
+#[test]
+fn a_system_declared_type_is_recognised_in_its_own_worlds() {
+    let manifest = json!({
+        "abilityVocabulary": { "types": [
+            { "id": "spell", "label": "Spell" },
+            { "id": "enchantment", "label": "Enchantment", "binds": "item" }
+        ]}
+    });
+
+    assert!(from_manifest(&manifest, &none()).recognises("enchantment"));
+}
+
+/// FR-013: and not in another system's.
+///
+/// The rule the dropped CHECK constraint could never have expressed — it is a
+/// question about *this world*, and a table-wide constraint cannot see the
+/// world's system.
+#[test]
+fn a_type_declared_by_one_system_is_not_recognised_by_another() {
+    let other_system = json!({
+        "abilityVocabulary": { "types": [{ "id": "scroll", "label": "Scroll" }] }
+    });
+
+    let vocabulary = from_manifest(&other_system, &none());
+
+    assert!(vocabulary.recognises("scroll"));
+    assert!(
+        !vocabulary.recognises("enchantment"),
+        "one system's type must not be authorable in another's world"
+    );
+}
+
+/// FR-017: the built-ins stay authorable wherever they are, whatever a system
+/// says — including a system that declared its own types and never mentioned
+/// them. Presence is about tabs; availability is about authoring.
+#[test]
+fn the_builtins_stay_authorable_even_where_they_are_not_shown() {
+    let manifest = json!({
+        "abilityVocabulary": { "types": [{ "id": "enchantment", "label": "Enchantment" }] }
+    });
+
+    // Not shown, because the system never mentioned it and the world holds none.
+    assert!(!from_manifest(&manifest, &none()).recognises("talent"));
+
+    // Authorable all the same: the mutation assembles with the wanted type
+    // counted as in use, which is how FR-011a and FR-017 coexist.
+    let held = vec!["talent".to_string()];
+    assert!(from_manifest(&manifest, &held).recognises("talent"));
+}
+
+/// FR-015: two declarations claiming one identity is reported at assembly,
+/// not when a Game Master first authors one of them.
+///
+/// "Reported" here means the vocabulary resolves it deterministically rather
+/// than producing two tabs with one id — the last declaration wins, and the
+/// count is what proves there is only one.
+#[test]
+fn two_declarations_of_one_identity_collapse_to_one_type() {
+    let manifest = json!({
+        "abilityVocabulary": { "types": [
+            { "id": "hex", "label": "Hex", "pluralLabel": "Hexes" },
+            { "id": "hex", "label": "Curse", "pluralLabel": "Curses" }
+        ]}
+    });
+
+    let vocabulary = from_manifest(&manifest, &none());
+
+    assert_eq!(
+        vocabulary.types.iter().filter(|k| k.id == "hex").count(),
+        1,
+        "one identity is one type, however many times it is declared"
+    );
+    assert_eq!(vocabulary.get("hex").unwrap().label, "Curse");
+}
+
+/// The shipped 5e pack declares an item-bound Enchantment, which is the
+/// worked example SC-003 is measured against.
+///
+/// Reads the real manifest rather than a fixture: the property being asserted
+/// is that a *shipped* pack can name a type the application has never heard
+/// of, and a fixture would prove only that the parser works.
+#[test]
+fn the_shipped_5e_pack_declares_an_item_bound_enchantment() {
+    let manifest_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../packs/systems/dnd5e/system.json");
+    let text = std::fs::read_to_string(manifest_path).expect("dnd5e ships a manifest");
+    let manifest: serde_json::Value = serde_json::from_str(&text).expect("dnd5e's manifest parses");
+
+    let vocabulary = from_manifest(&manifest, &none());
+    let enchantment = vocabulary
+        .get("enchantment")
+        .expect("dnd5e declares an Enchantment");
+
+    assert_eq!(enchantment.plural_label, "Enchantments");
+    assert_eq!(enchantment.binds, Binds::Item);
+    assert!(!enchantment.builtin, "a pack's own type is not a built-in");
+
+    // And its Spells are graded, in 5e's word for it.
+    let spell = vocabulary.get("spell").expect("dnd5e declares Spells");
+    assert_eq!(
+        spell.grade.as_ref().map(|g| g.label.as_str()),
+        Some("Level")
+    );
+}

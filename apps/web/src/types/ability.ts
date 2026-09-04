@@ -11,7 +11,19 @@ export type { ActorPermissionLevel };
  * GraphQL enum casing (`SPELL`), not the DB casing (`spell`); use
  * `toAbilityClassificationKey` to cross between them.
  */
-export type AbilityClassification = "SPELL" | "FEAT" | "POWER" | "TALENT";
+/**
+ * An ability's type, as a stable identity.
+ *
+ * A closed union until spec 033: `"SPELL" | "FEAT" | "POWER" | "TALENT"`. The
+ * available types are now the union of the four built-ins and whatever the
+ * world's system declares (FR-011), so a 5e pack may name an Enchantment and
+ * no fixed union could hold it. What a person reads comes from
+ * `abilityVocabulary(worldId)`; this is only the identity.
+ *
+ * Sent uppercase, stored lowercase — the server normalises, so both spellings
+ * mean the same type.
+ */
+export type AbilityClassification = string;
 
 export type AbilityEffectType = "HEAL" | "DAMAGE" | "MODIFIER" | "ATTACK_ROLL";
 export type AbilityEffectTrigger = "ON_USE" | "PASSIVE";

@@ -192,6 +192,22 @@ const steps = [
     cwd: ".",
     command: ["node", "./scripts/check-pack-docs.mjs"],
   },
+  {
+    // Spec 033 SC-003: a new ability type for one game system costs zero
+    // changes to files shared with other systems. The comfortable way to make
+    // a type work is to teach shared code about it, and that works perfectly
+    // until the next system ships — which is why this is a check rather than a
+    // convention, and why the ids come from the packs rather than from a list
+    // here that would go stale.
+    //
+    // Not affected by `--fix`: a violation is shared code that has learned one
+    // ruleset's vocabulary, and moving that knowledge back into the pack needs
+    // a person.
+    id: "abilityvocab",
+    name: "ability vocabulary",
+    cwd: ".",
+    command: ["node", "./scripts/check-ability-vocabulary.mjs"],
+  },
 ];
 
 // An unknown id is a failure, not an empty run: a hook whose step was renamed

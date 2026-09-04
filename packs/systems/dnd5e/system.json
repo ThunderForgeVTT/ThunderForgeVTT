@@ -14,10 +14,10 @@
       "Do not use 'Dungeons & Dragons' as a product/module name or in marketing that implies Wizards of the Coast endorsement",
       "Do not include any attribution to Wizards of the Coast or its parents/affiliates beyond the exact attribution statement above (per the SRD's own Legal Information page)",
       "May use 'compatible with fifth edition' or '5E compatible' phrasing, but not the D&D trademark or logo itself",
-      "Do not reproduce or imply access to proprietary campaign lore, named characters, deities, or iconic monsters (e.g. Mind Flayers, Beholders) \u2014 these are excluded from the SRD",
+      "Do not reproduce or imply access to proprietary campaign lore, named characters, deities, or iconic monsters (e.g. Mind Flayers, Beholders) — these are excluded from the SRD",
       "Where the SRD renamed a legacy item to avoid trademark bleed (e.g. 'Mysterious Deck' instead of 'Deck of Many Things', 'Dragon Orb' instead of 'Orb of Dragonkind'), use the SRD's renamed term, not the proprietary legacy name"
     ],
-    "requiredUiPlacement": "Must be shown on the system selection screen and/or a permanent, easily accessible module settings/about tab \u2014 not buried in Terms of Service.",
+    "requiredUiPlacement": "Must be shown on the system selection screen and/or a permanent, easily accessible module settings/about tab — not buried in Terms of Service.",
     "sourceUrl": "https://creativecommons.org/licenses/by/4.0/"
   },
   "url": "https://github.com/ThunderForgeVTT/ThunderForgeVTT",
@@ -733,5 +733,39 @@
   "turnStructure": {
     "rounds": true,
     "roundLabel": "Round"
+  },
+  "abilityVocabulary": {
+    "umbrella": {
+      "label": "Ability",
+      "pluralLabel": "Abilities"
+    },
+    "types": [
+      {
+        "id": "spell",
+        "label": "Spell",
+        "pluralLabel": "Spells",
+        "order": 0,
+        "binds": "character",
+        "grade": {
+          "label": "Level",
+          "min": 0,
+          "max": 9
+        }
+      },
+      {
+        "id": "feat",
+        "label": "Feat",
+        "pluralLabel": "Feats",
+        "order": 1,
+        "binds": "character"
+      },
+      {
+        "id": "enchantment",
+        "label": "Enchantment",
+        "pluralLabel": "Enchantments",
+        "order": 2,
+        "binds": "item"
+      }
+    ]
   }
 }

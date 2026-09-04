@@ -223,7 +223,6 @@ mod tests {
     use super::*;
     use crate::auth::ability_permissions::effective_ability_permission;
     use crate::graphql::mutations_abilities::{CreateAbilityInput, create_ability_impl};
-    use crate::graphql::types::AbilityClassification;
     use crate::test_support::*;
 
     fn ability_input(world_id: Uuid, name: &str) -> CreateAbilityInput {
@@ -231,7 +230,7 @@ mod tests {
             world_id,
             name: name.to_string(),
             description: None,
-            classification: AbilityClassification::Spell,
+            classification: "spell".to_string(),
             gm_only: None,
         }
     }
