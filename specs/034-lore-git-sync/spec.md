@@ -447,6 +447,21 @@ confirm the app presents both versions and applies only the one chosen.
   exported to a repository the user controls leaves the platform's hosting, that
   the platform cannot retract it once exported, and that responsibility for what
   is published there rests with the user who chose to export it.
+- **FR-041a**: The system MUST be able to deactivate a world's connection as an
+  enforcement action, independently of the owner's wishes, and a deactivated
+  connection MUST NOT resume without an administrative action. This is spec 015
+  FR-016's "retain the ability to deactivate the outward path"; a commitment
+  made to a rights holder that the product cannot carry out is worse than no
+  commitment.
+- **FR-041b**: Deactivating a connection MUST NOT be the default response to a
+  single takedown. Excluding the disabled entry (FR-015) is, because spec 015
+  FR-010 requires a takedown to leave unrelated content alone and the rest of a
+  world's mirror is unrelated content. Full deactivation is for the case where
+  exclusion cannot stop republication, and for the repeat-infringer policy.
+- **FR-041c**: An enforcement deactivation MUST be distinguishable in the
+  connection's state from a connection the owner removed and from one that is
+  merely failing (FR-029). A Game Master told to "check the connection" for
+  something they cannot fix will keep trying to fix it.
 - **FR-042**: An explicit determination under the constitution's DMCA guardrail
   — whether a user-initiated mirror to a repository the user owns constitutes a
   centralized public repository — MUST be recorded and accepted by an
@@ -673,12 +688,33 @@ confirm the app presents both versions and applies only the one chosen.
   reasoning is stated here as the input to a determination, not as the
   determination itself — FR-042 requires the determination on record before
   implementation begins, per the constitution's guardrail.
-- **A takedown cannot reach mirrored content.** Once content has been written to
-  a repository the platform does not control, the platform can stop exporting it
-  and can tell the owner, and that is the entire extent of its reach. The spec
-  requires both (FR-040) and claims nothing further. This is a genuine reduction
-  in takedown effectiveness for connected worlds and should be stated as such in
-  the FR-042 determination rather than glossed.
+- **A takedown cannot reach mirrored content, and the policy now says so out
+  loud.** Once content has been written to a repository the platform does not
+  control, the platform can stop exporting it, can deactivate the path entirely
+  (FR-041a), and can tell the owner. That is the entire extent of its reach.
+
+  **Decided 2026-09-04**: rather than leaving this as an uncomfortable footnote,
+  it is stated as policy. Spec 015 gained FR-015 to FR-018, and the public DMCA
+  page now carries a section saying where the platform's reach ends — that it
+  will disable content here and stop it being republished, that it has no
+  authority over copies already on a third-party service and will not pursue
+  them, that content a user exported was published by that user and removing it
+  there is theirs to do, and that a rights holder should direct a notice
+  concerning such material to that service's own provider.
+
+  Two things that section is careful about, and any revision of it must stay
+  careful about. It states the platform's inability to retract **together with**
+  the user's continued responsibility, because stating only the first reads as
+  an invitation. And it does not position the platform as a route to content
+  that has already left, which is what a vaguer "contact us" would do.
+
+  This remains a genuine reduction in takedown effectiveness for connected
+  worlds. It is now a disclosed and bounded one rather than an unstated one, and
+  the FR-042 determination should say so plainly.
+
+  **This wording is legal-adjacent and has not been reviewed by a lawyer.** The
+  page already carries a pre-launch configuration placeholder for the agent
+  designation; this section should go through the same review before launch.
 - **Scope boundary.** This feature covers lore only. Actors, items, abilities,
   scenes, and packs are not synchronised, and cross-links to them are declared
   lossy (FR-013). Extending the mirror to other content types is a separate

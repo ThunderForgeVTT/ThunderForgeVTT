@@ -30,7 +30,9 @@ One per world, at most (FR-001). The world's link to one external repository.
 | `directory` | `Text` | The subtree this world owns. Paired with `repository_ref` under a unique constraint (FR-033). |
 | `incoming_enabled` | `Bool` | Default **false**. Story 3's gate; FR-006 and FR-022 both depend on the default being off. |
 | `notice_acknowledged_at` | `Nullable<Timestamp>` | FR-038: synchronisation MUST NOT begin until FR-037's notice is acknowledged. Null means never started. |
-| `state` | `Text` | `working` · `needs_attention` · `never_configured`, matching FR-029's three words exactly. |
+| `state` | `Text` | `working` · `needs_attention` · `never_configured` · `deactivated`, the first three matching FR-029's words exactly. |
+| `deactivated_at` | `Nullable<Timestamp>` | Set by an enforcement action (FR-041a). |
+| `deactivated_reason` | `Nullable<Text>` | |
 | `state_reason` | `Nullable<Text>` | Plain language, naming the remedy. Never a raw host error. |
 | `last_synced_at` | `Nullable<Timestamp>` | |
 | `last_written_commit` | `Nullable<Text>` | What we believe the remote head to be. FR-031 compares against this. |
@@ -136,9 +138,21 @@ never_configured ──(grant + FR-038 acknowledgement)──> working
 working ──(run fails)──────────────────────────────> needs_attention
 working ──(divergence or collision)────────────────> needs_attention
 needs_attention ──(run succeeds)───────────────────> working
+any ──(enforcement action)─────────────────────────> deactivated
+deactivated ──(administrative action only)─────────> working
 any ──(connection removed)─────────────────────────> row deleted
 ```
 
 `needs_attention` always carries a `state_reason`. A state that says something
 is wrong without saying what is a state that sends a Game Master to a support
 channel, which FR-029 exists to prevent.
+
+**`deactivated` is a one-way door for the owner** (FR-041a). It is the only
+state a Game Master cannot leave by fixing something, and the only transition
+out of it is administrative. That is what makes spec 015 FR-016's commitment to
+a rights holder real rather than aspirational — a deactivation the owner could
+undo is not a deactivation.
+
+It is distinct from `needs_attention` on purpose (FR-041c). Telling someone to
+check a connection they are not permitted to restore leaves them retrying
+forever, and reads as a bug rather than a decision.

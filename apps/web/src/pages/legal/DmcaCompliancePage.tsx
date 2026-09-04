@@ -82,6 +82,45 @@ export default function DmcaCompliancePage() {
             <TakedownNoticeForm />
           </Card>
 
+          <Card
+            surface="stone"
+            className="grid gap-3 p-6"
+            data-testid="dmca-scope-of-reach"
+          >
+            <h2 className="text-lg font-semibold">
+              What We Can Reach, and What We Cannot
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              ThunderForge lets a Game Master copy or synchronise their own
+              world&apos;s content to services we do not operate — an external
+              repository they own, for example. Where that has happened, our
+              ability to act on a valid notice ends at our own systems.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              On receiving a valid takedown notice we will disable access to the
+              identified content on this platform, and we will stop that content
+              being carried outward by any synchronisation we operate. Where
+              excluding the item is not enough to stop it being republished, or
+              where our repeat-infringer policy applies, we will deactivate the
+              synchronisation entirely. These are within our control and they
+              will be done.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              We have no authority over copies already placed on a third-party
+              service, and we will not pursue them. We cannot delete them, we
+              cannot compel their removal, and we do not represent the rights
+              holder in seeking it. Content a user exported to a service they
+              control was published by that user, and removing it there is
+              theirs to do — as is any liability for having put it there.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              A rights holder whose work appears on such a service should direct
+              a notice to that service&apos;s own provider. We will disable the
+              content here and stop it being republished; we will not be the
+              route to content that has already left.
+            </p>
+          </Card>
+
           <Card surface="parchment" className="grid gap-2 p-6">
             <h2 className="text-lg font-semibold">
               Counter-Notices &amp; Repeat Infringers

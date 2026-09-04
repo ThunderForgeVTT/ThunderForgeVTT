@@ -102,6 +102,13 @@ Before product/engineering ships any feature that lets one world's compendium co
 - **FR-013**: Records of takedown notices, counter-notices, and their resolutions MUST be retained independent of whether the associated world or account is later deleted, for the platform's standard legal-hold retention period.
 - **FR-014**: The platform's public-facing legal/compliance page MUST distinguish, in plain language, between (a) official system packs distributed under open licenses (CC-BY, ORC, Cypher System Open License, Free League FTL, etc.) and (b) user-entered compendium content, which is the user's sole responsibility and subject to this notice-and-takedown policy.
 
+**Scope of the platform's reach** (added 2026-09-04)
+
+- **FR-015**: The platform's public-facing legal/compliance page MUST state, in plain language, where the platform's ability to act on a notice ends. It MUST commit to both of the actions that are within its control — disabling access to the identified content on the platform, and deactivating any synchronisation or export that would continue to publish that content to a service the platform does not operate — and MUST state that it has no authority over, and will not pursue, copies already placed on such a service.
+- **FR-016**: Where a feature lets a user copy or synchronise their world's content to a service the platform does not operate, acting on a valid takedown MUST stop that content being carried outward, and the platform MUST retain the ability to deactivate the outward path entirely. Deactivating the whole path is an enforcement action, not the default response to a single notice — FR-010 requires a takedown to leave unrelated content alone, and a world's entire mirror is unrelated content. It MUST be exercised where excluding the item alone cannot stop republication, and where the repeat-infringer policy of FR-009 is applied.
+- **FR-017**: Content a user exported to a service they control MUST be described as published by that user. The platform's inability to retract it MUST NOT be presented as the platform disclaiming the *user's* responsibility for it; both facts MUST appear together, since stating only the first reads as an invitation.
+- **FR-018**: A rights holder MUST be told, on the same page, that a notice concerning material on a third-party service should be directed to that service's own provider. The platform MUST NOT position itself as a route to content that has already left it.
+
 ### Key Entities
 
 - **Takedown Notice**: A rights holder's formal claim that specific user-entered content infringes their copyright. Carries the statutory elements, a reference ID, timestamp, validity status, the identified content's location, and resolution state.
