@@ -11,7 +11,6 @@ import {
   createAbilityShareLink,
   revokeAbilityShareLink,
 } from "@/api/abilityShares";
-import { getGameSystemManifest } from "@/api/gameSystems";
 import { getWorld } from "@/api/world";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
@@ -32,11 +31,11 @@ import type {
 } from "@/types/ability";
 import type { WorldRecord } from "@/types/world";
 import {
-  ABILITY_CLASSIFICATION_KEYS,
-  resolveAbilityLabel,
-  toAbilityClassificationKey,
-  type AbilityFacetsLookup,
-} from "@/utils/abilityFacets";
+  DEFAULT_VOCABULARY,
+  getAbilityVocabulary,
+  labelFor,
+  type AbilityVocabulary,
+} from "@/abilities/vocabulary";
 
 export interface AbilityDetailPageProps {
   mode: "view" | "edit";
@@ -75,10 +74,11 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
   const [isTogglingVisibility, setIsTogglingVisibility] = useState(false);
   // Kept with the system it was fetched for, so the facets in force are
   // derived during render rather than reset from inside the effect below.
-  const [loadedFacets, setLoadedFacets] = useState<{
-    gameSystemId: string;
-    facets: AbilityFacetsLookup | undefined;
-  } | null>(null);
+  // Spec 033: one assembled answer to what this world calls its abilities,
+  // from the server, so every surface agrees (FR-006). `DEFAULT_VOCABULARY`
+  // until it arrives and if it never does — every lookup is total.
+  const [vocabulary, setVocabulary] =
+    useState<AbilityVocabulary>(DEFAULT_VOCABULARY);
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [shareLinkId, setShareLinkId] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState(false);
@@ -128,34 +128,20 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
   }, [worldId, abilityId]);
 
   const gameSystemId = world?.gameSystemId;
-  const facets =
-    gameSystemId && loadedFacets?.gameSystemId === gameSystemId
-      ? loadedFacets.facets
-      : undefined;
 
   useEffect(() => {
-    if (!gameSystemId) {
-      return;
-    }
     let active = true;
-    getGameSystemManifest(gameSystemId)
-      .then((manifest) => {
-        if (active) {
-          setLoadedFacets({
-            gameSystemId,
-            facets: manifest.abilityFacets as AbilityFacetsLookup | undefined,
-          });
-        }
+    getAbilityVocabulary(worldId)
+      .then((assembled) => {
+        if (active) setVocabulary(assembled);
       })
       .catch(() => {
-        if (active) {
-          setLoadedFacets({ gameSystemId, facets: undefined });
-        }
+        if (active) setVocabulary(DEFAULT_VOCABULARY);
       });
     return () => {
       active = false;
     };
-  }, [gameSystemId]);
+  }, [worldId, gameSystemId]);
 
   if (isLoading) {
     return <Loader fullScreen label="Loading ability" />;
@@ -204,10 +190,7 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
     );
   }
 
-  const classificationLabel = resolveAbilityLabel(
-    facets,
-    toAbilityClassificationKey(ability.classification),
-  );
+  const classificationLabel = labelFor(vocabulary, ability.classification);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -439,11 +422,16 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
                   disabled={isSaving}
                   data-testid="ability-classification-select"
                 >
-                  {ABILITY_CLASSIFICATION_KEYS.map((key) => (
-                    <option key={key} value={key.toUpperCase()}>
-                      {resolveAbilityLabel(facets, key)}
-                    </option>
-                  ))}
+                  {/* The world's own types, in the system's words and order.
+                   * Filtered to built-ins while the wire type is still an
+                   * enum; Increment D lifts that with the CHECK constraint. */}
+                  {vocabulary.types
+                    .filter((kind) => kind.builtin)
+                    .map((kind) => (
+                      <option key={kind.id} value={kind.id.toUpperCase()}>
+                        {kind.label}
+                      </option>
+                    ))}
                 </select>
               </Field>
               <Field label="Description" htmlFor="ability-description">

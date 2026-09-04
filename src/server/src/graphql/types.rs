@@ -1317,6 +1317,17 @@ pub struct SharedAbilityPreview {
     pub name: String,
     pub description: Option<String>,
     pub classification: AbilityClassification,
+    /// The word the *owning world's* system uses for this ability's type.
+    ///
+    /// Spec 033 FR-006: every surface naming an ability type uses the system's
+    /// vocabulary, and a share view is such a surface. It cannot resolve one
+    /// itself — the viewer is deliberately not a member of that world (that is
+    /// what a share link is for), so they cannot read its vocabulary. The
+    /// server, which knows the world, resolves it here.
+    ///
+    /// Falls back to the stored type identity for a type no system recognises,
+    /// never to another type's name (FR-034, FR-035).
+    pub classification_label: String,
     pub effects: Vec<GraphQLAbilityEffect>,
 }
 

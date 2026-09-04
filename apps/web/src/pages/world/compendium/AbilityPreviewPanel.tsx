@@ -2,18 +2,14 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import type { WorldAbilityRecord } from "@/types/ability";
-import {
-  resolveAbilityLabel,
-  toAbilityClassificationKey,
-  type AbilityFacetsLookup,
-} from "@/utils/abilityFacets";
+import { labelFor, type AbilityVocabulary } from "@/abilities/vocabulary";
 import { effectTypeLabel } from "@/utils/effectLabels";
 
 export interface AbilityPreviewPanelProps {
   worldId: string;
   ability: WorldAbilityRecord | null;
-  /** The active system's `abilityFacets`, if it publishes any (FR-010). */
-  facets?: AbilityFacetsLookup;
+  /** What this world calls its abilities, assembled by the server (spec 033 FR-006). */
+  vocabulary: AbilityVocabulary;
   onClose: () => void;
 }
 
@@ -29,7 +25,7 @@ export interface AbilityPreviewPanelProps {
 export function AbilityPreviewPanel({
   worldId,
   ability,
-  facets,
+  vocabulary,
   onClose,
 }: AbilityPreviewPanelProps) {
   if (!ability) {
@@ -46,10 +42,7 @@ export function AbilityPreviewPanel({
   }
 
   const canEdit = ability.myPermissionLevel !== "VIEWER";
-  const classificationLabel = resolveAbilityLabel(
-    facets,
-    toAbilityClassificationKey(ability.classification),
-  );
+  const classificationLabel = labelFor(vocabulary, ability.classification);
 
   return (
     <Card className="grid gap-4 p-5" data-testid="ability-preview-panel">

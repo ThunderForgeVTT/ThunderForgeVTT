@@ -13,12 +13,7 @@ import type {
   AbilityClassification,
   WorldAbilityRecord,
 } from "@/types/ability";
-import {
-  ABILITY_CLASSIFICATION_KEYS,
-  resolveAbilityLabel,
-  toAbilityClassificationKey,
-  type AbilityFacetsLookup,
-} from "@/utils/abilityFacets";
+import { labelFor, type AbilityVocabulary } from "@/abilities/vocabulary";
 
 export interface AbilityCompendiumTabProps {
   worldId: string;
@@ -26,8 +21,8 @@ export interface AbilityCompendiumTabProps {
   selectedAbilityId: string | null;
   /** DM/GM-only — gates the create control (FR-002). */
   isGm: boolean;
-  /** The active system's `abilityFacets`, if it publishes any (FR-010). */
-  facets?: AbilityFacetsLookup;
+  /** What this world calls its abilities, assembled by the server (spec 033 FR-006). */
+  vocabulary: AbilityVocabulary;
   onCatalogLoaded?: (abilities: WorldAbilityRecord[]) => void;
 }
 
@@ -54,7 +49,7 @@ export function AbilityCompendiumTab({
   onSelect,
   selectedAbilityId,
   isGm,
-  facets,
+  vocabulary,
   onCatalogLoaded,
 }: AbilityCompendiumTabProps) {
   const [abilities, setAbilities] = useState<WorldAbilityRecord[] | null>(null);
@@ -232,10 +227,7 @@ export function AbilityCompendiumTab({
                     ) : null}
                   </td>
                   <td className="p-2 text-muted-foreground">
-                    {resolveAbilityLabel(
-                      facets,
-                      toAbilityClassificationKey(ability.classification),
-                    )}
+                    {labelFor(vocabulary, ability.classification)}
                   </td>
                   <td className="max-w-xs truncate p-2 text-muted-foreground">
                     {ability.description || (
@@ -304,11 +296,25 @@ export function AbilityCompendiumTab({
               aria-label="Ability type"
               data-testid="new-ability-classification-select"
             >
-              {ABILITY_CLASSIFICATION_KEYS.map((key) => (
-                <option key={key} value={key.toUpperCase()}>
-                  {resolveAbilityLabel(facets, key)}
-                </option>
-              ))}
+              {/*
+               * The world's own types, in the system's words and the
+               * system's order (FR-004, FR-006), rather than a fixed list of
+               * four in ours.
+               *
+               * Filtered to built-ins for now because the wire type is still
+               * a GraphQL enum and only those four are storable. Increment D
+               * retires the enum and drops the CHECK constraint, and this
+               * filter goes with them — at which point a system's own type
+               * becomes authorable here and nothing else about this control
+               * changes.
+               */}
+              {vocabulary.types
+                .filter((kind) => kind.builtin)
+                .map((kind) => (
+                  <option key={kind.id} value={kind.id.toUpperCase()}>
+                    {kind.label}
+                  </option>
+                ))}
             </select>
             <Input
               value={newDescription}

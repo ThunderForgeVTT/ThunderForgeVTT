@@ -82,20 +82,27 @@ pub async fn shared_ability_impl(
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
-    let (ability, effects) = tokio::task::spawn_blocking(move || {
+    let (ability, effects, world_system_id) = tokio::task::spawn_blocking(move || {
         let share = load_active_share(&mut conn, &share_code)?;
         let ability = world_abilities::table
             .filter(world_abilities::id.eq(share.ability_id))
             .select(WorldAbility::as_select())
             .first::<WorldAbility>(&mut conn)
             .map_err(|_| "This share link is no longer available".to_string())?;
+        // The owning world's system, so the label below is the word that
+        // world would show rather than the application's default.
+        let world_system_id: Option<String> = crate::schema::worlds::table
+            .filter(crate::schema::worlds::id.eq(ability.world_id))
+            .select(crate::schema::worlds::game_system_id)
+            .first::<Option<String>>(&mut conn)
+            .map_err(|e| e.to_string())?;
         let effects = world_ability_effects::table
             .filter(world_ability_effects::ability_id.eq(ability.id))
             .order(world_ability_effects::sort_order.asc())
             .select(AbilityEffect::as_select())
             .load::<AbilityEffect>(&mut conn)
             .map_err(|e| e.to_string())?;
-        Ok::<_, String>((ability, effects))
+        Ok::<_, String>((ability, effects, world_system_id))
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
@@ -108,16 +115,41 @@ pub async fn shared_ability_impl(
         return Err(Error::new("This share link is no longer available"));
     }
 
+    // The label the owning world would show. Resolved here because the viewer
+    // is deliberately not a member of that world and cannot read its
+    // vocabulary (FR-006).
+    let classification_label =
+        ability_label_for_world(state, world_system_id.as_deref(), &ability.classification);
+
     Ok(SharedAbilityPreview {
         name: ability.name,
         description: ability.description,
         classification: AbilityClassification::from_db_str(&ability.classification)
             .unwrap_or(AbilityClassification::Spell),
+        classification_label,
         effects: effects
             .into_iter()
             .map(GraphQLAbilityEffect::from)
             .collect(),
     })
+}
+
+/// One ability's type label, in the words of the world that owns it.
+///
+/// The vocabulary is assembled with the ability's own type counted as in use,
+/// so a type the active system no longer recognises still resolves to itself
+/// rather than to another type's name. An unrecognised type reads as the
+/// identity it was authored under, which is what FR-035 asks for.
+fn ability_label_for_world(
+    state: &AppState,
+    world_system_id: Option<&str>,
+    classification: &str,
+) -> String {
+    let in_use = [classification.to_string()];
+    crate::ability_vocabulary::for_system(&state.directories.systems_dir, world_system_id, &in_use)
+        .get(classification)
+        .map(|kind| kind.label.clone())
+        .unwrap_or_else(|| classification.to_string())
 }
 
 /// Testable core of `createAbilityShareLink` (FR-032). Owner-level only.
@@ -654,12 +686,21 @@ mod tests {
 
         let preview = shared_ability_impl(&state, link.share_code).await.unwrap();
         assert_eq!(preview.name, "Quiet");
+        // Spec 033 FR-006: a share view names the type in the owning world's
+        // words, resolved server-side because the viewer is deliberately not a
+        // member of that world and cannot read its vocabulary. This world runs
+        // no system, so the label is the application's own — but it is a
+        // resolved label rather than an enum the client has to translate, and
+        // it is never blank.
+        assert!(!preview.classification_label.is_empty());
+
         // Destructured exhaustively: adding an id/world_id/created_by field to
         // SharedAbilityPreview breaks this line, which is the point.
         let SharedAbilityPreview {
             name: _,
             description: _,
             classification: _,
+            classification_label: _,
             effects: _,
         } = preview;
     }

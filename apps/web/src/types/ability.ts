@@ -5,8 +5,8 @@ export type { ActorPermissionLevel };
 /**
  * Spec 025 (T012): the fixed, system-agnostic classification set (FR-009).
  * Shared by every game system so ability data survives a system change
- * intact — systems re-label these for display via `abilityFacets`
- * (`@/utils/abilityFacets`, FR-010), but cannot add to the set.
+ * intact — systems re-label these for display via their vocabulary
+ * (`@/abilities/vocabulary`, spec 033 FR-006), but cannot add to the set.
  *
  * GraphQL enum casing (`SPELL`), not the DB casing (`spell`); use
  * `toAbilityClassificationKey` to cross between them.

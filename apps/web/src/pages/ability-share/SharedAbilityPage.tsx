@@ -16,10 +16,6 @@ import type {
   DmWorldSummary,
   SharedAbilityPreview,
 } from "@/types/abilityShare";
-import {
-  resolveAbilityLabel,
-  toAbilityClassificationKey,
-} from "@/utils/abilityFacets";
 import { effectTypeLabel } from "@/utils/effectLabels";
 
 /**
@@ -136,10 +132,13 @@ export default function SharedAbilityPage() {
     );
   }
 
-  const classificationLabel = resolveAbilityLabel(
-    undefined,
-    toAbilityClassificationKey(preview.classification),
-  );
+  // Resolved by the server from the *owning world's* vocabulary (FR-006).
+  // This page cannot do it: the viewer is deliberately not a member of that
+  // world — that is what a share link is for — so they cannot read its
+  // system's words. Before spec 033 this passed `undefined` and always showed
+  // the application's built-in label, which meant a shared Scroll read
+  // "Spell".
+  const classificationLabel = preview.classificationLabel;
 
   return (
     <>

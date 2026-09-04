@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { getGameSystemManifest } from "@/api/gameSystems";
 import { getLoreEntry } from "@/api/lore";
 import { COMPENDIUM_OVERVIEW_SLUG } from "@/api/compendiumOverview";
 import { Tabs } from "@/components/ui/tabs/Tabs";
@@ -16,7 +15,11 @@ import { useWorldRole } from "@/hooks/useWorldRole";
 import type { WorldActorRecord } from "@/types/actor";
 import type { WorldAbilityRecord } from "@/types/ability";
 import type { WorldItemWithPrice } from "@/api/items";
-import type { AbilityFacetsLookup } from "@/utils/abilityFacets";
+import {
+  DEFAULT_VOCABULARY,
+  getAbilityVocabulary,
+  type AbilityVocabulary,
+} from "@/abilities/vocabulary";
 import type { WorldRecord } from "@/types/world";
 
 export interface WorldCompendiumPageProps {
@@ -59,16 +62,14 @@ export function WorldCompendiumPage({
   const [abilityCatalog, setAbilityCatalog] = useState<WorldAbilityRecord[]>(
     [],
   );
-  // Spec 025 (T028, FR-010/FR-012): the active system's optional ability
-  // presentation facets. `undefined` (no system, no facets block, or a failed
-  // manifest fetch) means every classification renders its built-in default
-  // label — the resolver is total, so this never needs a loading state.
-  // Kept with the system it was fetched for: which facets are in force is
-  // then derived during render, rather than reset from inside the effect.
-  const [loadedAbilityFacets, setLoadedAbilityFacets] = useState<{
-    gameSystemId: string;
-    facets: AbilityFacetsLookup | undefined;
-  } | null>(null);
+  // Spec 033: what this world calls its abilities, assembled by the server so
+  // that every surface naming a type agrees (FR-006). Replaces this page's own
+  // manifest read and five more like it.
+  //
+  // `DEFAULT_VOCABULARY` until it arrives, and if it never does — every lookup
+  // is total, so there is no loading state and no blank label (SC-013).
+  const [vocabulary, setVocabulary] =
+    useState<AbilityVocabulary>(DEFAULT_VOCABULARY);
   const { isGm } = useWorldRole(worldId, world);
 
   // Spec 021: the header blurb is GM-authored Markdown (a reserved lore
@@ -97,36 +98,22 @@ export function WorldCompendiumPage({
   }, [worldId]);
 
   const gameSystemId = world?.gameSystemId;
-  const abilityFacets =
-    gameSystemId && loadedAbilityFacets?.gameSystemId === gameSystemId
-      ? loadedAbilityFacets.facets
-      : undefined;
 
   useEffect(() => {
-    if (!gameSystemId) {
-      return;
-    }
     let active = true;
-    getGameSystemManifest(gameSystemId)
-      .then((manifest) => {
-        if (active) {
-          setLoadedAbilityFacets({
-            gameSystemId,
-            facets: manifest.abilityFacets as AbilityFacetsLookup | undefined,
-          });
-        }
+    getAbilityVocabulary(worldId)
+      .then((assembled) => {
+        if (active) setVocabulary(assembled);
       })
       .catch(() => {
-        // A manifest fetch failure degrades to default labels rather than
+        // A failure degrades to the application's own words rather than
         // breaking the tab.
-        if (active) {
-          setLoadedAbilityFacets({ gameSystemId, facets: undefined });
-        }
+        if (active) setVocabulary(DEFAULT_VOCABULARY);
       });
     return () => {
       active = false;
     };
-  }, [gameSystemId]);
+  }, [worldId, gameSystemId]);
 
   const selectedActor = useMemo(
     () => roster.find((actor) => actor.id === selectedActorId) ?? null,
@@ -232,13 +219,13 @@ export function WorldCompendiumPage({
                   onSelect={setSelectedAbilityId}
                   selectedAbilityId={selectedAbilityId}
                   isGm={isGm}
-                  facets={abilityFacets}
+                  vocabulary={vocabulary}
                   onCatalogLoaded={setAbilityCatalog}
                 />
                 <AbilityPreviewPanel
                   worldId={worldId}
                   ability={selectedAbility}
-                  facets={abilityFacets}
+                  vocabulary={vocabulary}
                   onClose={() => setSelectedAbilityId(null)}
                 />
               </div>

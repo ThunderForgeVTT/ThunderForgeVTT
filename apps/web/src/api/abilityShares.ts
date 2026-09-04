@@ -69,6 +69,7 @@ export function getSharedAbility(
           name
           description
           classification
+          classificationLabel
           effects {
             ${EFFECT_FIELDS}
           }
@@ -107,6 +108,7 @@ export function copySharedAbilityToWorld(
           worldId
           name
           classification
+          classificationLabel
           gmOnly
         }
       }

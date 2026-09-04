@@ -5,17 +5,17 @@ import {
   detachAbilityFromActor,
   getActorAbilities,
 } from "@/api/actorAbilities";
-import { getGameSystemManifest } from "@/api/gameSystems";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import type { WorldAbilityRecord } from "@/types/ability";
 import type { ActorAbilityEntryRecord } from "@/types/actorAbility";
 import {
-  resolveAbilityLabel,
-  toAbilityClassificationKey,
-  type AbilityFacetsLookup,
-} from "@/utils/abilityFacets";
+  DEFAULT_VOCABULARY,
+  getAbilityVocabulary,
+  labelFor,
+  type AbilityVocabulary,
+} from "@/abilities/vocabulary";
 
 export interface ActorAbilitiesPanelProps {
   actorId: string;
@@ -50,9 +50,10 @@ export function ActorAbilitiesPanel({
     null,
   );
   const [catalog, setCatalog] = useState<WorldAbilityRecord[] | null>(null);
-  const [facets, setFacets] = useState<AbilityFacetsLookup | undefined>(
-    undefined,
-  );
+  // Spec 033: the world's assembled vocabulary, so this panel names a type
+  // the same way the compendium does (FR-006).
+  const [vocabulary, setVocabulary] =
+    useState<AbilityVocabulary>(DEFAULT_VOCABULARY);
   const [error, setError] = useState<string | null>(null);
   const [selectedAbilityId, setSelectedAbilityId] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -113,25 +114,18 @@ export function ActorAbilitiesPanel({
   }, [worldId, canManage]);
 
   useEffect(() => {
-    if (!gameSystemId) {
-      return;
-    }
     let active = true;
-    getGameSystemManifest(gameSystemId)
-      .then((manifest) => {
-        if (active) {
-          setFacets(manifest.abilityFacets as AbilityFacetsLookup | undefined);
-        }
+    getAbilityVocabulary(worldId)
+      .then((assembled) => {
+        if (active) setVocabulary(assembled);
       })
       .catch(() => {
-        if (active) {
-          setFacets(undefined);
-        }
+        if (active) setVocabulary(DEFAULT_VOCABULARY);
       });
     return () => {
       active = false;
     };
-  }, [gameSystemId]);
+  }, [worldId, gameSystemId]);
 
   const handleAttach = async () => {
     if (!selectedAbilityId) {
@@ -206,10 +200,7 @@ export function ActorAbilitiesPanel({
                 </span>
                 {entry.classification ? (
                   <span className="ml-2 text-muted-foreground">
-                    {resolveAbilityLabel(
-                      facets,
-                      toAbilityClassificationKey(entry.classification),
-                    )}
+                    {labelFor(vocabulary, entry.classification)}
                   </span>
                 ) : (
                   // Tombstone: the ability was deleted, but the entry and its
