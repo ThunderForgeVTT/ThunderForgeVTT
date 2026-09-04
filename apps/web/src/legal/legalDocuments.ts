@@ -103,3 +103,32 @@ export function legalSections(slug: string): LegalSection[] {
   const source = LEGAL_DOCUMENTS[slug];
   return source ? sectionsOf(source) : [];
 }
+
+/**
+ * One keyed statement from a document, by its heading.
+ *
+ * `notice-attestations.md` is a document of *lookups* rather than flowing
+ * prose: each heading is a stable identifier a form references, and the text
+ * below it is what a submitter affirms. Prose sections are read in order;
+ * these are read by name.
+ *
+ * # Why this throws
+ *
+ * Unlike `legalSections`, a missing statement is not an answer. A checkbox
+ * whose label resolved to nothing would render as an empty affirmation next to
+ * a live checkbox — a submitter agreeing to blank text, on a form whose whole
+ * purpose is a statement made under penalty of perjury. Failing loudly at the
+ * first render is the only safe behaviour, and `legalDocuments.test.ts` asserts
+ * every identifier the forms use resolves so it never reaches a browser.
+ */
+export function legalStatement(slug: string, id: string): string {
+  const section = legalSections(slug).find((s) => s.heading === id);
+  if (!section || section.body.trim().length === 0) {
+    throw new Error(
+      `Legal statement "${id}" is missing from legal/${slug}.md. ` +
+        `A form references it; add the heading back or update the reference.`,
+    );
+  }
+  // Authored wrapped at 80 columns for review; rejoined for display.
+  return section.body.replace(/\s*\n\s*/g, " ").trim();
+}

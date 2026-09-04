@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   LEGAL_DOCUMENTS,
   legalSections,
+  legalStatement,
   sectionsOf,
 } from "@/legal/legalDocuments";
 
@@ -60,5 +61,53 @@ describe("legalDocuments", () => {
    */
   it("answers with no sections for a document that does not exist", () => {
     expect(legalSections("no-such-document")).toEqual([]);
+  });
+});
+
+/**
+ * The statements a submitter affirms under penalty of perjury.
+ *
+ * These are looked up by heading rather than read in order, which introduces a
+ * failure the prose documents do not have: rename a heading in
+ * `notice-attestations.md` and the form asking for that affirmation loses its
+ * label. A live checkbox beside blank text is a submitter agreeing to nothing,
+ * on the one form where the words are the entire point.
+ *
+ * So every identifier the forms use is asserted here. `legalStatement` throws
+ * rather than returning empty, and this is what keeps that throw from being
+ * discovered in a browser.
+ */
+describe("notice attestations", () => {
+  const REFERENCED_BY_FORMS = [
+    "takedown-good-faith",
+    "takedown-accuracy",
+    "counter-notice-good-faith",
+    "counter-notice-jurisdiction",
+  ] as const;
+
+  it.each(REFERENCED_BY_FORMS)("resolves %s to real text", (id) => {
+    const text = legalStatement("notice-attestations", id);
+    expect(text.length).toBeGreaterThan(20);
+    expect(text).not.toContain("\n");
+  });
+
+  /**
+   * Statutory language, so the substance is asserted rather than only the
+   * presence of a string. Someone softening "under penalty of perjury" out of
+   * either affirmation has changed what the form legally is.
+   */
+  it("keeps the perjury affirmation in both notices", () => {
+    expect(legalStatement("notice-attestations", "takedown-accuracy")).toMatch(
+      /under penalty of perjury/i,
+    );
+    expect(
+      legalStatement("notice-attestations", "counter-notice-good-faith"),
+    ).toMatch(/under penalty of perjury/i);
+  });
+
+  it("refuses a statement it cannot find, rather than rendering nothing", () => {
+    expect(() =>
+      legalStatement("notice-attestations", "no-such-statement"),
+    ).toThrow(/missing from legal/);
   });
 });

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { legalStatement } from "@/legal/legalDocuments";
 import { submitTakedownNotice } from "@/api/moderation";
 import { Button } from "@/components/ui/button/Button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -181,8 +182,7 @@ export function TakedownNoticeForm() {
           onCheckedChange={(v) => setGoodFaithStatement(v === true)}
         />
         <Label htmlFor="dmca-good-faith" className="text-sm font-normal">
-          I have a good-faith belief that use of the material is not authorized
-          by the copyright owner, its agent, or the law.
+          {legalStatement("notice-attestations", "takedown-good-faith")}
         </Label>
       </div>
 
@@ -193,8 +193,7 @@ export function TakedownNoticeForm() {
           onCheckedChange={(v) => setAccuracyStatement(v === true)}
         />
         <Label htmlFor="dmca-accuracy" className="text-sm font-normal">
-          Under penalty of perjury, this notice is accurate and I am authorized
-          to act on behalf of the copyright owner.
+          {legalStatement("notice-attestations", "takedown-accuracy")}
         </Label>
       </div>
 

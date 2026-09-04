@@ -21,15 +21,27 @@ review actionable rather than advisory.
 | File | Where it appears | Status |
 |---|---|---|
 | `dmca-policy.md` | `/legal/dmca` | **Needs legal review before launch** |
+| `notice-attestations.md` | The takedown and counter-notice forms | **Needs legal review before launch** — statutory |
+
+`notice-attestations.md` is read differently from the others, and the
+difference matters if you edit it. Its `##` headings are **stable identifiers**
+that the forms look text up by, not decoration: rename one and the form
+referencing it fails rather than rendering a live checkbox beside a blank
+affirmation. `legalDocuments.test.ts` asserts every identifier the forms use
+still resolves, so a rename fails in CI and not in front of a submitter.
+
+Reword the text under a heading freely. Change a heading only alongside the
+code that references it.
 
 ## What is deliberately *not* here
 
 - **Structured data**: the designated agent's name, address and electronic
   contact. Those are instance configuration, not prose, and they render as a
   definition list the page owns. They also carry a pre-launch placeholder.
-- **The notice and counter-notice forms.** Their field labels are UI. The
-  statutory attestations a submitter agrees to are prose and belong here; they
-  are listed as an open item below rather than claimed as done.
+- **The notice and counter-notice forms' field labels.** "Location of the
+  allegedly infringing material" is UI, not policy. The statutory attestations
+  those forms ask a submitter to affirm *are* policy, and they are here, in
+  `notice-attestations.md`.
 - **Per-system licence and attribution text.** That lives in each pack's
   `system.json` under its `legal` block, because it belongs to the pack and
   travels with it. `packs/systems/*/system.json` — eight of them, all
@@ -41,9 +53,16 @@ review actionable rather than advisory.
 - **No Terms of Service and no Privacy Policy exist.** Checked 2026-09-04:
   nothing in the application references either. That is a gap to close before
   a public instance, not an omission from this directory.
-- **The statutory attestations in the two notice forms are still in TSX.**
-  `TakedownNoticeForm.tsx` and `CounterNoticeForm.tsx` each carry one
-  under-penalty-of-perjury statement. They should move here.
-- **`dmca-policy.md` has not been reviewed by a lawyer.** It was drafted
-  in-repo. The agent designation on the same page already carries a
-  "configure before launch" placeholder; this text needs the same gate.
+- **Nothing here has been reviewed by a lawyer.** All of it was drafted
+  in-repo. The agent designation on the DMCA page already carries a "configure
+  before launch" placeholder; this text needs the same gate.
+- **The designated agent's mailing address and electronic contact are
+  placeholders.** `[Configure via instance legal/compliance settings before
+  launch]` and `dmca@thunderforge.example`. These are instance configuration
+  rather than prose, which is why they are not in this directory — but they
+  block launch just as hard.
+- **`notice-attestations.md` is a plain-language rendering of statutory
+  elements, not a quotation of them.** 17 U.S.C. § 512(c)(3)(A) governs the
+  notice elements and § 512(g)(3) the counter-notice elements. Whether the
+  rendering is sufficient is exactly the kind of question the review exists to
+  answer.

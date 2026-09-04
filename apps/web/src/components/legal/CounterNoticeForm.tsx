@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { legalStatement } from "@/legal/legalDocuments";
 import { submitCounterNotice } from "@/api/moderation";
 import { Button } from "@/components/ui/button/Button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -97,8 +98,7 @@ export function CounterNoticeForm({
           htmlFor="counter-notice-good-faith"
           className="text-sm font-normal"
         >
-          Under penalty of perjury, I have a good-faith belief the material was
-          disabled as a result of mistake or misidentification.
+          {legalStatement("notice-attestations", "counter-notice-good-faith")}
         </Label>
       </div>
 
@@ -112,8 +112,7 @@ export function CounterNoticeForm({
           htmlFor="counter-notice-jurisdiction"
           className="text-sm font-normal"
         >
-          I consent to the jurisdiction of the appropriate federal court and
-          will accept service of process from the original claimant.
+          {legalStatement("notice-attestations", "counter-notice-jurisdiction")}
         </Label>
       </div>
 
