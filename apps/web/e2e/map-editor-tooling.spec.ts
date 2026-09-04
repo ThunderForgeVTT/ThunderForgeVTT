@@ -45,7 +45,12 @@ import {
  *    `insert_test_world` doc comment) — so a world's own owner cannot
  *    generate an invite for their own, just-created world today.
  *
- * Together these mean no session can currently invite a second, distinct
+ * **Both were fixed elsewhere and T006 is live as of 2026-09-03** — see that
+ * test's own comment. What follows described the state when this file was
+ * written, and is kept because T003/T004's same-account approach was chosen
+ * because of it.
+ *
+ * Together these meant no session could then invite a second, distinct
  * account into a world through the real app. T003/T004 below instead
  * use the same "second, independent browser context reusing the first
  * session's login via `storageState`" pattern
@@ -520,18 +525,85 @@ test.describe("From-scratch authoring with no import (US1, T005)", () => {
 });
 
 test.describe("Non-GM player sees no authoring controls (US1, T006)", () => {
-  // Genuinely blocked, not merely inconvenient: this scenario needs a
-  // *distinct*, non-owner account viewing the GM's world, which requires
-  // a working invite flow. See this file's top-of-file doc comment for
-  // the two independent, pre-existing bugs (a frontend GraphQL
-  // argument-shape mismatch, and `generate_invite_code` requiring a
-  // `world_members` row `create_world` never gives the world's own
-  // owner) that make that currently unreachable through the real app —
-  // both outside spec 003's scope to fix. Unlike T003/T004, there is no
-  // same-account fallback here: the assertion is specifically about a
-  // *non-owner* viewpoint (`WorldPage.tsx`'s `isSceneOwner` check), which
-  // a second session under the GM's own login can never exercise.
-  test.skip("a joined non-owner player never sees wall/shape authoring tools, only their effects", () => {
-    // Intentionally unimplemented — see this describe block's comment.
+  // Unblocked 2026-09-03. This stood `test.skip`-ed for two stated reasons,
+  // and both have since been fixed elsewhere:
+  //
+  //   1. The frontend's invite mutation argument shape — `CampaignSettingsPanel`
+  //      calls `generateInviteCode(worldId, 5)` through `api/invites.ts` now,
+  //      and `access-links.spec.ts` exercises the whole flow.
+  //   2. `generate_invite_code` requiring a `world_members` row the world's own
+  //      owner never had. `mutations_invites.rs:308` now goes through
+  //      `require_world_member`, which falls back to `worlds.created_by` —
+  //      spec 005 US4 fixed it there deliberately, "reusing the already-built,
+  //      already-tested compensating helper instead of introducing a second
+  //      authorization path".
+  //
+  // So a genuinely distinct, non-owner account *can* now be got into a world
+  // through the real app, and the assertion this file wanted — the one no
+  // same-account second session can make — is finally reachable.
+  test.describe.configure({ timeout: 120_000 });
+
+  test("a joined non-owner player never sees wall/shape authoring tools, only their effects", async ({
+    browser,
+  }) => {
+    const gmContext = await browser.newContext();
+    const gm = await gmContext.newPage();
+    const worldId = await registerAndCreateWorldOnDashboard(
+      gm,
+      `T006 ${uniqueSuffix()}`,
+    );
+
+    // A real invite, so the second account is a real member rather than a
+    // second window onto the owner's own session.
+    await gm.goto(`/world/${worldId}`);
+    await expect(
+      gm.getByRole("heading", { name: /campaign settings/i }),
+    ).toBeVisible({ timeout: 15_000 });
+    await gm.getByRole("button", { name: /generate join link/i }).click();
+    await expect(gm.getByTestId("invite-link-row").first()).toBeVisible({
+      timeout: 15_000,
+    });
+    const url = await gm
+      .getByTestId("invite-link-row")
+      .first()
+      .getByLabel("Invite link")
+      .inputValue();
+    const code = url.split("/join/")[1];
+    expect(code, `could not parse a code out of ${url}`).toBeTruthy();
+
+    const playerContext = await browser.newContext();
+    const player = await playerContext.newPage();
+    await register(player, freshCredentials("t006player"));
+    await player.goto(`/join/${code}`);
+    await player.getByRole("button", { name: /join campaign/i }).click();
+    await player.waitForURL(new RegExp(`/world/${worldId}`), {
+      timeout: 20_000,
+    });
+
+    // The GM keeps their tools — the control, without which the assertions
+    // below would pass against a broken page.
+    await gm.goto(`/world/${worldId}/play`);
+    await waitForEngineReady(gm, "walls");
+    await expect(gm.getByTestId("gm-tool-rail")).toBeVisible();
+    await expect(gm.getByTestId("wall-tool")).toBeVisible();
+
+    // FR-006: the player sees the map and none of the authoring controls.
+    await player.goto(`/world/${worldId}/play`);
+    await expect(player.locator("canvas")).toBeVisible({ timeout: 60_000 });
+
+    await expect(
+      player.getByTestId("gm-tool-rail"),
+      "a player must not be offered the GM tool rail",
+    ).toHaveCount(0);
+    await expect(player.getByTestId("wall-tool")).toHaveCount(0);
+
+    // Not merely hidden behind a closed rail: the panels themselves are
+    // absent, which is what `WorldPage.tsx`'s `isSceneOwner` gate does.
+    for (const tool of ["lighting-tool", "shape-tool", "token-tool", "interaction-tool"]) {
+      await expect(player.getByTestId(tool)).toHaveCount(0);
+    }
+
+    await gmContext.close();
+    await playerContext.close();
   });
 });
