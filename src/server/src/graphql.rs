@@ -143,6 +143,7 @@ pub use mutations_actor_abilities::{ActorAbilityMutation, ActorAbilityQuery};
 pub use mutations_items::ItemMutation;
 
 // Spec 013: the item "ownership block" (Viewer/Editor/Owner grants)
+pub mod mutations_item_abilities;
 pub mod mutations_item_permissions;
 pub mod mutations_item_prices; // Spec 031: the GM's presentational price note
 pub use mutations_item_permissions::{ItemPermissionMutation, ItemPermissionQuery};
@@ -3040,6 +3041,7 @@ pub struct QueryRoot(
     AbilityQuery,
     AbilityVocabularyQuery,
     WorldContentQuery,
+    mutations_item_abilities::ItemAbilityQuery,
     AbilityPermissionQuery,
     AbilityShareQuery,
     ActorAbilityQuery,
@@ -3072,6 +3074,7 @@ pub struct MutationRoot(
     SceneMutation,
     WorldTokenMutation,
     ActorSystemDataMutation,
+    mutations_item_abilities::ItemAbilityMutation,
     CollaboratorMutation,
     InviteMutation,
     WallMutation,

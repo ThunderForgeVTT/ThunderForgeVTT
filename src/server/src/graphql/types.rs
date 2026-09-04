@@ -1165,6 +1165,10 @@ pub struct GraphQLAbility {
     pub name: String,
     pub description: Option<String>,
     pub classification: String,
+    /// The value on this type's declared grade, where it declares one
+    /// (spec 033 FR-021). `null` for an ungraded type, so a surface can show
+    /// nothing rather than a zero that means something (FR-022).
+    pub grade: Option<i32>,
     /// Spec 025 (FR-024a): visibility, deliberately separate from
     /// `my_permission_level`. Only ever `true` in a response to a DM — every
     /// non-DM read path filters GM-only abilities out entirely (FR-024b), so a
@@ -1206,6 +1210,7 @@ impl GraphQLAbility {
             // comes from the world's vocabulary, which resolves an unrecognised
             // type to the identity rather than to another type's name.
             classification: normalise_classification(&row.classification),
+            grade: row.grade,
             gm_only: row.gm_only,
             effects,
             my_permission_level,
@@ -1231,6 +1236,9 @@ impl GraphQLAbility {
             name: "[Content removed in response to a takedown notice]".to_string(),
             description: None,
             classification: "spell".to_string(),
+            // A moderated placeholder carries no grade: the ability's own
+            // values are removed with the rest of its content.
+            grade: None,
             gm_only: false,
             effects: Vec::new(),
             my_permission_level,

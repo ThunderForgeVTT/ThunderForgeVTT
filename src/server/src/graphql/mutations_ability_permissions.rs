@@ -231,6 +231,7 @@ mod tests {
             name: name.to_string(),
             description: None,
             classification: "spell".to_string(),
+            grade: None,
             gm_only: None,
         }
     }

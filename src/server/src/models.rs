@@ -8,9 +8,10 @@ use crate::schema::{
     world_actor_claims, world_actor_images, world_actor_inventory, world_actor_permissions,
     world_actor_shares, world_actor_system_data, world_actors, world_authoring_tool_grants,
     world_chat_messages, world_combatants, world_combats, world_events, world_invites,
-    world_item_effects, world_item_permissions, world_item_prices, world_item_shares, world_items,
-    world_lore_entries, world_lore_image_assets, world_lore_links, world_lore_permissions,
-    world_lore_revisions, world_lore_tags, world_members, world_roll_records, world_tokens, worlds,
+    world_item_abilities, world_item_effects, world_item_permissions, world_item_prices,
+    world_item_shares, world_items, world_lore_entries, world_lore_image_assets, world_lore_links,
+    world_lore_permissions, world_lore_revisions, world_lore_tags, world_members,
+    world_roll_records, world_tokens, worlds,
 };
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -1726,6 +1727,12 @@ pub struct WorldAbility {
     pub name: String,
     pub description: Option<String>,
     pub classification: String,
+    /// The value on this type's declared grade, where it declares one.
+    ///
+    /// `None` for an ungraded type, which is most of them. Unconstrained in
+    /// the database on purpose: a system narrowing its range later must not
+    /// silently edit content authored under the old one (FR-023).
+    pub grade: Option<i32>,
     pub gm_only: bool,
     pub created_by: uuid::Uuid,
     pub updated_by: uuid::Uuid,
@@ -1741,7 +1748,37 @@ pub struct NewWorldAbility {
     pub name: String,
     pub description: Option<String>,
     pub classification: String,
+    pub grade: Option<i32>,
     pub gm_only: bool,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+}
+
+/// An ability an item carries (spec 033 FR-020).
+///
+/// The item peer of `world_actor_abilities`, mirroring its tombstone shape: a
+/// deleted ability leaves the row with a null reference and a name snapshot,
+/// so an item still reads "Flametongue (deleted)" rather than losing a line.
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_item_abilities)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct ItemAbility {
+    pub id: uuid::Uuid,
+    pub item_id: uuid::Uuid,
+    pub ability_id: Option<uuid::Uuid>,
+    pub ability_name_snapshot: String,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_item_abilities)]
+pub struct NewItemAbility {
+    pub item_id: uuid::Uuid,
+    pub ability_id: Option<uuid::Uuid>,
+    pub ability_name_snapshot: String,
     pub created_by: uuid::Uuid,
     pub updated_by: uuid::Uuid,
 }

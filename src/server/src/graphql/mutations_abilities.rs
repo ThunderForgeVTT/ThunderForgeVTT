@@ -25,6 +25,10 @@ pub struct CreateAbilityInput {
     pub name: String,
     pub description: Option<String>,
     pub classification: String,
+    /// The value on this type's declared grade, where it declares one
+    /// (spec 033 FR-021). Refused for an ungraded type, and refused outside
+    /// the declared range (FR-023).
+    pub grade: Option<i32>,
     /// FR-024a: optional, defaults false. Settable at create time so a GM can
     /// author a secret ability without a visible window between insert and
     /// hide.
@@ -41,6 +45,7 @@ pub struct UpdateAbilityInput {
     pub name: Option<String>,
     pub description: Option<String>,
     pub classification: Option<String>,
+    pub grade: Option<i32>,
     /// Explicit clear, because `Option<String>` alone cannot distinguish
     /// "set to null" from "field omitted".
     ///
@@ -269,6 +274,23 @@ async fn require_authorable_type(
     world_id: Uuid,
     classification: &str,
 ) -> GraphQLResult<String> {
+    require_authorable_type_and_grade(state, world_id, classification, None)
+        .await
+        .map(|(classification, _)| classification)
+}
+
+/// The type, and a grade the type will accept.
+///
+/// FR-023 checks the range **here**, at authoring time, against the vocabulary
+/// in force — not in the database. A system that narrows its range later must
+/// not silently clamp or discard a value authored under the old one, and a
+/// column constraint could not tell the difference.
+async fn require_authorable_type_and_grade(
+    state: &AppState,
+    world_id: Uuid,
+    classification: &str,
+    grade: Option<i32>,
+) -> GraphQLResult<(String, Option<i32>)> {
     let classification = crate::graphql::types::normalise_classification(classification);
     if classification.is_empty() {
         return Err(Error::new("An ability needs a type"));
@@ -295,18 +317,34 @@ async fn require_authorable_type(
             system_id.as_deref(),
             std::slice::from_ref(&wanted),
         );
-        Ok::<_, diesel::result::Error>(vocabulary.recognises(&wanted))
+        let facet = vocabulary
+            .get(&wanted)
+            .and_then(|kind| kind.grade.as_ref())
+            .map(|grade| (grade.label.clone(), grade.min, grade.max));
+        Ok::<_, diesel::result::Error>((vocabulary.recognises(&wanted), facet))
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
     .map_err(|_| Error::new("Failed to read this world's system"))?;
 
+    let (recognised, grade_facet) = recognised;
     if !recognised {
         return Err(Error::new(format!(
             "This world's game system does not recognise the ability type \"{classification}\""
         )));
     }
-    Ok(classification)
+
+    match (grade, grade_facet) {
+        // A value on a type that declares no grade is meaningless, and storing
+        // it would show a number on a sheet nothing explains.
+        (Some(_), None) => Err(Error::new(format!(
+            "The ability type \"{classification}\" is not graded"
+        ))),
+        (Some(value), Some((label, min, max))) if value < min || value > max => Err(Error::new(
+            format!("{label} must be between {min} and {max} for \"{classification}\""),
+        )),
+        _ => Ok((classification, grade)),
+    }
 }
 
 pub async fn create_ability_impl(
@@ -319,8 +357,13 @@ pub async fn create_ability_impl(
         return Err(Error::new("Only the DM (Owner or GM) may create abilities"));
     }
 
-    let classification =
-        require_authorable_type(state, input.world_id, &input.classification).await?;
+    let (classification, grade) = require_authorable_type_and_grade(
+        state,
+        input.world_id,
+        &input.classification,
+        input.grade,
+    )
+    .await?;
 
     let mut conn = state
         .db_pool
@@ -332,6 +375,7 @@ pub async fn create_ability_impl(
         name: input.name,
         description: input.description,
         classification: classification.clone(),
+        grade,
         gm_only: input.gm_only.unwrap_or(false),
         created_by: user_id,
         updated_by: user_id,
@@ -649,6 +693,7 @@ mod tests {
             name: name.to_string(),
             description: None,
             classification: "spell".to_string(),
+            grade: None,
             gm_only: None,
         }
     }
@@ -727,6 +772,7 @@ mod tests {
                 name: Some("Fireball II".to_string()),
                 description: None,
                 classification: None,
+                grade: None,
                 clear_description: None,
             },
         )
@@ -748,6 +794,7 @@ mod tests {
                 name: None,
                 description: None,
                 classification: None,
+                grade: None,
                 clear_description: Some(true),
             },
         )
@@ -818,6 +865,7 @@ mod effect_tests {
             name: name.to_string(),
             description: None,
             classification: "spell".to_string(),
+            grade: None,
             gm_only: None,
         }
     }

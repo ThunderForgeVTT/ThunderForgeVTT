@@ -36,6 +36,7 @@ function ability(over: Partial<WorldAbilityRecord> = {}): WorldAbilityRecord {
     name: "Firebolt",
     description: null,
     classification: "SPELL",
+    grade: null,
     gmOnly: false,
     effects: [effect()],
     myPermissionLevel: "VIEWER",

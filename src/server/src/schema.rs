@@ -441,6 +441,7 @@ diesel::table! {
         updated_by -> Uuid,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        grade -> Nullable<Int4>,
     }
 }
 
@@ -677,6 +678,19 @@ diesel::table! {
         updated_at -> Timestamp,
         revoked -> Bool,
         rotated_from -> Nullable<Uuid>,
+    }
+}
+
+diesel::table! {
+    world_item_abilities (id) {
+        id -> Uuid,
+        item_id -> Uuid,
+        ability_id -> Nullable<Uuid>,
+        ability_name_snapshot -> Text,
+        created_by -> Uuid,
+        updated_by -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
     }
 }
 
@@ -946,6 +960,8 @@ diesel::joinable!(world_combats -> worlds (world_id));
 diesel::joinable!(world_events -> worlds (world_id));
 diesel::joinable!(world_invites -> users (created_by));
 diesel::joinable!(world_invites -> worlds (world_id));
+diesel::joinable!(world_item_abilities -> world_abilities (ability_id));
+diesel::joinable!(world_item_abilities -> world_items (item_id));
 diesel::joinable!(world_item_effects -> world_items (item_id));
 diesel::joinable!(world_item_permissions -> users (user_id));
 diesel::joinable!(world_item_permissions -> world_items (item_id));
@@ -1017,6 +1033,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     world_combats,
     world_events,
     world_invites,
+    world_item_abilities,
     world_item_effects,
     world_item_permissions,
     world_item_prices,

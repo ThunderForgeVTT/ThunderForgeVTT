@@ -330,6 +330,10 @@ pub async fn copy_shared_ability_to_world_impl(
                     name: source.name.clone(),
                     description: source.description.clone(),
                     classification: source.classification.clone(),
+                    // Carried across with the type it belongs to. A copy that
+                    // kept the type and dropped the grade would be a 3rd-level
+                    // spell arriving as an unlevelled one.
+                    grade: source.grade,
                     // Preserved, not reset — see this function's doc comment.
                     gm_only: source.gm_only,
                     created_by: user_id,
@@ -466,6 +470,7 @@ mod tests {
             name: name.to_string(),
             description: Some("A source ability.".to_string()),
             classification: "spell".to_string(),
+            grade: None,
             gm_only: None,
         }
     }

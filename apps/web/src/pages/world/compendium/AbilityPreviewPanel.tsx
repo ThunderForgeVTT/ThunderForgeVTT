@@ -2,7 +2,11 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import type { WorldAbilityRecord } from "@/types/ability";
-import { labelFor, type AbilityVocabulary } from "@/abilities/vocabulary";
+import {
+  labelFor,
+  typeFor,
+  type AbilityVocabulary,
+} from "@/abilities/vocabulary";
 import { effectTypeLabel } from "@/utils/effectLabels";
 
 export interface AbilityPreviewPanelProps {
@@ -43,6 +47,18 @@ export function AbilityPreviewPanel({
 
   const canEdit = ability.myPermissionLevel !== "VIEWER";
   const classificationLabel = labelFor(vocabulary, ability.classification);
+  /**
+   * The grade, in the system's word for it (FR-022).
+   *
+   * Shown only where the *type* declares one and the ability records one — an
+   * ungraded type shows nothing at all rather than a zero, because a zero on a
+   * sheet means something and "no such concept" does not.
+   */
+  const gradeFacet = typeFor(vocabulary, ability.classification)?.grade ?? null;
+  const gradeLabel =
+    gradeFacet && ability.grade !== null && ability.grade !== undefined
+      ? `${gradeFacet.label} ${ability.grade}`
+      : null;
 
   return (
     <Card className="grid gap-4 p-5" data-testid="ability-preview-panel">
@@ -50,6 +66,11 @@ export function AbilityPreviewPanel({
         <div>
           <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
             {classificationLabel}
+            {gradeLabel ? (
+              <span className="ml-2 normal-case" data-testid="ability-grade">
+                {gradeLabel}
+              </span>
+            ) : null}
           </p>
           <h2 className="text-lg font-semibold">
             {ability.name}

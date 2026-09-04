@@ -45,6 +45,13 @@ export type WorldAbilityRecord = {
   description: string | null;
   classification: AbilityClassification;
   /**
+   * The value on this type's declared grade, where its type declares one.
+   *
+   * `null` for an ungraded type — FR-022 says such a type shows no grade
+   * anywhere, so this is absence rather than zero.
+   */
+  grade: number | null;
+  /**
    * FR-024a: visibility, deliberately independent of `myPermissionLevel`.
    *
    * Only ever `true` in a response to a DM — every non-DM read path filters

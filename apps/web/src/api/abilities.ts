@@ -38,6 +38,7 @@ const WORLD_ABILITY_FIELDS = `
   name
   description
   classification
+  grade
   gmOnly
   effects {
     ${ABILITY_EFFECT_FIELDS}
@@ -112,6 +113,7 @@ export type CreateAbilityInput = {
   name: string;
   description?: string | null;
   classification: AbilityClassification;
+  grade?: number | null;
   gmOnly?: boolean;
 };
 
@@ -136,6 +138,7 @@ export type UpdateAbilityInput = {
   name?: string;
   description?: string | null;
   classification?: AbilityClassification;
+  grade?: number | null;
   /**
    * Explicit clear. `description: null` alone cannot mean "clear it", because
    * an omitted field is also null over the wire — which is precisely why
