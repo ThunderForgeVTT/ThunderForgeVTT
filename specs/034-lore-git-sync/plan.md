@@ -123,9 +123,8 @@ src/server/src/
 │   ├── run.rs              # one pass: fetch, diff, write, push, verify
 │   ├── paths.rs            # tree position + title -> path. Pure, and the densest unit tests here
 │   ├── document.rs         # front matter + body + link rewriting (repository-file-format.md)
-│   ├── git.rs              # the git binary. Credentials via GIT_ASKPASS, never argv
-│   └── hosts/
-│       └── mod.rs          # the grant boundary — the ONLY place a host is named
+│   └── git.rs              # the git binary. Credentials via GIT_ASKPASS, never argv
+├── repo_host.rs            # the effects half of the grant: the token-exchange call, the cache
 ├── crypto.rs               # extracted from auth/mod.rs (research R4)
 ├── graphql/
 │   ├── queries/lore_sync.rs
@@ -141,6 +140,11 @@ apps/web/src/
 └── pages/world/settings/LoreRepositoryCard.tsx
 
 apps/web/e2e/lore-repository-sync.spec.ts
+
+crates/thunderforge-repo-host/     # the grant model. GitHub is its first adapter,
+├── src/                           # not its definition (research R5a)
+└── Cargo.toml                     # no axum, no diesel, no reqwest — pure, per the
+                                   # precedent thunderforge-axum-oauth sets
 ```
 
 **Structure Decision**: A `lore_sync` module inside the server library, beside
@@ -148,10 +152,24 @@ apps/web/e2e/lore-repository-sync.spec.ts
 and not a crate: it is server behaviour that ships with the product, has no
 optional compilation story, and nothing about it is contributed by anyone.
 
-`hosts/` exists to make FR-004a checkable. The seam FR-004b describes is a
-directory, so "point at where the host-specific parts are confined" has a
-one-word answer — and any host knowledge that appears outside it is visible in
-a diff rather than discovered later.
+**The grant machinery is a crate, not a module** (research R5a). `lore_sync` is
+its first consumer rather than its owner: acting on a repository a user granted
+access to is a capability, and the spec's own scope boundary anticipates other
+content types wanting it. Extracting it later, under deadline, is how a boundary
+gets drawn badly.
+
+It also settles FR-004a in the strongest available form. The requirement is that
+host-specific parts be *pointed at* rather than claimed — and a crate boundary
+means everything outside it cannot reach a host concept even by accident,
+because it cannot name the types. What crosses back is a credential and an
+expiry.
+
+The crate holds only pure transformations, following the precedent
+`thunderforge-axum-oauth` states in its own manifest: no `axum`, no `diesel`, no
+`reqwest`, with the HTTP calls left in `src/server` (`repo_host.rs` here). That
+is not tidiness — it makes the refresh-window arithmetic, the scope validation
+and the JWT claim construction property-testable **without a GitHub account**,
+which is the difference between those rules being tested and being hoped for.
 
 `crypto.rs` is the extraction research R4 found necessary: `encrypt_secret`,
 `decrypt_secret` and `encryption_key_from_config_secret` are private to
@@ -167,3 +185,4 @@ here because they are commitments rather than violations:
 |---|---|---|
 | `git` binary as a runtime dependency | Rename detection (FR-010), force-push refusal (FR-031) and content verification (FR-034) all come from git itself; git-over-HTTPS is the host-neutral protocol FR-004b requires | A host REST API would put GitHub inside the sync engine, which FR-004c forbids. `git2` drags in a C dependency the workspace deliberately avoids; `gix`'s push support is its least mature surface, and this feature is nothing but pushing |
 | An RS256 JWT signer | Nothing in the workspace signs asymmetrically; the installation-token exchange FR-036a chose requires it | A pasted fine-grained token would have needed no dependency. It was considered and rejected in clarification; this is the recorded cost of that choice |
+| A new crate, `thunderforge-repo-host` | The grant is a capability other features will want, and a crate boundary is the strongest way to satisfy FR-004a's "point at where the host is confined" | A module inside `lore_sync` is simpler today and makes the second consumer pay for the first one's convenience. The workspace already has fifteen such crates; this is the established shape, not a new one |

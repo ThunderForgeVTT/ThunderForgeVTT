@@ -155,6 +155,57 @@ FR-036d).
 
 ---
 
+## R5a. The grant machinery is its own crate
+
+**Decision**: A new workspace crate, `crates/thunderforge-repo-host`
+(package `thunderforge_repo_host`), holding the application-installation grant
+model with a GitHub adapter as its first implementation. `lore_sync` is its
+first consumer, not its owner.
+
+**Rationale**: This is a *capability* — "act on a repository a user granted us
+access to" — and lore is the first thing that wants it, not the only thing that
+could. The spec's own scope boundary says extending the mirror to other content
+types is a separate spec; a grant model that lives inside `lore_sync` would have
+to be excavated the first time that happens, and excavation under deadline is
+how a boundary gets drawn badly.
+
+It also makes FR-004a trivially checkable. The requirement is that the
+host-specific parts be *pointed at* rather than claimed, and a crate boundary is
+the strongest form of pointing available: everything outside it cannot reach the
+host concepts even by accident, because it cannot name the types.
+
+**What the crate holds, and what it deliberately does not.**
+`thunderforge-axum-oauth` sets the precedent and states it in its own manifest:
+it carries no `axum`, `diesel` or `reqwest` dependency, because the OAuth flow is
+"a sequence of pure transformations … every one of them reachable here without a
+network round trip or a provider account", and the two actual HTTP calls stay in
+`src/server`. The same split applies here:
+
+| In the crate (pure, testable with no account) | In `src/server` (effects) |
+|---|---|
+| JWT claim construction and RS256 signing | The token-exchange HTTP call |
+| Parsing a token response | `reqwest` and its configuration |
+| Deciding whether a cached token needs refreshing | The cache itself, and its storage |
+| Building the grant hand-off a user is sent to | Redirect handling and session state |
+| Validating that a grant covers one repository (FR-036a) | Persisting the connection row |
+
+The value of that split is not tidiness. It means the refresh-window
+arithmetic, the scope validation, and the claim construction are all
+property-testable without a GitHub account, which is the difference between
+these rules being *tested* and being *hoped for*. `thunderforge-axum-oauth`
+carries `proptest` as a dev-dependency for exactly this reason.
+
+**What it returns to its caller**: a credential and an expiry, and nothing else
+that names a host. That return type is where FR-004c's boundary physically
+lives.
+
+**Alternatives considered**: a `hosts/` module inside `lore_sync` (the original
+plan — simpler today, and it makes the second consumer pay for the first one's
+convenience); a general-purpose "external integrations" crate (a name that broad
+attracts everything and constrains nothing).
+
+---
+
 ## R6. Commit identity
 
 **Decision**: The **committer is the application** — `ThunderForge VTT` with a

@@ -81,6 +81,11 @@ Starts the grant. Returns whatever the host adapter needs the user to be sent
 to. **This is the one place a host-specific concept legitimately appears**
 (FR-004b) — and its return type is opaque to the rest of the system.
 
+The adapter behind it lives in `crates/thunderforge-repo-host`, not in this
+feature's code. What crosses back into `lore_sync` is a credential and an
+expiry; nothing that names a host does. FR-004c is enforced by the crate
+boundary rather than by review.
+
 ### `completeLoreRepositoryConnection(input: CompleteConnectionInput!): LoreRepositoryConnection!`
 
 Finishes the grant and creates the row. Fails, without creating anything, when:

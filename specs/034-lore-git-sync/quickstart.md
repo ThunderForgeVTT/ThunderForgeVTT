@@ -126,11 +126,20 @@ With a connection working:
 Not a runtime scenario — a review step, and the spec requires it be *pointed at*
 rather than claimed.
 
-Name every location that knows which host is in use. Then confirm nothing in
-path mapping, commit synthesis, attribution, divergence detection, or
-verification appears on that list. **If the synchronising job knows it is
-talking to GitHub, the seam has stopped existing whatever the requirements
-say** (FR-004c).
+Name every location that knows which host is in use. The answer should be
+`crates/thunderforge-repo-host` and `src/server/src/repo_host.rs`, and nothing
+else. Then confirm nothing in path mapping, commit synthesis, attribution,
+divergence detection, or verification appears on that list. **If the
+synchronising job knows it is talking to GitHub, the seam has stopped existing
+whatever the requirements say** (FR-004c).
+
+A cheap mechanical version of the same check: `grep -ri github src/server/src/lore_sync/`
+should return nothing.
+
+The crate's own tests are the other half. Because it carries no `reqwest` and no
+account credential, its refresh-window arithmetic, scope validation and JWT
+claim construction are testable outright — `cargo test -p thunderforge_repo_host`
+must pass with no network and no GitHub App configured.
 
 ---
 
