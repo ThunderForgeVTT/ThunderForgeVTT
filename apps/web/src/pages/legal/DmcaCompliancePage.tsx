@@ -1,7 +1,9 @@
+import { LegalProse } from "@/components/legal/LegalProse";
 import { TakedownNoticeForm } from "@/components/legal/TakedownNoticeForm";
 import { SEO } from "@/components/seo/SEO";
 import { Card } from "@/components/ui/card/Card";
 import { Container } from "@/components/ui/container/Container";
+import { legalSections } from "@/legal/legalDocuments";
 import type { SeoConfig } from "@/types/seo";
 
 export const dmcaComplianceSeo: SeoConfig = {
@@ -13,11 +15,33 @@ export const dmcaComplianceSeo: SeoConfig = {
 };
 
 /**
- * Spec 015 (FR-001, FR-002, FR-014, SC-004): the platform's public DMCA
- * agent designation and takedown intake channel. Reachable without
- * authentication — this route carries no auth guard by design.
+ * Spec 015 (FR-001, FR-002, FR-014, FR-015..FR-018, SC-004): the platform's
+ * public DMCA agent designation, takedown intake channel, and the statement of
+ * where the platform's reach ends. Reachable without authentication — this
+ * route carries no auth guard by design.
+ *
+ * # Where the words are
+ *
+ * `legal/dmca-policy.md`. This component owns the page's *structure* — which
+ * sections become cards, where the agent designation and the notice form sit —
+ * and none of its prose.
+ *
+ * That split exists because the two halves have different reviewers. A lawyer
+ * reviews the policy and should not have to read JSX to do it; an engineer
+ * reviews the page and should not be editing legal text by accident. Before
+ * this, both lived here, and "what exactly does our DMCA page say" meant
+ * opening a React component and mentally stripping tags.
+ *
+ * Adding a `##` heading to the markdown adds a card. The surfaces are keyed by
+ * heading rather than by position, so reordering the document reorders the page
+ * and does not silently repaint one section with another's text.
  */
+
 export default function DmcaCompliancePage() {
+  const sections = legalSections("dmca-policy");
+  const intro = sections.find((s) => s.heading === null);
+  const body = sections.filter((s) => s.heading !== null);
+
   return (
     <>
       <SEO {...dmcaComplianceSeo} />
@@ -28,16 +52,22 @@ export default function DmcaCompliancePage() {
               Legal
             </p>
             <h1 className="text-3xl font-semibold">DMCA / Copyright Policy</h1>
-            <p className="max-w-2xl text-muted-foreground">
-              ThunderForge ships official game-system packs (5E System Core,
-              Pathfinder 2e, and others) distributed under their respective open
-              licenses. Anything a GM or player enters into their own
-              world&apos;s compendium — custom NPCs, items, or lore — is that
-              user&apos;s sole responsibility and is subject to the
-              notice-and-takedown process below.
-            </p>
+            <div className="grid max-w-2xl gap-3">
+              {intro ? (
+                <LegalProse
+                  body={intro.body}
+                  className="text-muted-foreground"
+                />
+              ) : null}
+            </div>
           </section>
 
+          {/* Structured, not prose: these are instance configuration values
+              rendered as a definition list, and they carry a pre-launch
+              placeholder. They stay here rather than in the markdown because a
+              reviewer editing policy text should not be editing an address
+              field, and because the mailing address is a value the operator
+              supplies rather than something anyone writes. */}
           <Card
             surface="stone"
             className="grid gap-3 p-6"
@@ -82,60 +112,27 @@ export default function DmcaCompliancePage() {
             <TakedownNoticeForm />
           </Card>
 
-          <Card
-            surface="stone"
-            className="grid gap-3 p-6"
-            data-testid="dmca-scope-of-reach"
-          >
-            <h2 className="text-lg font-semibold">
-              What We Can Reach, and What We Cannot
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              ThunderForge lets a Game Master copy or synchronise their own
-              world&apos;s content to services we do not operate — an external
-              repository they own, for example. Where that has happened, our
-              ability to act on a valid notice ends at our own systems.
-            </p>
-            <p className="text-sm text-muted-foreground">
-              On receiving a valid takedown notice we will disable access to the
-              identified content on this platform, and we will stop that content
-              being carried outward by any synchronisation we operate. Where
-              excluding the item is not enough to stop it being republished, or
-              where our repeat-infringer policy applies, we will deactivate the
-              synchronisation entirely. These are within our control and they
-              will be done.
-            </p>
-            <p className="text-sm text-muted-foreground">
-              We have no authority over copies already placed on a third-party
-              service, and we will not pursue them. We cannot delete them, we
-              cannot compel their removal, and we do not represent the rights
-              holder in seeking it. Content a user exported to a service they
-              control was published by that user, and removing it there is
-              theirs to do — as is any liability for having put it there.
-            </p>
-            <p className="text-sm text-muted-foreground">
-              A rights holder whose work appears on such a service should direct
-              a notice to that service&apos;s own provider. We will disable the
-              content here and stop it being republished; we will not be the
-              route to content that has already left.
-            </p>
-          </Card>
-
-          <Card surface="parchment" className="grid gap-2 p-6">
-            <h2 className="text-lg font-semibold">
-              Counter-Notices &amp; Repeat Infringers
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              A GM whose content was disabled may submit a counter-notice from
-              that content&apos;s detail page. Absent further action from the
-              original claimant, disabled content is restored after the
-              statutory waiting period. Accounts with a pattern of repeated,
-              valid infringement notices are subject to termination under our
-              repeat-infringer policy.
-            </p>
-          </Card>
+          {body.map((section) => (
+            <Card
+              key={section.heading}
+              surface="parchment"
+              className="grid gap-3 p-6"
+              data-testid={`dmca-section-${slugify(section.heading ?? "")}`}
+            >
+              <h2 className="text-lg font-semibold">{section.heading}</h2>
+              <LegalProse body={section.body} />
+            </Card>
+          ))}
         </main>
       </Container>
     </>
   );
+}
+
+/** A stable test id per section, so an e2e names a heading rather than an index. */
+function slugify(heading: string): string {
+  return heading
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 }
