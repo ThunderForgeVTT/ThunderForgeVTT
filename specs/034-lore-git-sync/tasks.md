@@ -24,7 +24,9 @@ most of them, because Story 2 *is* the tests.
 
 **Nothing below may begin until T001 is done.** This is not a soft ordering.
 
-- [ ] T001 Obtain and record the FR-042 determination — whether a user-initiated mirror to a repository the user owns constitutes a "centralized public repository" under spec 015's policy — as an ADR under `docs/adrs/` extending ADR-049, accepted by an accountable owner. The reasoning to weigh is already written in `specs/034-lore-git-sync/spec.md` under Assumptions ("The moderation posture is that mirroring is user-initiated distribution"), including the honest cost: a takedown cannot reach content already mirrored. Constitution v1.1.0's DMCA guardrail requires this **before implementation begins**, and spec 015 FR-012 says the same.
+**Cleared 2026-09-04** by [ADR-067](../../docs/adrs/20260904-067-a_user_initiated_mirror_is_not_a_public_repository.md), accepted by the project's owner. The determination and the cost it accepts are recorded there.
+
+- [X] T001 Obtain and record the FR-042 determination — whether a user-initiated mirror to a repository the user owns constitutes a "centralized public repository" under spec 015's policy — as an ADR under `docs/adrs/` extending ADR-049, accepted by an accountable owner. The reasoning to weigh is already written in `specs/034-lore-git-sync/spec.md` under Assumptions ("The moderation posture is that mirroring is user-initiated distribution"), including the honest cost: a takedown cannot reach content already mirrored. Constitution v1.1.0's DMCA guardrail requires this **before implementation begins**, and spec 015 FR-012 says the same.
 
 ---
 

@@ -57,7 +57,7 @@
   The spec's position is that these answer different threats and do not
   conflict. Accepting it means a connected private repository carries readable
   paths that the platform's own URLs will deliberately stop exposing.
-- [ ] **FR-042 determination.** Constitution v1.1.0 requires an on-record,
+- [x] **FR-042 determination.** Constitution v1.1.0 requires an on-record,
   owner-accepted determination before implementation begins. The spec supplies
   the reasoning; an accountable owner must still sign it, most naturally as an
   ADR amending or extending ADR-049.

@@ -74,6 +74,7 @@ This directory contains architecture decisions for ThunderForgeVTT, captured usi
 | [20260903-064](./20260903-064-ability_vocabulary_is_contributed.md) | Accepted | Ability Vocabulary Is Contributed, and the CHECK Constraint Goes |
 | [20260903-065](./20260903-065-counted_acknowledgement_for_a_reversible_change.md) | Accepted | A Counted Acknowledgement Guards a Change That Looks Destructive |
 | [20260904-066](./20260904-066-a_bundled_pack_ships_its_own_web_surfaces.md) | Accepted | A Bundled Pack Ships Its Own Web Surfaces, Found at Build Time |
+| [20260904-067](./20260904-067-a_user_initiated_mirror_is_not_a_public_repository.md) | Accepted | A User-Initiated Mirror to a Repository They Own Is Not a Centralized Public Repository |
 
 > **Note (2026-08-19):** ADRs 020–024 originally collided with an unrelated "pack system" batch that reused the same day-020 through day-024 numbers. The world-domain ADRs (020–024 above) were committed first and are documented here; the colliding pack-system ADRs were renumbered to 026–030. See `docs/SYSTEM_HOOKS_API_GUIDE.md` and ADR-036's "Related Decisions" for the corrected references.
 
