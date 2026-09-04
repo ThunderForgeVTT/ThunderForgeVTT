@@ -275,8 +275,45 @@ fn build_adjudicator() -> std::sync::Arc<dyn thunderforge_crucible::SessionAdjud
     }
 }
 
-#[tokio::main]
-async fn main() {
+/// Stack per async worker thread.
+///
+/// # Why this is set explicitly, and why it is this large
+///
+/// async-graphql's `MergedObject` generates field dispatch that nests one
+/// frame deeper per merged root member, and `src/app/src/schema_roots.rs`
+/// wraps the server's own roots in another `MergedObject` so that each system
+/// pack can contribute its queries and mutations. That is the design — a pack
+/// owns its own GraphQL (spec 032, ADR-063) — and it costs a level of nesting
+/// on *every* field resolution.
+///
+/// Tokio's default worker stack is 2 MiB, and the first pack to be merged in
+/// pushed the deepest resolver path past it. The symptom is the worst kind:
+/// `thread 'tokio-rt-worker' has overflowed its stack / fatal runtime error`,
+/// the process aborts with no panic and no graceful shutdown, and every
+/// in-flight request dies with connection-refused. It took a bisect to find,
+/// because an aborted process leaves nothing behind that looks like a bug.
+///
+/// `main.rs` already carried `#![recursion_limit = "512"]` for the *compile*
+/// side of exactly this — the type-layout recursion the same nesting causes.
+/// This is that same fact costing runtime stack rather than compiler depth,
+/// and it needs its own budget.
+///
+/// 8 MiB matches the default main-thread stack on Linux, so a worker is no
+/// more constrained than the thread `main` runs on. It is virtual address
+/// space reserved per worker, committed only as touched, so the cost of the
+/// headroom is close to nothing.
+const WORKER_STACK_BYTES: usize = 8 * 1024 * 1024;
+
+fn main() {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .thread_stack_size(WORKER_STACK_BYTES)
+        .build()
+        .expect("failed to build the async runtime")
+        .block_on(run());
+}
+
+async fn run() {
     dotenvy::dotenv().ok();
     let cli = Cli::parse();
 
