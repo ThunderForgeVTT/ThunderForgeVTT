@@ -675,6 +675,99 @@ test.describe("Wall sync across sessions (US1, T012)", () => {
     await contextA.close();
     await contextB.close();
   });
+
+  /**
+   * Spec 005 T007 (FR-007, SC-002, quickstart Scenario 1 step 5): the author's
+   * own change must not double-apply, flicker or revert when its own event
+   * comes back down the subscription.
+   *
+   * The test above proves an event *reaches* the other session. This proves
+   * the other half, and it is the half that fails quietly: an echo that
+   * spawns a second wall, or clears and re-adds the first, looks fine in a
+   * screenshot and wrong to a person drawing. The observable form is that the
+   * author's own selection survives — a re-spawn drops the selected entity
+   * and the panel with it.
+   */
+  test("a session's own wall does not double-apply, flicker or revert when its event echoes back", async ({
+    browser,
+  }) => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await registerAndCreateWorld(page, `E2E Echo ${uniqueSuffix()}`);
+    await createScene(page, "Echo Scene");
+    await waitForEngineReady(page, "walls");
+
+    await clickCanvasAt(page, -100, 0);
+    await clickCanvasAt(page, 100, 0);
+    await page.keyboard.press("Enter");
+
+    await clickCanvasAt(page, 0, 0);
+    const selected = page.getByText("Selected wall");
+    await expect(selected).toBeVisible({ timeout: 10_000 });
+
+    // The author's own event round-trips through Postgres, the broadcast
+    // channel and back down this session's own subscription. Well past any
+    // plausible delivery time, so "it had not arrived yet" cannot be what
+    // makes this pass.
+    await page.waitForTimeout(5_000);
+
+    // Still selected: an echo that re-spawned the wall would have dropped the
+    // selection, and one that spawned a second would leave this one selected
+    // but the scene holding two.
+    await expect(
+      selected,
+      "the author's own selection must survive their event echoing back",
+    ).toBeVisible();
+
+    // And exactly one wall exists. Asked of the server, because the engine's
+    // own count is what a duplicate would corrupt — this is the independent
+    // check on it. Two hops: the scene id is not in the URL.
+    const cookies = await context.cookies();
+    const csrf = cookies.find((cookie) => cookie.name === "csrf_token")?.value;
+    const post = async (query: string, variables: unknown) => {
+      const response = await page.request.post("/api/graphql", {
+        headers: csrf ? { "x-csrf-token": csrf } : {},
+        data: { query, variables },
+      });
+      return (await response.json()) as {
+        data?: Record<string, unknown>;
+        errors?: { message: string }[];
+      };
+    };
+
+    const worldId = new URL(page.url()).pathname.split("/")[2];
+    const scenes = await post(
+      `query S($worldId: UUID!) { scenes(worldId: $worldId) { sceneId } }`,
+      { worldId },
+    );
+    expect(
+      scenes.errors,
+      `scene lookup failed: ${JSON.stringify(scenes.errors)}`,
+    ).toBeUndefined();
+
+    const sceneIds = (
+      (scenes.data?.scenes as { sceneId: string }[] | undefined) ?? []
+    ).map((scene) => scene.sceneId);
+    expect(sceneIds.length, "the world should have scenes").toBeGreaterThan(0);
+
+    let total = 0;
+    for (const sceneId of sceneIds) {
+      const walls = await post(
+        `query W($sceneId: UUID!) { walls(sceneId: $sceneId) { wallId } }`,
+        { sceneId },
+      );
+      expect(
+        walls.errors,
+        `wall lookup failed: ${JSON.stringify(walls.errors)}`,
+      ).toBeUndefined();
+      total += ((walls.data?.walls as { wallId: string }[] | undefined) ?? [])
+        .length;
+    }
+
+    expect(total, "one drawn wall must be one stored wall, not two").toBe(1);
+
+    await context.close();
+  });
 });
 
 /**

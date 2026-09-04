@@ -4,14 +4,17 @@
  * Clock, Puzzle Clocks, Session Resource trades) — GM staging page host
  * hook.
  *
- * No live GraphQL subscription transport (apollo-client/graphql-ws) exists
- * anywhere in apps/web yet — same gap `useActorSystemData.ts` and
- * `engine/world/sync/genieSession.ts`'s own doc comment record — so this
- * fetches on mount/worldId change and exposes `refetch`, same pattern as
- * `useActorSystemData`. Each mutation call below already returns the
- * fresh session/clock/holdings shape from the server, so action callbacks
- * update local state directly from the response instead of forcing a
- * round-trip refetch.
+ * This used to say no live subscription transport existed anywhere in
+ * `apps/web`, which was true when it was written and stopped being true
+ * without anyone coming back to the comment. `subscribeToWorldEvents` is
+ * wired below: the session refetches on a session-state event and trades
+ * refetch on a trade event, so two connected clients see each other's moves
+ * without a reload.
+ *
+ * It still fetches on mount and exposes `refetch`, and each mutation returns
+ * the fresh session/clock/holdings shape so an action updates local state
+ * from its own response rather than waiting for the round trip. The
+ * subscription is what covers the *other* client.
  */
 
 import { useCallback, useEffect, useState } from "react";

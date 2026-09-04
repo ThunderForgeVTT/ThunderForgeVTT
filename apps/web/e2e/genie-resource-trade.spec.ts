@@ -129,3 +129,129 @@ test.describe("Spec 019: Session Resource trading between two real players", () 
     await playerContext.close();
   });
 });
+
+test.describe("Spec 019 T012: two clients connected at once, each seeing the other's move", () => {
+  /**
+   * The test above proves a proposal is stored and rendered — it navigates the
+   * recipient to the staging page *after* the proposal exists. This one proves
+   * the harder and more interesting thing: the recipient is already sitting on
+   * that page, touches nothing, and the proposal arrives.
+   *
+   * T012 stood open with "no GraphQL subscription" as its reason. That became
+   * false without anyone revisiting it — `useGenieSession` calls
+   * `subscribeToWorldEvents` and refetches trades on a trade event. The wiring
+   * existing and the wiring working are different claims, so this asserts the
+   * second one.
+   */
+  test("a proposal reaches an already-open recipient with no navigation, and declining reaches the proposer", async ({
+    browser,
+  }) => {
+    test.setTimeout(180_000);
+
+    const gmContext = await browser.newContext();
+    const gmPage = await gmContext.newPage();
+    const worldId = await registerAndCreateWorldOnDashboard(
+      gmPage,
+      `E2E Genie Live Trade ${Date.now()}`,
+    );
+
+    const gmActor = await graphql<{ data: { createActor: { id: string } } }>(
+      gmPage,
+      `mutation($input: CreateActorInput!) { createActor(input: $input) { id } }`,
+      { input: { worldId, label: "GM Trader", isNpc: false, gameSystemId: "genie" } },
+    );
+    const gmActorId = gmActor.data.createActor.id;
+
+    const playerActor = await graphql<{ data: { createActor: { id: string } } }>(
+      gmPage,
+      `mutation($input: CreateActorInput!) { createActor(input: $input) { id } }`,
+      { input: { worldId, label: "Player Trader", isNpc: false, gameSystemId: "genie" } },
+    );
+    const playerActorId = playerActor.data.createActor.id;
+    await graphql(
+      gmPage,
+      `mutation($actorId: UUID!, $available: Boolean!) { setActorAvailability(actorId: $actorId, available: $available) { id } }`,
+      { actorId: playerActorId, available: true },
+    );
+
+    await gmPage.getByRole("button", { name: "Generate Join Link" }).click();
+    const inviteCode = await extractInviteCode(gmPage);
+
+    const playerContext = await browser.newContext();
+    const playerPage = await playerContext.newPage();
+    await register(playerPage, freshCredentials("e2elivetrade"));
+    await playerPage.goto(`/join/${inviteCode}`);
+    await playerPage.getByRole("button", { name: "Join Campaign" }).click();
+    await playerPage.waitForURL(new RegExp(`/world/${worldId}/actor-select$`), {
+      timeout: 15_000,
+    });
+    await playerPage
+      .getByTestId("available-actor-row")
+      .getByRole("button", { name: "Select" })
+      .click();
+    await playerPage.waitForURL(new RegExp(`/world/${worldId}$`), {
+      timeout: 15_000,
+    });
+
+    // The GM opens the session first, so the player's page below has something
+    // to subscribe to when it mounts.
+    await gmPage.goto(`/world/${worldId}/staging`);
+    await expect(gmPage.getByTestId("genie-session-panel-wrapper")).toBeVisible({
+      timeout: 15_000,
+    });
+    const startButton = gmPage.getByTestId("start-genie-session-button");
+    if (await startButton.isVisible().catch(() => false)) {
+      await startButton.click();
+    }
+    await expect(gmPage.getByTestId("genie-session-panel")).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // **The recipient settles here and does not move again.** Every assertion
+    // after this point is about something arriving on a page nobody touched.
+    await playerPage.goto(`/world/${worldId}/staging`);
+    await expect(playerPage.getByTestId("genie-session-panel")).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(
+      playerPage.getByText("Incoming Trade Proposals"),
+      "the recipient starts with nothing pending, or the assertion below proves nothing",
+    ).toHaveCount(0);
+
+    // The GM proposes, on their own page.
+    const tradeForm = gmPage.locator("text=Propose a Trade").locator("..");
+    await expect(tradeForm).toBeVisible({ timeout: 10_000 });
+    await tradeForm.locator('input[type="number"]').first().fill("2");
+    await gmPage.getByRole("button", { name: "Propose Trade" }).click();
+
+    // And it arrives, with no navigation and no reload on the recipient's side.
+    await expect(
+      playerPage.getByText("Incoming Trade Proposals"),
+      "a proposal must reach an already-connected recipient without a reload",
+    ).toBeVisible({ timeout: 20_000 });
+    await expect(playerPage.getByText(/GM Trader offers 2/)).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // The other direction: the recipient declines, and the server agrees.
+    await playerPage.getByRole("button", { name: "Decline" }).click();
+    await expect(playerPage.getByText("Incoming Trade Proposals")).toHaveCount(0, {
+      timeout: 15_000,
+    });
+
+    const after = await graphql<{
+      data: { genieTradeProposals: { fromActorId: string }[] };
+    }>(
+      gmPage,
+      `query($actorId: UUID!) { genieTradeProposals(actorId: $actorId) { fromActorId } }`,
+      { actorId: playerActorId },
+    );
+    expect(
+      after.data.genieTradeProposals.some((p) => p.fromActorId === gmActorId),
+      "a declined proposal stops being pending for its recipient",
+    ).toBe(false);
+
+    await gmContext.close();
+    await playerContext.close();
+  });
+});
