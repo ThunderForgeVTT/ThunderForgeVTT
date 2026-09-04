@@ -22,6 +22,36 @@ describe("legalDocuments", () => {
   });
 
   /**
+   * Every document that has a route must be discoverable, or that route renders
+   * a title over nothing. Named explicitly rather than counted, because "there
+   * are four documents" passes while the wrong four are present.
+   */
+  it.each(["dmca-policy", "terms-of-service", "privacy-policy"])(
+    "publishes %s, which a route depends on",
+    (slug) => {
+      expect(legalSections(slug).length).toBeGreaterThan(0);
+    },
+  );
+
+  /**
+   * The base drafts carry `[OPERATOR — ...]` markers where a self-hosting
+   * operator must supply their own name, contact and jurisdiction. They are
+   * meant to be visible: a published policy showing an unfilled marker is
+   * embarrassing, and a *silently dropped* one is worse, because the page then
+   * reads as complete while saying nothing about who holds your data.
+   *
+   * This asserts they survive rendering rather than that they are absent. The
+   * day they should disappear is the day an operator fills them in, and that is
+   * an edit to the markdown, not to this test.
+   */
+  it("keeps operator placeholders visible rather than swallowing them", () => {
+    const privacy = legalSections("privacy-policy")
+      .map((s) => s.body)
+      .join("\n");
+    expect(privacy).toContain("[OPERATOR");
+  });
+
+  /**
    * `README.md` explains the directory to a human reviewer. Publishing it
    * would put "Needs legal review before launch" on the public policy page.
    */

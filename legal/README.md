@@ -22,6 +22,8 @@ review actionable rather than advisory.
 |---|---|---|
 | `dmca-policy.md` | `/legal/dmca` | **Needs legal review before launch** |
 | `notice-attestations.md` | The takedown and counter-notice forms | **Needs legal review before launch** — statutory |
+| `terms-of-service.md` | `/legal/terms` | **Base draft. Never reviewed.** Carries `[OPERATOR]` markers |
+| `privacy-policy.md` | `/legal/privacy` | **Base draft. Never reviewed.** Carries `[OPERATOR]` markers |
 
 `notice-attestations.md` is read differently from the others, and the
 difference matters if you edit it. Its `##` headings are **stable identifiers**
@@ -48,11 +50,33 @@ code that references it.
   populated.
 - **The project's own licence.** `LICENSE` at the repository root, AGPL-3.0.
 
+## Adding a document
+
+`legal/` is at the repository root, outside `apps/web`, so it is outside the
+directory Vite watches. **Editing a document hot-reloads; adding a new one does
+not** — the page renders its title and no prose until the dev server restarts.
+The symptom looks exactly like a broken glob and is not. Check a fresh process
+before touching the pattern.
+
+A document with a route also needs a test asserting it is discoverable, in
+`apps/web/src/legal/__tests__/legalDocuments.test.ts`. A route pointing at a
+missing document is a title over nothing, with no error anywhere.
+
 ## Open items
 
-- **No Terms of Service and no Privacy Policy exist.** Checked 2026-09-04:
-  nothing in the application references either. That is a gap to close before
-  a public instance, not an omission from this directory.
+- **The terms and the privacy policy are base drafts and have never been read
+  by a lawyer.** They were written on 2026-09-04 against what the software
+  actually does — verified in the schema and source, not adapted from a
+  template — which makes them a decent starting point and not a substitute for
+  review. Two sections are flagged in the terms as most likely to be wrong for
+  a given jurisdiction: the warranty disclaimer and the limitation of
+  liability.
+- **Both carry `[OPERATOR — ...]` markers that must be replaced before
+  publishing.** Who runs the instance, how to contact them, the governing
+  jurisdiction, and any minimum age. A test asserts these markers survive
+  rendering rather than being silently swallowed: a page that omits who holds
+  your data while reading as complete is worse than one that visibly has a
+  blank.
 - **Nothing here has been reviewed by a lawyer.** All of it was drafted
   in-repo. The agent designation on the DMCA page already carries a "configure
   before launch" placeholder; this text needs the same gate.

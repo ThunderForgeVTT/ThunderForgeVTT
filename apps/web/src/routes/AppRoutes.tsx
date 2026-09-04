@@ -12,6 +12,8 @@ const LoginPage = lazy(pageLoaders.login);
 const RegisterPage = lazy(pageLoaders.signup);
 const OAuthCallbackPage = lazy(pageLoaders.oauthCallback);
 const DmcaCompliancePage = lazy(pageLoaders.dmcaCompliance);
+const TermsOfServicePage = lazy(pageLoaders.termsOfService);
+const PrivacyPolicyPage = lazy(pageLoaders.privacyPolicy);
 const AdminSettingsPage = lazy(pageLoaders.adminSettings);
 const AdminModerationReviewPage = lazy(pageLoaders.adminModerationReview);
 const SetupPage = lazy(pageLoaders.setup);
@@ -341,6 +343,20 @@ export default function AppRoutes({
           element={renderLazyPage(
             <DmcaCompliancePage />,
             "Loading DMCA policy",
+          )}
+        />
+        <Route
+          path="/legal/terms"
+          element={renderLazyPage(
+            <TermsOfServicePage />,
+            "Loading terms of service",
+          )}
+        />
+        <Route
+          path="/legal/privacy"
+          element={renderLazyPage(
+            <PrivacyPolicyPage />,
+            "Loading privacy policy",
           )}
         />
         <Route

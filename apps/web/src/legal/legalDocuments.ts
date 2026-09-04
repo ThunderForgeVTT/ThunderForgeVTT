@@ -25,6 +25,18 @@
  * compiled in — not user input. That is why it can be rendered without the
  * server's sanitizing markdown pipeline, which exists for lore a player typed.
  * Nothing here should ever render a document that did not come from this glob.
+ *
+ * # Adding a document requires restarting the dev server
+ *
+ * `legal/` is at the repository root, outside `apps/web`, so it is outside the
+ * directory Vite watches. A *change* to an existing document hot-reloads; a
+ * *new file* is not picked up until the dev server restarts, and until then the
+ * page renders its title and no prose.
+ *
+ * Written down because the symptom looks exactly like a broken glob and is not
+ * — it cost a confused round of debugging on the day these were added. If a
+ * document is missing, check a fresh process (`pnpm --filter @thunderforge/web
+ * test`) before touching the pattern.
  */
 
 const DISCOVERED = import.meta.glob<string>("../../../../legal/*.md", {
