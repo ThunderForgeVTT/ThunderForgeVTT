@@ -16,6 +16,16 @@ import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { ModeratedContentBanner } from "@/components/world/ModeratedContentBanner";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import { ItemEffectEditor } from "@/pages/world/item/ItemEffectEditor";
+import {
+  getItemAbilities,
+  type ItemAbilityEntryRecord,
+} from "@/api/itemAbilities";
+import {
+  DEFAULT_VOCABULARY,
+  getAbilityVocabulary,
+  typeFor,
+  type AbilityVocabulary,
+} from "@/abilities/vocabulary";
 import { ItemOwnershipBlock } from "@/pages/world/item/ItemOwnershipBlock";
 import type { WorldItemRecord } from "@/types/item";
 import type { WorldRecord } from "@/types/world";
@@ -38,6 +48,12 @@ export default function ItemDetailPage({ mode }: ItemDetailPageProps) {
   const navigate = useNavigate();
   const [world, setWorld] = useState<WorldRecord | null>(null);
   const [item, setItem] = useState<WorldItemRecord | null>(null);
+  /** The abilities this item carries, and the words its system uses for them. */
+  const [itemAbilities, setItemAbilities] = useState<ItemAbilityEntryRecord[]>(
+    [],
+  );
+  const [vocabulary, setVocabulary] =
+    useState<AbilityVocabulary>(DEFAULT_VOCABULARY);
   const [isLoading, setIsLoading] = useState(true);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -56,6 +72,24 @@ export default function ItemDetailPage({ mode }: ItemDetailPageProps) {
   useResetOnChange(`${worldId}|${itemId}`, () => {
     setIsLoading(true);
   });
+
+  useEffect(() => {
+    let live = true;
+    // Both in one place: an item's abilities and the words for their types are
+    // one question on this page, and fetching them apart would let the list
+    // render before it can name what is in it.
+    void Promise.all([
+      getItemAbilities(itemId).catch(() => []),
+      getAbilityVocabulary(worldId).catch(() => DEFAULT_VOCABULARY),
+    ]).then(([entries, assembled]) => {
+      if (!live) return;
+      setItemAbilities(entries);
+      setVocabulary(assembled);
+    });
+    return () => {
+      live = false;
+    };
+  }, [itemId, worldId]);
 
   useEffect(() => {
     let active = true;
@@ -345,6 +379,62 @@ export default function ItemDetailPage({ mode }: ItemDetailPageProps) {
             setItem((current) => (current ? { ...current, effects } : current))
           }
         />
+
+        {/*
+         * FR-020: abilities this item carries, listed *with* its mechanical
+         * effects above and each identified as what it is.
+         *
+         * Beside them rather than merged into them. An effect is a rule the
+         * resolution layer consumes; an ability is named, described,
+         * permissioned, shareable content. Collapsing the two would either
+         * strip abilities of everything that makes them abilities or promote
+         * every numeric modifier into compendium content. They are reconciled
+         * here, where a Game Master actually meets the confusion.
+         */}
+        {itemAbilities.length > 0 ? (
+          <Card className="grid gap-2 p-4" data-testid="item-abilities">
+            <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+              {vocabulary.umbrella.pluralLabel}
+            </h2>
+            <ul className="grid gap-1 text-sm">
+              {itemAbilities.map((entry) => {
+                const kind = entry.classification
+                  ? typeFor(vocabulary, entry.classification)
+                  : null;
+                return (
+                  <li
+                    key={entry.id}
+                    data-testid={`item-ability-${entry.id}`}
+                    className="flex flex-wrap items-baseline gap-2"
+                  >
+                    {entry.abilityId ? (
+                      <Link
+                        to={`/world/${worldId}/ability/${entry.abilityId}/view`}
+                        className="font-medium underline-offset-2 hover:underline"
+                      >
+                        {entry.abilityName}
+                      </Link>
+                    ) : (
+                      // Tombstone: the ability was deleted, the row and its
+                      // name snapshot survive so the item does not lose a line.
+                      <span className="font-medium text-muted-foreground">
+                        {entry.abilityName} (deleted)
+                      </span>
+                    )}
+                    {entry.classification ? (
+                      <span className="text-xs text-muted-foreground">
+                        {kind?.label ?? entry.classification}
+                        {kind?.grade && entry.grade !== null
+                          ? ` · ${kind.grade.label} ${entry.grade}`
+                          : ""}
+                      </span>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
+        ) : null}
 
         {isDm && mode === "edit" ? (
           <ItemOwnershipBlock itemId={itemId} worldId={worldId} world={world} />

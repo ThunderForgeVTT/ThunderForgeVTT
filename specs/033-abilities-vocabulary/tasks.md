@@ -159,7 +159,7 @@ that each binding refuses the other subject.
 - [X] T049 [US4] Add the item attachment mutations and query beside the existing actor ones, following `mutations_actor_abilities.rs`'s shape (`attach_*_impl`, `detach_*_impl`, resolvers) rather than inventing a second one
 - [X] T050 [US4] Parse `grade` as `{ label, min, max }`, refuse an out-of-range value at authoring (FR-023), and **retain** a stored value that falls outside a *newly narrowed* range — never clamp or discard it. A system narrowing a range does not get to edit content authored under the old one
 - [X] T051 [US4] Display the grade in the system's word for it on every surface showing the ability, and show **no** grade for ungraded types (FR-022, SC-010)
-- [ ] T052 **Server half done** (`itemAbilities` query, `attachAbilityToItem`); the item page does not render them yet. [US4] Show item-bound abilities on the item, listed with that item's existing mechanical effects, each identified as what it is and not duplicated (FR-020). `world_item_effects` is **not** merged — an effect is a rule the resolution layer consumes, an ability is named, permissioned, shareable content, and they are reconciled in presentation only
+- [X] T052 [US4] Item-carried abilities are listed on the item, beside its effects, each identified as what it is and never duplicated (FR-020)
 - [X] T053 [P] [US4] Tests: grade refused outside range; out-of-range retained after a range narrows; item binding refused for a character and vice versa, **through the API rather than the interface** (SC-011)
 
 **Checkpoint**: a 5e Spell has a Level and binds to a character; an Enchantment
@@ -194,9 +194,9 @@ beforehand.
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T062 Run `quickstart.md` by hand end to end — including §1 step 7 (a system that declares nothing) and step 8 (FR-011a's presence rule), which no suite answers. Constitution V
-- [ ] T063 Run `pnpm verify` and fix what it reports **in the code this feature added**. Keep it to that; wide passes get their own commit
-- [ ] T064 [P] Update `MVP.md` where it describes the abilities compendium as a flat list with a Type column
+- [~] T062 **Deferred to the playtest pass**, with 031/032/003/002 — see spec 032's tasks.md § *Manual passes, deferred to the playtest*. Not done, not dropped, not blocking. Run `quickstart.md` by hand end to end — including §1 step 7 (a system that declares nothing) and step 8 (FR-011a's presence rule), which no suite answers. Constitution V
+- [X] T063 Run `pnpm verify` and fix what it reports **in the code this feature added**. Keep it to that; wide passes get their own commit
+- [X] T064 [P] Update `MVP.md` where it describes the abilities compendium as a flat list with a Type column
 
 ---
 

@@ -181,6 +181,31 @@ is now one directory**, proved by creating one against a running stack and
 watching it appear in the pickers. ADR-028 records why the table stays and
 what it means now.
 
+**Spec 033 gave a system the words for its abilities.** The compendium was a
+flat list with a "Type" column you had to read down to find your spells; it is
+now a tab per type, in the system's plural word for it and the system's order,
+each carrying its own count. A 5e GM has Spells and Feats, a Genie GM has
+Scrolls and Knacks, and the umbrella term replaces "Abilities" everywhere a
+person reads it.
+
+The set of types is no longer fixed. `world_abilities.classification` carried a
+CHECK constraint listing four values; it is dropped, the GraphQL enum and the
+TypeScript union with it, and validity is now what the world's assembled
+vocabulary says — enforced at the mutation, where the world's system is known
+and a table-wide constraint could never see it. `packs/systems/dnd5e` declares
+an item-bound Enchantment that no shared file mentions, which
+`scripts/check-ability-vocabulary.mjs` enforces.
+
+A type declares what it binds to and whether it is graded, and both are refused
+server-side. An ability whose type the active system stops recognising is not
+lost, renamed or re-typed: it moves to a marked tab under the identity it was
+authored with, and returns to its own tab when that system is active again.
+
+**Changing a world's system is no longer one click.** It counts what is at
+stake, says in red that the content becomes hidden rather than destroyed, and
+asks twice — with the server refusing an unacknowledged or stale request, so
+the guard holds against a direct call.
+
 What is *not* done, and is recorded rather than glossed: a system pack cannot
 yet contribute **behaviour**. World creation still branches on one system's
 name to insert its session row, because that pack cannot own the table it

@@ -346,7 +346,13 @@ export function AbilityCompendiumTab({
               </tr>
             </thead>
             <tbody>
-              {abilities.map((ability) => (
+              {/* The tab's own abilities, not the world's. The empty-state
+               * gate above already used `visible`; this iterated `abilities`,
+               * so a tab with content listed *every* type's rows while its
+               * count showed only its own. Both halves were individually
+               * right, which is why only a walkthrough with content in two
+               * tabs caught it. */}
+              {visible.map((ability) => (
                 <tr
                   key={ability.id}
                   className={cn(
