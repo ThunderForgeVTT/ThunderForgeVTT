@@ -22,11 +22,23 @@
  *
  * # What belongs here
  *
- * Things every system needs and no system should reimplement: reading and
- * writing an actor's system data, and the presentational primitives that make
- * a pack's sheet look like the rest of the application rather than like a
- * guest in it. That second half matters more than it sounds — a pack drawing
- * its own card border is how a product stops looking like one product.
+ * Three things, and the third arrived later than the other two.
+ *
+ * **An actor's system data.** Reading and writing it is what every system
+ * needs and no system should reimplement.
+ *
+ * **Presentational primitives.** The card, panel, button and badge that make a
+ * pack's surfaces look like the rest of the application rather than like a
+ * guest in it. That matters more than it sounds — a pack drawing its own card
+ * border is how a product stops looking like one product.
+ *
+ * **A way to talk to the pack's own server half** — `postGraphQL` and
+ * `subscribeToWorldEvents`. These are the widest exports here and they are not
+ * an oversight; ADR-063 gave a pack its own tables and its own GraphQL, and a
+ * pack that owns a schema it may not call is not a boundary, it is a pack
+ * whose two halves have to meet in `apps/web`. Their full reasoning sits
+ * beside the exports themselves, and it is worth reading before adding a
+ * fourth category.
  *
  * # What does not
  *
@@ -34,6 +46,19 @@
  * holding a session credential. A pack that needs one of those is describing a
  * capability boundary, and ADR-029 is explicit that no such boundary exists in
  * this product yet. The answer is to widen a declaration format, not this file.
+ *
+ * **That sentence survived `032/T108`, which widened this file — so it is
+ * worth saying exactly why the widening was not a capability boundary.** A
+ * capability is authority a pack would not otherwise have. `postGraphQL` is
+ * the same transport, endpoint and credentials every other caller in this app
+ * uses, and every field it reaches is authorized on the server per request; a
+ * pack gains no reach, only the ability to keep its client code next to its
+ * server code. `subscribeToWorldEvents` hands over the same undifferentiated
+ * NOTIFY stream every other consumer gets, which a pack filters by its own
+ * event code. Neither lets a pack do something the application would refuse
+ * to do on its behalf. The list above is the test: if an export would let a
+ * pack act with authority the current user lacks, it belongs on that list and
+ * not in this file.
  *
  * # Stability
  *

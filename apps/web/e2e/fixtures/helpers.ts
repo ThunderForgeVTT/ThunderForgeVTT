@@ -92,38 +92,80 @@ export async function registerAndCreateWorld(
   return match[1];
 }
 
+/**
+ * A GraphQL call made as the signed-in browser, but not *from* the page.
+ *
+ * # Why this does not use `page.evaluate`
+ *
+ * It used to. The request was a `fetch` running inside the page's own JS
+ * context, which meant it shared that context's lifetime — and a context dies
+ * the moment the page navigates. The full sweep on 2026-09-04 caught it:
+ *
+ * ```
+ * Error: page.evaluate: Execution context was destroyed,
+ * most likely because of a navigation.
+ *   at graphql (e2e/fixtures/helpers.ts:100)
+ * ```
+ *
+ * That failure landed on `interactive-secrets`, but nothing about it was
+ * specific to secrets — this helper is shared by most specs in this directory,
+ * and any of them could have drawn it. It reproduced 0 times in 5 isolated
+ * runs and passed on the shard rerun, which is exactly the signature of a race
+ * that needs contention to lose: under four parallel shards everything is
+ * slower, and the window between "navigation starts" and "evaluate finishes"
+ * widens until something falls in.
+ *
+ * # Why a retry would have been the wrong fix
+ *
+ * The obvious repair is to catch "Execution context was destroyed" and try
+ * again. It is wrong here, because this helper carries **mutations** as well
+ * as queries — `activateInteractive` among them — and a destroyed context
+ * tells you nothing about whether the server already applied the mutation. The
+ * request may have completed and the reply been lost with the context. Retrying
+ * would turn a rare flake into a rare double-apply, which is far worse: it
+ * fails as a wrong assertion somewhere unrelated instead of an obvious error.
+ *
+ * # What this does instead
+ *
+ * `page.request` issues the call from Playwright, outside the page. It shares
+ * the browser context's cookie jar, so it is the same authenticated user, and
+ * it is unaffected by anything the page does while the request is open. The
+ * race is not narrowed, it is gone — there is no page-side context left to
+ * destroy.
+ *
+ * CSRF still has to be satisfied by hand, and can be: `require_csrf_for_session`
+ * is a double-submit check comparing the `csrf_token` cookie against the
+ * `x-csrf-token` header, with no Origin or Referer condition. Reading the
+ * cookie from the context and echoing it in the header is exactly what the
+ * page's own code did.
+ */
 export async function graphql<T>(
   page: Page,
   query: string,
   variables: Record<string, unknown>,
 ): Promise<T> {
-  return page.evaluate(
-    async ({ query, variables }) => {
-      const csrfToken = document.cookie
-        .split(";")
-        .map((part) => part.trim())
-        .find((part) => part.startsWith("csrf_token="))
-        ?.slice("csrf_token=".length);
-      const res = await fetch("/api/graphql", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: {
-          "Content-Type": "application/json",
-          ...(csrfToken ? { "x-csrf-token": csrfToken } : {}),
-        },
-        body: JSON.stringify({ query, variables }),
-      });
-      const text = await res.text();
-      try {
-        return JSON.parse(text);
-      } catch {
-        throw new Error(
-          `Non-JSON response (status ${res.status}): ${text.slice(0, 500)}`,
-        );
-      }
+  const csrfToken = (await page.context().cookies()).find(
+    (cookie) => cookie.name === "csrf_token",
+  )?.value;
+
+  const response = await page.request.post("/api/graphql", {
+    headers: {
+      "Content-Type": "application/json",
+      ...(csrfToken ? { "x-csrf-token": csrfToken } : {}),
     },
-    { query, variables },
-  );
+    data: { query, variables },
+  });
+
+  const text = await response.text();
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    // Same message as before, deliberately: an HTML error page or a proxy
+    // failure is the usual cause, and the first 500 characters say which.
+    throw new Error(
+      `Non-JSON response (status ${response.status()}): ${text.slice(0, 500)}`,
+    );
+  }
 }
 
 /** The Play dock's Settings section (scene switcher, map import, "back to
