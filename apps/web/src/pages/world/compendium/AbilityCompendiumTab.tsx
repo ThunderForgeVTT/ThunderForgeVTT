@@ -263,9 +263,8 @@ export function AbilityCompendiumTab({
   // FR-008: creating from inside a tab makes an ability of that tab's type
   // without asking again. The select below still exists for changing one's
   // mind; it simply opens on the answer the tab already implies.
-  const classificationForNew = (
-    selected && selected !== UNRECOGNISED_TAB ? selected : "spell"
-  ).toUpperCase() as AbilityClassification;
+  const classificationForNew: AbilityClassification =
+    selected && selected !== UNRECOGNISED_TAB ? selected : "spell";
 
   return (
     <div className="grid gap-3">
@@ -457,13 +456,16 @@ export function AbilityCompendiumTab({
                * becomes authorable here and nothing else about this control
                * changes.
                */}
-              {vocabulary.types
-                .filter((kind) => kind.builtin)
-                .map((kind) => (
-                  <option key={kind.id} value={kind.id.toUpperCase()}>
-                    {kind.label}
-                  </option>
-                ))}
+              {/* Every type this world recognises, built in or declared by
+               * its system (FR-011). The built-in filter that stood here was
+               * a placeholder while the wire type was still a closed enum;
+               * Increment D retired the enum and the CHECK constraint, so a
+               * system's own type is authorable and belongs in this list. */}
+              {vocabulary.types.map((kind) => (
+                <option key={kind.id} value={kind.id}>
+                  {kind.label}
+                </option>
+              ))}
             </select>
             <Input
               value={newDescription}

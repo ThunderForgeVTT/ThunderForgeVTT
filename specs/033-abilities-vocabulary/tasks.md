@@ -178,14 +178,14 @@ unrecognised type is User Story 3's vocabulary continuing to hold after the
 world changed; counting what will become unrecognised is User Story 2's
 warning telling the truth.
 
-- [ ] T054 [US3] Detect abilities whose stored classification is absent from the world's assembled vocabulary. A **presentation state** computed per request, never a stored flag — nothing about the row changes when it enters or leaves it (FR-034)
+- [X] T054 [US3] Detect abilities whose stored classification is absent from the world's assembled vocabulary. A **presentation state** computed per request, never a stored flag — nothing about the row changes when it enters or leaves it (FR-034)
 - [X] T055 [US3] Present them as a **final tab** in the same tab row (FR-035a), present only while such abilities exist, clearly marked, carrying a count like any other tab
-- [ ] T056 [US3] Label each with the **stored identity itself**, plainly (FR-035 as clarified). Do not read another system's manifest to prettify it — that consults a system this world is not running — and do not copy a label onto the ability, which duplicates the manifest into content where it goes stale
+- [X] T056 [US3] Label each with the **stored identity itself**, plainly (FR-035 as clarified). Do not read another system's manifest to prettify it — that consults a system this world is not running — and do not copy a label onto the ability, which duplicates the manifest into content where it goes stale
 - [X] T057 [US3] Offer **no creation** in that tab (FR-035a), since FR-013 forbids authoring a type the active system does not recognise. Keep every other action: open, edit, delete (FR-034)
-- [ ] T058 [US3] Restore such abilities to their own tab, with the system's labels, when a system recognising them is active again (FR-036, SC-008)
-- [ ] T059 [US3] Let a GM re-type one deliberately to a recognised type (FR-038), and never do it for them — the alternative is a silent, lossy, irreversible edit to authored content performed by a dialog somebody clicked through
-- [ ] T060 [US2] Include abilities that will **become** unrecognised in the FR-025 counts (FR-037). This is the part of the inventory that needs the *target* system's vocabulary, and the reason `worldContentInventory` takes a `targetSystemId`
-- [ ] T061 [P] [US2] Add the round trip to `apps/web/e2e/system-change-guard.spec.ts`: author an Enchantment in a 5e world, switch to genie acknowledging the warning, confirm it is still listed under the unrecognised tab labelled `enchantment` and **not** shown as a Spell, then switch back and confirm it returns to its own tab unchanged (SC-008, SC-009)
+- [X] T058 [US3] Restore such abilities to their own tab, with the system's labels, when a system recognising them is active again (FR-036, SC-008)
+- [X] T059 [US3] Let a GM re-type one deliberately to a recognised type (FR-038), and never do it for them — the alternative is a silent, lossy, irreversible edit to authored content performed by a dialog somebody clicked through
+- [X] T060 [US2] Include abilities that will **become** unrecognised in the FR-025 counts (FR-037). This is the part of the inventory that needs the *target* system's vocabulary, and the reason `worldContentInventory` takes a `targetSystemId`
+- [X] T061 [P] [US2] Add the round trip to `apps/web/e2e/system-change-guard.spec.ts`: author an Enchantment in a 5e world, switch to genie acknowledging the warning, confirm it is still listed under the unrecognised tab labelled `enchantment` and **not** shown as a Spell, then switch back and confirm it returns to its own tab unchanged (SC-008, SC-009)
 
 **Checkpoint**: switching away and back is lossless, and the warning said so
 beforehand.

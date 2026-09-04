@@ -236,3 +236,103 @@ test.describe("US2: a system change is counted, red, and asked twice", () => {
     expect(system).not.toBe("dnd5e");
   });
 });
+
+test.describe("Where the halves meet: an ability survives its system leaving", () => {
+  test("an Enchantment stays listed under Genie, is never shown as another type, and comes back", async ({
+    page,
+  }) => {
+    // The question neither half of this spec can answer alone: what happens to
+    // an Enchantment when the world stops being 5e (FR-034 to FR-037, SC-008,
+    // SC-009).
+    await registerGm(page);
+    const worldId = await createWorld(page, `Round trip ${uniqueSuffix()}`);
+
+    // 5e, and an ability of 5e's own type.
+    await pickSystem(page, worldId, "5E System Core");
+    await expect(page.getByTestId("pending-system-confirmation")).toBeVisible({
+      timeout: 15_000,
+    });
+    await page
+      .getByTestId("pending-system-confirmation")
+      .getByRole("button", { name: /confirm/i })
+      .click();
+    await expect(page.getByTestId("active-system-card")).toContainText(
+      "5E System Core",
+      { timeout: 15_000 },
+    );
+
+    await page.goto(`/world/${worldId}/compendium?tab=abilities`);
+    await expect(page.getByTestId("ability-type-tabs")).toBeVisible({
+      timeout: 20_000,
+    });
+    await page.getByTestId("ability-type-tab-enchantment").click();
+    const name = `Frostbrand ${uniqueSuffix()}`;
+    await page.getByTestId("new-ability-name-input").fill(name);
+    await page.getByTestId("add-ability-button").click();
+    await expect(page.getByTestId("ability-catalog-table")).toContainText(name, {
+      timeout: 15_000,
+    });
+
+    // Switch to Genie, which has never heard of an Enchantment. FR-037: the
+    // warning counts what is about to become unrecognised.
+    await pickSystem(page, worldId, "Genie");
+    await expect(page.getByTestId("system-change-warning")).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByTestId("system-change-unrecognised")).toContainText(
+      "1 ability",
+    );
+    await page.getByTestId("system-change-accept-risk").click();
+    await page
+      .getByTestId("pending-system-confirmation")
+      .getByRole("button", { name: /confirm/i })
+      .click();
+    await expect(page.getByTestId("active-system-card")).toContainText("Genie", {
+      timeout: 15_000,
+    });
+
+    // FR-034/FR-035: still listed, under a marked tab, labelled with the
+    // identity it was authored under — and *not* shown as a Scroll, which is
+    // what the old `unwrap_or(Spell)` would have produced.
+    await page.goto(`/world/${worldId}/compendium?tab=abilities`);
+    await expect(page.getByTestId("ability-type-tabs")).toBeVisible({
+      timeout: 20_000,
+    });
+    const unrecognisedTab = page.getByTestId("ability-type-tab-__unrecognised__");
+    await expect(unrecognisedTab).toBeVisible();
+    await unrecognisedTab.click();
+    const table = page.getByTestId("ability-catalog-table");
+    await expect(table).toContainText(name);
+    await expect(table).toContainText("enchantment");
+    await expect(page.getByTestId("ability-type-tab-enchantment")).toHaveCount(0);
+
+    // FR-035a: no creation offered here — FR-013 forbids authoring a type the
+    // active system does not recognise.
+    await expect(page.getByTestId("add-ability-button")).toHaveCount(0);
+
+    // FR-036 and SC-008: switch back, and it returns to its own tab unchanged.
+    await pickSystem(page, worldId, "5E System Core");
+    await expect(page.getByTestId("system-change-warning")).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.getByTestId("system-change-accept-risk").click();
+    await page
+      .getByTestId("pending-system-confirmation")
+      .getByRole("button", { name: /confirm/i })
+      .click();
+    await expect(page.getByTestId("active-system-card")).toContainText(
+      "5E System Core",
+      { timeout: 15_000 },
+    );
+
+    await page.goto(`/world/${worldId}/compendium?tab=abilities`);
+    await expect(page.getByTestId("ability-type-tabs")).toBeVisible({
+      timeout: 20_000,
+    });
+    await page.getByTestId("ability-type-tab-enchantment").click();
+    await expect(page.getByTestId("ability-catalog-table")).toContainText(name);
+    await expect(
+      page.getByTestId("ability-type-tab-__unrecognised__"),
+    ).toHaveCount(0);
+  });
+});

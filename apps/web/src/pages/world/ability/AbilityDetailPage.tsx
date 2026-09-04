@@ -425,13 +425,15 @@ export default function AbilityDetailPage({ mode }: AbilityDetailPageProps) {
                   {/* The world's own types, in the system's words and order.
                    * Filtered to built-ins while the wire type is still an
                    * enum; Increment D lifts that with the CHECK constraint. */}
-                  {vocabulary.types
-                    .filter((kind) => kind.builtin)
-                    .map((kind) => (
-                      <option key={kind.id} value={kind.id.toUpperCase()}>
-                        {kind.label}
-                      </option>
-                    ))}
+                  {/* Every type this world recognises (FR-011), which is what
+                   * makes FR-038's deliberate re-typing possible: a GM moves
+                   * an ability to a type the current system knows, and only
+                   * because they asked. */}
+                  {vocabulary.types.map((kind) => (
+                    <option key={kind.id} value={kind.id}>
+                      {kind.label}
+                    </option>
+                  ))}
                 </select>
               </Field>
               <Field label="Description" htmlFor="ability-description">
