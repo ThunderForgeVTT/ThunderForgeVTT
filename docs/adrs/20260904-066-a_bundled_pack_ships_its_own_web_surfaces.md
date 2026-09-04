@@ -104,12 +104,21 @@ a page every system shares. They are on the check's `KNOWN` list against
 where it goes to be forgotten.
 
 They were not fixed alongside the sheet, and the reason is a real difference
-rather than fatigue. The sheet had exactly one mount point, so a filename
-convention was sufficient. A panel has four and will have more, so a convention
-would have to encode *where* — and a filename is the wrong place to put that.
-What panels want is a declaration: a pack naming the slots it fills, discovered
-the same way. That is the web analogue of the world-creation hook that retired
-the server's last entry, and it is `T108`.
+rather than fatigue — though the first version of this paragraph got that
+difference wrong, and the wrong version is worth correcting in place rather
+than quietly replacing.
+
+It said a filename is the wrong place to encode which slot a panel fills. That
+is overstated: `packs/systems/<id>/web/src/panels/<slot>.tsx` carries both the
+system and the slot perfectly well, and the same glob reads them off the path.
+
+The actual difference is that panels need a **host-declared vocabulary** where
+the sheet did not. One mount point needs one props contract, and a filename
+convention is the whole of it. Four mount points need an agreed set of slot
+names and a typed contract for each, because a pack has to know which slots
+exist and what each one is handed. That vocabulary is the work, and it is
+`T108` — the web analogue of the world-creation hook that retired the server's
+last entry.
 
 **`GameSystemContext` was deleted rather than repaired**, along with
 `game-system-context.ts`; the two manifest types moved to
