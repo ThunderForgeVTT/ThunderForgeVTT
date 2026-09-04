@@ -27,10 +27,65 @@ async function openPlayView(page: Page): Promise<void> {
   await clickPlay(page);
 }
 
+/**
+ * Make the engine's arrival observable, and keep it that way.
+ *
+ * Three of the tests below assert something about the *window* during which
+ * the engine is loading. That window only exists if the wasm actually takes
+ * time to arrive, and twice now it has not:
+ *
+ * - `data-determinate` was read off a bar that had already detached, because
+ *   a release bundle was warm in the page cache. The comment on that read
+ *   says the race "was always here — the machine just never lost it before".
+ * - Two of these tests failed twice in a row on a stack where the engine came
+ *   up before the loader could be seen at all, then passed five times running
+ *   once the machine was warm. The trigger was never identified; what *is*
+ *   known is that a cached wasm makes every assertion about the loading
+ *   window unobservable, and that the last test in this file depends on
+ *   exactly that caching to prove its own point.
+ *
+ * So rather than race the machine, give the window a floor. `delayMs` of
+ * deliberate latency guarantees there is something to observe, and
+ * `no-store` guarantees a second load inside the same page — a reload, a
+ * retry, anything — pays that cost again instead of being served from the
+ * browser's cache and skipping the loader entirely.
+ *
+ * This does not weaken what is asserted. The requirements are about how
+ * promptly and how honestly a *slow* load is explained; a machine fast enough
+ * to have no slow load is not evidence that the explanation works. Passing
+ * the upstream response through keeps `Content-Length` intact, so the
+ * determinate progress bar still has real numbers to report.
+ */
+async function serveEngineSlowly(page: Page, delayMs = 1_500): Promise<void> {
+  await page.route("**/*.wasm", async (route) => {
+    const response = await route.fetch();
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    await route.fulfill({
+      response,
+      headers: {
+        ...response.headers(),
+        "cache-control": "no-store, no-cache, must-revalidate",
+      },
+    });
+  });
+}
+
 test.describe("Engine load feedback (US6, T050/T051)", () => {
+  test.afterEach(async ({ page }) => {
+    // A deliberately slowed route can still be in flight when a test ends,
+    // and Playwright reports that as "route.fetch: Test ended" against
+    // whichever test happened to finish — an error about the harness wearing
+    // the name of a test that passed. Tearing the handlers down explicitly
+    // turns it back into nothing.
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+  });
+
   test("a loading state appears promptly and reports real progress through to interactive", async ({
     page,
   }) => {
+    // Installed before the navigation that triggers the load, or there is
+    // nothing for it to intercept.
+    await serveEngineSlowly(page);
     await openPlayView(page);
 
     const started = Date.now();
@@ -39,7 +94,17 @@ test.describe("Engine load feedback (US6, T050/T051)", () => {
     // SC-009: visible within 1s. The number matters — a loader that appears
     // after the wait it explains is worse than none, because the user has
     // already decided the page is broken.
-    await expect(loader).toBeVisible({ timeout: 1_000 });
+    //
+    // The message names the other way this can fail. "Element not found" on
+    // its own sent someone hunting for a broken loader when the engine had
+    // simply arrived before anyone could look at it, which is a fact about
+    // the machine rather than about the product.
+    await expect(
+      loader,
+      "no engine loader appeared — if the canvas is already up, the engine " +
+        "arrived before the loader could be observed rather than the loader " +
+        "being broken",
+    ).toBeVisible({ timeout: 1_000 });
     expect(Date.now() - started).toBeLessThan(1_000);
 
     const bar = page.getByTestId("engine-loader-progress");
@@ -102,15 +167,20 @@ test.describe("Engine load feedback (US6, T050/T051)", () => {
     // between asserting the loader is visible and reading its stage, and the
     // test becomes a race that fails by timing out on a detached locator —
     // reporting a product stall where there was only a fast machine.
-    await page.route("**/*.wasm", async (route) => {
-      await new Promise((resolve) => setTimeout(resolve, 1_500));
-      await route.continue();
-    });
+    //
+    // Through the shared helper now, which also marks the response
+    // `no-store`: the delay alone still let a *second* load inside the same
+    // page come from cache and skip the loader entirely.
+    await serveEngineSlowly(page);
 
     await openPlayView(page);
 
     const loader = page.getByTestId("engine-load-indicator");
-    await expect(loader).toBeVisible({ timeout: 5_000 });
+    await expect(
+      loader,
+      "no engine loader appeared despite a deliberately slowed wasm — check " +
+        "the route still matches the engine's URL before suspecting the loader",
+    ).toBeVisible({ timeout: 5_000 });
 
     // FR-031. Whichever phase we catch, the stage must be one of the two
     // named ones — never absent, and never a progress bar parked at 100%
@@ -131,9 +201,19 @@ test.describe("Engine load feedback (US6, T050/T051)", () => {
       if (failNext) {
         failNext = false;
         await route.abort("failed");
-      } else {
-        await route.continue();
+        return;
       }
+      // The retry's fetch is marked `no-store` for the same reason as
+      // `serveEngineSlowly`: a retry served from cache would clear the error
+      // without ever proving the download was actually attempted again.
+      const response = await route.fetch();
+      await route.fulfill({
+        response,
+        headers: {
+          ...response.headers(),
+          "cache-control": "no-store, no-cache, must-revalidate",
+        },
+      });
     });
 
     await openPlayView(page);
