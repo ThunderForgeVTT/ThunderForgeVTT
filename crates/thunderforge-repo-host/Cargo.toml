@@ -31,7 +31,16 @@ crate-type = ["rlib"]
 # this workspace signs asymmetrically — the crypto surface is aes-gcm, sha2,
 # rand and totp-rs, none of which does — so this is a new capability rather
 # than a reuse. See specs/034-lore-git-sync/research.md R5.
-jsonwebtoken = "10"
+# `aws_lc_rs` is not optional decoration. jsonwebtoken 10 made its crypto
+# backend pluggable and its default feature set enables *none* of them: with a
+# bare `jsonwebtoken = "10"` this crate compiles and then panics at the first
+# signature ("no default CryptoProvider"), which is a runtime failure caused by
+# a missing feature flag. Of the two backends, `aws_lc_rs` is chosen over
+# `rust_crypto` because aws-lc-rs is already in this workspace's lock file
+# (rustls pulls it in), so it adds no new crate to the build, whereas
+# `rust_crypto` would add the pure-Rust `rsa` crate and its still-unresolved
+# Marvin timing advisory (RUSTSEC-2023-0071) for no benefit here.
+jsonwebtoken = { version = "10", features = ["aws_lc_rs"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 thiserror = "2.0.20"

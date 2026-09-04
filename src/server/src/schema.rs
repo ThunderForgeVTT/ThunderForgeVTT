@@ -187,6 +187,82 @@ diesel::table! {
 }
 
 diesel::table! {
+    lore_disassociation_notices (id) {
+        id -> Uuid,
+        connection_id -> Uuid,
+        moderation_action_id -> Uuid,
+        attempted_at -> Timestamp,
+        outcome -> Text,
+        issue_ref -> Nullable<Text>,
+        failure_reason -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    lore_exported_entries (id) {
+        id -> Uuid,
+        connection_id -> Uuid,
+        lore_entry_id -> Uuid,
+        current_path -> Text,
+        exported_revision_id -> Nullable<Uuid>,
+        last_exported_at -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
+    lore_fidelity_notes (id) {
+        id -> Uuid,
+        connection_id -> Uuid,
+        lore_entry_id -> Nullable<Uuid>,
+        kind -> Text,
+        detail -> Text,
+        first_seen_at -> Timestamp,
+        last_seen_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    lore_repository_connections (id) {
+        id -> Uuid,
+        world_id -> Uuid,
+        host_kind -> Text,
+        installation_ref -> Text,
+        repository_ref -> Text,
+        branch -> Text,
+        directory -> Text,
+        incoming_enabled -> Bool,
+        notice_acknowledged_at -> Nullable<Timestamp>,
+        state -> Text,
+        state_reason -> Nullable<Text>,
+        repository_is_public -> Nullable<Bool>,
+        visibility_checked_at -> Nullable<Timestamp>,
+        deactivated_at -> Nullable<Timestamp>,
+        deactivated_reason -> Nullable<Text>,
+        last_synced_at -> Nullable<Timestamp>,
+        last_written_commit -> Nullable<Text>,
+        created_by -> Uuid,
+        updated_by -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    lore_sync_runs (id) {
+        id -> Uuid,
+        connection_id -> Uuid,
+        started_at -> Timestamp,
+        finished_at -> Nullable<Timestamp>,
+        outcome -> Nullable<Text>,
+        from_commit -> Nullable<Text>,
+        to_commit -> Nullable<Text>,
+        entries_written -> Int4,
+        failure_reason -> Nullable<Text>,
+        attempt -> Int4,
+    }
+}
+
+diesel::table! {
     oauth_authorization_sessions (id) {
         id -> Uuid,
         provider_id -> Uuid,
@@ -665,6 +741,93 @@ diesel::table! {
 }
 
 diesel::table! {
+    world_genie_puzzle_clock_rewards (id) {
+        id -> Uuid,
+        clock_id -> Uuid,
+        trigger_segment -> Int4,
+        reward_resource_type -> Nullable<Text>,
+        reward_resource_amount -> Nullable<Int4>,
+        reward_item_id -> Nullable<Uuid>,
+        reward_item_quantity -> Nullable<Int4>,
+        recipient_mode -> Text,
+        granted_at -> Nullable<Timestamp>,
+        created_by -> Uuid,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    world_genie_puzzle_clocks (id) {
+        id -> Uuid,
+        session_id -> Uuid,
+        label -> Text,
+        segments_current -> Int4,
+        segments_max -> Int4,
+        resolved_at -> Nullable<Timestamp>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    world_genie_resource_holdings (id) {
+        id -> Uuid,
+        session_id -> Uuid,
+        actor_id -> Uuid,
+        resource_type -> Text,
+        quantity -> Int4,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    world_genie_sessions (id) {
+        id -> Uuid,
+        world_id -> Uuid,
+        wishes_remaining -> Int4,
+        doom_clock_current -> Int4,
+        doom_clock_max -> Int4,
+        status -> Text,
+        created_by -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    world_genie_shop_listings (id) {
+        id -> Uuid,
+        actor_id -> Uuid,
+        item_id -> Uuid,
+        price_kind -> Text,
+        price_resource_type -> Nullable<Text>,
+        price_resource_amount -> Nullable<Int4>,
+        price_item_id -> Nullable<Uuid>,
+        price_item_quantity -> Nullable<Int4>,
+        created_by -> Uuid,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    world_genie_trade_proposals (id) {
+        id -> Uuid,
+        session_id -> Uuid,
+        from_actor_id -> Uuid,
+        from_resource_type -> Text,
+        from_quantity -> Int4,
+        to_actor_id -> Uuid,
+        to_resource_type -> Text,
+        to_quantity -> Int4,
+        status -> Text,
+        created_by -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     world_invites (id) {
         id -> Uuid,
         world_id -> Uuid,
@@ -911,6 +1074,14 @@ diesel::joinable!(interactives -> scenes (scene_id));
 diesel::joinable!(light_sources -> scenes (scene_id));
 diesel::joinable!(light_sources -> tokens (attached_token_id));
 diesel::joinable!(login_two_factor_challenges -> users (user_id));
+diesel::joinable!(lore_disassociation_notices -> lore_repository_connections (connection_id));
+diesel::joinable!(lore_exported_entries -> lore_repository_connections (connection_id));
+diesel::joinable!(lore_exported_entries -> world_lore_entries (lore_entry_id));
+diesel::joinable!(lore_exported_entries -> world_lore_revisions (exported_revision_id));
+diesel::joinable!(lore_fidelity_notes -> lore_repository_connections (connection_id));
+diesel::joinable!(lore_fidelity_notes -> world_lore_entries (lore_entry_id));
+diesel::joinable!(lore_repository_connections -> worlds (world_id));
+diesel::joinable!(lore_sync_runs -> lore_repository_connections (connection_id));
 diesel::joinable!(oauth_authorization_sessions -> oauth_providers (provider_id));
 diesel::joinable!(oauth_link_challenges -> oauth_providers (provider_id));
 diesel::joinable!(oauth_link_challenges -> users (user_id));
@@ -958,6 +1129,18 @@ diesel::joinable!(world_combats -> scenes (scene_id));
 diesel::joinable!(world_combats -> users (created_by));
 diesel::joinable!(world_combats -> worlds (world_id));
 diesel::joinable!(world_events -> worlds (world_id));
+diesel::joinable!(world_genie_puzzle_clock_rewards -> users (created_by));
+diesel::joinable!(world_genie_puzzle_clock_rewards -> world_genie_puzzle_clocks (clock_id));
+diesel::joinable!(world_genie_puzzle_clock_rewards -> world_items (reward_item_id));
+diesel::joinable!(world_genie_puzzle_clocks -> world_genie_sessions (session_id));
+diesel::joinable!(world_genie_resource_holdings -> world_actors (actor_id));
+diesel::joinable!(world_genie_resource_holdings -> world_genie_sessions (session_id));
+diesel::joinable!(world_genie_sessions -> users (created_by));
+diesel::joinable!(world_genie_sessions -> worlds (world_id));
+diesel::joinable!(world_genie_shop_listings -> users (created_by));
+diesel::joinable!(world_genie_shop_listings -> world_actors (actor_id));
+diesel::joinable!(world_genie_trade_proposals -> users (created_by));
+diesel::joinable!(world_genie_trade_proposals -> world_genie_sessions (session_id));
 diesel::joinable!(world_invites -> users (created_by));
 diesel::joinable!(world_invites -> worlds (world_id));
 diesel::joinable!(world_item_abilities -> world_abilities (ability_id));
@@ -1000,6 +1183,11 @@ diesel::allow_tables_to_appear_in_same_query!(
     interactives,
     light_sources,
     login_two_factor_challenges,
+    lore_disassociation_notices,
+    lore_exported_entries,
+    lore_fidelity_notes,
+    lore_repository_connections,
+    lore_sync_runs,
     oauth_authorization_sessions,
     oauth_link_challenges,
     oauth_providers,
@@ -1032,6 +1220,12 @@ diesel::allow_tables_to_appear_in_same_query!(
     world_combatants,
     world_combats,
     world_events,
+    world_genie_puzzle_clock_rewards,
+    world_genie_puzzle_clocks,
+    world_genie_resource_holdings,
+    world_genie_sessions,
+    world_genie_shop_listings,
+    world_genie_trade_proposals,
     world_invites,
     world_item_abilities,
     world_item_effects,

@@ -12,8 +12,9 @@ use crate::schema::{
 };
 use crate::state::AppState;
 use crate::users::{PublicUser, load_public_user, record_auth_audit_event};
-use aes_gcm::aead::{Aead, KeyInit};
-use aes_gcm::{Aes256Gcm, Nonce};
+// Moved to `crate::crypto` so spec 034's repository credentials can use the
+// same implementation rather than a second one. See that module's header.
+use crate::crypto::{decrypt_secret, encrypt_secret, encryption_key_from_config_secret};
 use argon2::password_hash::PasswordHasher;
 use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use axum::extract::{Path, Query, State};
@@ -24,13 +25,11 @@ use axum::{
     Json, Router,
     routing::{get, post},
 };
-use base64::{Engine as _, engine::general_purpose};
 use chrono::Utc;
 use data_encoding::BASE32_NOPAD;
 use diesel::prelude::*;
 use rand::RngExt;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use thunderforge_axum_auth_core::random::random_urlsafe;
 use thunderforge_axum_auth_core::session::{self, CookieSpec, csrf_cookie, session_cookie};
 use thunderforge_axum_auth_core::totp::verify_totp_code;
@@ -2610,44 +2609,6 @@ async fn verify_two_factor_for_user(
     verify_totp_code(&username, &secret, code)
 }
 
-fn decrypt_secret(ciphertext: &str, key: &[u8; 32]) -> Result<String, String> {
-    let mut parts = ciphertext.split('.');
-    let version = parts
-        .next()
-        .ok_or_else(|| "Invalid encrypted secret format".to_string())?;
-    if version != "v1" {
-        return Err("Unsupported encrypted secret version".to_string());
-    }
-    let nonce_b64 = parts
-        .next()
-        .ok_or_else(|| "Invalid encrypted secret format".to_string())?;
-    let cipher_b64 = parts
-        .next()
-        .ok_or_else(|| "Invalid encrypted secret format".to_string())?;
-    if parts.next().is_some() {
-        return Err("Invalid encrypted secret format".to_string());
-    }
-
-    let nonce_vec = base64::engine::general_purpose::URL_SAFE_NO_PAD
-        .decode(nonce_b64)
-        .map_err(|_| "Invalid encrypted secret nonce".to_string())?;
-    if nonce_vec.len() != 12 {
-        return Err("Invalid encrypted secret nonce length".to_string());
-    }
-    let cipher_vec = base64::engine::general_purpose::URL_SAFE_NO_PAD
-        .decode(cipher_b64)
-        .map_err(|_| "Invalid encrypted secret payload".to_string())?;
-
-    let cipher = Aes256Gcm::new_from_slice(key).map_err(|e| format!("Cipher init failed: {e}"))?;
-    let nonce = Nonce::try_from(&nonce_vec[..])
-        .map_err(|_| "Invalid encrypted secret nonce length".to_string())?;
-    let plaintext = cipher
-        .decrypt(&nonce, cipher_vec.as_ref())
-        .map_err(|e| format!("Decryption failed: {e}"))?;
-
-    String::from_utf8(plaintext).map_err(|_| "Decrypted secret is not valid UTF-8".to_string())
-}
-
 async fn verify_admin_request(
     state: &AppState,
     cookies: &Cookies,
@@ -3105,31 +3066,6 @@ fn auth_session_error(
             requires_email_verification: false,
         }),
     )
-}
-
-fn encryption_key_from_config_secret(secret_b64: &str) -> Result<[u8; 32], String> {
-    let secret_bytes = general_purpose::STANDARD
-        .decode(secret_b64)
-        .map_err(|_| "Config secret is not valid base64".to_string())?;
-    let digest = Sha256::digest(secret_bytes);
-    let mut key = [0u8; 32];
-    key.copy_from_slice(&digest[..32]);
-    Ok(key)
-}
-
-fn encrypt_secret(plaintext: &str, key: &[u8; 32]) -> Result<String, String> {
-    let cipher = Aes256Gcm::new_from_slice(key).map_err(|e| format!("Cipher init failed: {e}"))?;
-    let mut nonce_bytes = [0u8; 12];
-    let mut rng = rand::rng();
-    rng.fill(&mut nonce_bytes);
-    let nonce = Nonce::from(nonce_bytes);
-    let ciphertext = cipher
-        .encrypt(&nonce, plaintext.as_bytes())
-        .map_err(|e| format!("Encryption failed: {e}"))?;
-
-    let nonce_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(nonce_bytes);
-    let cipher_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(ciphertext);
-    Ok(format!("v1.{nonce_b64}.{cipher_b64}"))
 }
 
 /// The provider's configured scopes, with the SQL nulls dropped.

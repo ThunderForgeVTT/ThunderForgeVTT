@@ -1,16 +1,17 @@
 use crate::schema::{
     admin_bootstrap_oauth_sessions, admin_bootstrap_setup, auth_security_settings,
     canvas_image_assets, content_moderation_actions, fog_masks, game_systems, interaction_requests,
-    interactives, light_sources, login_two_factor_challenges, oauth_authorization_sessions,
-    oauth_link_challenges, oauth_providers, players_online, scene_state_fingerprints, scenes,
-    shapes, tokens, user_oauth_accounts, user_sessions, users, walls, world_abilities,
-    world_ability_effects, world_ability_permissions, world_ability_shares, world_actor_abilities,
-    world_actor_claims, world_actor_images, world_actor_inventory, world_actor_permissions,
-    world_actor_shares, world_actor_system_data, world_actors, world_authoring_tool_grants,
-    world_chat_messages, world_combatants, world_combats, world_events, world_invites,
-    world_item_abilities, world_item_effects, world_item_permissions, world_item_prices,
-    world_item_shares, world_items, world_lore_entries, world_lore_image_assets, world_lore_links,
-    world_lore_permissions, world_lore_revisions, world_lore_tags, world_members,
+    interactives, light_sources, login_two_factor_challenges, lore_disassociation_notices,
+    lore_exported_entries, lore_fidelity_notes, lore_repository_connections, lore_sync_runs,
+    oauth_authorization_sessions, oauth_link_challenges, oauth_providers, players_online,
+    scene_state_fingerprints, scenes, shapes, tokens, user_oauth_accounts, user_sessions, users,
+    walls, world_abilities, world_ability_effects, world_ability_permissions, world_ability_shares,
+    world_actor_abilities, world_actor_claims, world_actor_images, world_actor_inventory,
+    world_actor_permissions, world_actor_shares, world_actor_system_data, world_actors,
+    world_authoring_tool_grants, world_chat_messages, world_combatants, world_combats,
+    world_events, world_invites, world_item_abilities, world_item_effects, world_item_permissions,
+    world_item_prices, world_item_shares, world_items, world_lore_entries, world_lore_image_assets,
+    world_lore_links, world_lore_permissions, world_lore_revisions, world_lore_tags, world_members,
     world_roll_records, world_tokens, worlds,
 };
 use diesel::prelude::*;
@@ -1987,4 +1988,131 @@ pub struct NewWorldAuthoringToolGrant {
     pub tool: String,
     pub created_by: uuid::Uuid,
     pub updated_by: uuid::Uuid,
+}
+
+// ============================================================================
+// Spec 034: Optional lore synchronisation to an external repository
+// ============================================================================
+
+/// A world's link to one external repository.
+///
+/// **There is no credential column, deliberately.** The installation reference
+/// is not a secret, and the token derived from it is short-lived and never
+/// persisted (FR-036d). That is what keeps FR-035's "never appears in logs"
+/// achievable rather than aspirational: this row can be read in full while
+/// diagnosing a connection without anything sensitive coming with it.
+///
+/// `host_kind` and `installation_ref` are read at the grant boundary and
+/// nowhere else (FR-004c). No component past the grant may branch on either,
+/// and neither is exposed through the GraphQL surface at any depth.
+#[derive(Queryable, Selectable, Insertable, AsChangeset, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = lore_repository_connections)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct LoreRepositoryConnection {
+    pub id: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub host_kind: String,
+    pub installation_ref: String,
+    pub repository_ref: String,
+    pub branch: String,
+    pub directory: String,
+    pub incoming_enabled: bool,
+    /// FR-038: synchronisation does not begin until this is set. A `None` row
+    /// is never picked up by the background task.
+    pub notice_acknowledged_at: Option<chrono::NaiveDateTime>,
+    pub state: String,
+    pub state_reason: Option<String>,
+    /// FR-040a. What was **observed** at the last run, not a guarantee —
+    /// visibility changes at the host without telling us, so anywhere this is
+    /// shown must say when it was last seen.
+    pub repository_is_public: Option<bool>,
+    pub visibility_checked_at: Option<chrono::NaiveDateTime>,
+    pub deactivated_at: Option<chrono::NaiveDateTime>,
+    pub deactivated_reason: Option<String>,
+    pub last_synced_at: Option<chrono::NaiveDateTime>,
+    pub last_written_commit: Option<String>,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+/// One attempt to bring a repository into agreement with a world.
+///
+/// Retained rather than overwritten: FR-030's backoff and FR-029's "notify
+/// once rather than repeatedly" are both statements about a *history* of
+/// attempts, and a single mutable status column expresses neither.
+#[derive(Queryable, Selectable, Insertable, AsChangeset, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = lore_sync_runs)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct LoreSyncRun {
+    pub id: uuid::Uuid,
+    pub connection_id: uuid::Uuid,
+    pub started_at: chrono::NaiveDateTime,
+    pub finished_at: Option<chrono::NaiveDateTime>,
+    pub outcome: Option<String>,
+    pub from_commit: Option<String>,
+    pub to_commit: Option<String>,
+    pub entries_written: i32,
+    pub failure_reason: Option<String>,
+    pub attempt: i32,
+}
+
+/// The durable association between a lore entry and the file representing it.
+///
+/// Without this a rename is indistinguishable from a delete plus an unrelated
+/// create, and FR-010's history preservation is impossible. `current_path` is
+/// a **label**; the entry id carried in the file's own header is the key
+/// (FR-009).
+#[derive(Queryable, Selectable, Insertable, AsChangeset, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = lore_exported_entries)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct LoreExportedEntry {
+    pub id: uuid::Uuid,
+    pub connection_id: uuid::Uuid,
+    pub lore_entry_id: uuid::Uuid,
+    pub current_path: String,
+    pub exported_revision_id: Option<uuid::Uuid>,
+    pub last_exported_at: Option<chrono::NaiveDateTime>,
+}
+
+/// Something that could not be represented in the repository (FR-013, FR-037).
+///
+/// Rows rather than log lines, because SC-008 requires every fidelity loss to
+/// be *enumerated* rather than discovered by the user, and something
+/// enumerable must be queryable.
+#[derive(Queryable, Selectable, Insertable, AsChangeset, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = lore_fidelity_notes)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct LoreFidelityNote {
+    pub id: uuid::Uuid,
+    pub connection_id: uuid::Uuid,
+    /// `None` for a note about the whole connection — permission flattening,
+    /// or that the mirror is public.
+    pub lore_entry_id: Option<uuid::Uuid>,
+    pub kind: String,
+    pub detail: String,
+    pub first_seen_at: chrono::NaiveDateTime,
+    pub last_seen_at: chrono::NaiveDateTime,
+}
+
+/// One attempt to lodge a public withdrawal after a takedown (FR-040b).
+///
+/// A table rather than a log line because FR-040d requires a failure to reach
+/// an administrator without blocking the takedown, and "did we, for this
+/// takedown, and if not why" needs an answer a year later.
+///
+/// `skipped_private` is a recorded outcome rather than an absence, so that "we
+/// deliberately did not do this" and "we forgot" never look the same.
+#[derive(Queryable, Selectable, Insertable, AsChangeset, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = lore_disassociation_notices)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct LoreDisassociationNotice {
+    pub id: uuid::Uuid,
+    pub connection_id: uuid::Uuid,
+    pub moderation_action_id: uuid::Uuid,
+    pub attempted_at: chrono::NaiveDateTime,
+    pub outcome: String,
+    pub issue_ref: Option<String>,
+    pub failure_reason: Option<String>,
 }
