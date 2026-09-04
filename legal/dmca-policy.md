@@ -34,9 +34,18 @@ we do not represent the rights holder in seeking it. Content a user exported to 
 service they control was published by that user, and removing it there is theirs
 to do — as is any liability for having put it there.
 
+Where content was mirrored to a **publicly visible** repository, we will also
+lodge an issue on that repository recording that we have disabled the content at
+our end, stopped exporting it, and no longer associate ourselves with what
+remains there. That notice makes no claim about the repository's contents and
+does not name anyone; it records our own withdrawal, publicly, where a reader of
+that repository can see it. We do not do this for private repositories, and we
+do not delete or alter anything in either case.
+
 A rights holder whose work appears on such a service should direct a notice to
-that service's own provider. We will disable the content here and stop it being
-republished; we will not be the route to content that has already left.
+that service's own provider. We will disable the content here, stop it being
+republished, and say publicly that we have withdrawn; we will not be the route
+to content that has already left.
 
 ## Counter-Notices & Repeat Infringers
 

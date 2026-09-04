@@ -1,0 +1,40 @@
+[lints]
+workspace = true
+
+[package]
+name = "thunderforge_repo_host"
+version = "0.1.0"
+edition = "2024"
+repository = "git@github.com:ThunderForgeVTT/ThunderForgeVTT.git"
+license.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+# Deliberately no `axum`, `diesel` or `reqwest` dependency, following the
+# precedent `thunderforge-axum-oauth` states in its own manifest.
+#
+# Arranging access to a repository host is a sequence of pure transformations —
+# build a JWT's claims and sign them, parse a token response, decide whether a
+# cached credential is close enough to expiry to refresh, validate that a grant
+# covers exactly one repository — and every one of them is reachable here
+# without a network round trip or a registered application. The one actual HTTP
+# call, the installation-token exchange, lives in `src/server/src/repo_host.rs`.
+#
+# That is not tidiness. It is what makes the refresh-window arithmetic and the
+# scope validation testable at all: `cargo test -p thunderforge_repo_host` must
+# pass with no network and no application configured. Rules that can only be
+# exercised against a live GitHub App are rules that are hoped for rather than
+# tested. See specs/034-lore-git-sync/research.md R5a.
+[dependencies]
+# RS256 signing for the application JWT. Added deliberately: nothing else in
+# this workspace signs asymmetrically — the crypto surface is aes-gcm, sha2,
+# rand and totp-rs, none of which does — so this is a new capability rather
+# than a reuse. See specs/034-lore-git-sync/research.md R5.
+jsonwebtoken = "10"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+thiserror = "2.0.20"
+
+[dev-dependencies]
+proptest = "1.11.0"

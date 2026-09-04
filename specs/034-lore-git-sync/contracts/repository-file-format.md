@@ -88,3 +88,45 @@ missing from the repository's eventual content.
   deleted or modified, forever (FR-032, SC-007).
 - Per-entry permissions. They do not survive the mirror; FR-037's notice says so
   before the first run, and a `permission_not_carried` fidelity note records it.
+
+---
+
+## The disassociation issue
+
+Lodged on a **publicly visible** connected repository when a takedown disables
+content that was mirrored there (FR-040b). Never on a private one (FR-040c).
+
+**Title**: `Content removed at source — ThunderForge no longer associates with this mirror`
+
+**Body**, with only the world name and date substituted:
+
+```markdown
+This repository contains lore mirrored from a ThunderForge world.
+
+Content in that world has been disabled following a copyright notice. The
+ThunderForge instance that wrote here has disabled it at the source and has
+stopped exporting it. Nothing already committed to this repository has been
+altered by us, and we will not alter it.
+
+We are recording that we no longer associate ourselves with the material that
+remains in this repository. Its contents are published by whoever owns this
+repository, and decisions about them — including removal — rest with them.
+
+No claim about this repository's contents is made or implied here.
+```
+
+**What the body deliberately omits, and why each omission matters:**
+
+- **The complainant's identity.** Naming them publishes a party to a dispute
+  into a public forum they did not choose.
+- **Any assertion that the material infringes.** The platform disabled content
+  on receipt of a notice; it did not adjudicate one, and has no standing to.
+  Asserting infringement in public would be a claim the platform cannot support
+  and would pull it *into* the dispute rather than out of it.
+- **The content itself, and which entry it was.** Reproducing or pinpointing it
+  in a public issue would republish the thing being withdrawn.
+
+The point of the issue is the platform stating, on the record and where anyone
+reading the repository can see it, that it has withdrawn. That is the most the
+platform can do about a repository it does not control, and it is deliberately
+all it does.

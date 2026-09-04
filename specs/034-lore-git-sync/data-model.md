@@ -31,6 +31,8 @@ One per world, at most (FR-001). The world's link to one external repository.
 | `incoming_enabled` | `Bool` | Default **false**. Story 3's gate; FR-006 and FR-022 both depend on the default being off. |
 | `notice_acknowledged_at` | `Nullable<Timestamp>` | FR-038: synchronisation MUST NOT begin until FR-037's notice is acknowledged. Null means never started. |
 | `state` | `Text` | `working` · `needs_attention` · `never_configured` · `deactivated`, the first three matching FR-029's words exactly. |
+| `repository_is_public` | `Nullable<Bool>` | Observed at the last run (FR-040a). Null before the first. **A record of what was seen, not a guarantee** — visibility changes at the host without telling us. |
+| `visibility_checked_at` | `Nullable<Timestamp>` | When that observation was made, so a stale one can be shown as stale. |
 | `deactivated_at` | `Nullable<Timestamp>` | Set by an enforcement action (FR-041a). |
 | `deactivated_reason` | `Nullable<Text>` | |
 | `state_reason` | `Nullable<Text>` | Plain language, naming the remedy. Never a raw host error. |
@@ -110,7 +112,7 @@ A recorded instance of something that could not be represented (FR-013, FR-037).
 | `id` | `Uuid` | |
 | `connection_id` | `Uuid` | |
 | `lore_entry_id` | `Nullable<Uuid>` | Null for a note about the whole connection, such as permission flattening. |
-| `kind` | `Text` | `unresolvable_cross_link` · `permission_not_carried` · `path_disambiguated` |
+| `kind` | `Text` | `unresolvable_cross_link` · `permission_not_carried` · `path_disambiguated` · `mirrored_publicly` |
 | `detail` | `Text` | |
 | `first_seen_at` / `last_seen_at` | `Timestamp` | |
 
@@ -156,3 +158,31 @@ undo is not a deactivation.
 It is distinct from `needs_attention` on purpose (FR-041c). Telling someone to
 check a connection they are not permitted to restore leaves them retrying
 forever, and reads as a bug rather than a decision.
+
+
+---
+
+## `lore_disassociation_notices`
+
+One attempt to lodge a public withdrawal on a repository after a takedown
+(FR-040b).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `Uuid` | |
+| `connection_id` | `Uuid` | |
+| `moderation_action_id` | `Uuid` | The takedown that caused it. |
+| `attempted_at` | `Timestamp` | |
+| `outcome` | `Text` | `lodged` · `failed` · `skipped_private` |
+| `issue_ref` | `Nullable<Text>` | Where it landed, so it can be pointed at. |
+| `failure_reason` | `Nullable<Text>` | |
+
+**Why this is a table and not a log line.** FR-040d says a failure to lodge must
+not block or reverse the takedown, and must be surfaced to an administrator. A
+commitment the platform makes publicly — that it will record its withdrawal —
+needs a queryable answer to "did we, for this takedown, and if not why". A log
+line cannot answer that a year later.
+
+`skipped_private` is recorded rather than omitted, because "we deliberately did
+not do this, and here is why" and "we forgot" must not look the same in the
+record.

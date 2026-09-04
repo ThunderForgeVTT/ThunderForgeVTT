@@ -411,6 +411,13 @@ confirm the app presents both versions and applies only the one chosen.
   scoped at installation to the single repository being connected. The system
   MUST NOT accept a pasted long-lived user token, and MUST NOT request a scope
   that confers access to repositories other than the one connected.
+- **FR-036e**: The grant MUST include the ability to open an issue on the
+  connected repository, in addition to writing its contents. This widens
+  FR-036's "narrowest access" and is a deliberate trade rather than an
+  oversight: it is what makes FR-040b's public disassociation possible, and a
+  disassociation the product cannot perform is a commitment it should not make.
+  The user MUST be shown both parts of what they are granting, and why the
+  second exists, before they grant it.
 - **FR-036b**: Because FR-036a requires per-instance registration, an instance
   whose operator has not registered an application MUST NOT present the feature
   as broken. The connection surface MUST state that this instance has no
@@ -431,6 +438,18 @@ confirm the app presents both versions and applies only the one chosen.
   mirror: everything exported is visible to everyone with access to the
   repository, including entries restricted to a subset of world members, and
   that the repository's access control is theirs to manage, not the platform's.
+- **FR-037a**: The system MUST determine whether the connected repository is
+  publicly visible, and MUST say so distinctly in that notice. **A private
+  repository must not be assumed.** Not everyone has one — free plans, shared
+  accounts, and organisations with policies against private repositories are
+  all ordinary — and the difference between "everyone you invited to this
+  repository" and "everyone on the internet" is the largest single consequence
+  of this feature. A notice that covers only the private case is a notice that
+  is silently wrong for the users most exposed by it.
+- **FR-037b**: Where the repository is public, the notice MUST additionally
+  state that a takedown affecting mirrored content will result in a public
+  issue lodged on that repository (FR-040b), because that consequence is
+  visible to anyone reading the repository and must not be a surprise.
 - **FR-038**: Synchronisation MUST NOT begin until the Game Master has
   acknowledged FR-037's notice for that world.
 
@@ -443,6 +462,30 @@ confirm the app presents both versions and applies only the one chosen.
   action, the system MUST stop exporting it, MUST notify the world owner that
   the content may already exist in a repository outside the platform's control,
   and MUST state that removing it there is the owner's responsibility.
+- **FR-040a**: The system MUST record, per connection, whether the repository
+  was publicly visible at the time of each synchronisation. Visibility can be
+  changed at the host at any time without telling the platform, so this is a
+  record of what was observed rather than a guarantee, and MUST be described
+  as such wherever it is shown.
+- **FR-040b**: Where a takedown disables content that was mirrored to a
+  **publicly visible** repository, the system MUST lodge an issue on that
+  repository stating that the platform has disabled the content on its own
+  systems, has stopped exporting it, and no longer associates itself with what
+  remains there. The issue MUST NOT reproduce the content, MUST NOT name the
+  complainant, and MUST NOT assert that the material infringes — the platform
+  is recording its own withdrawal, not adjudicating a claim it has no standing
+  to decide.
+- **FR-040c**: Lodging that issue is the **entire** extent of the action. The
+  system MUST NOT delete, edit, or force-push anything in the repository, and
+  MUST NOT open an issue on a repository that is not publicly visible — a
+  private repository already limits the exposure the issue exists to address,
+  and writing into someone's private workspace to say so is an intrusion the
+  platform has no reason to make.
+- **FR-040d**: A failure to lodge the issue — access revoked, issues disabled
+  on that repository, the host unreachable — MUST NOT block or reverse the
+  takedown on the platform, and MUST be recorded and surfaced to an
+  administrator. The obligation is to attempt it and to say plainly when the
+  attempt failed.
 - **FR-041**: The user-facing terms for this feature MUST state that content
   exported to a repository the user controls leaves the platform's hosting, that
   the platform cannot retract it once exported, and that responsibility for what

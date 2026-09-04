@@ -19,6 +19,7 @@ members = [
     "crates/thunderforge-opfs",
     "crates/thunderforge-pg",
     "crates/thunderforge-presence",
+    "crates/thunderforge-repo-host",
     "crates/thunderforge-pg-sockets",
     "packs/systems/dnd5e/server",
     "packs/systems/dnd5e/engine",

@@ -80,8 +80,50 @@ does not control, is:
   control and that removing it there is theirs to do (FR-040).
 
 That is a **genuine reduction in takedown effectiveness for connected worlds**,
-and this ADR accepts it rather than arguing it away. Three things make the
-acceptance defensible rather than convenient:
+and this ADR accepts it rather than arguing it away.
+
+### Amended the same day: public repositories
+
+The first version of this determination reasoned as though a connected
+repository were private. **That assumption was wrong and is corrected here
+rather than quietly replaced.** Not everyone has a private repository — free
+plans, shared accounts, and organisations with policies against them are all
+ordinary — and a mirror to a *public* repository is a materially larger
+exposure than a mirror to a private one.
+
+It does not change the determination. The repository is still the user's, still
+reached with their credential, still chosen by them; the platform still
+aggregates nothing, indexes nothing and enumerates nothing. What makes something
+a centralized public repository is the platform assembling one view of many
+users' content, and that is absent whether an individual user's destination is
+public or not.
+
+It does change what the platform owes. Spec 034 gained FR-037a and FR-037b —
+the pre-synchronisation notice must determine and state whether the repository
+is public, because "everyone you invited" and "everyone on the internet" are
+different sentences and a notice covering only the first is silently wrong for
+the users most exposed. And it gained FR-040b: where a takedown disables content
+mirrored to a public repository, the platform lodges an issue there recording
+that it has disabled the content at source, stopped exporting it, and no longer
+associates itself with what remains.
+
+That issue is a **public withdrawal, not an accusation**. It names no
+complainant, asserts no infringement, and reproduces no content — the platform
+disabled content on receipt of a notice, it did not adjudicate one, and claiming
+otherwise in public would pull it into a dispute it has no standing in rather
+than out of one. Recording the withdrawal where a reader of that repository can
+see it is the most the platform can do about a repository it does not control,
+and FR-040c makes it deliberately all it does.
+
+**This widens the access the feature requests** (FR-036e): opening an issue
+needs more than writing contents, so FR-036's "narrowest access" is now
+narrowest-that-does-the-job rather than minimal. That trade is recorded rather
+than absorbed — a disassociation the product cannot perform is a commitment it
+should not make, and a grant that quietly grew is how a boundary erodes.
+
+### Why the acceptance is defensible
+
+Three things make it so rather than convenient:
 
 - **It is disclosed before the fact.** No synchronisation begins until the Game
   Master has acknowledged a notice explaining what leaves the platform
@@ -95,6 +137,9 @@ acceptance defensible rather than convenient:
 - **The reduction is bounded by the user's own act.** It applies only to worlds
   whose owner chose to connect a repository, and only to what was mirrored
   before the notice arrived.
+- **Where the exposure is public, the withdrawal is public too.** FR-040b puts
+  the platform's disassociation in the same place as the exposure, which is the
+  only forum where it is worth anything.
 
 ## What this determination does not cover
 
@@ -114,9 +159,10 @@ acceptance defensible rather than convenient:
   document.
 - `specs/034-lore-git-sync/checklists/requirements.md` reaches 29/29.
 - The disclosure obligations above are not optional decoration of the feature —
-  they are the conditions this determination rests on. FR-037, FR-038, FR-039,
-  FR-040 and FR-041a failing to ship would invalidate the reasoning here, and
-  this ADR would need revisiting rather than the requirements being relaxed.
+  they are the conditions this determination rests on. FR-037, FR-037a, FR-037b,
+  FR-038, FR-039, FR-040, FR-040b and FR-041a failing to ship would invalidate
+  the reasoning here, and this ADR would need revisiting rather than the
+  requirements being relaxed.
 - **The public wording has not been reviewed by a lawyer.** `legal/README.md`
   records that, and the review it asks for covers the text this determination
   depends on. A determination is not legal advice, and this one is a product and
