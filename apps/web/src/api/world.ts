@@ -349,11 +349,18 @@ type UpdateWorldGameSystemMutation = {
   updateWorldGameSystem: WorldRecord;
 };
 
-/** Spec 016 (T009): assigns/changes a world's active system pack.
- * DM/GM-only, server-enforced. */
+/**
+ * Spec 016 (T009): assigns/changes a world's active system pack.
+ * DM/GM-only, server-enforced.
+ *
+ * Spec 033 (FR-028): a world holding authored content must pass the digest
+ * from `worldContentInventory` — the server recomputes and refuses a stale or
+ * absent one, so the guard cannot be skipped by calling this directly.
+ */
 export function updateWorldGameSystem(
   worldId: string,
   gameSystemId: string,
+  acknowledgedDigest?: string,
 ): Promise<WorldRecord> {
   return postGraphQL<UpdateWorldGameSystemMutation>(
     `
@@ -363,7 +370,7 @@ export function updateWorldGameSystem(
         }
       }
     `,
-    { input: { worldId, gameSystemId } },
+    { input: { worldId, gameSystemId, acknowledgedDigest } },
   ).then((data) => data.updateWorldGameSystem);
 }
 

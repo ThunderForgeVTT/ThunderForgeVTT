@@ -96,6 +96,18 @@ pub const EVENT_CODE_INTERACTION_REQUEST: i32 = 22;
 /// Payload: `{"action": "changed", "interfacePackId": <id> | null}`.
 pub const EVENT_CODE_WORLD_APPEARANCE_CHANGED: i32 = 23;
 
+/// A world's **game system** changed (spec 033, ADR-065).
+///
+/// Its palette changing has been announced since spec 032; its ruleset
+/// changing was not, which is the larger of the two events by some distance.
+/// Every participant's compendium presents differently afterwards, so the same
+/// argument that put the appearance change on this channel applies here with
+/// more force — including spec 028's catch-up for a client that was offline
+/// when it happened.
+///
+/// Payload: `{"action": "changed", "gameSystemId": <id>}`.
+pub const EVENT_CODE_WORLD_SYSTEM_CHANGED: i32 = 24;
+
 /// Record a world event to the audit trail and trigger NOTIFY for real-time sync.
 ///
 /// # Failures are logged here, not at the call sites

@@ -8,6 +8,10 @@ import {
   type GameSystemSummary,
 } from "@/api/gameSystems";
 import {
+  getWorldContentInventory,
+  type ContentInventory,
+} from "@/api/worldContent";
+import {
   getWorld,
   updateWorldDefaultSceneGridType,
   updateWorldGameSystem,
@@ -57,6 +61,16 @@ export default function WorldSystemSettingsPage() {
   /** Offered by the deployment, read from `packs/systems/` (spec 032 T089). */
   const [systems, setSystems] = useState<GameSystemSummary[]>([]);
   const [pendingSystemId, setPendingSystemId] = useState<string | null>(null);
+  /** What the pending change would affect. `null` until counted (FR-025). */
+  const [inventory, setInventory] = useState<ContentInventory | null>(null);
+  /**
+   * The first of the two confirmations FR-027 requires.
+   *
+   * Deliberately separate from the legal-notice confirmation below, which
+   * exists for spec 016 and means "I have read the licence". One control
+   * meaning both that and "I accept this data consequence" would weaken both.
+   */
+  const [dataRiskAccepted, setDataRiskAccepted] = useState(false);
   const [pendingManifest, setPendingManifest] = useState<SystemManifest | null>(
     null,
   );
@@ -119,9 +133,15 @@ export default function WorldSystemSettingsPage() {
   const handlePickSystem = async (systemId: string) => {
     setStatus(null);
     setPendingSystemId(systemId);
+    setInventory(null);
+    setDataRiskAccepted(false);
     try {
       const manifest = await getGameSystemManifest(systemId);
       setPendingManifest(manifest);
+      // What this change would affect, counted now and acknowledged by digest
+      // (FR-025, ADR-065). An empty world takes the one-step path and never
+      // sees the red panel at all (FR-029).
+      setInventory(await getWorldContentInventory(worldId, systemId));
     } catch (err) {
       setStatus(
         err instanceof Error ? err.message : "Failed to load system manifest",
@@ -137,12 +157,24 @@ export default function WorldSystemSettingsPage() {
     setIsSaving(true);
     setStatus(null);
     try {
-      const updated = await updateWorldGameSystem(worldId, pendingSystemId);
+      const updated = await updateWorldGameSystem(
+        worldId,
+        pendingSystemId,
+        inventory && !inventory.isEmpty ? inventory.digest : undefined,
+      );
       setWorld(updated);
       setActiveManifest(pendingManifest);
+      const hidden = inventory && !inventory.isEmpty ? inventory : null;
       setPendingSystemId(null);
       setPendingManifest(null);
-      setStatus("System assigned.");
+      setDataRiskAccepted(false);
+      // FR-033: say what became hidden and how to get it back.
+      setStatus(
+        hidden
+          ? `System assigned. Content authored for another system is hidden, not deleted — switching back restores it.`
+          : "System assigned.",
+      );
+      setInventory(null);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Failed to assign system");
     } finally {
@@ -153,6 +185,8 @@ export default function WorldSystemSettingsPage() {
   const handleCancelPick = () => {
     setPendingSystemId(null);
     setPendingManifest(null);
+    setInventory(null);
+    setDataRiskAccepted(false);
   };
 
   const [isSavingCarryover, setIsSavingCarryover] = useState(false);
@@ -318,7 +352,87 @@ export default function WorldSystemSettingsPage() {
                 </Select>
               </Field>
 
-              {pendingManifest ? (
+              {/*
+               * FR-025 to FR-027: a world holding authored content gets a red
+               * panel with real counts, and two distinct confirmations. This
+               * is the first; the legal-notice confirmation below is the
+               * second, and it does not appear until this one is accepted.
+               *
+               * The wording is severe and *true*. Nothing is deleted here —
+               * content authored for another system becomes hidden and comes
+               * back if that system does — so the panel never says "delete",
+               * "lose" or "destroy" (FR-026). A false warning teaches a Game
+               * Master to distrust every warning this product shows them.
+               */}
+              {pendingManifest &&
+              inventory &&
+              !inventory.isEmpty &&
+              !dataRiskAccepted ? (
+                <div
+                  className="grid gap-3 rounded-lg border-2 border-destructive bg-destructive/10 p-4"
+                  role="alert"
+                  data-testid="system-change-warning"
+                >
+                  <p className="text-sm font-semibold text-destructive">
+                    This world already holds content authored for another
+                    system.
+                  </p>
+                  <ul
+                    className="grid gap-1 text-sm"
+                    data-testid="system-change-counts"
+                  >
+                    {inventory.counts.map((entry) => (
+                      <li key={`${entry.kind}-${entry.systemId ?? "none"}`}>
+                        <strong>{entry.count}</strong>{" "}
+                        {entry.count === 1
+                          ? entry.kind.replace(/ies$/, "y").replace(/s$/, "")
+                          : entry.kind}
+                        {entry.systemId
+                          ? ` authored for ${titleFor(systems, entry.systemId)}`
+                          : ""}
+                      </li>
+                    ))}
+                    {inventory.becomingUnrecognised > 0 ? (
+                      <li data-testid="system-change-unrecognised">
+                        <strong>{inventory.becomingUnrecognised}</strong>{" "}
+                        {inventory.becomingUnrecognised === 1
+                          ? "ability"
+                          : "abilities"}{" "}
+                        of a type {titleFor(systems, pendingSystemId ?? "")}{" "}
+                        does not recognise — still listed and editable, grouped
+                        on their own, and returning to their own section if you
+                        switch back.
+                      </li>
+                    ) : null}
+                  </ul>
+                  <p className="text-sm">
+                    Switching to{" "}
+                    <strong>{titleFor(systems, pendingSystemId ?? "")}</strong>{" "}
+                    hides this content rather than destroying it. Nothing is
+                    deleted, nothing is renamed, and switching back restores all
+                    of it.
+                  </p>
+                  <div className="flex gap-3">
+                    <Button
+                      variant="danger"
+                      onClick={() => setDataRiskAccepted(true)}
+                      data-testid="system-change-accept-risk"
+                    >
+                      I understand — continue
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={handleCancelPick}
+                      data-testid="system-change-cancel"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
+              {pendingManifest &&
+              (dataRiskAccepted || (inventory?.isEmpty ?? true)) ? (
                 <div
                   className="grid gap-3"
                   data-testid="pending-system-confirmation"
@@ -336,7 +450,9 @@ export default function WorldSystemSettingsPage() {
                       onClick={() => void handleConfirm()}
                       disabled={isSaving}
                     >
-                      {isSaving ? "Assigning..." : "Confirm"}
+                      {isSaving
+                        ? "Assigning..."
+                        : `Confirm — switch to ${pendingManifest.title}`}
                     </Button>
                     <Button
                       variant="ghost"

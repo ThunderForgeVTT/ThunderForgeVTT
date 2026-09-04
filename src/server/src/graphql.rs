@@ -69,7 +69,7 @@ pub mod queries;
 pub use queries::{
     AbilityQuery, AbilityVocabularyQuery, ActorQuery, AdminQuery, HealthcheckQuery, InventoryQuery,
     InviteQuery, ItemQuery, LoreQuery, ModerationQuery, RollQuery, SceneQuery, UserQuery,
-    WorldEventsSinceQuery, WorldSyncPlanQuery,
+    WorldContentQuery, WorldEventsSinceQuery, WorldSyncPlanQuery,
 };
 
 // Phase 4.10.B: Invite & Membership mutations for multiplayer campaigns
@@ -1926,6 +1926,14 @@ pub async fn update_world_session_notes_impl(
 pub struct UpdateWorldGameSystemInput {
     pub world_id: uuid::Uuid,
     pub game_system_id: String,
+    /// What the caller is acknowledging, from `worldContentInventory`.
+    ///
+    /// Required when the world holds authored content (FR-028). A digest
+    /// rather than a boolean because a boolean can be passed by a caller who
+    /// never saw a count — which is the bypass the requirement exists to
+    /// prevent — and stays true if the world changed while the dialog was
+    /// open. See ADR-065.
+    pub acknowledged_digest: Option<String>,
 }
 
 /// Testable core of `WorldMutation::update_world_game_system` (see
@@ -2032,9 +2040,47 @@ pub async fn update_world_game_system_impl(
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
     let packs_dir = state.directories.interface_packs_dir.clone();
+    let systems_dir = state.directories.systems_dir.clone();
     let system_for_pairing = game_system_id.clone();
+    let acknowledged = input.acknowledged_digest.clone();
+    let target_for_counting = game_system_id.clone();
 
     let updated = tokio::task::spawn_blocking(move || {
+        // FR-030: selecting the system already in force changes nothing and
+        // asks nothing. Checked before the counts, so a no-op never presents a
+        // warning about content it is not going to affect.
+        let current_system: Option<String> = worlds::table
+            .filter(worlds::id.eq(world_id))
+            .select(worlds::game_system_id)
+            .first::<Option<String>>(&mut conn)
+            .ok()
+            .flatten();
+
+        if current_system.as_deref() == Some(system_for_pairing.as_str()) {
+            return worlds::table
+                .filter(worlds::id.eq(world_id))
+                .select(World::as_select())
+                .first::<World>(&mut conn);
+        }
+
+        // FR-028. The server recomputes rather than trusting what it was
+        // handed: the digest says *which* numbers were acknowledged, and a
+        // world that gained content while the dialog was open is re-confirmed
+        // rather than switched behind the Game Master's back.
+        let inventory = crate::graphql::queries::world_content::inventory_of(
+            &mut conn,
+            &systems_dir,
+            world_id,
+            Some(&target_for_counting),
+        )?;
+
+        if !inventory.is_empty && acknowledged.as_deref() != Some(inventory.digest.as_str()) {
+            // Rolled back into an error message by the caller below. Diesel's
+            // error type is what this closure can carry, and `NotFound` is the
+            // one the caller maps to a refusal rather than a database fault.
+            return Err(diesel::result::Error::NotFound);
+        }
+
         // The pack binding is repaired in the same statement that changes the
         // system, because between the two a world is bound to a pack written
         // for a ruleset it no longer plays — and the settings picker only
@@ -2053,17 +2099,38 @@ pub async fn update_world_game_system_impl(
             &system_for_pairing,
         );
 
-        diesel::update(worlds::table.filter(worlds::id.eq(world_id)))
+        let updated = diesel::update(worlds::table.filter(worlds::id.eq(world_id)))
             .set((
-                worlds::game_system_id.eq(Some(game_system_id)),
+                worlds::game_system_id.eq(Some(game_system_id.clone())),
                 worlds::interface_pack_id.eq(interface_pack_id),
             ))
             .returning(World::as_returning())
-            .get_result::<World>(&mut conn)
+            .get_result::<World>(&mut conn)?;
+
+        // Announced like every other cross-participant change. A world's
+        // ruleset changing is at least as worth telling the table about as its
+        // palette, which has been announced since spec 032.
+        let _ = crate::world_events::record_world_event(
+            &mut conn,
+            world_id,
+            crate::world_events::EVENT_CODE_WORLD_SYSTEM_CHANGED,
+            Some(serde_json::json!({
+                "action": "changed",
+                "gameSystemId": game_system_id,
+            })),
+            user_id,
+        );
+
+        Ok(updated)
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to update game system"))?;
+    .map_err(|error| match error {
+        diesel::result::Error::NotFound => Error::new(
+            "This world holds authored content. Confirm what the change affects before applying it.",
+        ),
+        _ => Error::new("Failed to update game system"),
+    })?;
 
     Ok(GraphQLWorld::from(updated))
 }
@@ -2972,6 +3039,7 @@ pub struct QueryRoot(
     LorePermissionQuery,
     AbilityQuery,
     AbilityVocabularyQuery,
+    WorldContentQuery,
     AbilityPermissionQuery,
     AbilityShareQuery,
     ActorAbilityQuery,
@@ -3386,6 +3454,211 @@ mod tests {
 
     // Spec 016: World System Assignment (T009)
 
+    // Spec 033 User Story 2: the guarded system switch (FR-024 to FR-033).
+    //
+    // SC-007 says the two-confirmation rule holds "including attempts that call
+    // the operation directly without the interface", which makes these the
+    // tests that matter most — a dialog anyone can skip is not a guard.
+
+    /// A world with content is refused when nothing is acknowledged (FR-028).
+    #[tokio::test]
+    async fn a_world_with_content_refuses_an_unacknowledged_system_change() {
+        use super::{UpdateWorldGameSystemInput, update_world_game_system_impl};
+        use crate::test_support::*;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        insert_test_ability(&mut conn, world_id, owner_id);
+        drop(conn);
+
+        let refused = update_world_game_system_impl(
+            &state,
+            owner_id,
+            false,
+            UpdateWorldGameSystemInput {
+                world_id,
+                game_system_id: "dnd5e".to_string(),
+                acknowledged_digest: None,
+            },
+        )
+        .await;
+
+        assert!(
+            refused.is_err(),
+            "a world holding authored content must not switch system unacknowledged"
+        );
+    }
+
+    /// A digest taken before the world changed no longer acknowledges it.
+    ///
+    /// The reason this is a digest and not a boolean: a Game Master who left
+    /// the dialog open while an actor was added is asked again, rather than
+    /// switching on numbers that were true a minute ago.
+    #[tokio::test]
+    async fn a_stale_acknowledgement_is_refused() {
+        use super::{UpdateWorldGameSystemInput, update_world_game_system_impl};
+        use crate::graphql::queries::world_content::inventory_of;
+        use crate::test_support::*;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        insert_test_ability(&mut conn, world_id, owner_id);
+
+        let taken = inventory_of(
+            &mut conn,
+            &state.directories.systems_dir,
+            world_id,
+            Some("dnd5e"),
+        )
+        .expect("counting a seeded world should work");
+
+        // The world moves on while the dialog is open.
+        insert_test_ability(&mut conn, world_id, owner_id);
+        drop(conn);
+
+        let refused = update_world_game_system_impl(
+            &state,
+            owner_id,
+            false,
+            UpdateWorldGameSystemInput {
+                world_id,
+                game_system_id: "dnd5e".to_string(),
+                acknowledged_digest: Some(taken.digest),
+            },
+        )
+        .await;
+
+        assert!(
+            refused.is_err(),
+            "a digest taken before the world changed must not still acknowledge it"
+        );
+    }
+
+    /// The matching digest applies the change (FR-027's second confirmation
+    /// arriving as an acknowledgement the server can check).
+    #[tokio::test]
+    async fn a_matching_acknowledgement_applies_the_change() {
+        use super::{UpdateWorldGameSystemInput, update_world_game_system_impl};
+        use crate::graphql::queries::world_content::inventory_of;
+        use crate::test_support::*;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        insert_test_ability(&mut conn, world_id, owner_id);
+
+        let inventory = inventory_of(
+            &mut conn,
+            &state.directories.systems_dir,
+            world_id,
+            Some("dnd5e"),
+        )
+        .expect("counting a seeded world should work");
+        assert!(!inventory.is_empty, "the world was seeded with an ability");
+        drop(conn);
+
+        let updated = update_world_game_system_impl(
+            &state,
+            owner_id,
+            false,
+            UpdateWorldGameSystemInput {
+                world_id,
+                game_system_id: "dnd5e".to_string(),
+                acknowledged_digest: Some(inventory.digest),
+            },
+        )
+        .await
+        .expect("acknowledging the counts should allow the change");
+
+        assert_eq!(updated.game_system_id.as_deref(), Some("dnd5e"));
+    }
+
+    /// FR-005: a system change alters no authored content.
+    #[tokio::test]
+    async fn a_system_change_alters_no_authored_content() {
+        use super::{UpdateWorldGameSystemInput, update_world_game_system_impl};
+        use crate::graphql::queries::world_content::inventory_of;
+        use crate::test_support::*;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        insert_test_ability(&mut conn, world_id, owner_id);
+        insert_test_item(&mut conn, world_id, owner_id);
+
+        let before = inventory_of(&mut conn, &state.directories.systems_dir, world_id, None)
+            .expect("counting should work");
+        let digest = inventory_of(
+            &mut conn,
+            &state.directories.systems_dir,
+            world_id,
+            Some("dnd5e"),
+        )
+        .expect("counting should work")
+        .digest;
+        drop(conn);
+
+        update_world_game_system_impl(
+            &state,
+            owner_id,
+            false,
+            UpdateWorldGameSystemInput {
+                world_id,
+                game_system_id: "dnd5e".to_string(),
+                acknowledged_digest: Some(digest),
+            },
+        )
+        .await
+        .expect("the change should apply");
+
+        let mut conn = state.db_pool.get().unwrap();
+        let after = inventory_of(&mut conn, &state.directories.systems_dir, world_id, None)
+            .expect("counting should work");
+
+        assert_eq!(
+            before.counts.len(),
+            after.counts.len(),
+            "a system change must not add or remove content"
+        );
+        for entry in &before.counts {
+            let matched = after
+                .counts
+                .iter()
+                .find(|other| other.kind == entry.kind && other.system_id == entry.system_id)
+                .map(|other| other.count);
+            assert_eq!(matched, Some(entry.count), "{} changed", entry.kind);
+        }
+    }
+
+    /// FR-029: an empty world switches with no acknowledgement at all.
+    #[tokio::test]
+    async fn an_empty_world_needs_no_acknowledgement() {
+        use crate::graphql::queries::world_content::inventory_of;
+        use crate::test_support::*;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+
+        let inventory = inventory_of(&mut conn, &state.directories.systems_dir, world_id, None)
+            .expect("counting should work");
+
+        // Its auto-created default scene does not make it non-empty: every
+        // world has one (spec 010), so counting scenes would put the red
+        // warning in front of a Game Master on a world a minute old.
+        assert!(
+            inventory.is_empty,
+            "a world holding only its default scene is empty"
+        );
+    }
+
     #[tokio::test]
     async fn dm_can_assign_a_world_game_system() {
         use super::{UpdateWorldGameSystemInput, update_world_game_system_impl};
@@ -3404,6 +3677,8 @@ mod tests {
             UpdateWorldGameSystemInput {
                 world_id,
                 game_system_id: "dnd5e".to_string(),
+                // Empty world: FR-029's one-step path needs no acknowledgement.
+                acknowledged_digest: None,
             },
         )
         .await
@@ -3430,6 +3705,7 @@ mod tests {
             UpdateWorldGameSystemInput {
                 world_id,
                 game_system_id: "  ".to_string(),
+                acknowledged_digest: None,
             },
         )
         .await;
@@ -3457,6 +3733,8 @@ mod tests {
             UpdateWorldGameSystemInput {
                 world_id,
                 game_system_id: "dnd5e".to_string(),
+                // Empty world: FR-029's one-step path needs no acknowledgement.
+                acknowledged_digest: None,
             },
         )
         .await;

@@ -23,6 +23,7 @@ pub mod token_status;
 pub mod user;
 // The reconnect catch-up (`worldEventsSince`) — what a client missed while
 // its socket was down, read from the durable record rather than the wire.
+pub mod world_content;
 pub mod world_events_since;
 // Spec 028: the client-cache delta-sync plan (`worldSyncPlan`).
 pub mod world_sync_plan;
@@ -41,5 +42,6 @@ pub use moderation::ModerationQuery;
 pub use roll::RollQuery;
 pub use scene::SceneQuery;
 pub use user::UserQuery;
+pub use world_content::WorldContentQuery;
 pub use world_events_since::WorldEventsSinceQuery;
 pub use world_sync_plan::WorldSyncPlanQuery;
