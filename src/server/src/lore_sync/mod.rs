@@ -43,6 +43,7 @@ pub mod document;
 pub mod git;
 pub mod paths;
 pub mod plan;
+pub mod schedule;
 pub mod workspace;
 
 #[cfg(test)]

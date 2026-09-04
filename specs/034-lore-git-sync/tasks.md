@@ -92,7 +92,7 @@ most of them, because Story 2 *is* the tests.
 - [X] T029 [US1] Record fidelity notes from `src/server/src/lore_sync/run.rs` into the `lore_fidelity_notes` table — unresolvable cross-links, permission flattening, path disambiguation (FR-013, FR-037). Rows rather than log lines: SC-008 requires losses to be *enumerated*, and something enumerable must be queryable.
 - [ ] T029a [US1] Detect the connected repository's visibility in `src/server/src/repo_host.rs` and record it on the connection each run (FR-040a). **Observed, not guaranteed** — visibility changes at the host without telling us, and anywhere it is shown must say when it was last seen.
 - [X] T029b [US1] Extend the pre-synchronisation notice in `apps/web/src/pages/world/settings/LoreRepositoryCard.tsx` to state distinctly whether the repository is public (FR-037a), and where it is, that a takedown will result in a public issue on it (FR-037b). **A private repository must not be assumed**: "everyone you invited" and "everyone on the internet" are different sentences, and a notice covering only the first is silently wrong for the users most exposed.
-- [ ] T030 [US1] Implement `spawn_lore_sync_task` in `src/server/src/lore_sync/mod.rs` and call it from `src/app/src/main.rs` alongside the existing background tasks. **A connection with a null `notice_acknowledged_at` is never picked up** (FR-038).
+- [X] T030 [US1] Implement `spawn_lore_sync_task` in `src/server/src/lore_sync/mod.rs` and call it from `src/app/src/main.rs` alongside the existing background tasks. **A connection with a null `notice_acknowledged_at` is never picked up** (FR-038).
 
 ### GraphQL
 

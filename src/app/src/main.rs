@@ -451,6 +451,17 @@ async fn run() {
         );
     }
 
+    // Spec 034 (T030): lore repository synchronisation. Owns its own schedule
+    // and stays off every hot path, like the tasks below it.
+    //
+    // Spawned unconditionally even when no application is registered: with no
+    // connections it selects nothing and costs one indexed query every thirty
+    // seconds. Gating the spawn on configuration would mean an operator who
+    // configures the feature has to restart to use it, which is a worse
+    // trade than a query that finds no rows.
+    eprintln!("[Server] 🚀 Starting lore repository sync task");
+    thunderforge_server::lore_sync::schedule::spawn_lore_sync_task(app_state.clone());
+
     // Spawn the presence listener task (Phase 4.9.B.3)
     eprintln!("[Server] 🚀 Starting presence listener task");
     thunderforge_server::network::spawn_presence_listener_task(presence_sender);
