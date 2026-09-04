@@ -68,8 +68,8 @@ pub use helpers::{
 pub mod queries;
 pub use queries::{
     AbilityQuery, AbilityVocabularyQuery, ActorQuery, AdminQuery, HealthcheckQuery, InventoryQuery,
-    InviteQuery, ItemQuery, LoreQuery, ModerationQuery, RollQuery, SceneQuery, UserQuery,
-    WorldContentQuery, WorldEventsSinceQuery, WorldSyncPlanQuery,
+    InviteQuery, ItemQuery, LoreQuery, LoreSyncQuery, ModerationQuery, RollQuery, SceneQuery,
+    UserQuery, WorldContentQuery, WorldEventsSinceQuery, WorldSyncPlanQuery,
 };
 
 // Phase 4.10.B: Invite & Membership mutations for multiplayer campaigns
@@ -129,6 +129,11 @@ pub mod mutations_lore_tree;
 // Spec 012: paste/drop image upload for lore entries
 pub mod mutations_lore_images;
 pub use mutations_lore_images::LoreImageMutation;
+
+// Spec 034: establishing, acknowledging and removing a world's repository
+// connection. Nothing here writes to a world's lore.
+pub mod mutations_lore_sync;
+pub use mutations_lore_sync::LoreSyncMutation;
 
 // Spec 013: item creation/field-editing/deletion and effect CRUD
 pub mod mutations_abilities;
@@ -3038,6 +3043,9 @@ pub struct QueryRoot(
     ActorShareQuery,
     LoreQuery,
     LorePermissionQuery,
+    // Spec 034: the world's repository connection, its runs, and whether this
+    // instance can offer the feature at all.
+    LoreSyncQuery,
     AbilityQuery,
     AbilityVocabularyQuery,
     WorldContentQuery,
@@ -3092,6 +3100,7 @@ pub struct MutationRoot(
     LorePermissionMutation,
     LoreImageMutation,
     mutations_lore_tree::LoreTreeMutation,
+    LoreSyncMutation,
     AbilityMutation,
     AbilityPermissionMutation,
     AbilityShareMutation,

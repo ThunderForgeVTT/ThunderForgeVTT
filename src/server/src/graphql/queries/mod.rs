@@ -15,6 +15,9 @@ pub mod inventory;
 pub mod invite;
 pub mod item;
 pub mod lore;
+// Spec 034: `loreRepositoryConnection`, `loreSyncRuns`,
+// `instanceRepositoryIntegration`.
+pub mod lore_sync;
 pub mod moderation;
 pub mod roll;
 pub mod scene;
@@ -38,6 +41,7 @@ pub use inventory::InventoryQuery;
 pub use invite::InviteQuery;
 pub use item::ItemQuery;
 pub use lore::LoreQuery;
+pub use lore_sync::LoreSyncQuery;
 pub use moderation::ModerationQuery;
 pub use roll::RollQuery;
 pub use scene::SceneQuery;

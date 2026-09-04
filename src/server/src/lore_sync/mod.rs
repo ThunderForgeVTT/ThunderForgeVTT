@@ -41,6 +41,8 @@
 pub mod document;
 pub mod git;
 pub mod paths;
+pub mod plan;
+pub mod workspace;
 
 #[cfg(test)]
 #[path = "constraints_tests.rs"]

@@ -83,27 +83,27 @@ most of them, because Story 2 *is* the tests.
 
 ### Implementation
 
-- [ ] T023 [US1] Implement the working clone lifecycle in `src/server/src/lore_sync/mod.rs` — one persistent clone per connection under a server-managed directory, treated as a **rebuildable cache**: losing it costs a re-clone and nothing else (`research.md` R2).
+- [X] T023 [US1] Implement the working clone lifecycle in `src/server/src/lore_sync/mod.rs` — one persistent clone per connection under a server-managed directory, treated as a **rebuildable cache**: losing it costs a re-clone and nothing else (`research.md` R2).
 - [ ] T024 [US1] Implement one synchronisation pass in `src/server/src/lore_sync/run.rs` — fetch, diff the world against the clone, write files, commit, push, verify. Read and write on the same pass (FR-034b).
 - [ ] T025 [US1] Implement commit identity in `run.rs`: **committer is `ThunderForge VTT <noreply@<instance domain>>`, author is the world member who wrote the revision** under a generated no-reply address, never a personal one (FR-017, `research.md` R6). One commit per revision in order (FR-016), with FR-020's bounded batching window for rapid successive edits.
 - [ ] T026 [US1] Implement rename and move as a file move preserving history in `src/server/src/lore_sync/run.rs` (FR-010), using the `lore_exported_entries` row to know which file to move rather than inferring it.
 - [ ] T027 [US1] Implement image mirroring in `src/server/src/lore_sync/run.rs`, writing to `<directory>/_images/` — uploaded originals only, referenced relatively, no derived renditions (FR-014).
-- [ ] T028 [US1] Exclude moderation-disabled entries in `src/server/src/lore_sync/run.rs`, and make that exclusion not block the rest of the world (FR-015).
-- [ ] T029 [US1] Record fidelity notes from `src/server/src/lore_sync/run.rs` into the `lore_fidelity_notes` table — unresolvable cross-links, permission flattening, path disambiguation (FR-013, FR-037). Rows rather than log lines: SC-008 requires losses to be *enumerated*, and something enumerable must be queryable.
+- [X] T028 [US1] Exclude moderation-disabled entries in `src/server/src/lore_sync/run.rs`, and make that exclusion not block the rest of the world (FR-015).
+- [X] T029 [US1] Record fidelity notes from `src/server/src/lore_sync/run.rs` into the `lore_fidelity_notes` table — unresolvable cross-links, permission flattening, path disambiguation (FR-013, FR-037). Rows rather than log lines: SC-008 requires losses to be *enumerated*, and something enumerable must be queryable.
 - [ ] T029a [US1] Detect the connected repository's visibility in `src/server/src/repo_host.rs` and record it on the connection each run (FR-040a). **Observed, not guaranteed** — visibility changes at the host without telling us, and anywhere it is shown must say when it was last seen.
-- [ ] T029b [US1] Extend the pre-synchronisation notice in `apps/web/src/pages/world/settings/LoreRepositoryCard.tsx` to state distinctly whether the repository is public (FR-037a), and where it is, that a takedown will result in a public issue on it (FR-037b). **A private repository must not be assumed**: "everyone you invited" and "everyone on the internet" are different sentences, and a notice covering only the first is silently wrong for the users most exposed.
+- [X] T029b [US1] Extend the pre-synchronisation notice in `apps/web/src/pages/world/settings/LoreRepositoryCard.tsx` to state distinctly whether the repository is public (FR-037a), and where it is, that a takedown will result in a public issue on it (FR-037b). **A private repository must not be assumed**: "everyone you invited" and "everyone on the internet" are different sentences, and a notice covering only the first is silently wrong for the users most exposed.
 - [ ] T030 [US1] Implement `spawn_lore_sync_task` in `src/server/src/lore_sync/mod.rs` and call it from `src/app/src/main.rs` alongside the existing background tasks. **A connection with a null `notice_acknowledged_at` is never picked up** (FR-038).
 
 ### GraphQL
 
-- [ ] T031 [P] [US1] Implement the queries in `src/server/src/graphql/queries/lore_sync.rs` — `loreRepositoryConnection`, `loreSyncRuns`, `instanceRepositoryIntegration`. **No credential field at any depth, and no `installationRef` or `hostKind` in the API** (FR-035, FR-004c). Per [contracts/graphql-lore-sync.md](./contracts/graphql-lore-sync.md).
-- [ ] T032 [US1] Implement `beginLoreRepositoryConnection`, `completeLoreRepositoryConnection`, `acknowledgeLoreSyncNotice` and `removeLoreRepositoryConnection` in `src/server/src/graphql/mutations_lore_sync.rs`. Owner-level authority (FR-002), **re-checked per call and per run rather than captured at connection time** (FR-003).
-- [ ] T033 [US1] Add server tests in `src/server/src/graphql/mutations_lore_sync.rs` (`#[cfg(test)]`) for the authority rules: a non-owner refused, a second connection for a world refused (FR-001), a second world claiming one repository directory refused (FR-033), and a grant covering more than one repository refused (FR-036a).
+- [X] T031 [P] [US1] Implement the queries in `src/server/src/graphql/queries/lore_sync.rs` — `loreRepositoryConnection`, `loreSyncRuns`, `instanceRepositoryIntegration`. **No credential field at any depth, and no `installationRef` or `hostKind` in the API** (FR-035, FR-004c). Per [contracts/graphql-lore-sync.md](./contracts/graphql-lore-sync.md).
+- [X] T032 [US1] Implement `beginLoreRepositoryConnection`, `completeLoreRepositoryConnection`, `acknowledgeLoreSyncNotice` and `removeLoreRepositoryConnection` in `src/server/src/graphql/mutations_lore_sync.rs`. Owner-level authority (FR-002), **re-checked per call and per run rather than captured at connection time** (FR-003).
+- [X] T033 [US1] Add server tests in `src/server/src/graphql/mutations_lore_sync.rs` (`#[cfg(test)]`) for the authority rules: a non-owner refused, a second connection for a world refused (FR-001), a second world claiming one repository directory refused (FR-033), and a grant covering more than one repository refused (FR-036a).
 
 ### Web
 
-- [ ] T034 [P] [US1] Add the client in `apps/web/src/api/loreSync.ts`.
-- [ ] T035 [US1] Add the connection surface in `apps/web/src/pages/world/settings/LoreRepositoryCard.tsx` — connect, the FR-037 notice with its acknowledgement gate, and the current state. **Query `instanceRepositoryIntegration` before offering the flow**: a Game Master must never be shown something that cannot complete (FR-036b).
+- [X] T034 [P] [US1] Add the client in `apps/web/src/api/loreSync.ts`.
+- [X] T035 [US1] Add the connection surface in `apps/web/src/pages/world/settings/LoreRepositoryCard.tsx` — connect, the FR-037 notice with its acknowledgement gate, and the current state. **Query `instanceRepositoryIntegration` before offering the flow**: a Game Master must never be shown something that cannot complete (FR-036b).
 
 ### Tests
 

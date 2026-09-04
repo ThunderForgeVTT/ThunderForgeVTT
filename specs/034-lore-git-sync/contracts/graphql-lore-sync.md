@@ -28,13 +28,32 @@ type LoreRepositoryConnection {
   branch: String!
   directory: String!
   incomingEnabled: Boolean!
-  state: LoreSyncState!          # WORKING | NEEDS_ATTENTION | NEVER_CONFIGURED
+  state: LoreSyncState!          # WORKING | NEEDS_ATTENTION | NEVER_CONFIGURED | DEACTIVATED
   stateReason: String            # plain language, names the remedy (FR-029)
   noticeAcknowledgedAt: DateTime
   lastSyncedAt: DateTime
+  # FR-040a. What was **observed** at the last run, not a guarantee —
+  # visibility changes at the host without telling us, so every surface that
+  # shows this must show when it was last seen. Null before the first run, and
+  # a null must never be treated as "private": the notice for an unobserved
+  # repository has to be as loud as the notice for a public one.
+  repositoryIsPublic: Boolean
+  visibilityCheckedAt: DateTime
   fidelityNotes: [LoreFidelityNote!]!
 }
 ```
+
+**`DEACTIVATED` is a fourth state and not a flavour of `NEEDS_ATTENTION`**
+(FR-041c). It is the only state a Game Master cannot leave by fixing
+something, and a client must not offer them a retry for it — telling someone to
+check a connection they are not permitted to restore leaves them retrying
+forever.
+
+*Corrected 2026-09-04: this type originally omitted `DEACTIVATED`,
+`repositoryIsPublic` and `visibilityCheckedAt`, all three of which the
+requirements already demanded. Two independent implementations reached for
+`data-model.md` instead, which is the signal that the contract was the thing
+that was wrong.*
 
 **`installationRef` and `hostKind` are deliberately absent from the API.** They
 exist in the row and are read at the grant boundary only (FR-004c). A client
@@ -88,12 +107,32 @@ boundary rather than by review.
 
 ### `completeLoreRepositoryConnection(input: CompleteConnectionInput!): LoreRepositoryConnection!`
 
+```graphql
+input CompleteConnectionInput {
+  worldId: UUID!
+  grantResponse: String!   # opaque; only the host adapter reads it
+  branch: String           # default "main"
+  directory: String        # default "lore"
+}
+```
+
 Finishes the grant and creates the row. Fails, without creating anything, when:
 
 - the world already has a connection (FR-001);
 - the target repository and directory are already claimed by another world
   (FR-033);
 - the grant covers more than the single repository being connected (FR-036a).
+
+**`directory` defaults to a subdirectory rather than the repository root**, so
+that an FR-032 collision with the user's own `README.md` is not the expected
+first experience of the feature.
+
+**`branch` and `directory` are validated, not sanitised.** Both reach `git`,
+and a branch name beginning `-` is an argument rather than a ref — a value like
+`--upload-pack=…` would otherwise be handed to `git` as an option. `directory`
+refuses `.`, `..` and backslashes for the same reason `workspace::world_subtree`
+does: a value trying to escape is a bug or an attack, and quietly rewriting it
+into something safe hides both.
 
 ### `acknowledgeLoreSyncNotice(worldId: UUID!): LoreRepositoryConnection!`
 

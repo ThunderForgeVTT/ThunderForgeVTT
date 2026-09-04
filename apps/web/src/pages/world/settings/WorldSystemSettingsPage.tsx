@@ -37,6 +37,7 @@ import { useWorldRole } from "@/hooks/useWorldRole";
 import { WorldSectionShell } from "@/layouts/world-layout/WorldSectionShell";
 import { AuthoringToolGrantsCard } from "@/pages/world/settings/AuthoringToolGrantsCard";
 import { CompendiumOverviewSettingsCard } from "@/pages/world/settings/CompendiumOverviewSettingsCard";
+import { LoreRepositoryCard } from "@/pages/world/settings/LoreRepositoryCard";
 import { WorldAppearanceSettingsCard } from "@/pages/world/settings/WorldAppearanceSettingsCard";
 import type { WorldRecord } from "@/types/world";
 
@@ -76,7 +77,7 @@ export default function WorldSystemSettingsPage() {
   );
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
-  const { isGm } = useWorldRole(worldId, world);
+  const { isGm, role } = useWorldRole(worldId, world);
 
   // Reset during render rather than at the top of the effect below: this
   // is state derived from the arguments, and doing it in the effect commits
@@ -294,6 +295,12 @@ export default function WorldSystemSettingsPage() {
               player who reached this markup would still be refused by
               `is_dm_of_world` on the write. */}
           {isGm ? <AuthoringToolGrantsCard worldId={worldId} /> : null}
+
+          {/* Spec 034 (T035). Owner-only rather than `isGm`, matching the
+              authority every mutation behind it requires (FR-002): a GM shown
+              a connect button the server would refuse is the same broken
+              promise FR-036b forbids for an unconfigured instance. */}
+          {role === "Owner" ? <LoreRepositoryCard worldId={worldId} /> : null}
 
           {isGm ? (
             <Card className="grid gap-4 p-6" data-testid="system-picker-card">
