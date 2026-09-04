@@ -429,6 +429,28 @@ async fn run() {
         });
     }
 
+    // Spec 034 (T005, FR-036c): report a missing `git` at startup rather than
+    // when a Game Master first tries to connect a repository.
+    //
+    // This is the server's first external binary dependency, and there is no
+    // Dockerfile in this repository recording it — so the failure mode without
+    // this check is a feature that looks configured, offers a connect button,
+    // and fails on the first synchronisation with an error nobody can act on.
+    // Said once, at startup, to the operator who can actually fix it.
+    //
+    // Deliberately not fatal. Every other part of the product works without
+    // `git`, and refusing to boot over an optional feature's missing
+    // prerequisite would take a whole instance down to disable one card.
+    if thunderforge_server::lore_sync::git::git_is_available() {
+        eprintln!("[Server] ✅ git is available — lore repository sync can run");
+    } else {
+        eprintln!(
+            "[Server] ⚠️  git was not found on PATH. Lore repository synchronisation \
+             (spec 034) will report itself unconfigured and offer nothing to connect. \
+             Install git to enable it; everything else is unaffected."
+        );
+    }
+
     // Spawn the presence listener task (Phase 4.9.B.3)
     eprintln!("[Server] 🚀 Starting presence listener task");
     thunderforge_server::network::spawn_presence_listener_task(presence_sender);

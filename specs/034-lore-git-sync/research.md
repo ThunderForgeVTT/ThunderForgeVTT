@@ -153,6 +153,31 @@ clarification; would have needed no new dependency, which is worth noting as the
 cost of the choice that was made); a long-lived token exchanged once (defeats
 FR-036d).
 
+**`jwt-simple` was evaluated and rejected, 2026-09-04**, on the strength of its
+built-in WebAssembly support. Measured rather than argued:
+
+| | `jsonwebtoken` + `aws_lc_rs` | `jwt-simple` + `pure-rust` |
+|---|---|---|
+| Crates in the tree | 105 | 263 |
+| `aws-lc-rs` | already in the workspace via rustls | n/a |
+| `rsa` crate | absent from the workspace | pulled via `superboring` → `rsa 0.9.10` |
+
+`rsa 0.9.10`'s own README states it is vulnerable to the Marvin attack
+(RUSTSEC-2023-0071), so that path would introduce the advisory to this
+workspace for the first time.
+
+**The decisive argument is not the advisory, though — it is what WASM support
+would mean here.** This crate signs with the *application's private key*, which
+is instance configuration held by the operator's server. Any WebAssembly
+consumer is a browser, and a browser that can sign the application JWT is a
+browser that holds that key. WASM compatibility for this crate is therefore not
+a capability it lacks; it is a door to keep shut.
+
+A later need to *verify* a token client-side would be a different job needing
+only a public key, and `jwt-simple` would be a reasonable answer to it. Merging
+the two would drag private-key signing into a browser-capable crate, which is
+the thing to avoid.
+
 ---
 
 ## R5a. The grant machinery is its own crate

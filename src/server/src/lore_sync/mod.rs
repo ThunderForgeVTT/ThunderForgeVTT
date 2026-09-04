@@ -39,6 +39,7 @@
 //! this module. See `specs/034-lore-git-sync/research.md` R1.
 
 pub mod document;
+pub mod git;
 pub mod paths;
 
 #[cfg(test)]
