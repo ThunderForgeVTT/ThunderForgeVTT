@@ -5,6 +5,9 @@
       "@/*": [
         "./src/*"
       ],
+      "@thunderforge/host": [
+        "./src/host/index.ts"
+      ],
       "@thunderforge/genie": [
         "../../packs/systems/genie/web/src/index.ts"
       ]

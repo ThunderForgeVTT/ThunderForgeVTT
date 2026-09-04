@@ -113,6 +113,38 @@ function sharedServerSources() {
 }
 
 /**
+ * Shared web code: `apps/web/src`.
+ *
+ * FR-029 was written about the server, and for a long time the check was too.
+ * That was not a considered scope — it was just where the violation had been
+ * found. The client half had its own registry doing the same thing, a
+ * hand-written `{ genie: GenieActorSheet }` in `systemActorSheets.ts`, and a
+ * rule enforced on one half and unenforced on the other is how a rule becomes
+ * a thing people remember about the backend.
+ *
+ * Excluded, for the same reasons as the Rust side: a pack's own web code (a
+ * pack naming itself is the point), and tests, which must name a system to
+ * assert anything about one.
+ */
+function sharedWebSources() {
+  const root = path.join(repoRoot, "apps", "web", "src");
+  const out = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir)) {
+      if (entry === "node_modules" || entry === "__tests__") continue;
+      const full = path.join(dir, entry);
+      if (statSync(full).isDirectory()) {
+        walk(full);
+      } else if (/\.tsx?$/.test(entry) && !/\.(test|spec)\.tsx?$/.test(entry)) {
+        out.push(full);
+      }
+    }
+  };
+  walk(root);
+  return out;
+}
+
+/**
  * Strip `#[cfg(test)]` modules and test files.
  *
  * A test asserting "a Genie actor derives its Wish Points" must name Genie.
@@ -137,8 +169,27 @@ function withoutTests(source) {
  * the check has become the thing it was written to prevent.
  */
 const KNOWN = new Map();
-// Empty, as of 2026-09-03, and that is the point of the list rather than a
-// gap in it.
+
+// Shared web code, found the day the check was widened to cover it (see
+// `sharedWebSources`). All four mount one system's panel from a page every
+// system shares — the client-side shape of exactly what FR-029 forbids, and
+// invisible until now only because nothing was looking.
+//
+// They are listed rather than fixed in the same commit because each needs the
+// same thing and it is not a rename: somewhere for a pack to declare "I
+// contribute a panel here", which is the web analogue of the world-creation
+// hook that retired the server's last entry. `032/T108` is that task.
+for (const file of [
+  "apps/web/src/pages/world/actor/ActorDetailPage.tsx",
+  "apps/web/src/layouts/world-layout/WorldStagingPage.tsx",
+  "apps/web/src/pages/world/settings/WorldSystemSettingsPage.tsx",
+  "apps/web/src/components/world/PlayDock/ClocksPanel.tsx",
+]) {
+  KNOWN.set(file, { id: "genie", task: "032/T108" });
+}
+
+// The server half is empty, as of 2026-09-03, and that is the point of the
+// list rather than a gap in it.
 //
 // It held one entry for the whole of spec 032: `graphql.rs` branched on one
 // system's name during world creation to insert that system's session row.
@@ -152,7 +203,7 @@ const ids = bundledSystemIds();
 const failures = [];
 const stale = new Set(KNOWN.keys());
 
-for (const file of sharedServerSources()) {
+for (const file of [...sharedServerSources(), ...sharedWebSources()]) {
   const source = withoutTests(readFileSync(file, "utf8"));
   const relative = path.relative(repoRoot, file);
   source.split("\n").forEach((line, index) => {
@@ -174,15 +225,19 @@ for (const file of sharedServerSources()) {
 
 if (failures.length > 0) {
   process.stdout.write(
-    `[system-registry] shared server code must not name a game system.\n` +
+    `[system-registry] shared server and web code must not name a game system.\n` +
       `A pack declares what it contributes; nothing here lists them.\n\n`,
   );
   for (const failure of failures) {
     process.stdout.write(`  ${failure}\n`);
   }
   process.stdout.write(
-    `\nIf this is a genuine exception, it belongs in system_packs.rs with a\n` +
-      `reason, not behind a widened check. See spec 032 FR-029 and ADR-061.\n`,
+    `\nIf this is a genuine exception it goes in the linkage module for its\n` +
+      `side — system_packs.rs on the server — with a reason, not behind a\n` +
+      `widened check. On the web there is no such module: a pack contributes\n` +
+      `by shipping a file the host discovers, the way\n` +
+      `systemActorSheets.ts finds packs/systems/<id>/web/src/ActorSheet.tsx.\n` +
+      `See spec 032 FR-029, ADR-061 and ADR-066.\n`,
   );
   process.exit(1);
 }
@@ -201,7 +256,7 @@ if (stale.size > 0) {
 }
 
 process.stdout.write(
-  `[system-registry] shared server code names none of: ${ids.join(", ")}\n` +
+  `[system-registry] shared server and web code name none of: ${ids.join(", ")}\n` +
     (KNOWN.size === 0
       ? `                  and nothing is exempted.\n`
       : `                  (${KNOWN.size} known violation(s) outstanding)\n`),

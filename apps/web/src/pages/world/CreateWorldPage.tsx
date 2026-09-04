@@ -36,8 +36,8 @@ export default function CreateWorldPage() {
   /**
    * What this deployment offers, and what it preselects.
    *
-   * Both come from `/api/systems`. This form opened with `useState("genie")`
-   * and a picker over a hand-kept list of all seven bundled systems — one
+   * Both come from `/api/systems`. This form opened preselecting one bundled
+   * system by name, over a hand-kept list of all seven — one
    * system named in shared web code, and one list to keep in step with what
    * is installed. The server reads `packs/systems/` and the realm's
    * configured default, so both answers now come from where they are true

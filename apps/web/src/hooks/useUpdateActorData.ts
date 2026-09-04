@@ -47,7 +47,7 @@ export interface UseUpdateActorDataResult {
  * Update actor system data.
  *
  * @param actorId - Actor ID to update (required)
- * @param gameSystemId - Game system ID (required, e.g., "dnd5e")
+ * @param gameSystemId - Game system ID (required; a pack directory name)
  * @returns { mutate, isPending, error }
  */
 export function useUpdateActorData(

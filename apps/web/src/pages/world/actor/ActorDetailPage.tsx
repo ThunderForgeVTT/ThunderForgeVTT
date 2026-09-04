@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { createElement, useEffect, useState } from "react";
 import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { isClaimChanged } from "@/api/actorClaims";
@@ -28,7 +28,7 @@ import { ActorLorePanel } from "@/pages/world/actor/ActorLorePanel";
 import { ActorOwnershipBlock } from "@/pages/world/actor/ActorOwnershipBlock";
 import { WorldAppearance } from "@/appearance/WorldAppearance";
 import { PackActorSheet } from "@/pages/world/actor/PackActorSheet";
-import { SYSTEM_ACTOR_SHEETS } from "@/pages/world/actor/systemActorSheets";
+import { resolveActorSheet } from "@/pages/world/actor/systemActorSheets";
 import type { WorldActorRecord } from "@/types/actor";
 import type { WorldRecord } from "@/types/world";
 
@@ -414,24 +414,36 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
         />
 
         {(() => {
-          // Spec 032. `SYSTEM_ACTOR_SHEETS` had one entry, so six of the seven
-          // bundled systems had no character sheet at all — the registry's own
-          // header says adding a system should not mean editing this page, and
+          // Spec 032. The registry had one hand-written entry, so six of the
+          // seven bundled systems had no character sheet at all — its own
+          // header said adding a system should not mean editing this page, and
           // it meant exactly that.
           //
           // The pack-driven sheet is the sheet now: the server publishes what
           // the system declares and the world's interface pack says how to lay
-          // it out, so a system gets a sheet by having a manifest. The registry
-          // survives only for containers that do something a declared-value
-          // sheet cannot — `GenieActorSheet` edits `trait_data.level` and
-          // recomputes max Wish Points from it — and where one exists it is
-          // still what mounts, because replacing it would be removing working
-          // behaviour rather than generalising it.
-          const SystemEditor = actor.gameSystemId
-            ? SYSTEM_ACTOR_SHEETS[actor.gameSystemId]
-            : undefined;
-          return SystemEditor ? (
-            <SystemEditor actor={actor} canEdit={canEdit && mode === "edit"} />
+          // it out, so a system gets a sheet by having a manifest. A pack's own
+          // container survives only for what a declared-value sheet cannot do —
+          // editing a level and recomputing a resource from it, say — and where
+          // one exists it is still what mounts, because replacing it would be
+          // removing working behaviour rather than generalising it.
+          //
+          // Which container that is, is no longer written here or anywhere else
+          // in shared code: `resolveActorSheet` finds the ones bundled packs
+          // ship. `null` covers all three ways there can be nothing to mount.
+          //
+          // `createElement` with a lowercase local, for the reason
+          // `InPaneCharacterSheet` writes out at its own mount point: a
+          // component value chosen at render time is what
+          // `react-hooks/static-components` exists to catch, and the rule
+          // cannot see that this one comes from a module-level registry keyed
+          // by a string. Writing the call out keeps the rule on everywhere
+          // else rather than disabling it here.
+          const sheet = resolveActorSheet(actor.gameSystemId);
+          return sheet ? (
+            createElement(sheet, {
+              actor,
+              canEdit: canEdit && mode === "edit",
+            })
           ) : (
             <PackActorSheet actorId={actorId} />
           );

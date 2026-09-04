@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card/Card";
-import type { SystemManifestLegal } from "@/contexts/GameSystemContext";
+import type { SystemManifestLegal } from "@/types/systemManifest";
 
 export interface SystemLegalNoticeProps {
   legal: SystemManifestLegal;

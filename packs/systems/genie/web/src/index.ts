@@ -51,6 +51,12 @@ export type {
   GenieResourceData,
 } from './components/CharacterSheet';
 export { calculateMaxWishPoints } from './derived-data.ts';
+
+// The data-connected actor-sheet container. The host mounts it by finding
+// this file's path, not by importing it from here (see
+// `apps/web/src/pages/world/actor/systemActorSheets.ts`); re-exported so a
+// direct consumer can reach it the same way as any other component.
+export { default as ActorSheet } from './ActorSheet';
 export type { ConditionTrackProps } from './components/ConditionTrack';
 export type { SessionWishPoolProps } from './components/SessionWishPool';
 export type { SessionClocksProps, GeniePuzzleClockData } from './components/SessionClocks';

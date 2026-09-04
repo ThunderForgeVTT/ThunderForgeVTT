@@ -16,7 +16,25 @@ import {
  * without a sheet".
  */
 describe("resolveActorSheet", () => {
-  it("gives a registered system its own sheet", () => {
+  /**
+   * The registry is no longer written by hand — `import.meta.glob` finds
+   * every `packs/systems/<id>/web/src/ActorSheet.tsx` at build time. So the
+   * useful assertion is not that the lookup agrees with the map (it always
+   * will, they are the same object) but that the map was **populated by
+   * discovery at all**. A glob whose pattern stops matching silently yields
+   * an empty registry and every system quietly loses its sheet; that is the
+   * failure this catches.
+   *
+   * It names Genie because a test has to name something to assert it, and
+   * Genie is the pack that ships a container today. `check-system-registry`
+   * exempts tests for exactly this reason.
+   */
+  it("discovers the sheets bundled packs ship, without a hand-written list", () => {
+    expect(
+      Object.keys(SYSTEM_ACTOR_SHEETS).length,
+      "the glob found no pack sheets at all — check its pattern",
+    ).toBeGreaterThan(0);
+    expect(SYSTEM_ACTOR_SHEETS.genie).toBeTypeOf("function");
     expect(resolveActorSheet("genie")).toBe(SYSTEM_ACTOR_SHEETS.genie);
   });
 

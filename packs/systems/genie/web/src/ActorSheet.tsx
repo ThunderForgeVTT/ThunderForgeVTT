@@ -1,16 +1,17 @@
 import {
-  calculateMaxWishPoints,
-  CharacterSheet as GenieCharacterSheet,
-  GENIE_CONDITIONS,
+  Card,
+  updateActorSystemData,
+  useActorSystemData,
+  useUpdateTraitData,
+  type ActorSheetProps,
+} from "@thunderforge/host";
+import GenieCharacterSheet, {
   type GenieAbilityData,
   type GenieProficiencyData,
   type GenieResourceData,
-} from "@thunderforge/genie";
-import { updateActorSystemData } from "@/api/actorSystemData";
-import { Card } from "@/components/ui/card/Card";
-import { useActorSystemData } from "@/hooks/useActorSystemData";
-import { useUpdateTraitData } from "@/hooks/useUpdateActorData";
-import type { WorldActorRecord } from "@/types/actor";
+} from "./components/CharacterSheet";
+import { GENIE_CONDITIONS } from "./conditions";
+import { calculateMaxWishPoints } from "./derived-data.ts";
 
 const DEFAULT_GENIE_ABILITIES: GenieAbilityData = {
   might: 0,
@@ -21,27 +22,32 @@ const DEFAULT_GENIE_PROFICIENCIES: GenieProficiencyData = {
   trained_skills: [],
 };
 
-export interface GenieActorSheetProps {
-  actor: WorldActorRecord;
-  canEdit: boolean;
-}
-
 /**
  * Spec 018 (US1/US4/US6): the Genie system's character sheet — abilities,
  * skills, and the conditions track (as CharacterSheet's own "Conditions"
- * tab) — plus a GM/owner condition-editing control. `useActorSystemData`/
- * `useUpdateTraitData` are the same hooks dnd5e's sheet already uses;
- * genie's `ability_data`/`proficiency_data`/`trait_data` shapes are
- * whatever this actor's system data row already holds (or sensible
- * defaults if it has none yet).
+ * tab) — plus a GM/owner condition-editing control.
  *
- * Mounted generically via `systemActorSheets.ts`'s `systemId -> ActorSheet`
- * registry, not a hardcoded `gameSystemId === "genie"` check in
- * `ActorDetailPage.tsx` — this is Genie-specific data-fetching/mutation
- * plumbing (`trait_data.level`, `calculateMaxWishPoints`, etc.), but which
- * container to mount for a given actor is a generic lookup.
+ * # Why this file is in the pack
+ *
+ * It used to live in `apps/web/src/pages/world/actor/`, and a registry there
+ * mapped `"genie"` to it. That one entry was the last place shared web code
+ * named a game system, and the reason it was there was real: this is a
+ * *data-connected container*, not the plain presentational component the
+ * manifest carries. It fetches, it mutates, it recomputes max Wish Points
+ * from `trait_data.level`. There was nowhere in a pack to put that.
+ *
+ * ADR-029 settled that a bundled pack may contribute behaviour, and
+ * `@thunderforge/host` says what such a pack may reach for. Between them
+ * there is now somewhere, so this is there. The host discovers it by looking
+ * for `packs/systems/<id>/web/src/ActorSheet.tsx` at build time — a convention,
+ * not a list — so a pack that ships one is mounted and a pack that does not
+ * is simply a system without a sheet.
+ *
+ * What is deliberately unchanged: the *internals* are as system-specific as
+ * they ever were, and should stay that way. Only the mounting decision is
+ * generic.
  */
-export function GenieActorSheet({ actor, canEdit }: GenieActorSheetProps) {
+export default function GenieActorSheet({ actor, canEdit }: ActorSheetProps) {
   const { data, refetch } = useActorSystemData(actor.id, "genie");
   const { updateTraits, isPending } = useUpdateTraitData(actor.id, "genie");
 

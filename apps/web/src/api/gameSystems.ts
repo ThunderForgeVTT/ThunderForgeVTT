@@ -1,4 +1,4 @@
-import type { SystemManifest } from "@/contexts/GameSystemContext";
+import type { SystemManifest } from "@/types/systemManifest";
 
 /**
  * Enough to choose a system from, without fetching every manifest.

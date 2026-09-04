@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { SystemLegalNotice } from "@/components/game-systems/legal/SystemLegalNotice";
-import type { SystemManifest } from "@/contexts/GameSystemContext";
+import type { SystemManifest } from "@/types/systemManifest";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import { WorldSectionShell } from "@/layouts/world-layout/WorldSectionShell";
 import { AuthoringToolGrantsCard } from "@/pages/world/settings/AuthoringToolGrantsCard";

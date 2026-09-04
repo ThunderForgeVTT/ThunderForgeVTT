@@ -25,6 +25,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // The surface a bundled pack may import from this app. Its own header
+      // says what may go in it and why the list is short.
+      "@thunderforge/host": path.resolve(__dirname, "./src/host/index.ts"),
       // packs/systems/genie/web has never actually been built as a
       // library (no vite lib config, tsconfig has noEmit: true) — aliased
       // straight to its TS source rather than fixing that unrelated,

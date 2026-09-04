@@ -7,7 +7,7 @@
  * (`packs/systems/*\/system.json`, research.md R6 of spec 018). Kept
  * system-agnostic (no import of any specific system pack) — apps/web
  * loads manifests dynamically per `gameSystemId`
- * (`@/contexts/GameSystemContext`'s `SystemManifest` has an index
+ * (`@/types/systemManifest`'s `SystemManifest` has an index
  * signature, so any system can publish this key), and any future system
  * pack that wants "size category determines token footprint" gets it for
  * free by shipping the same `sizeCategories: { key: { scale } }` shape

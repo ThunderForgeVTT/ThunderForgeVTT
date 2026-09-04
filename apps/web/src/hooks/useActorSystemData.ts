@@ -102,7 +102,8 @@ export interface UseActorSystemDataResult {
  * Fetch an actor's system data directly via GraphQL.
  *
  * @param actorId - Actor ID to query (required)
- * @param gameSystemId - Game system ID to filter by (optional, e.g., "dnd5e")
+ * @param gameSystemId - Game system ID to filter by (optional; a pack
+ *   directory name)
  * @returns { data, loading, error, refetch }
  */
 export function useActorSystemData(
