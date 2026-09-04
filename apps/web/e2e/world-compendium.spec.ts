@@ -127,8 +127,13 @@ test.describe("Compendium shell: tabs, NPC browse/search, row-select preview", (
     // something the product deliberately no longer has. What is worth keeping
     // is the same claim the Items tab makes: a real empty state rather than a
     // placeholder, a blank table, or invented rows.
+    // Spec 033 broke the flat list into a tab per ability type, named in the
+    // system's own words (FR-002, FR-003). This world runs no system, so the
+    // words are the application's — but the shape is a tab set with an empty
+    // state inside it, not a single "No Abilities yet." line.
     await page.getByRole("tab", { name: "Abilities" }).click();
-    await expect(page.getByText("No Abilities yet.")).toBeVisible();
+    await expect(page.getByTestId("ability-type-tabs")).toBeVisible();
+    await expect(page.getByTestId("ability-tab-empty")).toBeVisible();
     await expect(page.getByTestId("compendium-coming-soon")).toHaveCount(0);
   });
 

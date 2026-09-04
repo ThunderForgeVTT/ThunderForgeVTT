@@ -210,7 +210,10 @@ export function WorldCompendiumPage({
           },
           {
             value: "abilities",
-            label: "Abilities",
+            // FR-003: the system's word for the concept, not ours. A 5e GM
+            // has Spells; a Genie GM has whatever Genie calls them; a system
+            // that says nothing gets "Abilities".
+            label: vocabulary.umbrella.pluralLabel,
             icon: "spells",
             content: (
               <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">

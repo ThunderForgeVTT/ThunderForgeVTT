@@ -95,7 +95,11 @@ test.describe("Abilities compendium (US1)", () => {
     // placeholder. Asserted positively — the "coming soon" testid this used to
     // check the absence of exists nowhere in the repository, so that check
     // passed against a blank page (docs/test-audit-2026-09-02.md).
-    await expect(page.getByText("No Abilities yet.")).toBeVisible();
+    // SC-001, now per type: the world opens on its first tab, and that tab is
+    // empty rather than blank. Spec 033 broke the flat list into a tab per
+    // type (FR-002), so the empty state belongs to a tab.
+    await expect(page.getByTestId("ability-type-tabs")).toBeVisible();
+    await expect(page.getByTestId("ability-tab-empty")).toBeVisible();
 
     // Create — appears without a reload.
     const name = `Fireball ${uniqueSuffix()}`;
@@ -111,7 +115,7 @@ test.describe("Abilities compendium (US1)", () => {
     await page.getByTestId("ability-catalog-search-input").fill(name);
     await expect(table).toContainText(name);
     await page.getByTestId("ability-catalog-search-input").fill("definitely-no-such-ability");
-    await expect(page.getByText(/No abilities match/)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("ability-tab-empty")).toBeVisible({ timeout: 15_000 });
     await page.getByTestId("ability-catalog-search-input").fill("");
 
     // Row select opens the preview panel beside the table.

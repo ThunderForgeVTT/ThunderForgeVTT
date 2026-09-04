@@ -13,7 +13,14 @@ import type {
   AbilityClassification,
   WorldAbilityRecord,
 } from "@/types/ability";
-import { labelFor, type AbilityVocabulary } from "@/abilities/vocabulary";
+import { type AbilityVocabulary } from "@/abilities/vocabulary";
+
+/**
+ * The tab holding abilities whose type this world's system does not
+ * recognise. Not a type identity — no system can declare it, because it is
+ * spelled with characters a manifest id may not contain.
+ */
+const UNRECOGNISED_TAB = "__unrecognised__";
 
 export interface AbilityCompendiumTabProps {
   worldId: string;
@@ -58,8 +65,23 @@ export function AbilityCompendiumTab({
   const [refreshTick, setRefreshTick] = useState(0);
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
+  /**
+   * The type a new ability will get, once a GM has said otherwise.
+   *
+   * `null` means "whatever tab I am standing in" (FR-008) — the tab already
+   * answered the question, and asking again is the complaint this increment
+   * exists to fix. Set only when the GM changes the select by hand.
+   */
   const [newClassification, setNewClassification] =
-    useState<AbilityClassification>("SPELL");
+    useState<AbilityClassification | null>(null);
+  /**
+   * Which type tab is showing.
+   *
+   * `null` until the vocabulary and the catalogue have both arrived, because
+   * the tab set is a function of both: the types the system recognises, plus
+   * any type this world holds that it does not (FR-011a, FR-035a).
+   */
+  const [activeType, setActiveType] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   // Stored against the name it was looked up for. Whether a suggestion is
   // showing right now is then a render-time question ("is this still the
@@ -82,7 +104,7 @@ export function AbilityCompendiumTab({
         worldId,
         name,
         description: newDescription.trim() || undefined,
-        classification: newClassification,
+        classification: newClassification ?? classificationForNew,
       });
       setNewName("");
       setNewDescription("");
@@ -173,23 +195,143 @@ export function AbilityCompendiumTab({
   }
 
   if (abilities === null) {
-    return <p className="text-sm text-muted-foreground">Loading abilities…</p>;
+    return (
+      <p className="text-sm text-muted-foreground">
+        Loading {vocabulary.umbrella.pluralLabel.toLowerCase()}…
+      </p>
+    );
   }
+
+  // Types this world holds abilities of that its system does not recognise.
+  //
+  // Content authored under another system keeps its type forever (FR-034), so
+  // it needs somewhere to live that is not "silently absent" and not "renamed
+  // to something the system does recognise". Nothing can write one of these
+  // until Increment D drops the CHECK constraint; building the tab now means
+  // the day that lands, no ability disappears.
+  const unrecognised = [
+    ...new Set(
+      abilities
+        .map((ability) => ability.classification.toLowerCase())
+        .filter((id) => !vocabulary.types.some((kind) => kind.id === id)),
+    ),
+  ];
+
+  const countOf = (typeId: string) =>
+    abilities.filter(
+      (ability) => ability.classification.toLowerCase() === typeId,
+    ).length;
+
+  const typeTabs = vocabulary.types.map((kind) => ({
+    id: kind.id,
+    label: kind.pluralLabel,
+    count: countOf(kind.id),
+  }));
+
+  const tabs = [
+    ...typeTabs,
+    ...(unrecognised.length > 0
+      ? [
+          {
+            id: UNRECOGNISED_TAB,
+            label: "Unrecognised",
+            count: unrecognised.reduce((sum, id) => sum + countOf(id), 0),
+          },
+        ]
+      : []),
+  ];
+
+  const selected =
+    activeType && tabs.some((tab) => tab.id === activeType)
+      ? activeType
+      : (tabs[0]?.id ?? null);
+
+  const visible =
+    selected === UNRECOGNISED_TAB
+      ? abilities.filter((ability) =>
+          unrecognised.includes(ability.classification.toLowerCase()),
+        )
+      : abilities.filter(
+          (ability) => ability.classification.toLowerCase() === selected,
+        );
+
+  // FR-013: a type the active system does not recognise cannot be authored,
+  // so the unrecognised tab offers no creation. Everything else it offers.
+  const canCreateHere =
+    isGm && selected !== null && selected !== UNRECOGNISED_TAB;
+
+  // FR-008: creating from inside a tab makes an ability of that tab's type
+  // without asking again. The select below still exists for changing one's
+  // mind; it simply opens on the answer the tab already implies.
+  const classificationForNew = (
+    selected && selected !== UNRECOGNISED_TAB ? selected : "spell"
+  ).toUpperCase() as AbilityClassification;
 
   return (
     <div className="grid gap-3">
       <Input
         type="search"
-        placeholder="Search abilities by name or description…"
+        placeholder={`Search ${vocabulary.umbrella.pluralLabel.toLowerCase()} by name or description…`}
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         data-testid="ability-catalog-search-input"
-        aria-label="Search abilities"
+        aria-label={`Search ${vocabulary.umbrella.pluralLabel.toLowerCase()}`}
       />
 
-      {abilities.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          {query ? `No abilities match "${query}".` : "No Abilities yet."}
+      {/* One tab per type this world presents, in the system's order and the
+       * system's plural word for it, each carrying the count of what this
+       * viewer can see in it (FR-002, FR-004, FR-007). */}
+      <div
+        role="tablist"
+        aria-label={vocabulary.umbrella.pluralLabel}
+        className="flex flex-wrap gap-1 border-b border-border"
+        data-testid="ability-type-tabs"
+      >
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={selected === tab.id}
+            data-testid={`ability-type-tab-${tab.id}`}
+            onClick={() => {
+              setActiveType(tab.id);
+              // Drop a hand-picked type when moving tabs: the new tab is a
+              // fresh answer to the same question, and carrying the old one
+              // would create a Feat from inside the Spells tab.
+              setNewClassification(null);
+            }}
+            className={cn(
+              "rounded-t px-3 py-1.5 text-sm",
+              selected === tab.id
+                ? "border-b-2 border-primary font-semibold"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {tab.label}
+            <span
+              className="ml-1.5 text-xs text-muted-foreground"
+              data-testid={`ability-type-count-${tab.id}`}
+            >
+              {tab.count}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {visible.length === 0 ? (
+        /* FR-009: an empty tab says so and offers creation. It never falls
+         * back to listing another type's abilities, which would make the tab
+         * a lie about what it contains. */
+        <p
+          className="text-sm text-muted-foreground"
+          data-testid="ability-tab-empty"
+        >
+          {query
+            ? `No ${vocabulary.umbrella.pluralLabel.toLowerCase()} match "${query}".`
+            : selected === UNRECOGNISED_TAB
+              ? "Nothing here."
+              : `No ${tabs.find((tab) => tab.id === selected)?.label ?? "abilities"} yet.`}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
@@ -197,7 +339,9 @@ export function AbilityCompendiumTab({
             <thead>
               <tr className="border-b border-border bg-muted/50 text-left text-xs tracking-wide text-muted-foreground uppercase">
                 <th className="p-2 font-semibold">Name</th>
-                <th className="p-2 font-semibold">Type</th>
+                {selected === UNRECOGNISED_TAB ? (
+                  <th className="p-2 font-semibold">Type</th>
+                ) : null}
                 <th className="p-2 font-semibold">Description</th>
                 <th className="p-2 font-semibold">Actions</th>
               </tr>
@@ -226,9 +370,14 @@ export function AbilityCompendiumTab({
                       </span>
                     ) : null}
                   </td>
-                  <td className="p-2 text-muted-foreground">
-                    {labelFor(vocabulary, ability.classification)}
-                  </td>
+                  {selected === UNRECOGNISED_TAB ? (
+                    /* The stored identity, plainly (FR-035). Shown only here:
+                     * everywhere else the tab already names the type, and a
+                     * column repeating it would say it twice. */
+                    <td className="p-2 text-muted-foreground">
+                      {ability.classification.toLowerCase()}
+                    </td>
+                  ) : null}
                   <td className="max-w-xs truncate p-2 text-muted-foreground">
                     {ability.description || (
                       <span className="italic">No description</span>
@@ -274,7 +423,7 @@ export function AbilityCompendiumTab({
         </div>
       )}
 
-      {isGm ? (
+      {canCreateHere ? (
         <div className="grid gap-2">
           <div className="grid gap-2 sm:grid-cols-[1fr_auto_1fr_auto]">
             <Input
@@ -286,7 +435,7 @@ export function AbilityCompendiumTab({
             />
             <select
               className="rounded-md border border-border bg-background px-2 text-sm"
-              value={newClassification}
+              value={newClassification ?? classificationForNew}
               onChange={(event) =>
                 setNewClassification(
                   event.target.value as AbilityClassification,

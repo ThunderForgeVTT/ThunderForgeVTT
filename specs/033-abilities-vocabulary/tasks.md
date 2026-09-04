@@ -78,15 +78,15 @@ and `abilityFacets` has exactly one reader.
 to one supplying vocabulary and one supplying none; confirm both produce a
 tabbed, fully-labelled set.
 
-- [ ] T014 [US1] Replace the flat table in `apps/web/src/pages/world/compendium/AbilityCompendiumTab.tsx` with a nested tab set — one tab per present type, in the vocabulary's order, each carrying the system's plural label. Reuse `apps/web/src/components/ui/tabs/Tabs.tsx`; it takes a `TabsItem[]` and supports a controlled value
-- [ ] T015 [US1] Show a count on each tab equal to the rows that tab lists (FR-007). The count is of what *this viewer* may see, so it is computed from the same filtered set the table renders, never from a separate total
-- [ ] T016 [US1] Drop the `<th>Type</th>` column and its cell (`AbilityCompendiumTab.tsx:205,235-238`) — the tab is the type now, and keeping both says it twice
-- [ ] T017 [US1] Creating from within a tab defaults the new ability to that type without asking (FR-008), replacing the `useState("SPELL")` default at `AbilityCompendiumTab.tsx:66-67`
-- [ ] T018 [US1] An empty tab states it is empty and offers creation, and does **not** fall back to listing other types (FR-009)
-- [ ] T019 [US1] Apply the umbrella term wherever the concept is named: the outer compendium tab (`WorldCompendiumPage.tsx:225-226`, currently the literal `"Abilities"`), the page heading, the create control, empty states and confirmation text (FR-003, FR-006). SC-002 measures **zero** built-in words on any ability surface, which is written to catch relabelling the tab and leaving "Add ability" alone
-- [ ] T020 [US1] Confirm the tab set and its labels are identical for GMs and players, only the abilities within differing (FR-010)
-- [ ] T021 [P] [US1] Update `apps/web/e2e/abilities-compendium.spec.ts`, which asserts against `ability-catalog-table` and a flat list and will not survive the tab set. Keep every behaviour it covers
-- [ ] T022 [US1] Add `apps/web/e2e/abilities-vocabulary.spec.ts` running **per system** across genie, dnd5e, pathfinder2e and blades_in_the_dark (SC-004), asserting each renders its own tab set from its own declarations — and that `blades_in_the_dark`, which declares nothing, still gets a complete, fully-labelled built-in set with no blank tab and no error (SC-013). That last case is the one most likely to break under a change only ever tested against genie
+- [X] T014 [US1] Replace the flat table in `apps/web/src/pages/world/compendium/AbilityCompendiumTab.tsx` with a nested tab set — one tab per present type, in the vocabulary's order, each carrying the system's plural label. Reuse `apps/web/src/components/ui/tabs/Tabs.tsx`; it takes a `TabsItem[]` and supports a controlled value
+- [X] T015 [US1] Show a count on each tab equal to the rows that tab lists (FR-007). The count is of what *this viewer* may see, so it is computed from the same filtered set the table renders, never from a separate total
+- [X] T016 [US1] Drop the `<th>Type</th>` column and its cell (`AbilityCompendiumTab.tsx:205,235-238`) — the tab is the type now, and keeping both says it twice
+- [X] T017 [US1] Creating from within a tab defaults the new ability to that type without asking (FR-008), replacing the `useState("SPELL")` default at `AbilityCompendiumTab.tsx:66-67`
+- [X] T018 [US1] An empty tab states it is empty and offers creation, and does **not** fall back to listing other types (FR-009)
+- [X] T019 [US1] Apply the umbrella term wherever the concept is named: the outer compendium tab (`WorldCompendiumPage.tsx:225-226`, currently the literal `"Abilities"`), the page heading, the create control, empty states and confirmation text (FR-003, FR-006). SC-002 measures **zero** built-in words on any ability surface, which is written to catch relabelling the tab and leaving "Add ability" alone
+- [X] T020 [US1] Confirm the tab set and its labels are identical for GMs and players, only the abilities within differing (FR-010)
+- [X] T021 [P] [US1] Update `apps/web/e2e/abilities-compendium.spec.ts`, which asserts against `ability-catalog-table` and a flat list and will not survive the tab set. Keep every behaviour it covers
+- [X] T022 [US1] Add `apps/web/e2e/abilities-vocabulary.spec.ts` running **per system** across genie, dnd5e, pathfinder2e and blades_in_the_dark (SC-004), asserting each renders its own tab set from its own declarations — and that `blades_in_the_dark`, which declares nothing, still gets a complete, fully-labelled built-in set with no blank tab and no error (SC-013). That last case is the one most likely to break under a change only ever tested against genie
 
 **Checkpoint**: **demonstrable.** A 5e GM sees Spells and Feats; a Genie GM
 sees Scrolls and Knacks; a Blades GM sees the built-in words, complete.
@@ -179,9 +179,9 @@ world changed; counting what will become unrecognised is User Story 2's
 warning telling the truth.
 
 - [ ] T054 [US3] Detect abilities whose stored classification is absent from the world's assembled vocabulary. A **presentation state** computed per request, never a stored flag — nothing about the row changes when it enters or leaves it (FR-034)
-- [ ] T055 [US3] Present them as a **final tab** in the same tab row (FR-035a), present only while such abilities exist, clearly marked, carrying a count like any other tab
+- [X] T055 [US3] Present them as a **final tab** in the same tab row (FR-035a), present only while such abilities exist, clearly marked, carrying a count like any other tab
 - [ ] T056 [US3] Label each with the **stored identity itself**, plainly (FR-035 as clarified). Do not read another system's manifest to prettify it — that consults a system this world is not running — and do not copy a label onto the ability, which duplicates the manifest into content where it goes stale
-- [ ] T057 [US3] Offer **no creation** in that tab (FR-035a), since FR-013 forbids authoring a type the active system does not recognise. Keep every other action: open, edit, delete (FR-034)
+- [X] T057 [US3] Offer **no creation** in that tab (FR-035a), since FR-013 forbids authoring a type the active system does not recognise. Keep every other action: open, edit, delete (FR-034)
 - [ ] T058 [US3] Restore such abilities to their own tab, with the system's labels, when a system recognising them is active again (FR-036, SC-008)
 - [ ] T059 [US3] Let a GM re-type one deliberately to a recognised type (FR-038), and never do it for them — the alternative is a silent, lossy, irreversible edit to authored content performed by a dialog somebody clicked through
 - [ ] T060 [US2] Include abilities that will **become** unrecognised in the FR-025 counts (FR-037). This is the part of the inventory that needs the *target* system's vocabulary, and the reason `worldContentInventory` takes a `targetSystemId`

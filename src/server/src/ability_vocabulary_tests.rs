@@ -20,17 +20,21 @@ fn ids(vocabulary: &AbilityVocabulary) -> Vec<&str> {
     vocabulary.types.iter().map(|k| k.id.as_str()).collect()
 }
 
-/// A system that says nothing gets a complete, correctly-labelled tab set.
+/// A system that says nothing gets a complete, correctly-labelled tab set —
+/// **even in a world holding nothing** (FR-005, SC-013).
 ///
-/// SC-013's case, and the one most likely to break under a change only ever
-/// tested against a system that declares plenty.
+/// This is the boundary of the presence rule and the case that got it wrong
+/// first: applying FR-011a to a system that declared nothing left a fresh
+/// world with no tabs at all, which is an empty compendium rather than a tidy
+/// one. Silence means all four.
 #[test]
-fn a_system_declaring_nothing_yields_every_builtin_correctly_labelled() {
-    let vocabulary = from_manifest(&json!({}), &held(&["spell", "feat", "power", "talent"]));
+fn a_system_declaring_nothing_yields_every_builtin_even_in_an_empty_world() {
+    let vocabulary = from_manifest(&json!({}), &none());
 
     assert_eq!(ids(&vocabulary), vec!["spell", "feat", "power", "talent"]);
     assert_eq!(vocabulary.umbrella.label, "Ability");
     assert_eq!(vocabulary.umbrella.plural_label, "Abilities");
+    assert_eq!(vocabulary.types.len(), 4, "a bare system gets the full set");
     assert!(vocabulary.types.iter().all(|k| !k.label.is_empty()));
     assert!(vocabulary.types.iter().all(|k| !k.plural_label.is_empty()));
 }
@@ -41,7 +45,7 @@ fn a_system_declaring_nothing_yields_every_builtin_correctly_labelled() {
 fn an_absent_manifest_still_names_everything() {
     let vocabulary = from_manifest(&serde_json::Value::Null, &held(&["spell"]));
 
-    assert_eq!(ids(&vocabulary), vec!["spell"]);
+    assert_eq!(ids(&vocabulary), vec!["spell", "feat", "power", "talent"]);
     assert_eq!(vocabulary.get("spell").unwrap().label, "Spell");
 }
 
@@ -183,8 +187,9 @@ fn a_builtin_is_present_when_the_system_uses_it_or_the_world_holds_one() {
     assert!(from_manifest(&declares_spell, &held(&["spell"])).recognises("spell"));
     // Declared, not held — a system that uses the type keeps its tab.
     assert!(from_manifest(&declares_spell, &none()).recognises("spell"));
-    // Not declared, but held — content is never hidden.
-    assert!(from_manifest(&json!({}), &held(&["talent"])).recognises("talent"));
+    // Not declared by a system that declared *something else*, but held —
+    // content is never hidden.
+    assert!(from_manifest(&declares_spell, &held(&["talent"])).recognises("talent"));
     // Neither: no tab. This is the case that stops a 5e world carrying empty
     // "Powers" and "Talents" forever.
     assert!(!from_manifest(&declares_spell, &none()).recognises("power"));

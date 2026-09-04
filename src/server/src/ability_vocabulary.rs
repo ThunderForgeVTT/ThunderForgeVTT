@@ -308,13 +308,29 @@ pub fn from_manifest(manifest: &serde_json::Value, in_use: &[String]) -> Ability
         }
     }
 
-    // FR-011a. A built-in stays when the system declared it, or when the world
-    // holds one. Nothing a system declared itself is ever dropped.
-    types.retain(|declaration| {
-        !declaration.builtin
-            || declared_ids.contains(&declaration.id)
-            || in_use.iter().any(|held| held == &declaration.id)
-    });
+    // FR-011a, and the boundary it does *not* cross.
+    //
+    // The rule exists so a system that named its own types does not also
+    // carry the built-ins it never mentioned — a 5e world should not hold
+    // empty "Powers" and "Talents" tabs it can never clear.
+    //
+    // A system that declares **nothing at all** is a different case, and
+    // FR-005 governs it: it "MUST produce a complete, correctly-labelled tab
+    // set using the application's built-in vocabulary". Applying the presence
+    // rule there gave a world on such a system *no tabs whatsoever* until
+    // somebody authored an ability — which is not a tidier compendium, it is
+    // an empty one. Caught by the per-system e2e, which is exactly the case
+    // SC-013 exists to protect.
+    //
+    // So: silence means all four. Speaking means only what was spoken about,
+    // plus whatever the world actually holds.
+    if !declared_ids.is_empty() {
+        types.retain(|declaration| {
+            !declaration.builtin
+                || declared_ids.contains(&declaration.id)
+                || in_use.iter().any(|held| held == &declaration.id)
+        });
+    }
 
     types.sort_by(|a, b| a.order.cmp(&b.order).then_with(|| a.id.cmp(&b.id)));
 
