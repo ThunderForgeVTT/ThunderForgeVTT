@@ -17,8 +17,9 @@
 //! |---|---|
 //! | `THUNDERFORGE_REPO_APP_ID` | the application's numeric identifier, which the assertion is issued by |
 //! | `THUNDERFORGE_REPO_APP_SLUG` | the application's URL slug, which the install link is built from |
-//! | `THUNDERFORGE_REPO_APP_PRIVATE_KEY` | the PEM private key |
-//! | `THUNDERFORGE_REPO_APP_PRIVATE_KEY_FILE` | *or* a path to read it from |
+//! | `THUNDERFORGE_REPO_APP_PRIVATE_KEY_FILE` | a path to read the PEM from |
+//! | `THUNDERFORGE_REPO_APP_PRIVATE_KEY_BASE64` | *or* the PEM, base64-encoded |
+//! | `THUNDERFORGE_REPO_APP_PRIVATE_KEY` | *or* the PEM itself |
 //!
 //! The identifier and the slug are **not interchangeable** — one issues the
 //! assertion, the other addresses the install page — and an operator who
@@ -32,17 +33,26 @@
 //! the value is *present*, so a naive "is it set" check says configured, and
 //! the failure surfaces later as an unreadable signing error.
 //!
-//! So four forms are accepted, and all four are the same key:
+//! So three variables are accepted, in this precedence, and all carry the same
+//! key:
 //!
-//! 1. **A file path** via `..._PRIVATE_KEY_FILE`. The right answer for Docker
-//!    and systemd secrets, which deliver secrets as files precisely because
+//! 1. **`..._PRIVATE_KEY_FILE`** — a path. The right answer for Docker and
+//!    systemd secrets, which deliver secrets as files precisely because
 //!    environments leak into logs and child processes.
-//! 2. **Base64** of the PEM. What people reach for when a deployment platform
-//!    accepts only single-line values.
-//! 3. **A PEM with literal `\n` escapes**, which is what pasting a key into a
-//!    `.env` file produces.
-//! 4. **A PEM with real newlines**, which works in a shell heredoc and in most
-//!    orchestrators.
+//! 2. **`..._PRIVATE_KEY_BASE64`** — the PEM, base64-encoded. **The `.env`-safe
+//!    form**: one line, no newlines to escape, nothing a shell or a dotenv
+//!    parser will reinterpret. This is the one to reach for when a deployment
+//!    platform accepts only single-line values.
+//! 3. **`..._PRIVATE_KEY`** — the PEM itself, with either real newlines or the
+//!    literal `\n` escapes that pasting into a `.env` file produces.
+//!
+//! **The encoding is declared, not detected.** An earlier version accepted
+//! base64 in `..._PRIVATE_KEY` by sniffing the value, and that is retained as a
+//! forgiving fallback — but sniffing is how `"not a key at all"` turned out to
+//! be valid base64 and decoded to nine bytes of noise. A dedicated variable
+//! means the operator says what they meant, and a value in it that is not
+//! base64 is reported against *that* variable rather than falling through to a
+//! confusing complaint about the other one.
 //!
 //! And the key is **parsed at configuration time, not at first use**
 //! (FR-036c). A key that is present but not a usable RSA key is reported by
@@ -59,8 +69,10 @@ pub const APP_ID_ENV: &str = "THUNDERFORGE_REPO_APP_ID";
 pub const APP_SLUG_ENV: &str = "THUNDERFORGE_REPO_APP_SLUG";
 /// The PEM private key, in any of the four forms this module accepts.
 pub const APP_PRIVATE_KEY_ENV: &str = "THUNDERFORGE_REPO_APP_PRIVATE_KEY";
-/// A path to read the PEM private key from. Takes precedence.
+/// A path to read the PEM private key from. Highest precedence.
 pub const APP_PRIVATE_KEY_FILE_ENV: &str = "THUNDERFORGE_REPO_APP_PRIVATE_KEY_FILE";
+/// The PEM private key, base64-encoded — declared rather than detected.
+pub const APP_PRIVATE_KEY_BASE64_ENV: &str = "THUNDERFORGE_REPO_APP_PRIVATE_KEY_BASE64";
 
 /// Why an instance cannot offer repository synchronisation.
 ///
@@ -74,6 +86,10 @@ pub enum RegistrationProblem {
     MissingPrivateKey,
     /// Present, and not a key. The case a presence check would call configured.
     UnreadablePrivateKey(String),
+    /// `..._PRIVATE_KEY_BASE64` was set to something that is not base64.
+    /// Reported against that variable rather than falling through, because the
+    /// operator declared an encoding and deserves to be told it was wrong.
+    UndecodableBase64Key(String),
     UnreadableKeyFile {
         path: String,
         detail: String,
@@ -94,9 +110,14 @@ impl RegistrationProblem {
                  install link is built from, and is different from its numeric identifier."
             ),
             Self::MissingPrivateKey => format!(
-                "Neither {APP_PRIVATE_KEY_ENV} nor {APP_PRIVATE_KEY_FILE_ENV} is set. \
-                 Supply the application's PEM private key as a file path, base64, or the \
-                 PEM itself."
+                "None of {APP_PRIVATE_KEY_FILE_ENV}, {APP_PRIVATE_KEY_BASE64_ENV} or \
+                 {APP_PRIVATE_KEY_ENV} is set. Supply the application's PEM private key \
+                 as a file path, base64 (the .env-safe form), or the PEM itself."
+            ),
+            Self::UndecodableBase64Key(detail) => format!(
+                "{APP_PRIVATE_KEY_BASE64_ENV} is set but is not valid base64 ({detail}). \
+                 It must be the PEM file encoded whole — for example \
+                 `base64 -w0 app-key.pem`."
             ),
             Self::UnreadablePrivateKey(detail) => format!(
                 "{APP_PRIVATE_KEY_ENV} is set but could not be read as an RSA private key \
@@ -199,6 +220,18 @@ fn read_private_key() -> Result<Option<Vec<u8>>, RegistrationProblem> {
         };
     }
 
+    // An explicitly declared encoding. A value here that is not base64 is an
+    // error against this variable, not a silent fall-through: the operator
+    // said what it was, so being told "that is not base64" is more useful than
+    // being told the key is unreadable.
+    if let Some(encoded) = non_empty(APP_PRIVATE_KEY_BASE64_ENV) {
+        let compact: String = encoded.chars().filter(|c| !c.is_whitespace()).collect();
+        return match general_purpose::STANDARD.decode(&compact) {
+            Ok(decoded) => Ok(Some(decoded)),
+            Err(e) => Err(RegistrationProblem::UndecodableBase64Key(e.to_string())),
+        };
+    }
+
     let Some(raw) = non_empty(APP_PRIVATE_KEY_ENV) else {
         return Ok(None);
     };
@@ -246,6 +279,43 @@ pub fn normalise_pem(raw: &str) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Set some variables, run, restore.
+    ///
+    /// The environment is process-global and `cargo test` is threaded, so
+    /// these cases are serialised behind one lock. Without it they pass alone
+    /// and fail together, which is the worst way for a test to be wrong.
+    fn temp_env(vars: &[(&str, Option<&str>)], body: impl FnOnce()) {
+        use std::sync::Mutex;
+        static LOCK: Mutex<()> = Mutex::new(());
+        let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+        let previous: Vec<(String, Option<String>)> = vars
+            .iter()
+            .map(|(k, _)| ((*k).to_string(), std::env::var(k).ok()))
+            .collect();
+        for (k, v) in vars {
+            // SAFETY: serialised by LOCK above; no other thread in this test
+            // binary reads these variables outside this helper.
+            unsafe {
+                match v {
+                    Some(value) => std::env::set_var(k, value),
+                    None => std::env::remove_var(k),
+                }
+            }
+        }
+
+        body();
+
+        for (k, v) in previous {
+            unsafe {
+                match v {
+                    Some(value) => std::env::set_var(&k, value),
+                    None => std::env::remove_var(&k),
+                }
+            }
+        }
+    }
 
     /// A PEM pasted into a `.env` file arrives with literal backslash-n.
     /// Accepting it is the difference between a working instance and an
@@ -314,6 +384,114 @@ mod tests {
             String::from_utf8(normalise_pem(&encoded)).unwrap(),
             encoded,
             "base64 of a non-PEM was decoded anyway",
+        );
+    }
+
+    /// The `.env`-safe form, declared rather than sniffed.
+    #[test]
+    fn a_declared_base64_key_is_decoded() {
+        let pem = "-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----";
+        let encoded = general_purpose::STANDARD.encode(pem);
+        temp_env(
+            &[
+                (APP_PRIVATE_KEY_BASE64_ENV, Some(encoded.as_str())),
+                (APP_PRIVATE_KEY_ENV, None),
+                (APP_PRIVATE_KEY_FILE_ENV, None),
+            ],
+            || {
+                let key = read_private_key().expect("readable").expect("present");
+                assert_eq!(String::from_utf8(key).unwrap(), pem);
+            },
+        );
+    }
+
+    /// The operator declared an encoding, so being told "that is not base64"
+    /// is more useful than being told the key is unreadable. Falling through
+    /// to the plain variable's forgiving path would produce the second.
+    #[test]
+    fn a_declared_base64_key_that_is_not_base64_says_so() {
+        temp_env(
+            &[
+                (
+                    APP_PRIVATE_KEY_BASE64_ENV,
+                    Some("-----BEGIN PRIVATE KEY-----"),
+                ),
+                (APP_PRIVATE_KEY_ENV, None),
+                (APP_PRIVATE_KEY_FILE_ENV, None),
+            ],
+            || match read_private_key() {
+                Err(RegistrationProblem::UndecodableBase64Key(_)) => {}
+                other => panic!("expected an UndecodableBase64Key, got {other:?}"),
+            },
+        );
+    }
+
+    /// A file path outranks both inline forms. An operator who went to the
+    /// trouble of a mounted secret should not be silently overridden by a
+    /// stale value left in an environment file.
+    #[test]
+    fn a_file_path_outranks_the_inline_forms() {
+        let dir = std::env::temp_dir().join(format!("tf-key-{}", uuid::Uuid::now_v7()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("app.pem");
+        std::fs::write(
+            &path,
+            b"-----BEGIN PRIVATE KEY-----\nFROMFILE\n-----END PRIVATE KEY-----",
+        )
+        .unwrap();
+
+        temp_env(
+            &[
+                (APP_PRIVATE_KEY_FILE_ENV, Some(path.to_str().unwrap())),
+                (
+                    APP_PRIVATE_KEY_BASE64_ENV,
+                    Some(
+                        &general_purpose::STANDARD.encode(
+                            "-----BEGIN PRIVATE KEY-----\nINLINE\n-----END PRIVATE KEY-----",
+                        ),
+                    ),
+                ),
+                (
+                    APP_PRIVATE_KEY_ENV,
+                    Some("-----BEGIN PRIVATE KEY-----\nPLAIN\n-----END PRIVATE KEY-----"),
+                ),
+            ],
+            || {
+                let key =
+                    String::from_utf8(read_private_key().expect("readable").expect("present"))
+                        .unwrap();
+                assert!(key.contains("FROMFILE"), "the file did not win: {key}");
+            },
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// `_BASE64` outranks the plain variable, so an operator migrating to the
+    /// safer form does not have to remember to unset the old one.
+    #[test]
+    fn base64_outranks_the_plain_variable() {
+        temp_env(
+            &[
+                (APP_PRIVATE_KEY_FILE_ENV, None),
+                (
+                    APP_PRIVATE_KEY_BASE64_ENV,
+                    Some(
+                        &general_purpose::STANDARD.encode(
+                            "-----BEGIN PRIVATE KEY-----\nWINNER\n-----END PRIVATE KEY-----",
+                        ),
+                    ),
+                ),
+                (
+                    APP_PRIVATE_KEY_ENV,
+                    Some("-----BEGIN PRIVATE KEY-----\nLOSER\n-----END PRIVATE KEY-----"),
+                ),
+            ],
+            || {
+                let key =
+                    String::from_utf8(read_private_key().expect("readable").expect("present"))
+                        .unwrap();
+                assert!(key.contains("WINNER"), "precedence is wrong: {key}");
+            },
         );
     }
 
