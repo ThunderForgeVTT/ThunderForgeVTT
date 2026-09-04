@@ -72,10 +72,6 @@ export {
 } from "./offlineQueue";
 export { parseSceneLaunchedEvent } from "./scenes";
 export {
-  applyGenieSessionWorldEvent,
-  startGenieSessionEventSync,
-} from "./genieSession";
-export {
   applyPlayPanelWorldEvent,
   startPlayPanelEventSync,
   CHAT_MESSAGE_EVENT_CODE,

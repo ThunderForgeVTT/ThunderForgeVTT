@@ -4,6 +4,7 @@ import { useParams } from "react-router-dom";
 import { getWorld } from "@/api/world";
 import { SEO } from "@/components/seo/SEO";
 import { Loader } from "@/components/ui/loader/Loader";
+import { useAuth } from "@/hooks/useAuth";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import { WorldSectionShell } from "@/layouts/world-layout/WorldSectionShell";
 import { WorldStagingPage } from "@/layouts/world-layout/WorldStagingPage";
@@ -27,6 +28,7 @@ export default function WorldStagingRoutePage() {
   const [world, setWorld] = useState<WorldRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { isGm, loading: roleLoading } = useWorldRole(id, world);
+  const { user } = useAuth();
 
   // Reset during render rather than at the top of the effect below: this
   // is state derived from the arguments, and doing it in the effect commits
@@ -74,6 +76,7 @@ export default function WorldStagingRoutePage() {
           worldId={id}
           world={world}
           isGm={isGm}
+          currentUserId={user?.id}
           onSessionNotesSaved={(notes) =>
             setWorld((current) =>
               current ? { ...current, sessionNotes: notes } : current,

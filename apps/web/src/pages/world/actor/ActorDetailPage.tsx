@@ -19,7 +19,6 @@ import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/loader/Loader";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
-import { GenieShopPanel } from "@/components/world/GenieShopPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import { ActorAbilitiesPanel } from "@/pages/world/actor/ActorAbilitiesPanel";
@@ -28,6 +27,7 @@ import { ActorLorePanel } from "@/pages/world/actor/ActorLorePanel";
 import { ActorOwnershipBlock } from "@/pages/world/actor/ActorOwnershipBlock";
 import { WorldAppearance } from "@/appearance/WorldAppearance";
 import { PackActorSheet } from "@/pages/world/actor/PackActorSheet";
+import { resolvePanel } from "@/panels/systemPanels";
 import { resolveActorSheet } from "@/pages/world/actor/systemActorSheets";
 import type { WorldActorRecord } from "@/types/actor";
 import type { WorldRecord } from "@/types/world";
@@ -466,19 +466,32 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
           canManage={canEdit}
         />
 
-        {/* Spec 020 (User Story 2): NPC shop — Genie-only for now (no
-            other pack has Session Resources to price against), shown for
-            any NPC actor so a GM can author listings even before stocking
-            it, and hidden entirely from non-GM viewers when it has none
-            (GenieShopPanel's own "Scenario 6" check). */}
-        {actor.gameSystemId === "genie" && actor.isNpc ? (
-          <GenieShopPanel
-            worldId={worldId}
-            npcActorId={actorId}
-            currentUserId={user?.id}
-            isGm={isDm}
-          />
-        ) : null}
+        {/* Whatever this actor's system contributes to an NPC's page — spec
+            020's shop is one such panel, and this page used to name it and
+            the system that ships it (`032/T108`). Only `isNpc` survives the
+            move, because whether an actor is an NPC is a fact about the
+            actor rather than a decision about a game system; everything
+            else, including whether a non-GM viewer sees an empty shop, is
+            the panel's own. */}
+        {actor.isNpc
+          ? (() => {
+              // `createElement` with a lowercase local, for the same reason
+              // the sheet above writes its call out: a component value chosen
+              // at render time from a registry keyed by a string is what
+              // `react-hooks/static-components` exists to catch, and the rule
+              // cannot tell this one is safe.
+              const panel = resolvePanel(actor.gameSystemId, "npc-detail");
+              return panel
+                ? createElement(panel, {
+                    worldId,
+                    actorId,
+                    actor,
+                    currentUserId: user?.id,
+                    isGm: isDm,
+                  })
+                : null;
+            })()
+          : null}
 
         {/* Spec 017 (T028, US3): GM-only, PC-only "available for claiming"
             control plus who currently has this character claimed. */}

@@ -2120,6 +2120,7 @@ export default function WorldPage() {
         <ClocksPanel
           worldId={id}
           isGm={isSceneOwner}
+          currentUserId={user?.id}
           gameSystemId={world?.gameSystemId ?? null}
         />
       ),

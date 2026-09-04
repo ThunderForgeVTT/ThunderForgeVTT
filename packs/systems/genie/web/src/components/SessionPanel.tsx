@@ -1,19 +1,25 @@
 import { useEffect, useState } from "react";
+import SessionClocks from "./SessionClocks";
+import SessionResourceTrade from "./SessionResourceTrade";
+import SessionWishPool from "./SessionWishPool";
 import {
-  SessionClocks,
-  SessionResourceTrade,
-  SessionWishPool,
-} from "@thunderforge/genie";
-import { getWorldItems } from "@/api/items";
-import { Button } from "@/components/ui/button/Button";
-import { Card } from "@/components/ui/card/Card";
-import { useAuth } from "@/hooks/useAuth";
-import { useGenieSession } from "@/hooks/useGenieSession";
-import type { WorldItemRecord } from "@/types/item";
+  Button,
+  Card,
+  getWorldItems,
+  type WorldItemRecord,
+} from "@thunderforge/host";
+import { useGenieSession } from "../session/useGenieSession";
 
 export interface GenieSessionPanelProps {
   worldId: string;
   isGm: boolean;
+  /**
+   * Who is looking. Passed in rather than read from an auth hook: this
+   * component is a pack's, and `@thunderforge/host` deliberately exports no
+   * way to reach the session — the host tells a panel who is looking through
+   * its slot props (`WorldStagingPanelProps`, `ClocksPanelProps`).
+   */
+  currentUserId?: string;
 }
 
 /** Genie's `sessionResources` block (`packs/systems/genie/system.json`) —
@@ -30,8 +36,11 @@ const GENIE_SESSION_RESOURCE_TYPES = [
  * Spec 018/019 User Story 7: the Genie GM session loop — Session Wish
  * Pool, Doom/Puzzle Clocks, and (spec 019) Session Resource trading.
  */
-export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
-  const { user } = useAuth();
+export function GenieSessionPanel({
+  worldId,
+  isGm,
+  currentUserId,
+}: GenieSessionPanelProps) {
   const {
     session,
     loading,
@@ -50,7 +59,7 @@ export function GenieSessionPanel({ worldId, isGm }: GenieSessionPanelProps) {
     declineResourceTrade,
     grantSessionResource,
     configurePuzzleClockReward,
-  } = useGenieSession(worldId, user?.id);
+  } = useGenieSession(worldId, currentUserId);
 
   const [grantActorId, setGrantActorId] = useState("");
   const [grantResourceType, setGrantResourceType] = useState("insight");

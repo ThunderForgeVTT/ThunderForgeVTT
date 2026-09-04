@@ -1,5 +1,6 @@
+import { createElement } from "react";
 import { Panel } from "@/components/ui/panel/Panel";
-import { GenieSessionPanel } from "@/components/world/GenieSessionPanel/GenieSessionPanel";
+import { resolvePanel } from "@/panels/systemPanels";
 import { SessionNotesPanel } from "@/components/world/SessionNotesPanel/SessionNotesPanel";
 import { SessionSetupInviteLink } from "@/components/world/SessionSetupInviteLink";
 import type { WorldRecord } from "@/types/world";
@@ -12,6 +13,8 @@ export interface WorldStagingPageProps {
   /** Called when Last Session Notes is saved, so the caller's own world
    * record stays in sync without a full refetch. */
   onSessionNotesSaved: (notes: string) => void;
+  /** Who is looking, passed through to whichever pack fills this slot. */
+  currentUserId?: string;
 }
 
 /**
@@ -33,7 +36,23 @@ export function WorldStagingPage({
   world,
   isGm,
   onSessionNotesSaved,
+  currentUserId,
 }: WorldStagingPageProps) {
+  /**
+   * Whatever the world's system contributes to the staging page, if
+   * anything. This used to compare `world?.gameSystemId` against one
+   * system's id and mount that system's session panel inside a wrapper this
+   * page drew, under a heading this page wrote — one of the four violations
+   * `check-system-registry.mjs` listed against `032/T108`. The chrome went
+   * with the panel: a heading naming a system is that system's to write, and
+   * a page that draws a frame labelled for one has not stopped knowing about
+   * it.
+   */
+  const SystemPanel = resolvePanel(
+    world?.gameSystemId ?? null,
+    "world-staging",
+  );
+
   return (
     <main className="grid w-full gap-6" data-testid="world-staging-page">
       <header className="grid gap-3">
@@ -86,20 +105,12 @@ export function WorldStagingPage({
         </Panel>
       ) : null}
 
-      {/* Spec 018 US7: the Genie session loop (Wish Pool, Doom Clock,
-       * Puzzle Clocks) — only relevant for Genie-system worlds. */}
-      {world?.gameSystemId === "genie" ? (
-        <Panel
-          variant="stone"
-          className="grid gap-3 rounded-xl border border-border"
-          data-testid="genie-session-panel-wrapper"
-        >
-          <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-            Genie session
-          </p>
-          <GenieSessionPanel worldId={worldId} isGm={isGm} />
-        </Panel>
-      ) : null}
+      {/* Spec 018 US7 lives here, but this page no longer knows whose it is:
+       * a pack fills the `world-staging` slot or the page ends after the
+       * invite link. */}
+      {SystemPanel
+        ? createElement(SystemPanel, { worldId, world, isGm, currentUserId })
+        : null}
     </main>
   );
 }

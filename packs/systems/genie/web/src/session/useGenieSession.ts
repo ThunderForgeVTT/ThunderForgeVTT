@@ -1,5 +1,5 @@
 /**
- * apps/web/src/hooks/useGenieSession.ts
+ * packs/systems/genie/web/src/session/useGenieSession.ts
  * Spec 018 User Story 7: the Genie session loop (Session Wish Pool, Doom
  * Clock, Puzzle Clocks, Session Resource trades) — GM staging page host
  * hook.
@@ -18,12 +18,12 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { useResetOnChange } from "@/hooks/useResetOnChange";
-import { getWorldActors } from "@/api/actors";
 import {
-  startGenieSessionEventSync,
+  getWorldActors,
   subscribeToWorldEvents,
-} from "@/engine/world/sync";
+  useResetOnChange,
+} from "@thunderforge/host";
+import { startGenieSessionEventSync } from "./worldEvents";
 import {
   acceptResourceTrade as acceptResourceTradeRequest,
   advanceDoomClock as advanceDoomClockRequest,
@@ -51,8 +51,8 @@ import {
   spendResourceOnPuzzleClock as spendResourceOnPuzzleClockRequest,
   spendWish as spendWishRequest,
   startGenieSession as startGenieSessionRequest,
-} from "@/api/genieSession";
-import type { WorldActorRecord } from "@/types/actor";
+} from "./api";
+import type { WorldActorRecord } from "@thunderforge/host";
 
 export interface UseGenieSessionResult {
   session: GenieSessionRecord | null;

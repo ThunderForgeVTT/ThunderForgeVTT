@@ -170,23 +170,33 @@ function withoutTests(source) {
  */
 const KNOWN = new Map();
 
-// Shared web code, found the day the check was widened to cover it (see
-// `sharedWebSources`). All four mount one system's panel from a page every
-// system shares — the client-side shape of exactly what FR-029 forbids, and
-// invisible until now only because nothing was looking.
+// The web half is empty too, as of 2026-09-04.
 //
-// They are listed rather than fixed in the same commit because each needs the
-// same thing and it is not a rename: somewhere for a pack to declare "I
-// contribute a panel here", which is the web analogue of the world-creation
-// hook that retired the server's last entry. `032/T108` is that task.
-for (const file of [
-  "apps/web/src/pages/world/actor/ActorDetailPage.tsx",
-  "apps/web/src/layouts/world-layout/WorldStagingPage.tsx",
-  "apps/web/src/pages/world/settings/WorldSystemSettingsPage.tsx",
-  "apps/web/src/components/world/PlayDock/ClocksPanel.tsx",
-]) {
-  KNOWN.set(file, { id: "genie", task: "032/T108" });
-}
+// It held four entries for the length of `032/T108`, all found the day this
+// check was widened to cover `apps/web/src`. Each mounted one system's panel
+// from a page every system shares: the actor page's NPC shop, the staging
+// page's session loop, the settings page's carryover card, and the play
+// dock's clocks panel — that last one inverted, printing an empty state for
+// every system that was not the named one, which is the same comparison
+// wearing the opposite sign.
+//
+// Retiring them took what the actor sheet took, one level deeper. A pack
+// contributes a panel by shipping
+// `packs/systems/<id>/web/src/panels/<slot>.tsx`;
+// `apps/web/src/panels/systemPanels.ts` globs those at build time and keys
+// them `${systemId}:${slot}`; `@thunderforge/host` declares the slot
+// vocabulary and one props type per slot, which is the part a sheet did not
+// need and a panel does. Two slots may point at one component, and Genie's
+// staging and clocks panels do.
+//
+// The data layer went with them. `api/genieSession.ts`,
+// `hooks/useGenieSession.ts` and `engine/world/sync/genieSession.ts` were
+// three more files in shared web code named for one system — invisible to
+// this check until the filename pass below, because none of them quoted the
+// id inside itself. They live in `packs/systems/genie/web/src/session/` now,
+// which is possible because ADR-063 already moved that system's tables and
+// GraphQL into the pack's server half; a pack owning a schema it could not
+// call was the only thing keeping its client in `apps/web`.
 
 // The server half is empty, as of 2026-09-03, and that is the point of the
 // list rather than a gap in it.
@@ -199,6 +209,40 @@ for (const file of [
 // still written; the pack writes it, through a world-creation hook the server
 // runs without knowing whose it is.
 
+/**
+ * A path, flattened for comparison against a system id.
+ *
+ * Ids are written the way a directory is — `year_zero_engine`,
+ * `basic-game-system` — and filenames are written the way a component is,
+ * `YearZeroEnginePanel.tsx`. Lowercasing alone would miss every id with a
+ * separator in it, so both sides lose their separators before they meet.
+ * Every bundled id survives that flattening as something distinctive
+ * (`yearzeroengine`, `basicgamesystem`, `genie`), so this is not a source of
+ * accidental matches.
+ */
+function flattened(text) {
+  return text.toLowerCase().replace(/[_-]/g, "");
+}
+
+/**
+ * The filename half of the rule.
+ *
+ * Content matching cannot see this, and the gap was not theoretical: for the
+ * length of `032/T108` shared web code held `GenieShopPanel.tsx`,
+ * `GenieSessionPanel/`, `useGenieSession.ts`, `api/genieSession.ts` and
+ * `engine/world/sync/genieSession.ts`, and not one of them quoted `"genie"`
+ * inside itself. Five files named for a single game system, in shared code,
+ * invisible to a check written to forbid exactly that — because the check
+ * read file *contents*, and a filename is not content.
+ *
+ * A component can be entirely about one system without ever spelling its id
+ * in a string literal. The name is where it says so, so the name is checked.
+ */
+function namesSystemInPath(relativePath, ids) {
+  const haystack = flattened(relativePath);
+  return ids.filter((id) => haystack.includes(flattened(id)));
+}
+
 const ids = bundledSystemIds();
 const failures = [];
 const stale = new Set(KNOWN.keys());
@@ -206,6 +250,16 @@ const stale = new Set(KNOWN.keys());
 for (const file of [...sharedServerSources(), ...sharedWebSources()]) {
   const source = withoutTests(readFileSync(file, "utf8"));
   const relative = path.relative(repoRoot, file);
+
+  for (const id of namesSystemInPath(relative, ids)) {
+    const known = KNOWN.get(relative);
+    if (known && known.id === id) {
+      stale.delete(relative);
+      continue;
+    }
+    failures.push(`${relative} is named for "${id}"`);
+  }
+
   source.split("\n").forEach((line, index) => {
     for (const id of ids) {
       // Quoted, so a path fragment or a word in prose does not trip it — the
@@ -235,9 +289,12 @@ if (failures.length > 0) {
     `\nIf this is a genuine exception it goes in the linkage module for its\n` +
       `side — system_packs.rs on the server — with a reason, not behind a\n` +
       `widened check. On the web there is no such module: a pack contributes\n` +
-      `by shipping a file the host discovers, the way\n` +
-      `systemActorSheets.ts finds packs/systems/<id>/web/src/ActorSheet.tsx.\n` +
-      `See spec 032 FR-029, ADR-061 and ADR-066.\n`,
+      `by shipping a file the host discovers.\n\n` +
+      `  a character sheet   packs/systems/<id>/web/src/ActorSheet.tsx\n` +
+      `  a panel             packs/systems/<id>/web/src/panels/<slot>.tsx\n\n` +
+      `Slots and their props are declared in @thunderforge/host (PanelSlot,\n` +
+      `PanelSlotProps); systemActorSheets.ts and systemPanels.ts are what\n` +
+      `find them. See spec 032 FR-029, ADR-061 and ADR-066.\n`,
   );
   process.exit(1);
 }
@@ -256,7 +313,8 @@ if (stale.size > 0) {
 }
 
 process.stdout.write(
-  `[system-registry] shared server and web code name none of: ${ids.join(", ")}\n` +
+  `[system-registry] no shared server or web file quotes or is named for any\n` +
+    `                  of: ${ids.join(", ")}\n` +
     (KNOWN.size === 0
       ? `                  and nothing is exempted.\n`
       : `                  (${KNOWN.size} known violation(s) outstanding)\n`),

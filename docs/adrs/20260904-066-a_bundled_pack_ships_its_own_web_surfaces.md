@@ -96,12 +96,12 @@ assert anything about one.
 
 ## Consequences
 
-**Four violations became visible the day the check could see them.**
-`ActorDetailPage`, `WorldStagingPage`, `WorldSystemSettingsPage` and
-`ClocksPanel` each branch on one system's id to mount that system's panel from
-a page every system shares. They are on the check's `KNOWN` list against
-`032/T108`, which is where a violation waits with a retirement path rather than
-where it goes to be forgotten.
+**Four violations became visible the day the check could see them, and were
+retired the next.** `ActorDetailPage`, `WorldStagingPage`,
+`WorldSystemSettingsPage` and `ClocksPanel` each branched on one system's id to
+mount that system's panel from a page every system shares. They waited on the
+check's `KNOWN` list against `032/T108` for a day; that list is now empty on
+both halves for the first time.
 
 They were not fixed alongside the sheet, and the reason is a real difference
 rather than fatigue — though the first version of this paragraph got that
@@ -116,9 +116,41 @@ The actual difference is that panels need a **host-declared vocabulary** where
 the sheet did not. One mount point needs one props contract, and a filename
 convention is the whole of it. Four mount points need an agreed set of slot
 names and a typed contract for each, because a pack has to know which slots
-exist and what each one is handed. That vocabulary is the work, and it is
-`T108` — the web analogue of the world-creation hook that retired the server's
-last entry.
+exist and what each one is handed. `@thunderforge/host` declares `PanelSlot`
+and `PanelSlotProps`; `apps/web/src/panels/systemPanels.ts` is the registry,
+keyed `${systemId}:${slot}`. Two slots may share one component, and Genie's
+staging and clocks panels do, because the session loop is one panel reached
+from two places.
+
+**Doing it widened this file, and that was the point of the exercise rather
+than a cost of it.** A pack imports from `@thunderforge/host` or from nowhere,
+so a pack panel could not call `useGenieSession` where it lived — in
+`apps/web/src/hooks` — and exporting a system-named hook from the host would
+have been the same violation wearing a different hat. The system's whole client
+layer moved into the pack, and the host gained `postGraphQL` and
+`subscribeToWorldEvents` so it could. ADR-063 had already given that pack its
+tables and the GraphQL over them; a pack that owns a schema and may not call it
+is not a boundary, it is a pack whose two halves have to meet in `apps/web`.
+Routing, authentication, the world store and anything holding a session
+credential are still absent, and a panel is told who is looking through its
+props rather than being handed a way to ask.
+
+**The check learned to read filenames, and found three more.** Content matching
+could not see `GenieShopPanel.tsx`, `useGenieSession.ts` or
+`engine/world/sync/genieSession.ts`, because not one of them quoted the id
+inside itself: a component can be entirely about one system without ever
+spelling it in a string literal, and the name is where it says so. Paths are
+now compared against every bundled id with separators flattened, so
+`YearZeroEnginePanel.tsx` trips on `year_zero_engine`.
+
+**Pack web code was type-checked by nobody, including the sheet this ADR is
+about.** The pack's own `tsc --noEmit` answered "Cannot find module
+'@thunderforge/host'" on every file that used it. Mapping the alias from inside
+the pack drags `apps/web` under the pack's React 18 types and fails on the
+version skew, so `apps/web/tsconfig.json` includes
+`../../packs/systems/*/web/src` instead — which checks pack code against the
+React the bundle actually resolves to. A typed contract nothing checks is not a
+contract.
 
 **`GameSystemContext` was deleted rather than repaired**, along with
 `game-system-context.ts`; the two manifest types moved to

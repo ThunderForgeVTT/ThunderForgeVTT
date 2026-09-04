@@ -9,7 +9,7 @@
  * WebSocket route at `/api/ws` (async-graphql-axum's `GraphQLWebSocket`,
  * `main.rs`) — but nothing in this app ever opened a WebSocket to it.
  * Every `apply*WorldEvent`/`start*EventSync` pair in this directory
- * (walls.ts, tokens.ts, shapes.ts, lights.ts, genieSession.ts) was
+ * (walls.ts, tokens.ts, shapes.ts, lights.ts, and a pack's own) was
  * already written expecting exactly this: an
  * `AsyncIterable<{ event_code, token_event }>`.
  *
@@ -105,7 +105,7 @@ type LiveSyncStateListener = (state: LiveSyncState) => void;
  *
  * Module-level rather than per-subscription on purpose. A fully-mounted world
  * page holds four to six independent subscriptions on this one socket (scene
- * launch, canvas content, chat, combat, genie, playback), and every one of
+ * launch, canvas content, chat, combat, a pack's own, playback), and every one of
  * them sees every event for its world. A cursor per subscription would mean
  * six clients each asking the server for the same backlog and six copies of
  * every replayed event — and since the handlers are refetch-on-nudge, that is

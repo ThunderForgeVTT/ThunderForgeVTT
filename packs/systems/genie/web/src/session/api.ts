@@ -1,4 +1,4 @@
-import { postGraphQL } from "@/api/graphqlClient";
+import { postGraphQL } from "@thunderforge/host";
 
 /**
  * Genie session-loop GraphQL client — spec 018 User Story 7. The backend

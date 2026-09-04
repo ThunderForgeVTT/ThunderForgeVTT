@@ -402,27 +402,6 @@ export function updateWorldInterfacePack(
   ).then((data) => data.updateWorldInterfacePack);
 }
 
-type UpdateWorldGenieResourceCarryoverMutation = {
-  updateWorldGenieResourceCarryover: WorldRecord;
-};
-
-/** Spec 020 (FR-003, research.md R1): DM/GM-only, server-enforced. */
-export function updateWorldGenieResourceCarryover(
-  worldId: string,
-  enabled: boolean,
-): Promise<WorldRecord> {
-  return postGraphQL<UpdateWorldGenieResourceCarryoverMutation>(
-    `
-      mutation UpdateWorldGenieResourceCarryover($input: UpdateWorldGenieResourceCarryoverInput!) {
-        updateWorldGenieResourceCarryover(input: $input) {
-          ${WORLD_FIELDS}
-        }
-      }
-    `,
-    { input: { worldId, enabled } },
-  ).then((data) => data.updateWorldGenieResourceCarryover);
-}
-
 type UpdateWorldDefaultSceneGridTypeMutation = {
   updateWorldDefaultSceneGridType: WorldRecord;
 };

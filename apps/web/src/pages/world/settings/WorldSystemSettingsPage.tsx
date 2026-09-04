@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { createElement, useEffect, useState } from "react";
 import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
@@ -15,7 +15,6 @@ import {
   getWorld,
   updateWorldDefaultSceneGridType,
   updateWorldGameSystem,
-  updateWorldGenieResourceCarryover,
 } from "@/api/world";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
@@ -33,6 +32,7 @@ import {
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { SystemLegalNotice } from "@/components/game-systems/legal/SystemLegalNotice";
 import type { SystemManifest } from "@/types/systemManifest";
+import { resolvePanel } from "@/panels/systemPanels";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import { WorldSectionShell } from "@/layouts/world-layout/WorldSectionShell";
 import { AuthoringToolGrantsCard } from "@/pages/world/settings/AuthoringToolGrantsCard";
@@ -187,23 +187,6 @@ export default function WorldSystemSettingsPage() {
     setPendingManifest(null);
     setInventory(null);
     setDataRiskAccepted(false);
-  };
-
-  const [isSavingCarryover, setIsSavingCarryover] = useState(false);
-  const handleToggleCarryover = async (enabled: boolean) => {
-    setIsSavingCarryover(true);
-    try {
-      const updated = await updateWorldGenieResourceCarryover(worldId, enabled);
-      setWorld(updated);
-    } catch (err) {
-      setStatus(
-        err instanceof Error
-          ? err.message
-          : "Failed to update resource carryover setting",
-      );
-    } finally {
-      setIsSavingCarryover(false);
-    }
   };
 
   const [isSavingGridType, setIsSavingGridType] = useState(false);
@@ -500,33 +483,32 @@ export default function WorldSystemSettingsPage() {
             </Card>
           ) : null}
 
-          {isGm && world.gameSystemId === "genie" ? (
-            <Card
-              className="grid gap-3 p-6"
-              data-testid="genie-resource-carryover-card"
-            >
-              <h2 className="text-lg font-semibold">
-                Session Resource carryover
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                When enabled, players' Insight/Favor/Essence holdings carry over
-                into the next Genie session instead of resetting to 0 — "the
-                rope doesn't disappear."
-              </p>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={world.genieResourceCarryoverEnabled}
-                  disabled={isSavingCarryover}
-                  onChange={(event) =>
-                    void handleToggleCarryover(event.target.checked)
-                  }
-                  data-testid="genie-resource-carryover-toggle"
-                />
-                Carry over Session Resource holdings between sessions
-              </label>
-            </Card>
-          ) : null}
+          {/* Whatever the world's system contributes to its own settings.
+              This was an inline card behind a comparison of
+              `world.gameSystemId` against one system's id, with its own
+              mutation in the shared world API — the third of the four
+              violations `check-system-registry.mjs` listed against
+              `032/T108`. `isGm` is passed rather than gating the mount: a
+              panel may well have something to show a player, and only the
+              panel knows which half of itself is the GM's. */}
+          {(() => {
+            // `createElement` with a lowercase local — see `ActorDetailPage`
+            // for why the registry lookup is written out rather than
+            // rendered as `<Panel />`.
+            const panel = resolvePanel(world.gameSystemId, "world-settings");
+            return panel
+              ? createElement(panel, {
+                  worldId,
+                  world,
+                  isGm,
+                  onWorldChanged: () => {
+                    void getWorld(worldId)
+                      .then(setWorld)
+                      .catch(() => {});
+                  },
+                })
+              : null;
+          })()}
 
           {!activeManifest && !isGm ? (
             <p className="text-sm text-muted-foreground">
