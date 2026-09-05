@@ -40,6 +40,7 @@
 
 pub mod apply;
 pub mod binding;
+pub mod disassociate;
 pub mod document;
 pub mod git;
 pub mod paths;

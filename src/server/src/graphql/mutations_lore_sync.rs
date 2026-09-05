@@ -27,6 +27,7 @@
 //! the same thing an operator who has registered nothing sees, and never as a
 //! crashed request.
 
+use async_graphql::Enum;
 use async_graphql::{
     Context, Error, ErrorExtensions, InputObject, Object, Result as GraphQLResult, SimpleObject,
 };
@@ -463,6 +464,138 @@ fn no_connection() -> Error {
 ///
 /// Returns `false` when there was nothing to remove, so a client that asks
 /// twice sees "already gone" rather than an error.
+/// How a Game Master answers FR-031's divergence.
+///
+/// Two options, and the absence of a third is the point. Reconciling would mean
+/// merging prose, which FR-024 forbids everywhere in this spec — and a
+/// synchronisation that silently merged someone's repository edits with their
+/// world's would be the one failure mode this feature exists to avoid.
+#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
+pub enum DivergenceResolution {
+    /// Make the repository match the world again, discarding the divergent
+    /// history. The world is authoritative (FR-021), and this is the Game
+    /// Master saying so on purpose.
+    OverwriteRemote,
+    /// Stop. The connection is removed and the repository is left exactly as
+    /// it is, including whatever diverged.
+    AbandonConnection,
+}
+
+/// FR-031's explicit choice.
+///
+/// A run that stopped for divergence does not resume on its own, at any
+/// backoff, forever. That is deliberate: the alternative is a system that waits
+/// a while and then overwrites work it warned about, which is worse than one
+/// that waits indefinitely for a person.
+pub async fn resolve_lore_sync_divergence_impl(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    world_id: Uuid,
+    resolution: DivergenceResolution,
+) -> GraphQLResult<bool> {
+    require_world_owner(state, user_id, is_admin, world_id).await?;
+
+    let existing = load_connection(state, world_id)
+        .await?
+        .ok_or_else(no_connection)?;
+
+    // An enforcement deactivation is not a divergence a Game Master may
+    // resolve. Letting this reopen one would make FR-041a's "cannot be lifted
+    // by its owner" false through a side door.
+    if existing.state == "deactivated" {
+        return Err(Error::new(
+            "This connection was deactivated by an administrator and cannot be resumed here.",
+        ));
+    }
+
+    match resolution {
+        DivergenceResolution::AbandonConnection => {
+            remove_lore_repository_connection_impl(state, user_id, is_admin, world_id).await
+        }
+        DivergenceResolution::OverwriteRemote => {
+            let now = chrono::Utc::now().naive_utc();
+            let mut conn = state
+                .db_pool
+                .get()
+                .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+            // Clearing `last_written_commit` is what actually authorises the
+            // overwrite: the next push leases against nothing rather than
+            // against a commit the remote no longer has, which is the only
+            // way past `--force-with-lease`. The authorisation is therefore a
+            // stored fact rather than a flag the pass carries in memory, so a
+            // restart cannot lose it and nothing else can invent it.
+            tokio::task::spawn_blocking(move || {
+                diesel::update(
+                    lore_repository_connections::table
+                        .filter(lore_repository_connections::world_id.eq(world_id)),
+                )
+                .set((
+                    lore_repository_connections::last_written_commit.eq::<Option<String>>(None),
+                    lore_repository_connections::state.eq("working"),
+                    lore_repository_connections::state_reason.eq::<Option<String>>(None),
+                    lore_repository_connections::updated_at.eq(now),
+                    lore_repository_connections::updated_by.eq(user_id),
+                ))
+                .execute(&mut conn)
+            })
+            .await
+            .map_err(|_| Error::new("Failed to spawn blocking task"))?
+            .map_err(|_| Error::new("Failed to record the resolution"))?;
+
+            Ok(true)
+        }
+    }
+}
+
+/// FR-041a: deactivate a connection against its owner's wishes.
+///
+/// Administrator-only, and the resulting state is the one a Game Master cannot
+/// leave by fixing something (FR-041c). A commitment made to a rights holder
+/// that the product cannot carry out is worse than no commitment, so this
+/// exists whether or not anything has needed it yet.
+///
+/// It does not delete the connection. Removal would let the owner simply
+/// reconnect, and would also destroy the record of why it was stopped.
+pub async fn deactivate_lore_sync_impl(
+    state: &AppState,
+    is_admin: bool,
+    world_id: Uuid,
+    reason: String,
+) -> GraphQLResult<bool> {
+    if !is_admin {
+        return Err(Error::new(
+            "Only an administrator may deactivate a connection.",
+        ));
+    }
+
+    let now = chrono::Utc::now().naive_utc();
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    let affected = tokio::task::spawn_blocking(move || {
+        diesel::update(
+            lore_repository_connections::table
+                .filter(lore_repository_connections::world_id.eq(world_id)),
+        )
+        .set((
+            lore_repository_connections::state.eq("deactivated"),
+            lore_repository_connections::deactivated_at.eq(Some(now)),
+            lore_repository_connections::deactivated_reason.eq(Some(reason)),
+            lore_repository_connections::updated_at.eq(now),
+        ))
+        .execute(&mut conn)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|_| Error::new("Failed to deactivate the connection"))?;
+
+    Ok(affected > 0)
+}
+
 pub async fn remove_lore_repository_connection_impl(
     state: &AppState,
     user_id: Uuid,
@@ -552,6 +685,44 @@ impl LoreSyncMutation {
             .await
     }
 
+    /// FR-031. Answer a divergence: overwrite the remote, or abandon the
+    /// connection. There is deliberately no third option that reconciles,
+    /// because reconciling would mean merging prose (FR-024).
+    async fn resolve_lore_sync_divergence(
+        &self,
+        ctx: &Context<'_>,
+        world_id: Uuid,
+        resolution: DivergenceResolution,
+    ) -> GraphQLResult<bool> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        resolve_lore_sync_divergence_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            world_id,
+            resolution,
+        )
+        .await
+    }
+
+    /// FR-041a. Deactivate a connection against its owner's wishes.
+    ///
+    /// Administrator-only. Exposed as a mutation rather than left to a database
+    /// console because a commitment made to a rights holder that requires
+    /// someone to hand-edit a table is a commitment that will not be kept under
+    /// time pressure.
+    async fn deactivate_lore_sync(
+        &self,
+        ctx: &Context<'_>,
+        world_id: Uuid,
+        reason: String,
+    ) -> GraphQLResult<bool> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        deactivate_lore_sync_impl(state, auth_user.is_admin, world_id, reason).await
+    }
+
     /// Remove the connection. Leaves the world's lore and the repository's
     /// contents entirely intact (FR-005).
     async fn remove_lore_repository_connection(
@@ -627,6 +798,152 @@ mod tests {
             branch: None,
             directory: Some(directory.to_string()),
         }
+    }
+
+    /// FR-041a. A deactivation the owner can undo is not a deactivation, and a
+    /// commitment made to a rights holder that the product cannot carry out is
+    /// worse than no commitment.
+    #[tokio::test]
+    async fn only_an_administrator_may_deactivate_a_connection() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().expect("a connection");
+        let owner = insert_test_user(&mut conn);
+        let world = insert_test_world(&mut conn, owner);
+        insert_connection_row(
+            &mut conn,
+            world,
+            owner,
+            &format!("o/{}", Uuid::now_v7()),
+            "lore",
+        );
+
+        let by_owner =
+            deactivate_lore_sync_impl(&state, false, world, "not allowed".to_string()).await;
+        assert!(
+            by_owner.is_err(),
+            "a world owner deactivated their own connection"
+        );
+
+        let by_admin =
+            deactivate_lore_sync_impl(&state, true, world, "repeat infringer".to_string()).await;
+        assert_eq!(by_admin.expect("an administrator may"), true);
+    }
+
+    /// FR-041c and FR-031 together. Resolving a divergence must not be a side
+    /// door out of an enforcement action — otherwise "cannot be lifted by its
+    /// owner" is false, and false in the one place it matters.
+    #[tokio::test]
+    async fn a_deactivated_connection_cannot_be_resumed_by_resolving_a_divergence() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().expect("a connection");
+        let owner = insert_test_user(&mut conn);
+        let world = insert_test_world(&mut conn, owner);
+        insert_connection_row(
+            &mut conn,
+            world,
+            owner,
+            &format!("o/{}", Uuid::now_v7()),
+            "lore",
+        );
+        deactivate_lore_sync_impl(&state, true, world, "enforcement".to_string())
+            .await
+            .expect("deactivated");
+
+        let attempt = resolve_lore_sync_divergence_impl(
+            &state,
+            owner,
+            false,
+            world,
+            DivergenceResolution::OverwriteRemote,
+        )
+        .await;
+
+        assert!(
+            attempt.is_err(),
+            "an enforcement action was lifted by its owner"
+        );
+    }
+
+    /// Overwriting authorises the next push by clearing what the lease is
+    /// taken against. A stored fact rather than a flag carried in memory, so a
+    /// restart cannot lose it and nothing else can invent it.
+    #[tokio::test]
+    async fn overwriting_clears_the_lease_the_next_push_would_fail_against() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().expect("a connection");
+        let owner = insert_test_user(&mut conn);
+        let world = insert_test_world(&mut conn, owner);
+        insert_connection_row(
+            &mut conn,
+            world,
+            owner,
+            &format!("o/{}", Uuid::now_v7()),
+            "lore",
+        );
+
+        diesel::update(
+            lore_repository_connections::table
+                .filter(lore_repository_connections::world_id.eq(world)),
+        )
+        .set((
+            lore_repository_connections::last_written_commit.eq(Some("deadbeef".to_string())),
+            lore_repository_connections::state.eq("needs_attention"),
+        ))
+        .execute(&mut conn)
+        .expect("set up a diverged connection");
+
+        resolve_lore_sync_divergence_impl(
+            &state,
+            owner,
+            false,
+            world,
+            DivergenceResolution::OverwriteRemote,
+        )
+        .await
+        .expect("the owner may overwrite");
+
+        let after = load_connection(&state, world)
+            .await
+            .expect("loaded")
+            .expect("present");
+        assert_eq!(after.last_written_commit, None, "the stale lease survived");
+        assert_eq!(after.state, "working");
+    }
+
+    /// The other answer. Abandoning leaves the repository exactly as it is,
+    /// including whatever diverged — FR-005 says removing a connection touches
+    /// nothing in the repository, and a divergence is not an exception.
+    #[tokio::test]
+    async fn abandoning_a_divergence_removes_the_connection() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().expect("a connection");
+        let owner = insert_test_user(&mut conn);
+        let world = insert_test_world(&mut conn, owner);
+        insert_connection_row(
+            &mut conn,
+            world,
+            owner,
+            &format!("o/{}", Uuid::now_v7()),
+            "lore",
+        );
+
+        resolve_lore_sync_divergence_impl(
+            &state,
+            owner,
+            false,
+            world,
+            DivergenceResolution::AbandonConnection,
+        )
+        .await
+        .expect("the owner may abandon");
+
+        assert!(
+            load_connection(&state, world)
+                .await
+                .expect("loaded")
+                .is_none(),
+            "the connection survived being abandoned",
+        );
     }
 
     /// FR-002. A player in the world is not an owner, and the refusal happens

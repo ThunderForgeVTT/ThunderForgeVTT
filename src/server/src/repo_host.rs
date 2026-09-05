@@ -949,6 +949,55 @@ pub async fn claim_binding(
     Ok(ClaimOutcome::Claimed { issue: number })
 }
 
+/// Open an issue on a repository, returning where it landed.
+///
+/// Public because `lore_sync` needs it and **`lore_sync` may not speak HTTP**.
+/// FR-004c confines host knowledge to the grant boundary, and T061's check is
+/// mechanical — a case-insensitive grep of `lore_sync/` for a host's name must
+/// find nothing. A module there building its own request passes that grep only
+/// by avoiding a vendor header, which is the letter of the rule without its
+/// point: the structural fact that would matter to a second host is *where the
+/// HTTP lives*, not which strings it contains.
+pub async fn open_issue(
+    installation_id: &str,
+    owner: &str,
+    name: &str,
+    title: &str,
+    body: &str,
+) -> Result<String, String> {
+    let registered = registration_from_env().map_err(join_problems)?;
+    let credential = installation_credential(installation_id).await?;
+
+    let created: serde_json::Value = client()?
+        .post(format!(
+            "{}/issues",
+            registered.app.repository_url(owner, name)
+        ))
+        .bearer_auth(credential.token())
+        .header("Accept", "application/vnd.github+json")
+        .json(&serde_json::json!({ "title": title, "body": body }))
+        .send()
+        .await
+        .map_err(|e| format!("Could not reach the repository host: {e}"))?
+        .json()
+        .await
+        .map_err(|e| format!("The host's response could not be read: {e}"))?;
+
+    created
+        .get("html_url")
+        .and_then(|v| v.as_str())
+        .map(str::to_string)
+        .ok_or_else(|| {
+            format!(
+                "The issue was not created: {}",
+                created
+                    .get("message")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("the host said nothing useful")
+            )
+        })
+}
+
 /// What happened when a world tried to claim a repository.
 #[derive(Debug)]
 pub enum ClaimOutcome {
