@@ -414,6 +414,27 @@ impl CollectionShareMutation {
         let user = authenticated_user(ctx)?;
         revoke_collection_share_link_impl(state, user.user_id, user.is_admin, share_id).await
     }
+
+    /// **Authenticated**, unlike `sharedCollection`. Viewing and copying are
+    /// different acts with different requirements (FR-009b), and this is
+    /// exactly where they diverge.
+    async fn copy_shared_collection_to_world(
+        &self,
+        ctx: &Context<'_>,
+        share_code: String,
+        destination_world_id: Uuid,
+    ) -> GraphQLResult<crate::collections::copy::CopyReceipt> {
+        let state = app_state(ctx)?;
+        let user = authenticated_user(ctx)?;
+        crate::collections::copy::copy_shared_collection_to_world_impl(
+            state,
+            user.user_id,
+            user.is_admin,
+            share_code,
+            destination_world_id,
+        )
+        .await
+    }
 }
 
 #[cfg(test)]
