@@ -130,9 +130,9 @@ most of them, because Story 2 *is* the tests.
 - [X] T043 [US2] Implement `resolveLoreSyncDivergence` in `src/server/src/graphql/mutations_lore_sync.rs` — overwrite the divergent remote, or abandon the connection. **There is no third option that reconciles silently**, because reconciling would mean merging prose (FR-024).
 - [X] T044 [US2] Implement first-synchronisation collision safety in `src/server/src/lore_sync/run.rs`: never delete or modify a file the system did not write, and stop with an explanation on a collision inside the world's own directory (FR-032). Files outside that directory are untouched forever.
 - [X] T045 [US2] Implement write verification in `src/server/src/lore_sync/run.rs` against remote state already fetched (FR-034, FR-034b) rather than trusting a reported success.
-- [ ] T046 [US2] Detect a revoked grant — an uninstalled application — in `src/server/src/repo_host.rs`, and surface it as a connection needing attention with that cause named, not as an uninterpretable synchronisation error (FR-036d).
+- [X] T046 [US2] Detect a revoked grant — an uninstalled application — in `src/server/src/repo_host.rs`, and surface it as a connection needing attention with that cause named, not as an uninterpretable synchronisation error (FR-036d).
 - [X] T047 [P] [US2] Implement enforcement deactivation in `src/server/src/graphql/mutations_lore_sync.rs` and `src/server/src/lore_sync/mod.rs` (FR-041a): a `deactivated` connection does not resume without an administrative action, and is distinguishable from one the owner removed and from one that is merely failing (FR-041c). Excluding a disabled entry remains the default response to a takedown; full deactivation is for when exclusion cannot stop republication, or for the repeat-infringer policy (FR-041b, spec 015 FR-016).
-- [ ] T048 [US2] Notify the world owner from `src/server/src/moderation/mod.rs` when moderated content may already exist outside the platform's control, stating that removing it there is theirs to do (FR-040).
+- [X] T048 [US2] Notify the world owner from `src/server/src/moderation/mod.rs` when moderated content may already exist outside the platform's control, stating that removing it there is theirs to do (FR-040).
 
 ### Tests
 

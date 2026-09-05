@@ -232,6 +232,36 @@ pub async fn submit_takedown_notice_impl(
         .map_err(|_| Error::new("Failed to spawn blocking task"))?
         .map_err(Error::new)?;
 
+    // Spec 034 FR-040: the content is disabled and that is done. What follows
+    // is about a mirror the platform does not control, and **it cannot fail
+    // this call** (FR-040d) — the takedown has already happened, and a
+    // repository being unreachable is not a reason to un-happen it.
+    //
+    // Deliberately after the transaction, and deliberately not a `?`. The hook
+    // returns a report rather than a Result precisely so there is nothing here
+    // to propagate; the worst it can do is say it could not.
+    if entity_type == ModerationEntityType::WorldLoreEntry
+        && let Some(disabled) = events
+            .iter()
+            .find(|e| e.action_type == action_type::CONTENT_DISABLED)
+    {
+        // The disabling action is what the notice is recorded against. A fresh
+        // id here would orphan the record from the takedown that caused it, and
+        // "which takedown was this for" is the first question anyone asks of
+        // the table a year later.
+        let response = crate::lore_sync::takedown_hook::on_content_disabled(
+            state,
+            disabled.world_id,
+            disabled.id,
+            chrono::Utc::now().date_naive(),
+        )
+        .await;
+
+        if let crate::lore_sync::takedown_hook::MirrorResponse::Attempted(outcome) = &response {
+            eprintln!("[LoreSync] takedown mirror response: {outcome:?}");
+        }
+    }
+
     to_graphql_case(events)
 }
 
@@ -469,6 +499,92 @@ mod tests {
             accuracy_statement: true,
             signature: "Jane Claimant".to_string(),
         }
+    }
+
+    /// **FR-040d, and the one that matters most in this file.**
+    ///
+    /// A takedown is a legal obligation with a committed response window. The
+    /// mirror hook that runs after it talks to a repository the platform does
+    /// not control — a host that is down, a grant that was revoked, a
+    /// repository that was deleted. None of that may reverse or block the
+    /// disabling, and the structural guarantee is that the hook returns a
+    /// report rather than a Result. This is the test that the guarantee holds
+    /// in the path that actually runs.
+    ///
+    /// The connection here points at a repository that cannot resolve, so the
+    /// hook genuinely fails rather than being skipped.
+    #[tokio::test]
+    async fn a_takedown_succeeds_even_when_the_worlds_mirror_cannot_be_reached() {
+        use crate::models::LoreRepositoryConnection;
+        use crate::schema::lore_repository_connections as c;
+
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        let entry_id = crate::test_support::insert_test_lore_entry(&mut conn, world_id, owner_id);
+
+        let now = chrono::Utc::now().naive_utc();
+        diesel::insert_into(c::table)
+            .values(LoreRepositoryConnection {
+                id: Uuid::now_v7(),
+                world_id,
+                host_kind: "test".into(),
+                // Not a number, so the withdrawal fails while parsing the
+                // installation reference — before any HTTP. The test then
+                // needs no network and fails the same way on every machine,
+                // where an unreachable *host* would make it depend on whether
+                // this one is online.
+                installation_ref: "not-an-installation".into(),
+                // Unique per run: FR-033's constraint is instance-wide, so a
+                // fixed name here makes the second run of this test fail on
+                // the previous run's row rather than on anything it asserts.
+                repository_ref: format!("no-such-owner/no-such-repository-{}", Uuid::now_v7()),
+                branch: "main".into(),
+                directory: "lore".into(),
+                incoming_enabled: false,
+                notice_acknowledged_at: Some(now),
+                state: "working".into(),
+                state_reason: None,
+                // Public, so the hook tries to lodge and fails against a
+                // repository that does not exist — the failure is real rather
+                // than short-circuited by the private skip.
+                repository_is_public: Some(true),
+                visibility_checked_at: Some(now),
+                deactivated_at: None,
+                deactivated_reason: None,
+                last_synced_at: None,
+                last_written_commit: None,
+                created_by: owner_id,
+                updated_by: owner_id,
+                created_at: now,
+                updated_at: now,
+            })
+            .execute(&mut conn)
+            .unwrap();
+
+        let case = submit_takedown_notice_impl(
+            &state,
+            valid_notice_input(ModerationEntityType::WorldLoreEntry, entry_id),
+        )
+        .await
+        .expect("a takedown must not fail because a repository is unreachable");
+
+        assert!(
+            case.events
+                .iter()
+                .any(|e| matches!(e.action_type, ModerationActionType::ContentDisabled)),
+            "the content was not disabled",
+        );
+
+        // And the obligation was recorded as unmet rather than silently
+        // dropped — FR-040d requires an administrator to be able to find it.
+        let unmet = crate::lore_sync::disassociate::failed_notices(&mut conn)
+            .expect("the failed notices are queryable");
+        assert!(
+            !unmet.is_empty(),
+            "a failed withdrawal left no record for an administrator",
+        );
     }
 
     #[tokio::test]
