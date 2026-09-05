@@ -122,6 +122,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    instance_identity (id) {
+        id -> Int4,
+        instance_id -> Uuid,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     interaction_requests (request_id) {
         request_id -> Uuid,
         interactive_id -> Uuid,
@@ -1179,6 +1187,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     content_moderation_actions,
     fog_masks,
     game_systems,
+    instance_identity,
     interaction_requests,
     interactives,
     light_sources,

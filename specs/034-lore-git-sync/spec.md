@@ -407,10 +407,47 @@ confirm the app presents both versions and applies only the one chosen.
   write access to the connected repository and nothing else — and MUST show the
   user what access is being granted before they grant it.
 - **FR-036a**: Access MUST be granted by the Game Master installing an
-  application the instance operator has registered with the repository host,
-  scoped at installation to the single repository being connected. The system
-  MUST NOT accept a pasted long-lived user token, and MUST NOT request a scope
-  that confers access to repositories other than the one connected.
+  application the instance operator has registered with the repository host.
+  The system MUST NOT accept a pasted long-lived user token.
+
+  **A grant MAY cover more than one repository.** This is a correction, made
+  2026-09-04 after installing a real application: an installation is something
+  a person configures at the host, across whichever repositories they choose,
+  and it is routine for one to cover several. Requiring a grant to cover
+  exactly one made the product refuse the way people actually install
+  applications, and would have been discovered by every operator rather than
+  by us.
+
+  **The narrow thing is the binding, not the grant** (FR-036f). Access held is
+  not access used, and what stops this feature writing where it should not is
+  that one world writes to one bound repository and nothing else — enforced
+  per write, not per grant.
+- **FR-036f**: A world MUST bind to exactly one repository, and the system MUST
+  write only to the repository a world is bound to. Where a grant covers
+  several, the others MUST be unreachable to that world — a grant that permits
+  more than the binding is not a licence to use more.
+- **FR-036g**: Before a world's first synchronisation, the system MUST record
+  the binding **on the repository itself**, as an issue naming which world and
+  which instance is writing there. That record exists because FR-033's
+  uniqueness is a database constraint, and a database constraint sees one
+  instance: two ThunderForge instances can bind one repository and neither
+  will know. The repository is the only place both can look.
+- **FR-036h**: Where the system finds an existing binding record for a
+  *different* world or instance, it MUST treat the repository as already
+  claimed: it MUST NOT begin synchronising, MUST report the conflict naming
+  what already holds the binding, and MUST comment on the existing issue
+  recording the attempt rather than opening a second one.
+- **FR-036i**: The binding record is **advisory, not a lock**. Two instances
+  racing can still both write, and the system MUST NOT claim otherwise. What it
+  buys is that the conflict is visible to a human on the repository, in the
+  place they would look, instead of being two mirrors silently overwriting each
+  other. A system with no shared state cannot do better, and pretending to
+  would be worse than saying so.
+- **FR-036j**: The binding record MUST contain no lore content, and MUST name
+  the world by a name its owner chose rather than by anything derived from its
+  contents. On a public repository it is readable by anyone, and it is written
+  by the platform rather than by the Game Master.
+
 - **FR-036e**: The grant MUST include the ability to open an issue on the
   connected repository, in addition to writing its contents. This widens
   FR-036's "narrowest access" and is a deliberate trade rather than an

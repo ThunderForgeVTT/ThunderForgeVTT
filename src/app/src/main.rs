@@ -451,6 +451,19 @@ async fn run() {
         );
     }
 
+    // Spec 034 (FR-036g): this deployment's stable identity, generated on first
+    // launch. Read at startup rather than lazily so that a fresh instance has
+    // one before anything can want it, and so a database that cannot produce
+    // one is a loud startup problem rather than a confusing failure later.
+    match db_pool
+        .get()
+        .map_err(|e| e.to_string())
+        .and_then(|mut conn| thunderforge_server::instance_identity::instance_id(&mut conn))
+    {
+        Ok(id) => eprintln!("[Server] 🪪 Instance identity {id}"),
+        Err(e) => eprintln!("[Server] ⚠️  Could not establish an instance identity: {e}"),
+    }
+
     // Spec 034 (T030): lore repository synchronisation. Owns its own schedule
     // and stays off every hot path, like the tasks below it.
     //

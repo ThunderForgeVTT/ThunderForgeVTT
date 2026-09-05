@@ -122,8 +122,9 @@ impl RegistrationProblem {
                  application's slug."
             ),
             Self::MissingAppSlug => format!(
-                "{APP_SLUG_ENV} is not set. It is the application's URL slug, which the \
-                 install link is built from, and is different from its numeric identifier."
+                "{APP_SLUG_ENV} is not set. It is the application's URL slug — the last \
+                 segment of its github.com/apps/… address — and is different from its \
+                 client ID."
             ),
             Self::MissingPrivateKey => format!(
                 "None of {APP_PRIVATE_KEY_FILE_ENV}, {APP_PRIVATE_KEY_BASE64_ENV} or \
@@ -611,7 +612,13 @@ mod tests {
         assert!(
             RegistrationProblem::MissingAppSlug
                 .guidance()
-                .contains("different from its numeric identifier")
+                .contains("different from its client ID")
+        );
+        assert!(
+            RegistrationProblem::MissingAppSlug
+                .guidance()
+                .contains("github.com/apps/"),
+            "the guidance does not say where to find the slug",
         );
     }
 
@@ -628,4 +635,239 @@ mod tests {
         // which passes only the parser's own message.
         assert!(guidance.contains(APP_PRIVATE_KEY_ENV));
     }
+}
+
+// ============================================================================
+// The effects half: the HTTP the pure crate deliberately does not do.
+// ============================================================================
+
+use thunderforge_repo_host::{RepoHost as _, RepositoryCredential};
+
+/// What this instance's application can see.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VisibleRepository {
+    pub installation_id: String,
+    pub full_name: String,
+    pub public: bool,
+}
+
+/// A user agent is not optional here: GitHub rejects requests without one, and
+/// the failure is a 403 that reads like a permissions problem rather than a
+/// missing header.
+const USER_AGENT: &str = "ThunderForgeVTT";
+
+fn client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .user_agent(USER_AGENT)
+        .build()
+        .map_err(|e| format!("Could not build an HTTP client: {e}"))
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// Every installation of this application, with the repositories each covers.
+///
+/// Read-only, and the only step that authenticates as the *application* rather
+/// than as an installation. An installation identifier is not something a user
+/// types, so it has to be discovered once; everything after this uses the
+/// installation credential instead.
+pub async fn visible_repositories() -> Result<Vec<VisibleRepository>, String> {
+    let registered = registration_from_env().map_err(join_problems)?;
+    let app = &registered.app;
+    let http = client()?;
+
+    let assertion = app
+        .app_assertion(now_secs())
+        .map_err(|e| format!("Could not sign an application assertion: {e}"))?;
+
+    let installations: Vec<serde_json::Value> = http
+        .get(app.installations_url())
+        .bearer_auth(&assertion)
+        .header("Accept", "application/vnd.github+json")
+        .send()
+        .await
+        .map_err(|e| format!("Could not reach the repository host: {e}"))?
+        .json()
+        .await
+        .map_err(|e| format!("The host's installation list could not be read: {e}"))?;
+
+    let mut out = Vec::new();
+    for installation in installations {
+        let Some(id) = installation.get("id").and_then(|v| v.as_i64()) else {
+            continue;
+        };
+        let id = id.to_string();
+
+        let credential = installation_credential(&id).await?;
+        let listing: serde_json::Value = http
+            .get(app.installation_repositories_url())
+            .bearer_auth(credential.token())
+            .header("Accept", "application/vnd.github+json")
+            .send()
+            .await
+            .map_err(|e| format!("Could not list the installation's repositories: {e}"))?
+            .json()
+            .await
+            .map_err(|e| format!("The repository list could not be read: {e}"))?;
+
+        for repo in listing
+            .get("repositories")
+            .and_then(|v| v.as_array())
+            .into_iter()
+            .flatten()
+        {
+            let (Some(full_name), Some(private)) = (
+                repo.get("full_name").and_then(|v| v.as_str()),
+                repo.get("private").and_then(|v| v.as_bool()),
+            ) else {
+                continue;
+            };
+            out.push(VisibleRepository {
+                installation_id: id.clone(),
+                full_name: full_name.to_string(),
+                public: !private,
+            });
+        }
+    }
+
+    Ok(out)
+}
+
+/// Exchange an installation identifier for a short-lived credential.
+///
+/// Not cached here. FR-036d says these are refreshed rather than stored beyond
+/// their lifetime, and a cache is a thing that can serve a stale token to a
+/// pass that then fails for a reason nobody can see. When one is added it
+/// belongs beside the pass, keyed by connection, with the expiry the crate
+/// already parses.
+pub async fn installation_credential(
+    installation_id: &str,
+) -> Result<RepositoryCredential, String> {
+    let registered = registration_from_env().map_err(join_problems)?;
+    let app = &registered.app;
+
+    // Parsed rather than passed through as a string. `InstallationRef` has no
+    // accessor by design (FR-004c), and its `FromStr` is the only way in — so
+    // a malformed identifier is refused here rather than becoming a 404 from
+    // the host that reads like a revoked grant.
+    let reference: <thunderforge_repo_host::github::GitHubApp as thunderforge_repo_host::RepoHost>::Grant =
+        installation_id
+            .parse()
+            .map_err(|_| format!("\"{installation_id}\" is not an installation reference"))?;
+
+    let exchange = app
+        .token_exchange(&reference, now_secs())
+        .map_err(|e| format!("Could not build the token exchange: {e}"))?;
+
+    let body = client()?
+        .post(&exchange.url)
+        .bearer_auth(&exchange.assertion)
+        .header("Accept", "application/vnd.github+json")
+        .send()
+        .await
+        .map_err(|e| format!("Could not reach the repository host: {e}"))?
+        .text()
+        .await
+        .map_err(|e| format!("The host's response could not be read: {e}"))?;
+
+    app.credential_from_exchange(&body)
+        .map_err(|e| format!("The host's credential could not be read: {e}"))
+}
+
+/// One repository's current visibility (FR-040a).
+///
+/// Read on every pass rather than trusted from grant time, because visibility
+/// changes at the host without telling us and the notice a Game Master sees
+/// depends on it. What comes back is an observation, and every surface that
+/// shows it must say when it was made.
+pub async fn repository_is_public(
+    installation_id: &str,
+    owner: &str,
+    name: &str,
+) -> Result<bool, String> {
+    let registered = registration_from_env().map_err(join_problems)?;
+    let credential = installation_credential(installation_id).await?;
+
+    let repo: serde_json::Value = client()?
+        .get(registered.app.repository_url(owner, name))
+        .bearer_auth(credential.token())
+        .header("Accept", "application/vnd.github+json")
+        .send()
+        .await
+        .map_err(|e| format!("Could not reach the repository host: {e}"))?
+        .json()
+        .await
+        .map_err(|e| format!("The repository could not be read: {e}"))?;
+
+    repo.get("private")
+        .and_then(|v| v.as_bool())
+        .map(|private| !private)
+        .ok_or_else(|| "The host did not report the repository's visibility".to_string())
+}
+
+/// The binding record already on a repository, if any (FR-036g).
+///
+/// Read-only. Searching open issues rather than a fixed number is deliberate:
+/// a repository someone has used for a while may have many, and the record we
+/// are looking for could be any age.
+pub async fn existing_binding(
+    installation_id: &str,
+    owner: &str,
+    name: &str,
+) -> Result<Option<(u64, crate::lore_sync::binding::Binding)>, String> {
+    use crate::lore_sync::binding;
+
+    let registered = registration_from_env().map_err(join_problems)?;
+    let credential = installation_credential(installation_id).await?;
+
+    let issues: Vec<serde_json::Value> = client()?
+        .get(format!(
+            "{}/issues?state=open&per_page=100",
+            registered.app.repository_url(owner, name)
+        ))
+        .bearer_auth(credential.token())
+        .header("Accept", "application/vnd.github+json")
+        .send()
+        .await
+        .map_err(|e| format!("Could not reach the repository host: {e}"))?
+        .json()
+        .await
+        .map_err(|e| format!("The repository's issues could not be read: {e}"))?;
+
+    for issue in issues {
+        // A pull request is an issue as far as this endpoint is concerned, and
+        // one titled like ours would otherwise be read as a binding.
+        if issue.get("pull_request").is_some() {
+            continue;
+        }
+        let Some(title) = issue.get("title").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        if title != binding::BINDING_ISSUE_TITLE {
+            continue;
+        }
+        let body = issue
+            .get("body")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
+        if let Some(parsed) = binding::parse_binding(body) {
+            let number = issue.get("number").and_then(|v| v.as_u64()).unwrap_or(0);
+            return Ok(Some((number, parsed)));
+        }
+    }
+
+    Ok(None)
+}
+
+fn join_problems(problems: Vec<RegistrationProblem>) -> String {
+    problems
+        .iter()
+        .map(|p| p.guidance())
+        .collect::<Vec<_>>()
+        .join(" ")
 }

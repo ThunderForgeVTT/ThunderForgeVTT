@@ -36,6 +36,7 @@ pub mod declared_values;
 pub mod door_effects;
 pub mod errors;
 pub mod graphql;
+pub mod instance_identity;
 pub mod interaction;
 pub mod interface_packs;
 pub mod light_effects;

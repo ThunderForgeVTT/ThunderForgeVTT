@@ -197,6 +197,41 @@ impl GitHubApp {
     /// deployment, and because a hard-coded hostname is the kind of thing that
     /// is only ever discovered to be a problem by the person who cannot work
     /// around it.
+    /// A signed application assertion, for the endpoints that authenticate as
+    /// the *application* rather than as one of its installations.
+    ///
+    /// Listing installations is the one that matters: an installation
+    /// identifier is not something a user types, so it has to be discovered,
+    /// and discovering it is the only step that needs this. Everything after
+    /// it authenticates with the installation credential instead.
+    ///
+    /// Separate from [`RepoHost::token_exchange`] because that method builds a
+    /// request for a *known* installation. This is what you have before you
+    /// know one.
+    pub fn app_assertion(&self, now: UnixSeconds) -> Result<String, RepoHostError> {
+        let claims = jwt::build_claims(&self.app_id, now, jwt::DEFAULT_JWT_LIFETIME_SECS)?;
+        jwt::sign_claims(&self.signing_key, &claims)
+    }
+
+    /// Where to ask which repositories this application has been installed on.
+    pub fn installations_url(&self) -> String {
+        format!("{}/app/installations", self.api_base)
+    }
+
+    /// Where to read one repository's description, including its visibility.
+    ///
+    /// FR-040a reads this on every pass rather than trusting what was true at
+    /// grant time, because visibility changes at the host without telling us
+    /// and the notice a Game Master sees depends on it.
+    pub fn repository_url(&self, owner: &str, name: &str) -> String {
+        format!("{}/repos/{owner}/{name}", self.api_base)
+    }
+
+    /// Where to list the repositories one installation covers.
+    pub fn installation_repositories_url(&self) -> String {
+        format!("{}/installation/repositories", self.api_base)
+    }
+
     pub fn with_bases(mut self, web_base: impl Into<String>, api_base: impl Into<String>) -> Self {
         self.web_base = web_base.into().trim_end_matches('/').to_string();
         self.api_base = api_base.into().trim_end_matches('/').to_string();
