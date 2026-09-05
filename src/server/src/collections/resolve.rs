@@ -62,13 +62,12 @@ pub async fn resolve_member(
     // 2. Has moderation disabled it? A share must never become a moderation
     //    bypass — the property spec 025's shares guard with the same call, and
     //    the one ADR-069's determination leans on hardest.
-    if let Some(entity_type) = moderation_entity_type(&member.member_type) {
-        if crate::moderation::effective_status(state, entity_type, member.member_id)
+    if let Some(entity_type) = moderation_entity_type(&member.member_type)
+        && crate::moderation::effective_status(state, entity_type, member.member_id)
             .await?
             .is_some()
-        {
-            return Ok(MemberResolution::Withheld);
-        }
+    {
+        return Ok(MemberResolution::Withheld);
     }
 
     // 3. FR-001b: has it become restricted since it was added? A check that

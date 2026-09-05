@@ -626,6 +626,12 @@ pub struct GameSystemRegistry {
     systems: HashMap<String, SystemValidators>,
 }
 
+impl Default for GameSystemRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GameSystemRegistry {
     /// Create new empty registry
     pub fn new() -> Self {

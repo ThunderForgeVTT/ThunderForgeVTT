@@ -1,6 +1,5 @@
 //! The transitions, and the one that must never happen.
 
-use diesel::prelude::*;
 use uuid::Uuid;
 
 use super::*;

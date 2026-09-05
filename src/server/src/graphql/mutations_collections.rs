@@ -168,10 +168,10 @@ pub async fn update_collection_impl(
 ) -> GraphQLResult<Collection> {
     require_collection_authority(state, user_id, is_admin, input.collection_id).await?;
 
-    if let Some(name) = &input.name {
-        if name.trim().is_empty() {
-            return Err(Error::new("A collection needs a name"));
-        }
+    if let Some(name) = &input.name
+        && name.trim().is_empty()
+    {
+        return Err(Error::new("A collection needs a name"));
     }
 
     let mut conn = state

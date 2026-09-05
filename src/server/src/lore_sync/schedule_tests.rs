@@ -3,7 +3,6 @@
 //! Selection is the whole of what this module decides, and each exclusion is a
 //! promise the product makes rather than an implementation detail.
 
-use diesel::prelude::*;
 use uuid::Uuid;
 
 use super::*;

@@ -5,6 +5,7 @@ use crate::graphql::mutations_collections::{
     create_collection_impl,
 };
 use crate::test_support::*;
+use diesel::expression_methods::AggregateExpressionMethods;
 
 struct Source {
     state: AppState,
@@ -563,9 +564,7 @@ async fn copying_a_scene_shares_stored_bytes_rather_than_duplicating_them() {
     let distinct_paths_before: i64 = {
         let mut conn = s.state.db_pool.get().expect("connection");
         canvas_image_assets::table
-            .select(diesel::dsl::count_distinct(
-                canvas_image_assets::storage_path,
-            ))
+            .select(diesel::dsl::count(canvas_image_assets::storage_path).aggregate_distinct())
             .first(&mut conn)
             .expect("count distinct paths")
     };
@@ -584,9 +583,7 @@ async fn copying_a_scene_shares_stored_bytes_rather_than_duplicating_them() {
     let mut conn = s.state.db_pool.get().expect("connection");
 
     let distinct_paths_after: i64 = canvas_image_assets::table
-        .select(diesel::dsl::count_distinct(
-            canvas_image_assets::storage_path,
-        ))
+        .select(diesel::dsl::count(canvas_image_assets::storage_path).aggregate_distinct())
         .first(&mut conn)
         .expect("count distinct paths");
     assert_eq!(

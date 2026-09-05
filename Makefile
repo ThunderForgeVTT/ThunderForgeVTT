@@ -1,4 +1,4 @@
-.PHONY: dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint check-file-length test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean
+.PHONY: dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean
 
 # Loads DATABASE_URL (and anything else) from the repo-root .env for targets
 # that shell out to tools which don't read it themselves (diesel-cli).
@@ -21,7 +21,9 @@ help:
 	@echo "  make build            Production build (engine WASM + backend + frontend)"
 	@echo "  make clean            Remove build output (dist/)"
 	@echo "  make format           Run prettier + cargo fmt"
-	@echo "  make lint             Run cargo clippy (-D warnings) across the workspace"
+	@echo "  make lint             Run cargo clippy (-D warnings): lint-host + lint-wasm"
+	@echo "  make lint-host        Clippy the workspace for the host target (everything but the wasm-only engine)"
+	@echo "  make lint-wasm        Clippy the browser crates for wasm32-unknown-unknown, the target they ship to"
 	@echo "  make check-file-length  Fail if any tracked .rs file exceeds 1000 lines (see scripts/check-file-length.sh)"
 	@echo ""
 	@echo "Load/torture tiers (standalone — no other target ever runs these):"
@@ -104,8 +106,27 @@ clean:
 format:
 	pnpm format
 
-lint:
-	cargo clippy --workspace --all-targets -- -D warnings
+# Two passes, because the workspace has two compilation targets and neither
+# one covers the other.
+#
+# `thunderforge_engine` ships only as wasm (`wasm-pack --target web`, see
+# scripts/shared.mjs). Almost everything in it — `start`, the plugin wiring,
+# the whole external-command enum — sits behind `cfg(target_arch = "wasm32")`,
+# so a host-target clippy reports fifty-odd items as dead code that are in
+# fact the entire product. Linting it for the host was worse than not linting
+# it: the noise is what made `make lint` unrunnable, and an unrunnable lint
+# gate catches nothing. It is linted for the target it actually ships to.
+#
+# Conversely the wasm pass cannot replace the host pass: `thunderforge-server`
+# and everything it pulls in does not build for wasm at all.
+lint: lint-host lint-wasm
+
+lint-host:
+	cargo clippy --workspace --exclude thunderforge_engine --all-targets -- -D warnings
+
+lint-wasm:
+	cargo clippy -p thunderforge_engine -p thunderforge_cache_browser -p thunderforge_opfs -p dnd5e-engine \
+		--target wasm32-unknown-unknown --all-targets -- -D warnings
 
 check-file-length:
 	@./scripts/check-file-length.sh

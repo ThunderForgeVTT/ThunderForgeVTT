@@ -35,8 +35,7 @@ use diesel::prelude::*;
 use uuid::Uuid;
 
 use crate::graphql::queries::lore_sync::{
-    GraphQLLoreRepositoryConnection, LoreSyncState, instance_repository_integration,
-    load_connection, require_world_owner,
+    GraphQLLoreRepositoryConnection, LoreSyncState, load_connection, require_world_owner,
 };
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::LoreRepositoryConnection;
@@ -135,20 +134,6 @@ pub struct GrantedConnection {
     pub repository_is_public: Option<bool>,
 }
 
-/// The error every unimplemented half of the grant answers with.
-///
-/// Deliberately the same message the FR-036b path produces, because from the
-/// Game Master's side the two situations are identical: this instance cannot
-/// complete this flow. Distinguishing "not registered" from "not built" would
-/// be telling them about our schedule.
-fn integration_unavailable() -> Error {
-    let status = instance_repository_integration();
-    let guidance = status.operator_guidance.unwrap_or_else(|| {
-        "Repository synchronisation is not available on this server yet.".to_string()
-    });
-    Error::new(guidance).extend_with(|_, ext| ext.set("code", "REPOSITORY_INTEGRATION_UNAVAILABLE"))
-}
-
 /// Start the grant: build the URL the user is sent to and the permission list
 /// they must be shown first.
 ///
@@ -200,7 +185,7 @@ async fn begin_grant(
         url: handoff.url,
         permissions: handoff
             .permissions
-            .into_iter()
+            .iter()
             .map(|p| GraphQLGrantedPermission {
                 id: p.id.to_string(),
                 summary: p.summary.to_string(),
@@ -1191,7 +1176,7 @@ mod tests {
 
         let by_admin =
             deactivate_lore_sync_impl(&state, true, world, "repeat infringer".to_string()).await;
-        assert_eq!(by_admin.expect("an administrator may"), true);
+        assert!(by_admin.expect("an administrator may"));
     }
 
     /// FR-041c and FR-031 together. Resolving a divergence must not be a side

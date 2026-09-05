@@ -19,7 +19,7 @@ use uuid::Uuid;
 use crate::ability_vocabulary::for_system;
 use crate::auth::world_membership::is_dm_of_world;
 use crate::graphql::{app_state, authenticated_user};
-use crate::schema::{world_abilities, world_actors, world_items, worlds};
+use crate::schema::{world_abilities, world_actors, world_items};
 
 /// One kind of content, and the system it was authored under.
 #[derive(SimpleObject, Debug, Clone)]

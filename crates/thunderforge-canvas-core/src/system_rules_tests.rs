@@ -326,7 +326,7 @@ fn grouped_values_carry_the_relationship_a_sheet_shows() {
 
     // A Cypher stat: a current value, the pool that is its maximum, and the
     // edge that modifies spending from it.
-    let values = vec![
+    let values = [
         stat("might", 10),
         stat("mightPool", 12),
         stat("mightEdge", 1),

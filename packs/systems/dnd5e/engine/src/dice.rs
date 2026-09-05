@@ -108,11 +108,11 @@ pub fn roll_d20_seeded(_modifier: i32, _advantage: RollAdvantage, _seed: u64) ->
 }
 
 #[cfg(test)]
+#[cfg(not(target_arch = "wasm32"))]
 mod tests {
     use super::*;
 
     #[test]
-    #[cfg(not(target_arch = "wasm32"))]
     fn test_d20_normal() {
         let roll = roll_d20_seeded(0, RollAdvantage::Normal, 12345);
         assert!(roll.result >= 1 && roll.result <= 20);
@@ -121,7 +121,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(target_arch = "wasm32"))]
     fn test_d20_advantage() {
         let roll = roll_d20_seeded(2, RollAdvantage::Advantage, 12345);
         assert_eq!(roll.rolls.len(), 2);
@@ -130,7 +129,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(target_arch = "wasm32"))]
     fn test_d20_disadvantage() {
         let roll = roll_d20_seeded(-1, RollAdvantage::Disadvantage, 12345);
         assert_eq!(roll.rolls.len(), 2);
@@ -140,10 +138,7 @@ mod tests {
 
     #[test]
     fn test_d20_modifier() {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let roll = roll_d20_seeded(5, RollAdvantage::Normal, 67890);
-            assert_eq!(roll.total, roll.result + 5);
-        }
+        let roll = roll_d20_seeded(5, RollAdvantage::Normal, 67890);
+        assert_eq!(roll.total, roll.result + 5);
     }
 }

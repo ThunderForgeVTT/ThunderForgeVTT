@@ -6,7 +6,6 @@
 //! need is a remote, a clone, a credential, or a repository host, which is the
 //! whole reason planning is a separate module from the pass that applies it.
 
-use diesel::prelude::*;
 use uuid::Uuid;
 
 use super::*;

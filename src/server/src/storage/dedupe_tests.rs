@@ -1,6 +1,5 @@
 use super::*;
 use crate::test_support::*;
-use diesel::prelude::*;
 use uuid::Uuid;
 
 /// Insert an asset row directly, so these tests exercise the lookup rather
