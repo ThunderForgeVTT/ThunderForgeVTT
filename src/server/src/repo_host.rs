@@ -11,17 +11,25 @@
 //!
 //! # Registering an application
 //!
-//! Three values, all `THUNDERFORGE_`-prefixed to match `Config::from_env`:
+//! `SYNC_GITHUB_APP_*`, matching the `OAUTH_<PROVIDER>_*` shape spec 007
+//! established: the feature first, then the provider. Naming the host here is
+//! deliberate and permitted — FR-004b puts the seam *after* the credential
+//! grant, and arranging a grant is inherently host-shaped. A second host
+//! arrives as `SYNC_GITLAB_APP_*` beside this one rather than as a widening of
+//! it, which is the same shape `OAUTH_DISCORD_*` and `OAUTH_GITHUB_*` already
+//! have.
+//!
+//! Three values:
 //!
 //! | Variable | What it is |
 //! |---|---|
-//! | `THUNDERFORGE_REPO_APP_ID` | the application's numeric identifier, which the assertion is issued by |
-//! | `THUNDERFORGE_REPO_APP_SLUG` | the application's URL slug, which the install link is built from |
-//! | `THUNDERFORGE_REPO_APP_PRIVATE_KEY_FILE` | a path to read the PEM from |
-//! | `THUNDERFORGE_REPO_APP_PRIVATE_KEY_BASE64` | *or* the PEM, base64-encoded |
-//! | `THUNDERFORGE_REPO_APP_PRIVATE_KEY` | *or* the PEM itself |
+//! | `SYNC_GITHUB_APP_CLIENT_ID` | the application's client ID, which the assertion is issued by |
+//! | `SYNC_GITHUB_APP_SLUG` | the application's URL slug, which the install link is built from |
+//! | `SYNC_GITHUB_APP_PRIVATE_KEY_FILE` | a path to read the PEM from |
+//! | `SYNC_GITHUB_APP_PRIVATE_KEY_BASE64` | *or* the PEM, base64-encoded |
+//! | `SYNC_GITHUB_APP_PRIVATE_KEY` | *or* the PEM itself |
 //!
-//! The identifier and the slug are **not interchangeable** — one issues the
+//! The client ID and the slug are **not interchangeable** — one issues the
 //! assertion, the other addresses the install page — and an operator who
 //! supplies one for the other gets an authentication failure that reads like a
 //! wrong key. Hence two variables and a diagnostic that names both.
@@ -63,16 +71,23 @@ use base64::Engine as _;
 use base64::engine::general_purpose;
 use thunderforge_repo_host::github::GitHubApp;
 
-/// The operator's application identifier.
-pub const APP_ID_ENV: &str = "THUNDERFORGE_REPO_APP_ID";
+/// The application's **client ID**, which the assertion is issued by.
+///
+/// GitHub accepts either the client ID or the numeric application ID as a
+/// JWT's `iss`, and its documentation says plainly: "Use of the client ID is
+/// recommended." Naming the variable for the recommended one means an operator
+/// copying the value GitHub puts in front of them lands in the right place,
+/// rather than hunting for the numeric id that a variable called `..._APP_ID`
+/// would have implied.
+pub const APP_ID_ENV: &str = "SYNC_GITHUB_APP_CLIENT_ID";
 /// The application's URL slug. Not interchangeable with the identifier.
-pub const APP_SLUG_ENV: &str = "THUNDERFORGE_REPO_APP_SLUG";
+pub const APP_SLUG_ENV: &str = "SYNC_GITHUB_APP_SLUG";
 /// The PEM private key, in any of the four forms this module accepts.
-pub const APP_PRIVATE_KEY_ENV: &str = "THUNDERFORGE_REPO_APP_PRIVATE_KEY";
+pub const APP_PRIVATE_KEY_ENV: &str = "SYNC_GITHUB_APP_PRIVATE_KEY";
 /// A path to read the PEM private key from. Highest precedence.
-pub const APP_PRIVATE_KEY_FILE_ENV: &str = "THUNDERFORGE_REPO_APP_PRIVATE_KEY_FILE";
+pub const APP_PRIVATE_KEY_FILE_ENV: &str = "SYNC_GITHUB_APP_PRIVATE_KEY_FILE";
 /// The PEM private key, base64-encoded — declared rather than detected.
-pub const APP_PRIVATE_KEY_BASE64_ENV: &str = "THUNDERFORGE_REPO_APP_PRIVATE_KEY_BASE64";
+pub const APP_PRIVATE_KEY_BASE64_ENV: &str = "SYNC_GITHUB_APP_PRIVATE_KEY_BASE64";
 
 /// Why an instance cannot offer repository synchronisation.
 ///
@@ -102,8 +117,9 @@ impl RegistrationProblem {
     pub fn guidance(&self) -> String {
         match self {
             Self::MissingAppId => format!(
-                "{APP_ID_ENV} is not set. It is the application's numeric identifier, \
-                 which is different from its slug."
+                "{APP_ID_ENV} is not set. It is the application's client ID — the value \
+                 GitHub recommends issuing assertions with — and is different from the \
+                 application's slug."
             ),
             Self::MissingAppSlug => format!(
                 "{APP_SLUG_ENV} is not set. It is the application's URL slug, which the \
@@ -495,6 +511,71 @@ mod tests {
         );
     }
 
+    /// FR-036c. An operator who set two of the three must be told which one is
+    /// missing, not merely that the instance is unconfigured.
+    #[test]
+    fn a_partial_registration_names_only_what_is_missing() {
+        temp_env(
+            &[
+                (APP_ID_ENV, Some("12345")),
+                (APP_SLUG_ENV, None),
+                (APP_PRIVATE_KEY_FILE_ENV, None),
+                (APP_PRIVATE_KEY_BASE64_ENV, None),
+                (APP_PRIVATE_KEY_ENV, Some("-----BEGIN PRIVATE KEY-----")),
+            ],
+            || {
+                let problems = registration_from_env().err().expect("unconfigured");
+                assert!(problems.contains(&RegistrationProblem::MissingAppSlug));
+                assert!(!problems.contains(&RegistrationProblem::MissingAppId));
+            },
+        );
+    }
+
+    /// A variable set to whitespace is set to nothing. Templated configuration
+    /// producing an empty value is common, and treating `""` as present would
+    /// report a usable integration and then fail at the grant.
+    #[test]
+    fn a_blank_value_counts_as_missing() {
+        temp_env(
+            &[
+                (APP_ID_ENV, Some("   ")),
+                (APP_SLUG_ENV, Some("slug")),
+                (APP_PRIVATE_KEY_FILE_ENV, None),
+                (APP_PRIVATE_KEY_BASE64_ENV, None),
+                (APP_PRIVATE_KEY_ENV, Some("-----BEGIN PRIVATE KEY-----")),
+            ],
+            || {
+                let problems = registration_from_env().err().expect("unconfigured");
+                assert!(problems.contains(&RegistrationProblem::MissingAppId));
+            },
+        );
+    }
+
+    /// A key that is present and is not a key. **The case a presence check
+    /// calls configured**, and the whole reason this runs at configuration
+    /// time rather than at first use.
+    #[test]
+    fn a_present_but_unusable_key_is_reported_rather_than_accepted() {
+        temp_env(
+            &[
+                (APP_ID_ENV, Some("12345")),
+                (APP_SLUG_ENV, Some("slug")),
+                (APP_PRIVATE_KEY_FILE_ENV, None),
+                (APP_PRIVATE_KEY_BASE64_ENV, None),
+                (APP_PRIVATE_KEY_ENV, Some("hunter2")),
+            ],
+            || {
+                let problems = registration_from_env().err().expect("unconfigured");
+                assert!(
+                    problems
+                        .iter()
+                        .any(|p| matches!(p, RegistrationProblem::UnreadablePrivateKey(_))),
+                    "an unusable key was accepted: {problems:?}",
+                );
+            },
+        );
+    }
+
     /// Every problem at once, not the first. An operator restarting once per
     /// missing variable is a configuration experience nobody finishes.
     #[test]
@@ -505,19 +586,27 @@ mod tests {
             RegistrationProblem::MissingPrivateKey,
         ] {
             let guidance = problem.guidance();
-            assert!(guidance.contains("THUNDERFORGE_REPO_APP"), "{guidance}");
+            assert!(guidance.contains("SYNC_GITHUB_APP"), "{guidance}");
         }
     }
 
-    /// The identifier and the slug are different things, and an operator who
+    /// The client ID and the slug are different things, and an operator who
     /// swaps them gets an authentication failure that reads like a bad key.
-    /// The guidance has to say so.
+    /// The guidance has to say so — and has to name the client ID, because a
+    /// variable called `..._APP_ID` would send them looking for the numeric
+    /// one GitHub no longer recommends.
     #[test]
     fn the_guidance_distinguishes_the_identifier_from_the_slug() {
         assert!(
             RegistrationProblem::MissingAppId
                 .guidance()
-                .contains("different from its slug")
+                .contains("client ID"),
+            "the guidance does not say which identifier GitHub recommends",
+        );
+        assert!(
+            RegistrationProblem::MissingAppId
+                .guidance()
+                .contains("different from the application's slug")
         );
         assert!(
             RegistrationProblem::MissingAppSlug

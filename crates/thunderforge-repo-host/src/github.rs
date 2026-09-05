@@ -137,7 +137,7 @@ pub struct RepositoryPayload {
 pub struct GitHubApp {
     app_id: String,
     /// The App's URL slug, which is what the installation hand-off URL is
-    /// built from. Distinct from `app_id`: GitHub uses the numeric id for the
+    /// built from. Distinct from `app_id`: GitHub uses the issuer identifier for the
     /// assertion's issuer and the slug for the web URL, and they are not
     /// interchangeable.
     app_slug: String,

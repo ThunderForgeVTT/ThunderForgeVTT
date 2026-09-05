@@ -64,6 +64,12 @@ pub struct AppJwtClaims {
     /// [`MAX_JWT_LIFETIME_SECS`] after `iat`.
     pub exp: UnixSeconds,
     /// Issuer: the registered application's identifier.
+    /// The application's issuer identifier.
+    ///
+    /// GitHub accepts either the client ID or the numeric application ID here,
+    /// and recommends the client ID. This crate takes whichever the caller
+    /// supplies and does not validate its shape — a client ID is not numeric,
+    /// so any check that assumed digits would reject the recommended value.
     pub iss: String,
 }
 

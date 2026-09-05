@@ -39,14 +39,6 @@ use crate::models::{LoreFidelityNote, LoreRepositoryConnection, LoreSyncRun};
 use crate::schema::{lore_fidelity_notes, lore_repository_connections, lore_sync_runs};
 use crate::state::AppState;
 
-/// The operator's application identifier.
-pub const REPO_APP_ID_ENV: &str = "THUNDERFORGE_REPO_APP_ID";
-/// The application's URL slug, which the grant hand-off URL is built from.
-/// Distinct from the identifier and not interchangeable with it.
-pub const REPO_APP_SLUG_ENV: &str = "THUNDERFORGE_REPO_APP_SLUG";
-/// PEM-encoded RSA private key the instance signs its assertions with.
-pub const REPO_APP_PRIVATE_KEY_ENV: &str = "THUNDERFORGE_REPO_APP_PRIVATE_KEY";
-
 /// A connection's current state, in FR-029's own words.
 ///
 /// `Deactivated` is the fourth (`data-model.md`'s state table; the contract
@@ -272,79 +264,18 @@ pub struct RepositoryIntegrationStatus {
     pub operator_guidance: Option<String>,
 }
 
-/// The pure half of the check, so it can be tested without an environment.
+/// Whether this instance can offer repository synchronisation at all.
 ///
-/// FR-036c is three conditions and a binary, not one condition: an identifier,
-/// a slug, and a private key are separately configurable and separately
-/// forgettable, and an operator who set two of three deserves to be told
-/// *which* one is missing rather than "not configured". Reporting only the
-/// first missing item would send them round the loop three times, so all of
-/// them are named at once.
+/// Public because the mutations need the same answer before they start a grant
+/// a Game Master cannot finish — the check has to be one function, or the
+/// query and the flow it gates will eventually disagree.
 ///
-/// The `git` binary joins them for the reason R1 gives: a missing binary makes
-/// the integration exactly as unusable as a missing registration, and the
-/// operator deserves to learn both at the same moment rather than discovering
-/// the second one after fixing the first.
-///
-/// No value is ever echoed back — the guidance names variables, never their
-/// contents (FR-035).
-pub fn integration_status(
-    app_id: Option<&str>,
-    app_slug: Option<&str>,
-    private_key: Option<&str>,
-    git_available: bool,
-) -> RepositoryIntegrationStatus {
-    fn present(value: Option<&str>) -> bool {
-        value.is_some_and(|v| !v.trim().is_empty())
-    }
-
-    let mut missing: Vec<&str> = Vec::new();
-    if !present(app_id) {
-        missing.push(REPO_APP_ID_ENV);
-    }
-    if !present(app_slug) {
-        missing.push(REPO_APP_SLUG_ENV);
-    }
-    if !present(private_key) {
-        missing.push(REPO_APP_PRIVATE_KEY_ENV);
-    }
-
-    let mut problems: Vec<String> = Vec::new();
-    if !missing.is_empty() {
-        problems.push(format!(
-            "This instance has no repository integration configured. \
-             Register an application with your repository host, install it on \
-             nothing yet, and set: {}.",
-            missing.join(", ")
-        ));
-    }
-    if !git_available {
-        problems.push(
-            "The `git` binary was not found on this server. Repository \
-             synchronisation runs git over HTTPS, so install git and restart \
-             the server."
-                .to_string(),
-        );
-    }
-
-    if problems.is_empty() {
-        RepositoryIntegrationStatus {
-            configured: true,
-            operator_guidance: None,
-        }
-    } else {
-        RepositoryIntegrationStatus {
-            configured: false,
-            operator_guidance: Some(problems.join(" ")),
-        }
-    }
-}
-
-/// [`integration_status`] against this process's environment.
-///
-/// Public because the mutations need the same answer before they start a
-/// grant a Game Master cannot finish — the check has to be one function, or
-/// the query and the flow it gates will eventually disagree.
+/// There was briefly a second copy of this logic here, a pure function taking
+/// the three values as arguments. It was the more testable shape and it became
+/// dead the moment this was rewired to parse the key rather than check for its
+/// presence — while staying green, because its own tests were the only thing
+/// calling it. Two implementations of one rule is how they drift; the rules and
+/// their tests now live together in `repo_host`.
 ///
 /// T014 (`src/server/src/repo_host.rs`) should extend this by constructing
 /// the host application once at startup, so that a private key which is
@@ -524,56 +455,11 @@ impl LoreSyncQuery {
 mod tests {
     use super::*;
 
-    /// FR-036c. Three conditions, so a partially-configured instance is told
-    /// which part is missing — the failure mode this replaces is an operator
-    /// who set two of the three and is told only "not configured".
-    #[test]
-    fn a_partial_registration_names_the_missing_pieces() {
-        let status = integration_status(Some("12345"), None, Some("-----BEGIN..."), true);
-
-        assert!(!status.configured);
-        let guidance = status
-            .operator_guidance
-            .expect("guidance when unconfigured");
-        assert!(guidance.contains(REPO_APP_SLUG_ENV), "{guidance}");
-        assert!(!guidance.contains(REPO_APP_ID_ENV), "{guidance}");
-    }
-
-    /// A variable set to whitespace is set to nothing. Configuration files
-    /// that template an empty value are common, and treating `""` as present
-    /// would report a usable integration and then fail at the grant.
-    #[test]
-    fn a_blank_value_counts_as_missing() {
-        let status = integration_status(Some("  "), Some("slug"), Some("key"), true);
-        assert!(!status.configured);
-    }
-
-    /// R1. A missing binary makes the integration exactly as unusable as a
-    /// missing registration, and the operator learns it at the same moment.
-    #[test]
-    fn a_missing_git_binary_is_reported_as_unconfigured() {
-        let status = integration_status(Some("12345"), Some("slug"), Some("key"), false);
-
-        assert!(!status.configured);
-        assert!(
-            status
-                .operator_guidance
-                .expect("guidance when unconfigured")
-                .contains("git"),
-        );
-    }
-
-    #[test]
-    fn a_complete_registration_offers_no_guidance() {
-        let status = integration_status(Some("12345"), Some("slug"), Some("key"), true);
-        assert_eq!(
-            status,
-            RepositoryIntegrationStatus {
-                configured: true,
-                operator_guidance: None,
-            }
-        );
-    }
+    // The registration diagnostics moved to `crate::repo_host`, where the
+    // implementation now lives. They were exercising a second copy of the
+    // same rules here — a copy that stopped being called when the diagnostic
+    // was rewired to actually parse the key, and stayed green because its own
+    // tests were the only thing keeping it alive.
 
     /// An unrecognised stored state resolves towards attention, never towards
     /// "working". The alternative is a build that quietly reports a
