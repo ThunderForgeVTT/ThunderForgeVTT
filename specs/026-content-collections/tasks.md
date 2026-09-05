@@ -74,18 +74,18 @@ the original untouched.
 
 ### Server — authoring
 
-- [ ] T013 [US1] Implement `create_collection_impl`, `update_collection_impl` and `delete_collection_impl` in `src/server/src/graphql/mutations_collections.rs`, each requiring DM authority over the world (`is_dm_of_world`). Deleting a collection deletes no artifacts (FR-004).
-- [ ] T014 [US1] Implement `add_collection_member_impl` in the same file, enforcing: the artifact belongs to the collection's world (FR-003); `restriction_reason` returns `None` or the add is refused with that sentence (FR-001a); the collection holds fewer than 100 members (FR-005a) with a message naming the limit.
-- [ ] T015 [US1] Implement `remove_collection_member_impl`, deleting only the membership row (FR-004).
-- [ ] T016 [P] [US1] Implement the `collection` and `worldCollections` queries in `src/server/src/graphql/queries/collections.rs`, both requiring authority over the world. Add no other listing surface (FR-020).
-- [ ] T017 [US1] Write unit tests for T013–T016 in `mutations_collections.rs`: a non-DM is refused; a cross-world artifact is refused; a restricted artifact is refused with a reason; the 101st member is refused; removing a member leaves the artifact present.
+- [X] T013 [US1] Implement `create_collection_impl`, `update_collection_impl` and `delete_collection_impl` in `src/server/src/graphql/mutations_collections.rs`, each requiring DM authority over the world (`is_dm_of_world`). Deleting a collection deletes no artifacts (FR-004).
+- [X] T014 [US1] Implement `add_collection_member_impl` in the same file, enforcing: the artifact belongs to the collection's world (FR-003); `restriction_reason` returns `None` or the add is refused with that sentence (FR-001a); the collection holds fewer than 100 members (FR-005a) with a message naming the limit.
+- [X] T015 [US1] Implement `remove_collection_member_impl`, deleting only the membership row (FR-004).
+- [X] T016 [P] [US1] Implement the `collection` and `worldCollections` queries in `src/server/src/graphql/queries/collections.rs`, both requiring authority over the world. Add no other listing surface (FR-020).
+- [X] T017 [US1] Write unit tests for T013–T016 in `mutations_collections.rs`: a non-DM is refused; a cross-world artifact is refused; a restricted artifact is refused with a reason; the 101st member is refused; removing a member leaves the artifact present.
 
 ### Server — sharing and the anonymous read
 
-- [ ] T018 [US1] Implement `create_collection_share_link_impl` in `src/server/src/graphql/mutations_collection_shares.rs`, requiring **Owner** level (following `create_ability_share_link_impl`), calling `generate_link_code()`, and **re-checking every member's restriction at share time** — the shipped ability path re-checks because sharing "is the one path that escapes the world".
-- [ ] T019 [US1] Implement `shared_collection_impl` in the same file and wire it as the `sharedCollection` query **without** `authenticated_user(ctx)?`. Resolve each member via `resolve_member`; return visible members, counts by type, and a `withheldCount` that is a number and never a name. Apply the T012 rate limiter first.
-- [ ] T020 [US1] Make the four refusal cases — unknown code, revoked share, deleted collection, no active share — return the **same sentence**, so an outsider cannot distinguish them (FR-009d).
-- [ ] T021 [US1] Write unit tests asserting the anonymous preview carries no world id, no world name, and no member list of the source world, modelled on the shipped `shared_ability_preview_omits_source_world_identity`.
+- [X] T018 [US1] Implement `create_collection_share_link_impl` in `src/server/src/graphql/mutations_collection_shares.rs`, requiring **Owner** level (following `create_ability_share_link_impl`), calling `generate_link_code()`, and **re-checking every member's restriction at share time** — the shipped ability path re-checks because sharing "is the one path that escapes the world".
+- [X] T019 [US1] Implement `shared_collection_impl` in the same file and wire it as the `sharedCollection` query **without** `authenticated_user(ctx)?`. Resolve each member via `resolve_member`; return visible members, counts by type, and a `withheldCount` that is a number and never a name. Apply the T012 rate limiter first.
+- [X] T020 [US1] Make the four refusal cases — unknown code, revoked share, deleted collection, no active share — return the **same sentence**, so an outsider cannot distinguish them (FR-009d).
+- [X] T021 [US1] Write unit tests asserting the anonymous preview carries no world id, no world name, and no member list of the source world, modelled on the shipped `shared_ability_preview_omits_source_world_identity`.
 
 ### Server — copying
 

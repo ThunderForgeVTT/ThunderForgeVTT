@@ -71,9 +71,17 @@ async fn graphql_handler(
 /// rights holder.
 async fn graphql_public_handler(
     Extension(schema): Extension<AppSchema>,
+    headers: axum::http::HeaderMap,
     req: GraphQLRequest,
 ) -> GraphQLResponse {
-    schema.execute(req.into_inner()).await.into()
+    // Spec 026 (FR-009c): the anonymous collection read is rate limited, and
+    // this is the only layer that can see who the caller is — the resolver has
+    // headers nowhere. Derived with the same `client_ip` the auth limiter uses,
+    // so the two cannot disagree about who somebody is.
+    let caller = thunderforge_server::graphql::mutations_collection_shares::AnonymousCaller(
+        thunderforge_server::auth_middleware::client_ip(&headers),
+    );
+    schema.execute(req.into_inner().data(caller)).await.into()
 }
 
 async fn graphql_ws_handler(

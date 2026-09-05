@@ -73,6 +73,9 @@ pub use queries::{
 };
 
 // Phase 4.10.B: Invite & Membership mutations for multiplayer campaigns
+// Spec 026: content collections — authoring, and (separately) sharing.
+pub mod mutations_collection_shares;
+pub mod mutations_collections;
 pub mod mutations_invites;
 pub mod share_codes;
 pub use mutations_invites::InviteMutation;
@@ -3052,6 +3055,10 @@ pub struct QueryRoot(
     mutations_item_abilities::ItemAbilityQuery,
     AbilityPermissionQuery,
     AbilityShareQuery,
+    // Spec 026: a world's own collections. The ONLY listing surface here.
+    mutations_collections::CollectionQuery,
+    // Spec 026: `sharedCollection` — the anonymous read (ADR-070).
+    mutations_collection_shares::CollectionShareQuery,
     ActorAbilityQuery,
     ItemQuery,
     ItemPermissionQuery,
@@ -3104,6 +3111,9 @@ pub struct MutationRoot(
     AbilityMutation,
     AbilityPermissionMutation,
     AbilityShareMutation,
+    // Spec 026: gather artifacts into a named collection.
+    mutations_collections::CollectionMutation,
+    mutations_collection_shares::CollectionShareMutation,
     ActorAbilityMutation,
     ItemMutation,
     ItemPermissionMutation,

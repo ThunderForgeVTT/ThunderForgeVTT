@@ -185,7 +185,12 @@ fn ensure_csrf_cookie(state: &AppState, cookies: &Cookies) {
     )));
 }
 
-fn client_ip(headers: &HeaderMap) -> String {
+/// The caller's IP, as best the headers report it.
+///
+/// Public because spec 026's anonymous collection read needs the same answer
+/// for its own rate limiter, and two ways of deciding who a caller is would
+/// eventually disagree.
+pub fn client_ip(headers: &HeaderMap) -> String {
     if let Some(forwarded) = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok())
         && let Some(first) = forwarded.split(',').next()
     {
