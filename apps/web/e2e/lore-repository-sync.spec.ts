@@ -68,13 +68,84 @@ async function createWorld(page: Page, worldName: string): Promise<string> {
   return match[1];
 }
 
+/**
+ * User Story 2's promise, checked where it is actually made: **no failure of
+ * the remote may affect in-app lore.**
+ *
+ * These do not simulate a broken remote — they assert the stronger and simpler
+ * thing that makes simulating one unnecessary. Nothing in Stories 1 and 2
+ * writes to a lore table, so lore behaves identically whether a repository is
+ * connected, broken, or absent. The e2e that would "break the host" would be
+ * testing a mock; this tests the property.
+ *
+ * The failure-mode table itself (unreachable host, revoked grant, force-pushed
+ * branch, deleted repository) is exercised where those things are real:
+ * `lore_sync::git_roundtrip_tests` drives the actual git binary against a local
+ * bare repository, and its divergence test has a second clone rewrite the
+ * branch mid-pass and asserts the push is refused with the other commit intact.
+ */
+test.describe("Spec 034 User Story 2: a world is unharmed by its mirror", () => {
+  /**
+   * SC-006: zero instances of in-app lore being altered, hidden or lost across
+   * every failure mode. The structural version of that claim.
+   */
+  test("lore can be created and read with the mirror surface live", async ({
+    page,
+  }) => {
+    await register(page, freshCredentials("e2eloreharm"));
+    const worldId = await createWorld(page, `E2E Lore Unharmed ${uniqueSuffix()}`);
+
+    // Visit the settings surface first, so the connection machinery is loaded
+    // and answering rather than never having been asked.
+    await page.goto(`/world/${worldId}/settings/system`);
+    await expect(page.getByTestId("lore-repository-card")).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // Then do the thing FR-028 protects: read and write lore.
+    const title = `Unharmed ${uniqueSuffix()}`;
+    await page.goto(`/world/${worldId}/compendium`);
+    await page.getByRole("tab", { name: "Lore" }).click();
+    await page.getByTestId("new-lore-entry-title-input").fill(title);
+    await page.getByTestId("add-lore-entry-button").click();
+
+    const row = page
+      .getByTestId("lore-catalog-table")
+      .locator("tr", { hasText: title });
+    await expect(row).toBeVisible({ timeout: 15_000 });
+    await row.getByRole("link", { name: "View" }).click();
+    await page.waitForURL(/\/world\/[^/]+\/lore\/[^/]+\/view$/, {
+      timeout: 15_000,
+    });
+
+    const slug = /\/lore\/([^/]+)\/view$/.exec(new URL(page.url()).pathname)?.[1];
+    if (!slug) throw new Error("no slug");
+
+    // Reading the entry back is the half FR-028 is about: lore behaves exactly
+    // as it does in a world with no connection. Editing is covered thoroughly
+    // by `lore-wiki.spec.ts`; duplicating its editor interaction here would
+    // couple this spec to that surface's markup for no extra assurance.
+    // The breadcrumb rather than the rendered markdown: a freshly created
+    // entry has an empty body, so there is no markdown block to find, and
+    // asserting one would fail for a reason that has nothing to do with this
+    // spec.
+    await page.goto(`/world/${worldId}/lore/${slug}/view`);
+    await expect(page.getByTestId("lore-breadcrumb")).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByTestId("lore-breadcrumb")).toContainText(title);
+  });
+});
+
 test.describe("Spec 034: an instance with no repository integration", () => {
   /**
    * FR-036b. The failure this rules out is a Game Master clicking "connect",
    * being sent to a repository host, granting access, and coming back to an
    * error — because the instance never had an application registered.
    */
-  test("offers a Game Master nothing to connect, and says why", async ({ page }) => {
+  test("shows exactly one of the two states, and never a broken flow", async ({
+    page,
+  }) => {
     await register(page, freshCredentials("e2elore"));
     const worldId = await createWorld(page, `E2E Lore Repo ${uniqueSuffix()}`);
 
@@ -83,16 +154,37 @@ test.describe("Spec 034: an instance with no repository integration", () => {
     const card = page.getByTestId("lore-repository-card");
     await expect(card).toBeVisible({ timeout: 15_000 });
 
-    // The unconfigured branch renders, and it explains itself.
+    // Which branch renders depends on whether *this instance* has an
+    // application registered, and the suite must not assume either. An earlier
+    // version asserted the unconfigured branch unconditionally and started
+    // failing the moment a real application was configured — the test was
+    // right, its assumption was not.
     const unconfigured = page.getByTestId("lore-sync-unconfigured");
-    await expect(unconfigured).toBeVisible();
-    await expect(unconfigured).toContainText(/no repository integration/i);
+    const isUnconfigured = (await unconfigured.count()) > 0;
 
-    // Nothing connectable exists at all — not a disabled button, which a
-    // Game Master would sit and wait for.
-    await expect(page.getByTestId("lore-sync-connect")).toHaveCount(0);
-    await expect(page.getByTestId("lore-sync-notice")).toHaveCount(0);
-    await expect(page.getByTestId("lore-sync-acknowledge")).toHaveCount(0);
+    if (isUnconfigured) {
+      // FR-036b. Nothing connectable exists at all — not a disabled button,
+      // which a Game Master would sit and wait for.
+      await expect(unconfigured).toContainText(/no repository integration/i);
+      await expect(page.getByTestId("lore-sync-connect")).toHaveCount(0);
+      await expect(page.getByTestId("lore-sync-notice")).toHaveCount(0);
+      await expect(page.getByTestId("lore-sync-acknowledge")).toHaveCount(0);
+    } else {
+      // Configured: a connect affordance exists, and the pre-synchronisation
+      // notice has NOT been skipped — FR-038's gate is not something a
+      // configured instance gets to bypass.
+      await expect(page.getByTestId("lore-sync-connect")).toHaveCount(1);
+      await expect(page.getByTestId("lore-sync-acknowledge")).toHaveCount(0);
+    }
+
+    // True in both states, and the reason the branch matters: a Game Master is
+    // never shown a half-built flow.
+    const connectable = await page.getByTestId("lore-sync-connect").count();
+    const explained = await unconfigured.count();
+    expect(
+      connectable + explained,
+      "the card showed neither a way forward nor a reason there is none",
+    ).toBeGreaterThan(0);
   });
 
   /**

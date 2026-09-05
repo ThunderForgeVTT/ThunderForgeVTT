@@ -230,6 +230,27 @@ diesel::table! {
 }
 
 diesel::table! {
+    lore_pending_incoming_changes (id) {
+        id -> Uuid,
+        connection_id -> Uuid,
+        lore_entry_id -> Nullable<Uuid>,
+        kind -> Text,
+        repository_path -> Text,
+        proposed_title -> Nullable<Text>,
+        incoming_body -> Nullable<Text>,
+        base_revision_id -> Nullable<Uuid>,
+        app_revision_id -> Nullable<Uuid>,
+        also_changed_in_app -> Bool,
+        status -> Text,
+        detected_at -> Timestamp,
+        decided_at -> Nullable<Timestamp>,
+        decided_by -> Nullable<Uuid>,
+        applied_revision_id -> Nullable<Uuid>,
+        created_entry_id -> Nullable<Uuid>,
+    }
+}
+
+diesel::table! {
     lore_repository_connections (id) {
         id -> Uuid,
         world_id -> Uuid,
@@ -1088,6 +1109,8 @@ diesel::joinable!(lore_exported_entries -> world_lore_entries (lore_entry_id));
 diesel::joinable!(lore_exported_entries -> world_lore_revisions (exported_revision_id));
 diesel::joinable!(lore_fidelity_notes -> lore_repository_connections (connection_id));
 diesel::joinable!(lore_fidelity_notes -> world_lore_entries (lore_entry_id));
+diesel::joinable!(lore_pending_incoming_changes -> lore_repository_connections (connection_id));
+diesel::joinable!(lore_pending_incoming_changes -> users (decided_by));
 diesel::joinable!(lore_repository_connections -> worlds (world_id));
 diesel::joinable!(lore_sync_runs -> lore_repository_connections (connection_id));
 diesel::joinable!(oauth_authorization_sessions -> oauth_providers (provider_id));
@@ -1195,6 +1218,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     lore_disassociation_notices,
     lore_exported_entries,
     lore_fidelity_notes,
+    lore_pending_incoming_changes,
     lore_repository_connections,
     lore_sync_runs,
     oauth_authorization_sessions,

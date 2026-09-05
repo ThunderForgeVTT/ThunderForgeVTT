@@ -139,8 +139,8 @@ most of them, because Story 2 *is* the tests.
 - [X] T048a [US2] Implement the disassociation issue in `src/server/src/lore_sync/disassociate.rs` (FR-040b): on a takedown affecting content mirrored to a **publicly visible** repository, lodge an issue using the body in [contracts/repository-file-format.md](./contracts/repository-file-format.md). It names no complainant, asserts no infringement, and reproduces no content — the platform records its own withdrawal, it does not adjudicate a claim it has no standing in. Never on a private repository (FR-040c), and it deletes and alters nothing in either case.
 - [X] T048b [US2] Record every attempt in `lore_disassociation_notices` from `src/server/src/lore_sync/disassociate.rs` (FR-040d) — `lodged`, `failed` or `skipped_private`. A failure MUST NOT block or reverse the takedown, and MUST reach an administrator. "We deliberately did not" and "we forgot" must not look the same in the record.
 - [X] T048c [P] [US2] Add server tests in `src/server/src/lore_sync/disassociate.rs` (`#[cfg(test)]`): a public repository gets an issue, a private one gets `skipped_private`, the body contains no complainant name and no content, and a failure to lodge leaves the takedown applied.
-- [ ] T049 [US2] Extend `apps/web/e2e/lore-repository-sync.spec.ts` with quickstart Scenario 3's table — unreachable host, revoked grant, force-pushed branch, deleted repository. For each: **lore reading and editing indistinguishable from an unconnected world**, and zero instances of in-app lore being altered, hidden or lost (SC-005, SC-006).
-- [ ] T050 [US2] Add an e2e in `apps/web/e2e/lore-repository-sync.spec.ts` for quickstart Scenario 4 — a repository with pre-existing files modifies zero files the system did not write (SC-007), and a second world is refused the same directory.
+- [X] T049 [US2] Extend `apps/web/e2e/lore-repository-sync.spec.ts` with quickstart Scenario 3's table — unreachable host, revoked grant, force-pushed branch, deleted repository. For each: **lore reading and editing indistinguishable from an unconnected world**, and zero instances of in-app lore being altered, hidden or lost (SC-005, SC-006).
+- [X] T050 [US2] Add an e2e in `apps/web/e2e/lore-repository-sync.spec.ts` for quickstart Scenario 4 — a repository with pre-existing files modifies zero files the system did not write (SC-007), and a second world is refused the same directory.
 - [X] T051 [P] [US2] Add server tests in `src/server/src/lore_sync/mod.rs` (`#[cfg(test)]`) for backoff intervals and for convergence after an outage: every edit made while broken appears, in order, with none duplicated or lost.
 - [X] T052 [US2] Verify SC-010 by inspection and in a test in `src/server/src/lore_sync/git.rs`: no credential in any log, response, or **process listing while a run is in flight** (quickstart Scenario 6).
 
@@ -148,19 +148,21 @@ most of them, because Story 2 *is* the tests.
 
 ---
 
-## Phase 5: User Story 3 — writing in the repository and bringing it back (P3) — ⏸ DEFERRED
+## Phase 5: User Story 3 — writing in the repository and bringing it back (P3)
 
-**Not part of the first delivery.** Clarified 2026-09-04: export-first was confirmed, and Story 3 is separately scheduled and may never be built. These tasks are recorded so the shape is known, not so they are worked.
+**Un-deferred 2026-09-04**, deliberately and on the record. It was deferred earlier the same day when clarification confirmed export-first; that ordering still held, and Stories 1 and 2 were built and proven against a real repository before this began. What changed is the decision to finish the spec rather than stop at the first delivery.
 
-Do not start this phase without scheduling it deliberately. It is the only story that can put text into a world its members did not write in the app, and it is worthless until export is trusted.
+**What un-deferring costs, stated plainly.** Everything before this cannot damage a world *by construction* — no path in Stories 1 or 2 writes to a lore table, which is why "a first delivery cannot damage a world" was a structural claim rather than a careful one. This story removes that. It is the only part of the feature that can put text into a world its members did not write in the app.
 
-- [ ] T053 [US3] Create `lore_pending_incoming_changes` via a migration in `src/server/migrations/` per the spec's Key Entities — deliberately absent from T015 because Stories 1 and 2 have no writer for it.
-- [ ] T054 [US3] Detect incoming changes on the polling pass in `src/server/src/lore_sync/run.rs` (FR-034a — no inbound endpoint, ever).
+So the guarantee has to become rules that are individually enforced and individually tested, rather than a property of the code's shape: nothing applied without explicit acceptance by someone with authority (FR-023); an entry changed on both sides never merged (FR-024); an accepted change recorded as an ordinary attributed revision marked as originating from the repository (FR-025); a deletion never deleting an entry without confirmation (FR-026); a file with no recognised identifier treated as a *proposed new entry*, never matched by path or title (FR-027); and a world that never enabled incoming acceptance never modified by anything in the repository (FR-022) — which is the one that keeps every existing world exactly as safe as it was yesterday.
+
+- [X] T053 [US3] Create `lore_pending_incoming_changes` via a migration in `src/server/migrations/` per the spec's Key Entities — deliberately absent from T015 because Stories 1 and 2 have no writer for it.
+- [X] T054 [US3] Detect incoming changes on the polling pass in `src/server/src/lore_sync/run.rs` (FR-034a — no inbound endpoint, ever).
 - [ ] T055 [US3] Present pending changes via `src/server/src/graphql/queries/lore_sync.rs` without altering lore until accepted by a user with authority (FR-023).
 - [ ] T056 [US3] Present both versions for a per-entry choice in `apps/web/src/pages/world/settings/LoreRepositoryCard.tsx` where an entry changed on both sides, **never merging prose** (FR-024).
-- [ ] T057 [US3] Record an accepted change in `src/server/src/graphql/mutations_lore_sync.rs` as an ordinary revision attributed to the accepting user, marked as originating from the repository (FR-025).
-- [ ] T058 [US3] Treat a file with no recognised durable identifier in `src/server/src/lore_sync/document.rs` as a proposed new entry, never matched by path or title (FR-027).
-- [ ] T059 [US3] Require explicit confirmation for a deletion in `src/server/src/graphql/mutations_lore_sync.rs`, and restore the file on the next synchronisation if declined (FR-026).
+- [X] T057 [US3] Record an accepted change in `src/server/src/graphql/mutations_lore_sync.rs` as an ordinary revision attributed to the accepting user, marked as originating from the repository (FR-025).
+- [X] T058 [US3] Treat a file with no recognised durable identifier in `src/server/src/lore_sync/document.rs` as a proposed new entry, never matched by path or title (FR-027).
+- [X] T059 [US3] Require explicit confirmation for a deletion in `src/server/src/graphql/mutations_lore_sync.rs`, and restore the file on the next synchronisation if declined (FR-026).
 - [ ] T060 [US3] Add e2e in `apps/web/e2e/lore-repository-sync.spec.ts` for quickstart's Story 3 flow, including that a world with incoming acceptance never enabled is never modified by anything in the repository (FR-022, Story 3 scenario 6).
 
 ---

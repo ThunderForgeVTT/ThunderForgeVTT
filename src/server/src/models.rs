@@ -2,16 +2,17 @@ use crate::schema::{
     admin_bootstrap_oauth_sessions, admin_bootstrap_setup, auth_security_settings,
     canvas_image_assets, content_moderation_actions, fog_masks, game_systems, interaction_requests,
     interactives, light_sources, login_two_factor_challenges, lore_disassociation_notices,
-    lore_exported_entries, lore_fidelity_notes, lore_repository_connections, lore_sync_runs,
-    oauth_authorization_sessions, oauth_link_challenges, oauth_providers, players_online,
-    scene_state_fingerprints, scenes, shapes, tokens, user_oauth_accounts, user_sessions, users,
-    walls, world_abilities, world_ability_effects, world_ability_permissions, world_ability_shares,
-    world_actor_abilities, world_actor_claims, world_actor_images, world_actor_inventory,
-    world_actor_permissions, world_actor_shares, world_actor_system_data, world_actors,
-    world_authoring_tool_grants, world_chat_messages, world_combatants, world_combats,
-    world_events, world_invites, world_item_abilities, world_item_effects, world_item_permissions,
-    world_item_prices, world_item_shares, world_items, world_lore_entries, world_lore_image_assets,
-    world_lore_links, world_lore_permissions, world_lore_revisions, world_lore_tags, world_members,
+    lore_exported_entries, lore_fidelity_notes, lore_pending_incoming_changes,
+    lore_repository_connections, lore_sync_runs, oauth_authorization_sessions,
+    oauth_link_challenges, oauth_providers, players_online, scene_state_fingerprints, scenes,
+    shapes, tokens, user_oauth_accounts, user_sessions, users, walls, world_abilities,
+    world_ability_effects, world_ability_permissions, world_ability_shares, world_actor_abilities,
+    world_actor_claims, world_actor_images, world_actor_inventory, world_actor_permissions,
+    world_actor_shares, world_actor_system_data, world_actors, world_authoring_tool_grants,
+    world_chat_messages, world_combatants, world_combats, world_events, world_invites,
+    world_item_abilities, world_item_effects, world_item_permissions, world_item_prices,
+    world_item_shares, world_items, world_lore_entries, world_lore_image_assets, world_lore_links,
+    world_lore_permissions, world_lore_revisions, world_lore_tags, world_members,
     world_roll_records, world_tokens, worlds,
 };
 use diesel::prelude::*;
@@ -2074,6 +2075,54 @@ pub struct LoreExportedEntry {
     pub current_path: String,
     pub exported_revision_id: Option<uuid::Uuid>,
     pub last_exported_at: Option<chrono::NaiveDateTime>,
+}
+
+/// A change observed in the repository that the world does not have, waiting
+/// for a person to decide about it (spec 034 Key Entities, User Story 3).
+///
+/// Every field here exists to keep one rule, and the rules are the point of
+/// the row rather than a property of the code that happens to read it:
+///
+/// * `lore_entry_id` is `None` for a file carrying no identifier we recognise
+///   — FR-027's proposed new entry. There is no column holding a guess at
+///   which entry such a file "probably" is, because a guess by path or title
+///   is exactly what FR-027 forbids.
+/// * `also_changed_in_app`, with `base_revision_id` and `app_revision_id`, is
+///   FR-024's evidence: what to present, and that there are two of them. There
+///   is no merged text anywhere in this struct and there must never be.
+/// * `status` is FR-023 and FR-026: the row is inert until a named user moves
+///   it off `pending`, and a deletion is a proposal like any other.
+/// * `applied_revision_id` is FR-025's mark of origin — an accepted change
+///   becomes an ordinary `world_lore_revisions` row, and a revision is
+///   repository-originated exactly when one of these points at it.
+#[derive(Queryable, Selectable, Insertable, AsChangeset, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = lore_pending_incoming_changes)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct LorePendingIncomingChange {
+    pub id: uuid::Uuid,
+    pub connection_id: uuid::Uuid,
+    /// `None` means "this proposes a new entry" (FR-027), never "we could not
+    /// work out which entry it was".
+    pub lore_entry_id: Option<uuid::Uuid>,
+    pub kind: String,
+    /// Where the file was seen. A label for a reviewer; never a key.
+    pub repository_path: String,
+    pub proposed_title: Option<String>,
+    /// The incoming markdown in authored form. `None` only for a deletion,
+    /// which proposes no text.
+    pub incoming_body: Option<String>,
+    pub base_revision_id: Option<uuid::Uuid>,
+    pub app_revision_id: Option<uuid::Uuid>,
+    pub also_changed_in_app: bool,
+    pub status: String,
+    pub detected_at: chrono::NaiveDateTime,
+    pub decided_at: Option<chrono::NaiveDateTime>,
+    pub decided_by: Option<uuid::Uuid>,
+    pub applied_revision_id: Option<uuid::Uuid>,
+    /// Which entry an accepted proposal for a new entry turned into. Separate
+    /// from `lore_entry_id` so that "this was never matched to anything" stays
+    /// auditable after acceptance.
+    pub created_entry_id: Option<uuid::Uuid>,
 }
 
 /// Something that could not be represented in the repository (FR-013, FR-037).

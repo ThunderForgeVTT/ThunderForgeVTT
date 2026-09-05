@@ -1,17 +1,30 @@
 //! Spec 034: mirroring a world's lore into a repository its owner controls.
 //!
-//! # What is here, and what deliberately is not
+//! # What is here, and the guarantee that changed
 //!
-//! The first delivery is **export only** — User Story 1 (the mirror) and User
-//! Story 2 (failing without harm). User Story 3, accepting edits made in the
-//! repository, is separately scheduled and may never be built.
+//! Until 2026-09-04 this module could not damage a world **by construction**:
+//! every lore table was read and none was written, so "a first delivery cannot
+//! damage a world" was a property of the code's shape rather than of anyone's
+//! care. That paragraph is gone because the thing it described is gone —
+//! `incoming` writes revisions, and leaving a comfortable claim standing after
+//! it stopped being true is worse than never having made it.
 //!
-//! That boundary is the most important property of this module and it is
-//! visible in the code rather than only asserted: **nothing here writes to a
-//! world's lore.** Every lore table is read and none is written, which is what
-//! makes "a first delivery cannot damage a world" true by construction rather
-//! than by care. A change that adds a write path to this module has left the
-//! first delivery, whatever the commit message says.
+//! What replaces a structural guarantee is a narrower one, and it is worth
+//! knowing exactly how narrow. **`incoming::IncomingEnabled` is the only key to
+//! every write path**: its fields are private, its sole constructor refuses a
+//! connection that has not opted in (FR-022) or that has been deactivated
+//! (FR-041a), and `detect`, `record`, `accept` and `decline` all demand one.
+//! There is no way to spell a lore write for a world that never asked for it.
+//!
+//! So the guarantee is no longer "this module cannot write" but "this module
+//! cannot write **without a value only an opted-in connection can produce**".
+//! That is weaker, it is checked by the compiler rather than by review, and a
+//! change that widens `IncomingEnabled`'s constructor is the change to look at
+//! hardest — not a change that adds another function.
+//!
+//! Export remains what most of this module does, and User Story 3 remains the
+//! only part that can put text into a world its members did not write in the
+//! app.
 //!
 //! # The shape of a synchronisation
 //!
@@ -43,6 +56,7 @@ pub mod binding;
 pub mod disassociate;
 pub mod document;
 pub mod git;
+pub mod incoming;
 pub mod paths;
 pub mod plan;
 pub mod schedule;
