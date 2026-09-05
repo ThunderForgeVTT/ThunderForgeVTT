@@ -60,12 +60,17 @@ pub mod incoming;
 pub mod paths;
 pub mod plan;
 pub mod schedule;
+pub mod state;
 pub mod takedown_hook;
 pub mod workspace;
 
 #[cfg(test)]
 #[path = "constraints_tests.rs"]
 mod constraints_tests;
+
+#[cfg(test)]
+#[path = "scale_tests.rs"]
+mod scale_tests;
 
 #[cfg(test)]
 #[path = "git_roundtrip_tests.rs"]

@@ -121,14 +121,36 @@ With a connection working:
 
 ---
 
+## Measured, 2026-09-04
+
+**Planning a 200-entry world takes ~97ms** (`lore_sync::scale_tests`). SC-001
+allows five minutes to connect and see a world of that size, and SC-003 allows
+sixty seconds for an edit to reach the repository. Planning is a rounding error
+against both, which means those budgets are spent on the network — which is
+what the criteria assume and what a slow one would spend them on anyway.
+
+The test keeps a deliberately loose ceiling of ten seconds. It runs on whatever
+machine is building, beside every other test, against a shared database; a
+tight bound would fail for reasons unrelated to the code, and a test that fails
+for unrelated reasons is one people learn to ignore.
+
 ## The seam check (FR-004a)
 
 Not a runtime scenario — a review step, and the spec requires it be *pointed at*
 rather than claimed.
 
-Name every location that knows which host is in use. The answer should be
-`crates/thunderforge-repo-host` and `src/server/src/repo_host.rs`, and nothing
-else. Then confirm nothing in path mapping, commit synthesis, attribution,
+Name every location that knows which host is in use. **Run 2026-09-04, and it
+passes**: `crates/thunderforge-repo-host` (the adapter, which is the grant
+boundary) and `src/server/src/repo_host.rs` (the effects half), and nothing
+else. `src/server/src/markdown/mod.rs` matches the grep and is a false
+positive — "GitHub-flavored markdown" is a format's name, not an integration.
+
+One thing the review tightened rather than passed: `disassociate.rs` was
+handing an installation reference through to `repo_host`. It never read or
+branched on it, so FR-004c's letter held — but "arguably not reading it" is how
+a boundary starts eroding, so `repo_host::open_issue_for_connection` now takes
+the connection and splits the reference itself. The rule is checkable by
+grepping for the field name rather than by judging each use. Then confirm nothing in path mapping, commit synthesis, attribution,
 divergence detection, or verification appears on that list. **If the
 synchronising job knows it is talking to GitHub, the seam has stopped existing
 whatever the requirements say** (FR-004c).

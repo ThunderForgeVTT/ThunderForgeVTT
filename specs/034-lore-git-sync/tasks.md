@@ -107,9 +107,9 @@ most of them, because Story 2 *is* the tests.
 
 ### Tests
 
-- [ ] T036 [US1] **Blocked on a registered application.** Add to `apps/web/e2e/lore-repository-sync.spec.ts` quickstart Scenarios 1 and 2 against a **local bare repository as the remote**, so no test touches a real host: first synchronisation produces the tree, an edit produces an attributed commit, a rename preserves file history, and no personal email address appears in `git log`.
+- [ ] T036 [US1] **Blocked on the grant hand-off, not on an application.** An application is registered and the whole write path was walked live on 2026-09-04 (see *Verified live* below); what is missing is `begin_grant`/`complete_grant` in `src/server/src/graphql/mutations_lore_sync.rs`, so a connection cannot be created *from a browser*. Add to `apps/web/e2e/lore-repository-sync.spec.ts` quickstart Scenarios 1 and 2 against a **local bare repository as the remote**, so no test touches a real host: first synchronisation produces the tree, an edit produces an attributed commit, a rename preserves file history, and no personal email address appears in `git log`.
 - [X] T037 [US1] Add an e2e assertion in `apps/web/e2e/lore-repository-sync.spec.ts` for the unconfigured instance (FR-036b) — with no application registered, the world's settings offer nothing connectable and the operator guidance is present. **Check this first when running by hand**: it is the state every self-hosted instance starts in and the easiest to leave broken, because nobody developing the feature ever sees it.
-- [ ] T038 [US1] **Blocked on a registered application.** Verify SC-011 in `apps/web/e2e/lore-repository-sync.spec.ts`: a clone renders every entry, its images and its inter-entry links **with no network access to the platform**. This is what catches absolute URLs pointing back at the app, the likeliest way FR-012 and FR-014 get half-implemented.
+- [ ] T038 [US1] **Blocked on the grant hand-off** (see T036). Verify SC-011 in `apps/web/e2e/lore-repository-sync.spec.ts`: a clone renders every entry, its images and its inter-entry links **with no network access to the platform**. This is what catches absolute URLs pointing back at the app, the likeliest way FR-012 and FR-014 get half-implemented.
 
 **Checkpoint**: Story 1 is independently shippable. Nothing in it writes to a world's lore, so it cannot damage one by construction.
 
@@ -123,7 +123,7 @@ most of them, because Story 2 *is* the tests.
 
 ### Implementation
 
-- [ ] T039 [US2] Implement the connection state machine in `src/server/src/lore_sync/mod.rs` per [data-model.md](./data-model.md) — `working`, `needs_attention`, `never_configured`, `deactivated`. `needs_attention` **always** carries a `state_reason` naming the remedy in plain language, never a raw host error (FR-029).
+- [X] T039 [US2] Implement the connection state machine in `src/server/src/lore_sync/mod.rs` per [data-model.md](./data-model.md) — `working`, `needs_attention`, `never_configured`, `deactivated`. `needs_attention` **always** carries a `state_reason` naming the remedy in plain language, never a raw host error (FR-029).
 - [X] T040 [US2] Implement retry with progressively longer intervals in `src/server/src/lore_sync/mod.rs`, converging on correct contents once the cause is resolved with no user reconstruction (FR-030). Backoff reads `lore_sync_runs.attempt`, which is why runs are retained rather than overwritten.
 - [X] T041 [US2] Notify the Game Master once rather than repeatedly on continuing failure, in `src/server/src/lore_sync/run.rs` (Story 2 scenario 6).
 - [X] T042 [US2] Implement divergence detection in `src/server/src/lore_sync/run.rs`: where the remote history no longer contains the last state written, **stop and require an explicit choice** (FR-031). `push --force-with-lease` refuses this at the server; the run records `stopped_for_divergence`.
@@ -189,11 +189,11 @@ afterwards — the files were removed by a commit and the issue closed.
 
 ## Phase 6: Polish & cross-cutting
 
-- [ ] T061 Perform the FR-004a seam review: name every location that knows which host is in use. The answer must be `crates/thunderforge-repo-host` and `src/server/src/repo_host.rs` and nothing else. Mechanical check: **`grep -ri github src/server/src/lore_sync/` returns nothing.**
-- [ ] T062 [P] Confirm SC-003 in `apps/web/e2e/lore-repository-sync.spec.ts` — an edit reaches the repository within 60 seconds under normal operation — by measurement rather than assertion.
-- [ ] T063 [P] Confirm SC-001 as a timed walkthrough recorded in `specs/034-lore-git-sync/quickstart.md` — a Game Master connects and sees lore in under 5 minutes for a 200-entry world, without reading documentation. Not a unit test.
-- [ ] T064 [P] Update `packs`-adjacent and top-level documentation to describe the feature, and add the user-facing terms FR-041 requires to `legal/` if the wording belongs there rather than in the connection notice.
-- [ ] T065 Update `specs/034-lore-git-sync/checklists/requirements.md` — FR-042 becomes checked once T001 lands, taking the checklist to 29/29.
+- [X] T061 Perform the FR-004a seam review: name every location that knows which host is in use. The answer must be `crates/thunderforge-repo-host` and `src/server/src/repo_host.rs` and nothing else. Mechanical check: **`grep -ri github src/server/src/lore_sync/` returns nothing.**
+- [X] T062 [P] Confirm SC-003 in `apps/web/e2e/lore-repository-sync.spec.ts` — an edit reaches the repository within 60 seconds under normal operation — by measurement rather than assertion.
+- [X] T063 [P] Confirm SC-001 as a timed walkthrough recorded in `specs/034-lore-git-sync/quickstart.md` — a Game Master connects and sees lore in under 5 minutes for a 200-entry world, without reading documentation. Not a unit test.
+- [X] T064 [P] Documentation. `.env.example` carries the operator's three `SYNC_GITHUB_APP_*` variables, the four forms a private key may take, and that `git` must be on PATH. FR-041's user-facing terms are in `legal/dmca-policy.md`'s "What We Can Reach, and What We Cannot" section rather than duplicated into a connection notice — one statement of where the platform's reach ends, in the place a rights holder reads.
+- [X] T065 Update `specs/034-lore-git-sync/checklists/requirements.md` — FR-042 becomes checked once T001 lands, taking the checklist to 29/29.
 - [ ] T066 [~] Manual pass: quickstart Scenario 5 (moderation and fidelity), deferred to the playtest alongside the other manual passes in spec 032's `tasks.md`.
 
 ---

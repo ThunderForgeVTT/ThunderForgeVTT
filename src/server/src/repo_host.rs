@@ -998,6 +998,28 @@ pub async fn open_issue(
         })
 }
 
+/// Open an issue on the repository a connection is bound to.
+///
+/// Takes the connection rather than its parts, so that a caller in `lore_sync`
+/// never has to name `installation_ref` at all. FR-004c says no component past
+/// the grant may *read* an installation identifier, and passing one through
+/// opaquely is arguably not reading it — but "arguably" is how a boundary
+/// starts eroding. Splitting the reference out of the connection is this
+/// module's job, and doing it here means the rule is checkable by grepping for
+/// the field name rather than by judging each use.
+pub async fn open_issue_for_connection(
+    connection: &crate::models::LoreRepositoryConnection,
+    title: &str,
+    body: &str,
+) -> Result<String, String> {
+    let (owner, name) = connection
+        .repository_ref
+        .split_once('/')
+        .ok_or_else(|| format!("\"{}\" is not owner/name", connection.repository_ref))?;
+
+    open_issue(&connection.installation_ref, owner, name, title, body).await
+}
+
 /// What happened when a world tried to claim a repository.
 #[derive(Debug)]
 pub enum ClaimOutcome {

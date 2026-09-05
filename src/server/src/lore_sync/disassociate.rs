@@ -264,20 +264,8 @@ pub fn split_repository_ref(repository_ref: &str) -> Option<(&str, &str)> {
 /// vendor header while still being the thing the rule exists to prevent. What
 /// matters to a second host is where the HTTP lives, not which strings it
 /// contains.
-async fn open_issue(
-    installation_ref: &str,
-    owner: &str,
-    name: &str,
-    body: &str,
-) -> Result<String, String> {
-    crate::repo_host::open_issue(
-        installation_ref,
-        owner,
-        name,
-        DISASSOCIATION_ISSUE_TITLE,
-        body,
-    )
-    .await
+async fn open_issue(connection: &LoreRepositoryConnection, body: &str) -> Result<String, String> {
+    crate::repo_host::open_issue_for_connection(connection, DISASSOCIATION_ISSUE_TITLE, body).await
 }
 
 /// Attempt the disassociation for one connection, and record what happened.
@@ -304,21 +292,27 @@ pub async fn disassociate_after_takedown(
                      established that lodging an issue would not write into a private workspace."
                 .to_string(),
         },
-        Decision::Lodge => match split_repository_ref(&connection.repository_ref) {
-            None => Outcome::Failed {
+        // The reference is still validated here rather than left to fail at
+        // the boundary, because a malformed one is a *configuration* problem
+        // this module can name precisely — "not an owner/name reference" —
+        // where the same failure arriving from `repo_host` would read as the
+        // host being unreachable. The split's result is discarded; splitting
+        // for real is the grant boundary's job (FR-004c).
+        Decision::Lodge if split_repository_ref(&connection.repository_ref).is_none() => {
+            Outcome::Failed {
                 reason: format!(
                     "\"{}\" is not an owner/name repository reference.",
                     connection.repository_ref
                 ),
-            },
-            Some((owner, name)) => {
-                let body = disassociation_body(world_name, disabled_on);
-                match open_issue(&connection.installation_ref, owner, name, &body).await {
-                    Ok(issue_ref) => Outcome::Lodged { issue_ref },
-                    Err(reason) => Outcome::Failed { reason },
-                }
             }
-        },
+        }
+        Decision::Lodge => {
+            let body = disassociation_body(world_name, disabled_on);
+            match open_issue(connection, &body).await {
+                Ok(issue_ref) => Outcome::Lodged { issue_ref },
+                Err(reason) => Outcome::Failed { reason },
+            }
+        }
     };
 
     // A recording failure is the one thing this cannot itself record. It is
