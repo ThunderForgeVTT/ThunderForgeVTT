@@ -107,9 +107,9 @@ most of them, because Story 2 *is* the tests.
 
 ### Tests
 
-- [ ] T036 [US1] Add `apps/web/e2e/lore-repository-sync.spec.ts` covering quickstart Scenarios 1 and 2 against a **local bare repository as the remote**, so no test touches a real host: first synchronisation produces the tree, an edit produces an attributed commit, a rename preserves file history, and no personal email address appears in `git log`.
-- [ ] T037 [US1] Add an e2e assertion in `apps/web/e2e/lore-repository-sync.spec.ts` for the unconfigured instance (FR-036b) — with no application registered, the world's settings offer nothing connectable and the operator guidance is present. **Check this first when running by hand**: it is the state every self-hosted instance starts in and the easiest to leave broken, because nobody developing the feature ever sees it.
-- [ ] T038 [US1] Verify SC-011 in `apps/web/e2e/lore-repository-sync.spec.ts`: a clone renders every entry, its images and its inter-entry links **with no network access to the platform**. This is what catches absolute URLs pointing back at the app, the likeliest way FR-012 and FR-014 get half-implemented.
+- [ ] T036 [US1] **Blocked on a registered application.** Add to `apps/web/e2e/lore-repository-sync.spec.ts` quickstart Scenarios 1 and 2 against a **local bare repository as the remote**, so no test touches a real host: first synchronisation produces the tree, an edit produces an attributed commit, a rename preserves file history, and no personal email address appears in `git log`.
+- [X] T037 [US1] Add an e2e assertion in `apps/web/e2e/lore-repository-sync.spec.ts` for the unconfigured instance (FR-036b) — with no application registered, the world's settings offer nothing connectable and the operator guidance is present. **Check this first when running by hand**: it is the state every self-hosted instance starts in and the easiest to leave broken, because nobody developing the feature ever sees it.
+- [ ] T038 [US1] **Blocked on a registered application.** Verify SC-011 in `apps/web/e2e/lore-repository-sync.spec.ts`: a clone renders every entry, its images and its inter-entry links **with no network access to the platform**. This is what catches absolute URLs pointing back at the app, the likeliest way FR-012 and FR-014 get half-implemented.
 
 **Checkpoint**: Story 1 is independently shippable. Nothing in it writes to a world's lore, so it cannot damage one by construction.
 
