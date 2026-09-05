@@ -29,6 +29,7 @@ pub mod attributes;
 pub mod auth;
 pub mod auth_middleware;
 pub mod canvas_assets_serve;
+pub mod collections;
 pub mod config;
 pub mod crypto;
 pub mod db_types;

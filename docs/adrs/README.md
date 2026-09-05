@@ -76,6 +76,8 @@ This directory contains architecture decisions for ThunderForgeVTT, captured usi
 | [20260904-066](./20260904-066-a_bundled_pack_ships_its_own_web_surfaces.md) | Accepted | A Bundled Pack Ships Its Own Web Surfaces, Found at Build Time |
 | [20260904-067](./20260904-067-a_user_initiated_mirror_is_not_a_public_repository.md) | Accepted | A User-Initiated Mirror to a Repository They Own Is Not a Centralized Public Repository |
 | [20260904-068](./20260904-068-signing_backend_for_repository_application_tokens.md) | Accepted | The Signing Backend for Repository Application Tokens, and the Three Things It Traded |
+| [20260905-069](./20260905-069-collection_share_dmca_repository_determination.md) | Accepted | A Link-Shared Collection Is Not a Centralized Public Repository — With One Accepted Risk |
+| [20260905-070](./20260905-070-anonymous_collection_read_path.md) | Accepted | A Collection's Preview Is Read Without an Account |
 
 > **Note (2026-08-19):** ADRs 020–024 originally collided with an unrelated "pack system" batch that reused the same day-020 through day-024 numbers. The world-domain ADRs (020–024 above) were committed first and are documented here; the colliding pack-system ADRs were renumbered to 026–030. See `docs/SYSTEM_HOOKS_API_GUIDE.md` and ADR-036's "Related Decisions" for the corrected references.
 

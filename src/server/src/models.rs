@@ -9,11 +9,11 @@ use crate::schema::{
     world_ability_effects, world_ability_permissions, world_ability_shares, world_actor_abilities,
     world_actor_claims, world_actor_images, world_actor_inventory, world_actor_permissions,
     world_actor_shares, world_actor_system_data, world_actors, world_authoring_tool_grants,
-    world_chat_messages, world_combatants, world_combats, world_events, world_invites,
-    world_item_abilities, world_item_effects, world_item_permissions, world_item_prices,
-    world_item_shares, world_items, world_lore_entries, world_lore_image_assets, world_lore_links,
-    world_lore_permissions, world_lore_revisions, world_lore_tags, world_members,
-    world_roll_records, world_tokens, worlds,
+    world_chat_messages, world_collection_members, world_collection_shares, world_collections,
+    world_combatants, world_combats, world_events, world_invites, world_item_abilities,
+    world_item_effects, world_item_permissions, world_item_prices, world_item_shares, world_items,
+    world_lore_entries, world_lore_image_assets, world_lore_links, world_lore_permissions,
+    world_lore_revisions, world_lore_tags, world_members, world_roll_records, world_tokens, worlds,
 };
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -2164,4 +2164,97 @@ pub struct LoreDisassociationNotice {
     pub outcome: String,
     pub issue_ref: Option<String>,
     pub failure_reason: Option<String>,
+}
+
+// ============================================================================
+// Spec 026: content collections. Governed by ADR-069 (the DMCA determination)
+// and ADR-070 (the anonymous read path).
+// ============================================================================
+
+/// A named set of one world's artifacts (FR-001, FR-003).
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_collections)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct Collection {
+    pub id: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_collections)]
+pub struct NewCollection {
+    pub id: uuid::Uuid,
+    pub world_id: uuid::Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub created_by: uuid::Uuid,
+    pub updated_by: uuid::Uuid,
+}
+
+/// One artifact's membership in a collection.
+///
+/// `member_id` is deliberately not a foreign key, and `member_type` is what
+/// says which table it points into. The migration carries the full reasoning;
+/// the short version is that a member deleted from its world must not make the
+/// collection unopenable, which a cascading FK would guarantee it did.
+///
+/// There is no `disabled` or `restricted` field here on purpose. Both are
+/// resolved fresh on every read — see `collections::resolve`.
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_collection_members)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct CollectionMember {
+    pub id: uuid::Uuid,
+    pub collection_id: uuid::Uuid,
+    pub member_type: String,
+    pub member_id: uuid::Uuid,
+    pub sort_order: i32,
+    pub added_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_collection_members)]
+pub struct NewCollectionMember {
+    pub id: uuid::Uuid,
+    pub collection_id: uuid::Uuid,
+    pub member_type: String,
+    pub member_id: uuid::Uuid,
+    pub sort_order: i32,
+    pub added_by: uuid::Uuid,
+}
+
+/// The unguessable code by which a collection is reachable (FR-007, FR-008).
+///
+/// Separate from the collection so one may be shared, revoked and shared again
+/// without losing its identity. `revoked` is a soft flag, never a row delete —
+/// FR-010 needs a revoked link to render a distinct "no longer available"
+/// state, which a deleted row could not distinguish from a code that never
+/// existed.
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_collection_shares)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct CollectionShare {
+    pub id: uuid::Uuid,
+    pub collection_id: uuid::Uuid,
+    pub share_code: String,
+    pub created_by: uuid::Uuid,
+    pub revoked: bool,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = world_collection_shares)]
+pub struct NewCollectionShare {
+    pub id: uuid::Uuid,
+    pub collection_id: uuid::Uuid,
+    pub share_code: String,
+    pub created_by: uuid::Uuid,
 }

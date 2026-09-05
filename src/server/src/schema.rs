@@ -739,6 +739,46 @@ diesel::table! {
 }
 
 diesel::table! {
+    world_collection_members (id) {
+        id -> Uuid,
+        collection_id -> Uuid,
+        #[max_length = 32]
+        member_type -> Varchar,
+        member_id -> Uuid,
+        sort_order -> Int4,
+        added_by -> Uuid,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    world_collection_shares (id) {
+        id -> Uuid,
+        collection_id -> Uuid,
+        #[max_length = 32]
+        share_code -> Varchar,
+        created_by -> Uuid,
+        revoked -> Bool,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    world_collections (id) {
+        id -> Uuid,
+        world_id -> Uuid,
+        #[max_length = 200]
+        name -> Varchar,
+        description -> Nullable<Text>,
+        created_by -> Uuid,
+        updated_by -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     world_combatants (id) {
         id -> Uuid,
         combat_id -> Uuid,
@@ -779,93 +819,6 @@ diesel::table! {
         updated_at -> Timestamp,
         created_by -> Uuid,
         updated_by -> Uuid,
-    }
-}
-
-diesel::table! {
-    world_genie_puzzle_clock_rewards (id) {
-        id -> Uuid,
-        clock_id -> Uuid,
-        trigger_segment -> Int4,
-        reward_resource_type -> Nullable<Text>,
-        reward_resource_amount -> Nullable<Int4>,
-        reward_item_id -> Nullable<Uuid>,
-        reward_item_quantity -> Nullable<Int4>,
-        recipient_mode -> Text,
-        granted_at -> Nullable<Timestamp>,
-        created_by -> Uuid,
-        created_at -> Timestamp,
-    }
-}
-
-diesel::table! {
-    world_genie_puzzle_clocks (id) {
-        id -> Uuid,
-        session_id -> Uuid,
-        label -> Text,
-        segments_current -> Int4,
-        segments_max -> Int4,
-        resolved_at -> Nullable<Timestamp>,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
-    }
-}
-
-diesel::table! {
-    world_genie_resource_holdings (id) {
-        id -> Uuid,
-        session_id -> Uuid,
-        actor_id -> Uuid,
-        resource_type -> Text,
-        quantity -> Int4,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
-    }
-}
-
-diesel::table! {
-    world_genie_sessions (id) {
-        id -> Uuid,
-        world_id -> Uuid,
-        wishes_remaining -> Int4,
-        doom_clock_current -> Int4,
-        doom_clock_max -> Int4,
-        status -> Text,
-        created_by -> Uuid,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
-    }
-}
-
-diesel::table! {
-    world_genie_shop_listings (id) {
-        id -> Uuid,
-        actor_id -> Uuid,
-        item_id -> Uuid,
-        price_kind -> Text,
-        price_resource_type -> Nullable<Text>,
-        price_resource_amount -> Nullable<Int4>,
-        price_item_id -> Nullable<Uuid>,
-        price_item_quantity -> Nullable<Int4>,
-        created_by -> Uuid,
-        created_at -> Timestamp,
-    }
-}
-
-diesel::table! {
-    world_genie_trade_proposals (id) {
-        id -> Uuid,
-        session_id -> Uuid,
-        from_actor_id -> Uuid,
-        from_resource_type -> Text,
-        from_quantity -> Int4,
-        to_actor_id -> Uuid,
-        to_resource_type -> Text,
-        to_quantity -> Int4,
-        status -> Text,
-        created_by -> Uuid,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
     }
 }
 
@@ -1170,23 +1123,16 @@ diesel::joinable!(world_authoring_tool_grants -> world_members (world_member_id)
 diesel::joinable!(world_chat_messages -> scenes (scene_id));
 diesel::joinable!(world_chat_messages -> users (author_user_id));
 diesel::joinable!(world_chat_messages -> worlds (world_id));
+diesel::joinable!(world_collection_members -> users (added_by));
+diesel::joinable!(world_collection_members -> world_collections (collection_id));
+diesel::joinable!(world_collection_shares -> users (created_by));
+diesel::joinable!(world_collection_shares -> world_collections (collection_id));
+diesel::joinable!(world_collections -> worlds (world_id));
 diesel::joinable!(world_combatants -> world_actors (actor_id));
 diesel::joinable!(world_combats -> scenes (scene_id));
 diesel::joinable!(world_combats -> users (created_by));
 diesel::joinable!(world_combats -> worlds (world_id));
 diesel::joinable!(world_events -> worlds (world_id));
-diesel::joinable!(world_genie_puzzle_clock_rewards -> users (created_by));
-diesel::joinable!(world_genie_puzzle_clock_rewards -> world_genie_puzzle_clocks (clock_id));
-diesel::joinable!(world_genie_puzzle_clock_rewards -> world_items (reward_item_id));
-diesel::joinable!(world_genie_puzzle_clocks -> world_genie_sessions (session_id));
-diesel::joinable!(world_genie_resource_holdings -> world_actors (actor_id));
-diesel::joinable!(world_genie_resource_holdings -> world_genie_sessions (session_id));
-diesel::joinable!(world_genie_sessions -> users (created_by));
-diesel::joinable!(world_genie_sessions -> worlds (world_id));
-diesel::joinable!(world_genie_shop_listings -> users (created_by));
-diesel::joinable!(world_genie_shop_listings -> world_actors (actor_id));
-diesel::joinable!(world_genie_trade_proposals -> users (created_by));
-diesel::joinable!(world_genie_trade_proposals -> world_genie_sessions (session_id));
 diesel::joinable!(world_invites -> users (created_by));
 diesel::joinable!(world_invites -> worlds (world_id));
 diesel::joinable!(world_item_abilities -> world_abilities (ability_id));
@@ -1266,15 +1212,12 @@ diesel::allow_tables_to_appear_in_same_query!(
     world_actors,
     world_authoring_tool_grants,
     world_chat_messages,
+    world_collection_members,
+    world_collection_shares,
+    world_collections,
     world_combatants,
     world_combats,
     world_events,
-    world_genie_puzzle_clock_rewards,
-    world_genie_puzzle_clocks,
-    world_genie_resource_holdings,
-    world_genie_sessions,
-    world_genie_shop_listings,
-    world_genie_trade_proposals,
     world_invites,
     world_item_abilities,
     world_item_effects,

@@ -40,6 +40,16 @@ consideration only, gated on demonstrated demand and a fresh review. Collections
 are shared by link, exactly like singletons, and FR-020 below forbids the
 enumeration that would turn one into the other by increment.
 
+## Clarifications
+
+### Session 2026-09-04
+
+- Q: When a lore entry restricted to only some of a world's members is put into a shared collection, who should be able to read it? → A: Refuse restricted members entirely — an artifact restricted to a subset of world members cannot be added to a collection, and the interface says why.
+- Q: Should scenes be shareable in a collection from the first delivery? → A: Yes — scenes are in from the start, images included. The interim storage behaviour (share the stored path, delete nothing) makes the reference-counting dependency bind on deletion rather than on copying.
+- Q: Does someone need an account to open a collection's link? → A: No — anyone with the link may view it signed out, matching spec 025's existing shares. Copying still requires an account and authority in a destination world.
+- Q: Should a collection have a size limit? → A: A member count of 100, refused on adding with a clear message rather than silently truncated. Bytes are not separately bounded because scene images are shared rather than duplicated.
+- Q: Who owns the copies, and may a recipient re-share them? → A: The person who performed the copy owns them outright in their own world, with the same rights as anything they authored, and may put them into a collection of their own.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A Game Master gathers their work and shares it once (Priority: P1)
@@ -187,6 +197,9 @@ that could not be brought across.
   removed from it, while the collection is shared.
 - **A member the owner never had the right to share.** Ownership of what is in a
   collection is not established by putting it in one.
+- **A member that becomes restricted after being added** (FR-001b), and the
+  reverse: a restriction lifted while the collection is shared, which must
+  return the member without the owner rebuilding anything.
 - **Two members of the same type with the same name.** Copying must produce two
   records, not one.
 - **A scene whose background image is shared, by content, with another world's
@@ -194,8 +207,15 @@ that could not be brought across.
   holds, and revoking must not make another world's scene lose its background.
 - **A collection copied into the world it came from.** Legitimate — duplicating
   one's own work — and must not collide with the originals.
-- **A very large collection**: hundreds of members, or a scene with a large
-  image, copied over a slow connection.
+- **A collection at its limit**: exactly 100 members, one of them a scene with a
+  large image, copied over a slow connection.
+- **An anonymous visitor opening a collection repeatedly**, or walking codes.
+  FR-009c's rate limit is what stands between an unguessable code and an
+  attacker allowed to guess indefinitely.
+- **A recipient re-shares what they received**, and their recipient re-shares in
+  turn. Each link is its own collection with its own owner and its own
+  revocation; revoking the first does not reach the copies made from it, because
+  those copies are their owners' own content (FR-012, FR-017a).
 - **The same collection copied twice into one world**, deliberately or by a
   double-click.
 - **A member that is itself a copy** taken from someone else's share.
@@ -208,14 +228,88 @@ that could not be brought across.
 
 - **FR-001**: A user with authority over a world MUST be able to create a named
   collection and add artifacts from that world to it.
-- **FR-002**: A collection MUST be able to hold members of more than one type —
-  at minimum items, actors, abilities and lore entries.
+- **FR-001a**: An artifact whose visibility is restricted to a subset of its
+  world's members MUST NOT be addable to a collection, and the refusal MUST say
+  why.
+
+  **This is a refusal rather than a warning, deliberately.** A collection is
+  read by anyone holding its link, so a restricted artifact placed in one is
+  published to strangers — and that is the single failure in this feature its
+  owner cannot undo. A notice warns; a refusal prevents, and nothing here forces
+  the choice: an owner who wants to share something restricted may loosen the
+  restriction first, which is a deliberate act rather than a side effect of
+  adding to a list.
+
+  Spec 034 answered the same question with a mandatory acknowledged notice
+  (FR-037), and the difference is worth naming: there, mirroring *cannot*
+  preserve per-entry permissions because a repository has one access list, so
+  disclosure was the only option available. Here nothing is forced, so the
+  stronger answer is the right one.
+
+  **What this covers in practice, found by implementing it.** The clarification
+  was asked about "a lore entry restricted to only some of a world's members".
+  **No such category exists.** The permission ladder cannot express a
+  restriction: `Viewer` is both its floor and its default, and
+  `queries/lore.rs` states that "every caller — member or not — defaults to
+  `Viewer` when no explicit row exists". A grant row *elevates* one member; it
+  never withholds from the others. Verified against the schema, exactly one
+  member type carries a genuine restriction:
+
+  | Type | Axis | Restricts? |
+  |---|---|---|
+  | ability | `world_abilities.gm_only` | **Yes** — defaults false, so setting it is a deliberate act |
+  | scene | `scenes.hidden` | **No** — defaults *true*; see FR-001c |
+  | item, lore, actor | none | No — every member sees them all |
+
+  FR-001a therefore binds on GM-only abilities today. It is still implemented
+  exhaustively across all five types, so that adding a restriction axis later
+  lands in a function that already has a place for it.
+- **FR-001c**: A scene MUST NOT be refused for being `hidden`. That flag is
+  **play-staging state, not a permission** — it defaults to true, so every
+  scene is hidden when created, and refusing on it would refuse nearly every
+  scene in the product while FR-002 puts scenes in scope precisely because
+  sharing a *place* is the flagship case.
+
+  It would also force a worse outcome than it prevents: to share a scene, an
+  owner would first have to unhide it **in their own world**, revealing the room
+  to their players mid-campaign as a side effect of sharing it with a friend.
+  The deliberate act is adding the scene and sharing the collection, which is
+  the same standard every other member type is held to.
+- **FR-001b**: An artifact already in a collection that *becomes* restricted MUST
+  be treated as withheld from that point (the same behaviour FR-021 gives a
+  moderated member): absent from the collection, not copied, and its absence
+  visible without naming it. A restriction applied after the fact must take
+  effect, or the refusal in FR-001a is a gate with a way around it.
+- **FR-002**: A collection MUST be able to hold members of more than one type:
+  items, actors, abilities, lore entries **and scenes**.
+
+  Scenes were ambiguous in the first draft — absent from this list while Story 1
+  and FR-018/FR-019 assumed them — and are confirmed in scope (clarified
+  2026-09-04). They are also the point: the flagship use is sharing a *place*,
+  and a haunted manor without its rooms is a list of nouns. They are the only
+  member type carrying binary assets, which is where FR-019's storage question
+  comes from, and deferring them would only mean answering it later anyway.
 - **FR-003**: A collection MUST only hold artifacts from the world it belongs
   to. A collection spanning worlds is a different feature and is out of scope.
 - **FR-004**: Adding an artifact to a collection MUST NOT alter that artifact,
   and removing it MUST NOT delete it.
 - **FR-005**: A collection MUST be editable — members added and removed — for as
   long as its owner holds authority over its world.
+- **FR-005a**: A collection MUST hold at most **100 members**. An attempt to
+  exceed that MUST be refused when adding, with a message naming the limit —
+  never silently truncated, and never accepted-then-failed at copy time.
+
+  A count rather than a byte ceiling, because a count is what a person can
+  reason about and what decides whether copying stays one action they wait out
+  rather than a background job with progress and resumption. Bytes are not
+  separately bounded: they are dominated by scene images, which the platform
+  already stores once however many rows refer to them, so a second limit would
+  mostly refuse copies that cost nothing.
+
+  A hundred is enough for a substantial adventure module. If it ever binds in
+  practice, raising it is a decision with evidence behind it; starting
+  unbounded would mean designing for eight hundred members on the strength of
+  no evidence at all.
 
 **Sharing**
 
@@ -227,6 +321,46 @@ that could not be brought across.
   search and leaks creation time.)
 - **FR-009**: Opening a collection's link MUST NOT grant any access to the world
   it came from, nor reveal that world's other content.
+- **FR-009a**: A collection MUST be viewable by anyone holding its link, without
+  an account (clarified 2026-09-04). It is what makes sharing with someone who
+  has not joined possible — which is most of the point — and what protects the
+  content is that the code is unguessable and the share is revocable, not a
+  login wall.
+
+  **Correction, recorded rather than quietly fixed.** When this was clarified it
+  was justified as matching how single-artifact shares already behave. It does
+  not. `sharedAbility`, `sharedItem` and `sharedActor` each call
+  `authenticated_user(ctx)?` before resolving — deliberately skipping the
+  *membership* check while still requiring a session. So a share link today
+  reaches any signed-in user, not any user at all, and this requirement is a
+  **divergence from shipped behaviour**, not an inheritance of it. The decision
+  stands on its own merits above; the plan must budget for building an
+  unauthenticated read path rather than reusing one.
+- **FR-009e**: Aligning the three existing single-artifact shares to the same
+  anonymous rule is **out of scope for this delivery** and is a follow-up. The
+  argument for anonymity applies to them equally, so leaving them authenticated
+  makes the product briefly inconsistent — but relaxing authentication on three
+  shipped, live share paths is a security-relevant change to features this spec
+  is not otherwise touching, and it deserves its own decision rather than
+  arriving as a side effect of a collections build.
+- **FR-009b**: **Copying still requires an account** and authority in a
+  destination world (FR-016). Viewing and copying are different acts with
+  different requirements, and conflating them would either lock out the
+  recipients this feature exists for or let an anonymous caller write into a
+  world.
+- **FR-009c**: Because the view is unauthenticated, requests for collections MUST
+  be rate limited per caller. Without it an unguessable code is only unguessable
+  until someone is allowed to guess indefinitely.
+
+  The existing limiter does not cover this. `rate_limit_auth_requests` keys on
+  the request **path** and returns early unless the path contains
+  `/authentication/`; every GraphQL operation in the product arrives at one
+  path. So this is a new limiter over a GraphQL operation, not a configuration
+  of the current one.
+- **FR-009d**: An unauthenticated view MUST reveal nothing about the source world
+  beyond the collection's own members — not its name, its other content, its
+  members, nor whether a given collection code exists as distinct from being
+  revoked in a way that could be probed.
 - **FR-010**: A collection's owner MUST be able to revoke it, after which its
   link reports it as no longer available — a distinct state from a link that
   never existed and from an error.
@@ -250,6 +384,18 @@ that could not be brought across.
   before a copy may be made there.
 - **FR-017**: Copying a collection twice MUST produce two independent sets, not
   a merge or a conflict.
+- **FR-017a**: The copies MUST be owned by **the person who performed the copy**,
+  in the destination world, carrying the same rights they would have over
+  anything they authored there — editing, deleting, and granting as usual
+  (clarified 2026-09-04). "Independent records" in FR-012 left ownership unsaid,
+  which would have let a copy land owned by nobody and leave a Game Master unable
+  to delete content they had just imported into their own world.
+- **FR-017b**: A recipient MAY put their copies into a collection of their own.
+  Re-sharing follows from ownership rather than being a separate grant. The
+  alternative — marking copies as derived and refusing to share them — would have
+  to survive editing to mean anything, and would not survive a recipient
+  retyping the text by hand, so it would restrict the honest and inconvenience
+  nobody else.
 - **FR-018**: A scene's image assets MUST be reachable from the copy without the
   copy depending on the source world continuing to exist.
 - **FR-019**: Copying a scene MUST NOT duplicate stored image bytes the platform
@@ -310,8 +456,13 @@ that could not be brought across.
   collection and share it in under three minutes, without reading documentation.
 - **SC-002**: A recipient can go from opening a link to having the content in
   their own world in a single confirmed action.
+- **SC-002a**: A collection at the 100-member limit copies within one action the
+  recipient waits out, rather than requiring a background job they return to.
 - **SC-003**: 100% of a collection's non-disabled members appear in the
   destination after a copy, and 0% of its disabled members do.
+- **SC-003a**: Zero artifacts restricted to a subset of their world's members
+  are reachable through any shared collection, verified across every artifact
+  type rather than sampled.
 - **SC-004**: Editing any copy produces no observable change in the source
   world, and vice versa, across every member type — verified for all of them,
   not sampled.
@@ -322,8 +473,13 @@ that could not be brought across.
 - **SC-007**: No query available to any caller returns a list of collections
   beyond those the caller owns — verified by inspection of every read path, not
   by sampling.
+- **SC-007a**: An unauthenticated caller can obtain, from any number of requests,
+  nothing about a world beyond the members of collections whose codes they
+  already hold.
 - **SC-008**: Copying a collection containing a scene whose image the platform
   already stores adds no additional stored bytes for that image.
+- **SC-008a**: A copied scene renders in the destination world with its
+  background, its walls and its lighting, without the source world existing.
 - **SC-009**: 90% of recipients shown a collection's preview can correctly state
   what it will add to their world before copying it.
 - **SC-010**: A takedown against one member is reflected in the collection
@@ -331,10 +487,15 @@ that could not be brought across.
 
 ## Assumptions
 
-- **The unit changes; the machinery does not.** Spec 025 built the share code,
-  the read-only preview, the transactional deep copy and revocation for single
-  artifacts. This generalises that rather than inventing a second mechanism, and
-  a plan that budgets for building sharing from scratch has misread what exists.
+- **The unit changes; most of the machinery does not.** Spec 025 built the share
+  code, the read-only preview, the transactional deep copy and revocation for
+  single artifacts. This generalises that rather than inventing a second
+  mechanism, and a plan that budgets for building sharing from scratch has
+  misread what exists. Three things are genuinely new and are not generalisations
+  of anything shipped: the **unauthenticated** read path (FR-009a), a
+  **GraphQL-level rate limiter** (FR-009c), and **scene copying** — no code in
+  this product duplicates a scene today, and a scene carries walls, lighting,
+  shapes, fog and its background asset row.
 
 - **Reference-counted object deletion is a hard dependency of FR-019.**
   `storage/dedupe.rs` stores one copy of any given image however many rows refer
