@@ -158,8 +158,8 @@ So the guarantee has to become rules that are individually enforced and individu
 
 - [X] T053 [US3] Create `lore_pending_incoming_changes` via a migration in `src/server/migrations/` per the spec's Key Entities — deliberately absent from T015 because Stories 1 and 2 have no writer for it.
 - [X] T054 [US3] Detect incoming changes on the polling pass in `src/server/src/lore_sync/run.rs` (FR-034a — no inbound endpoint, ever).
-- [ ] T055 [US3] Present pending changes via `src/server/src/graphql/queries/lore_sync.rs` without altering lore until accepted by a user with authority (FR-023).
-- [ ] T056 [US3] Present both versions for a per-entry choice in `apps/web/src/pages/world/settings/LoreRepositoryCard.tsx` where an entry changed on both sides, **never merging prose** (FR-024).
+- [X] T055 [US3] Present pending changes via `src/server/src/graphql/queries/lore_sync.rs` without altering lore until accepted by a user with authority (FR-023).
+- [X] T056 [US3] Present both versions for a per-entry choice in `apps/web/src/pages/world/settings/LoreRepositoryCard.tsx` where an entry changed on both sides, **never merging prose** (FR-024).
 - [X] T057 [US3] Record an accepted change in `src/server/src/graphql/mutations_lore_sync.rs` as an ordinary revision attributed to the accepting user, marked as originating from the repository (FR-025).
 - [X] T058 [US3] Treat a file with no recognised durable identifier in `src/server/src/lore_sync/document.rs` as a proposed new entry, never matched by path or title (FR-027).
 - [X] T059 [US3] Require explicit confirmation for a deletion in `src/server/src/graphql/mutations_lore_sync.rs`, and restore the file on the next synchronisation if declined (FR-026).

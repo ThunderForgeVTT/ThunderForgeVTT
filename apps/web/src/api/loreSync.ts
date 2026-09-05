@@ -343,3 +343,109 @@ export function resolveLoreSyncDivergence(
     { input },
   ).then((data) => data.resolveLoreSyncDivergence);
 }
+
+/**
+ * FR-024/FR-026/FR-027's three shapes, kept distinct rather than collapsed into
+ * a single "change": what a reviewer must decide differs per kind — an update
+ * replaces text, a deletion removes an entry, and a new entry creates one — and
+ * a UI that could not tell them apart would have to guess which question to ask.
+ */
+export type LoreIncomingKind = "UPDATE" | "NEW_ENTRY" | "DELETION";
+
+/**
+ * One proposal found in the repository, waiting on a person (FR-023). Nothing
+ * here has touched the world's lore: a pending change is a description of what
+ * *would* happen, and it stays that way until accepted.
+ *
+ * Both sides of the text travel together — `incomingBody` and `currentBody` —
+ * so a conflict can be shown as two whole texts. Deliberately no merged or
+ * unified field exists anywhere in this type: FR-024 forbids merging prose, and
+ * the way to keep a client from rendering a merge is to never hand it one.
+ */
+export interface LorePendingChange {
+  id: string;
+  kind: LoreIncomingKind;
+  /** Where in the repository it came from. A label, never an identity. */
+  repositoryPath: string;
+  proposedTitle?: string | null;
+  incomingBody?: string | null;
+  /** FR-024's flag: the entry also changed in the app since the last run. */
+  alsoChangedInApp: boolean;
+  detectedAt: string;
+  /** Null for a NEW_ENTRY — a file with no recognised identifier is matched to
+   * nothing (FR-027), not even by path or title. */
+  loreEntryId?: string | null;
+  currentTitle?: string | null;
+  currentBody?: string | null;
+}
+
+const PENDING_CHANGE_FIELDS = `
+  id
+  kind
+  repositoryPath
+  proposedTitle
+  incomingBody
+  alsoChangedInApp
+  detectedAt
+  loreEntryId
+  currentTitle
+  currentBody
+`;
+
+/** What the repository proposes, and nothing more: this query reports, it never
+ * applies (FR-023). An empty list is the ordinary case. */
+export function getLorePendingChanges(
+  worldId: string,
+): Promise<LorePendingChange[]> {
+  return postGraphQL<{ lorePendingChanges: LorePendingChange[] }>(
+    `
+      query LorePendingChanges($worldId: UUID!) {
+        lorePendingChanges(worldId: $worldId) {
+          ${PENDING_CHANGE_FIELDS}
+        }
+      }
+    `,
+    { worldId },
+  ).then((data) => data.lorePendingChanges);
+}
+
+/**
+ * Applies one change, as one explicit act by one person with authority
+ * (FR-023). Per change rather than in bulk: an "accept all" would let a
+ * conflict (FR-024) and a deletion (FR-026) be decided by a single click that
+ * asked neither question.
+ *
+ * The server records the result as an ordinary revision attributed to the
+ * accepting user (FR-025), which is why this returns only success — the entry's
+ * new state is read back through the ordinary lore surface, not this one.
+ */
+export function acceptLoreIncomingChange(
+  worldId: string,
+  changeId: string,
+): Promise<boolean> {
+  return postGraphQL<{ acceptLoreIncomingChange: boolean }>(
+    `
+      mutation AcceptLoreIncomingChange($worldId: UUID!, $changeId: UUID!) {
+        acceptLoreIncomingChange(worldId: $worldId, changeId: $changeId)
+      }
+    `,
+    { worldId, changeId },
+  ).then((data) => data.acceptLoreIncomingChange);
+}
+
+/** Refuses one change. The world's lore is left exactly as it was, and a
+ * declined deletion is undone in the repository on the next synchronisation
+ * (FR-026) — declining is the safe answer, not a destructive one. */
+export function declineLoreIncomingChange(
+  worldId: string,
+  changeId: string,
+): Promise<boolean> {
+  return postGraphQL<{ declineLoreIncomingChange: boolean }>(
+    `
+      mutation DeclineLoreIncomingChange($worldId: UUID!, $changeId: UUID!) {
+        declineLoreIncomingChange(worldId: $worldId, changeId: $changeId)
+      }
+    `,
+    { worldId, changeId },
+  ).then((data) => data.declineLoreIncomingChange);
+}

@@ -549,6 +549,80 @@ pub async fn resolve_lore_sync_divergence_impl(
     }
 }
 
+/// FR-023: nothing is applied until someone with authority says so.
+///
+/// Owner-level, re-checked here rather than trusted from whenever the change
+/// was detected — a change can sit pending for as long as nobody looks at it,
+/// and the person who may accept it is the person who has authority *now*.
+pub async fn accept_lore_incoming_change_impl(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    world_id: Uuid,
+    change_id: Uuid,
+) -> GraphQLResult<bool> {
+    require_world_owner(state, user_id, is_admin, world_id).await?;
+
+    let connection = load_connection(state, world_id)
+        .await?
+        .ok_or_else(no_connection)?;
+
+    // The gate, not a boolean check. `IncomingEnabled` is the only key to a
+    // lore write in this feature, and its constructor is where FR-022 and
+    // FR-041a are enforced — asking it here rather than re-testing the flags
+    // means this path cannot drift away from the rule.
+    let gate = crate::lore_sync::incoming::IncomingEnabled::for_connection(&connection)
+        .ok_or_else(|| {
+            Error::new("This world has not enabled accepting changes from its repository.")
+        })?;
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    tokio::task::spawn_blocking(move || {
+        crate::lore_sync::incoming::accept(&mut conn, &gate, change_id, user_id)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map(|_| true)
+    .map_err(|e| Error::new(e.to_string()))
+}
+
+/// FR-026: declining a proposed deletion is safe, and the next pass restores
+/// the file. Declining anything else simply leaves the world alone.
+pub async fn decline_lore_incoming_change_impl(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    world_id: Uuid,
+    change_id: Uuid,
+) -> GraphQLResult<bool> {
+    require_world_owner(state, user_id, is_admin, world_id).await?;
+
+    let connection = load_connection(state, world_id)
+        .await?
+        .ok_or_else(no_connection)?;
+    let gate = crate::lore_sync::incoming::IncomingEnabled::for_connection(&connection)
+        .ok_or_else(|| {
+            Error::new("This world has not enabled accepting changes from its repository.")
+        })?;
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    tokio::task::spawn_blocking(move || {
+        crate::lore_sync::incoming::decline(&mut conn, &gate, change_id, user_id)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map(|_| true)
+    .map_err(|e| Error::new(e.to_string()))
+}
+
 /// FR-041a: deactivate a connection against its owner's wishes.
 ///
 /// Administrator-only, and the resulting state is the one a Game Master cannot
@@ -706,6 +780,44 @@ impl LoreSyncMutation {
         .await
     }
 
+    /// FR-023. Apply one pending change, as an ordinary attributed revision.
+    async fn accept_lore_incoming_change(
+        &self,
+        ctx: &Context<'_>,
+        world_id: Uuid,
+        change_id: Uuid,
+    ) -> GraphQLResult<bool> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        accept_lore_incoming_change_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            world_id,
+            change_id,
+        )
+        .await
+    }
+
+    /// FR-026. Decline one. A declined deletion is restored by the next pass.
+    async fn decline_lore_incoming_change(
+        &self,
+        ctx: &Context<'_>,
+        world_id: Uuid,
+        change_id: Uuid,
+    ) -> GraphQLResult<bool> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        decline_lore_incoming_change_impl(
+            state,
+            auth_user.user_id,
+            auth_user.is_admin,
+            world_id,
+            change_id,
+        )
+        .await
+    }
+
     /// FR-041a. Deactivate a connection against its owner's wishes.
     ///
     /// Administrator-only. Exposed as a mutation rather than left to a database
@@ -798,6 +910,100 @@ mod tests {
             branch: None,
             directory: Some(directory.to_string()),
         }
+    }
+
+    /// **FR-022, at the boundary a client can actually reach.**
+    ///
+    /// The gate is enforced inside `incoming`, by a type. This asserts the
+    /// GraphQL surface asks for it rather than reimplementing a flag check —
+    /// a world that never opted in must be unable to have a change applied
+    /// even by someone with every permission.
+    #[tokio::test]
+    async fn a_world_that_never_opted_in_cannot_have_a_change_applied() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().expect("a connection");
+        let owner = insert_test_user(&mut conn);
+        let world = insert_test_world(&mut conn, owner);
+        // incoming_enabled defaults to false — the state every connection
+        // starts in, and the one FR-022 protects.
+        insert_connection_row(
+            &mut conn,
+            world,
+            owner,
+            &format!("o/{}", Uuid::now_v7()),
+            "lore",
+        );
+
+        let attempt = accept_lore_incoming_change_impl(
+            &state,
+            owner,
+            true, // even as an administrator
+            world,
+            Uuid::now_v7(),
+        )
+        .await;
+
+        let message = attempt.expect_err("a world that never opted in accepted a change");
+        assert!(
+            message.message.contains("has not enabled"),
+            "the refusal did not name the reason: {}",
+            message.message,
+        );
+    }
+
+    /// The same gate on the declining path. Declining is harmless, but a world
+    /// that never opted in has nothing to decline and should not be told it
+    /// does.
+    #[tokio::test]
+    async fn a_world_that_never_opted_in_cannot_decline_either() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().expect("a connection");
+        let owner = insert_test_user(&mut conn);
+        let world = insert_test_world(&mut conn, owner);
+        insert_connection_row(
+            &mut conn,
+            world,
+            owner,
+            &format!("o/{}", Uuid::now_v7()),
+            "lore",
+        );
+
+        assert!(
+            decline_lore_incoming_change_impl(&state, owner, false, world, Uuid::now_v7())
+                .await
+                .is_err(),
+        );
+    }
+
+    /// FR-041a again, through this door. An enforcement deactivation must
+    /// close every write path, not only the synchronising one.
+    #[tokio::test]
+    async fn a_deactivated_connection_cannot_apply_incoming_changes() {
+        use crate::schema::lore_repository_connections as c;
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().expect("a connection");
+        let owner = insert_test_user(&mut conn);
+        let world = insert_test_world(&mut conn, owner);
+        insert_connection_row(
+            &mut conn,
+            world,
+            owner,
+            &format!("o/{}", Uuid::now_v7()),
+            "lore",
+        );
+
+        // Opted in, and then deactivated. The flag alone would let this pass.
+        diesel::update(c::table.filter(c::world_id.eq(world)))
+            .set((c::incoming_enabled.eq(true), c::state.eq("deactivated")))
+            .execute(&mut conn)
+            .expect("deactivate");
+
+        assert!(
+            accept_lore_incoming_change_impl(&state, owner, true, world, Uuid::now_v7())
+                .await
+                .is_err(),
+            "a deactivated connection applied a change from its repository",
+        );
     }
 
     /// FR-041a. A deactivation the owner can undo is not a deactivation, and a

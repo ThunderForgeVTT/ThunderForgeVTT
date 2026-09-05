@@ -314,6 +314,130 @@ pub fn instance_repository_integration() -> RepositoryIntegrationStatus {
     }
 }
 
+/// One change the repository proposes, awaiting a decision.
+///
+/// Carries both texts where an entry changed on both sides, because FR-024
+/// requires them to be *presented* rather than reconciled — and a client that
+/// only received the incoming text could not show a person what they would be
+/// giving up.
+#[derive(SimpleObject)]
+pub struct GraphQLLorePendingChange {
+    pub id: Uuid,
+    pub kind: LoreIncomingKind,
+    pub repository_path: String,
+    pub proposed_title: Option<String>,
+    pub incoming_body: Option<String>,
+    /// FR-024's conflict flag. True means the same entry changed in the app
+    /// too, and the client must present both and merge neither.
+    pub also_changed_in_app: bool,
+    pub detected_at: chrono::DateTime<chrono::Utc>,
+    /// `None` for a proposed new entry — a file with no recognised identifier
+    /// is never matched to an existing entry (FR-027), and a null here is how
+    /// that is visible to a client rather than something it has to infer.
+    pub lore_entry_id: Option<Uuid>,
+    pub current_title: Option<String>,
+    pub current_body: Option<String>,
+}
+
+/// What a proposal would do.
+#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
+pub enum LoreIncomingKind {
+    Update,
+    NewEntry,
+    Deletion,
+}
+
+impl LoreIncomingKind {
+    fn from_db_str(value: &str) -> Self {
+        match value {
+            "new_entry" => Self::NewEntry,
+            "deletion" => Self::Deletion,
+            // An unrecognised kind resolves to the least destructive reading.
+            // A row a later migration adds must not be interpreted as a
+            // deletion by a build that does not understand it.
+            _ => Self::Update,
+        }
+    }
+}
+
+/// Every undecided change for a world.
+///
+/// Owner-level: a proposal carries the repository's text, which is content the
+/// world's members have not agreed to yet and which a player has no standing
+/// to read.
+pub async fn lore_pending_changes(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    world_id: Uuid,
+) -> GraphQLResult<Vec<GraphQLLorePendingChange>> {
+    require_world_owner(state, user_id, is_admin, world_id).await?;
+
+    let Some(connection) = load_connection(state, world_id).await? else {
+        return Ok(Vec::new());
+    };
+    let Some(gate) = crate::lore_sync::incoming::IncomingEnabled::for_connection(&connection)
+    else {
+        // Not opted in, or deactivated. An empty list rather than an error:
+        // "there is nothing to decide" is the true answer, and a client asking
+        // a world that never enabled this has not done anything wrong.
+        return Ok(Vec::new());
+    };
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    let rows = tokio::task::spawn_blocking(move || {
+        let pending = crate::lore_sync::incoming::pending(&mut conn, &gate)?;
+        let mut out = Vec::with_capacity(pending.len());
+        for row in pending {
+            // The app's current text, so both sides can be shown. Loaded per
+            // row rather than joined because the list is short by nature — a
+            // world with hundreds of undecided proposals has a problem this
+            // query is not going to fix.
+            let (current_title, current_body) = match row.lore_entry_id {
+                Some(entry_id) => crate::schema::world_lore_entries::table
+                    .filter(crate::schema::world_lore_entries::id.eq(entry_id))
+                    .select((
+                        crate::schema::world_lore_entries::title,
+                        crate::schema::world_lore_entries::content,
+                    ))
+                    .first::<(String, String)>(&mut conn)
+                    .optional()
+                    .unwrap_or(None)
+                    .map(|(t, b)| (Some(t), Some(b)))
+                    .unwrap_or((None, None)),
+                None => (None, None),
+            };
+            out.push((row, current_title, current_body));
+        }
+        Ok::<_, crate::lore_sync::incoming::IncomingError>(out)
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|e| Error::new(e.to_string()))?;
+
+    Ok(rows
+        .into_iter()
+        .map(
+            |(row, current_title, current_body)| GraphQLLorePendingChange {
+                id: row.id,
+                kind: LoreIncomingKind::from_db_str(&row.kind),
+                repository_path: row.repository_path,
+                proposed_title: row.proposed_title,
+                incoming_body: row.incoming_body,
+                also_changed_in_app: row.also_changed_in_app,
+                detected_at: row.detected_at.and_utc(),
+                lore_entry_id: row.lore_entry_id,
+                current_title,
+                current_body,
+            },
+        )
+        .collect())
+}
+
 /// The world's connection row, or `None`. No authority check — every caller
 /// makes its own, because the two questions ("is there one" and "may you see
 /// it") have different answers for the same row.
@@ -442,6 +566,18 @@ impl LoreSyncQuery {
     /// signed-in caller, because the operator guidance names this
     /// deployment's configuration and an anonymous visitor has no reason to
     /// read it.
+    /// FR-023. What the repository proposes, and nothing applied until a
+    /// person with authority says so.
+    async fn lore_pending_changes(
+        &self,
+        ctx: &Context<'_>,
+        world_id: Uuid,
+    ) -> GraphQLResult<Vec<GraphQLLorePendingChange>> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        lore_pending_changes(state, auth_user.user_id, auth_user.is_admin, world_id).await
+    }
+
     async fn instance_repository_integration(
         &self,
         ctx: &Context<'_>,

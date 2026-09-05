@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
 import {
+  acceptLoreIncomingChange,
   acknowledgeLoreSyncNotice,
   beginLoreRepositoryConnection,
+  declineLoreIncomingChange,
   getInstanceRepositoryIntegration,
   getLoreRepositoryConnection,
+  getLorePendingChanges,
   type ConnectionGrantHandoff,
+  type LorePendingChange,
   type LoreRepositoryConnection,
   type RepositoryIntegrationStatus,
 } from "@/api/loreSync";
@@ -45,6 +49,7 @@ export function LoreRepositoryCard({ worldId }: LoreRepositoryCardProps) {
   const [handoff, setHandoff] = useState<ConnectionGrantHandoff | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingChanges, setPendingChanges] = useState<LorePendingChange[]>([]);
 
   // Reset during render rather than at the top of the effect: this is state
   // derived from the arguments, and doing it in the effect commits one render
@@ -75,8 +80,20 @@ export function LoreRepositoryCard({ worldId }: LoreRepositoryCardProps) {
 
         if (status.configured) {
           const existing = await getLoreRepositoryConnection(worldId);
-          if (active) {
-            setConnection(existing);
+          if (!active) {
+            return;
+          }
+          setConnection(existing);
+
+          // Asked for only where the world has actually enabled incoming
+          // acceptance (FR-022). A world that never enabled it has no answer
+          // to give here, and querying anyway would put a "nothing pending"
+          // shape in front of a feature that world has not opted into.
+          if (existing?.incomingEnabled === true) {
+            const changes = await getLorePendingChanges(worldId);
+            if (active) {
+              setPendingChanges(changes);
+            }
           }
         }
       } catch (err) {
@@ -130,6 +147,31 @@ export function LoreRepositoryCard({ worldId }: LoreRepositoryCardProps) {
     }
   };
 
+  /** FR-023: the decision is the mutation, so the list is re-read from the
+   * server afterwards rather than the row being dropped locally. A local
+   * removal would show a change as settled on the strength of a click, which
+   * is precisely the claim this feature may never make on its own. */
+  const handleResolve = async (changeId: string, accept: boolean) => {
+    setPending(true);
+    setError(null);
+    try {
+      if (accept) {
+        await acceptLoreIncomingChange(worldId, changeId);
+      } else {
+        await declineLoreIncomingChange(worldId, changeId);
+      }
+      setPendingChanges(await getLorePendingChanges(worldId));
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to record your decision. Your world's lore is unchanged.",
+      );
+    } finally {
+      setPending(false);
+    }
+  };
+
   return (
     <Card className="grid gap-4 p-6" data-testid="lore-repository-card">
       <div>
@@ -160,6 +202,14 @@ export function LoreRepositoryCard({ worldId }: LoreRepositoryCardProps) {
           onAcknowledge={() => void handleAcknowledge()}
         />
       )}
+
+      {connection?.incomingEnabled === true && pendingChanges.length > 0 ? (
+        <PendingIncomingChanges
+          changes={pendingChanges}
+          pending={pending}
+          onResolve={(changeId, accept) => void handleResolve(changeId, accept)}
+        />
+      ) : null}
 
       {error ? (
         <StatusBadge variant="danger" data-testid="lore-repository-error">
@@ -502,6 +552,276 @@ function ConnectionState({
           </ul>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** What each kind is called where a person reads it. "Proposed" throughout,
+ * because until someone accepts, none of these has happened (FR-023). */
+const KIND_LABEL: Record<LorePendingChange["kind"], string> = {
+  UPDATE: "Proposed update",
+  NEW_ENTRY: "Proposed new entry",
+  DELETION: "Proposed deletion",
+};
+
+/**
+ * User Story 3's review surface: everything the repository proposes, waiting on
+ * a person. Rendered only where the world enabled incoming acceptance and
+ * something is actually pending — an empty "no incoming changes" panel would
+ * advertise a write path on worlds that have one for no reason.
+ *
+ * There is no "accept all". A conflict (FR-024) and a deletion (FR-026) each
+ * ask a question a bulk control would answer on the user's behalf, so the only
+ * granularity offered is the one the requirements are written at: per change.
+ */
+function PendingIncomingChanges({
+  changes,
+  pending,
+  onResolve,
+}: {
+  changes: LorePendingChange[];
+  pending: boolean;
+  onResolve: (changeId: string, accept: boolean) => void;
+}) {
+  return (
+    <div className="grid gap-3" data-testid="lore-incoming-changes">
+      <div>
+        <h3 className="text-sm font-semibold">
+          Changes in the repository, waiting for you
+        </h3>
+        <p className="text-sm text-muted-foreground">
+          {changes.length === 1
+            ? "One change was found in the repository that this world does not have."
+            : `${changes.length} changes were found in the repository that this world does not have.`}{" "}
+          None of them has altered your world&apos;s lore. Each is applied only
+          if you accept it, and an accepted change is recorded as an ordinary
+          revision in the entry&apos;s history, attributed to you and marked as
+          coming from the repository.
+        </p>
+      </div>
+
+      {changes.map((change) => (
+        <PendingIncomingChange
+          key={change.id}
+          change={change}
+          pending={pending}
+          onResolve={onResolve}
+        />
+      ))}
+    </div>
+  );
+}
+
+function PendingIncomingChange({
+  change,
+  pending,
+  onResolve,
+}: {
+  change: LorePendingChange;
+  pending: boolean;
+  onResolve: (changeId: string, accept: boolean) => void;
+}) {
+  // A deletion is the one decision that cannot be undone from inside the app,
+  // so it is taken in two steps (FR-026). The step exists to make the act
+  // deliberate; the sentence beside it exists so declining does not look like
+  // the risky option, which is the mistake this shape is guarding against.
+  const [confirmingDeletion, setConfirmingDeletion] = useState(false);
+  const detectedAt = formatMoment(change.detectedAt);
+  const title = change.proposedTitle ?? change.currentTitle ?? null;
+
+  return (
+    <div
+      className="grid gap-2 rounded-md border p-3"
+      data-testid="lore-incoming-change"
+    >
+      <div className="grid gap-1">
+        <p className="text-sm font-medium" data-testid="lore-incoming-kind">
+          {KIND_LABEL[change.kind]}
+          {title ? ` — ${title}` : null}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          From <span className="font-medium">{change.repositoryPath}</span> in
+          the repository
+          {detectedAt ? `, noticed ${detectedAt}` : null}.
+        </p>
+      </div>
+
+      {change.kind === "NEW_ENTRY" ? (
+        // FR-027. Said outright, because the plausible-looking wrong answer —
+        // "this is probably that entry over there, matched by its filename" —
+        // is exactly what the requirement forbids, and a user who assumes it
+        // happened would read an accept as an overwrite.
+        <p className="text-sm">
+          This file carries no ThunderForge entry identifier, so it matches
+          nothing in this world. It is offered as a new entry to create.
+          ThunderForge does not match a file to an existing entry by its path or
+          its title, so accepting this creates a new entry and changes nothing
+          you already have.
+        </p>
+      ) : null}
+
+      {change.kind === "DELETION" ? (
+        <p className="text-sm">
+          This entry&apos;s file was deleted in the repository. The entry is
+          still here and untouched. Accepting deletes it from this world;
+          declining is safe — the entry stays exactly as it is, and the file is
+          written back to the repository on the next synchronisation.
+        </p>
+      ) : null}
+
+      {change.kind === "UPDATE" && !change.alsoChangedInApp ? (
+        <p className="text-sm">
+          The file changed in the repository, and this entry has not changed in
+          this world since the last synchronisation. Accepting replaces the
+          entry&apos;s text with the version below.
+        </p>
+      ) : null}
+
+      {change.alsoChangedInApp ? (
+        <ConflictingVersions change={change} />
+      ) : (
+        <ProposedText
+          label={
+            change.kind === "DELETION"
+              ? "The text that would be deleted"
+              : "The text from the repository"
+          }
+          body={
+            change.kind === "DELETION"
+              ? change.currentBody
+              : change.incomingBody
+          }
+        />
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        {change.kind === "DELETION" && confirmingDeletion ? (
+          <>
+            <Button
+              variant="danger"
+              disabled={pending}
+              data-testid="lore-incoming-accept-confirm"
+              onClick={() => {
+                setConfirmingDeletion(false);
+                onResolve(change.id, true);
+              }}
+            >
+              {pending ? "Working..." : "Yes, delete this entry"}
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={pending}
+              onClick={() => setConfirmingDeletion(false)}
+            >
+              Keep the entry
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button
+              variant={change.kind === "DELETION" ? "danger" : "primary"}
+              disabled={pending}
+              data-testid="lore-incoming-accept"
+              onClick={() => {
+                if (change.kind === "DELETION") {
+                  setConfirmingDeletion(true);
+                  return;
+                }
+                onResolve(change.id, true);
+              }}
+            >
+              {change.kind === "DELETION"
+                ? "Delete this entry from the world"
+                : change.kind === "NEW_ENTRY"
+                  ? "Create this entry"
+                  : change.alsoChangedInApp
+                    ? "Keep the repository's version"
+                    : "Accept this change"}
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={pending}
+              data-testid="lore-incoming-decline"
+              onClick={() => onResolve(change.id, false)}
+            >
+              {change.kind === "DELETION"
+                ? "Decline — keep the entry"
+                : change.alsoChangedInApp
+                  ? "Keep this world's version"
+                  : "Decline"}
+            </Button>
+          </>
+        )}
+      </div>
+
+      {change.kind === "DELETION" && confirmingDeletion ? (
+        <p className="text-sm">
+          This removes the entry from this world. Its revision history goes with
+          it, and ThunderForge cannot bring it back for you.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * FR-024, and the reason this component exists at all rather than a diff.
+ *
+ * The two texts are rendered whole, side by side, and never combined — no
+ * unified diff, no merged draft, no "resolved" text with both sides folded in.
+ * A view that interleaved them would look like a result, and a user would
+ * reasonably accept it believing that result is what gets saved. Nothing merges
+ * prose here, so nothing may be drawn that suggests something did: the only two
+ * things that can be saved are the two texts shown, and each is shown entire so
+ * the choice is between things the user has actually read.
+ */
+function ConflictingVersions({ change }: { change: LorePendingChange }) {
+  return (
+    <div
+      className="grid gap-2 rounded-md border border-amber-500 p-3"
+      data-testid="lore-incoming-conflict"
+    >
+      <StatusBadge variant="warning">
+        Changed in both places — nothing will be merged
+      </StatusBadge>
+      <p className="text-sm">
+        This entry changed in the repository and in this world since the last
+        synchronisation. ThunderForge will not combine the two texts, and
+        neither text below is a merge or a preview of one. Choose one whole
+        version to keep: accepting saves the repository&apos;s version exactly
+        as shown, and declining leaves this world&apos;s version exactly as
+        shown. Whichever you do not choose is not folded into the other.
+      </p>
+      <div className="grid gap-2 md:grid-cols-2">
+        <ProposedText
+          label="This world's version — kept if you decline"
+          body={change.currentBody}
+        />
+        <ProposedText
+          label="The repository's version — saved if you accept"
+          body={change.incomingBody}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** One whole text, shown as written. Preformatted rather than rendered: what
+ * is being chosen between is the Markdown source in the file, and rendering it
+ * would hide the very characters an author went to a text editor to change. */
+function ProposedText({
+  label,
+  body,
+}: {
+  label: string;
+  body?: string | null;
+}) {
+  return (
+    <div className="grid gap-1">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-muted p-2 text-xs">
+        {body ?? "(empty)"}
+      </pre>
     </div>
   );
 }
