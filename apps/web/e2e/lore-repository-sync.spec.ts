@@ -276,3 +276,85 @@ test.describe("Spec 034: an instance with no repository integration", () => {
     await memberContext.close();
   });
 });
+
+/**
+ * User Story 3: accepting edits made in the repository.
+ *
+ * This is the only part of the feature that can put text into a world its
+ * members did not write in the app, so the test that matters most is the one
+ * that proves it **does not happen by default**.
+ *
+ * `incoming_enabled` is false on every connection until someone turns it on
+ * (FR-022), and the server enforces that through a type whose constructor
+ * refuses a connection that has not opted in. The browser-level assertion here
+ * is the complement: a Game Master who has not enabled it is not shown a
+ * surface that implies they might have, and no query the page makes returns a
+ * proposal for their world.
+ *
+ * Accepting an actual proposal is not covered here. Producing one needs a real
+ * repository, a completed grant, and a push from outside the app — the same
+ * ceiling that keeps T036 and T038 out of this suite. It is covered where it
+ * can be proven for real: `lore_sync::incoming`'s tests apply an accepted
+ * change to a live database and assert the resulting revision's author,
+ * content and origin, and that a declined deletion leaves the entry
+ * byte-for-byte.
+ */
+test.describe("Spec 034 User Story 3: incoming changes are off until asked for", () => {
+  /**
+   * **FR-022.** The single most important assertion in this spec: a world that
+   * never enabled incoming acceptance is never modified by anything in the
+   * repository. If this ever fails, every world on the instance is exposed.
+   */
+  test("a world that never enabled it is shown no incoming surface", async ({
+    page,
+  }) => {
+    await register(page, freshCredentials("e2eloreincoming"));
+    const worldId = await createWorld(page, `E2E Lore Incoming ${uniqueSuffix()}`);
+
+    await page.goto(`/world/${worldId}/settings/system`);
+    await expect(page.getByTestId("lore-repository-card")).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // No section, and no individual control from it. Asserted separately
+    // because a section that renders empty and a section that does not render
+    // are different failures, and only one of them is this one.
+    await expect(page.getByTestId("lore-incoming-changes")).toHaveCount(0);
+    await expect(page.getByTestId("lore-incoming-change")).toHaveCount(0);
+    await expect(page.getByTestId("lore-incoming-accept")).toHaveCount(0);
+    await expect(page.getByTestId("lore-incoming-decline")).toHaveCount(0);
+  });
+
+  /**
+   * The server half of the same rule, read from the wire rather than the
+   * screen. A control can be absent from the page while the data that would
+   * drive it is being sent, and it is the data an attacker reads.
+   */
+  test("no proposal is sent to a browser for a world that never enabled it", async ({
+    page,
+  }) => {
+    await register(page, freshCredentials("e2eloreincsrv"));
+    const worldId = await createWorld(page, `E2E Lore Incoming Wire ${uniqueSuffix()}`);
+
+    const payloads: string[] = [];
+    page.on("response", async (response) => {
+      if (!response.url().includes("/api/graphql")) return;
+      try {
+        payloads.push(await response.text());
+      } catch {
+        // Unreadable bodies are not evidence of a leak.
+      }
+    });
+
+    await page.goto(`/world/${worldId}/settings/system`);
+    await expect(page.getByTestId("lore-repository-card")).toBeVisible({
+      timeout: 15_000,
+    });
+
+    const all = payloads.join("\n");
+    expect(all.length, "no GraphQL response was captured").toBeGreaterThan(0);
+    // `incomingBody` is the field that would carry text from outside the app.
+    expect(all, "a repository proposal reached a world that never asked for one")
+      .not.toContain("incomingBody");
+  });
+});

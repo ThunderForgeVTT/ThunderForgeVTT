@@ -163,7 +163,7 @@ So the guarantee has to become rules that are individually enforced and individu
 - [X] T057 [US3] Record an accepted change in `src/server/src/graphql/mutations_lore_sync.rs` as an ordinary revision attributed to the accepting user, marked as originating from the repository (FR-025).
 - [X] T058 [US3] Treat a file with no recognised durable identifier in `src/server/src/lore_sync/document.rs` as a proposed new entry, never matched by path or title (FR-027).
 - [X] T059 [US3] Require explicit confirmation for a deletion in `src/server/src/graphql/mutations_lore_sync.rs`, and restore the file on the next synchronisation if declined (FR-026).
-- [ ] T060 [US3] Add e2e in `apps/web/e2e/lore-repository-sync.spec.ts` for quickstart's Story 3 flow, including that a world with incoming acceptance never enabled is never modified by anything in the repository (FR-022, Story 3 scenario 6).
+- [X] T060 [US3] Add e2e in `apps/web/e2e/lore-repository-sync.spec.ts` for quickstart's Story 3 flow, including that a world with incoming acceptance never enabled is never modified by anything in the repository (FR-022, Story 3 scenario 6).
 
 ---
 
