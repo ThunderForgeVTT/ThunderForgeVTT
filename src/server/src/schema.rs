@@ -277,6 +277,19 @@ diesel::table! {
 }
 
 diesel::table! {
+    lore_sync_grant_sessions (id) {
+        id -> Uuid,
+        world_id -> Uuid,
+        started_by -> Uuid,
+        state -> Varchar,
+        return_to -> Nullable<Varchar>,
+        expires_at -> Timestamp,
+        consumed_at -> Nullable<Timestamp>,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     lore_sync_runs (id) {
         id -> Uuid,
         connection_id -> Uuid,
@@ -1112,6 +1125,8 @@ diesel::joinable!(lore_fidelity_notes -> world_lore_entries (lore_entry_id));
 diesel::joinable!(lore_pending_incoming_changes -> lore_repository_connections (connection_id));
 diesel::joinable!(lore_pending_incoming_changes -> users (decided_by));
 diesel::joinable!(lore_repository_connections -> worlds (world_id));
+diesel::joinable!(lore_sync_grant_sessions -> users (started_by));
+diesel::joinable!(lore_sync_grant_sessions -> worlds (world_id));
 diesel::joinable!(lore_sync_runs -> lore_repository_connections (connection_id));
 diesel::joinable!(oauth_authorization_sessions -> oauth_providers (provider_id));
 diesel::joinable!(oauth_link_challenges -> oauth_providers (provider_id));
@@ -1220,6 +1235,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     lore_fidelity_notes,
     lore_pending_incoming_changes,
     lore_repository_connections,
+    lore_sync_grant_sessions,
     lore_sync_runs,
     oauth_authorization_sessions,
     oauth_link_challenges,

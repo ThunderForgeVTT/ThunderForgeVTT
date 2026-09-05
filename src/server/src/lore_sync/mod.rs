@@ -56,6 +56,7 @@ pub mod binding;
 pub mod disassociate;
 pub mod document;
 pub mod git;
+pub mod grant;
 pub mod incoming;
 pub mod paths;
 pub mod plan;

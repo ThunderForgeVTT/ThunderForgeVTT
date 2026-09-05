@@ -42,6 +42,7 @@ use crate::graphql::{app_state, authenticated_user};
 use crate::models::LoreRepositoryConnection;
 use crate::schema::lore_repository_connections;
 use crate::state::AppState;
+use thunderforge_repo_host::RepoHost as _;
 
 /// Where the branch defaults, when the caller expresses no preference.
 const DEFAULT_BRANCH: &str = "main";
@@ -97,6 +98,17 @@ pub struct CompleteConnectionInput {
     /// an option, because a grant we hold and promise not to use is still a
     /// grant we hold.
     pub grant_response: String,
+    /// Which repository this world binds to, as `owner/name` (FR-036f).
+    ///
+    /// Required in practice, and `Option` only so that a client which omits it
+    /// gets told *which repositories it may choose from* rather than a schema
+    /// error naming a field. An installation routinely covers several — the
+    /// grant is broad, the binding is not — and picking for the user is how a
+    /// world ends up mirroring into a repository nobody chose. That is not
+    /// hypothetical: the first live run of this flow connected a world to this
+    /// project's own public source repository, because it took whichever the
+    /// host listed first.
+    pub repository_ref: Option<String>,
     /// Defaults to `main`.
     pub branch: Option<String>,
     /// Defaults to `lore`. Repository-relative, no leading slash.
@@ -147,8 +159,55 @@ fn integration_unavailable() -> Error {
 /// is passed because that `state` must bind the hand-off to one world — a
 /// grant completed against a different world than it was begun for is the
 /// obvious way this flow gets abused.
-async fn begin_grant(_state: &AppState, _world_id: Uuid) -> GraphQLResult<ConnectionGrantHandoff> {
-    Err(integration_unavailable())
+async fn begin_grant(
+    state: &AppState,
+    world_id: Uuid,
+    started_by: Uuid,
+) -> GraphQLResult<ConnectionGrantHandoff> {
+    let registered = crate::repo_host::registration_from_env().map_err(|problems| {
+        integration_unavailable_with(
+            problems
+                .iter()
+                .map(|p| p.guidance())
+                .collect::<Vec<_>>()
+                .join(" "),
+        )
+    })?;
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    // The state binds this hand-off to one world and one person. A grant
+    // completed against a different world than it was begun for is the obvious
+    // way this flow gets abused, and the state is what makes that impossible
+    // rather than merely discouraged.
+    let anti_forgery = crate::lore_sync::grant::begin(
+        &mut conn,
+        world_id,
+        started_by,
+        Some(&format!("/world/{world_id}/settings/system")),
+    )
+    .map_err(|e| Error::new(format!("Could not begin the connection: {e:?}")))?;
+
+    let handoff = registered
+        .app
+        .grant_handoff(&anti_forgery)
+        .map_err(|e| Error::new(format!("Could not build the hand-off: {e}")))?;
+
+    Ok(ConnectionGrantHandoff {
+        url: handoff.url,
+        permissions: handoff
+            .permissions
+            .into_iter()
+            .map(|p| GraphQLGrantedPermission {
+                id: p.id.to_string(),
+                summary: p.summary.to_string(),
+                reason: p.reason.to_string(),
+            })
+            .collect(),
+    })
 }
 
 /// Finish the grant: validate what the host returned and yield the neutral
@@ -164,11 +223,101 @@ async fn begin_grant(_state: &AppState, _world_id: Uuid) -> GraphQLResult<Connec
 /// of T014 and never returns from here — nothing in this module has a field
 /// to put one in (FR-035).
 async fn complete_grant(
-    _state: &AppState,
-    _world_id: Uuid,
-    _grant_response: &str,
+    state: &AppState,
+    world_id: Uuid,
+    grant_response: &str,
+    requested_repository: Option<&str>,
+    returning_user: Uuid,
 ) -> GraphQLResult<GrantedConnection> {
-    Err(integration_unavailable())
+    // `grant_response` is `<state>:<installation reference>` — everything in
+    // it is attacker-controlled, so none of it is believed before the state is.
+    let (anti_forgery, installation_ref) = grant_response
+        .split_once(':')
+        .ok_or_else(|| Error::new("The repository host's response could not be read."))?;
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    let claim = crate::lore_sync::grant::consume(&mut conn, anti_forgery, returning_user).map_err(
+        |_| {
+            // One message for every refusal. Distinguishing "no such state"
+            // from "expired" from "not yours" answers a question about whether
+            // a state ever existed, which is what someone guessing wants.
+            Error::new("This connection attempt is no longer valid. Start it again.")
+        },
+    )?;
+
+    // The world the hand-off was begun for, not the one the caller now names.
+    if claim.world_id != world_id {
+        return Err(Error::new(
+            "This connection attempt was started for a different world.",
+        ));
+    }
+
+    // Only now is the installation asked about. Everything above establishes
+    // that we should be asking at all.
+    let repositories = crate::repo_host::visible_repositories()
+        .await
+        .map_err(|e| Error::new(format!("Could not read the granted access: {e}")))?;
+
+    let granted: Vec<_> = repositories
+        .into_iter()
+        .filter(|r| r.installation_id == installation_ref)
+        .collect();
+
+    if granted.is_empty() {
+        return Err(Error::new(
+            "That installation grants access to no repository this instance can see. \
+             Install the application on the repository you want to connect, then try again.",
+        ));
+    }
+
+    // **The world binds to a repository the user names** (FR-036f).
+    //
+    // An earlier version took the first repository the installation covered,
+    // and the first live run connected a world to this project's own public
+    // source repository — because an installation routinely covers several and
+    // "first" is whatever the host happened to list. The grant may be broad;
+    // the binding may not be, and the difference is a choice a person makes
+    // rather than an ordering we inherit.
+    let requested = requested_repository.ok_or_else(|| {
+        Error::new(format!(
+            "Choose which repository this world should write to. This installation covers: {}.",
+            granted
+                .iter()
+                .map(|r| r.full_name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ))
+    })?;
+
+    let chosen = granted
+        .iter()
+        .find(|r| r.full_name.eq_ignore_ascii_case(requested))
+        .ok_or_else(|| {
+            Error::new(format!(
+                "The application is not installed on {requested}. It covers: {}.",
+                granted
+                    .iter()
+                    .map(|r| r.full_name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ))
+        })?;
+
+    Ok(GrantedConnection {
+        repository_ref: chosen.full_name.clone(),
+        host_kind: "github".to_string(),
+        installation_ref: installation_ref.to_string(),
+        repository_is_public: Some(chosen.public),
+    })
+}
+
+/// The unavailable error, with a specific reason rather than the generic one.
+fn integration_unavailable_with(guidance: String) -> Error {
+    Error::new(guidance).extend_with(|_, ext| ext.set("code", "REPOSITORY_INTEGRATION_UNAVAILABLE"))
 }
 
 /// A repository-relative directory, or an explanation.
@@ -237,7 +386,7 @@ pub async fn begin_lore_repository_connection_impl(
         return Err(already_connected());
     }
 
-    begin_grant(state, world_id).await
+    begin_grant(state, world_id, user_id).await
 }
 
 fn already_connected() -> Error {
@@ -278,7 +427,14 @@ pub async fn complete_lore_repository_connection_impl(
         return Err(already_connected());
     }
 
-    let granted = complete_grant(state, world_id, &input.grant_response).await?;
+    let granted = complete_grant(
+        state,
+        world_id,
+        &input.grant_response,
+        input.repository_ref.as_deref(),
+        user_id,
+    )
+    .await?;
 
     // FR-033. Two worlds writing into one directory of one repository would
     // interleave two histories into one tree, and neither owner could tell
@@ -907,6 +1063,9 @@ mod tests {
         CompleteConnectionInput {
             world_id,
             grant_response: "{}".to_string(),
+            // These tests are about the refusals, which all happen before a
+            // repository is chosen.
+            repository_ref: None,
             branch: None,
             directory: Some(directory.to_string()),
         }
