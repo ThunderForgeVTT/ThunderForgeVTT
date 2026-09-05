@@ -533,6 +533,20 @@ function CollectionCard({
               </StatusBadge>
             ) : (
               <div className="grid gap-2">
+                {/*
+                  The same caveat the shipped ability share page carries, for
+                  the same reason. No-enumeration is one of the invariants
+                  ADR-069's determination rests on, so there is deliberately no
+                  "list this collection's share links" call — which means this
+                  link cannot be shown again after you leave the page, and
+                  revoking it is only possible while it is on screen.
+                */}
+                <p className="text-xs text-muted-foreground">
+                  Anyone with this link can read the collection without an
+                  account, and copy it into a world they run. It is not listed
+                  or discoverable anywhere, and it will not be shown again —
+                  keep it if you may want to revoke it later.
+                </p>
                 <code
                   className="rounded-lg border border-input px-2.5 py-2 text-xs break-all"
                   data-testid="share-url"
