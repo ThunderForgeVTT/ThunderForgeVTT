@@ -165,6 +165,29 @@ must pass with no network and no GitHub App configured.
 
 ---
 
+## Running the live e2e
+
+Two of `apps/web/e2e/lore-repository-sync.spec.ts`'s tests reach a real
+repository host, and they skip rather than fail when they cannot.
+
+The grant hand-off test needs only a registered application — it reads what a
+grant would cover and never writes. The mirror test **writes to a real
+repository**, so it is opt-in twice:
+
+```sh
+THUNDERFORGE_E2E_LIVE_MIRROR=1 \
+THUNDERFORGE_E2E_LIVE_REPO=owner/repository \
+THUNDERFORGE_E2E_LIVE_INSTALLATION=<installation id> \
+  pnpm exec playwright test lore-repository-sync
+```
+
+A suite that commits to someone's repository on every run is a suite nobody
+runs casually, and the second flag is the one that leaves commits behind.
+
+**Skipping is not passing**, and the tests say which they did. A green run on an
+instance with no application configured has proven the unconfigured path and
+nothing else.
+
 ## Before implementation begins
 
 **FR-042.** The constitution requires an on-record, owner-accepted determination

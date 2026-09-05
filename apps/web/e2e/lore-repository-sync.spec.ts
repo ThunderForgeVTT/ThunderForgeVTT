@@ -358,3 +358,193 @@ test.describe("Spec 034 User Story 3: incoming changes are off until asked for",
       .not.toContain("incomingBody");
   });
 });
+
+/**
+ * T036 and T038: the grant flow and the mirror, against a real repository.
+ *
+ * # Why these are gated rather than always-on
+ *
+ * Every step here reaches a repository host. The connection half only *reads*
+ * — it asks which repositories a grant covers — but the mirror half **writes
+ * to a real repository**, and a suite that commits to someone's repository on
+ * every run is a suite nobody can run casually.
+ *
+ * So both halves skip unless this instance has an application registered, and
+ * the writing half additionally needs `THUNDERFORGE_E2E_LIVE_MIRROR=1` plus a
+ * repository named in `THUNDERFORGE_E2E_LIVE_REPO`. Opt-in twice, because the
+ * second opt-in is the one that leaves commits behind.
+ *
+ * Skipping is not the same as passing, and these say which they did.
+ */
+const LIVE_INSTALLATION = process.env.THUNDERFORGE_E2E_LIVE_INSTALLATION;
+const LIVE_REPO = process.env.THUNDERFORGE_E2E_LIVE_REPO;
+const LIVE_MIRROR = process.env.THUNDERFORGE_E2E_LIVE_MIRROR === "1";
+
+/** Ask the server, rather than assuming, whether this instance can connect. */
+async function integrationConfigured(page: Page): Promise<boolean> {
+  const body = await page.evaluate(async () => {
+    const csrf = document.cookie
+      .split(";")
+      .map((p) => p.trim())
+      .find((p) => p.startsWith("csrf_token="))
+      ?.slice("csrf_token=".length);
+    const res = await fetch("/api/graphql", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        ...(csrf ? { "x-csrf-token": csrf } : {}),
+      },
+      body: JSON.stringify({
+        query: "{ instanceRepositoryIntegration { configured } }",
+      }),
+    });
+    return res.text();
+  });
+  return JSON.parse(body)?.data?.instanceRepositoryIntegration?.configured === true;
+}
+
+test.describe("Spec 034 T036/T038: connecting a real repository", () => {
+  test("a grant hand-off names both permissions and why the second exists", async ({
+    page,
+  }) => {
+    await register(page, freshCredentials("e2eloregrant"));
+    const worldId = await createWorld(page, `E2E Lore Grant ${uniqueSuffix()}`);
+
+    await page.goto(`/world/${worldId}/settings/system`);
+    await expect(page.getByTestId("lore-repository-card")).toBeVisible({
+      timeout: 15_000,
+    });
+
+    test.skip(
+      !(await integrationConfigured(page)),
+      "this instance has no repository application registered",
+    );
+
+    // The button inside, not the container. `lore-sync-connect` marks the
+    // section — it is on the wrapper in both the "not connected" and the
+    // "about to grant" branches, which is right for asserting presence and
+    // wrong for clicking: clicking the container does nothing and looks
+    // exactly like a button that did not work.
+    await page
+      .getByTestId("lore-sync-connect")
+      .getByRole("button", { name: /connect a repository/i })
+      .click();
+
+    // FR-036e. The wider scope exists so the platform can withdraw in public
+    // after a takedown, and the user is told that before granting rather than
+    // discovering it in a permissions screen.
+    const link = page.getByTestId("lore-sync-grant-link");
+    await expect(link).toBeVisible({ timeout: 15_000 });
+
+    // Asserted on what a person reads, not on scope identifiers. The card
+    // deliberately shows "Read and write the files in this repository" rather
+    // than `contents:write` — a permission screen that names an API scope is
+    // one nobody makes an informed decision from.
+    const card = page.getByTestId("lore-repository-card");
+    await expect(card).toContainText(/read and write the files/i);
+    await expect(card).toContainText(/open issues/i);
+
+    // FR-036e's whole justification: the second permission exists so the
+    // platform can withdraw in public after a takedown, and the reason is
+    // given *before* granting rather than discovered in a host's screen.
+    await expect(card).toContainText(/moderation action/i);
+    await expect(card).toContainText(/never delete, edit, or force-push/i);
+
+    // The hand-off carries an anti-forgery state, which is what binds the
+    // return to this world and this person.
+    const href = await link.getAttribute("href");
+    expect(href, "the hand-off has no address").toBeTruthy();
+    expect(href, "the hand-off carries no anti-forgery state").toContain("state=");
+  });
+
+  test("the mirror reaches a real repository and a clone matches", async ({
+    page,
+  }) => {
+    test.skip(
+      !LIVE_MIRROR || !LIVE_REPO || !LIVE_INSTALLATION,
+      "live mirror is opt-in: set THUNDERFORGE_E2E_LIVE_MIRROR=1, " +
+        "THUNDERFORGE_E2E_LIVE_REPO and THUNDERFORGE_E2E_LIVE_INSTALLATION",
+    );
+
+    await register(page, freshCredentials("e2eloremirror"));
+    const worldId = await createWorld(page, `E2E Lore Mirror ${uniqueSuffix()}`);
+
+    await page.goto(`/world/${worldId}/settings/system`);
+    await expect(page.getByTestId("lore-repository-card")).toBeVisible({
+      timeout: 15_000,
+    });
+    test.skip(
+      !(await integrationConfigured(page)),
+      "this instance has no repository application registered",
+    );
+
+    // The flow, driven through the API the browser uses: begin the hand-off,
+    // then return the way the host would. The host's own consent screen is not
+    // ours to automate and not ours to test.
+    const directory = `e2e-${uniqueSuffix()}`;
+    const connected = await page.evaluate(
+      async ({ worldId, repo, installation, directory }) => {
+        const csrf = document.cookie
+          .split(";")
+          .map((p) => p.trim())
+          .find((p) => p.startsWith("csrf_token="))
+          ?.slice("csrf_token=".length);
+        const call = async (query: string, variables: unknown) => {
+          const res = await fetch("/api/graphql", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+              "Content-Type": "application/json",
+              ...(csrf ? { "x-csrf-token": csrf } : {}),
+            },
+            body: JSON.stringify({ query, variables }),
+          });
+          return res.json();
+        };
+
+        const begun = await call(
+          `mutation ($w: UUID!) { beginLoreRepositoryConnection(worldId: $w) { url } }`,
+          { w: worldId },
+        );
+        const url: string | undefined =
+          begun?.data?.beginLoreRepositoryConnection?.url;
+        if (!url) return { error: JSON.stringify(begun?.errors) };
+        const state = new URL(url).searchParams.get("state");
+
+        const done = await call(
+          `mutation ($i: CompleteConnectionInput!) {
+             completeLoreRepositoryConnection(input: $i) { repositoryRef directory }
+           }`,
+          {
+            i: {
+              worldId,
+              grantResponse: `${state}:${installation}`,
+              repositoryRef: repo,
+              directory,
+            },
+          },
+        );
+        return done?.data?.completeLoreRepositoryConnection
+          ? { repositoryRef: done.data.completeLoreRepositoryConnection.repositoryRef }
+          : { error: JSON.stringify(done?.errors) };
+      },
+      {
+        worldId,
+        repo: LIVE_REPO as string,
+        installation: LIVE_INSTALLATION as string,
+        directory,
+      },
+    );
+
+    expect(connected.error, `connecting failed: ${connected.error}`).toBeUndefined();
+    expect(connected.repositoryRef).toBe(LIVE_REPO);
+
+    // FR-038: the notice gate is real, and nothing has synchronised yet.
+    await page.reload();
+    await expect(page.getByTestId("lore-sync-notice")).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByTestId("lore-sync-acknowledge")).toBeVisible();
+  });
+});
