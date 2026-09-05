@@ -37,6 +37,10 @@ export const pageLoaders = {
   worldSystemSettings: () =>
     import("@/pages/world/settings/WorldSystemSettingsPage"),
   sharedItem: () => import("@/pages/item-share/SharedItemPage"),
+  sharedCollection: () =>
+    import("@/pages/collection-share/SharedCollectionPage"),
+  worldCollections: () =>
+    import("@/pages/world-collections/WorldCollectionsPage"),
   joinWorld: () => import("@/pages/world/JoinWorldPage"),
   status: () => import("@/pages/status/StatusPage"),
   notFound: () => import("@/pages/not-found/NotFoundPage"),

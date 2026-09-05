@@ -50,6 +50,8 @@ const AbilityDetailPage = lazy(pageLoaders.abilityView);
 const SharedAbilityPage = lazy(pageLoaders.sharedAbility);
 const ItemDetailPage = lazy(pageLoaders.itemView);
 const SharedItemPage = lazy(pageLoaders.sharedItem);
+const SharedCollectionPage = lazy(pageLoaders.sharedCollection);
+const WorldCollectionsPage = lazy(pageLoaders.worldCollections);
 const WorldSystemSettingsPage = lazy(pageLoaders.worldSystemSettings);
 const StorageSettingsPage = lazy(pageLoaders.storageSettings);
 const JoinWorldPage = lazy(pageLoaders.joinWorld);
@@ -338,6 +340,26 @@ export default function AppRoutes({
             "Completing OAuth sign-in",
           )}
         />
+        {/*
+          Spec 026 (T033, FR-009a). **Deliberately outside `RequireAuthenticated`.**
+
+          The other three share routes below — `/shared/actor/:code`,
+          `/shared/ability/:code`, `/shared/item/:code` — are each wrapped in
+          it, and wrapping this one the same way is the obvious mistake to
+          make here. It would send the person the link was sent to a login
+          screen instead of the collection, which is the feature.
+
+          ADR-070 records the divergence. FR-009e puts aligning the older
+          three out of scope, so the inconsistency below is expected and not a
+          thing to tidy away.
+        */}
+        <Route
+          path="/collection/:shareCode"
+          element={renderLazyPage(
+            <SharedCollectionPage />,
+            "Loading shared collection",
+          )}
+        />
         <Route
           path="/legal/dmca"
           element={renderLazyPage(
@@ -500,6 +522,14 @@ export default function AppRoutes({
                 <ActorSelectionPage />,
                 "Loading Actor Selection",
               )}
+            </RequireAuthenticated>
+          }
+        />
+        <Route
+          path="/world/:id/collections"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(<WorldCollectionsPage />, "Loading collections")}
             </RequireAuthenticated>
           }
         />
