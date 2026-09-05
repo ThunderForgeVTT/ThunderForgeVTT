@@ -113,7 +113,14 @@ fn remote_args() -> Vec<String> {
     ]
 }
 
-/// `git clone` for a connection's working copy.
+/// `git clone` for a connection's working copy, of a repository that has the
+/// branch already.
+///
+/// Fails on a repository with no commits — `--branch` names a ref that does not
+/// exist yet. That is not an edge case to shrug at: **an empty repository is
+/// the first thing a user connects**, because creating one and pointing
+/// ThunderForge at it is the obvious way to start. [`clone_unborn_args`] is the
+/// other half, and the caller falls back to it.
 pub fn clone_args(remote_url: &str, branch: &str, into: &Path) -> Vec<String> {
     let mut args = remote_args();
     args.extend([
@@ -125,6 +132,37 @@ pub fn clone_args(remote_url: &str, branch: &str, into: &Path) -> Vec<String> {
         into.display().to_string(),
     ]);
     args
+}
+
+/// `git clone` of a repository that has no commits yet.
+///
+/// No `--branch`, because there is no branch to name — the remote's HEAD points
+/// at something unborn. The clone succeeds with a warning and leaves a working
+/// tree on an unborn branch, which is exactly what a first synchronisation
+/// wants: write the files, commit, and push, and the branch comes into
+/// existence with them.
+///
+/// The branch is set explicitly afterwards rather than trusting the clone's
+/// default, because a host's default branch name and the connection's
+/// configured one need not agree, and inheriting the host's would quietly
+/// synchronise to a branch nobody chose.
+pub fn clone_unborn_args(remote_url: &str, into: &Path) -> Vec<String> {
+    let mut args = remote_args();
+    args.extend([
+        "clone".to_string(),
+        remote_url.to_string(),
+        into.display().to_string(),
+    ]);
+    args
+}
+
+/// Point an unborn working tree at the branch this connection writes to.
+pub fn set_unborn_branch_args(branch: &str) -> Vec<String> {
+    vec![
+        "symbolic-ref".to_string(),
+        "HEAD".to_string(),
+        format!("refs/heads/{branch}"),
+    ]
 }
 
 /// `git fetch`, the read half of a pass (FR-034b).
@@ -321,6 +359,29 @@ mod tests {
         assert!(
             !joined.contains("@example.com"),
             "a personal-looking address reached a commit",
+        );
+    }
+
+    /// An empty repository is the first thing a user connects — creating one
+    /// and pointing ThunderForge at it is the obvious way to start — so the
+    /// unborn clone must not name a branch that does not exist yet.
+    #[test]
+    fn cloning_an_empty_repository_names_no_branch() {
+        let args = clone_unborn_args("https://host/owner/repo.git", Path::new("/tmp/x"));
+        assert!(!args.iter().any(|a| a == "--branch"), "{args:?}");
+        assert!(args.iter().any(|a| a == "clone"));
+        // The credential arrangement is the same; only the ref handling differs.
+        assert!(args.iter().any(|a| a.starts_with("credential.helper=!f()")));
+    }
+
+    /// The branch is set rather than inherited: a host's default branch name
+    /// and the connection's configured one need not agree, and inheriting the
+    /// host's would synchronise to a branch nobody chose.
+    #[test]
+    fn an_unborn_tree_is_pointed_at_the_configured_branch() {
+        assert_eq!(
+            set_unborn_branch_args("trunk"),
+            vec!["symbolic-ref", "HEAD", "refs/heads/trunk"],
         );
     }
 

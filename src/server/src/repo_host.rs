@@ -871,3 +871,122 @@ fn join_problems(problems: Vec<RegistrationProblem>) -> String {
         .collect::<Vec<_>>()
         .join(" ")
 }
+
+/// Claim a repository for a world, by opening the binding issue (FR-036g).
+///
+/// Read-then-write, and the window between the two is real: two instances can
+/// both read "unclaimed" and both open an issue. FR-036i says this is advisory
+/// rather than a lock, and this is the function that makes that true rather
+/// than merely stated — it does not pretend to close the window, because it
+/// cannot. What it guarantees is that the conflict is *visible*, as two issues
+/// on one repository, to the person who can resolve it.
+pub async fn claim_binding(
+    installation_id: &str,
+    owner: &str,
+    name: &str,
+    binding: &crate::lore_sync::binding::Binding,
+    world_name: &str,
+    directory: &str,
+) -> Result<ClaimOutcome, String> {
+    use crate::lore_sync::binding;
+
+    if let Some((number, existing)) = existing_binding(installation_id, owner, name).await? {
+        if binding::is_held_by(&existing, binding.world_id, &binding.instance) {
+            return Ok(ClaimOutcome::AlreadyOurs { issue: number });
+        }
+        // FR-036h: a comment on the existing issue rather than a second issue,
+        // so the whole history of who tried to claim this repository is in one
+        // place. Two issues is two things to find, and finding one and not the
+        // other is how a conflict gets half-understood.
+        comment_on_issue(
+            installation_id,
+            owner,
+            name,
+            number,
+            &binding::conflict_comment(binding, world_name),
+        )
+        .await?;
+        return Ok(ClaimOutcome::HeldByAnother {
+            issue: number,
+            existing,
+        });
+    }
+
+    let registered = registration_from_env().map_err(join_problems)?;
+    let credential = installation_credential(installation_id).await?;
+
+    let created: serde_json::Value = client()?
+        .post(format!(
+            "{}/issues",
+            registered.app.repository_url(owner, name)
+        ))
+        .bearer_auth(credential.token())
+        .header("Accept", "application/vnd.github+json")
+        .json(&serde_json::json!({
+            "title": binding::BINDING_ISSUE_TITLE,
+            "body": binding::claim_body(binding, world_name, directory),
+        }))
+        .send()
+        .await
+        .map_err(|e| format!("Could not reach the repository host: {e}"))?
+        .json()
+        .await
+        .map_err(|e| format!("The host's response could not be read: {e}"))?;
+
+    let number = created
+        .get("number")
+        .and_then(|v| v.as_u64())
+        .ok_or_else(|| {
+            format!(
+                "The binding issue was not created: {}",
+                created
+                    .get("message")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("the host said nothing useful")
+            )
+        })?;
+
+    Ok(ClaimOutcome::Claimed { issue: number })
+}
+
+/// What happened when a world tried to claim a repository.
+#[derive(Debug)]
+pub enum ClaimOutcome {
+    Claimed {
+        issue: u64,
+    },
+    /// Already ours — a second pass, or a restart. Not an error.
+    AlreadyOurs {
+        issue: u64,
+    },
+    /// Someone else's. **Synchronisation must not begin** (FR-036h).
+    HeldByAnother {
+        issue: u64,
+        existing: crate::lore_sync::binding::Binding,
+    },
+}
+
+async fn comment_on_issue(
+    installation_id: &str,
+    owner: &str,
+    name: &str,
+    number: u64,
+    body: &str,
+) -> Result<(), String> {
+    let registered = registration_from_env().map_err(join_problems)?;
+    let credential = installation_credential(installation_id).await?;
+
+    client()?
+        .post(format!(
+            "{}/issues/{number}/comments",
+            registered.app.repository_url(owner, name)
+        ))
+        .bearer_auth(credential.token())
+        .header("Accept", "application/vnd.github+json")
+        .json(&serde_json::json!({ "body": body }))
+        .send()
+        .await
+        .map_err(|e| format!("Could not record the conflict: {e}"))?;
+
+    Ok(())
+}

@@ -90,7 +90,7 @@ most of them, because Story 2 *is* the tests.
 - [X] T027 [US1] Implement image mirroring in `src/server/src/lore_sync/run.rs`, writing to `<directory>/_images/` — uploaded originals only, referenced relatively, no derived renditions (FR-014).
 - [X] T028 [US1] Exclude moderation-disabled entries in `src/server/src/lore_sync/run.rs`, and make that exclusion not block the rest of the world (FR-015).
 - [X] T029 [US1] Record fidelity notes from `src/server/src/lore_sync/run.rs` into the `lore_fidelity_notes` table — unresolvable cross-links, permission flattening, path disambiguation (FR-013, FR-037). Rows rather than log lines: SC-008 requires losses to be *enumerated*, and something enumerable must be queryable.
-- [ ] T029a [US1] Detect the connected repository's visibility in `src/server/src/repo_host.rs` and record it on the connection each run (FR-040a). **Observed, not guaranteed** — visibility changes at the host without telling us, and anywhere it is shown must say when it was last seen.
+- [X] T029a [US1] Detect the connected repository's visibility in `src/server/src/repo_host.rs` and record it on the connection each run (FR-040a). **Observed, not guaranteed** — visibility changes at the host without telling us, and anywhere it is shown must say when it was last seen.
 - [X] T029b [US1] Extend the pre-synchronisation notice in `apps/web/src/pages/world/settings/LoreRepositoryCard.tsx` to state distinctly whether the repository is public (FR-037a), and where it is, that a takedown will result in a public issue on it (FR-037b). **A private repository must not be assumed**: "everyone you invited" and "everyone on the internet" are different sentences, and a notice covering only the first is silently wrong for the users most exposed.
 - [X] T030 [US1] Implement `spawn_lore_sync_task` in `src/server/src/lore_sync/mod.rs` and call it from `src/app/src/main.rs` alongside the existing background tasks. **A connection with a null `notice_acknowledged_at` is never picked up** (FR-038).
 
@@ -164,6 +164,26 @@ Do not start this phase without scheduling it deliberately. It is the only story
 - [ ] T060 [US3] Add e2e in `apps/web/e2e/lore-repository-sync.spec.ts` for quickstart's Story 3 flow, including that a world with incoming acceptance never enabled is never modified by anything in the repository (FR-022, Story 3 scenario 6).
 
 ---
+
+## Verified live, 2026-09-04
+
+A throwaway world with three lore entries was mirrored into a real repository
+(`ThunderForgeVTT/context-sync`) end to end, and the artefact checked from a
+fresh clone: the tree mirrored, the front matter carried id/title/tags/updated,
+the body was byte-identical to what was authored, a `[[wiki link]]` became a
+relative path that resolves to a real file, the commit carried two identities
+with no personal address, and the binding issue was opened. Cleaned up
+afterwards — the files were removed by a commit and the issue closed.
+
+**Two gaps that only reality found:**
+
+- `git clone --branch <b>` fails on a repository with no commits, and an empty
+  repository is *the first thing anyone connects*. Now falls back to a plain
+  clone and sets the branch explicitly, so a first synchronisation works and
+  goes to the branch the connection configured rather than the host's default.
+- The application's installation covered four repositories, not one. That is
+  how installations actually work, and it is why FR-036a was corrected and the
+  binding (FR-036f) is the narrow thing rather than the grant.
 
 ## Phase 6: Polish & cross-cutting
 
