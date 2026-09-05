@@ -149,11 +149,98 @@ function sharedWebSources() {
  *
  * A test asserting "a Genie actor derives its Wish Points" must name Genie.
  * The rule is about what the *product* knows, not what its tests do.
+ *
+ * This used to truncate the file at the first `#[cfg(test)]` and return
+ * everything before it, which silently exempted every line after the first
+ * test module in the file — including, in `graphql.rs`, about 1,450 lines of
+ * shared server code sitting after a *nested* test module at line 2657. One
+ * of them named a system, and the check reported the file clean for as long
+ * as the two lived together. Splitting that file is what surfaced it.
+ *
+ * So each `#[cfg(test)]` block is now removed individually, by matching
+ * braces from the `{` that opens it, and the code after it is kept and
+ * scanned. Braces inside strings, chars and comments are skipped — a `"{"`
+ * in a test's assertion message would otherwise swallow the rest of the file
+ * and reintroduce exactly the blind spot this replaces.
  */
 function withoutTests(source) {
   const marker = "#[cfg(test)]";
-  const at = source.indexOf(marker);
-  return at === -1 ? source : source.slice(0, at);
+  let out = source;
+  for (;;) {
+    const at = out.indexOf(marker);
+    if (at === -1) return out;
+    const open = out.indexOf("{", at);
+    if (open === -1) return out.slice(0, at);
+    const close = matchingBrace(out, open);
+    // An unbalanced block means the file does not parse; drop the remainder
+    // rather than guessing, which is what the old behaviour did everywhere.
+    if (close === -1) return out.slice(0, at);
+    out = out.slice(0, at) + out.slice(close + 1);
+  }
+}
+
+/**
+ * Index of the `}` closing the `{` at `open`, or -1.
+ *
+ * Skips braces inside string literals, char literals, raw strings and
+ * comments, because a test message containing a brace is ordinary and
+ * miscounting one would silently unscan the rest of the file.
+ */
+function matchingBrace(text, open) {
+  let depth = 0;
+  for (let i = open; i < text.length; i++) {
+    const c = text[i];
+    if (c === "/" && text[i + 1] === "/") {
+      const nl = text.indexOf("\n", i);
+      if (nl === -1) return -1;
+      i = nl;
+      continue;
+    }
+    if (c === "/" && text[i + 1] === "*") {
+      const end = text.indexOf("*/", i + 2);
+      if (end === -1) return -1;
+      i = end + 1;
+      continue;
+    }
+    if (c === "r" && (text[i + 1] === '"' || text[i + 1] === "#")) {
+      let hashes = 0;
+      let j = i + 1;
+      while (text[j] === "#") {
+        hashes++;
+        j++;
+      }
+      if (text[j] === '"') {
+        const terminator = '"' + "#".repeat(hashes);
+        const end = text.indexOf(terminator, j + 1);
+        if (end === -1) return -1;
+        i = end + terminator.length - 1;
+        continue;
+      }
+    }
+    if (c === '"' || c === "'") {
+      const quote = c;
+      let j = i + 1;
+      while (j < text.length) {
+        if (text[j] === "\\") {
+          j += 2;
+          continue;
+        }
+        if (text[j] === quote) break;
+        // A lifetime (`'a`) is not a char literal and has no closing quote.
+        if (quote === "'" && text[j] === "\n") break;
+        j++;
+      }
+      if (j >= text.length) return -1;
+      i = text[j] === quote ? j : j - 1;
+      continue;
+    }
+    if (c === "{") depth++;
+    else if (c === "}") {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
 }
 
 /**
