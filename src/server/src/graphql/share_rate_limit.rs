@@ -1,4 +1,11 @@
-//! FR-009c: the anonymous collection read is rate limited.
+//! FR-009c and ADR-071: every anonymous share read is rate limited.
+//!
+//! Four resolvers answer without a session — `sharedCollection`,
+//! `sharedAbility`, `sharedItem` and `sharedActor` — and each calls
+//! [`allow_request`] before its lookup. It lived under `collections/` while
+//! collections were the only anonymous path; it moved here when the other
+//! three joined them, so that three share modules do not import a limiter
+//! through a module about something else.
 //!
 //! # Why this is not `auth_middleware::rate_limit_auth_requests`
 //!
@@ -47,7 +54,7 @@ fn limiter_store() -> &'static Mutex<HashMap<String, Vec<i64>>> {
     COLLECTION_RATE_LIMITER.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-/// Whether this caller may make another anonymous collection request.
+/// Whether this caller may make another anonymous share request.
 ///
 /// Same sliding-window shape as the auth limiter, so the codebase has one idea
 /// of what rate limiting looks like rather than two.
@@ -55,7 +62,7 @@ pub fn allow_request(caller: &str) -> bool {
     let now = Utc::now().timestamp();
     let Ok(mut store) = limiter_store().lock() else {
         // A poisoned lock must not become an open door. Refusing is the safe
-        // way to be broken here: a collection preview failing is a bad page,
+        // way to be broken here: a share preview failing is a bad page,
         // while an unbounded guessing surface is the thing this exists to stop.
         return false;
     };

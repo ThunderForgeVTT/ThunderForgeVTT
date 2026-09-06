@@ -27,7 +27,6 @@
 
 pub mod copy;
 pub mod membership;
-pub mod rate_limit;
 pub mod resolve;
 pub mod scene_copy;
 

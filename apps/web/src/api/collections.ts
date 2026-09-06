@@ -20,9 +20,10 @@ import type {
 
 // `/api/graphql` sits behind a router-level auth gate. The collection preview
 // is readable without an account (FR-009a, ADR-070), so it goes to the same
-// unauthenticated route spec 015 built for the takedown notice. Copying does
-// not — see `copySharedCollectionToWorld` below, which is where viewing and
-// copying deliberately diverge (FR-009b).
+// unauthenticated route spec 015 built for the takedown notice — as do the
+// other three share previews since ADR-071. Copying does not — see
+// `copySharedCollectionToWorld` below, which is where viewing and copying
+// deliberately diverge (FR-009b).
 const GRAPHQL_PUBLIC_ENDPOINT = "/api/graphql/public";
 
 const COLLECTION_FIELDS = `
@@ -241,12 +242,10 @@ export function revokeCollectionShareLink(shareId: string): Promise<boolean> {
  * FR-009a: readable **with no account at all**, which is why this one call
  * goes to the public endpoint.
  *
- * This is the divergence from the three shipped shares. `sharedAbility`,
- * `sharedItem` and `sharedActor` each require a session — the clarification
- * that chose anonymous viewing said it matched them, and it did not.
- * ADR-070 records this as a deliberate divergence rather than a mistake, and
- * FR-009e puts aligning the older three out of scope. Pointing this at
- * `/api/graphql` would make the page require a login and quietly undo that.
+ * This was the divergence from the three shipped shares, which each required a
+ * session. ADR-071 closed it: `sharedAbility`, `sharedItem` and `sharedActor`
+ * now read anonymously through this same endpoint. Pointing any of the four at
+ * `/api/graphql` would make its page require a login and quietly undo that.
  */
 export function getSharedCollection(
   shareCode: string,

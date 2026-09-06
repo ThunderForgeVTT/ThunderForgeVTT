@@ -343,15 +343,13 @@ export default function AppRoutes({
         {/*
           Spec 026 (T033, FR-009a). **Deliberately outside `RequireAuthenticated`.**
 
-          The other three share routes below — `/shared/actor/:code`,
-          `/shared/ability/:code`, `/shared/item/:code` — are each wrapped in
-          it, and wrapping this one the same way is the obvious mistake to
-          make here. It would send the person the link was sent to a login
-          screen instead of the collection, which is the feature.
-
-          ADR-070 records the divergence. FR-009e puts aligning the older
-          three out of scope, so the inconsistency below is expected and not a
-          thing to tidy away.
+          So are the other three share routes — `/shared/actor/:code`,
+          `/shared/ability/:code`, `/shared/item/:code` — since ADR-071 closed
+          FR-009e. Wrapping any of the four is the obvious mistake to make
+          here: it would send the person the link was sent to a login screen
+          instead of the content, which is the feature. A resolver that answers
+          anonymously behind a route that redirects to login is the same wall
+          in a different place.
         */}
         <Route
           path="/collection/:shareCode"
@@ -651,11 +649,7 @@ export default function AppRoutes({
         />
         <Route
           path="/shared/actor/:code"
-          element={
-            <RequireAuthenticated>
-              {renderLazyPage(<SharedActorPage />, "Loading shared actor")}
-            </RequireAuthenticated>
-          }
+          element={renderLazyPage(<SharedActorPage />, "Loading shared actor")}
         />
         <Route
           path="/world/:id/ability/:abilityId/view"
@@ -697,19 +691,14 @@ export default function AppRoutes({
         />
         <Route
           path="/shared/ability/:code"
-          element={
-            <RequireAuthenticated>
-              {renderLazyPage(<SharedAbilityPage />, "Loading shared ability")}
-            </RequireAuthenticated>
-          }
+          element={renderLazyPage(
+            <SharedAbilityPage />,
+            "Loading shared ability",
+          )}
         />
         <Route
           path="/shared/item/:code"
-          element={
-            <RequireAuthenticated>
-              {renderLazyPage(<SharedItemPage />, "Loading shared item")}
-            </RequireAuthenticated>
-          }
+          element={renderLazyPage(<SharedItemPage />, "Loading shared item")}
         />
         {/*
           Spec 028 US5. Any signed-in user, not just an admin: the cache is on

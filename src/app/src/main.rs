@@ -67,18 +67,19 @@ async fn graphql_handler(
 /// (which never call `authenticated_user(ctx)`) still fails cleanly with
 /// "Authentication required" if invoked through this route — this is not
 /// a broader bypass, it just removes the transport-level all-or-nothing
-/// gate for the one mutation that must be reachable by an anonymous
-/// rights holder.
+/// gate for the operations that must be reachable without an account:
+/// `submitTakedownNotice` (spec 015), `sharedCollection` (ADR-070), and
+/// `sharedAbility`, `sharedItem` and `sharedActor` (ADR-071).
 async fn graphql_public_handler(
     Extension(schema): Extension<AppSchema>,
     headers: axum::http::HeaderMap,
     req: GraphQLRequest,
 ) -> GraphQLResponse {
-    // Spec 026 (FR-009c): the anonymous collection read is rate limited, and
-    // this is the only layer that can see who the caller is — the resolver has
-    // headers nowhere. Derived with the same `client_ip` the auth limiter uses,
-    // so the two cannot disagree about who somebody is.
-    let caller = thunderforge_server::graphql::mutations_collection_shares::AnonymousCaller(
+    // Spec 026 (FR-009c) and ADR-071: the four anonymous share reads are rate
+    // limited, and this is the only layer that can see who the caller is — the
+    // resolver has headers nowhere. Derived with the same `client_ip` the auth
+    // limiter uses, so the two cannot disagree about who somebody is.
+    let caller = thunderforge_server::graphql::anonymous::AnonymousCaller(
         thunderforge_server::auth_middleware::client_ip(&headers),
     );
     schema.execute(req.into_inner().data(caller)).await.into()

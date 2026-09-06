@@ -6,6 +6,12 @@ import type {
   SharedAbilityPreview,
 } from "@/types/abilityShare";
 
+// ADR-071: the share preview is readable without an account, so it goes to
+// the unauthenticated route spec 015 built for the takedown notice — the
+// same one `sharedCollection` uses. Everything else in this file keeps the
+// authenticated endpoint.
+const GRAPHQL_PUBLIC_ENDPOINT = "/api/graphql/public";
+
 /**
  * Spec 025 US6: ability share links, governed by ADR-049.
  *
@@ -58,7 +64,14 @@ export function revokeAbilityShareLink(shareId: string): Promise<boolean> {
   ).then((data) => data.revokeAbilityShareLink);
 }
 
-/** Requires login but NOT world membership — that is the point of a share. */
+/**
+ * ADR-071: readable **with no account at all**. This one call goes to the
+ * public endpoint — `/api/graphql` sits behind a router-level auth gate, so
+ * pointing it there would make the page require a login and quietly undo the
+ * decision.
+ *
+ * Copying does not go here. Viewing and copying diverge at exactly that call.
+ */
 export function getSharedAbility(
   shareCode: string,
 ): Promise<SharedAbilityPreview> {
@@ -77,6 +90,7 @@ export function getSharedAbility(
       }
     `,
     { shareCode },
+    { endpoint: GRAPHQL_PUBLIC_ENDPOINT },
   ).then((data) => data.sharedAbility);
 }
 

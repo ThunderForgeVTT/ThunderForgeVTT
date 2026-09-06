@@ -65,10 +65,12 @@ pub use queries::{
 
 // Phase 4.10.B: Invite & Membership mutations for multiplayer campaigns
 // Spec 026: content collections — authoring, and (separately) sharing.
+pub mod anonymous;
 pub mod mutations_collection_shares;
 pub mod mutations_collections;
 pub mod mutations_invites;
 pub mod share_codes;
+pub mod share_rate_limit;
 pub use mutations_invites::InviteMutation;
 
 // Phase 6: Wall mutations (vision-blocking scene geometry)

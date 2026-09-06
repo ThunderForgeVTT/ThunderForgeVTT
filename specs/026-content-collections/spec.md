@@ -355,6 +355,13 @@ that could not be brought across.
   shipped, live share paths is a security-relevant change to features this spec
   is not otherwise touching, and it deserves its own decision rather than
   arriving as a side effect of a collections build.
+
+  **Closed 2026-09-06 by ADR-071**, which took that decision on its own terms.
+  `sharedAbility`, `sharedItem` and `sharedActor` now read without a session,
+  rate-limited before the lookup, each refusing through a single `UNAVAILABLE`
+  constant; their three routes left `RequireAuthenticated`; and each gained the
+  owner-facing read path (`abilityShareLink`, `itemShareLink`, `actorShareLink`)
+  that the second defect below called for. Copying still authenticates.
 - **FR-009b**: **Copying still requires an account** and authority in a
   destination world (FR-016). Viewing and copying are different acts with
   different requirements, and conflating them would either lock out the
@@ -403,8 +410,8 @@ that could not be brought across.
   Recorded because implementing FR-010 without it produced a revoke that only
   worked inside the page that minted the link: with no read path, closing the
   tab permanently removed the owner's ability to revoke. The three shipped
-  single-artifact shares have the same defect today; fixing them is FR-009e's
-  follow-up, not this one.
+  single-artifact shares had the same defect; ADR-071 fixed it, as FR-009e's
+  follow-up said it would.
 - **FR-011**: Revocation MUST NOT affect copies already made, and the interface
   MUST say so at the moment of revoking rather than implying a reach the
   platform does not have.

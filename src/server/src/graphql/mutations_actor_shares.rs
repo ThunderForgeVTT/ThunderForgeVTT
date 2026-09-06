@@ -9,7 +9,9 @@ use uuid::Uuid;
 
 use crate::auth::actor_permissions::effective_actor_permission;
 use crate::auth::world_membership::is_dm_of_world;
+use crate::graphql::anonymous::caller_id;
 use crate::graphql::share_codes::generate_link_code;
+use crate::graphql::share_rate_limit as rate_limit;
 use crate::graphql::types::{ActorPermissionLevel, GraphQLActorShareLink, SharedActorPreview};
 use crate::graphql::{GraphQLActorSystemData, GraphQLWorldActor, app_state, authenticated_user};
 use crate::models::{ActorShare, ActorSystemData, NewActorShare, NewWorldActor, WorldActor};
@@ -41,6 +43,15 @@ impl From<String> for CopyError {
     }
 }
 
+/// The one sentence every failed lookup in this module produces.
+///
+/// ADR-071: an unknown code, a revoked share, a deleted actor and a moderated
+/// one must be indistinguishable to an outsider, because distinguishing them is
+/// a probe — and that matters more now the caller need not have an account. A
+/// constant rather than four string literals so they cannot drift apart later,
+/// which is exactly how this kind of leak is usually introduced.
+pub const UNAVAILABLE: &str = "This share link is no longer available";
+
 fn load_active_share(
     conn: &mut diesel::PgConnection,
     share_code: &str,
@@ -50,16 +61,34 @@ fn load_active_share(
         .filter(world_actor_shares::revoked.eq(false))
         .select(ActorShare::as_select())
         .first::<ActorShare>(conn)
-        .map_err(|_| "This share link is no longer available".to_string())
+        .map_err(|_| UNAVAILABLE.to_string())
 }
 
-/// Testable core of `ActorShareQuery::shared_actor`. Authenticated-only,
-/// no world-membership check by design (research.md §9) — returns a
-/// world-identity-scrubbed projection.
+/// Testable core of `sharedActor` (research.md §9).
+///
+/// **Unauthenticated** — ADR-071. Do not add `authenticated_user(ctx)?` to the
+/// resolver that calls this; the session requirement was removed deliberately,
+/// on the same terms ADR-070 set for `sharedCollection`. There is no
+/// world-membership check either, which is the point of a share link.
+///
+/// `caller` is used for one thing: rate limiting, before the lookup. An
+/// unguessable code is unguessable only while the number of guesses is bounded,
+/// and once no account is needed, nothing else bounds them.
+///
+/// Blocked entirely for a moderated actor, so a share can never become a
+/// moderation bypass.
+///
+/// Returns a world-identity-scrubbed projection.
 pub async fn shared_actor_impl(
     state: &AppState,
+    caller: &str,
     share_code: String,
 ) -> GraphQLResult<SharedActorPreview> {
+    // ADR-071 (and FR-009c's reasoning): before the lookup, never after.
+    if !rate_limit::allow_request(caller) {
+        return Err(Error::new(rate_limit::rate_limited_message()));
+    }
+
     let mut conn = state
         .db_pool
         .get()
@@ -72,7 +101,7 @@ pub async fn shared_actor_impl(
             .filter(world_actors::id.eq(share.actor_id))
             .select(WorldActor::as_select())
             .first::<WorldActor>(&mut conn)
-            .map_err(|_| "This share link is no longer available".to_string())?;
+            .map_err(|_| UNAVAILABLE.to_string())?;
 
         let system_data = world_actor_system_data::table
             .filter(world_actor_system_data::actor_id.eq(actor.id))
@@ -93,7 +122,7 @@ pub async fn shared_actor_impl(
         .await?
         .is_some()
     {
-        return Err(Error::new("This share link is no longer available"));
+        return Err(Error::new(UNAVAILABLE));
     }
 
     Ok(SharedActorPreview {
@@ -108,6 +137,61 @@ pub async fn shared_actor_impl(
 /// Testable core of `ActorShareMutation::create_actor_share_link`.
 /// Requires effective `Owner` on the actor, including the DM's implicit
 /// access (FR-023).
+/// Testable core of `actorShareLink` — the active share for a actor the
+/// caller owns, or null.
+///
+/// # Why it exists
+///
+/// ADR-071's second half. The revoke mutation shipped without a read path, so
+/// revoking only worked inside the browser session that minted the link: the
+/// code was shown once, and closing the tab removed the owner's ability to
+/// recall it permanently. Spec 026 recorded that defect against all three
+/// singleton shares and held it under FR-009e; collections answered it with
+/// `collectionShareLink` and this is the same answer.
+///
+/// It matters more now the read is anonymous, not less: a link that reaches the
+/// public and cannot be recalled by its owner is exactly what ADR-049's
+/// ownership model exists to prevent.
+///
+/// # Why this is not the enumeration FR-020 forbids
+///
+/// It is scoped to one actor the caller already has Owner-level authority
+/// over — the same authority needed to mint the link in the first place. It
+/// reaches nothing by world, by user, or in aggregate, so nothing becomes
+/// discoverable that was not already.
+pub async fn actor_share_link_impl(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    actor_id: Uuid,
+) -> GraphQLResult<Option<ActorShare>> {
+    // The authority to see a link is the authority to have made one.
+    let level = effective_actor_permission(state, user_id, is_admin, actor_id).await?;
+    if level.rank() < ActorPermissionLevel::Owner.rank() {
+        return Err(Error::new(
+            "Only an Owner-level member may see this actor's share link",
+        ));
+    }
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    tokio::task::spawn_blocking(move || {
+        world_actor_shares::table
+            .filter(world_actor_shares::actor_id.eq(actor_id))
+            .filter(world_actor_shares::revoked.eq(false))
+            .order(world_actor_shares::created_at.desc())
+            .select(ActorShare::as_select())
+            .first::<ActorShare>(&mut conn)
+            .optional()
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|e| Error::new(format!("Failed to load the share link: {e}")))
+}
+
 pub async fn create_actor_share_link_impl(
     state: &AppState,
     user_id: Uuid,
@@ -245,7 +329,7 @@ pub async fn copy_shared_actor_to_world_impl(
                 .filter(world_actors::id.eq(share.actor_id))
                 .select(WorldActor::as_select())
                 .first::<WorldActor>(conn)
-                .map_err(|_| "This share link is no longer available".to_string())?;
+                .map_err(|_| UNAVAILABLE.to_string())?;
 
             let destination_scene_id = scenes::table
                 .filter(scenes::world_id.eq(destination_world_id))
@@ -313,14 +397,34 @@ pub struct ActorShareQuery;
 
 #[async_graphql::Object]
 impl ActorShareQuery {
+    /// ADR-071: the active share link for a actor the caller owns, or null.
+    /// **Authenticated**, and scoped to one actor the caller already has
+    /// authority over — see `actor_share_link_impl` for why this is not
+    /// enumeration.
+    async fn actor_share_link(
+        &self,
+        ctx: &Context<'_>,
+        actor_id: Uuid,
+    ) -> GraphQLResult<Option<GraphQLActorShareLink>> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        Ok(
+            actor_share_link_impl(state, auth_user.user_id, auth_user.is_admin, actor_id)
+                .await?
+                .map(Into::into),
+        )
+    }
+
+    /// **Deliberately unauthenticated** — ADR-071. Do not add
+    /// `authenticated_user(ctx)?` here; it was removed on purpose, and all four
+    /// share reads now agree. The caller is identified only to rate-limit them.
     async fn shared_actor(
         &self,
         ctx: &Context<'_>,
         share_code: String,
     ) -> GraphQLResult<SharedActorPreview> {
         let state = app_state(ctx)?;
-        let _auth_user = authenticated_user(ctx)?;
-        shared_actor_impl(state, share_code).await
+        shared_actor_impl(state, &caller_id(ctx), share_code).await
     }
 }
 
@@ -371,6 +475,13 @@ mod tests {
     use crate::test_support::{
         insert_test_scene, insert_test_user, insert_test_world, test_app_state,
     };
+
+    /// A distinct caller per test, so the shared rate limiter's window cannot
+    /// leak between them: they run concurrently in one process, and a limiter
+    /// keyed on a constant would make passing depend on test order.
+    fn a_caller() -> String {
+        format!("test-{}", Uuid::new_v4())
+    }
 
     /// FR-023: only an Owner-level member (including the DM's implicit
     /// access) may generate a share link.
@@ -446,7 +557,7 @@ mod tests {
             .await
             .expect("DM should be able to share the actor");
 
-        let preview = shared_actor_impl(&state, link.share_code.clone())
+        let preview = shared_actor_impl(&state, &a_caller(), link.share_code.clone())
             .await
             .expect("a valid share code should resolve");
         assert_eq!(preview.label, "Bo Jangles");
@@ -455,13 +566,13 @@ mod tests {
             .await
             .expect("DM should be able to revoke");
 
-        let after_revoke = shared_actor_impl(&state, link.share_code).await;
+        let after_revoke = shared_actor_impl(&state, &a_caller(), link.share_code).await;
         assert!(
             after_revoke.is_err(),
             "a revoked share code must no longer resolve"
         );
 
-        let missing = shared_actor_impl(&state, "DOES-NOT-EXIST".to_string()).await;
+        let missing = shared_actor_impl(&state, &a_caller(), "DOES-NOT-EXIST".to_string()).await;
         assert!(missing.is_err(), "an unknown share code must not resolve");
     }
 
@@ -550,6 +661,199 @@ mod tests {
         assert!(
             copy_permissions.is_empty(),
             "a freshly copied actor must start with an empty ownership block (FR-030)"
+        );
+    }
+
+    /// ADR-071: with no account required, the refusal must not distinguish an
+    /// unknown code from a revoked share. Distinguishing them is a probe, and
+    /// the probe is now free.
+    #[tokio::test]
+    async fn a_revoked_share_is_indistinguishable_from_a_code_that_never_existed() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        insert_test_scene(&mut conn, world_id, owner_id);
+        drop(conn);
+
+        let actor = create_actor_impl(
+            &state,
+            owner_id,
+            false,
+            CreateActorInput {
+                world_id,
+                label: "Bo Jangles".to_string(),
+                is_npc: true,
+                actor_type: Some("npc".to_string()),
+                game_system_id: None,
+                description: None,
+            },
+        )
+        .await
+        .expect("DM should create actor");
+
+        let link = create_actor_share_link_impl(&state, owner_id, false, actor.id)
+            .await
+            .expect("the owner may share");
+
+        revoke_actor_share_link_impl(&state, owner_id, false, link.id)
+            .await
+            .expect("the owner may revoke");
+
+        let revoked = shared_actor_impl(&state, &a_caller(), link.share_code)
+            .await
+            .expect_err("a revoked code must not resolve");
+        let unknown = shared_actor_impl(&state, &a_caller(), "NOTAREALCODEATALL0".to_string())
+            .await
+            .expect_err("an unknown code must not resolve");
+
+        assert_eq!(
+            revoked.message, unknown.message,
+            "the two refusals must be one sentence, or the difference is a probe"
+        );
+        assert_eq!(revoked.message, UNAVAILABLE);
+    }
+
+    /// ADR-071: the read resolves with no session at all. `shared_actor_impl`
+    /// takes a caller only to rate-limit it, and is reached by a resolver that
+    /// never calls `authenticated_user` — this asserts the core behaves that
+    /// way rather than asserting the absence of a line of code.
+    #[tokio::test]
+    async fn the_read_needs_no_account() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        insert_test_scene(&mut conn, world_id, owner_id);
+        drop(conn);
+
+        let actor = create_actor_impl(
+            &state,
+            owner_id,
+            false,
+            CreateActorInput {
+                world_id,
+                label: "Bo Jangles".to_string(),
+                is_npc: true,
+                actor_type: Some("npc".to_string()),
+                game_system_id: None,
+                description: None,
+            },
+        )
+        .await
+        .expect("DM should create actor");
+
+        let link = create_actor_share_link_impl(&state, owner_id, false, actor.id)
+            .await
+            .expect("the owner may share");
+
+        let preview = shared_actor_impl(&state, "an-anonymous-visitor-actor", link.share_code)
+            .await
+            .expect("a valid code must resolve for a caller with no account");
+        assert_eq!(preview.label, "Bo Jangles");
+    }
+
+    /// ADR-071: an unguessable code is unguessable only while the guesses are
+    /// bounded, and the account requirement that used to bound them is gone.
+    #[tokio::test]
+    async fn the_anonymous_read_is_rate_limited() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        insert_test_scene(&mut conn, world_id, owner_id);
+        drop(conn);
+
+        let actor = create_actor_impl(
+            &state,
+            owner_id,
+            false,
+            CreateActorInput {
+                world_id,
+                label: "Bo Jangles".to_string(),
+                is_npc: true,
+                actor_type: Some("npc".to_string()),
+                game_system_id: None,
+                description: None,
+            },
+        )
+        .await
+        .expect("DM should create actor");
+
+        let link = create_actor_share_link_impl(&state, owner_id, false, actor.id)
+            .await
+            .expect("the owner may share");
+
+        let caller = a_caller();
+        let mut refused = None;
+        for _ in 0..200 {
+            if let Err(e) = shared_actor_impl(&state, &caller, link.share_code.clone()).await {
+                refused = Some(e);
+                break;
+            }
+        }
+
+        let error = refused.expect("a caller must eventually be rate limited");
+        assert!(
+            error.message.contains("Too many requests"),
+            "got: {}",
+            error.message
+        );
+        assert_ne!(
+            error.message, UNAVAILABLE,
+            "being throttled must not read as the code being invalid"
+        );
+    }
+
+    /// ADR-071's second half: revoking must not depend on still having the page
+    /// that minted the link. Before this read path, closing the tab lost the
+    /// code permanently.
+    #[tokio::test]
+    async fn the_owner_can_recover_the_share_code_after_closing_the_page() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        insert_test_scene(&mut conn, world_id, owner_id);
+        drop(conn);
+
+        let actor = create_actor_impl(
+            &state,
+            owner_id,
+            false,
+            CreateActorInput {
+                world_id,
+                label: "Bo Jangles".to_string(),
+                is_npc: true,
+                actor_type: Some("npc".to_string()),
+                game_system_id: None,
+                description: None,
+            },
+        )
+        .await
+        .expect("DM should create actor");
+
+        let link = create_actor_share_link_impl(&state, owner_id, false, actor.id)
+            .await
+            .expect("the owner may share");
+
+        let recovered = actor_share_link_impl(&state, owner_id, false, actor.id)
+            .await
+            .expect("the owner may read back their own share link")
+            .expect("an active share must be found");
+        assert_eq!(recovered.share_code, link.share_code);
+        assert_eq!(recovered.id, link.id);
+
+        revoke_actor_share_link_impl(&state, owner_id, false, link.id)
+            .await
+            .expect("the owner may revoke");
+
+        let after = actor_share_link_impl(&state, owner_id, false, actor.id)
+            .await
+            .expect("reading back after revocation is not an error");
+        assert!(
+            after.is_none(),
+            "a revoked share is not an active share link"
         );
     }
 }

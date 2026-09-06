@@ -6,7 +6,7 @@ use super::types_lore::GraphQLLoreEntry;
 use async_graphql::SimpleObject;
 use chrono::NaiveDateTime;
 
-use crate::models::{AbilityEffect, AbilityPermission, WorldAbility};
+use crate::models::{AbilityEffect, AbilityPermission, AbilityShare, WorldAbility};
 
 /// An ability's type, as a **stable identity** rather than a closed set.
 ///
@@ -275,6 +275,18 @@ pub struct GraphQLAbilityShareLink {
     pub share_code: String,
     pub revoked: bool,
     pub created_at: NaiveDateTime,
+}
+
+impl From<AbilityShare> for GraphQLAbilityShareLink {
+    fn from(row: AbilityShare) -> Self {
+        Self {
+            id: row.id,
+            ability_id: row.ability_id,
+            share_code: row.share_code,
+            revoked: row.revoked,
+            created_at: row.created_at,
+        }
+    }
 }
 
 /// Spec 025 (FR-033): what a share-link viewer sees.

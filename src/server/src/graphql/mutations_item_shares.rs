@@ -11,7 +11,9 @@ use uuid::Uuid;
 
 use crate::auth::item_permissions::effective_item_permission;
 use crate::auth::world_membership::is_dm_of_world;
+use crate::graphql::anonymous::caller_id;
 use crate::graphql::share_codes::generate_link_code;
+use crate::graphql::share_rate_limit as rate_limit;
 use crate::graphql::types::{
     ActorPermissionLevel, GraphQLItem, GraphQLItemEffect, GraphQLItemShareLink, SharedItemPreview,
 };
@@ -42,6 +44,15 @@ impl From<String> for CopyError {
     }
 }
 
+/// The one sentence every failed lookup in this module produces.
+///
+/// ADR-071: an unknown code, a revoked share, a deleted item and a moderated
+/// one must be indistinguishable to an outsider, because distinguishing them is
+/// a probe — and that matters more now the caller need not have an account. A
+/// constant rather than four string literals so they cannot drift apart later,
+/// which is exactly how this kind of leak is usually introduced.
+pub const UNAVAILABLE: &str = "This share link is no longer available";
+
 fn load_active_share(
     conn: &mut diesel::PgConnection,
     share_code: &str,
@@ -51,15 +62,32 @@ fn load_active_share(
         .filter(world_item_shares::revoked.eq(false))
         .select(ItemShare::as_select())
         .first::<ItemShare>(conn)
-        .map_err(|_| "This share link is no longer available".to_string())
+        .map_err(|_| UNAVAILABLE.to_string())
 }
 
-/// Testable core of `ItemShareQuery::shared_item`. Authenticated-only, no
-/// world-membership check by design (mirrors `shared_actor_impl`).
+/// Testable core of `sharedItem` (FR-033).
+///
+/// **Unauthenticated** — ADR-071. Do not add `authenticated_user(ctx)?` to the
+/// resolver that calls this; the session requirement was removed deliberately,
+/// on the same terms ADR-070 set for `sharedCollection`. There is no
+/// world-membership check either, which is the point of a share link.
+///
+/// `caller` is used for one thing: rate limiting, before the lookup. An
+/// unguessable code is unguessable only while the number of guesses is bounded,
+/// and once no account is needed, nothing else bounds them.
+///
+/// Blocked entirely for a moderated item, so a share can never become a
+/// moderation bypass.
 pub async fn shared_item_impl(
     state: &AppState,
+    caller: &str,
     share_code: String,
 ) -> GraphQLResult<SharedItemPreview> {
+    // ADR-071 (and FR-009c's reasoning): before the lookup, never after.
+    if !rate_limit::allow_request(caller) {
+        return Err(Error::new(rate_limit::rate_limited_message()));
+    }
+
     let mut conn = state
         .db_pool
         .get()
@@ -72,7 +100,7 @@ pub async fn shared_item_impl(
             .filter(world_items::id.eq(share.item_id))
             .select(WorldItem::as_select())
             .first::<WorldItem>(&mut conn)
-            .map_err(|_| "This share link is no longer available".to_string())?;
+            .map_err(|_| UNAVAILABLE.to_string())?;
 
         let effects = world_item_effects::table
             .filter(world_item_effects::item_id.eq(item.id))
@@ -93,7 +121,7 @@ pub async fn shared_item_impl(
         .await?
         .is_some()
     {
-        return Err(Error::new("This share link is no longer available"));
+        return Err(Error::new(UNAVAILABLE));
     }
 
     Ok(SharedItemPreview {
@@ -106,6 +134,61 @@ pub async fn shared_item_impl(
 
 /// Testable core of `ItemShareMutation::create_item_share_link`. Requires
 /// effective Owner on the item (FR-022).
+/// Testable core of `itemShareLink` — the active share for a item the
+/// caller owns, or null.
+///
+/// # Why it exists
+///
+/// ADR-071's second half. The revoke mutation shipped without a read path, so
+/// revoking only worked inside the browser session that minted the link: the
+/// code was shown once, and closing the tab removed the owner's ability to
+/// recall it permanently. Spec 026 recorded that defect against all three
+/// singleton shares and held it under FR-009e; collections answered it with
+/// `collectionShareLink` and this is the same answer.
+///
+/// It matters more now the read is anonymous, not less: a link that reaches the
+/// public and cannot be recalled by its owner is exactly what ADR-049's
+/// ownership model exists to prevent.
+///
+/// # Why this is not the enumeration FR-020 forbids
+///
+/// It is scoped to one item the caller already has Owner-level authority
+/// over — the same authority needed to mint the link in the first place. It
+/// reaches nothing by world, by user, or in aggregate, so nothing becomes
+/// discoverable that was not already.
+pub async fn item_share_link_impl(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    item_id: Uuid,
+) -> GraphQLResult<Option<ItemShare>> {
+    // The authority to see a link is the authority to have made one.
+    let level = effective_item_permission(state, user_id, is_admin, item_id).await?;
+    if level.rank() < ActorPermissionLevel::Owner.rank() {
+        return Err(Error::new(
+            "Only an Owner-level member may see this item's share link",
+        ));
+    }
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    tokio::task::spawn_blocking(move || {
+        world_item_shares::table
+            .filter(world_item_shares::item_id.eq(item_id))
+            .filter(world_item_shares::revoked.eq(false))
+            .order(world_item_shares::created_at.desc())
+            .select(ItemShare::as_select())
+            .first::<ItemShare>(&mut conn)
+            .optional()
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|e| Error::new(format!("Failed to load the share link: {e}")))
+}
+
 pub async fn create_item_share_link_impl(
     state: &AppState,
     user_id: Uuid,
@@ -240,7 +323,7 @@ pub async fn copy_shared_item_to_world_impl(
                 .filter(world_items::id.eq(share.item_id))
                 .select(WorldItem::as_select())
                 .first::<WorldItem>(conn)
-                .map_err(|_| "This share link is no longer available".to_string())?;
+                .map_err(|_| UNAVAILABLE.to_string())?;
 
             let new_item_row = NewWorldItem {
                 world_id: destination_world_id,
@@ -294,14 +377,34 @@ pub struct ItemShareQuery;
 
 #[async_graphql::Object]
 impl ItemShareQuery {
+    /// ADR-071: the active share link for a item the caller owns, or null.
+    /// **Authenticated**, and scoped to one item the caller already has
+    /// authority over — see `item_share_link_impl` for why this is not
+    /// enumeration.
+    async fn item_share_link(
+        &self,
+        ctx: &Context<'_>,
+        item_id: Uuid,
+    ) -> GraphQLResult<Option<GraphQLItemShareLink>> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        Ok(
+            item_share_link_impl(state, auth_user.user_id, auth_user.is_admin, item_id)
+                .await?
+                .map(Into::into),
+        )
+    }
+
+    /// **Deliberately unauthenticated** — ADR-071. Do not add
+    /// `authenticated_user(ctx)?` here; it was removed on purpose, and all four
+    /// share reads now agree. The caller is identified only to rate-limit them.
     async fn shared_item(
         &self,
         ctx: &Context<'_>,
         share_code: String,
     ) -> GraphQLResult<SharedItemPreview> {
         let state = app_state(ctx)?;
-        let _auth_user = authenticated_user(ctx)?;
-        shared_item_impl(state, share_code).await
+        shared_item_impl(state, &caller_id(ctx), share_code).await
     }
 }
 
@@ -356,6 +459,13 @@ mod tests {
     };
     use crate::graphql::types::ItemEffectType;
     use crate::test_support::{insert_test_user, insert_test_world, test_app_state};
+
+    /// A distinct caller per test, so the shared rate limiter's window cannot
+    /// leak between them: they run concurrently in one process, and a limiter
+    /// keyed on a constant would make passing depend on test order.
+    fn a_caller() -> String {
+        format!("test-{}", Uuid::new_v4())
+    }
 
     /// FR-022: only an Owner-level member (including the DM's implicit
     /// access) may generate a share link.
@@ -507,7 +617,7 @@ mod tests {
 
         // Sanity: share works before any takedown.
         assert!(
-            shared_item_impl(&state, link.share_code.clone())
+            shared_item_impl(&state, &a_caller(), link.share_code.clone())
                 .await
                 .is_ok()
         );
@@ -529,10 +639,187 @@ mod tests {
         .await
         .expect("valid notice should succeed");
 
-        let result = shared_item_impl(&state, link.share_code).await;
+        let result = shared_item_impl(&state, &a_caller(), link.share_code).await;
         assert!(
             result.is_err(),
             "a disabled item's share link must stop serving real content"
+        );
+    }
+
+    /// ADR-071: with no account required, the refusal must not distinguish an
+    /// unknown code from a revoked share. Distinguishing them is a probe, and
+    /// the probe is now free.
+    #[tokio::test]
+    async fn a_revoked_share_is_indistinguishable_from_a_code_that_never_existed() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let item = create_item_impl(
+            &state,
+            owner_id,
+            false,
+            CreateItemInput {
+                world_id,
+                name: "Longsword".to_string(),
+                description: None,
+            },
+        )
+        .await
+        .expect("DM should create item");
+
+        let link = create_item_share_link_impl(&state, owner_id, false, item.id)
+            .await
+            .expect("the owner may share");
+
+        revoke_item_share_link_impl(&state, owner_id, false, link.id)
+            .await
+            .expect("the owner may revoke");
+
+        let revoked = shared_item_impl(&state, &a_caller(), link.share_code)
+            .await
+            .expect_err("a revoked code must not resolve");
+        let unknown = shared_item_impl(&state, &a_caller(), "NOTAREALCODEATALL0".to_string())
+            .await
+            .expect_err("an unknown code must not resolve");
+
+        assert_eq!(
+            revoked.message, unknown.message,
+            "the two refusals must be one sentence, or the difference is a probe"
+        );
+        assert_eq!(revoked.message, UNAVAILABLE);
+    }
+
+    /// ADR-071: the read resolves with no session at all. `shared_item_impl`
+    /// takes a caller only to rate-limit it, and is reached by a resolver that
+    /// never calls `authenticated_user` — this asserts the core behaves that
+    /// way rather than asserting the absence of a line of code.
+    #[tokio::test]
+    async fn the_read_needs_no_account() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let item = create_item_impl(
+            &state,
+            owner_id,
+            false,
+            CreateItemInput {
+                world_id,
+                name: "Longsword".to_string(),
+                description: None,
+            },
+        )
+        .await
+        .expect("DM should create item");
+
+        let link = create_item_share_link_impl(&state, owner_id, false, item.id)
+            .await
+            .expect("the owner may share");
+
+        let preview = shared_item_impl(&state, "an-anonymous-visitor-item", link.share_code)
+            .await
+            .expect("a valid code must resolve for a caller with no account");
+        assert_eq!(preview.name, "Longsword");
+    }
+
+    /// ADR-071: an unguessable code is unguessable only while the guesses are
+    /// bounded, and the account requirement that used to bound them is gone.
+    #[tokio::test]
+    async fn the_anonymous_read_is_rate_limited() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let item = create_item_impl(
+            &state,
+            owner_id,
+            false,
+            CreateItemInput {
+                world_id,
+                name: "Longsword".to_string(),
+                description: None,
+            },
+        )
+        .await
+        .expect("DM should create item");
+
+        let link = create_item_share_link_impl(&state, owner_id, false, item.id)
+            .await
+            .expect("the owner may share");
+
+        let caller = a_caller();
+        let mut refused = None;
+        for _ in 0..200 {
+            if let Err(e) = shared_item_impl(&state, &caller, link.share_code.clone()).await {
+                refused = Some(e);
+                break;
+            }
+        }
+
+        let error = refused.expect("a caller must eventually be rate limited");
+        assert!(
+            error.message.contains("Too many requests"),
+            "got: {}",
+            error.message
+        );
+        assert_ne!(
+            error.message, UNAVAILABLE,
+            "being throttled must not read as the code being invalid"
+        );
+    }
+
+    /// ADR-071's second half: revoking must not depend on still having the page
+    /// that minted the link. Before this read path, closing the tab lost the
+    /// code permanently.
+    #[tokio::test]
+    async fn the_owner_can_recover_the_share_code_after_closing_the_page() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let item = create_item_impl(
+            &state,
+            owner_id,
+            false,
+            CreateItemInput {
+                world_id,
+                name: "Longsword".to_string(),
+                description: None,
+            },
+        )
+        .await
+        .expect("DM should create item");
+
+        let link = create_item_share_link_impl(&state, owner_id, false, item.id)
+            .await
+            .expect("the owner may share");
+
+        let recovered = item_share_link_impl(&state, owner_id, false, item.id)
+            .await
+            .expect("the owner may read back their own share link")
+            .expect("an active share must be found");
+        assert_eq!(recovered.share_code, link.share_code);
+        assert_eq!(recovered.id, link.id);
+
+        revoke_item_share_link_impl(&state, owner_id, false, link.id)
+            .await
+            .expect("the owner may revoke");
+
+        let after = item_share_link_impl(&state, owner_id, false, item.id)
+            .await
+            .expect("reading back after revocation is not an error");
+        assert!(
+            after.is_none(),
+            "a revoked share is not an active share link"
         );
     }
 }

@@ -15,10 +15,24 @@ import { useAuth } from "@/hooks/useAuth";
 import type { DmWorldSummary, SharedActorPreview } from "@/types/actorShare";
 
 /**
- * Spec 010 (US5): `/shared/actor/:code` — a login-required (but not
- * world-membership-required, research.md §9) read-only preview of a
- * shared actor, with a "Copy to World" deep-clone flow. Mirrors
- * `JoinWorldPage.tsx`'s login-gate pattern.
+ * Spec 010 (US5): `/shared/actor/:code` — a read-only preview of a shared actor, with a
+ * "Copy to World" deep-clone flow.
+ *
+ * # This page renders for a signed-out visitor
+ *
+ * ADR-071. It used to redirect to `/login` before fetching anything, and its
+ * route used to be wrapped in `RequireAuthenticated`; both are gone. A resolver
+ * that answers anonymously behind a route that redirects to login is the same
+ * wall in a different place, so restoring either would undo the decision
+ * without touching the server.
+ *
+ * The preview loads first, for anybody, from `/api/graphql/public`.
+ * Authentication is asked for at exactly one point — pressing "Copy to World" —
+ * because viewing and copying are different acts with different requirements.
+ *
+ * World membership is not required either, and never was: that is what a share
+ * link is for. The preview shows nothing identifying the source world or its
+ * members.
  */
 export default function SharedActorPage() {
   const { code = "" } = useParams();
@@ -35,30 +49,25 @@ export default function SharedActorPage() {
   const [copyError, setCopyError] = useState<string | null>(null);
   const [copiedWorldName, setCopiedWorldName] = useState<string | null>(null);
 
+  // No auth gate around this. A visitor with no account sees the actor.
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      navigate(
-        `/login?returnTo=${encodeURIComponent(`/shared/actor/${code}`)}`,
-      );
-    }
-  }, [authLoading, isAuthenticated, code, navigate]);
-
-  useEffect(() => {
-    if (!isAuthenticated || !code) {
+    if (!code) {
       return;
     }
     let active = true;
 
-    Promise.all([getSharedActor(code), getMyDmWorlds()])
-      .then(([previewResult, worlds]) => {
-        if (!active) {
-          return;
+    getSharedActor(code)
+      .then((previewResult) => {
+        if (active) {
+          setPreview(previewResult);
         }
-        setPreview(previewResult);
-        setDmWorlds(worlds);
       })
       .catch((err) => {
         if (active) {
+          // Revoked, moderated, deleted and never-existed all land here with
+          // one identical sentence, deliberately (ADR-071). It is shown
+          // verbatim rather than replaced, because replacing it with our own
+          // wording is how the cases start reading differently.
           setLoadError(
             err instanceof Error
               ? err.message
@@ -75,14 +84,48 @@ export default function SharedActorPage() {
     return () => {
       active = false;
     };
-  }, [isAuthenticated, code]);
+  }, [code]);
 
-  if (authLoading || (isAuthenticated && isLoading)) {
+  // The destination worlds are only needed once somebody wants to copy, and
+  // only exist for a signed-in caller.
+  useEffect(() => {
+    if (step !== "confirming" || !isAuthenticated) {
+      return;
+    }
+    let active = true;
+    getMyDmWorlds()
+      .then((worlds) => {
+        if (active) {
+          setDmWorlds(worlds);
+        }
+      })
+      .catch((err: unknown) => {
+        if (active) {
+          setCopyError(
+            err instanceof Error ? err.message : "Could not load your worlds.",
+          );
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [step, isAuthenticated]);
+
+  // The sign-in point, and the only one. `returnTo` brings them back here
+  // rather than to a dashboard, so the link they followed still resolves to
+  // what they were looking at.
+  const handleCopyPressed = () => {
+    if (!isAuthenticated) {
+      navigate(
+        `/login?returnTo=${encodeURIComponent(`/shared/actor/${code}`)}`,
+      );
+      return;
+    }
+    setStep("confirming");
+  };
+
+  if (authLoading || isLoading) {
     return <Loader fullScreen label="Loading shared actor" />;
-  }
-
-  if (!isAuthenticated) {
-    return null;
   }
 
   const handleConfirmCopy = async () => {
@@ -145,7 +188,7 @@ export default function SharedActorPage() {
               </div>
 
               {step === "idle" ? (
-                <Button onClick={() => setStep("confirming")} icon="worlds">
+                <Button onClick={handleCopyPressed} icon="worlds">
                   Copy to World
                 </Button>
               ) : (

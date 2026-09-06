@@ -22,7 +22,9 @@ use uuid::Uuid;
 
 use crate::auth::ability_permissions::effective_ability_permission;
 use crate::auth::world_membership::is_dm_of_world;
+use crate::graphql::anonymous::caller_id;
 use crate::graphql::share_codes::generate_link_code;
+use crate::graphql::share_rate_limit as rate_limit;
 use crate::graphql::types::{
     ActorPermissionLevel, GraphQLAbility, GraphQLAbilityEffect, GraphQLAbilityShareLink,
     SharedAbilityPreview,
@@ -56,6 +58,15 @@ impl From<String> for CopyError {
     }
 }
 
+/// The one sentence every failed lookup in this module produces.
+///
+/// ADR-071: an unknown code, a revoked share, a deleted ability and a moderated
+/// one must be indistinguishable to an outsider, because distinguishing them is
+/// a probe — and that matters more now the caller need not have an account. A
+/// constant rather than four string literals so they cannot drift apart later,
+/// which is exactly how this kind of leak is usually introduced.
+pub const UNAVAILABLE: &str = "This share link is no longer available";
+
 fn load_active_share(
     conn: &mut diesel::PgConnection,
     share_code: &str,
@@ -65,18 +76,32 @@ fn load_active_share(
         .filter(world_ability_shares::revoked.eq(false))
         .select(AbilityShare::as_select())
         .first::<AbilityShare>(conn)
-        .map_err(|_| "This share link is no longer available".to_string())
+        .map_err(|_| UNAVAILABLE.to_string())
 }
 
 /// Testable core of `sharedAbility` (FR-033).
 ///
-/// Authenticated-only, with **no world-membership check by design** — that is
-/// the point of a share link. Blocked entirely for a moderated ability, so a
-/// share can never become a moderation bypass.
+/// **Unauthenticated** — ADR-071. Do not add `authenticated_user(ctx)?` to the
+/// resolver that calls this; the session requirement was removed deliberately,
+/// on the same terms ADR-070 set for `sharedCollection`. There is no
+/// world-membership check either, which is the point of a share link.
+///
+/// `caller` is used for one thing: rate limiting, before the lookup. An
+/// unguessable code is unguessable only while the number of guesses is bounded,
+/// and once no account is needed, nothing else bounds them.
+///
+/// Blocked entirely for a moderated ability, so a share can never become a
+/// moderation bypass.
 pub async fn shared_ability_impl(
     state: &AppState,
+    caller: &str,
     share_code: String,
 ) -> GraphQLResult<SharedAbilityPreview> {
+    // ADR-071 (and FR-009c's reasoning): before the lookup, never after.
+    if !rate_limit::allow_request(caller) {
+        return Err(Error::new(rate_limit::rate_limited_message()));
+    }
+
     let mut conn = state
         .db_pool
         .get()
@@ -88,7 +113,7 @@ pub async fn shared_ability_impl(
             .filter(world_abilities::id.eq(share.ability_id))
             .select(WorldAbility::as_select())
             .first::<WorldAbility>(&mut conn)
-            .map_err(|_| "This share link is no longer available".to_string())?;
+            .map_err(|_| UNAVAILABLE.to_string())?;
         // The owning world's system, so the label below is the word that
         // world would show rather than the application's default.
         let world_system_id: Option<String> = crate::schema::worlds::table
@@ -112,7 +137,7 @@ pub async fn shared_ability_impl(
         .await?
         .is_some()
     {
-        return Err(Error::new("This share link is no longer available"));
+        return Err(Error::new(UNAVAILABLE));
     }
 
     // The label the owning world would show. Resolved here because the viewer
@@ -153,6 +178,61 @@ fn ability_label_for_world(
         .get(classification)
         .map(|kind| kind.label.clone())
         .unwrap_or_else(|| classification.to_string())
+}
+
+/// Testable core of `abilityShareLink` — the active share for a ability the
+/// caller owns, or null.
+///
+/// # Why it exists
+///
+/// ADR-071's second half. The revoke mutation shipped without a read path, so
+/// revoking only worked inside the browser session that minted the link: the
+/// code was shown once, and closing the tab removed the owner's ability to
+/// recall it permanently. Spec 026 recorded that defect against all three
+/// singleton shares and held it under FR-009e; collections answered it with
+/// `collectionShareLink` and this is the same answer.
+///
+/// It matters more now the read is anonymous, not less: a link that reaches the
+/// public and cannot be recalled by its owner is exactly what ADR-049's
+/// ownership model exists to prevent.
+///
+/// # Why this is not the enumeration FR-020 forbids
+///
+/// It is scoped to one ability the caller already has Owner-level authority
+/// over — the same authority needed to mint the link in the first place. It
+/// reaches nothing by world, by user, or in aggregate, so nothing becomes
+/// discoverable that was not already.
+pub async fn ability_share_link_impl(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    ability_id: Uuid,
+) -> GraphQLResult<Option<AbilityShare>> {
+    // The authority to see a link is the authority to have made one.
+    let level = effective_ability_permission(state, user_id, is_admin, ability_id).await?;
+    if level.rank() < ActorPermissionLevel::Owner.rank() {
+        return Err(Error::new(
+            "Only an Owner of this ability may see its share link",
+        ));
+    }
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    tokio::task::spawn_blocking(move || {
+        world_ability_shares::table
+            .filter(world_ability_shares::ability_id.eq(ability_id))
+            .filter(world_ability_shares::revoked.eq(false))
+            .order(world_ability_shares::created_at.desc())
+            .select(AbilityShare::as_select())
+            .first::<AbilityShare>(&mut conn)
+            .optional()
+    })
+    .await
+    .map_err(|_| Error::new("Failed to spawn blocking task"))?
+    .map_err(|e| Error::new(format!("Failed to load the share link: {e}")))
 }
 
 /// Testable core of `createAbilityShareLink` (FR-032). Owner-level only.
@@ -382,15 +462,34 @@ pub struct AbilityShareQuery;
 
 #[async_graphql::Object]
 impl AbilityShareQuery {
+    /// ADR-071: the active share link for a ability the caller owns, or null.
+    /// **Authenticated**, and scoped to one ability the caller already has
+    /// authority over — see `ability_share_link_impl` for why this is not
+    /// enumeration.
+    async fn ability_share_link(
+        &self,
+        ctx: &Context<'_>,
+        ability_id: Uuid,
+    ) -> GraphQLResult<Option<GraphQLAbilityShareLink>> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        Ok(
+            ability_share_link_impl(state, auth_user.user_id, auth_user.is_admin, ability_id)
+                .await?
+                .map(Into::into),
+        )
+    }
+
+    /// **Deliberately unauthenticated** — ADR-071. Do not add
+    /// `authenticated_user(ctx)?` here; it was removed on purpose, and all four
+    /// share reads now agree. The caller is identified only to rate-limit them.
     async fn shared_ability(
         &self,
         ctx: &Context<'_>,
         share_code: String,
     ) -> GraphQLResult<SharedAbilityPreview> {
         let state = app_state(ctx)?;
-        // Authenticated, but deliberately no membership check.
-        let _ = authenticated_user(ctx)?;
-        shared_ability_impl(state, share_code).await
+        shared_ability_impl(state, &caller_id(ctx), share_code).await
     }
 }
 
@@ -463,6 +562,13 @@ mod tests {
     };
     use crate::graphql::types::AbilityEffectType;
     use crate::test_support::*;
+
+    /// A distinct caller per test, so the shared rate limiter's window cannot
+    /// leak between them: they run concurrently in one process, and a limiter
+    /// keyed on a constant would make passing depend on test order.
+    fn a_caller() -> String {
+        format!("test-{}", Uuid::new_v4())
+    }
 
     fn ability_input(world_id: Uuid, name: &str) -> CreateAbilityInput {
         CreateAbilityInput {
@@ -607,7 +713,7 @@ mod tests {
             .await
             .unwrap();
 
-        shared_ability_impl(&state, link.share_code.clone())
+        shared_ability_impl(&state, &a_caller(), link.share_code.clone())
             .await
             .expect("an active link resolves");
 
@@ -617,7 +723,7 @@ mod tests {
                 .unwrap()
         );
 
-        let err = shared_ability_impl(&state, link.share_code)
+        let err = shared_ability_impl(&state, &a_caller(), link.share_code)
             .await
             .expect_err("a revoked link must not resolve");
         assert!(err.message.contains("no longer available"));
@@ -645,7 +751,7 @@ mod tests {
         let link = create_ability_share_link_impl(&state, owner_id, false, ability.id)
             .await
             .unwrap();
-        shared_ability_impl(&state, link.share_code.clone())
+        shared_ability_impl(&state, &a_caller(), link.share_code.clone())
             .await
             .expect("resolves before moderation");
 
@@ -666,7 +772,7 @@ mod tests {
         .await
         .expect("takedown submission");
 
-        let err = shared_ability_impl(&state, link.share_code)
+        let err = shared_ability_impl(&state, &a_caller(), link.share_code)
             .await
             .expect_err("a moderated ability's share must stop resolving");
         assert!(err.message.contains("no longer available"));
@@ -692,7 +798,9 @@ mod tests {
             .await
             .unwrap();
 
-        let preview = shared_ability_impl(&state, link.share_code).await.unwrap();
+        let preview = shared_ability_impl(&state, &a_caller(), link.share_code)
+            .await
+            .unwrap();
         assert_eq!(preview.name, "Quiet");
         // Spec 033 FR-006: a share view names the type in the owning world's
         // words, resolved server-side because the viewer is deliberately not a
@@ -711,5 +819,154 @@ mod tests {
             classification_label: _,
             effects: _,
         } = preview;
+    }
+
+    /// ADR-071: with no account required, the refusal must not distinguish an
+    /// unknown code from a revoked share. Distinguishing them is a probe, and
+    /// the probe is now free.
+    #[tokio::test]
+    async fn a_revoked_share_is_indistinguishable_from_a_code_that_never_existed() {
+        dotenvy::dotenv().ok();
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let ability =
+            create_ability_impl(&state, owner_id, false, ability_input(world_id, "Shared"))
+                .await
+                .unwrap();
+
+        let link = create_ability_share_link_impl(&state, owner_id, false, ability.id)
+            .await
+            .expect("the owner may share");
+
+        revoke_ability_share_link_impl(&state, owner_id, false, link.id)
+            .await
+            .expect("the owner may revoke");
+
+        let revoked = shared_ability_impl(&state, &a_caller(), link.share_code)
+            .await
+            .expect_err("a revoked code must not resolve");
+        let unknown = shared_ability_impl(&state, &a_caller(), "NOTAREALCODEATALL0".to_string())
+            .await
+            .expect_err("an unknown code must not resolve");
+
+        assert_eq!(
+            revoked.message, unknown.message,
+            "the two refusals must be one sentence, or the difference is a probe"
+        );
+        assert_eq!(revoked.message, UNAVAILABLE);
+    }
+
+    /// ADR-071: the read resolves with no session at all. `shared_ability_impl`
+    /// takes a caller only to rate-limit it, and is reached by a resolver that
+    /// never calls `authenticated_user` — this asserts the core behaves that
+    /// way rather than asserting the absence of a line of code.
+    #[tokio::test]
+    async fn the_read_needs_no_account() {
+        dotenvy::dotenv().ok();
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let ability =
+            create_ability_impl(&state, owner_id, false, ability_input(world_id, "Shared"))
+                .await
+                .unwrap();
+
+        let link = create_ability_share_link_impl(&state, owner_id, false, ability.id)
+            .await
+            .expect("the owner may share");
+
+        let preview = shared_ability_impl(&state, "an-anonymous-visitor-ability", link.share_code)
+            .await
+            .expect("a valid code must resolve for a caller with no account");
+        assert_eq!(preview.name, "Shared");
+    }
+
+    /// ADR-071: an unguessable code is unguessable only while the guesses are
+    /// bounded, and the account requirement that used to bound them is gone.
+    #[tokio::test]
+    async fn the_anonymous_read_is_rate_limited() {
+        dotenvy::dotenv().ok();
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let ability =
+            create_ability_impl(&state, owner_id, false, ability_input(world_id, "Shared"))
+                .await
+                .unwrap();
+
+        let link = create_ability_share_link_impl(&state, owner_id, false, ability.id)
+            .await
+            .expect("the owner may share");
+
+        let caller = a_caller();
+        let mut refused = None;
+        for _ in 0..200 {
+            if let Err(e) = shared_ability_impl(&state, &caller, link.share_code.clone()).await {
+                refused = Some(e);
+                break;
+            }
+        }
+
+        let error = refused.expect("a caller must eventually be rate limited");
+        assert!(
+            error.message.contains("Too many requests"),
+            "got: {}",
+            error.message
+        );
+        assert_ne!(
+            error.message, UNAVAILABLE,
+            "being throttled must not read as the code being invalid"
+        );
+    }
+
+    /// ADR-071's second half: revoking must not depend on still having the page
+    /// that minted the link. Before this read path, closing the tab lost the
+    /// code permanently.
+    #[tokio::test]
+    async fn the_owner_can_recover_the_share_code_after_closing_the_page() {
+        dotenvy::dotenv().ok();
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let owner_id = insert_test_user(&mut conn);
+        let world_id = insert_test_world(&mut conn, owner_id);
+        drop(conn);
+
+        let ability =
+            create_ability_impl(&state, owner_id, false, ability_input(world_id, "Shared"))
+                .await
+                .unwrap();
+
+        let link = create_ability_share_link_impl(&state, owner_id, false, ability.id)
+            .await
+            .expect("the owner may share");
+
+        let recovered = ability_share_link_impl(&state, owner_id, false, ability.id)
+            .await
+            .expect("the owner may read back their own share link")
+            .expect("an active share must be found");
+        assert_eq!(recovered.share_code, link.share_code);
+        assert_eq!(recovered.id, link.id);
+
+        revoke_ability_share_link_impl(&state, owner_id, false, link.id)
+            .await
+            .expect("the owner may revoke");
+
+        let after = ability_share_link_impl(&state, owner_id, false, ability.id)
+            .await
+            .expect("reading back after revocation is not an error");
+        assert!(
+            after.is_none(),
+            "a revoked share is not an active share link"
+        );
     }
 }

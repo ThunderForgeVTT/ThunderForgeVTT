@@ -22,9 +22,21 @@ import { effectTypeLabel } from "@/utils/effectLabels";
  * Spec 025 (T091, US6): the read-only view behind an ability share link.
  * Mirrors `SharedItemPage`.
  *
- * Login is required, world membership is not — that is what a share link is
- * for. The preview deliberately shows nothing that identifies the source world
- * or its members (FR-033).
+ * # This page renders for a signed-out visitor
+ *
+ * ADR-071. It used to redirect to `/login` before fetching anything, and its
+ * route used to be wrapped in `RequireAuthenticated`; both are gone. A resolver
+ * that answers anonymously behind a route that redirects to login is the same
+ * wall in a different place, so restoring either would undo the decision
+ * without touching the server.
+ *
+ * The preview loads first, for anybody, from `/api/graphql/public`.
+ * Authentication is asked for at exactly one point — pressing "Copy to World" —
+ * because viewing and copying are different acts with different requirements.
+ *
+ * World membership is not required either, and never was: that is what a share
+ * link is for. The preview deliberately shows nothing that identifies the
+ * source world or its members (FR-033).
  *
  * Classification renders with **built-in default labels**, not facets: facets
  * belong to a game system, and this page has no world context by design.
@@ -45,36 +57,19 @@ export default function SharedAbilityPage() {
   const [copyError, setCopyError] = useState<string | null>(null);
   const [copiedWorldName, setCopiedWorldName] = useState<string | null>(null);
 
+  // No auth gate around this. A visitor with no account sees the ability.
   useEffect(() => {
-    if (authLoading) {
-      return;
-    }
-    if (!isAuthenticated) {
-      navigate(
-        `/login?returnTo=${encodeURIComponent(`/shared/ability/${code}`)}`,
-        {
-          replace: true,
-        },
-      );
-    }
-  }, [authLoading, isAuthenticated, code, navigate]);
-
-  useEffect(() => {
-    if (authLoading || !isAuthenticated) {
-      return;
-    }
     let active = true;
-    Promise.all([getSharedAbility(code), getMyDmWorlds()])
-      .then(([previewResult, worlds]) => {
+    getSharedAbility(code)
+      .then((previewResult) => {
         if (active) {
           setPreview(previewResult);
-          setDmWorlds(worlds);
         }
       })
       .catch(() => {
         if (active) {
           // Revoked, moderated, and never-existed all land here with the same
-          // message — deliberately indistinguishable.
+          // message — deliberately indistinguishable (ADR-071).
           setLoadError("This share link is no longer available.");
         }
       })
@@ -86,7 +81,45 @@ export default function SharedAbilityPage() {
     return () => {
       active = false;
     };
-  }, [code, authLoading, isAuthenticated]);
+  }, [code]);
+
+  // The destination worlds are only needed once somebody wants to copy, and
+  // only exist for a signed-in caller.
+  useEffect(() => {
+    if (step !== "confirming" || !isAuthenticated) {
+      return;
+    }
+    let active = true;
+    getMyDmWorlds()
+      .then((worlds) => {
+        if (active) {
+          setDmWorlds(worlds);
+        }
+      })
+      .catch((err: unknown) => {
+        if (active) {
+          setCopyError(
+            err instanceof Error ? err.message : "Could not load your worlds.",
+          );
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [step, isAuthenticated]);
+
+  // The sign-in point, and the only one. `returnTo` brings them back here
+  // rather than to a dashboard, so the link they followed still resolves to
+  // what they were looking at.
+  const handleCopyPressed = () => {
+    if (!isAuthenticated) {
+      navigate(
+        `/login?returnTo=${encodeURIComponent(`/shared/ability/${code}`)}`,
+      );
+      return;
+    }
+    setStep("confirming");
+  };
 
   const handleConfirmCopy = async () => {
     if (!selectedWorldId) {
@@ -189,19 +222,19 @@ export default function SharedAbilityPage() {
                 Return home
               </Button>
             </div>
-          ) : dmWorlds.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              You don&apos;t have DM-level access to any world yet, so
-              there&apos;s nowhere to copy this.
-            </p>
           ) : step === "idle" ? (
             <Button
               icon="worlds"
-              onClick={() => setStep("confirming")}
+              onClick={handleCopyPressed}
               data-testid="shared-ability-copy-button"
             >
               Copy to World
             </Button>
+          ) : isAuthenticated && dmWorlds.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              You don&apos;t have DM-level access to any world yet, so
+              there&apos;s nowhere to copy this.
+            </p>
           ) : (
             <div className="grid gap-2">
               <select

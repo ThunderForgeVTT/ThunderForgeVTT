@@ -14,7 +14,7 @@ import {
  *
  * # What is deliberately not asserted here
  *
- * FR-009c's rate limit. It is real and it is tested — `collections/rate_limit.rs`
+ * FR-009c's rate limit. It is real and it is tested — `graphql/share_rate_limit.rs`
  * covers the threshold, and that the limiter ignores
  * `THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT` even though the auth limiter honours
  * it. It is not exercised here because the limiter keys on the caller's IP and

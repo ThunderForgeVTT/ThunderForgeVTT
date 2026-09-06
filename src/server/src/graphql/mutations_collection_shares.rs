@@ -27,9 +27,10 @@ use diesel::prelude::*;
 use uuid::Uuid;
 
 use crate::auth::world_membership::is_dm_of_world;
-use crate::collections::rate_limit;
 use crate::collections::resolve::{MemberResolution, resolve_member};
+use crate::graphql::anonymous::caller_id;
 use crate::graphql::share_codes::generate_link_code;
+use crate::graphql::share_rate_limit as rate_limit;
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{Collection, CollectionMember, CollectionShare, NewCollectionShare};
 use crate::schema::{world_collection_members, world_collection_shares, world_collections};
@@ -42,14 +43,6 @@ use crate::state::AppState;
 /// is a constant rather than four string literals so that they cannot drift
 /// apart later, which is exactly how this kind of leak is usually introduced.
 pub const UNAVAILABLE: &str = "This collection link is no longer available";
-
-/// The caller's identity for rate-limiting purposes, put into the GraphQL
-/// context by the public transport handler.
-///
-/// A newtype rather than a bare `String` so nothing else in the context can be
-/// mistaken for it.
-#[derive(Clone, Debug)]
-pub struct AnonymousCaller(pub String);
 
 #[derive(SimpleObject, Debug, Clone)]
 pub struct SharedCollectionMemberPreview {
@@ -444,14 +437,7 @@ impl CollectionShareQuery {
         share_code: String,
     ) -> GraphQLResult<SharedCollectionPreview> {
         let state = app_state(ctx)?;
-        // An absent caller identity means the transport did not supply one.
-        // Falling back to a shared bucket is the safe way to be wrong: it
-        // rate-limits such callers together rather than exempting them.
-        let caller = ctx
-            .data_opt::<AnonymousCaller>()
-            .map(|c| c.0.clone())
-            .unwrap_or_else(|| "unknown".to_string());
-        shared_collection_impl(state, &caller, share_code).await
+        shared_collection_impl(state, &caller_id(ctx), share_code).await
     }
 }
 

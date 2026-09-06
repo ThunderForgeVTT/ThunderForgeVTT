@@ -6,6 +6,12 @@ import type {
 } from "@/types/itemShare";
 import type { WorldItemRecord } from "@/types/item";
 
+// ADR-071: the share preview is readable without an account, so it goes to
+// the unauthenticated route spec 015 built for the takedown notice — the
+// same one `sharedCollection` uses. Everything else in this file keeps the
+// authenticated endpoint.
+const GRAPHQL_PUBLIC_ENDPOINT = "/api/graphql/public";
+
 type CreateItemShareLinkMutation = {
   createItemShareLink: ItemShareLinkRecord;
 };
@@ -51,6 +57,14 @@ type SharedItemQuery = {
 };
 
 /** Authenticated-only, world-identity-scrubbed (mirrors sharedActor). */
+/**
+ * ADR-071: readable **with no account at all**. This one call goes to the
+ * public endpoint — `/api/graphql` sits behind a router-level auth gate, so
+ * pointing it there would make the page require a login and quietly undo the
+ * decision.
+ *
+ * Copying does not go here. Viewing and copying diverge at exactly that call.
+ */
 export function getSharedItem(shareCode: string): Promise<SharedItemPreview> {
   return postGraphQL<SharedItemQuery>(
     `
@@ -72,6 +86,7 @@ export function getSharedItem(shareCode: string): Promise<SharedItemPreview> {
       }
     `,
     { shareCode },
+    { endpoint: GRAPHQL_PUBLIC_ENDPOINT },
   ).then((data) => data.sharedItem);
 }
 
