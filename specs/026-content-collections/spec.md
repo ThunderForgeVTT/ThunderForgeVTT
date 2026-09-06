@@ -50,6 +50,17 @@ enumeration that would turn one into the other by increment.
 - Q: Should a collection have a size limit? → A: A member count of 100, refused on adding with a clear message rather than silently truncated. Bytes are not separately bounded because scene images are shared rather than duplicated.
 - Q: Who owns the copies, and may a recipient re-share them? → A: The person who performed the copy owns them outright in their own world, with the same rights as anything they authored, and may put them into a collection of their own.
 
+### Session 2026-09-05
+
+Asked after US1 and US2 shipped, so every question below is grounded in
+something implementation surfaced rather than in re-reading the prose.
+
+- Q: How should a collection's owner get back to an active share link in order to revoke it later? → A: Show the owner their own collection's link — an owner may retrieve the active share code for a collection they own.
+- Q: Should a copied actor's portrait and a copied item's icon come across with the copy? → A: Yes — all image assets travel with the copy, on the same terms as a scene's background.
+- Q: When a copied actor's own scene was not part of the collection, where should that actor be placed in the destination world? → A: The destination world's active scene, with the displacement declared.
+- Q: A new world's first scene is named after the world, so sharing that scene discloses the world's name. What should change? → A: Seed new worlds with a neutral named starter scene carrying a base map, instead of an empty grid named after the world.
+- Q: US4 says a recipient should see "roughly how large it is" — what should the preview show? → A: Nothing; drop the size claim. Counts by type are what SC-009 measures.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A Game Master gathers their work and shares it once (Priority: P1)
@@ -162,8 +173,7 @@ copy made afterwards does not contain the disabled member.
 ### User Story 4 - The recipient understands what they are taking (Priority: P3)
 
 Before copying, the recipient can see what the collection will add to their
-world: how many of each kind of thing, roughly how large it is, and what it will
-not bring with it. After copying, they are told what arrived and what did not,
+world: how many of each kind of thing, and what it will not bring with it. After copying, they are told what arrived and what did not,
 so a collection that referenced something it did not contain does not leave them
 hunting for a ghost.
 
@@ -202,6 +212,8 @@ that could not be brought across.
   return the member without the owner rebuilding anything.
 - **Two members of the same type with the same name.** Copying must produce two
   records, not one.
+- **A member whose name discloses its world**, because the platform chose that
+  name rather than the author (FR-009f).
 - **A scene whose background image is shared, by content, with another world's
   scene.** Copying must not create a second copy of bytes the platform already
   holds, and revoking must not make another world's scene lose its background.
@@ -361,9 +373,38 @@ that could not be brought across.
   beyond the collection's own members — not its name, its other content, its
   members, nor whether a given collection code exists as distinct from being
   revoked in a way that could be probed.
+- **FR-009f**: The platform MUST NOT put a world's name into an artifact's own
+  name by default, because a member's title is shown in full to anonymous
+  viewers and FR-009d cannot redact it (clarified 2026-09-05).
+
+  This is not hypothetical and was found by running the end-to-end test: world
+  creation names a new world's first scene **after the world**, so the very
+  first scene most Game Masters own discloses their world's name the moment it
+  is shared — and nothing tells them. FR-009d is satisfied by the preview, which
+  sends no world field at all; the disclosure arrives through data the author is
+  presumed to have chosen and did not.
+
+  The remedy is at the source: new worlds get a neutral named starter scene
+  carrying a base map instead of an empty grid named after the world. See
+  Assumptions. An author who *chooses* to name a scene after their world is
+  making their own decision and is not this requirement's concern.
 - **FR-010**: A collection's owner MUST be able to revoke it, after which its
   link reports it as no longer available — a distinct state from a link that
   never existed and from an error.
+- **FR-010a**: A collection's owner MUST be able to retrieve the active share
+  code for a collection they own, so that revoking it does not depend on still
+  having the browser session that created it (clarified 2026-09-05).
+
+  **FR-020 permits this and does not conflict with it.** That requirement
+  forbids browsing, searching or counting collections "beyond a user's own" —
+  this is squarely a user's own, scoped to one collection they already have
+  authority over, and adds no surface from which anything can be enumerated.
+
+  Recorded because implementing FR-010 without it produced a revoke that only
+  worked inside the page that minted the link: with no read path, closing the
+  tab permanently removed the owner's ability to revoke. The three shipped
+  single-artifact shares have the same defect today; fixing them is FR-009e's
+  follow-up, not this one.
 - **FR-011**: Revocation MUST NOT affect copies already made, and the interface
   MUST say so at the moment of revoking rather than implying a reach the
   platform does not have.
@@ -380,6 +421,16 @@ that could not be brought across.
 - **FR-015**: A reference from a member to something **not** in the collection
   MUST NOT be silently dropped. It MUST be reported to the recipient as a
   declared loss.
+- **FR-015a**: An actor whose own scene was not in the collection MUST be placed
+  in the destination world's **active** scene, and the displacement MUST be
+  declared (clarified 2026-09-05).
+
+  An actor requires a scene, so unlike other lost references this one cannot
+  simply be reported — somewhere has to be chosen. The first implementation took
+  whichever scene the database returned first, which made the same copy into the
+  same world land differently on different runs. The active scene is the one its
+  new owner is looking at, so a displaced actor turns up where they will see it
+  rather than somewhere they must go hunting.
 - **FR-016**: A recipient MUST have authority to author in the destination world
   before a copy may be made there.
 - **FR-017**: Copying a collection twice MUST produce two independent sets, not
@@ -396,8 +447,17 @@ that could not be brought across.
   to survive editing to mean anything, and would not survive a recipient
   retyping the text by hand, so it would restrict the honest and inconvenience
   nobody else.
-- **FR-018**: A scene's image assets MUST be reachable from the copy without the
-  copy depending on the source world continuing to exist.
+- **FR-018**: A member's image assets — a scene's background, an actor's
+  portrait imagery, an item's icon — MUST travel with the copy and MUST be
+  reachable from it without the copy depending on the source world continuing
+  to exist (widened 2026-09-05).
+
+  Originally written about scenes alone, which is how it was built: item icons
+  were dropped with a fidelity note and actor portraits were dropped with **no
+  note at all**, which FR-015 forbids outright. The narrow reading also made
+  every copied actor arrive faceless, which is the most visible way a copy can
+  disappoint someone. Images are shared by content rather than duplicated
+  (FR-019), so carrying them costs a row and not a stored file.
 - **FR-019**: Copying a scene MUST NOT duplicate stored image bytes the platform
   already holds. **This requires reference-counted deletion to exist first** —
   see Assumptions.
@@ -496,6 +556,17 @@ that could not be brought across.
   **GraphQL-level rate limiter** (FR-009c), and **scene copying** — no code in
   this product duplicates a scene today, and a scene carries walls, lighting,
   shapes, fog and its background asset row.
+
+- **The starter scene changes, and the change is not confined to this spec.**
+  FR-009f is satisfied by world creation seeding a neutral, named starter scene
+  with a base map (`examples/maps/` already ships several) rather than an empty
+  100×100 grid named after the world. That touches spec 008's onboarding flow
+  rather than anything here, and it stands on its own merits there — a new Game
+  Master landing on something playable is a better first run than blank squares.
+  It is recorded in this spec because this is where the cost of the current
+  behaviour shows up. **Existing worlds are not renamed**: a scene already
+  named after its world stays that way, so FR-009f binds on what the platform
+  creates from now on, not retroactively.
 
 - **Reference-counted object deletion is a hard dependency of FR-019.**
   `storage/dedupe.rs` stores one copy of any given image however many rows refer

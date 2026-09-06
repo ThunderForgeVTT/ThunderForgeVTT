@@ -52,12 +52,17 @@
 
 ## Open Items Requiring User Confirmation
 
-- [ ] **FR-027's determination.** The constitution's DMCA guardrail requires an
+- [x] **FR-027's determination.** The constitution's DMCA guardrail requires an
   on-record, owner-accepted determination of whether link-shared collections
   constitute a "centralized public repository" **before implementation begins**.
   Spec 025's determination for single artifacts is explicitly not pre-approval.
   This is a signature, not a spec edit — the same shape as spec 034's FR-042,
   which ADR-067 satisfied.
+
+  **Satisfied 2026-09-05** by
+  `docs/adrs/20260905-069-collection_share_dmca_repository_determination.md`:
+  accepted by MBRound18 as accountable owner, with one risk accepted on the
+  record and the conditions it rests on named.
 
 - [ ] **Reference-counted object deletion.** FR-019 depends on it, and nothing
   in the product deletes stored objects today. Until it lands, a copied scene
