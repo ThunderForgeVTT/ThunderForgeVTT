@@ -22,16 +22,24 @@ describe("legalDocuments", () => {
   });
 
   /**
-   * Every document that has a route must be discoverable, or that route renders
-   * a title over nothing. Named explicitly rather than counted, because "there
-   * are four documents" passes while the wrong four are present.
+   * Every document something renders must be discoverable, or that surface
+   * shows a title over nothing. Named explicitly rather than counted, because
+   * "there are four documents" passes while the wrong four are present.
+   *
+   * `collection-sharing-terms` has no route of its own — spec 026's FR-026
+   * renders it inline at the share step, which is the only place it is read.
+   * It belongs here for exactly the reason the others do: if the glob stops
+   * matching, the share step renders an empty box above the button and a Game
+   * Master shares without being told what sharing does.
    */
-  it.each(["dmca-policy", "terms-of-service", "privacy-policy"])(
-    "publishes %s, which a route depends on",
-    (slug) => {
-      expect(legalSections(slug).length).toBeGreaterThan(0);
-    },
-  );
+  it.each([
+    "dmca-policy",
+    "terms-of-service",
+    "privacy-policy",
+    "collection-sharing-terms",
+  ])("publishes %s, which a rendered surface depends on", (slug) => {
+    expect(legalSections(slug).length).toBeGreaterThan(0);
+  });
 
   /**
    * The base drafts carry `[OPERATOR — ...]` markers where a self-hosting

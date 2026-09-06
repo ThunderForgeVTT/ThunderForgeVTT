@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { STARTER_SCENE_NAME } from "./fixtures/helpers";
 
 /**
  * specs/018-genie-house-system, User Story 2 (Scenario 2): a GM switches
@@ -47,7 +48,10 @@ async function register(page: Page, creds: Credentials): Promise<void> {
   await page.getByRole("button", { name: "Create account" }).click();
 }
 
-async function registerAndCreateWorld(page: Page, worldName: string): Promise<string> {
+async function registerAndCreateWorld(
+  page: Page,
+  worldName: string,
+): Promise<string> {
   await register(page, freshCredentials("e2egtopo"));
   await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
   await page.locator("#world-name").fill(worldName);
@@ -60,7 +64,11 @@ async function registerAndCreateWorld(page: Page, worldName: string): Promise<st
   return match[1];
 }
 
-async function graphql<T>(page: Page, query: string, variables: Record<string, unknown>): Promise<T> {
+async function graphql<T>(
+  page: Page,
+  query: string,
+  variables: Record<string, unknown>,
+): Promise<T> {
   return page.evaluate(
     async ({ query, variables }) => {
       const csrfToken = document.cookie
@@ -81,7 +89,9 @@ async function graphql<T>(page: Page, query: string, variables: Record<string, u
       try {
         return JSON.parse(text);
       } catch {
-        throw new Error(`Non-JSON response (status ${res.status}): ${text.slice(0, 500)}`);
+        throw new Error(
+          `Non-JSON response (status ${res.status}): ${text.slice(0, 500)}`,
+        );
       }
     },
     { query, variables },
@@ -181,14 +191,19 @@ async function createTokenViaPanel(page: Page): Promise<string> {
   if (!tokenId) {
     throw new Error("Could not extract tokenId from createToken response");
   }
-  await expect(page.getByTestId("token-create-trigger")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId("token-create-trigger")).toBeVisible({
+    timeout: 10_000,
+  });
   await page.keyboard.press("Escape");
   await page.keyboard.press("Escape");
   return tokenId;
 }
 
 /** The one row this test is about, out of however many the scene holds. */
-function tokenById<T extends { tokenId: string }>(tokens: T[], tokenId: string): T {
+function tokenById<T extends { tokenId: string }>(
+  tokens: T[],
+  tokenId: string,
+): T {
   const row = tokens.find((token) => token.tokenId === tokenId);
   if (!row) {
     throw new Error(
@@ -329,9 +344,18 @@ test.describe("Spec 018 Scenario 2: a GM switches a scene between Material (grid
     await dragTokenAtOriginTo(page, materialTokenId, { dx: 120, dy: 40 });
     await page.waitForTimeout(1_000);
 
-    const scenesBefore = await graphql<{ data: { scenes: { sceneId: string; gridType: string }[] } }>(
+    const scenesBefore = await graphql<{
+      data: { scenes: { sceneId: string; gridType: string }[] };
+    }>(
       page,
-      `query($worldId: UUID!) { scenes(worldId: $worldId) { sceneId gridType } }`,
+      `
+        query ($worldId: UUID!) {
+          scenes(worldId: $worldId) {
+            sceneId
+            gridType
+          }
+        }
+      `,
       { worldId },
     );
     const materialScene = scenesBefore.data.scenes[0];
@@ -341,21 +365,44 @@ test.describe("Spec 018 Scenario 2: a GM switches a scene between Material (grid
       data: { tokens: { tokenId: string; x: number; y: number }[] };
     }>(
       page,
-      `query($sceneId: UUID!) { tokens(sceneId: $sceneId) { tokenId x y } }`,
+      `
+        query ($sceneId: UUID!) {
+          tokens(sceneId: $sceneId) {
+            tokenId
+            x
+            y
+          }
+        }
+      `,
       { sceneId: materialScene.sceneId },
     );
-    const materialTokenPos = tokenById(materialTokens.data.tokens, materialTokenId);
+    const materialTokenPos = tokenById(
+      materialTokens.data.tokens,
+      materialTokenId,
+    );
     // Moved away from the origin the token was created at.
-    expect(Math.abs(materialTokenPos.x) + Math.abs(materialTokenPos.y)).toBeGreaterThan(0);
+    expect(
+      Math.abs(materialTokenPos.x) + Math.abs(materialTokenPos.y),
+    ).toBeGreaterThan(0);
 
     // Create a genuinely gridless Wish-Warped Zone scene directly via the
     // real createScene GraphQL mutation (no UI affordance exists to pick
     // gridType — see file header note).
     const createGridless = await graphql<{
-      data: { createScene: { sceneId: string; gridType: string; name: string } };
+      data: {
+        createScene: { sceneId: string; gridType: string; name: string };
+      };
     }>(
       page,
-      `mutation($input: GraphQLCreateSceneInput!) { createScene(input: $input) { sceneId gridType name } }`,
+      `
+        mutation ($input: GraphQLCreateSceneInput!) {
+          createScene(input: $input) {
+            sceneId
+            gridType
+            name
+          }
+        }
+      `,
       { input: { worldId, name: "Wish-Warped Zone", gridType: "gridless" } },
     );
     const gridlessScene = createGridless.data.createScene;
@@ -394,11 +441,24 @@ test.describe("Spec 018 Scenario 2: a GM switches a scene between Material (grid
       data: { tokens: { tokenId: string; x: number; y: number }[] };
     }>(
       page,
-      `query($sceneId: UUID!) { tokens(sceneId: $sceneId) { tokenId x y } }`,
+      `
+        query ($sceneId: UUID!) {
+          tokens(sceneId: $sceneId) {
+            tokenId
+            x
+            y
+          }
+        }
+      `,
       { sceneId: gridlessScene.sceneId },
     );
-    const gridlessTokenPos = tokenById(gridlessTokens.data.tokens, gridlessTokenId);
-    expect(Math.abs(gridlessTokenPos.x) + Math.abs(gridlessTokenPos.y)).toBeGreaterThan(0);
+    const gridlessTokenPos = tokenById(
+      gridlessTokens.data.tokens,
+      gridlessTokenId,
+    );
+    expect(
+      Math.abs(gridlessTokenPos.x) + Math.abs(gridlessTokenPos.y),
+    ).toBeGreaterThan(0);
 
     await page.screenshot({
       path: "e2e/screenshots/genie-wish-warped-zone-gridless-scene.png",
@@ -410,21 +470,34 @@ test.describe("Spec 018 Scenario 2: a GM switches a scene between Material (grid
     // from having visited the gridless scene in between (Edge Cases).
     await ensureSidebarOpen(page);
     await page.getByTestId("scene-switcher").click();
-    await page.getByRole("option", { name: worldName }).click();
+    // The world's starter scene. It shared the world's name until spec 026
+    // FR-009f, and this switcher option was found that way.
+    await page.getByRole("option", { name: STARTER_SCENE_NAME }).click();
     await page.waitForTimeout(1_000);
 
     const materialTokensAfter = await graphql<{
       data: { tokens: { tokenId: string; x: number; y: number }[] };
     }>(
       page,
-      `query($sceneId: UUID!) { tokens(sceneId: $sceneId) { tokenId x y } }`,
+      `
+        query ($sceneId: UUID!) {
+          tokens(sceneId: $sceneId) {
+            tokenId
+            x
+            y
+          }
+        }
+      `,
       { sceneId: materialScene.sceneId },
     );
     // By name, not by count: parking the engine's demo tokens out of the way
     // gives each of them a server row, so this scene legitimately holds
     // several. How many is not this test's subject — where *its* token ended
     // up is.
-    const materialAfter = tokenById(materialTokensAfter.data.tokens, materialTokenId);
+    const materialAfter = tokenById(
+      materialTokensAfter.data.tokens,
+      materialTokenId,
+    );
     expect(materialAfter.x).toBeCloseTo(materialTokenPos.x, 5);
     expect(materialAfter.y).toBeCloseTo(materialTokenPos.y, 5);
 
@@ -433,10 +506,21 @@ test.describe("Spec 018 Scenario 2: a GM switches a scene between Material (grid
       data: { tokens: { tokenId: string; x: number; y: number }[] };
     }>(
       page,
-      `query($sceneId: UUID!) { tokens(sceneId: $sceneId) { tokenId x y } }`,
+      `
+        query ($sceneId: UUID!) {
+          tokens(sceneId: $sceneId) {
+            tokenId
+            x
+            y
+          }
+        }
+      `,
       { sceneId: gridlessScene.sceneId },
     );
-    const gridlessAfter = tokenById(gridlessTokensAfter.data.tokens, gridlessTokenId);
+    const gridlessAfter = tokenById(
+      gridlessTokensAfter.data.tokens,
+      gridlessTokenId,
+    );
     expect(gridlessAfter.x).toBeCloseTo(gridlessTokenPos.x, 5);
     expect(gridlessAfter.y).toBeCloseTo(gridlessTokenPos.y, 5);
   });

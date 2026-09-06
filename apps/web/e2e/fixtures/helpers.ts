@@ -6,6 +6,20 @@ import { expect, type Browser, type Page } from "@playwright/test";
  * New specs should import from here instead of re-implementing these.
  */
 
+/**
+ * What a world's first scene is called — `STARTER_SCENE_NAME` on the server
+ * (`graphql/mutations_worlds.rs`).
+ *
+ * It used to be the world's own name, and three specs located the starter
+ * scene that way. Spec 026 FR-009f changed it: a scene named after its world
+ * discloses that world's name to anyone the scene is shared with, through the
+ * member's own title, which the collection preview cannot redact.
+ *
+ * Kept here rather than repeated, so the next rename is one edit and not a
+ * hunt through the suite.
+ */
+export const STARTER_SCENE_NAME = "Starting Scene";
+
 export function uniqueSuffix(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }

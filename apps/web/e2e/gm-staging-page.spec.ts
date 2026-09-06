@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { openDockTab } from "./fixtures/helpers";
+import { STARTER_SCENE_NAME, openDockTab } from "./fixtures/helpers";
 
 /**
  * specs/009-gm-staging-page: the GM staging page and full-screen play
@@ -55,7 +55,10 @@ async function extractInviteCode(page: Page): Promise<string> {
   return code;
 }
 
-async function registerAndCreateWorld(page: Page, worldName: string): Promise<string> {
+async function registerAndCreateWorld(
+  page: Page,
+  worldName: string,
+): Promise<string> {
   await register(page, freshCredentials("e2estage"));
   await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
   await page.locator("#world-name").fill(worldName);
@@ -99,7 +102,11 @@ test.describe("US1: GM sees a real staging page, not the old placeholder shell",
     await expect(page.getByTestId("world-nav-scenes")).toBeVisible();
     await page.getByTestId("world-nav-scenes").click();
     await page.waitForURL(`**/world/${worldId}/scenes`, { timeout: 10_000 });
-    await expect(page.getByRole("link", { name: worldName })).toBeVisible({
+    // The starter scene, by its own name — it is no longer named after the
+    // world (spec 026 FR-009f; see STARTER_SCENE_NAME).
+    await expect(
+      page.getByRole("link", { name: STARTER_SCENE_NAME }),
+    ).toBeVisible({
       timeout: 10_000,
     });
     await page.goBack();
@@ -111,7 +118,9 @@ test.describe("US1: GM sees a real staging page, not the old placeholder shell",
 
     // Play navigates to the full-screen canvas route.
     await page.getByTestId("play-button").click();
-    await page.waitForURL(new RegExp(`/world/${worldId}/play$`), { timeout: 15_000 });
+    await page.waitForURL(new RegExp(`/world/${worldId}/play$`), {
+      timeout: 15_000,
+    });
     await expect(page.getByTestId("world-staging-page")).toHaveCount(0);
     await waitForEngineReady(page);
   });
@@ -130,7 +139,10 @@ test.describe("US1: back-to-staging navigates to the dedicated staging route", (
   test("the on-screen back control returns to /staging (spec 010 route split)", async ({
     page,
   }) => {
-    const worldId = await registerAndCreateWorld(page, `E2E BackToStaging ${uniqueSuffix()}`);
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E BackToStaging ${uniqueSuffix()}`,
+    );
     await page.getByTestId("play-button").click();
     await waitForEngineReady(page);
 
@@ -139,12 +151,16 @@ test.describe("US1: back-to-staging navigates to the dedicated staging route", (
     // open (see WorldDock/SettingsPanel).
     await openDockTab(page, "settings");
     await page.getByTestId("back-to-staging-button").click();
-    await page.waitForURL(new RegExp(`/world/${worldId}/staging$`), { timeout: 15_000 });
+    await page.waitForURL(new RegExp(`/world/${worldId}/staging$`), {
+      timeout: 15_000,
+    });
     await expect(page.getByTestId("world-staging-page")).toBeVisible();
 
     // The stray canvas used to intercept this click.
     await page.getByTestId("play-button").click();
-    await page.waitForURL(new RegExp(`/world/${worldId}/play$`), { timeout: 15_000 });
+    await page.waitForURL(new RegExp(`/world/${worldId}/play$`), {
+      timeout: 15_000,
+    });
     await waitForEngineReady(page);
   });
 });
@@ -170,7 +186,9 @@ test.describe("US2: the play dock exposes scenes/actors/settings without losing 
     await page.getByTestId("world-dock-tab-actors").click();
     const actors = page.getByTestId("world-dock-panel-actors");
     await expect(actors).toBeVisible();
-    await expect(actors.getByText("No NPCs yet.")).toBeVisible({ timeout: 10_000 });
+    await expect(actors.getByText("No NPCs yet.")).toBeVisible({
+      timeout: 10_000,
+    });
 
     await page.getByTestId("world-dock-tab-actors").click();
     await expect(page.getByTestId("world-dock-panel-actors")).toHaveCount(0);
@@ -182,9 +200,14 @@ test.describe("US3: players get the same shell, read-only and independent of the
     page,
     browser,
   }) => {
-    const worldId = await registerAndCreateWorld(page, `E2E Player Staging ${uniqueSuffix()}`);
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Player Staging ${uniqueSuffix()}`,
+    );
 
-    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page
+      .context()
+      .grantPermissions(["clipboard-read", "clipboard-write"]);
     await page.goto(`/world/${worldId}`);
     await page.getByRole("button", { name: "Generate Join Link" }).click();
     const inviteCode = await extractInviteCode(page);
@@ -195,16 +218,23 @@ test.describe("US3: players get the same shell, read-only and independent of the
       await playerPage.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
       // Give the player their own world first so they land on the hub, not
       // the zero-world create path, then redeem the GM's invite.
-      await playerPage.locator("#world-name").fill(`E2E Player Own ${uniqueSuffix()}`);
+      await playerPage
+        .locator("#world-name")
+        .fill(`E2E Player Own ${uniqueSuffix()}`);
       await playerPage.getByRole("button", { name: /create world/i }).click();
-      await playerPage.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
+      await playerPage.waitForURL(/\/world\/[^/]+\/staging$/, {
+        timeout: 15_000,
+      });
 
       await playerPage.goto(`/join/${inviteCode}`);
       await expect(
         playerPage.getByRole("button", { name: "Join Campaign" }),
       ).toBeVisible({ timeout: 10_000 });
       await playerPage.getByRole("button", { name: "Join Campaign" }).click();
-      await playerPage.waitForURL(new RegExp(`/world/${worldId}(/actor-select)?$`), { timeout: 15_000 });
+      await playerPage.waitForURL(
+        new RegExp(`/world/${worldId}(/actor-select)?$`),
+        { timeout: 15_000 },
+      );
 
       await playerPage.goto(`/world/${worldId}/staging`);
       await expect(playerPage.getByTestId("world-staging-page")).toBeVisible({
@@ -215,7 +245,9 @@ test.describe("US3: players get the same shell, read-only and independent of the
       // itself hides the "New scene" creation form from non-GM members.
       await expect(playerPage.getByTestId("scene-switcher")).toHaveCount(0);
       await playerPage.goto(`/world/${worldId}/scenes`);
-      await expect(playerPage.getByTestId("new-scene-name-input")).toHaveCount(0);
+      await expect(playerPage.getByTestId("new-scene-name-input")).toHaveCount(
+        0,
+      );
       await playerPage.goto(`/world/${worldId}/staging`);
 
       // The player enters full-screen independently — the GM's own,

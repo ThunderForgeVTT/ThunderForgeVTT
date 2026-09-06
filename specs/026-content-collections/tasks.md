@@ -214,8 +214,22 @@ that could not be brought across.
 
   That is the argument for mutation testing in one example: the surviving
   mutation was not the one on the list.
-- [ ] T053 Run `pnpm verify` (all ten checks), `cargo test -p thunderforge-server`, `pnpm --filter web test`, and the full Playwright sweep with `--workers=1`. Before starting: confirm the tree is clean and `ss -ltn | grep 301` is empty — stale backends have twice produced what looked like fresh regressions.
-- [ ] T054 Update `TOMORROW.md` with what shipped, what was found, and anything the next session would otherwise rediscover.
+- [x] T053 Run `pnpm verify` (all ten checks), `cargo test -p thunderforge-server`, `pnpm --filter web test`, and the full Playwright sweep with `--workers=1`. Before starting: confirm the tree is clean and `ss -ltn | grep 301` is empty — stale backends have twice produced what looked like fresh regressions.
+
+  **Run 2026-09-05.** `pnpm verify` (10/10), 917 server tests, 423 web tests,
+  and the full Playwright sweep at 4 shards — 87 spec files, 28.1 minutes.
+
+  **Three e2e failures, one cause, all mine.** `onboarding-flow`,
+  `gm-staging-page` and `genie-scene-topology` each located a world's starter
+  scene *by the world's name* — the behaviour FR-009f deliberately removed.
+  They were asserting the leak. Fixed by giving the suite a shared
+  `STARTER_SCENE_NAME` in `e2e/fixtures/helpers.ts` and matching on it, so the
+  next rename is one edit rather than a hunt.
+
+  Worth recording that `e2e-parallel.mjs` **exited 0 with two shards failing**.
+  The per-shard result lines are the truth; the exit code is not. Do not read a
+  green exit as a green sweep.
+- [x] T054 Update `TOMORROW.md` with what shipped, what was found, and anything the next session would otherwise rediscover.
 
 ---
 
