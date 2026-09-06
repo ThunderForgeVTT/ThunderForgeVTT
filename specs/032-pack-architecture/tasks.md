@@ -420,6 +420,7 @@ What is deferred here, and where it lives:
 | The playability quickstart | 031 T077 |
 | Wall passability, torch placement, left-click behaviour | 003 T007–T009 |
 | The canvas-authoring e2e run by hand | 002 T040 |
+| Gathering ten mixed artifacts and sharing them, undocumented, inside three minutes (SC-001); and a recipient stating from the preview alone what a copy will add (SC-009) | 026 T055 |
 
 Nothing mechanical is deferred with them. Every one of these specs' automated
 checks passes now, and the e2e suite covers what a suite can.

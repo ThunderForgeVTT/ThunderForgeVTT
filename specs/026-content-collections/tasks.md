@@ -235,7 +235,17 @@ that could not be brought across.
 
 ## Deferred to the playtest
 
-- [ ] T055 Manual pass: SC-001 (a GM gathers ten mixed artifacts and shares in under three minutes without documentation) and SC-009 (a recipient shown the preview can correctly state what it will add). Both are human-judgement criteria that no automated test can stand in for. Add to spec 032's deferred-manual-pass table.
+- [~] T055 **Deferred to the playtest pass, not dropped.** Manual pass: SC-001 (a
+  GM gathers ten mixed artifacts and shares in under three minutes without
+  documentation) and SC-009 (a recipient shown the preview can correctly state
+  what it will add). Both are human-judgement criteria that no automated test
+  can stand in for, and both are judgements about the feature being *used* —
+  which is the argument for running them inside a playtest rather than as a
+  checklist walk per spec.
+
+  Registered 2026-09-05 in [spec 032's deferred-manual-pass table](../032-pack-architecture/tasks.md#manual-passes-deferred-to-the-playtest),
+  alongside 002 T040, 003 T007–T009, 031 T077 and 032 T062–T063. Nothing
+  mechanical is deferred with it: T001–T054 are done and green.
 
 ---
 

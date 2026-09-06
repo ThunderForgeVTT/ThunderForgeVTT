@@ -21,7 +21,7 @@ help:
 	@echo "  make build            Production build (engine WASM + backend + frontend)"
 	@echo "  make clean            Remove build output (dist/)"
 	@echo "  make format           Run prettier + cargo fmt"
-	@echo "  make lint             Run cargo clippy (-D warnings): lint-host + lint-wasm"
+	@echo "  make lint             Run cargo clippy (-D warnings) plus the file-length check"
 	@echo "  make lint-host        Clippy the workspace for the host target (everything but the wasm-only engine)"
 	@echo "  make lint-wasm        Clippy the browser crates for wasm32-unknown-unknown, the target they ship to"
 	@echo "  make check-file-length  Fail if any tracked .rs file exceeds 1000 lines (see scripts/check-file-length.sh)"
@@ -119,7 +119,7 @@ format:
 #
 # Conversely the wasm pass cannot replace the host pass: `thunderforge-server`
 # and everything it pulls in does not build for wasm at all.
-lint: lint-host lint-wasm
+lint: lint-host lint-wasm check-file-length
 
 lint-host:
 	cargo clippy --workspace --exclude thunderforge_engine --all-targets -- -D warnings

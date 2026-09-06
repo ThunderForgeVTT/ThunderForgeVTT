@@ -208,6 +208,23 @@ const steps = [
     cwd: ".",
     command: ["node", "./scripts/check-ability-vocabulary.mjs"],
   },
+  {
+    // The file-level counterpart to clippy's per-function length cap. Wired
+    // in on 2026-09-05, once the backlog it would otherwise have failed on
+    // reached zero — a gate that is red on `main` the day it lands teaches
+    // everyone to bypass it, which is exactly what happened to `make lint`
+    // before it was split by target.
+    //
+    // Cheap: `git ls-files` plus a `wc -l` each, so it belongs in the class
+    // that runs on every commit rather than on push.
+    //
+    // Not affected by `--fix`: where a 1000-line file's seam falls is a
+    // judgement about what the halves are called, and no script has it.
+    id: "filelength",
+    name: "file length",
+    cwd: ".",
+    command: ["./scripts/check-file-length.sh"],
+  },
 ];
 
 // An unknown id is a failure, not an empty run: a hook whose step was renamed
