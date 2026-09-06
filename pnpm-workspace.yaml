@@ -1,7 +1,6 @@
 packages:
   - apps/*
   - dist/engine
-  - "packages/*"
   - "crates/*"
   - "packs/*"
   - "packs/systems/*/web"

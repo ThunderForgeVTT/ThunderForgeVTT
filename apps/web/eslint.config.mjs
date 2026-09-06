@@ -11,8 +11,6 @@ export default tseslint.config(
       "dist/**",
       "postcss.config.js",
       "scripts/**",
-      "src/engine/bevy/pkg/**",
-      "src/views/**",
       "tailwind.config.js",
     ],
   },
