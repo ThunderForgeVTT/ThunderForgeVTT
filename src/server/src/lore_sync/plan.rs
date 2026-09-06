@@ -215,7 +215,7 @@ pub async fn plan_world(state: &AppState, world_id: Uuid) -> Result<Plan, String
         let _ = content_type;
         plan.images.push(PlannedImage {
             asset_id,
-            // The stored original is always webp — `lore_assets_serve` writes
+            // The stored original is always webp — `assets_serve::lore` writes
             // it that way — so the extension is not guessed from a content
             // type that describes what was uploaded rather than what is held.
             path: format!("{IMAGE_DIR}/{asset_id}.webp"),

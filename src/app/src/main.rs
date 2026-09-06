@@ -543,22 +543,22 @@ async fn run() {
             thunderforge_server::auth_middleware::require_authenticated_user,
         ));
     let canvas_assets_router =
-        thunderforge_server::canvas_assets_serve::router().route_layer(from_fn_with_state(
+        thunderforge_server::assets_serve::canvas::router().route_layer(from_fn_with_state(
             app_state.clone(),
             thunderforge_server::auth_middleware::require_authenticated_user,
         ));
     let lore_assets_router =
-        thunderforge_server::lore_assets_serve::router().route_layer(from_fn_with_state(
+        thunderforge_server::assets_serve::lore::router().route_layer(from_fn_with_state(
             app_state.clone(),
             thunderforge_server::auth_middleware::require_authenticated_user,
         ));
     let actor_assets_router =
-        thunderforge_server::actor_assets_serve::router().route_layer(from_fn_with_state(
+        thunderforge_server::assets_serve::actor::router().route_layer(from_fn_with_state(
             app_state.clone(),
             thunderforge_server::auth_middleware::require_authenticated_user,
         ));
     let scene_assets_router =
-        thunderforge_server::scene_assets_serve::router().route_layer(from_fn_with_state(
+        thunderforge_server::assets_serve::scene::router().route_layer(from_fn_with_state(
             app_state.clone(),
             thunderforge_server::auth_middleware::require_authenticated_user,
         ));
@@ -627,7 +627,7 @@ async fn run() {
                     thunderforge_server::interface_packs::router(),
                 ),
         )
-        .merge(thunderforge_server::serve::router(&directories))
+        .merge(thunderforge_server::static_files::router(&directories))
         .fallback(thunderforge_server::errors::handler_404)
         .with_state(app_state.clone())
         .layer(from_fn(

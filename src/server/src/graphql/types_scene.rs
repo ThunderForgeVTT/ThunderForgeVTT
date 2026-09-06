@@ -43,7 +43,7 @@ pub struct GraphQLScene {
     /// since it writes to RustFS via `background_asset_id` instead. This
     /// computed field is the fetchable URL for whichever mechanism is
     /// actually populated (`background_asset_id` preferred — RustFS via
-    /// `canvas_assets_serve.rs`'s existing `GET /canvas-assets/{id}`
+    /// `assets_serve/canvas.rs`'s existing `GET /canvas-assets/{id}`
     /// route, already used by `AssetPasteTool`; falls back to the legacy
     /// `background_image_path` static-file route for scenes never
     /// migrated to RustFS), mirroring `preview_url`'s existing pattern.
@@ -96,7 +96,7 @@ impl From<crate::models::Scene> for GraphQLScene {
             updated_at: scene.updated_at,
             // Bug fix: both these routes are nested under `/api` in
             // main.rs (`.nest("/api", api_router...)`, which merges in
-            // `canvas_assets_serve::router()`/`scene_assets_serve::router()`)
+            // `assets_serve::canvas::router()`/`assets_serve::scene::router()`)
             // — their own `Router::new().route("/canvas-assets/{id}", ...)`
             // declarations show only the path *before* that nesting.
             // `preview_url` (pre-existing, spec 022) had this same missing
@@ -110,7 +110,7 @@ impl From<crate::models::Scene> for GraphQLScene {
             // handed to the engine's `AssetServer`, which resolves an
             // image loader by file extension and gives up (without ever
             // requesting the bytes) on an extensionless path. Every stored
-            // object is WebP — see `canvas_assets_serve::parse_asset_id`,
+            // object is WebP — see `assets_serve::canvas::parse_asset_id`,
             // which strips the extension back off.
             background_url: scene
                 .background_asset_id

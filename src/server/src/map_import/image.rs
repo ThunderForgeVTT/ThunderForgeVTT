@@ -91,7 +91,7 @@ pub async fn save_scene_preview_image(
         .map_err(|e| MapImportError::Storage(e.to_string()))?;
 
     let asset_id = Uuid::now_v7();
-    let key = crate::scene_assets_serve::preview_key(asset_id);
+    let key = crate::assets_serve::scene::preview_key(asset_id);
     let byte_size = preview.webp_bytes.len() as i64;
     let cfg = crate::storage::rustfs::RustFsConfig::from_env();
     crate::storage::rustfs::write_object(&cfg, &key, preview.webp_bytes, "image/webp")

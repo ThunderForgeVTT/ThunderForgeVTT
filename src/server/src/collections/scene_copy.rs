@@ -29,7 +29,7 @@
 //! same `storage_path`**. This is the designed use of `storage/dedupe.rs`,
 //! which states that each asset keeps its own row with its own `asset_id`,
 //! `world_id`, `scene_id` and owner, that only `storage_path` is shared, and
-//! that `canvas_assets_serve` authorises against the row it looked up. Two
+//! that `assets_serve::canvas` authorises against the row it looked up. Two
 //! worlds pointing at one object are still two independent permission checks.
 //!
 //! That satisfies three requirements at once: FR-019 and SC-008 (no additional

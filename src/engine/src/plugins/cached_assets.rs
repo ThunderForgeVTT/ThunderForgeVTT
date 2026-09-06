@@ -6,7 +6,7 @@
 //! Research R1 put the asset read path in the engine for one concrete
 //! reason: canvas image bytes are fetched by Bevy's `AssetServer` from
 //! inside WASM (`GET /canvas-assets/{id}.webp`, see
-//! `src/server/src/canvas_assets_serve.rs`), not by TypeScript. A cache
+//! `src/server/src/assets_serve/canvas.rs`), not by TypeScript. A cache
 //! that intercepted at the TS layer would miss the single largest category
 //! of bytes this feature exists to stop re-transferring. This module is
 //! where that interception actually happens.
@@ -239,7 +239,7 @@ struct CanvasAssetPath {
 /// Recognise `…/canvas-assets/<uuid>.<ext>` and nothing else.
 ///
 /// Strict by intent. This module may only touch bytes served by
-/// `canvas_assets_serve`, because that route is the one whose bytes the
+/// `assets_serve::canvas`, because that route is the one whose bytes the
 /// server fingerprints (T017). Anything else — token art on an arbitrary
 /// URL, a bundled asset — must reach `AssetServer` untouched, so an
 /// unrecognised path returns `None` rather than being guessed at.

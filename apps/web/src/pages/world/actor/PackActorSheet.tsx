@@ -27,10 +27,13 @@ import { fetchActorSheet } from "@/api/actorSheet";
 import { useAppearance } from "@/appearance/appearance-context";
 import { BASE_PACK_ID } from "@/appearance/appearance-context";
 import { PackSurfaceBoundary } from "@/appearance/PackSurfaceBoundary";
-import { SheetLayout } from "@/layout/SheetLayout";
-import { declarationsFrom } from "@/layout/declarations";
-import { rendersAnything, resolutionFrom } from "@/layout/resolve";
-import type { LayoutDeclaration, SheetDeclarations } from "@/layout/types";
+import { SheetLayout } from "@/sheet-layout/SheetLayout";
+import { declarationsFrom } from "@/sheet-layout/declarations";
+import { rendersAnything, resolutionFrom } from "@/sheet-layout/resolve";
+import type {
+  LayoutDeclaration,
+  SheetDeclarations,
+} from "@/sheet-layout/types";
 import { Loader } from "@/components/ui/loader/Loader";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 

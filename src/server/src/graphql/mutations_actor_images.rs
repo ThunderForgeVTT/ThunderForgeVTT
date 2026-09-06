@@ -26,14 +26,14 @@
 //! player's portrait vanish the moment a Game Master hid the scene the actor
 //! happens to belong to. An actor's picture is not scene knowledge.
 //!
-//! Reading them back is `actor_assets_serve.rs`, which mirrors
-//! `lore_assets_serve.rs` in the same way.
+//! Reading them back is `assets_serve/actor.rs`, which mirrors
+//! `assets_serve/lore.rs` in the same way.
 
 use async_graphql::{Context, Error, ErrorExtensions, Result as GraphQLResult, Upload};
 use diesel::prelude::*;
 use uuid::Uuid;
 
-use crate::actor_assets_serve::{actor_image_full_key, actor_image_thumb_key};
+use crate::assets_serve::actor::{actor_image_full_key, actor_image_thumb_key};
 use crate::auth::actor_permissions::require_actor_permission;
 use crate::graphql::types::{ActorPermissionLevel, GraphQLActorImage};
 use crate::graphql::{app_state, authenticated_user};

@@ -2,7 +2,7 @@
 //! RustFS is private, per-world-scoped storage (mirrors ADR-039) — a raw
 //! RustFS URL is never handed to a client. `GET /lore-assets/{asset_id}`
 //! and `GET /lore-assets/{asset_id}/thumb` mirror
-//! `canvas_assets_serve.rs`'s `/canvas-assets/{asset_id}` exactly:
+//! `assets_serve/canvas.rs`'s `/canvas-assets/{asset_id}` exactly:
 //! authenticated via the same `auth_middleware::require_authenticated_user`
 //! layer, authorized via the entry's effective lore permission
 //! (Viewer-or-above), then stream the object's bytes from RustFS using a

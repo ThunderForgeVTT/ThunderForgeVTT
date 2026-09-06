@@ -16,7 +16,7 @@
 //! # Why this is safe here, and what would make it unsafe
 //!
 //! Each asset keeps its **own row**, with its own `asset_id`, `world_id`,
-//! `scene_id` and owner. Only `storage_path` is shared. `canvas_assets_serve`
+//! `scene_id` and owner. Only `storage_path` is shared. `assets_serve::canvas`
 //! authorises against the row it looked up and then reads whatever path that
 //! row names, so two worlds pointing at one object are still two independent
 //! permission checks. Nothing about who may see what changes.

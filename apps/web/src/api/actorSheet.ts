@@ -12,7 +12,7 @@
  * renderer wants six, and reconstructing them here would be guessing.
  */
 import { postGraphQL } from "@/api/graphqlClient";
-import type { SheetDeclarations, SheetValue } from "@/layout/types";
+import type { SheetDeclarations, SheetValue } from "@/sheet-layout/types";
 
 const VALUE_FIELDS = `
   id

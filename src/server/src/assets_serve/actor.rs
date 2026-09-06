@@ -3,7 +3,7 @@
 //! `mutations_actor_images.rs` writes the bytes into RustFS, which is private,
 //! server-credentialled storage (ADR-039) — a client is never handed a RustFS
 //! URL. `GET /actor-assets/{asset_id}` and `/thumb` mirror
-//! `lore_assets_serve.rs` exactly: authenticated by the same
+//! `assets_serve/lore.rs` exactly: authenticated by the same
 //! `auth_middleware::require_authenticated_user` layer in `main.rs`, then
 //! authorized by the *actor's* own effective permission rather than by world
 //! membership, so a picture is readable by precisely the people who may read

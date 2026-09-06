@@ -11,10 +11,10 @@ use chrono::Utc;
 use diesel::prelude::*;
 use uuid::Uuid;
 
+use crate::assets_serve::lore::{full_key, thumb_key};
 use crate::auth::lore_permissions::require_lore_permission;
 use crate::graphql::types::{ActorPermissionLevel, GraphQLLoreImageAsset};
 use crate::graphql::{app_state, authenticated_user};
-use crate::lore_assets_serve::{full_key, thumb_key};
 use crate::models::{LoreImageAsset, NewLoreImageAsset};
 use crate::schema::world_lore_image_assets;
 use crate::state::AppState;

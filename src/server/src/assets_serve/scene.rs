@@ -1,5 +1,5 @@
 //! Spec 022 (FR-011/FR-012): serves a scene's generated preview/thumbnail
-//! image. Mirrors `lore_assets_serve.rs` exactly (authenticated, then
+//! image. Mirrors `assets_serve/lore.rs` exactly (authenticated, then
 //! authorized via world membership, then streamed from RustFS via a
 //! single-object-scoped, server-held credential) — the one difference is
 //! the authorization check itself (world membership, not lore permission,

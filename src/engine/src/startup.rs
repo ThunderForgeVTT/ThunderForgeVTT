@@ -50,7 +50,7 @@ pub fn start(canvas_selector: &str) {
         // `Allow` is the right call for this app: the paths are not
         // filesystem paths at all, and the bytes behind them are already
         // authenticated and world-authorized server-side by
-        // `canvas_assets_serve`.
+        // `assets_serve::canvas`.
         .add_plugins(
             DefaultPlugins
                 .set(AssetPlugin {

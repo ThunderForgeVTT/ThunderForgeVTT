@@ -22,13 +22,12 @@
 #![recursion_limit = "512"]
 
 pub mod ability_vocabulary;
-pub mod actor_assets_serve;
 pub mod adapters;
 pub mod admin;
+pub mod assets_serve;
 pub mod attributes;
 pub mod auth;
 pub mod auth_middleware;
-pub mod canvas_assets_serve;
 pub mod collections;
 pub mod config;
 pub mod crypto;
@@ -41,7 +40,6 @@ pub mod instance_identity;
 pub mod interaction;
 pub mod interface_packs;
 pub mod light_effects;
-pub mod lore_assets_serve;
 pub mod lore_sync;
 pub mod map_import;
 pub mod markdown;
@@ -51,13 +49,12 @@ pub mod network;
 pub mod peer_signaling;
 pub mod pubsub;
 pub mod repo_host;
-pub mod scene_assets_serve;
 pub mod scene_fingerprint;
 pub mod schema;
-pub mod serve;
 pub mod session;
 pub mod sheet;
 pub mod state;
+pub mod static_files;
 pub mod status_display;
 pub mod storage;
 pub mod systems;
