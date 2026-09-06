@@ -176,7 +176,15 @@ export default function SharedCollectionPage() {
           {loadError || !preview ? (
             <Card className="grid w-full max-w-lg gap-4 p-6 text-center">
               <StatusBadge variant="danger">
-                {loadError ?? "This link is no longer available."}
+                {/*
+                  One sentence for an unknown code, a revoked share and a
+                  deleted collection (FR-009d). The test compares the three to
+                  each other rather than to a literal, so rewording this keeps
+                  the assertion meaningful.
+                */}
+                <span data-testid="collection-unavailable">
+                  {loadError ?? "This link is no longer available."}
+                </span>
               </StatusBadge>
               <Button onClick={() => navigate("/")}>Go to ThunderForge</Button>
             </Card>

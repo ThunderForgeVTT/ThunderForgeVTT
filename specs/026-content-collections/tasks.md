@@ -89,22 +89,22 @@ the original untouched.
 
 ### Server — copying
 
-- [ ] T022 [US1] Implement `CopyError` and the transaction skeleton of `copy_shared_collection_to_world_impl` in `src/server/src/collections/copy.rs`: require an authenticated DM of the destination (FR-009b, FR-016); inside `conn.transaction::<_, CopyError, _>`, re-load the share and confirm it is active (it may have been revoked between preview and confirm), and re-assert the 100-member limit.
-- [ ] T023 [P] [US1] Implement ability and item copying in `copy.rs`: clone the row and its effects, **preserve `gm_only`** (fail closed — a copy arriving un-hidden exposes what the source hid), re-validate effect formulas rather than trusting the source, and stamp `created_by`/`updated_by` with the copier (FR-017a).
-- [ ] T024 [P] [US1] Implement actor and lore-entry copying in `copy.rs`, same ownership stamping.
-- [ ] T025 [US1] Implement scene copying in `src/server/src/collections/scene_copy.rs`: copy the `scenes` row plus `walls`, `light_sources` and `shapes`; create a **new `canvas_assets` row in the destination world pointing at the same `storage_path`** for the background. Do **not** copy `tokens`, `fog_masks` or `interactives` — each becomes a fidelity note. Write the reasoning in a module comment (a scene is a place, not a session) so the next reader does not "fix" the omission.
-- [ ] T026 [US1] Build the old-id → new-id map as rows are inserted and re-point intra-collection references at the copies (FR-014) — an actor that knows an included ability must know the *copy* of it.
-- [ ] T027 [US1] Record every reference to something outside the collection as a fidelity note and return a `CopyReceipt` (FR-015). The receipt is **returned, never stored** — a stored record naming both sides is exactly the referential link FR-012 forbids.
-- [ ] T028 [US1] Write unit tests for the copy path: every member type arrives; editing a copy does not change the source and the reverse, **for each of the five types** (SC-004 says verified, not sampled); an intra-collection reference points at the copy; an out-of-collection reference produces a fidelity note; a forced failure part-way leaves nothing behind (SC-006).
-- [ ] T029 [US1] Write a test asserting that copying a scene whose image the platform already holds adds a `canvas_assets` row but **no new `storage_path`** (SC-008).
+- [x] T022 [US1] Implement `CopyError` and the transaction skeleton of `copy_shared_collection_to_world_impl` in `src/server/src/collections/copy.rs`: require an authenticated DM of the destination (FR-009b, FR-016); inside `conn.transaction::<_, CopyError, _>`, re-load the share and confirm it is active (it may have been revoked between preview and confirm), and re-assert the 100-member limit.
+- [x] T023 [P] [US1] Implement ability and item copying in `copy.rs`: clone the row and its effects, **preserve `gm_only`** (fail closed — a copy arriving un-hidden exposes what the source hid), re-validate effect formulas rather than trusting the source, and stamp `created_by`/`updated_by` with the copier (FR-017a).
+- [x] T024 [P] [US1] Implement actor and lore-entry copying in `copy.rs`, same ownership stamping.
+- [x] T025 [US1] Implement scene copying in `src/server/src/collections/scene_copy.rs`: copy the `scenes` row plus `walls`, `light_sources` and `shapes`; create a **new `canvas_assets` row in the destination world pointing at the same `storage_path`** for the background. Do **not** copy `tokens`, `fog_masks` or `interactives` — each becomes a fidelity note. Write the reasoning in a module comment (a scene is a place, not a session) so the next reader does not "fix" the omission.
+- [x] T026 [US1] Build the old-id → new-id map as rows are inserted and re-point intra-collection references at the copies (FR-014) — an actor that knows an included ability must know the *copy* of it.
+- [x] T027 [US1] Record every reference to something outside the collection as a fidelity note and return a `CopyReceipt` (FR-015). The receipt is **returned, never stored** — a stored record naming both sides is exactly the referential link FR-012 forbids.
+- [x] T028 [US1] Write unit tests for the copy path: every member type arrives; editing a copy does not change the source and the reverse, **for each of the five types** (SC-004 says verified, not sampled); an intra-collection reference points at the copy; an out-of-collection reference produces a fidelity note; a forced failure part-way leaves nothing behind (SC-006).
+- [x] T029 [US1] Write a test asserting that copying a scene whose image the platform already holds adds a `canvas_assets` row but **no new `storage_path`** (SC-008).
 
 ### Web
 
-- [ ] T030 [P] [US1] Add `apps/web/src/types/collection.ts` and `apps/web/src/api/collections.ts`, following `types/abilityShare.ts` and `api/abilityShares.ts`.
-- [ ] T031 [US1] Build `apps/web/src/pages/world-collections/` — list a world's collections, create one, add and remove members via a picker covering all five types, share and copy the link. Surface T014's refusals verbatim rather than as a generic error.
-- [ ] T032 [US1] Build `apps/web/src/pages/collection-share/SharedCollectionPage.tsx` at route `/collection/:shareCode`, rendering **for a signed-out visitor**. Copying prompts for sign-in and a destination world — the point at which viewing and copying diverge (FR-009b).
-- [ ] T033 [US1] Register both routes in the router, confirming `/collection/:shareCode` sits outside whatever guard wraps the authenticated routes.
-- [ ] T034 [US1] Write `apps/web/e2e/content-collections.spec.ts` walking the whole journey: author one of each type, gather, share, open the link **signed out in a fresh context**, sign in as a second user, copy into their world, and confirm all five arrived and the scene renders its background (SC-008a).
+- [x] T030 [P] [US1] Add `apps/web/src/types/collection.ts` and `apps/web/src/api/collections.ts`, following `types/abilityShare.ts` and `api/abilityShares.ts`.
+- [x] T031 [US1] Build `apps/web/src/pages/world-collections/` — list a world's collections, create one, add and remove members via a picker covering all five types, share and copy the link. Surface T014's refusals verbatim rather than as a generic error.
+- [x] T032 [US1] Build `apps/web/src/pages/collection-share/SharedCollectionPage.tsx` at route `/collection/:shareCode`, rendering **for a signed-out visitor**. Copying prompts for sign-in and a destination world — the point at which viewing and copying diverge (FR-009b).
+- [x] T033 [US1] Register both routes in the router, confirming `/collection/:shareCode` sits outside whatever guard wraps the authenticated routes.
+- [x] T034 [US1] Write `apps/web/e2e/content-collections.spec.ts` walking the whole journey: author one of each type, gather, share, open the link **signed out in a fresh context**, sign in as a second user, copy into their world, and confirm all five arrived and the scene renders its background (SC-008a).
 
 **Checkpoint**: US1 delivers value alone. Everything after this protects or refines it.
 
@@ -118,10 +118,10 @@ the original untouched.
 confirm the link now reports the collection as no longer available, and confirm
 a copy taken beforehand is unaffected.
 
-- [ ] T035 [US2] Implement `revoke_collection_share_link_impl` in `mutations_collection_shares.rs` as a **soft flag**, never a delete — a deleted row cannot distinguish "revoked" from "never existed", which is why the shipped share tables use `revoked BOOLEAN`. Allow the link's creator or a DM of its world.
-- [ ] T036 [US2] Write unit tests: a revoked share resolves to the refusal sentence; a copy taken before revocation is untouched; deleting the collection makes the code stop resolving with that same sentence.
-- [ ] T037 [P] [US2] In the revoke confirmation UI, state plainly that copies already made are unaffected (FR-011) — at the moment of revoking, not in a help page.
-- [ ] T038 [US2] Add the revoke and delete flows to `apps/web/e2e/content-collections.spec.ts`: link works → revoke → link reports unavailable within one page load (SC-005) → the recipient's copy is intact.
+- [x] T035 [US2] Implement `revoke_collection_share_link_impl` in `mutations_collection_shares.rs` as a **soft flag**, never a delete — a deleted row cannot distinguish "revoked" from "never existed", which is why the shipped share tables use `revoked BOOLEAN`. Allow the link's creator or a DM of its world.
+- [x] T036 [US2] Write unit tests: a revoked share resolves to the refusal sentence; a copy taken before revocation is untouched; deleting the collection makes the code stop resolving with that same sentence.
+- [x] T037 [P] [US2] In the revoke confirmation UI, state plainly that copies already made are unaffected (FR-011) — at the moment of revoking, not in a help page.
+- [x] T038 [US2] Add the revoke and delete flows to `apps/web/e2e/content-collections.spec.ts`: link works → revoke → link reports unavailable within one page load (SC-005) → the recipient's copy is intact.
 
 ---
 
@@ -134,12 +134,12 @@ takedown against one, and confirm the collection still opens, the disabled
 member is absent and shown as withheld, the remaining members still copy, and a
 copy made afterwards does not contain the disabled member.
 
-- [ ] T039 [US3] Confirm by test — not by inspection — that `resolve_member` (T011) already withholds a moderated member on both the preview and the copy path (FR-021, FR-023). If it does, this task is a test; if it does not, it is a fix.
-- [ ] T040 [US3] Implement the all-withheld case: a collection whose every member is withheld reports "nothing is available" rather than presenting an empty collection as complete (FR-024), and refuses the copy.
-- [ ] T041 [US3] Add the withheld indicator to the preview UI: something has been withheld, **without naming it or reproducing its content** (FR-022).
-- [ ] T042 [US3] Write a test proving FR-025 needs no cache invalidation: reverse a takedown and confirm the member returns on the next read without the owner touching the collection. `moderation::effective_status` restores lazily, so this passes only if no status was cached — which is what makes it worth asserting.
-- [ ] T043 [US3] Write `apps/web/e2e/collection-moderation.spec.ts` using `submit_takedown_notice_impl` the way the shipped ability-share moderation test does: take one member down, confirm three of four remain and the fourth is unnamed; take the rest down, confirm "nothing available"; reverse one, confirm it returns.
-- [ ] T044 [US3] Implement FR-001b: an artifact that **becomes** restricted after being added is withheld from that point, by the same path as a moderated member. Test both directions — restricting after adding withholds it, lifting the restriction returns it — because a check that runs only at add time passes the first half and fails the second.
+- [x] T039 [US3] Confirm by test — not by inspection — that `resolve_member` (T011) already withholds a moderated member on both the preview and the copy path (FR-021, FR-023). If it does, this task is a test; if it does not, it is a fix.
+- [x] T040 [US3] Implement the all-withheld case: a collection whose every member is withheld reports "nothing is available" rather than presenting an empty collection as complete (FR-024), and refuses the copy.
+- [x] T041 [US3] Add the withheld indicator to the preview UI: something has been withheld, **without naming it or reproducing its content** (FR-022).
+- [x] T042 [US3] Write a test proving FR-025 needs no cache invalidation: reverse a takedown and confirm the member returns on the next read without the owner touching the collection. `moderation::effective_status` restores lazily, so this passes only if no status was cached — which is what makes it worth asserting.
+- [x] T043 [US3] Write `apps/web/e2e/collection-moderation.spec.ts` using `submit_takedown_notice_impl` the way the shipped ability-share moderation test does: take one member down, confirm three of four remain and the fourth is unnamed; take the rest down, confirm "nothing available"; reverse one, confirm it returns.
+- [x] T044 [US3] Implement FR-001b: an artifact that **becomes** restricted after being added is withheld from that point, by the same path as a moderated member. Test both directions — restricting after adding withholds it, lifting the restriction returns it — because a check that runs only at add time passes the first half and fails the second.
 
 ---
 
@@ -151,19 +151,69 @@ copy made afterwards does not contain the disabled member.
 preview states what it will add, copy it, and confirm the result names anything
 that could not be brought across.
 
-- [ ] T045 [P] [US4] Show counts by type in the preview before copying (US4 scenario 1), sourced from the `sharedCollection` response rather than computed client-side.
-- [ ] T046 [US4] Render the `CopyReceipt` after copying: what arrived, and every fidelity note — out-of-collection references, withheld members (unnamed), and the scene children not copied by design.
-- [ ] T047 [US4] Extend `content-collections.spec.ts` to assert the preview's counts match what arrives, and that a collection with an out-of-collection reference names that loss to the recipient.
+- [x] T045 [P] [US4] Show counts by type in the preview before copying (US4 scenario 1), sourced from the `sharedCollection` response rather than computed client-side.
+- [x] T046 [US4] Render the `CopyReceipt` after copying: what arrived, and every fidelity note — out-of-collection references, withheld members (unnamed), and the scene children not copied by design.
+- [x] T047 [US4] Extend `content-collections.spec.ts` to assert the preview's counts match what arrives, and that a collection with an out-of-collection reference names that loss to the recipient.
 
 ---
 
 ## Phase 7: Polish and cross-cutting
 
-- [ ] T048 [P] Write `apps/web/e2e/collection-anonymous-access.spec.ts`: a signed-out visitor opens a valid link and sees the collection; repeated wrong codes hit the rate limiter (FR-009c); an unknown code, a revoked share and a deleted collection return the same sentence (FR-009d); no response in the anonymous path carries a world id or name (SC-007a).
-- [ ] T049 Verify FR-020 by **inspection of every read path**, not sampling (SC-007): grep every resolver touching the three new tables and confirm none returns collections the caller does not own. Record the finding in this file.
-- [ ] T050 [P] Add the 100-member case to the e2e suite: the 101st add is refused with a message naming the limit, and a 100-member collection copies inside one waited-out action (SC-002a) — assert an upper bound on the wall time rather than merely that it completes.
-- [ ] T051 [P] Add the share-terms text (FR-026): the person sharing is responsible for having the right to share what is in the collection, and a copy taken by someone else is theirs and cannot be recalled. It belongs in `legal/` with the other reviewable text, surfaced at the share step.
-- [ ] T052 Mutation-test the guards that matter, and record which mutation each test caught: break `restriction_reason` for one member type (T010 must fail); make the rate limiter honour `THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT` (T012's test must fail); make one refusal sentence differ from the others (T020's test must fail); cache moderation status on the member row (T042 must fail); copy `tokens` with a scene (T025's fidelity-note test must fail).
+- [x] T048 [P] Write `apps/web/e2e/collection-anonymous-access.spec.ts`: a signed-out visitor opens a valid link and sees the collection; repeated wrong codes hit the rate limiter (FR-009c); an unknown code, a revoked share and a deleted collection return the same sentence (FR-009d); no response in the anonymous path carries a world id or name (SC-007a).
+- [x] T049 Verify FR-020 by **inspection of every read path**, not sampling (SC-007): grep every resolver touching the three new tables and confirm none returns collections the caller does not own. Record the finding in this file.
+
+  **Finding, 2026-09-05.** Nine read paths touch `world_collections`,
+  `world_collection_members` or `world_collection_shares`. Every one is either
+  filtered to a single id the caller already named, or guarded by an authority
+  check before the query runs. None can list, search or count beyond the
+  caller's own.
+
+  | Path | Filter | Guard |
+  |---|---|---|
+  | `mutations_collections.rs:98` (`require_collection_authority`) | one `id` | this *is* the guard; callers await it first |
+  | `mutations_collections.rs:451` (`world_collections_impl`) | `world_id` | `is_dm_of_world` before the query |
+  | `mutations_collections.rs:497` (`collection_members_impl`) | one `collection_id` | `require_collection_authority` before the query |
+  | `mutations_collection_shares.rs:103` (`load_active_share`) | one `share_code` | the code is the authority (FR-007) |
+  | `mutations_collection_shares.rs:150` (`collection_share_link_impl`, FR-010a) | one `collection_id` | creator-or-DM before the query |
+  | `mutations_collection_shares.rs:242` (revoke) | one `share_id` | creator-or-DM on the row it read |
+  | `mutations_collection_shares.rs:311` (anonymous preview) | the share's own `collection_id` | reached only through a valid unrevoked code |
+  | `mutations_collection_shares.rs:382` (`collection_world_and_owner`) | one `collection_id` | a helper; returns the owner *so* callers can check |
+  | `mutations_collection_shares.rs:405` (`load_members`) | one `collection_id` | a helper; every caller checks first |
+
+  Two of the nine are helpers that perform no check themselves
+  (`collection_world_and_owner`, `load_members`). That is the shape most likely
+  to drift — a future caller that forgets. Both are `pub` within the crate and
+  neither is reachable from a resolver that does not check, verified by reading
+  every call site rather than by sampling.
+
+  There is no `myCollections`, no `collectionsByUser`, and no path returning a
+  share code except to the collection's own owner.
+- [x] T050 [P] Add the 100-member case to the e2e suite: the 101st add is refused with a message naming the limit, and a 100-member collection copies inside one waited-out action (SC-002a) — assert an upper bound on the wall time rather than merely that it completes.
+- [x] T051 [P] Add the share-terms text (FR-026): the person sharing is responsible for having the right to share what is in the collection, and a copy taken by someone else is theirs and cannot be recalled. It belongs in `legal/` with the other reviewable text, surfaced at the share step.
+- [x] T052 Mutation-test the guards that matter, and record which mutation each test caught: break `restriction_reason` for one member type (T010 must fail); make the rate limiter honour `THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT` (T012's test must fail); make one refusal sentence differ from the others (T020's test must fail); cache moderation status on the member row (T042 must fail); copy `tokens` with a scene (T025's fidelity-note test must fail).
+
+  **Run 2026-09-05.** Each mutation applied, the suite run, the mutation
+  reverted. All five were caught, and one exposed a weak assertion.
+
+  | Mutation | Result |
+  |---|---|
+  | `restriction_reason`'s `"ability"` arm made unreachable | **caught** — 3 failures in `collections::membership` |
+  | `allow_request` returns early on `THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT` | **caught** — including `the_e2e_auth_bypass_does_not_disable_this_limiter`, which exists for precisely this |
+  | `load_active_share` answers "That collection has been revoked." instead of `UNAVAILABLE` | **caught** — 2 failures; the constant is compared across all three cases rather than to a literal |
+  | `resolve_member` stops consulting moderation | **caught** — 2 failures, including the copy-path test added this session |
+  | tokens copied along with the scene | **caught** — `tokens_stay_behind_and_the_omission_is_declared` |
+
+  **What the pass found.** Before the real token mutation, a cheaper one was
+  tried first: leave the behaviour alone and reword the fidelity note to
+  "brought its 3 tokens along". That **survived**, because the assertion was
+  `n.contains("token")` — satisfied by a note declaring the opposite of what
+  happened. The behaviour assertion still caught the real mutation, so the test
+  was never wrong; but half of it was measuring nothing, and a declared loss
+  that declares an arrival is the exact failure FR-015 exists to prevent. The
+  assertion now requires the note to say the tokens were *not copied*.
+
+  That is the argument for mutation testing in one example: the surviving
+  mutation was not the one on the list.
 - [ ] T053 Run `pnpm verify` (all ten checks), `cargo test -p thunderforge-server`, `pnpm --filter web test`, and the full Playwright sweep with `--workers=1`. Before starting: confirm the tree is clean and `ss -ltn | grep 301` is empty — stale backends have twice produced what looked like fresh regressions.
 - [ ] T054 Update `TOMORROW.md` with what shipped, what was found, and anything the next session would otherwise rediscover.
 

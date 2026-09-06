@@ -401,3 +401,164 @@ test.describe("spec 026: gather a world's content, share it, copy it", () => {
     }
   });
 });
+
+/**
+ * T050 / FR-005a and SC-002a: the cap, and that a full collection still copies
+ * in one action the recipient waits out.
+ *
+ * Seeded through the API rather than the picker. A hundred and one clicks
+ * through a select would measure Playwright, and the thing under test is the
+ * server's refusal and the copy's wall time — neither of which the UI decides.
+ */
+test.describe("spec 026: a collection at its limit", () => {
+  test("the 101st member is refused by name, and 100 copy in one action", async ({
+    page,
+  }) => {
+    test.setTimeout(600_000);
+
+    const suffix = uniqueSuffix();
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Limit Source ${suffix}`,
+      "e2elimsrc",
+    );
+
+    const collection = await graphql<{
+      data: { createCollection: { id: string } };
+    }>(
+      page,
+      `
+        mutation C($input: CreateCollectionInput!) {
+          createCollection(input: $input) {
+            id
+          }
+        }
+      `,
+      { input: { worldId, name: `A Hundred Things ${suffix}` } },
+    );
+    const collectionId = collection.data.createCollection.id;
+
+    // 100 lore entries: the cheapest member type to create, and the one whose
+    // copy cost is dominated by nothing but rows.
+    const ids: string[] = [];
+    for (let i = 0; i < 101; i++) {
+      const made = await graphql<{
+        data: { createLoreEntry: { id: string } };
+      }>(
+        page,
+        `
+          mutation C($input: CreateLoreEntryInput!) {
+            createLoreEntry(input: $input) {
+              id
+            }
+          }
+        `,
+        {
+          input: { worldId, title: `Entry ${i} ${suffix}`, content: "..." },
+        },
+      );
+      ids.push(made.data.createLoreEntry.id);
+    }
+
+    for (let i = 0; i < 100; i++) {
+      const added = await graphql<{ errors?: { message: string }[] }>(
+        page,
+        `
+          mutation A($input: AddCollectionMemberInput!) {
+            addCollectionMember(input: $input) {
+              id
+            }
+          }
+        `,
+        {
+          input: { collectionId, memberType: "lore", memberId: ids[i] },
+        },
+      );
+      expect(added.errors, `member ${i} should be accepted`).toBeUndefined();
+    }
+
+    // FR-005a: refused on adding, with the limit named — never silently
+    // truncated, and never accepted-then-failed at copy time.
+    const refused = await graphql<{ errors?: { message: string }[] }>(
+      page,
+      `
+        mutation A($input: AddCollectionMemberInput!) {
+          addCollectionMember(input: $input) {
+            id
+          }
+        }
+      `,
+      { input: { collectionId, memberType: "lore", memberId: ids[100] } },
+    );
+    expect(refused.errors, "the 101st must be refused").toBeDefined();
+    expect(refused.errors![0].message).toContain("100");
+
+    const shared = await graphql<{
+      data: { createCollectionShareLink: { shareCode: string } };
+    }>(
+      page,
+      `
+        mutation S($collectionId: UUID!) {
+          createCollectionShareLink(collectionId: $collectionId) {
+            shareCode
+          }
+        }
+      `,
+      { collectionId },
+    );
+
+    const destinationWorldId = await graphql<{
+      data: { createWorld: { id: string } };
+    }>(
+      page,
+      `
+        mutation C($input: GraphQLCreateWorldInput!) {
+          createWorld(input: $input) {
+            id
+          }
+        }
+      `,
+      { input: { name: `E2E Limit Destination ${suffix}` } },
+    ).then((r) => r.data.createWorld.id);
+
+    // SC-002a: one action the recipient waits out, not a background job.
+    const startedAt = Date.now();
+    const copied = await graphql<{
+      data: { copySharedCollectionToWorld: { created: { id: string }[] } };
+      errors?: { message: string }[];
+    }>(
+      page,
+      `
+        mutation Copy($shareCode: String!, $destinationWorldId: UUID!) {
+          copySharedCollectionToWorld(
+            shareCode: $shareCode
+            destinationWorldId: $destinationWorldId
+          ) {
+            created {
+              id
+            }
+          }
+        }
+      `,
+      {
+        shareCode: shared.data.createCollectionShareLink.shareCode,
+        destinationWorldId,
+      },
+    );
+    const elapsedMs = Date.now() - startedAt;
+
+    expect(copied.errors).toBeUndefined();
+    expect(copied.data.copySharedCollectionToWorld.created).toHaveLength(100);
+
+    // An upper bound on the wall time rather than merely that it finished.
+    // "One action the recipient waits out" is a claim about duration, and a
+    // test that only asserts completion cannot fail when that stops being
+    // true. Generous against a debug build on a loaded machine — this is a
+    // guard against a copy that has quietly become a background job, not a
+    // performance budget.
+    expect(
+      elapsedMs,
+      `copying 100 members took ${elapsedMs}ms — SC-002a wants one waited-out action`,
+    ).toBeLessThan(30_000);
+  });
+});

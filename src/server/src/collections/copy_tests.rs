@@ -750,9 +750,20 @@ async fn tokens_stay_behind_and_the_omission_is_declared() {
         .expect("tokens");
     assert_eq!(token_count, 0, "tokens are not part of the place");
 
+    // The note has to say they were *not* copied, not merely mention tokens.
+    //
+    // T052's mutation pass caught this: `contains("token")` was satisfied by a
+    // note reading "brought its 3 tokens along", which declares the opposite of
+    // what happened. The behaviour assertion above still failed on the real
+    // mutation, so the test was never wrong — but half of it was measuring
+    // nothing, and a declared loss that declares an arrival is exactly the
+    // failure FR-015 exists to prevent.
     assert!(
-        receipt.fidelity_notes.iter().any(|n| n.contains("token")),
-        "the omission must be declared: {:?}",
+        receipt
+            .fidelity_notes
+            .iter()
+            .any(|n| n.contains("token") && n.contains("not copied")),
+        "the omission must be declared as an omission: {:?}",
         receipt.fidelity_notes
     );
 }
