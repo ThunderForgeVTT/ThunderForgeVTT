@@ -381,6 +381,7 @@ fn the_collection_surface_is_reachable_under_the_names_the_client_uses() {
         "revokeCollectionShareLink(",
         "copySharedCollectionToWorld(",
         "sharedCollection(",
+        "collectionShareLink(",
     ] {
         assert!(sdl.contains(name), "{name} must be reachable from the root");
     }

@@ -301,10 +301,14 @@ fn copy_item(
 ) -> Result<(), CopyError> {
     use crate::schema::{world_item_effects, world_items};
 
-    let (name, description) = world_items::table
+    let (name, description, source_icon) = world_items::table
         .filter(world_items::id.eq(source_id))
-        .select((world_items::name, world_items::description))
-        .first::<(String, Option<String>)>(conn)?;
+        .select((
+            world_items::name,
+            world_items::description,
+            world_items::icon_asset_id,
+        ))
+        .first::<(String, Option<String>, Option<Uuid>)>(conn)?;
 
     let new_id = Uuid::now_v7();
     let now = chrono::Utc::now().naive_utc();
@@ -314,25 +318,19 @@ fn copy_item(
             world_items::world_id.eq(ctx.destination_world_id),
             world_items::name.eq(&name),
             world_items::description.eq(&description),
-            // The icon asset is deliberately not carried: it belongs to the
-            // source world's asset rows and copying it is the scene-background
-            // problem in miniature. Declared below rather than dropped.
-            world_items::icon_asset_id.eq(None::<Uuid>),
+            // FR-018: the icon travels. `icon_asset_id` is a bare object-storage
+            // identifier with no foreign key and no world scoping (see the
+            // header of the `world_actor_images` migration, which says so for
+            // both tables), so pointing at it costs a column and not a stored
+            // byte. This is the same sharing FR-019 asks for on scene
+            // backgrounds, and it needs no second asset row because there is
+            // no per-world asset row to duplicate.
+            world_items::icon_asset_id.eq(source_icon),
             world_items::created_by.eq(ctx.user_id),
             world_items::created_at.eq(now),
             world_items::updated_at.eq(now),
         ))
         .execute(conn)?;
-
-    let icon: Option<Uuid> = world_items::table
-        .filter(world_items::id.eq(source_id))
-        .select(world_items::icon_asset_id)
-        .first::<Option<Uuid>>(conn)?;
-    if icon.is_some() {
-        ctx.notes.push(format!(
-            "\"{name}\" had an icon image, which was not copied."
-        ));
-    }
 
     let effects = world_item_effects::table
         .filter(world_item_effects::item_id.eq(source_id))
@@ -372,7 +370,10 @@ fn copy_actor(
     ctx: &mut CopyContext,
     source_id: Uuid,
 ) -> Result<(), CopyError> {
-    use crate::schema::{scenes, world_actor_abilities, world_actor_inventory, world_actors};
+    use crate::schema::{
+        scenes, world_actor_abilities, world_actor_images, world_actor_inventory, world_actors,
+        worlds,
+    };
 
     let (label, description, actor_type, game_system_id, is_npc, source_scene) =
         world_actors::table
@@ -387,21 +388,45 @@ fn copy_actor(
             ))
             .first::<(String, Option<String>, String, Option<String>, bool, Uuid)>(conn)?;
 
-    // An actor needs a scene. If its own scene came along in the collection,
-    // it lands there; otherwise it lands in any scene of the destination
-    // world, and the displacement is declared rather than hidden.
+    // An actor needs a scene. If its own scene came along in the collection, it
+    // lands there; otherwise FR-015a puts it in the destination world's
+    // **active** scene and declares the displacement.
+    //
+    // The active scene rather than any scene, because "any" was what this did
+    // first and it meant whichever row the database happened to return —
+    // making the same copy into the same world land somewhere different on
+    // different runs. The active scene is the one its new owner is looking at,
+    // so a displaced actor turns up where they will see it rather than
+    // somewhere they have to go hunting.
     let destination_scene = match ctx.scene_map.get(&source_scene) {
         Some(copied) => *copied,
         None => {
-            let any: Option<Uuid> = scenes::table
-                .filter(scenes::world_id.eq(ctx.destination_world_id))
-                .select(scenes::scene_id)
-                .first::<Uuid>(conn)
-                .optional()?;
-            match any {
+            let active: Option<Uuid> = worlds::table
+                .filter(worlds::id.eq(ctx.destination_world_id))
+                .select(worlds::active_scene_id)
+                .first::<Option<Uuid>>(conn)
+                .optional()?
+                .flatten();
+
+            // A world with no active scene is ordinary — nothing has been
+            // launched yet — so fall back to its oldest scene rather than
+            // refusing. Oldest rather than arbitrary keeps the result
+            // repeatable, which is the half of FR-015a that survives even
+            // when there is no active scene to honour.
+            let landing = match active {
+                Some(scene_id) => Some(scene_id),
+                None => scenes::table
+                    .filter(scenes::world_id.eq(ctx.destination_world_id))
+                    .order(scenes::created_at.asc())
+                    .select(scenes::scene_id)
+                    .first::<Uuid>(conn)
+                    .optional()?,
+            };
+
+            match landing {
                 Some(scene_id) => {
                     ctx.notes.push(format!(
-                        "\"{label}\" was placed in an existing scene, because the scene it came from was not in this collection."
+                        "\"{label}\" was placed in this world's current scene, because the scene it came from was not in this collection."
                     ));
                     scene_id
                 }
@@ -434,6 +459,35 @@ fn copy_actor(
             world_actors::updated_at.eq(now),
         ))
         .execute(conn)?;
+
+    // FR-018: the actor's imagery travels with it.
+    //
+    // `world_actor_images.asset_id` is a bare object-storage identifier —
+    // no foreign key, no world scoping, deliberately (see that table's
+    // migration header). So the copy points at the same stored bytes and adds
+    // no new object, exactly as FR-019 asks of a scene's background. Every
+    // role comes across rather than a chosen one: `role` is open text by
+    // ADR-054, so picking "portrait" here would silently drop whatever roles a
+    // pack introduced later.
+    let images = world_actor_images::table
+        .filter(world_actor_images::actor_id.eq(source_id))
+        .select((world_actor_images::role, world_actor_images::asset_id))
+        .load::<(String, Uuid)>(conn)?;
+
+    for (role, asset_id) in images {
+        diesel::insert_into(world_actor_images::table)
+            .values((
+                world_actor_images::id.eq(Uuid::now_v7()),
+                world_actor_images::actor_id.eq(new_id),
+                world_actor_images::role.eq(role),
+                world_actor_images::asset_id.eq(asset_id),
+                world_actor_images::created_by.eq(ctx.user_id),
+                world_actor_images::updated_by.eq(ctx.user_id),
+                world_actor_images::created_at.eq(now),
+                world_actor_images::updated_at.eq(now),
+            ))
+            .execute(conn)?;
+    }
 
     // FR-014: an actor that knows an included ability must know the **copy**.
     let known = world_actor_abilities::table

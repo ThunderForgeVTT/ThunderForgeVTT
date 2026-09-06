@@ -175,6 +175,32 @@ export function removeCollectionMember(
   ).then((data) => data.removeCollectionMember);
 }
 
+/**
+ * FR-010a: the active share link for a collection you own, or `null`.
+ *
+ * Not the enumeration FR-020 forbids — it takes one collection id the caller
+ * already has authority over and returns that collection's own share. It
+ * exists because without it FR-010's "the owner MUST be able to revoke" only
+ * held inside the browser session that created the link: the code was shown
+ * once, and closing the tab removed the ability to revoke it for good.
+ */
+export function getCollectionShareLink(
+  collectionId: string,
+): Promise<CollectionShareLinkRecord | null> {
+  return postGraphQL<{
+    collectionShareLink: CollectionShareLinkRecord | null;
+  }>(
+    `
+      query CollectionShareLink($collectionId: UUID!) {
+        collectionShareLink(collectionId: $collectionId) {
+          ${SHARE_LINK_FIELDS}
+        }
+      }
+    `,
+    { collectionId },
+  ).then((data) => data.collectionShareLink);
+}
+
 export function createCollectionShareLink(
   collectionId: string,
 ): Promise<CollectionShareLinkRecord> {

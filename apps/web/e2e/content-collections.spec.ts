@@ -229,7 +229,16 @@ test.describe("spec 026: gather a world's content, share it, copy it", () => {
     ).toHaveCount(5, { timeout: 15_000 });
 
     // ---- 3. Share it -----------------------------------------------------
-    await page.getByRole("button", { name: "Create a share link" }).click();
+    //
+    // FR-026: the terms are on screen before the button, not behind a link.
+    const terms = page.getByTestId("share-terms");
+    await expect(terms).toBeVisible();
+    await expect(terms).toContainText("responsible for what you share");
+    await expect(terms).toContainText("cannot be recalled");
+
+    await page
+      .getByRole("button", { name: /I have the right to share this/ })
+      .click();
     const shareUrl = await page.getByTestId("share-url").textContent();
     expect(shareUrl).toContain("/collection/");
     const sharePath = new URL(shareUrl!).pathname;
@@ -354,13 +363,19 @@ test.describe("spec 026: gather a world's content, share it, copy it", () => {
 
       // ---- 8. Revoke, and the link dies within one page load -------------
       //
-      // T038 / SC-005.
+      // T038 / SC-005, now through the flow FR-010a made possible.
       //
-      // Deliberately no reload of the author's page first. No-enumeration
-      // means there is no "list this collection's share links" call — the
-      // same property the shipped ability share page has — so the link is
-      // revocable only while it is still on screen. Reloading here would test
-      // a flow the product does not have.
+      // The author's page is reloaded first, deliberately. Before FR-010a the
+      // link was displayed once and never again, so revoking only worked in
+      // the session that minted it — closing the tab removed the ability for
+      // good. Reloading here is the assertion that this is fixed: the link
+      // comes back on its own, and it is revocable from a fresh page.
+      await page.reload();
+      await page.getByRole("button", { name: "Open", exact: true }).click();
+      await expect(page.getByTestId("share-url")).toContainText(
+        "/collection/",
+        { timeout: 15_000 },
+      );
       await page.getByRole("button", { name: "Revoke link" }).click();
 
       // FR-011: the warning has to be here, at the moment of revoking.

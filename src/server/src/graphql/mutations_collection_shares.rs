@@ -108,6 +108,55 @@ pub fn load_active_share(
         .map_err(|_| UNAVAILABLE.to_string())
 }
 
+/// Testable core of `collectionShareLink` (FR-010a): the active share for a
+/// collection **you own**, or `None`.
+///
+/// # Why this is not the enumeration FR-020 forbids
+///
+/// FR-020 bars browsing, searching or counting collections "beyond a user's
+/// own". This takes one collection id, verifies the caller is its creator or a
+/// DM of its world through the same check every mutation here uses, and
+/// returns that one collection's share. Nothing is listed, nothing is
+/// discoverable, and a caller learns only about a collection they could
+/// already read.
+///
+/// # Why it exists
+///
+/// FR-010 says the owner must be able to revoke. Without a read path that was
+/// only true inside the browser session that minted the link: the code was
+/// displayed once, and closing the tab removed the owner's ability to revoke
+/// it permanently. The three shipped single-artifact shares still have that
+/// defect; FR-009e holds the decision to change them.
+pub async fn collection_share_link_impl(
+    state: &AppState,
+    user_id: Uuid,
+    is_admin: bool,
+    collection_id: Uuid,
+) -> GraphQLResult<Option<CollectionShare>> {
+    let (world_id, created_by) = collection_world_and_owner(state, collection_id).await?;
+
+    // Same refusal as everywhere else in this module: a caller with no
+    // authority is told the collection does not exist rather than that it
+    // exists and is not theirs.
+    if created_by != user_id && !is_dm_of_world(state, user_id, is_admin, world_id).await? {
+        return Err(Error::new("Collection not found"));
+    }
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| Error::new("Failed to get DB connection"))?;
+
+    world_collection_shares::table
+        .filter(world_collection_shares::collection_id.eq(collection_id))
+        .filter(world_collection_shares::revoked.eq(false))
+        .order(world_collection_shares::created_at.desc())
+        .select(CollectionShare::as_select())
+        .first::<CollectionShare>(&mut conn)
+        .optional()
+        .map_err(|e| Error::new(format!("Failed to load the share link: {e}")))
+}
+
 /// Testable core of `createCollectionShareLink` (FR-006, FR-008).
 ///
 /// Re-checks **every member's restriction at share time**, not only at add
@@ -369,6 +418,24 @@ pub struct CollectionShareQuery;
 
 #[async_graphql::Object]
 impl CollectionShareQuery {
+    /// FR-010a: the active share link for a collection the caller owns, or
+    /// null. **Authenticated**, and scoped to one collection the caller
+    /// already has authority over — see `collection_share_link_impl` for why
+    /// this is not the enumeration FR-020 forbids.
+    async fn collection_share_link(
+        &self,
+        ctx: &Context<'_>,
+        collection_id: Uuid,
+    ) -> GraphQLResult<Option<GraphQLCollectionShareLink>> {
+        let state = app_state(ctx)?;
+        let user = authenticated_user(ctx)?;
+        Ok(
+            collection_share_link_impl(state, user.user_id, user.is_admin, collection_id)
+                .await?
+                .map(Into::into),
+        )
+    }
+
     /// **Deliberately unauthenticated** — ADR-070. Do not add
     /// `authenticated_user(ctx)?` here.
     async fn shared_collection(

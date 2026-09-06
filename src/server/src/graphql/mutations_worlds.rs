@@ -19,6 +19,26 @@ use crate::state::AppState;
 /// `_impl` convention, e.g. `mutations_assets.rs`'s
 /// `upload_canvas_image_impl`) so it's directly unit-testable without a
 /// full GraphQL execution context.
+/// What a world's first scene is called.
+///
+/// **Not the world's name** (spec 026 FR-009f). It used to be, and that meant
+/// the first scene every Game Master owns carried their world's name — so
+/// sharing that scene in a collection disclosed the world's name to anonymous
+/// viewers through the member's own title, with nothing telling them. The
+/// collection preview sends no world field at all and was never the leak; the
+/// leak was here, in data the author is presumed to have chosen and did not.
+///
+/// Deliberately plain rather than evocative. The intent recorded in spec 026 is
+/// that a new world starts on something playable — a real starter map rather
+/// than an empty grid — and `examples/maps/README.md` already names the shape
+/// that map should have. It is **not** seeded yet: every file in that directory
+/// came from a personal, non-redistributable map collection, and that README
+/// says in as many words not to ship them in a release artifact. Naming this
+/// scene after art it does not have would be the worse half of the change.
+/// When a licensed starter map exists, this constant and the scene it names are
+/// the one place to change.
+pub const STARTER_SCENE_NAME: &str = "Starting Scene";
+
 pub async fn create_world_impl(
     state: &AppState,
     user_id: uuid::Uuid,
@@ -63,7 +83,6 @@ pub async fn create_world_impl(
     };
 
     let inserted_world = new_world.clone();
-    let world_name_for_scene = new_world.name.clone();
     // Spec 022 (FR-002d, ADR-046): Play now shows an empty/unloaded canvas
     // whenever `worlds.active_scene_id` is null — but spec 010 (FR-004)
     // already guarantees every freshly created world has its default
@@ -86,7 +105,7 @@ pub async fn create_world_impl(
             let scene_values = (
                 scenes::scene_id.eq(default_scene_id),
                 scenes::world_id.eq(inserted_world.id),
-                scenes::name.eq(&world_name_for_scene),
+                scenes::name.eq(STARTER_SCENE_NAME),
                 scenes::description.eq::<Option<String>>(None),
                 scenes::type_.eq("battlemap"),
                 scenes::grid_size.eq(5),

@@ -7,12 +7,15 @@ import {
   createCollection,
   createCollectionShareLink,
   deleteCollection,
+  getCollectionShareLink,
   getCollectionMembers,
   getWorldCollections,
   removeCollectionMember,
   revokeCollectionShareLink,
 } from "@/api/collections";
 import { getWorldItems } from "@/api/items";
+import { LegalProse } from "@/components/legal/LegalProse";
+import { legalSections } from "@/legal/legalDocuments";
 import { getWorldLoreEntries } from "@/api/lore";
 import { getScenes } from "@/api/scenes";
 import { SEO } from "@/components/seo/SEO";
@@ -42,6 +45,9 @@ import type {
  * generic "could not add member" would leave an author with no idea which of
  * those three happened or what to do next.
  */
+
+/** FR-026's text, compiled in from `legal/` like every other legal document. */
+const SHARE_TERMS = legalSections("collection-sharing-terms");
 
 /** One thing that can go in a collection, from any of the five sources. */
 type Candidate = {
@@ -268,6 +274,7 @@ function CollectionCard({
   const [confirmingRevoke, setConfirmingRevoke] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
+  const [shareLoaded, setShareLoaded] = useState(false);
   const [membersToken, setMembersToken] = useState(0);
   const reloadMembers = useCallback(() => setMembersToken((n) => n + 1), []);
 
@@ -328,6 +335,34 @@ function CollectionCard({
     loadedCandidates !== null && loadedCandidates.memberType === pickerType
       ? loadedCandidates.rows
       : null;
+
+  // FR-010a: an existing link is found again rather than lost with the tab.
+  useEffect(() => {
+    if (!isOpen || shareLoaded) {
+      return;
+    }
+    let active = true;
+    getCollectionShareLink(collection.id)
+      .then((existing) => {
+        if (active) {
+          setShare(existing);
+          setShareLoaded(true);
+        }
+      })
+      .catch((err: unknown) => {
+        if (active) {
+          setShareError(
+            err instanceof Error
+              ? err.message
+              : "Could not check whether this collection is shared.",
+          );
+          setShareLoaded(true);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [isOpen, shareLoaded, collection.id]);
 
   const shareUrl = useMemo(
     () =>
@@ -522,10 +557,36 @@ function CollectionCard({
               <StatusBadge variant="danger">{shareError}</StatusBadge>
             ) : null}
             {share === null ? (
-              <div>
-                <Button onClick={() => void handleShare()}>
-                  Create a share link
-                </Button>
+              <div className="grid gap-3">
+                {/*
+                  FR-026. Shown before the button, not behind a link: these are
+                  the two things a person has to have taken in *before* they
+                  share, and a policy page they could go and read is not the
+                  same as having read it. The prose lives in
+                  `legal/collection-sharing-terms.md` so it can be reviewed by
+                  somebody who does not read TypeScript.
+                */}
+                <div
+                  className="grid gap-3 rounded-lg border border-input p-4"
+                  data-testid="share-terms"
+                >
+                  {SHARE_TERMS.map((section) => (
+                    <div
+                      key={section.heading ?? "opening"}
+                      className="grid gap-1"
+                    >
+                      {section.heading ? (
+                        <p className="text-sm font-medium">{section.heading}</p>
+                      ) : null}
+                      <LegalProse body={section.body} />
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <Button onClick={() => void handleShare()}>
+                    I have the right to share this — create a link
+                  </Button>
+                </div>
               </div>
             ) : share.revoked ? (
               <StatusBadge variant="warning">
@@ -534,18 +595,15 @@ function CollectionCard({
             ) : (
               <div className="grid gap-2">
                 {/*
-                  The same caveat the shipped ability share page carries, for
-                  the same reason. No-enumeration is one of the invariants
-                  ADR-069's determination rests on, so there is deliberately no
-                  "list this collection's share links" call — which means this
-                  link cannot be shown again after you leave the page, and
-                  revoking it is only possible while it is on screen.
+                  The "it will not be shown again" caveat that used to be here
+                  is gone, because it is no longer true: FR-010a gives the owner
+                  a way back to their own collection's link, so revoking no
+                  longer depends on keeping this tab open.
                 */}
                 <p className="text-xs text-muted-foreground">
                   Anyone with this link can read the collection without an
                   account, and copy it into a world they run. It is not listed
-                  or discoverable anywhere, and it will not be shown again —
-                  keep it if you may want to revoke it later.
+                  or discoverable anywhere — revoke it to stop it working.
                 </p>
                 <code
                   className="rounded-lg border border-input px-2.5 py-2 text-xs break-all"

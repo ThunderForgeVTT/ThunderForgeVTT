@@ -756,3 +756,462 @@ async fn tokens_stay_behind_and_the_omission_is_declared() {
         receipt.fidelity_notes
     );
 }
+
+/// Record a takedown against one artifact, the way spec 015 does.
+///
+/// Written directly rather than through `submit_takedown_notice_impl` because
+/// these tests are about what a *collection* does with a disabled member, not
+/// about notice validation — and going through the notice path would make them
+/// fail for reasons that belong to spec 015.
+fn disable(conn: &mut PgConnection, entity_type: &str, entity_id: Uuid, world_id: Uuid) -> Uuid {
+    use crate::schema::content_moderation_actions;
+    let case_id = Uuid::now_v7();
+    diesel::insert_into(content_moderation_actions::table)
+        .values((
+            content_moderation_actions::id.eq(Uuid::now_v7()),
+            content_moderation_actions::case_id.eq(case_id),
+            content_moderation_actions::action_type
+                .eq(crate::moderation::action_type::CONTENT_DISABLED),
+            content_moderation_actions::entity_type.eq(entity_type),
+            content_moderation_actions::entity_id.eq(entity_id),
+            content_moderation_actions::world_id.eq(world_id),
+            content_moderation_actions::claimant_name.eq("A Rights Holder"),
+            content_moderation_actions::claimant_contact.eq("rights@example.test"),
+            content_moderation_actions::copyrighted_work_description.eq("The work"),
+            content_moderation_actions::infringing_material_location.eq("here"),
+            content_moderation_actions::good_faith_statement.eq(true),
+            content_moderation_actions::accuracy_statement.eq(true),
+            content_moderation_actions::signature.eq("A Rights Holder"),
+            content_moderation_actions::created_at.eq(chrono::Utc::now()),
+        ))
+        .execute(conn)
+        .expect("record the takedown");
+    case_id
+}
+
+/// Undo one, the way a reversed takedown does.
+fn restore(
+    conn: &mut PgConnection,
+    case_id: Uuid,
+    entity_type: &str,
+    entity_id: Uuid,
+    world_id: Uuid,
+) {
+    use crate::schema::content_moderation_actions;
+    diesel::insert_into(content_moderation_actions::table)
+        .values((
+            content_moderation_actions::id.eq(Uuid::now_v7()),
+            content_moderation_actions::case_id.eq(case_id),
+            content_moderation_actions::action_type
+                .eq(crate::moderation::action_type::CONTENT_RESTORED),
+            content_moderation_actions::entity_type.eq(entity_type),
+            content_moderation_actions::entity_id.eq(entity_id),
+            content_moderation_actions::world_id.eq(world_id),
+            content_moderation_actions::claimant_name.eq("A Rights Holder"),
+            content_moderation_actions::claimant_contact.eq("rights@example.test"),
+            content_moderation_actions::copyrighted_work_description.eq("The work"),
+            content_moderation_actions::infringing_material_location.eq("here"),
+            content_moderation_actions::good_faith_statement.eq(true),
+            content_moderation_actions::accuracy_statement.eq(true),
+            content_moderation_actions::signature.eq("A Rights Holder"),
+            content_moderation_actions::created_at.eq(chrono::Utc::now()),
+        ))
+        .execute(conn)
+        .expect("record the restoration");
+}
+
+/// T039, FR-021/FR-023: a takedown reaches the copy path, not just the preview.
+///
+/// Asserted on the copy rather than inferred from the preview sharing a
+/// resolver with it. The two call `resolve_member` independently, and "the
+/// preview hides it" is not the claim FR-021 makes — the claim is that a copy
+/// taken afterwards does not create it.
+#[tokio::test]
+async fn a_moderated_member_is_withheld_from_the_copy_and_the_rest_still_arrive() {
+    let s = source();
+    {
+        let mut conn = s.state.db_pool.get().expect("connection");
+        disable(&mut conn, "world_item", s.item_id, s.world_id);
+    }
+
+    let code = share_of(
+        &s,
+        &[
+            ("item", s.item_id),
+            ("ability", s.ability_id),
+            ("lore", s.lore_id),
+        ],
+        "One taken down, two not",
+    )
+    .await;
+
+    let receipt = copy_shared_collection_to_world_impl(
+        &s.state,
+        s.recipient_id,
+        false,
+        code,
+        s.destination_world_id,
+    )
+    .await
+    .expect("the collection still copies");
+
+    assert!(
+        !receipt.created.iter().any(|c| c.member_type == "item"),
+        "FR-021: a disabled member must not be created by a copy: {:?}",
+        receipt.created
+    );
+    assert_eq!(
+        receipt.created.len(),
+        2,
+        "FR-023: disabling one member must not withhold the others: {:?}",
+        receipt.created
+    );
+
+    // FR-022: the absence is declared, and the artifact is never named.
+    let notes = receipt.fidelity_notes.join(" ");
+    assert!(
+        notes.contains("unavailable"),
+        "the withholding must be declared: {notes}"
+    );
+    let name = {
+        let mut conn = s.state.db_pool.get().expect("connection");
+        use crate::schema::world_items;
+        world_items::table
+            .filter(world_items::id.eq(s.item_id))
+            .select(world_items::name)
+            .first::<String>(&mut conn)
+            .expect("the item still exists")
+    };
+    assert!(
+        !notes.contains(&name),
+        "FR-022 forbids naming the withheld artifact, but the notes say: {notes}"
+    );
+}
+
+/// T042, FR-025: reversing a takedown returns the member with nothing rebuilt.
+///
+/// This passes only if no status was cached anywhere — `effective_status`
+/// resolves from the latest event every time. That is the design working, and
+/// it is worth asserting precisely because the obvious optimisation (a
+/// `moderated` flag on the member row) would break it silently.
+#[tokio::test]
+async fn a_reversed_takedown_returns_the_member_without_rebuilding_the_collection() {
+    let s = source();
+    let case_id = {
+        let mut conn = s.state.db_pool.get().expect("connection");
+        disable(&mut conn, "world_item", s.item_id, s.world_id)
+    };
+
+    let code = share_of(&s, &[("item", s.item_id)], "Taken down then restored").await;
+
+    let while_disabled = crate::graphql::mutations_collection_shares::shared_collection_impl(
+        &s.state,
+        "203.0.113.7",
+        code.clone(),
+    )
+    .await;
+    assert!(
+        while_disabled.is_err(),
+        "FR-024: a collection whose every member is withheld reports nothing available"
+    );
+
+    {
+        let mut conn = s.state.db_pool.get().expect("connection");
+        restore(&mut conn, case_id, "world_item", s.item_id, s.world_id);
+    }
+
+    // The same code, the same collection, nothing touched in between.
+    let after = crate::graphql::mutations_collection_shares::shared_collection_impl(
+        &s.state,
+        "203.0.113.7",
+        code,
+    )
+    .await
+    .expect("the member returns without the owner rebuilding anything");
+    assert_eq!(after.members.len(), 1);
+    assert_eq!(after.withheld_count, 0);
+}
+
+/// T044, FR-001b, the direction the add-time check cannot cover.
+///
+/// `resolve.rs` already proves that restricting an ability after adding it
+/// withholds it. The other half matters as much and is easier to get wrong:
+/// lifting the restriction must return it, with no rebuild — which it does
+/// only because nothing about the restriction was ever written down on the
+/// member row.
+#[tokio::test]
+async fn lifting_a_restriction_returns_the_member_to_the_collection() {
+    use crate::schema::world_abilities;
+    let s = source();
+
+    let set_gm_only = |flag: bool| {
+        let mut conn = s.state.db_pool.get().expect("connection");
+        diesel::update(world_abilities::table.filter(world_abilities::id.eq(s.ability_id)))
+            .set(world_abilities::gm_only.eq(flag))
+            .execute(&mut conn)
+            .expect("toggle gm_only");
+    };
+
+    let code = share_of(
+        &s,
+        &[("ability", s.ability_id), ("lore", s.lore_id)],
+        "A restriction that comes and goes",
+    )
+    .await;
+
+    set_gm_only(true);
+    let restricted = crate::graphql::mutations_collection_shares::shared_collection_impl(
+        &s.state,
+        "203.0.113.8",
+        code.clone(),
+    )
+    .await
+    .expect("the collection still opens");
+    assert_eq!(restricted.members.len(), 1, "the ability is withheld");
+    assert_eq!(restricted.withheld_count, 1);
+
+    set_gm_only(false);
+    let lifted = crate::graphql::mutations_collection_shares::shared_collection_impl(
+        &s.state,
+        "203.0.113.8",
+        code,
+    )
+    .await
+    .expect("the collection still opens");
+    assert_eq!(
+        lifted.members.len(),
+        2,
+        "FR-001b's other direction: lifting the restriction returns the member"
+    );
+    assert_eq!(lifted.withheld_count, 0);
+}
+
+/// FR-018: an actor's imagery and an item's icon travel with the copy.
+///
+/// Both are bare object-storage identifiers with no world scoping, so the copy
+/// points at the same bytes. Asserted as *the same* asset id rather than
+/// merely a present one — a copy that uploaded its own duplicate would satisfy
+/// "the picture is there" and quietly double the stored bytes.
+#[tokio::test]
+async fn a_copy_carries_its_imagery_and_shares_the_stored_bytes() {
+    use crate::schema::{world_actor_images, world_items};
+
+    let s = source();
+    let portrait = Uuid::now_v7();
+    let icon = Uuid::now_v7();
+    {
+        let mut conn = s.state.db_pool.get().expect("connection");
+        let now = chrono::Utc::now().naive_utc();
+        diesel::insert_into(world_actor_images::table)
+            .values((
+                world_actor_images::id.eq(Uuid::now_v7()),
+                world_actor_images::actor_id.eq(s.actor_id),
+                world_actor_images::role.eq("portrait"),
+                world_actor_images::asset_id.eq(portrait),
+                world_actor_images::created_by.eq(s.owner_id),
+                world_actor_images::updated_by.eq(s.owner_id),
+                world_actor_images::created_at.eq(now),
+                world_actor_images::updated_at.eq(now),
+            ))
+            .execute(&mut conn)
+            .expect("a portrait");
+        diesel::update(world_items::table.filter(world_items::id.eq(s.item_id)))
+            .set(world_items::icon_asset_id.eq(Some(icon)))
+            .execute(&mut conn)
+            .expect("an icon");
+    }
+
+    let code = share_of(
+        &s,
+        &[
+            ("scene", s.scene_id),
+            ("actor", s.actor_id),
+            ("item", s.item_id),
+        ],
+        "A collection with pictures",
+    )
+    .await;
+    let receipt = copy_shared_collection_to_world_impl(
+        &s.state,
+        s.recipient_id,
+        false,
+        code,
+        s.destination_world_id,
+    )
+    .await
+    .expect("copied");
+
+    let copied_actor = receipt
+        .created
+        .iter()
+        .find(|c| c.member_type == "actor")
+        .expect("an actor");
+    let copied_item = receipt
+        .created
+        .iter()
+        .find(|c| c.member_type == "item")
+        .expect("an item");
+
+    let mut conn = s.state.db_pool.get().expect("connection");
+    let carried: Vec<(String, Uuid)> = world_actor_images::table
+        .filter(world_actor_images::actor_id.eq(copied_actor.id))
+        .select((world_actor_images::role, world_actor_images::asset_id))
+        .load(&mut conn)
+        .expect("the copy's imagery");
+    assert_eq!(
+        carried,
+        vec![("portrait".to_string(), portrait)],
+        "the portrait must travel, pointing at the same stored object"
+    );
+
+    let carried_icon: Option<Uuid> = world_items::table
+        .filter(world_items::id.eq(copied_item.id))
+        .select(world_items::icon_asset_id)
+        .first(&mut conn)
+        .expect("the copy's icon");
+    assert_eq!(
+        carried_icon,
+        Some(icon),
+        "the icon must travel, pointing at the same stored object"
+    );
+
+    assert!(
+        !receipt
+            .fidelity_notes
+            .iter()
+            .any(|n| n.contains("icon") || n.contains("portrait")),
+        "nothing is lost any more, so nothing should be declared lost: {:?}",
+        receipt.fidelity_notes
+    );
+}
+
+/// FR-015a: a displaced actor lands in the destination world's active scene.
+#[tokio::test]
+async fn a_displaced_actor_lands_in_the_destination_worlds_active_scene() {
+    use crate::schema::{world_actors, worlds};
+
+    let s = source();
+    // A second scene, made active. The world already has one from `source()`,
+    // so "the active scene" and "whichever comes first" are different answers
+    // — which is the whole point of the requirement.
+    let active_scene = {
+        let mut conn = s.state.db_pool.get().expect("connection");
+        let scene = insert_test_scene_named(
+            &mut conn,
+            s.destination_world_id,
+            s.recipient_id,
+            "The scene they are looking at",
+        );
+        diesel::update(worlds::table.filter(worlds::id.eq(s.destination_world_id)))
+            .set(worlds::active_scene_id.eq(Some(scene)))
+            .execute(&mut conn)
+            .expect("launch it");
+        scene
+    };
+
+    // The actor's own scene is deliberately not in the collection.
+    let code = share_of(&s, &[("actor", s.actor_id)], "An actor with no place").await;
+    let receipt = copy_shared_collection_to_world_impl(
+        &s.state,
+        s.recipient_id,
+        false,
+        code,
+        s.destination_world_id,
+    )
+    .await
+    .expect("copied");
+
+    let copied = receipt
+        .created
+        .iter()
+        .find(|c| c.member_type == "actor")
+        .expect("an actor");
+
+    let mut conn = s.state.db_pool.get().expect("connection");
+    let landed: Uuid = world_actors::table
+        .filter(world_actors::id.eq(copied.id))
+        .select(world_actors::scene_id)
+        .first(&mut conn)
+        .expect("its scene");
+    assert_eq!(
+        landed, active_scene,
+        "FR-015a: a displaced actor lands in the world's current scene"
+    );
+    assert!(
+        receipt
+            .fidelity_notes
+            .iter()
+            .any(|n| n.contains("current scene")),
+        "the displacement must still be declared: {:?}",
+        receipt.fidelity_notes
+    );
+}
+
+/// FR-010a: an owner can find their collection's link again; a stranger cannot.
+#[tokio::test]
+async fn an_owner_can_retrieve_their_own_share_link_and_a_stranger_cannot() {
+    use crate::graphql::mutations_collection_shares::collection_share_link_impl;
+
+    let s = source();
+    let collection = create_collection_impl(
+        &s.state,
+        s.owner_id,
+        false,
+        CreateCollectionInput {
+            world_id: s.world_id,
+            name: "Findable again".to_string(),
+            description: None,
+        },
+    )
+    .await
+    .expect("created");
+
+    // Before sharing there is nothing to find, and that is not an error.
+    assert!(
+        collection_share_link_impl(&s.state, s.owner_id, false, collection.id)
+            .await
+            .expect("no error")
+            .is_none(),
+        "an unshared collection has no link"
+    );
+
+    add_collection_member_impl(
+        &s.state,
+        s.owner_id,
+        false,
+        AddCollectionMemberInput {
+            collection_id: collection.id,
+            member_type: "lore".to_string(),
+            member_id: s.lore_id,
+        },
+    )
+    .await
+    .expect("added");
+    let share = create_collection_share_link_impl(&s.state, s.owner_id, false, collection.id)
+        .await
+        .expect("shared");
+
+    let found = collection_share_link_impl(&s.state, s.owner_id, false, collection.id)
+        .await
+        .expect("no error")
+        .expect("the owner finds their own link");
+    assert_eq!(found.share_code, share.share_code);
+
+    // FR-020: nobody else learns anything, including that it exists.
+    let refused = collection_share_link_impl(&s.state, s.recipient_id, false, collection.id).await;
+    assert!(refused.is_err(), "a stranger must not read the link");
+
+    // And a revoked link stops being the active one.
+    crate::graphql::mutations_collection_shares::revoke_collection_share_link_impl(
+        &s.state, s.owner_id, false, share.id,
+    )
+    .await
+    .expect("revoked");
+    assert!(
+        collection_share_link_impl(&s.state, s.owner_id, false, collection.id)
+            .await
+            .expect("no error")
+            .is_none(),
+        "a revoked link is not an active link"
+    );
+}

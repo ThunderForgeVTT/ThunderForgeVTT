@@ -148,6 +148,56 @@ fn world_name_validation_rejects_xss_attempts() {
     }
 }
 
+/// Spec 026 FR-009f: the starter scene must not be named after its world.
+///
+/// It was, and the consequence only showed up two specs later: a Game
+/// Master sharing the scene their world came with published the world's
+/// name to anonymous viewers through the member's own title. The
+/// collection preview sends no world field and never was the leak. This
+/// asserts the name is independent of the world's, not merely that some
+/// name exists — the bug was a name that was perfectly valid and happened
+/// to be the wrong one.
+#[tokio::test]
+async fn the_starter_scene_is_not_named_after_its_world() {
+    use crate::schema::scenes;
+    use crate::test_support::*;
+    use diesel::prelude::*;
+
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().unwrap();
+    let user_id = insert_test_user(&mut conn);
+    drop(conn);
+
+    let world_name = format!("Ambleside {}", uuid::Uuid::now_v7());
+    let world = create_world_impl(
+        &state,
+        user_id,
+        GraphQLCreateWorldInput {
+            name: world_name.clone(),
+            description: None,
+            game_system_id: None,
+            interface_pack_id: None,
+        },
+    )
+    .await
+    .expect("world created");
+
+    let mut conn = state.db_pool.get().expect("connection");
+    let names: Vec<String> = scenes::table
+        .filter(scenes::world_id.eq(world.id))
+        .select(scenes::name)
+        .load(&mut conn)
+        .expect("its scenes");
+
+    assert_eq!(names.len(), 1, "one starter scene");
+    assert!(
+        !names[0].contains(&world_name),
+        "FR-009f: the starter scene must not carry the world's name, but it is called {:?}",
+        names[0]
+    );
+    assert_eq!(names[0], crate::graphql::STARTER_SCENE_NAME);
+}
+
 // Phase 1.4: Security test - world name length limits
 #[test]
 fn world_name_validation_enforces_length_limits() {
