@@ -270,6 +270,11 @@ confirm each is listed with what it disables and how to fix it.
 - **FR-002**: Setup MUST collect, in one pass: the first administrator's
   account, the operator identity, the contact for copyright notices, the
   support address, and mail delivery settings.
+- **FR-002a**: Setup MUST also take the first administrator through enrolling
+  a second factor, and MUST NOT complete without it. Spec 041 owns that flow
+  and its rule that an administrator always holds a second factor; this
+  requirement exists so that 040's own definition of "setup is finished"
+  agrees with it.
 - **FR-003**: Setup MUST distinguish what it requires from what it merely
   offers, and MUST complete without the optional parts.
 - **FR-004**: A required value that is blank or an obvious placeholder MUST be
