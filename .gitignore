@@ -196,3 +196,7 @@ graphify-out/
 
 # Spec 028 load runs: disposable artifacts, safe to delete wholesale
 apps/web/torture-results/
+
+### OS cruft ###
+.DS_Store
+Thumbs.db
