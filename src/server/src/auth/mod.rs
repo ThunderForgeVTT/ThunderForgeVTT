@@ -145,6 +145,12 @@ pub fn router() -> Router<AppState> {
             post(two_factor_setup_confirm),
         )
         .route("/authentication/2fa/verify", post(two_factor_verify))
+        // Spec 041 US2 (FR-010): a fresh set of recovery codes, which costs
+        // possession of the factor and invalidates every earlier code.
+        .route(
+            "/authentication/2fa/recovery-codes",
+            post(regenerate_recovery_codes),
+        )
         .route(
             "/authentication/admin/2fa/requirement",
             post(set_admin_two_factor_requirement),

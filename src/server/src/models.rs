@@ -7,15 +7,15 @@ use crate::schema::{
     lore_fidelity_notes, lore_pending_incoming_changes, lore_repository_connections,
     lore_sync_runs, oauth_authorization_sessions, oauth_link_challenges, oauth_providers,
     players_online, scene_state_fingerprints, scenes, shapes, tokens, user_oauth_accounts,
-    user_sessions, users, walls, world_abilities, world_ability_effects, world_ability_permissions,
-    world_ability_shares, world_actor_abilities, world_actor_claims, world_actor_images,
-    world_actor_inventory, world_actor_permissions, world_actor_shares, world_actor_system_data,
-    world_actors, world_authoring_tool_grants, world_chat_messages, world_collection_members,
-    world_collection_shares, world_collections, world_combatants, world_combats, world_events,
-    world_invites, world_item_abilities, world_item_effects, world_item_permissions,
-    world_item_prices, world_item_shares, world_items, world_lore_entries, world_lore_image_assets,
-    world_lore_links, world_lore_permissions, world_lore_revisions, world_lore_tags, world_members,
-    world_roll_records, world_tokens, worlds,
+    user_recovery_codes, user_sessions, users, walls, world_abilities, world_ability_effects,
+    world_ability_permissions, world_ability_shares, world_actor_abilities, world_actor_claims,
+    world_actor_images, world_actor_inventory, world_actor_permissions, world_actor_shares,
+    world_actor_system_data, world_actors, world_authoring_tool_grants, world_chat_messages,
+    world_collection_members, world_collection_shares, world_collections, world_combatants,
+    world_combats, world_events, world_invites, world_item_abilities, world_item_effects,
+    world_item_permissions, world_item_prices, world_item_shares, world_items, world_lore_entries,
+    world_lore_image_assets, world_lore_links, world_lore_permissions, world_lore_revisions,
+    world_lore_tags, world_members, world_roll_records, world_tokens, worlds,
 };
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -247,6 +247,33 @@ pub struct NewLoginTwoFactorChallenge {
     pub user_id: uuid::Uuid,
     pub expires_at: chrono::NaiveDateTime,
     pub consumed_at: Option<chrono::NaiveDateTime>,
+    pub created_at: chrono::NaiveDateTime,
+}
+
+/// Spec 041 US2 (FR-006 … FR-010): one of the ten codes that get somebody back
+/// in when their authenticator is gone.
+///
+/// `code_hash` is an Argon2id PHC string and there is no column holding the
+/// code — not raw, not encrypted, not a prefix. FR-009 is true because there
+/// is nothing left to display.
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = user_recovery_codes)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct UserRecoveryCode {
+    pub id: uuid::Uuid,
+    pub user_id: uuid::Uuid,
+    pub code_hash: String,
+    pub used_at: Option<chrono::NaiveDateTime>,
+    pub created_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = user_recovery_codes)]
+pub struct NewUserRecoveryCode {
+    pub id: uuid::Uuid,
+    pub user_id: uuid::Uuid,
+    pub code_hash: String,
+    pub used_at: Option<chrono::NaiveDateTime>,
     pub created_at: chrono::NaiveDateTime,
 }
 

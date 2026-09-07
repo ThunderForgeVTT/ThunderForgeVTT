@@ -3,6 +3,14 @@
 
 use super::*;
 
+/// Spec 041 US2 (FR-006 … FR-011): the recovery codes issued at confirmation
+/// and spent at the challenge. First tenant of the `two_factor/` module
+/// directory research R11 calls for; the rest of this file follows it there as
+/// the remaining stories land.
+#[path = "two_factor/recovery.rs"]
+pub(crate) mod recovery;
+pub(crate) use recovery::*;
+
 pub(crate) async fn two_factor_setup_start(
     State(state): State<AppState>,
     Json(request): Json<TwoFactorSetupStartRequest>,
@@ -124,7 +132,7 @@ pub(crate) async fn two_factor_setup_start(
 pub(crate) async fn two_factor_setup_confirm(
     State(state): State<AppState>,
     Json(request): Json<TwoFactorSetupConfirmRequest>,
-) -> (StatusCode, Json<OAuthResponse>) {
+) -> (StatusCode, Json<TwoFactorSetupConfirmResponse>) {
     let username = request.username.clone();
     let username_for_query = username.clone();
     let mut conn = state.db_pool.get().expect("Failed to get DB connection");
@@ -145,7 +153,7 @@ pub(crate) async fn two_factor_setup_confirm(
     .expect("Failed to query DB");
 
     let Some((user_id, password_hash, secret_encrypted)) = user else {
-        return error_response(StatusCode::UNAUTHORIZED, "failure", "Invalid credentials");
+        return confirm_error(StatusCode::UNAUTHORIZED, "failure", "Invalid credentials");
     };
 
     let parsed_hash = PasswordHash::new(&password_hash).expect("Invalid hash in db");
@@ -153,14 +161,14 @@ pub(crate) async fn two_factor_setup_confirm(
         .verify_password(request.password.as_bytes(), &parsed_hash)
         .is_err()
     {
-        return error_response(StatusCode::UNAUTHORIZED, "failure", "Invalid credentials");
+        return confirm_error(StatusCode::UNAUTHORIZED, "failure", "Invalid credentials");
     }
 
     // No enrolment in progress. Deliberately the same answer whether the
     // account has a live second factor or none at all: confirming is about the
     // enrolment that was started, and there was not one.
     let Some(secret_encrypted) = secret_encrypted else {
-        return error_response(
+        return confirm_error(
             StatusCode::BAD_REQUEST,
             "two_factor_not_setup",
             "Start 2FA setup first",
@@ -170,7 +178,7 @@ pub(crate) async fn two_factor_setup_confirm(
     let encryption_key = match encryption_key_from_config_secret(&state.config.secret) {
         Ok(key) => key,
         Err(msg) => {
-            return error_response(
+            return confirm_error(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "two_factor_error",
                 msg.as_str(),
@@ -181,7 +189,7 @@ pub(crate) async fn two_factor_setup_confirm(
     let secret = match decrypt_secret(&secret_encrypted, &encryption_key) {
         Ok(value) => value,
         Err(msg) => {
-            return error_response(
+            return confirm_error(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "two_factor_error",
                 msg.as_str(),
@@ -192,23 +200,46 @@ pub(crate) async fn two_factor_setup_confirm(
     let now = Utc::now().naive_utc();
     match verify_totp_code(&username, &secret, &request.code) {
         Ok(true) => {
+            // Spec 041 FR-006: confirmation is where the recovery codes are
+            // issued. Hashing happens before the transaction opens — ten Argon2
+            // hashes is not work to hold a row lock through — and the plaintext
+            // goes into the response below and nowhere else.
+            let (codes, rows) = match generate_recovery_code_rows(user_id) {
+                Ok(pair) => pair,
+                Err(msg) => {
+                    return confirm_error(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "two_factor_error",
+                        msg.as_str(),
+                    );
+                }
+            };
+
             let mut conn = state.db_pool.get().expect("Failed to get DB connection");
             tokio::task::spawn_blocking(move || {
-                // The code proved the pending secret works, so it becomes the
-                // live one and the pending slot is emptied. Until this
-                // statement runs, whatever the account had before is still
-                // what it has.
-                diesel::update(users::table.filter(users::id.eq(user_id)))
-                    .set((
-                        users::two_factor_secret_encrypted
-                            .eq(users::two_factor_pending_secret_encrypted.nullable()),
-                        users::two_factor_enabled.eq(true),
-                        users::two_factor_confirmed_at.eq(Some(now)),
-                        users::two_factor_pending_secret_encrypted.eq::<Option<String>>(None),
-                        users::two_factor_pending_started_at
-                            .eq::<Option<chrono::NaiveDateTime>>(None),
-                    ))
-                    .execute(&mut conn)
+                conn.transaction::<_, diesel::result::Error, _>(|conn| {
+                    // The code proved the pending secret works, so it becomes
+                    // the live one and the pending slot is emptied. Until this
+                    // statement runs, whatever the account had before is still
+                    // what it has.
+                    diesel::update(users::table.filter(users::id.eq(user_id)))
+                        .set((
+                            users::two_factor_secret_encrypted
+                                .eq(users::two_factor_pending_secret_encrypted.nullable()),
+                            users::two_factor_enabled.eq(true),
+                            users::two_factor_confirmed_at.eq(Some(now)),
+                            users::two_factor_pending_secret_encrypted.eq::<Option<String>>(None),
+                            users::two_factor_pending_started_at
+                                .eq::<Option<chrono::NaiveDateTime>>(None),
+                        ))
+                        .execute(conn)?;
+
+                    // Same transaction as the promotion: an account is never
+                    // enabled without a way back in, and never handed codes for
+                    // an enrolment that did not take. Re-confirming replaces
+                    // the previous set outright (FR-010).
+                    replace_recovery_codes_sync(conn, user_id, &rows)
+                })
             })
             .await
             .expect("Failed to spawn blocking task")
@@ -216,20 +247,21 @@ pub(crate) async fn two_factor_setup_confirm(
 
             (
                 StatusCode::OK,
-                Json(OAuthResponse {
+                Json(TwoFactorSetupConfirmResponse {
                     status: "success",
                     message: "2FA enabled".to_string(),
-                    challenge_id: None,
-                    login_two_factor_challenge_id: None,
+                    confirmed_at: Some(now),
+                    recovery_codes: Some(codes),
+                    recovery_codes_notice: Some(RECOVERY_CODES_NOTICE.to_string()),
                 }),
             )
         }
-        Ok(false) => error_response(
+        Ok(false) => confirm_error(
             StatusCode::UNAUTHORIZED,
             "two_factor_invalid",
             "Invalid 2FA code",
         ),
-        Err(msg) => error_response(
+        Err(msg) => confirm_error(
             StatusCode::INTERNAL_SERVER_ERROR,
             "two_factor_error",
             msg.as_str(),
@@ -241,7 +273,7 @@ pub(crate) async fn two_factor_verify(
     cookies: Cookies,
     State(state): State<AppState>,
     Json(request): Json<TwoFactorVerifyRequest>,
-) -> (StatusCode, Json<OAuthResponse>) {
+) -> (StatusCode, Json<TwoFactorVerifyResponse>) {
     let now = Utc::now().naive_utc();
     let mut conn = state.db_pool.get().expect("Failed to get DB connection");
 
@@ -257,7 +289,7 @@ pub(crate) async fn two_factor_verify(
     .expect("Failed to query 2FA challenge");
 
     let Some(challenge) = challenge else {
-        return error_response(
+        return verify_error(
             StatusCode::BAD_REQUEST,
             "two_factor_challenge_invalid",
             "2FA challenge is invalid",
@@ -265,7 +297,7 @@ pub(crate) async fn two_factor_verify(
     };
 
     if challenge.consumed_at.is_some() || challenge.expires_at <= now {
-        return error_response(
+        return verify_error(
             StatusCode::BAD_REQUEST,
             "two_factor_challenge_invalid",
             "2FA challenge is expired or already used",
@@ -273,7 +305,34 @@ pub(crate) async fn two_factor_verify(
     }
 
     let user_id = challenge.user_id;
-    match verify_two_factor_for_user(&state, user_id, &request.code).await {
+
+    // FR-007: a challenge takes an authenticator code **or** a recovery code.
+    // Both together is refused before either is evaluated — a client sending
+    // both is asking for two chances counted as one attempt — and neither is
+    // refused the same way a wrong code is, so a probe learns nothing about
+    // whether the account has recovery codes at all (FR-018).
+    let held = match (
+        request.code.as_deref().filter(|v| !v.trim().is_empty()),
+        request
+            .recovery_code
+            .as_deref()
+            .filter(|v| !v.trim().is_empty()),
+    ) {
+        (Some(_), Some(_)) => {
+            return verify_error(
+                StatusCode::BAD_REQUEST,
+                "two_factor_invalid",
+                "Invalid 2FA code",
+            );
+        }
+        (None, None) => Ok(false),
+        (Some(code), None) => verify_two_factor_for_user(&state, user_id, code).await,
+        // FR-008: spending is the conditional write inside this call, so a
+        // code that two requests present at once is spent by exactly one.
+        (None, Some(recovery_code)) => consume_recovery_code(&state, user_id, recovery_code).await,
+    };
+
+    match held {
         Ok(true) => {
             let mut conn = state.db_pool.get().expect("Failed to get DB connection");
             tokio::task::spawn_blocking(move || {
@@ -289,29 +348,35 @@ pub(crate) async fn two_factor_verify(
             .expect("Failed to consume 2FA challenge");
 
             if let Err(msg) = issue_session_cookie(&state, &cookies, user_id).await {
-                return error_response(
+                return verify_error(
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "session_error",
                     msg.as_str(),
                 );
             }
 
+            // FR-011: how many codes are left, said at the sign-in rather than
+            // saved for a settings page the person may never open. A failure
+            // to count is not a reason to fail a sign-in that has already
+            // succeeded — the fields simply go unsaid.
+            let remaining = count_unspent_recovery_codes(&state, user_id).await.ok();
+
             (
                 StatusCode::OK,
-                Json(OAuthResponse {
+                Json(TwoFactorVerifyResponse {
                     status: "success",
                     message: "2FA verification succeeded".to_string(),
-                    challenge_id: None,
-                    login_two_factor_challenge_id: None,
+                    recovery_codes_remaining: remaining,
+                    recovery_codes_low: remaining.map(recovery_codes_low),
                 }),
             )
         }
-        Ok(false) => error_response(
+        Ok(false) => verify_error(
             StatusCode::UNAUTHORIZED,
             "two_factor_invalid",
             "Invalid 2FA code",
         ),
-        Err(msg) => error_response(
+        Err(msg) => verify_error(
             StatusCode::INTERNAL_SERVER_ERROR,
             "two_factor_error",
             msg.as_str(),
@@ -509,4 +574,42 @@ pub(crate) async fn verify_two_factor_for_user(
     let encryption_key = encryption_key_from_config_secret(&state.config.secret)?;
     let secret = decrypt_secret(&secret_encrypted, &encryption_key)?;
     verify_totp_code(&username, &secret, code)
+}
+
+/// Confirmation's refusals. Same `status`/`message` pair the shared
+/// `error_response` produces, in the shape that can also carry recovery codes
+/// on the one path that has them.
+fn confirm_error(
+    code: StatusCode,
+    status: &'static str,
+    message: &str,
+) -> (StatusCode, Json<TwoFactorSetupConfirmResponse>) {
+    (
+        code,
+        Json(TwoFactorSetupConfirmResponse {
+            status,
+            message: message.to_string(),
+            confirmed_at: None,
+            recovery_codes: None,
+            recovery_codes_notice: None,
+        }),
+    )
+}
+
+/// The challenge's refusals, in the shape that can also carry the
+/// recovery-code count on the one path that has earned it.
+fn verify_error(
+    code: StatusCode,
+    status: &'static str,
+    message: &str,
+) -> (StatusCode, Json<TwoFactorVerifyResponse>) {
+    (
+        code,
+        Json(TwoFactorVerifyResponse {
+            status,
+            message: message.to_string(),
+            recovery_codes_remaining: None,
+            recovery_codes_low: None,
+        }),
+    )
 }

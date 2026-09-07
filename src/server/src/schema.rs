@@ -548,6 +548,16 @@ diesel::table! {
 }
 
 diesel::table! {
+    user_recovery_codes (id) {
+        id -> Uuid,
+        user_id -> Uuid,
+        code_hash -> Text,
+        used_at -> Nullable<Timestamp>,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     user_sessions (id) {
         id -> Uuid,
         user_id -> Uuid,
@@ -1157,6 +1167,7 @@ diesel::joinable!(tokens -> scenes (scene_id));
 diesel::joinable!(tokens -> users (owner_user_id));
 diesel::joinable!(user_oauth_accounts -> oauth_providers (provider_id));
 diesel::joinable!(user_oauth_accounts -> users (user_id));
+diesel::joinable!(user_recovery_codes -> users (user_id));
 diesel::joinable!(user_sessions -> users (user_id));
 diesel::joinable!(walls -> scenes (scene_id));
 diesel::joinable!(world_abilities -> worlds (world_id));
@@ -1259,6 +1270,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     token_resource_disclosure,
     tokens,
     user_oauth_accounts,
+    user_recovery_codes,
     user_sessions,
     users,
     walls,

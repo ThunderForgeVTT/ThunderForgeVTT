@@ -61,10 +61,79 @@ pub(crate) struct TwoFactorSetupConfirmRequest {
     pub(crate) code: String,
 }
 
+/// Confirmation's reply. `status`/`message` are what the previous
+/// `OAuthResponse` shape said and are unchanged, so an existing client keeps
+/// working; the recovery fields are added because spec 041 FR-006 makes
+/// confirmation the moment the codes are issued, and this body is the only
+/// place they will ever exist outside a hash.
+#[derive(Debug, Serialize)]
+pub(crate) struct TwoFactorSetupConfirmResponse {
+    pub(crate) status: &'static str,
+    pub(crate) message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) confirmed_at: Option<chrono::NaiveDateTime>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) recovery_codes: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) recovery_codes_notice: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 pub(crate) struct TwoFactorVerifyRequest {
     pub(crate) challenge_id: uuid::Uuid,
-    pub(crate) code: String,
+    /// Spec 041 US2 (FR-007): a challenge takes an authenticator code **or** a
+    /// recovery code, and the handler refuses a request carrying both before
+    /// it evaluates either — a client sending both is asking for two chances
+    /// counted as one attempt.
+    #[serde(default)]
+    pub(crate) code: Option<String>,
+    #[serde(default)]
+    pub(crate) recovery_code: Option<String>,
+}
+
+/// The login challenge's reply. `status`/`message` are unchanged from the
+/// `OAuthResponse` it used to return; the two recovery fields are added
+/// because FR-011 says a person running low is told **at the moment it
+/// matters** — the sign-in they just completed — rather than only if they
+/// happen to visit a settings page.
+///
+/// A refusal carries neither field. How many codes an account has left is not
+/// something a failed attempt gets to learn (FR-018).
+#[derive(Debug, Serialize)]
+pub(crate) struct TwoFactorVerifyResponse {
+    pub(crate) status: &'static str,
+    pub(crate) message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) recovery_codes_remaining: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) recovery_codes_low: Option<bool>,
+}
+
+/// Spec 041 US2 (FR-010): `POST /authentication/2fa/recovery-codes`. Exactly
+/// one of the two fields, for the same reason the challenge takes one.
+#[derive(Debug, Deserialize)]
+pub(crate) struct RecoveryCodesRegenerateRequest {
+    #[serde(default)]
+    pub(crate) code: Option<String>,
+    #[serde(default)]
+    pub(crate) recovery_code: Option<String>,
+}
+
+/// The only shape that ever carries recovery-code plaintext, and it carries it
+/// exactly once — from the response that issues a set. Nothing reads these
+/// values back out of the server afterwards, because nothing can (FR-009).
+#[derive(Debug, Serialize)]
+pub(crate) struct RecoveryCodesResponse {
+    pub(crate) status: &'static str,
+    pub(crate) message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) recovery_codes: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) recovery_codes_notice: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) recovery_codes_remaining: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) recovery_codes_low: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
