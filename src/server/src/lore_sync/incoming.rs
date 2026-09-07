@@ -239,13 +239,20 @@ impl WithheldByModeration {
             .load(&mut conn)
             .map_err(IncomingError::Database)?;
 
-        let visible = crate::moderation::filter_visible(state, "lore_entry", ids.clone(), |id| *id)
-            .await
-            .map_err(|_| {
-                IncomingError::Database(diesel::result::Error::QueryBuilderError(
-                    "moderation filter failed".into(),
-                ))
-            })?;
+        // See `plan.rs`: the moderation tables key on `world_lore_entry`, and
+        // this passed the link-target vocabulary's `lore_entry` instead.
+        let visible = crate::moderation::filter_visible(
+            state,
+            crate::graphql::types::ModerationEntityType::WorldLoreEntry.as_db_str(),
+            ids.clone(),
+            |id| *id,
+        )
+        .await
+        .map_err(|_| {
+            IncomingError::Database(diesel::result::Error::QueryBuilderError(
+                "moderation filter failed".into(),
+            ))
+        })?;
 
         let visible: HashSet<Uuid> = visible.into_iter().collect();
         Ok(Self(

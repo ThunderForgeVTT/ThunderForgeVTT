@@ -28,6 +28,7 @@ use diesel::prelude::*;
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::graphql::types::ModerationEntityType;
 use crate::lore_sync::document::{self, DocumentHeader, LinkTarget, UnresolvableKind};
 use crate::lore_sync::paths::{self, AssignedPath, EntryNode};
 use crate::moderation;
@@ -106,9 +107,21 @@ pub async fn plan_world(state: &AppState, world_id: Uuid) -> Result<Plan, String
     // FR-015. An entry disabled by a takedown is absent from the repository,
     // and its absence must not stop the rest of the world synchronising —
     // which is why this filters rather than failing.
-    let visible = moderation::filter_visible(state, "lore_entry", rows, |r| r.0)
-        .await
-        .map_err(|_| "Failed to apply moderation filter".to_string())?;
+    // `world_lore_entry` — the value `content_moderation_actions` actually
+    // holds, via `ModerationEntityType::as_db_str`, rather than the
+    // `markdown::links` target kind of the same subject. This said
+    // "lore_entry" until 2026-09-07, which matched no row, so
+    // `effective_status` answered `None` for everything and a disabled entry
+    // went to the mirror exactly like a visible one. FR-015 was not being
+    // enforced at all.
+    let visible = moderation::filter_visible(
+        state,
+        ModerationEntityType::WorldLoreEntry.as_db_str(),
+        rows,
+        |r| r.0,
+    )
+    .await
+    .map_err(|_| "Failed to apply moderation filter".to_string())?;
 
     // What a `[[target]]` may resolve to besides lore. Loaded once rather than
     // queried per link: a world's own content is small (the same reasoning

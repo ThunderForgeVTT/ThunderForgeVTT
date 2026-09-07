@@ -46,7 +46,17 @@ fn disable_entry(conn: &mut PgConnection, world_id: Uuid, entry_id: Uuid) {
             content_moderation_actions::id.eq(Uuid::now_v7()),
             content_moderation_actions::case_id.eq(Uuid::now_v7()),
             content_moderation_actions::action_type.eq("content_disabled"),
-            content_moderation_actions::entity_type.eq("lore_entry"),
+            // What a real takedown writes — `ModerationEntityType::WorldLoreEntry
+            // .as_db_str()`, the value `submit_takedown_notice` stores and
+            // `effective_status` looks up.
+            //
+            // This helper said "lore_entry" until 2026-09-07, which is what
+            // let the whole family of tests below pass against a filter that
+            // did nothing: production asked for "lore_entry" too, so the
+            // fixture and the defect agreed with each other and the disabled
+            // entry was found by neither the filter nor the test.
+            content_moderation_actions::entity_type
+                .eq(crate::graphql::types::ModerationEntityType::WorldLoreEntry.as_db_str()),
             content_moderation_actions::entity_id.eq(entry_id),
             content_moderation_actions::world_id.eq(world_id),
             content_moderation_actions::claimant_name.eq("A Claimant"),
