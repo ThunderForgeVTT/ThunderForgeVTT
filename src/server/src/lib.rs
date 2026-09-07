@@ -47,6 +47,8 @@ pub mod models;
 pub mod moderation;
 pub mod network;
 pub mod peer_signaling;
+/// Spec 036: which client of an account is at the table.
+pub mod play_field;
 pub mod pubsub;
 pub mod repo_host;
 pub mod scene_fingerprint;
