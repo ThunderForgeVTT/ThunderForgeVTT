@@ -79,6 +79,7 @@ This directory contains architecture decisions for ThunderForgeVTT, captured usi
 | [20260905-069](./20260905-069-collection_share_dmca_repository_determination.md) | Accepted | A Link-Shared Collection Is Not a Centralized Public Repository — With One Accepted Risk |
 | [20260905-070](./20260905-070-anonymous_collection_read_path.md) | Accepted | A Collection's Preview Is Read Without an Account |
 | [20260906-071](./20260906-071-singleton_shares_read_without_an_account.md) | Accepted | A Shared Ability, Item or Actor Is Read Without an Account |
+| [20260906-072](./20260906-072-instance_admission_precedes_provisioning.md) | Accepted | The Instance Decides Admission Before ADR-042 Decides Provisioning |
 
 > **Note (2026-08-19):** ADRs 020–024 originally collided with an unrelated "pack system" batch that reused the same day-020 through day-024 numbers. The world-domain ADRs (020–024 above) were committed first and are documented here; the colliding pack-system ADRs were renumbered to 026–030. See `docs/SYSTEM_HOOKS_API_GUIDE.md` and ADR-036's "Related Decisions" for the corrected references.
 

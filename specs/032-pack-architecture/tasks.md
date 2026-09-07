@@ -421,6 +421,7 @@ What is deferred here, and where it lives:
 | Wall passability, torch placement, left-click behaviour | 003 T007–T009 |
 | The canvas-authoring e2e run by hand | 002 T040 |
 | Gathering ten mixed artifacts and sharing them, undocumented, inside three minutes (SC-001); and a recipient stating from the preview alone what a copy will add (SC-009) | 026 T055 |
+| A closed instance refusing a real OAuth handshake with an unmatched verified email (quickstart Scenario A step 5) — the harness has no provider to stub | 035 T056 |
 
 Nothing mechanical is deferred with them. Every one of these specs' automated
 checks passes now, and the e2e suite covers what a suite can.

@@ -4,7 +4,14 @@
 
 **Created**: 2026-09-01
 
-**Status**: Draft
+**Status**: US1 and US2 implemented (2026-09-06) — the instance access policy
+and instance invitations are built, tested and running. **US3, US4 and US5 are
+specified but unbuilt**: no request-access intake, no delivery destination, no
+retention job. FR-021 through FR-038 describe work that does not exist yet.
+
+One manual pass is outstanding and registered rather than dropped: a real OAuth
+handshake against a closed instance (quickstart Scenario A step 5, tasks T056),
+which the e2e harness cannot stub.
 
 **Input**: User description: "the whole software needs an allow-signups and invite system for the entire app so I can run a demo in prod eventually. And a request-access-to-webhook option allowing us to host it and accept interest kinda deal — but this feature is more far out."
 
@@ -66,6 +73,17 @@ its first administrator — a closed default must not brick a fresh install), an
 sign-in by someone who **already has an account**, which is authentication, not
 signup.
 
+## Clarifications
+
+### Session 2026-09-06
+
+- Q: When this ships to an instance already running with real users, what access policy should the migration give it? → A: Open — preserve current behaviour; the migration distinguishes a new instance from an existing one by whether any users exist.
+- Q: What should a brand-new instance default to before the operator has configured anything? → A: Invite-only — bootstrap is exempt, and the operator can issue a working invitation without changing a setting first.
+- Q: Someone who already has an account opens an instance invitation link. What should happen? → A: Sign them in and consume nothing — the already-a-user check runs before any use is burned.
+- Q: Should invitation redemption be rate limited, the way share-link reads are? → A: Yes — reuse the existing share-code limiter (`graphql/share_rate_limit.rs`) rather than adding a second one.
+- Q: On an invite-only instance, what should a signed-out visitor with no invitation see? → A: Sign-in only, plus a line stating the instance is invite-only.
+
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - An operator closes the instance and it is actually closed (Priority: P1)
@@ -91,8 +109,9 @@ recorded for the operator.
 **Acceptance Scenarios**:
 
 1. **Given** an instance set to closed, **When** a visitor loads the
-   application, **Then** no sign-up affordance is offered and the sign-in path
-   remains available.
+   application, **Then** no sign-up affordance is offered, the sign-in path
+   remains available, and the surface states that the instance is not accepting
+   new accounts (FR-003a).
 2. **Given** an instance set to closed, **When** a visitor submits a local
    registration, **Then** no account is created and the response does not
    reveal whether the submitted identifier already belongs to a user.
@@ -349,6 +368,14 @@ throttled while a legitimate submission from elsewhere still succeeds.
   that the sign-in surface can present only the routes that will actually work.
   It MUST NOT expose anything else about the instance's users or invitations to
   an unauthenticated caller.
+- **FR-003a**: On an **invite-only** or **closed** instance the sign-in surface
+  MUST offer no registration affordance and MUST state that the instance is
+  invite-only or not accepting new accounts (clarified 2026-09-06). Saying so
+  is required, not optional: a page that silently omits sign-up is
+  indistinguishable from a broken one, and it leaves a person holding an
+  unclicked invitation with no way to tell the instance is working as intended.
+  This states the policy only — never whether any particular invitation or
+  account exists.
 - **FR-004**: Every change of the access policy MUST be recorded with the
   administrator who made it, the previous state, the new state, and the time.
 
@@ -384,8 +411,19 @@ throttled while a legitimate submission from elsewhere still succeeds.
 - **FR-012**: Every refused admission MUST be recorded for administrator review
   with the time, the route attempted, the provider where applicable, and the
   policy state at the time — and MUST NOT record submitted credentials.
-- **FR-013**: A newly created instance MUST default to a policy that does not
-  admit strangers, and this default MUST NOT prevent FR-010.
+- **FR-013**: A newly created instance MUST default to **invite-only**
+  (clarified 2026-09-06). It admits no stranger who lacks an invitation, and it
+  MUST NOT prevent FR-010. Invite-only rather than closed so that an operator
+  can issue a working invitation as their first act: a closed instance refuses
+  even a valid invitation (FR-001), which would make issuing one on a fresh
+  instance fail confusingly.
+- **FR-013a**: An instance that **already has users** when this feature is
+  first installed MUST be placed in **open**, preserving the admission
+  behaviour it had before the upgrade. FR-013's default applies to a new
+  instance only. An upgrade MUST NOT silently stop an operating instance from
+  admitting people; closing it is an explicit operator act (clarified
+  2026-09-06). The two cases are distinguished by whether any user exists at
+  migration time.
 
 #### Instance invitations
 
@@ -408,9 +446,24 @@ throttled while a legitimate submission from elsewhere still succeeds.
   strength as the existing world access links, and MUST NOT be recoverable from
   the application after issuance except to the administrators entitled to list
   them.
+- **FR-019a**: Redemption attempts MUST be rate limited per source, before the
+  code is looked up, reusing the limiter that already guards the anonymous
+  share reads (clarified 2026-09-06). An unguessable code is unguessable only
+  while the number of guesses is bounded, and unlike the account requirement
+  that once bounded them, a redemption endpoint on an invite-only instance is
+  reachable by anyone. The refusal for being throttled MUST be distinguishable
+  from FR-011's uniform invalid-invitation refusal, so that a legitimate
+  recipient retrying is not told their invitation is bad.
 - **FR-020**: Instance invitations MUST remain governed solely by their own
   revocation, expiry, and use count; a change of instance access policy MUST
   NOT invalidate or extend an already-issued invitation.
+- **FR-020a**: When an invitation is presented by someone who **already has an
+  account**, the invitation MUST NOT be consumed and MUST remain available to
+  its intended recipient; the person is simply authenticated as themselves
+  (clarified 2026-09-06). The already-a-user check MUST run **before** any use
+  is consumed, so that an operator testing a link they issued does not destroy
+  it. This restates, at instance scope, the defect spec 027 fixed for world
+  invites, where a second click burned a use of the Game Master's cap.
 
 #### Request access
 
@@ -556,9 +609,9 @@ throttled while a legitimate submission from elsewhere still succeeds.
   operator contacts an approved person themselves using the address supplied.
 - The default access policy for a **new** instance is invite-only rather than
   closed, so that first-run bootstrap and subsequent operator-issued
-  invitations both work without a first configuration step. **Operator
-  confirmation needed** — closed is the more conservative choice if the
-  operator prefers to open the gate explicitly.
+  invitations both work without a first configuration step. **Confirmed
+  2026-09-06** — see Clarifications. An instance that already has users when
+  the feature installs is placed in open instead (FR-013a).
 - A default retention period for handled access requests is assumed at 90 days.
   **Operator confirmation needed** — the number should be whatever the operator
   is willing to state publicly on the form.
