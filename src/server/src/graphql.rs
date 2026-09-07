@@ -68,6 +68,7 @@ pub use queries::{
 pub mod anonymous;
 pub mod mutations_collection_shares;
 pub mod mutations_collections;
+pub mod mutations_instance_access;
 pub mod mutations_invites;
 pub mod permissioned_entity_resolvers;
 pub mod share_codes;
@@ -258,6 +259,7 @@ pub struct QueryRoot(
     ActorQuery,
     ActorPermissionQuery,
     ActorShareQuery,
+    mutations_instance_access::InstanceAccessQuery,
     LoreQuery,
     LorePermissionQuery,
     // Spec 034: the world's repository connection, its runs, and whether this
@@ -316,6 +318,7 @@ pub struct MutationRoot(
     ActorMutation,
     ActorPermissionMutation,
     ActorShareMutation,
+    mutations_instance_access::InstanceAccessMutation,
     mutations_actor_images::ActorImageMutation,
     LoreMutation,
     LorePermissionMutation,

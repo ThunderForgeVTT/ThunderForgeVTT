@@ -11,7 +11,7 @@ import { RuneDivider } from "@/components/ui/rune-divider/RuneDivider";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { AuthLayout } from "@/layouts/auth-layout/AuthLayout";
 import { useAuth } from "@/hooks/useAuth";
-import type { SetupProvider } from "@/types/auth";
+import type { InstanceAccessPolicy, SetupProvider } from "@/types/auth";
 import { cn } from "@/lib/utils";
 
 type LoginStep = "credentials" | "twoFactor";
@@ -69,6 +69,11 @@ export function LoginView() {
   const [status, setStatus] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [providers, setProviders] = useState<SetupProvider[]>([]);
+  // Spec 035 (FR-003a). Hiding the sign-up link is not what closes the
+  // instance — the server refuses independently (ADR-072). This exists so the
+  // page can be honest about why the link is gone.
+  const [accessPolicy, setAccessPolicy] =
+    useState<InstanceAccessPolicy>("open");
   const [touched, setTouched] = useState<Partial<Record<LoginField, boolean>>>(
     {},
   );
@@ -83,6 +88,7 @@ export function LoginView() {
       .then((response) => {
         if (active) {
           setProviders(response.configured_oauth_providers);
+          setAccessPolicy(response.access_policy);
         }
       })
       .catch(() => {
@@ -282,12 +288,27 @@ export function LoginView() {
       aside={
         <Card className="p-5">
           <div className="grid gap-2">
-            <Link
-              to={`/register${location.search}`}
-              className="font-medium text-primary hover:underline"
-            >
-              Create a local account
-            </Link>
+            {accessPolicy === "open" ? (
+              <Link
+                to={`/register${location.search}`}
+                className="font-medium text-primary hover:underline"
+              >
+                Create a local account
+              </Link>
+            ) : (
+              // FR-003a: say so, rather than silently omitting the link. A
+              // page that just drops sign-up is indistinguishable from a
+              // broken one, and it leaves someone holding an unclicked
+              // invitation with no way to tell the instance is working.
+              <p
+                className="text-sm text-muted-foreground"
+                data-testid="instance-not-open-notice"
+              >
+                {accessPolicy === "invite_only"
+                  ? "This instance is invite only. Open the invitation link you were sent to create an account."
+                  : "This instance is not accepting new accounts."}
+              </p>
+            )}
             <Link
               to="/welcome"
               className="font-medium text-primary hover:underline"

@@ -425,3 +425,46 @@ pub fn count_content_permissions(
 
     (actors, items, lore, abilities)
 }
+
+/// Spec 035: put the instance into a known admission policy.
+///
+/// Tests must set this explicitly rather than relying on the migration's seed,
+/// because the seed is deliberately conditional (FR-013/FR-013a) — a shared
+/// test database has users in it, so it seeds `open`, and a test that assumed
+/// otherwise would pass for the wrong reason.
+pub fn set_instance_access_policy(conn: &mut PgConnection, policy: &str) {
+    use crate::schema::instance_access_settings as s;
+    diesel::insert_into(s::table)
+        .values((s::id.eq(1), s::access_policy.eq(policy)))
+        .on_conflict(s::id)
+        .do_update()
+        .set(s::access_policy.eq(policy))
+        .execute(conn)
+        .expect("Failed to set the instance access policy");
+}
+
+/// Spec 035: an instance invitation, with the caller choosing the shape that
+/// matters to their test.
+pub fn insert_test_instance_invitation(
+    conn: &mut PgConnection,
+    created_by: Uuid,
+    max_uses: i32,
+    expires_at: Option<chrono::NaiveDateTime>,
+    revoked: bool,
+) -> (Uuid, String) {
+    use crate::schema::instance_invitations as i;
+    let id = Uuid::now_v7();
+    let code = crate::graphql::share_codes::generate_link_code();
+    diesel::insert_into(i::table)
+        .values((
+            i::id.eq(id),
+            i::invite_code.eq(&code),
+            i::max_uses.eq(max_uses),
+            i::expires_at.eq(expires_at),
+            i::revoked.eq(revoked),
+            i::created_by.eq(created_by),
+        ))
+        .execute(conn)
+        .expect("Failed to insert the test instance invitation");
+    (id, code)
+}

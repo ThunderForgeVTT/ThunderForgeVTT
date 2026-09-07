@@ -29,6 +29,29 @@ INSERT INTO admin_bootstrap_setup (id, setup_completed_at, admin_code_hash, admi
 VALUES (1, now(), NULL, NULL, now(), now())
 ON CONFLICT (id) DO UPDATE SET setup_completed_at = now();
 
+-- Platform administrator, for specs that exercise the /admin surface.
+--
+-- Added by spec 035: this seed had no `is_admin = true` user at all, and the
+-- `admin / admin` account lives in `demo_accounts.sql`, which the e2e harness
+-- does not apply. A spec needing an administrator therefore had none, and the
+-- symptom was a 401 from `/api/graphql` on a page that looked signed in.
+--
+-- Same password as the demo user below, so there is one e2e credential to
+-- remember rather than two.
+INSERT INTO users (id, username, password_hash, email, created_at, updated_at, two_factor_enabled, two_factor_admin_required, is_admin)
+VALUES (
+  '00000000-0000-0000-0000-0000000000e1',
+  'e2eadmin',
+  '$argon2id$v=19$m=19456,t=2,p=1$niEwA63DF+T39rY601qniQ$r0q7cdblJI4nH9jsOohucWwiYaWLtXKAqDxvq62Bj+s',
+  'e2eadmin@example.test',
+  now(),
+  now(),
+  false,
+  false,
+  true
+)
+ON CONFLICT (id) DO UPDATE SET is_admin = true;
+
 -- Demo user. Password is "Sup3r-Secret-Passphrase!" (matches the
 -- convention used by apps/web/e2e/fixtures/helpers.ts's freshCredentials),
 -- hashed with the same Argon2 params as auth::hash_password.

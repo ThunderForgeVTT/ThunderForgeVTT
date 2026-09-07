@@ -61,13 +61,29 @@ pub(crate) async fn register(
     State(state): State<AppState>,
     Json(request): Json<RegisterRequest>,
 ) -> (StatusCode, Json<AuthSessionResponse>) {
-    if let Err(message) = ensure_registration_allowed(&state).await {
-        return auth_session_error(
-            StatusCode::CONFLICT,
-            "registration_blocked",
-            message.as_str(),
-        );
-    }
+    // ADR-072. This runs BEFORE the username/email uniqueness probes below,
+    // and that ordering is load-bearing: a closed instance must answer
+    // identically whether or not the submitted address belongs to a user
+    // (FR-011). Reached after the probes, it would be an account-existence
+    // oracle for anyone who could read two different status codes.
+    let route = AdmissionRoute::Local;
+    let admission =
+        match ensure_admission_allowed(&state, &route, request.invitation_code.as_deref()).await {
+            Ok(value) => value,
+            Err(refusal) => {
+                let (code, message) = match refusal {
+                    AdmissionRefused::Policy(m) => ("registration_blocked", m),
+                    AdmissionRefused::InvitationUnusable => (
+                        "invitation_unusable",
+                        "This invitation is no longer valid".to_string(),
+                    ),
+                    AdmissionRefused::RateLimited(m) => ("rate_limited", m),
+                    AdmissionRefused::Unavailable(m) => ("registration_blocked", m),
+                };
+                record_refusal(&state, &route).await;
+                return auth_session_error(StatusCode::CONFLICT, code, message.as_str());
+            }
+        };
 
     let username = request.username.trim().to_string();
     let email = request.email.trim().to_lowercase();
@@ -134,6 +150,15 @@ pub(crate) async fn register(
         .await
         .expect("Failed to spawn blocking task");
 
+    // A failed signup must not burn a use (FR-016). The consume already
+    // happened — it has to, so concurrent redeemers see it — so the
+    // compensation is explicit on every failure path below.
+    if create_result.is_err()
+        && let Admission::AllowedByInvitation(invitation_id) = admission
+    {
+        crate::auth::instance_access::release_invitation_use(&state, invitation_id).await;
+    }
+
     let user_id = match create_result {
         Ok(value) => value,
         Err(RegisterUserError::UsernameTaken) => {
@@ -158,6 +183,12 @@ pub(crate) async fn register(
             );
         }
     };
+
+    if let Admission::AllowedByInvitation(invitation_id) = admission {
+        let _ =
+            crate::auth::instance_access::record_redemption(&state, invitation_id, user_id, &route)
+                .await;
+    }
 
     let session = match issue_session_cookie(&state, &cookies, user_id).await {
         Ok(value) => value,

@@ -122,10 +122,58 @@ diesel::table! {
 }
 
 diesel::table! {
+    instance_access_events (id) {
+        id -> Uuid,
+        event_type -> Text,
+        occurred_at -> Timestamp,
+        actor_user_id -> Nullable<Uuid>,
+        previous_policy -> Nullable<Text>,
+        new_policy -> Nullable<Text>,
+        attempted_route -> Nullable<Text>,
+        policy_at_attempt -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    instance_access_settings (id) {
+        id -> Int4,
+        access_policy -> Text,
+        updated_by -> Nullable<Uuid>,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     instance_identity (id) {
         id -> Int4,
         instance_id -> Uuid,
         created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    instance_invitation_redemptions (id) {
+        id -> Uuid,
+        invitation_id -> Uuid,
+        user_id -> Uuid,
+        route -> Text,
+        redeemed_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    instance_invitations (id) {
+        id -> Uuid,
+        #[max_length = 32]
+        invite_code -> Varchar,
+        max_uses -> Int4,
+        used_count -> Int4,
+        expires_at -> Nullable<Timestamp>,
+        note -> Nullable<Text>,
+        revoked -> Bool,
+        created_by -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
     }
 }
 
@@ -317,6 +365,8 @@ diesel::table! {
         expires_at -> Timestamp,
         consumed_at -> Nullable<Timestamp>,
         created_at -> Timestamp,
+        #[max_length = 32]
+        invitation_code -> Nullable<Varchar>,
     }
 }
 
@@ -1063,6 +1113,11 @@ diesel::joinable!(admin_bootstrap_oauth_sessions -> oauth_providers (provider_id
 diesel::joinable!(canvas_image_assets -> worlds (world_id));
 diesel::joinable!(fog_masks -> scenes (scene_id));
 diesel::joinable!(fog_masks -> users (updated_by));
+diesel::joinable!(instance_access_events -> users (actor_user_id));
+diesel::joinable!(instance_access_settings -> users (updated_by));
+diesel::joinable!(instance_invitation_redemptions -> instance_invitations (invitation_id));
+diesel::joinable!(instance_invitation_redemptions -> users (user_id));
+diesel::joinable!(instance_invitations -> users (created_by));
 diesel::joinable!(interaction_requests -> interactives (interactive_id));
 diesel::joinable!(interaction_requests -> scenes (scene_id));
 diesel::joinable!(interactives -> scenes (scene_id));
@@ -1171,7 +1226,11 @@ diesel::allow_tables_to_appear_in_same_query!(
     content_moderation_actions,
     fog_masks,
     game_systems,
+    instance_access_events,
+    instance_access_settings,
     instance_identity,
+    instance_invitation_redemptions,
+    instance_invitations,
     interaction_requests,
     interactives,
     light_sources,

@@ -17,6 +17,7 @@ describe("admin sections", () => {
       "/admin/configuration",
       "/admin/storage",
       "/admin/security",
+      "/admin/access",
       "/admin/moderation",
     ]);
   });

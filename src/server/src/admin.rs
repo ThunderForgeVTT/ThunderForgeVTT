@@ -1,11 +1,12 @@
+use crate::auth::instance_access::InstanceAccessPolicy;
 use crate::config::oauth_env::{parse_oauth_env_vars, resolve};
 use crate::models::{
-    AdminBootstrapSetup, AuthSecuritySetting, NewAuthSecuritySetting, NewOAuthProvider,
-    OAuthProvider,
+    AdminBootstrapSetup, AuthSecuritySetting, InstanceAccessSetting, NewAuthSecuritySetting,
+    NewOAuthProvider, OAuthProvider,
 };
 use crate::schema::{
-    admin_bootstrap_setup, auth_security_settings, oauth_providers, policies, users, world_events,
-    world_tokens, worlds,
+    admin_bootstrap_setup, auth_security_settings, instance_access_settings, oauth_providers,
+    policies, users, world_events, world_tokens, worlds,
 };
 use crate::state::{AppState, DbPool};
 use chrono::Utc;
@@ -763,4 +764,117 @@ mod tests {
         assert_eq!(user_role(true), "admin");
         assert_eq!(user_role(false), "user");
     }
+}
+
+/// Spec 035 / ADR-072: read the instance's admission policy.
+///
+/// The settings row is seeded by the migration, conditionally on whether the
+/// instance already had users (FR-013, FR-013a). `ensure_` exists only so a
+/// missing row cannot take the instance down; it must never be the thing that
+/// decides a fresh instance's default, because after the fact nothing can tell
+/// a fresh instance from an upgraded one.
+pub async fn load_instance_access_settings(
+    state: &AppState,
+) -> Result<InstanceAccessSetting, String> {
+    ensure_instance_access_settings(state).await?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| "Failed to get DB connection".to_string())?;
+
+    tokio::task::spawn_blocking(move || {
+        instance_access_settings::table
+            .filter(instance_access_settings::id.eq(1))
+            .select(InstanceAccessSetting::as_select())
+            .first::<InstanceAccessSetting>(&mut conn)
+    })
+    .await
+    .map_err(|_| "Failed to spawn blocking task".to_string())?
+    .map_err(|_| "Failed to query the instance access settings".to_string())
+}
+
+async fn ensure_instance_access_settings(state: &AppState) -> Result<(), String> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| "Failed to get DB connection".to_string())?;
+
+    tokio::task::spawn_blocking(move || {
+        let existing = instance_access_settings::table
+            .filter(instance_access_settings::id.eq(1))
+            .select(InstanceAccessSetting::as_select())
+            .first::<InstanceAccessSetting>(&mut conn)
+            .optional()?;
+
+        if existing.is_none() {
+            // Fail shut. A row that should have been seeded by the migration
+            // and is not there is an anomaly, and the safe way to be wrong
+            // about an anomaly is to admit nobody.
+            diesel::insert_into(instance_access_settings::table)
+                .values((
+                    instance_access_settings::id.eq(1),
+                    instance_access_settings::access_policy.eq("closed"),
+                    instance_access_settings::updated_at.eq(Utc::now().naive_utc()),
+                ))
+                .execute(&mut conn)?;
+        }
+
+        Ok::<_, diesel::result::Error>(())
+    })
+    .await
+    .map_err(|_| "Failed to spawn blocking task".to_string())?
+    .map_err(|_| "Failed to ensure the instance access settings".to_string())
+}
+
+/// Writes the policy and its audit event **in one transaction** (FR-002,
+/// FR-004). An audit row that can be lost independently of the change it
+/// records is not an audit row.
+pub async fn update_instance_access_policy(
+    state: &AppState,
+    actor_user_id: uuid::Uuid,
+    new_policy: InstanceAccessPolicy,
+) -> Result<InstanceAccessSetting, String> {
+    ensure_instance_access_settings(state).await?;
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| "Failed to get DB connection".to_string())?;
+    let now = Utc::now().naive_utc();
+
+    tokio::task::spawn_blocking(move || {
+        conn.transaction::<_, diesel::result::Error, _>(|conn| {
+            let previous = instance_access_settings::table
+                .filter(instance_access_settings::id.eq(1))
+                .select(instance_access_settings::access_policy)
+                .first::<String>(conn)?;
+
+            let updated = diesel::update(
+                instance_access_settings::table.filter(instance_access_settings::id.eq(1)),
+            )
+            .set((
+                instance_access_settings::access_policy.eq(new_policy.as_db_str()),
+                instance_access_settings::updated_by.eq(Some(actor_user_id)),
+                instance_access_settings::updated_at.eq(now),
+            ))
+            .returning(InstanceAccessSetting::as_returning())
+            .get_result::<InstanceAccessSetting>(conn)?;
+
+            diesel::insert_into(crate::schema::instance_access_events::table)
+                .values(crate::models::NewInstanceAccessEvent {
+                    id: uuid::Uuid::now_v7(),
+                    event_type: "policy_changed".to_string(),
+                    actor_user_id: Some(actor_user_id),
+                    previous_policy: Some(previous),
+                    new_policy: Some(new_policy.as_db_str().to_string()),
+                    attempted_route: None,
+                    policy_at_attempt: None,
+                })
+                .execute(conn)?;
+
+            Ok(updated)
+        })
+    })
+    .await
+    .map_err(|_| "Failed to spawn blocking task".to_string())?
+    .map_err(|_| "Failed to update the instance access policy".to_string())
 }

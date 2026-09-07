@@ -27,6 +27,17 @@ export const DEMO_USER = {
   password: "Sup3r-Secret-Passphrase!",
 };
 
+/**
+ * The seeded platform administrator (spec 035).
+ *
+ * `DEMO_USER` is deliberately not an admin, so specs that need the /admin
+ * surface use this one instead of promoting a user mid-test.
+ */
+export const ADMIN_USER = {
+  identifier: "e2eadmin",
+  password: "Sup3r-Secret-Passphrase!",
+};
+
 export interface DemoWorld {
   worldId: string;
   worldName: string;

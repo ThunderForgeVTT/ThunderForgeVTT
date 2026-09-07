@@ -20,6 +20,11 @@ import type {
   UpdateOAuthProviderInput,
 } from "@/types/admin";
 import type { SeoConfig } from "@/types/seo";
+import {
+  getInstanceAccessSettings,
+  type InstanceAccessSettings,
+} from "@/api/instanceAccess";
+import { AccessPanel } from "./components/AccessPanel";
 import { AdminSectionShell } from "./components/AdminSectionShell";
 import { DiskUsageChart } from "./components/DiskUsageChart";
 import { ManifestEditor } from "./components/ManifestEditor";
@@ -31,7 +36,8 @@ type AdminSettingsSection =
   | "overview"
   | "configuration"
   | "storage"
-  | "security";
+  | "security"
+  | "access";
 
 interface SettingsPageProps {
   initialSection?: AdminSettingsSection;
@@ -53,6 +59,8 @@ function sectionLabel(section: AdminSettingsSection) {
       return "Storage";
     case "security":
       return "Security";
+    case "access":
+      return "Access";
     default:
       return "Overview";
   }
@@ -63,9 +71,31 @@ export default function SettingsPage({
 }: SettingsPageProps) {
   const [data, setData] = useState<AdminSettingsData | null>(null);
   const [pageStatus, setPageStatus] = useState<string | null>(null);
+  // Spec 035: loaded only for the access section, so every other admin page
+  // does not pay for a query it never renders.
+  const [accessSettings, setAccessSettings] =
+    useState<InstanceAccessSettings | null>(null);
+
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshingDisk, setIsRefreshingDisk] = useState(false);
   const section = initialSection;
+
+  useEffect(() => {
+    if (section !== "access" || accessSettings) {
+      return;
+    }
+    let active = true;
+    void getInstanceAccessSettings()
+      .then((value) => {
+        if (active) {
+          setAccessSettings(value);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [section, accessSettings]);
 
   useEffect(() => {
     let active = true;
@@ -395,6 +425,34 @@ export default function SettingsPage({
                     onUpdate={updateSecurity}
                   />
                 </Card>
+              </section>
+            ) : null}
+
+            {section === "access" ? (
+              <section className="grid gap-3" id="access">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="inline-flex items-center gap-2 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+                      <FantasyIcon name="shield" size={16} />
+                      Access
+                    </p>
+                    <h2 className="text-xl font-semibold">
+                      Instance admission and invitations
+                    </h2>
+                  </div>
+                </div>
+                {accessSettings ? (
+                  <AccessPanel
+                    settings={accessSettings}
+                    onPolicyChange={setAccessSettings}
+                  />
+                ) : (
+                  <Card surface="stone" className="p-6">
+                    <p className="text-sm text-muted-foreground">
+                      Loading access settings...
+                    </p>
+                  </Card>
+                )}
               </section>
             ) : null}
 

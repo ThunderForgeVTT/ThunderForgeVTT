@@ -51,6 +51,7 @@ const SharedAbilityPage = lazy(pageLoaders.sharedAbility);
 const ItemDetailPage = lazy(pageLoaders.itemView);
 const SharedItemPage = lazy(pageLoaders.sharedItem);
 const SharedCollectionPage = lazy(pageLoaders.sharedCollection);
+const InstanceInvitePage = lazy(pageLoaders.instanceInvite);
 const WorldCollectionsPage = lazy(pageLoaders.worldCollections);
 const WorldSystemSettingsPage = lazy(pageLoaders.worldSystemSettings);
 const StorageSettingsPage = lazy(pageLoaders.storageSettings);
@@ -351,6 +352,19 @@ export default function AppRoutes({
           anonymously behind a route that redirects to login is the same wall
           in a different place.
         */}
+        {/*
+          Spec 035 (FR-016). **Deliberately outside `RequireAuthenticated`**,
+          for the same reason the share routes below are: the person holding
+          this link has no account yet, and a redemption page behind a login
+          wall admits nobody — which is the whole feature.
+        */}
+        <Route
+          path="/invite/:code"
+          element={renderLazyPage(
+            <InstanceInvitePage />,
+            "Loading your invitation",
+          )}
+        />
         <Route
           path="/collection/:shareCode"
           element={renderLazyPage(
@@ -431,6 +445,17 @@ export default function AppRoutes({
         <Route
           path="/admin/system"
           element={<Navigate to="/admin/security" replace />}
+        />
+        <Route
+          path="/admin/access"
+          element={
+            <RequireAdmin>
+              {renderLazyPage(
+                <AdminSettingsPage initialSection="access" />,
+                "Loading instance access",
+              )}
+            </RequireAdmin>
+          }
         />
         <Route
           path="/admin/security"

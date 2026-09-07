@@ -51,6 +51,9 @@ use url::Url;
 
 /// Spec 002: `require_world_member` — the shared world_members-based
 /// authorization guard for canvas asset reads/writes.
+/// Spec 035 / ADR-072: the instance admission policy and its audit trail.
+pub mod instance_access;
+pub(crate) use instance_access::{AdmissionRoute, record_refusal};
 pub mod world_membership;
 
 /// Spec 028 (T045c): `scenes.hidden` visibility for scenes and the canvas
@@ -94,8 +97,9 @@ mod registration;
 mod provider_wiring;
 
 use registration::{
-    RegisterUserError, derive_bootstrap_username, ensure_registration_allowed, random_setup_code,
-    unique_username_from_email_sync, validate_registration_input,
+    Admission, AdmissionRefused, RegisterUserError, derive_bootstrap_username,
+    ensure_admission_allowed, random_setup_code, unique_username_from_email_sync,
+    validate_registration_input,
 };
 
 pub fn router() -> Router<AppState> {

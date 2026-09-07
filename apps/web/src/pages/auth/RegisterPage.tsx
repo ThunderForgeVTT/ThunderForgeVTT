@@ -81,6 +81,10 @@ export default function RegisterPage() {
         username,
         email,
         password,
+        // FR-016: `/invite/:code` sends the visitor here with the code in the
+        // query, and the server consumes it as the account is created.
+        invitation_code:
+          new URLSearchParams(location.search).get("invitation") ?? undefined,
       });
       setStatus(response.message);
 

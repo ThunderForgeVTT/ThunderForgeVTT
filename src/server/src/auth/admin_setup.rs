@@ -36,6 +36,12 @@ pub(crate) async fn setup_status(
     let (admin_exists, setup, providers) = result;
     let setup_completed = admin_exists || setup.and_then(|v| v.setup_completed_at).is_some();
 
+    // FR-003. Read per request, so a policy change takes effect without a
+    // restart (FR-002) — which is what makes SC-004's three minutes possible.
+    let access_policy = crate::auth::instance_access::load_policy(&state)
+        .await
+        .unwrap_or(crate::auth::instance_access::InstanceAccessPolicy::Closed);
+
     (
         StatusCode::OK,
         Json(SetupStatusResponse {
@@ -48,6 +54,10 @@ pub(crate) async fn setup_status(
                     display_name,
                 })
                 .collect(),
+            access_policy: access_policy.as_db_str().to_string(),
+            // US3 is not built. Constant rather than absent so the front end's
+            // shape does not change when it is.
+            accepting_access_requests: false,
         }),
     )
 }

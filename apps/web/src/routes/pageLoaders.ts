@@ -37,6 +37,7 @@ export const pageLoaders = {
   worldSystemSettings: () =>
     import("@/pages/world/settings/WorldSystemSettingsPage"),
   sharedItem: () => import("@/pages/item-share/SharedItemPage"),
+  instanceInvite: () => import("@/pages/invite/InstanceInvitePage"),
   sharedCollection: () =>
     import("@/pages/collection-share/SharedCollectionPage"),
   worldCollections: () =>

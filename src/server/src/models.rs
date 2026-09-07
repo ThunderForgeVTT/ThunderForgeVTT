@@ -1,19 +1,21 @@
 use crate::schema::{
     admin_bootstrap_oauth_sessions, admin_bootstrap_setup, auth_security_settings,
-    canvas_image_assets, content_moderation_actions, fog_masks, game_systems, interaction_requests,
-    interactives, light_sources, login_two_factor_challenges, lore_disassociation_notices,
-    lore_exported_entries, lore_fidelity_notes, lore_pending_incoming_changes,
-    lore_repository_connections, lore_sync_runs, oauth_authorization_sessions,
-    oauth_link_challenges, oauth_providers, players_online, scene_state_fingerprints, scenes,
-    shapes, tokens, user_oauth_accounts, user_sessions, users, walls, world_abilities,
-    world_ability_effects, world_ability_permissions, world_ability_shares, world_actor_abilities,
-    world_actor_claims, world_actor_images, world_actor_inventory, world_actor_permissions,
-    world_actor_shares, world_actor_system_data, world_actors, world_authoring_tool_grants,
-    world_chat_messages, world_collection_members, world_collection_shares, world_collections,
-    world_combatants, world_combats, world_events, world_invites, world_item_abilities,
-    world_item_effects, world_item_permissions, world_item_prices, world_item_shares, world_items,
-    world_lore_entries, world_lore_image_assets, world_lore_links, world_lore_permissions,
-    world_lore_revisions, world_lore_tags, world_members, world_roll_records, world_tokens, worlds,
+    canvas_image_assets, content_moderation_actions, fog_masks, game_systems,
+    instance_access_events, instance_access_settings, instance_invitation_redemptions,
+    instance_invitations, interaction_requests, interactives, light_sources,
+    login_two_factor_challenges, lore_disassociation_notices, lore_exported_entries,
+    lore_fidelity_notes, lore_pending_incoming_changes, lore_repository_connections,
+    lore_sync_runs, oauth_authorization_sessions, oauth_link_challenges, oauth_providers,
+    players_online, scene_state_fingerprints, scenes, shapes, tokens, user_oauth_accounts,
+    user_sessions, users, walls, world_abilities, world_ability_effects, world_ability_permissions,
+    world_ability_shares, world_actor_abilities, world_actor_claims, world_actor_images,
+    world_actor_inventory, world_actor_permissions, world_actor_shares, world_actor_system_data,
+    world_actors, world_authoring_tool_grants, world_chat_messages, world_collection_members,
+    world_collection_shares, world_collections, world_combatants, world_combats, world_events,
+    world_invites, world_item_abilities, world_item_effects, world_item_permissions,
+    world_item_prices, world_item_shares, world_items, world_lore_entries, world_lore_image_assets,
+    world_lore_links, world_lore_permissions, world_lore_revisions, world_lore_tags, world_members,
+    world_roll_records, world_tokens, worlds,
 };
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -132,6 +134,99 @@ pub struct NewAuthSecuritySetting {
     pub id: i32,
     pub two_factor_required_for_all_users: bool,
     pub updated_at: chrono::NaiveDateTime,
+}
+
+/// Spec 035 / ADR-072: the instance's admission policy. A singleton at `id = 1`,
+/// exactly like `AuthSecuritySetting` above.
+#[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = instance_access_settings)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct InstanceAccessSetting {
+    pub id: i32,
+    pub access_policy: String,
+    pub updated_by: Option<uuid::Uuid>,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+/// An operator-issued grant admitting a person **with no account** to the
+/// application. Distinct from `WorldInvite`, which admits an existing user to
+/// one world's table — see spec 035's Key Entities.
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = instance_invitations)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct InstanceInvitation {
+    pub id: uuid::Uuid,
+    pub invite_code: String,
+    pub max_uses: i32,
+    pub used_count: i32,
+    pub expires_at: Option<chrono::NaiveDateTime>,
+    pub note: Option<String>,
+    pub revoked: bool,
+    pub created_by: uuid::Uuid,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = instance_invitations)]
+pub struct NewInstanceInvitation {
+    pub id: uuid::Uuid,
+    pub invite_code: String,
+    pub max_uses: i32,
+    pub expires_at: Option<chrono::NaiveDateTime>,
+    pub note: Option<String>,
+    pub created_by: uuid::Uuid,
+}
+
+/// One account admitted by one invitation. A row rather than a `redeemed_by`
+/// column because `max_uses` may exceed 1 and FR-018 wants every redeemer.
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = instance_invitation_redemptions)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct InstanceInvitationRedemption {
+    pub id: uuid::Uuid,
+    pub invitation_id: uuid::Uuid,
+    pub user_id: uuid::Uuid,
+    pub route: String,
+    pub redeemed_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = instance_invitation_redemptions)]
+pub struct NewInstanceInvitationRedemption {
+    pub id: uuid::Uuid,
+    pub invitation_id: uuid::Uuid,
+    pub user_id: uuid::Uuid,
+    pub route: String,
+}
+
+/// Append-only. Note there is no email or identifier field, and none may be
+/// added: FR-012 forbids recording what a refused caller submitted, and a
+/// struct that cannot express the violation is easier to keep honest.
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = instance_access_events)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct InstanceAccessEvent {
+    pub id: uuid::Uuid,
+    pub event_type: String,
+    pub occurred_at: chrono::NaiveDateTime,
+    pub actor_user_id: Option<uuid::Uuid>,
+    pub previous_policy: Option<String>,
+    pub new_policy: Option<String>,
+    pub attempted_route: Option<String>,
+    pub policy_at_attempt: Option<String>,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = instance_access_events)]
+pub struct NewInstanceAccessEvent {
+    pub id: uuid::Uuid,
+    pub event_type: String,
+    pub actor_user_id: Option<uuid::Uuid>,
+    pub previous_policy: Option<String>,
+    pub new_policy: Option<String>,
+    pub attempted_route: Option<String>,
+    pub policy_at_attempt: Option<String>,
 }
 
 #[derive(Queryable, Selectable, Insertable, Debug, Clone, Serialize, Deserialize)]
@@ -263,6 +358,9 @@ pub struct OAuthAuthorizationSession {
     pub code_verifier: String,
     pub redirect_uri: String,
     pub return_to: Option<String>,
+    /// Spec 035 (FR-016): an instance invitation carried across the provider
+    /// redirect, when the visitor started from one.
+    pub invitation_code: Option<String>,
     pub expires_at: chrono::NaiveDateTime,
     pub consumed_at: Option<chrono::NaiveDateTime>,
     pub created_at: chrono::NaiveDateTime,
@@ -279,6 +377,7 @@ pub struct NewOAuthAuthorizationSession {
     pub code_verifier: String,
     pub redirect_uri: String,
     pub return_to: Option<String>,
+    pub invitation_code: Option<String>,
     pub expires_at: chrono::NaiveDateTime,
     pub consumed_at: Option<chrono::NaiveDateTime>,
     pub created_at: chrono::NaiveDateTime,

@@ -14,10 +14,19 @@ pub(crate) struct RegisterRequest {
     pub(crate) username: String,
     pub(crate) email: String,
     pub(crate) password: String,
+    /// Spec 035 (FR-016): an instance invitation, when the visitor arrived by
+    /// one. Optional — an open instance needs none, and a closed one refuses
+    /// regardless.
+    #[serde(default)]
+    pub(crate) invitation_code: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub(crate) struct OAuthResolveRequest {
+    /// Spec 035 (FR-016): an instance invitation carried through the provider
+    /// round trip, when the visitor arrived by one.
+    #[serde(default)]
+    pub(crate) invitation_code: Option<String>,
     pub(crate) provider_key: String,
     pub(crate) provider_user_id: String,
     pub(crate) provider_email: Option<String>,
@@ -72,6 +81,9 @@ pub(crate) struct AdminUserTwoFactorRequiredRequest {
 pub(crate) struct OAuthStartQuery {
     pub(crate) redirect_uri: String,
     pub(crate) return_to: Option<String>,
+    /// Spec 035 (FR-016): `/invite/{code}` starts the provider flow with this
+    /// set, so redemption survives the round trip.
+    pub(crate) invitation: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -93,6 +105,16 @@ pub(crate) struct SetupStatusResponse {
     pub(crate) setup_required: bool,
     pub(crate) setup_completed: bool,
     pub(crate) configured_oauth_providers: Vec<SetupOAuthProvider>,
+    /// Spec 035 (FR-003): the instance's admission policy, so the signed-out
+    /// surface offers only routes that will actually work.
+    ///
+    /// This is the *only* thing about access exposed to an unauthenticated
+    /// caller. No user count, no invitation codes, no indication that any
+    /// particular invitation or account exists.
+    pub(crate) access_policy: String,
+    /// Ships as a constant `false` until US3 exists. Present now so the
+    /// front-end shape does not change when it does.
+    pub(crate) accepting_access_requests: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -159,8 +181,16 @@ pub(crate) struct AdminBootstrapOAuthContext {
 pub(crate) enum ResolveOutcome {
     ProviderNotFound,
     LinkedUser(uuid::Uuid),
+    /// Spec 035: an account was **created** by this call, not merely linked.
+    /// Distinguished from `LinkedUser` so the caller can record an invitation
+    /// redemption against it — and so that releasing an unused invitation is
+    /// possible when the flow linked to an existing account instead.
+    ProvisionedUser(uuid::Uuid),
     PasswordRequired(uuid::Uuid),
     NoMatchingUser,
+    /// Spec 035 / ADR-072: the instance's policy refuses to admit this
+    /// identity. No account was created and no session is issued.
+    NotAdmitted(String),
 }
 
 pub(crate) enum LinkConfirmOutcome {

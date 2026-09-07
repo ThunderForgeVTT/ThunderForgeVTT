@@ -53,6 +53,13 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
     testId: "admin-nav-security",
   },
   {
+    label: "Access",
+    description: "Who may create an account, and invitations",
+    to: "/admin/access",
+    icon: "shield",
+    testId: "admin-nav-access",
+  },
+  {
     label: "Moderation",
     description: "Takedown cases and repeat-infringer flags",
     to: "/admin/moderation",

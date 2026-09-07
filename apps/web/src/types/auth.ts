@@ -3,10 +3,22 @@ export interface SetupProvider {
   display_name: string;
 }
 
+export type InstanceAccessPolicy = "open" | "invite_only" | "closed";
+
 export interface SetupStatus {
   setup_required: boolean;
   setup_completed: boolean;
   configured_oauth_providers: SetupProvider[];
+  /**
+   * Spec 035 (FR-003): the instance's admission policy, so the signed-out
+   * surface offers only routes that will actually work.
+   *
+   * Hiding a route is NOT enforcing it — the server refuses independently
+   * (ADR-072). This exists so the page can be honest, not so it can be the
+   * gate.
+   */
+  access_policy: InstanceAccessPolicy;
+  accepting_access_requests: boolean;
 }
 
 export interface AuthUser {
@@ -43,6 +55,8 @@ export interface RegisterPayload {
   username: string;
   email: string;
   password: string;
+  /** Spec 035 (FR-016): present when the visitor arrived from an invitation. */
+  invitation_code?: string;
 }
 
 export interface OAuthActionResponse {

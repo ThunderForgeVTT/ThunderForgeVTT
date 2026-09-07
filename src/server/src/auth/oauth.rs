@@ -58,6 +58,7 @@ pub(crate) async fn oauth_start(
         code_verifier: code_verifier.clone(),
         redirect_uri: query.redirect_uri.clone(),
         return_to: query.return_to,
+        invitation_code: query.invitation,
         expires_at: now + chrono::Duration::minutes(10),
         consumed_at: None,
         created_at: now,
@@ -203,6 +204,8 @@ pub(crate) async fn handle_oauth_code_flow(
         .map(|seconds| Utc::now() + chrono::Duration::seconds(seconds));
 
     let resolve_request = OAuthResolveRequest {
+        // FR-016: whatever the visitor started the flow holding.
+        invitation_code: auth_ctx.session.invitation_code.clone(),
         provider_key,
         provider_user_id,
         provider_email,
@@ -267,11 +270,54 @@ pub(crate) async fn resolve_oauth_login(
     let provider_key = request.provider_key;
     let provider_key_for_audit = provider_key.clone();
     let provider_user_id = request.provider_user_id;
+    let invitation_code = request.invitation_code.clone();
     let provider_email = request
         .provider_email
         .map(|v| v.trim().to_lowercase())
         .filter(|v| !v.is_empty());
     let token_expires_at = request.token_expires_at.map(|v| v.naive_utc());
+
+    // ─── ADR-072: the gate, on the path that had none ────────────────────
+    //
+    // This is the whole point of spec 035. Before it, `resolve_oauth_login`
+    // auto-provisioned an unmatched verified email (ADR-042) with nothing
+    // asking whether the instance was accepting anyone — so an operator who
+    // "closed signups" closed the registration form and kept admitting every
+    // stranger who clicked Sign in with Google.
+    //
+    // It runs here, ahead of the blocking closure, because that closure is
+    // synchronous diesel and the policy read is async. Consulting it needs to
+    // know whether this call *would* create an account, which is: no existing
+    // link, a verified email, and no existing user with that email. Anything
+    // else is authentication or linking, and FR-009 says the policy must not
+    // touch either — so those never reach the gate at all.
+    let would_provision = would_auto_provision(
+        &state,
+        &provider_key,
+        &provider_user_id,
+        provider_email.as_deref(),
+    )
+    .await;
+    let route = AdmissionRoute::OAuth(provider_key.clone());
+    let admission = if would_provision {
+        match ensure_admission_allowed(&state, &route, invitation_code.as_deref()).await {
+            Ok(value) => Some(value),
+            Err(refusal) => {
+                let message = match refusal {
+                    AdmissionRefused::Policy(m) | AdmissionRefused::Unavailable(m) => m,
+                    AdmissionRefused::RateLimited(m) => m,
+                    AdmissionRefused::InvitationUnusable => {
+                        "This invitation is no longer valid".to_string()
+                    }
+                };
+                record_refusal(&state, &route).await;
+                // No session, no account, no identity link. FR-006.
+                return error_response(StatusCode::CONFLICT, "instance_closed", message.as_str());
+            }
+        }
+    } else {
+        None
+    };
 
     let outcome =
         tokio::task::spawn_blocking(move || -> Result<ResolveOutcome, diesel::result::Error> {
@@ -321,7 +367,7 @@ pub(crate) async fn resolve_oauth_login(
                 .optional()?;
 
             let Some(existing_user_id) = existing_user_id else {
-                // ADR-011: unlike an existing local account (which still
+                // ADR-042: unlike an existing local account (which still
                 // requires password confirmation below before linking), a
                 // first-time OAuth identity with no local account at all is
                 // auto-provisioned. The provider already vouched for this
@@ -366,7 +412,7 @@ pub(crate) async fn resolve_oauth_login(
                     .values(&oauth_account)
                     .execute(&mut conn)?;
 
-                return Ok(ResolveOutcome::LinkedUser(new_user_id));
+                return Ok(ResolveOutcome::ProvisionedUser(new_user_id));
             };
 
             let challenge_id = uuid::Uuid::now_v7();
@@ -395,13 +441,37 @@ pub(crate) async fn resolve_oauth_login(
         .expect("Failed to spawn blocking task")
         .expect("Failed to resolve oauth login");
 
+    // FR-016 and FR-020a, settled together here.
+    //
+    // The gate consumed a use before the closure ran, on the strength of a
+    // pre-flight that said this call would provision. If the closure did
+    // something else — because the account was created by a concurrent
+    // request in between, or because the identity turned out to be linkable —
+    // then nobody was admitted by the invitation and the use goes back.
+    if let Some(Admission::AllowedByInvitation(invitation_id)) = admission {
+        match outcome {
+            ResolveOutcome::ProvisionedUser(user_id) => {
+                let _ = crate::auth::instance_access::record_redemption(
+                    &state,
+                    invitation_id,
+                    user_id,
+                    &route,
+                )
+                .await;
+            }
+            _ => {
+                crate::auth::instance_access::release_invitation_use(&state, invitation_id).await;
+            }
+        }
+    }
+
     match outcome {
         ResolveOutcome::ProviderNotFound => error_response(
             StatusCode::NOT_FOUND,
             "provider_not_found",
             "OAuth provider is not configured or disabled",
         ),
-        ResolveOutcome::LinkedUser(user_id) => {
+        ResolveOutcome::LinkedUser(user_id) | ResolveOutcome::ProvisionedUser(user_id) => {
             let two_factor_required = match is_two_factor_required_for_user(&state, user_id).await {
                 Ok(v) => v,
                 Err(msg) => {
@@ -484,7 +554,73 @@ pub(crate) async fn resolve_oauth_login(
             "no_matching_user",
             "The OAuth provider did not return an email address, so this identity cannot be linked or auto-provisioned",
         ),
+        // Produced by the pre-flight gate above, which returns early; the
+        // blocking closure never yields it. Handled so the match stays
+        // exhaustive if that ever changes.
+        ResolveOutcome::NotAdmitted(message) => {
+            error_response(StatusCode::CONFLICT, "instance_closed", message.as_str())
+        }
     }
+}
+
+/// Whether this call would **create** an account, and so must consult the
+/// instance policy (ADR-072).
+///
+/// Three conditions, matching the branch in the closure below: no existing
+/// identity link, a verified email, and no existing user holding it. If any
+/// fails, the call is authentication or linking — never signup — and FR-009
+/// requires the policy leave it alone.
+async fn would_auto_provision(
+    state: &AppState,
+    provider_key: &str,
+    provider_user_id: &str,
+    provider_email: Option<&str>,
+) -> bool {
+    let Some(email) = provider_email.map(|e| e.to_string()) else {
+        return false;
+    };
+    let Ok(mut conn) = state.db_pool.get() else {
+        return false;
+    };
+    let provider_key = provider_key.to_string();
+    let provider_user_id = provider_user_id.to_string();
+
+    tokio::task::spawn_blocking(move || {
+        let provider_id = oauth_providers::table
+            .filter(oauth_providers::provider_key.eq(&provider_key))
+            .filter(oauth_providers::enabled.eq(true))
+            .select(oauth_providers::id)
+            .first::<uuid::Uuid>(&mut conn)
+            .optional()
+            .ok()
+            .flatten();
+        let Some(provider_id) = provider_id else {
+            return false;
+        };
+
+        let linked = user_oauth_accounts::table
+            .filter(user_oauth_accounts::provider_id.eq(provider_id))
+            .filter(user_oauth_accounts::provider_user_id.eq(&provider_user_id))
+            .select(user_oauth_accounts::id)
+            .first::<uuid::Uuid>(&mut conn)
+            .optional()
+            .ok()
+            .flatten();
+        if linked.is_some() {
+            return false;
+        }
+
+        let existing_user = users::table
+            .filter(users::email.eq(&email))
+            .select(users::id)
+            .first::<uuid::Uuid>(&mut conn)
+            .optional()
+            .ok()
+            .flatten();
+        existing_user.is_none()
+    })
+    .await
+    .unwrap_or(false)
 }
 
 pub(crate) async fn oauth_link_confirm(

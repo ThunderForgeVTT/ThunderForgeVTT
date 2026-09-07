@@ -16,7 +16,7 @@
 --   psql "$DATABASE_URL" -f src/server/seeds/demo_accounts.sql
 
 -- Skip the first-run admin bootstrap wizard — `admin` below already
--- satisfies ensure_registration_allowed (an is_admin=true user must
+-- satisfies ensure_admission_allowed (an is_admin=true user must
 -- exist), but this also short-circuits the /setup/<code> UI entirely.
 INSERT INTO admin_bootstrap_setup (id, setup_completed_at, admin_code_hash, admin_code_generated_at, created_at, updated_at)
 VALUES (1, now(), NULL, NULL, now(), now())
