@@ -1,235 +1,33 @@
-//! Spec 012: the lore entry "ownership block" — DM-only permission
-//! grants (`setLorePermission`, `loreEntryPermissions`). Direct
-//! structural mirror of `mutations_actor_permissions.rs` (spec 010),
-//! generalized to lore entries. See
-//! `specs/012-lore-wiki/contracts/lore-permissions.md`.
+//! Spec 012: the lore entry "ownership block" — DM-only permission grants
+//! (`loreEntryPermissions`, `setLorePermission`, `removeLorePermission`).
+//! See contracts/lore-permissions.md.
+//!
+//! The surface is generated from one declaration in
+//! [`crate::graphql::permissioned_entity_resolvers`], which this module
+//! re-exports. Lore is the one type whose grant table names its user column
+//! `world_member_user_id` rather than `user_id`, and whose noun is two words;
+//! both are parameters of that declaration rather than reasons to keep a
+//! hand-written copy.
+//!
+//! Its tests stay here, because what is worth testing per type is not the
+//! shape — that is the macro's, and tested once — but that this type's rows,
+//! tables and gate are wired to the right ones.
 
-use async_graphql::{Context, Error, InputObject, Result as GraphQLResult};
-use diesel::prelude::*;
-use uuid::Uuid;
-
-use crate::auth::world_membership::is_dm_of_world;
-use crate::graphql::types::{ActorPermissionLevel, GraphQLLorePermission};
-use crate::graphql::{app_state, authenticated_user};
-use crate::models::{LorePermission, NewLorePermission};
-use crate::schema::{world_lore_entries, world_lore_permissions};
-
-#[derive(InputObject, Debug, Clone)]
-pub struct SetLorePermissionInput {
-    pub lore_entry_id: Uuid,
-    pub user_id: Uuid,
-    pub level: ActorPermissionLevel,
-}
-
-async fn require_dm_of_entrys_world(
-    state: &crate::state::AppState,
-    caller_id: Uuid,
-    is_admin: bool,
-    lore_entry_id: Uuid,
-) -> GraphQLResult<()> {
-    let mut conn = state
-        .db_pool
-        .get()
-        .map_err(|_| Error::new("Failed to get DB connection"))?;
-
-    let world_id = tokio::task::spawn_blocking(move || {
-        world_lore_entries::table
-            .filter(world_lore_entries::id.eq(lore_entry_id))
-            .select(world_lore_entries::world_id)
-            .first::<Uuid>(&mut conn)
-            .optional()
-    })
-    .await
-    .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to load lore entry"))?
-    .ok_or_else(|| Error::new("Lore entry not found"))?;
-
-    if is_dm_of_world(state, caller_id, is_admin, world_id).await? {
-        Ok(())
-    } else {
-        Err(Error::new(
-            "Only the DM (Owner or GM) may view or change a lore entry's ownership block",
-        ))
-    }
-}
-
-/// Testable core of `LorePermissionQuery::lore_entry_permissions`.
-pub async fn lore_entry_permissions_impl(
-    state: &crate::state::AppState,
-    caller_id: Uuid,
-    is_admin: bool,
-    lore_entry_id: Uuid,
-) -> GraphQLResult<Vec<LorePermission>> {
-    require_dm_of_entrys_world(state, caller_id, is_admin, lore_entry_id).await?;
-
-    let mut conn = state
-        .db_pool
-        .get()
-        .map_err(|_| Error::new("Failed to get DB connection"))?;
-
-    tokio::task::spawn_blocking(move || {
-        world_lore_permissions::table
-            .filter(world_lore_permissions::lore_entry_id.eq(lore_entry_id))
-            .select(LorePermission::as_select())
-            .load::<LorePermission>(&mut conn)
-    })
-    .await
-    .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to load lore entry permissions"))
-}
-
-/// Testable core of `LorePermissionMutation::set_lore_permission`.
-/// DM-only. UPSERT on `(lore_entry_id, world_member_user_id)`.
-pub async fn set_lore_permission_impl(
-    state: &crate::state::AppState,
-    caller_id: Uuid,
-    is_admin: bool,
-    input: SetLorePermissionInput,
-) -> GraphQLResult<LorePermission> {
-    require_dm_of_entrys_world(state, caller_id, is_admin, input.lore_entry_id).await?;
-
-    let mut conn = state
-        .db_pool
-        .get()
-        .map_err(|_| Error::new("Failed to get DB connection"))?;
-
-    let lore_entry_id = input.lore_entry_id;
-    let target_user_id = input.user_id;
-    let level = input.level.as_db_str().to_string();
-
-    tokio::task::spawn_blocking(move || {
-        let new_row = NewLorePermission {
-            id: Uuid::now_v7(),
-            lore_entry_id,
-            world_member_user_id: target_user_id,
-            level: level.clone(),
-        };
-
-        diesel::insert_into(world_lore_permissions::table)
-            .values(&new_row)
-            .on_conflict((
-                world_lore_permissions::lore_entry_id,
-                world_lore_permissions::world_member_user_id,
-            ))
-            .do_update()
-            .set((
-                world_lore_permissions::level.eq(level),
-                world_lore_permissions::updated_at.eq(chrono::Utc::now().naive_utc()),
-            ))
-            .returning(LorePermission::as_returning())
-            .get_result::<LorePermission>(&mut conn)
-            .map_err(|e| format!("Failed to set lore permission: {e}"))
-    })
-    .await
-    .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(Error::new)
-}
-
-/// Testable core of `LorePermissionMutation::remove_lore_permission`.
-/// DM-only. Idempotent — reverts the member to default Viewer. Not in
-/// the original contracts/lore-permissions.md shape, but added to match
-/// the "Default (Viewer)" option the actor ownership-block UI
-/// (`ActorOwnershipBlock.tsx`) already exposes — `setLorePermission`
-/// alone has no way to clear an explicit row back to the implicit
-/// default.
-pub async fn remove_lore_permission_impl(
-    state: &crate::state::AppState,
-    caller_id: Uuid,
-    is_admin: bool,
-    lore_entry_id: Uuid,
-    user_id: Uuid,
-) -> GraphQLResult<bool> {
-    require_dm_of_entrys_world(state, caller_id, is_admin, lore_entry_id).await?;
-
-    let mut conn = state
-        .db_pool
-        .get()
-        .map_err(|_| Error::new("Failed to get DB connection"))?;
-
-    tokio::task::spawn_blocking(move || {
-        diesel::delete(
-            world_lore_permissions::table
-                .filter(world_lore_permissions::lore_entry_id.eq(lore_entry_id))
-                .filter(world_lore_permissions::world_member_user_id.eq(user_id)),
-        )
-        .execute(&mut conn)
-    })
-    .await
-    .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(|_| Error::new("Failed to remove lore permission"))?;
-
-    Ok(true)
-}
-
-#[derive(Default)]
-pub struct LorePermissionQuery;
-
-#[async_graphql::Object]
-impl LorePermissionQuery {
-    /// DM-only. Returns only explicit rows — members with no row default
-    /// to Viewer, which the client renders itself by combining this with
-    /// the full world-member roster (contracts/lore-permissions.md).
-    async fn lore_entry_permissions(
-        &self,
-        ctx: &Context<'_>,
-        lore_entry_id: Uuid,
-    ) -> GraphQLResult<Vec<GraphQLLorePermission>> {
-        let state = app_state(ctx)?;
-        let auth_user = authenticated_user(ctx)?;
-        let rows = lore_entry_permissions_impl(
-            state,
-            auth_user.user_id,
-            auth_user.is_admin,
-            lore_entry_id,
-        )
-        .await?;
-        Ok(rows.into_iter().map(GraphQLLorePermission::from).collect())
-    }
-}
-
-#[derive(Default)]
-pub struct LorePermissionMutation;
-
-#[async_graphql::Object]
-impl LorePermissionMutation {
-    async fn set_lore_permission(
-        &self,
-        ctx: &Context<'_>,
-        input: SetLorePermissionInput,
-    ) -> GraphQLResult<GraphQLLorePermission> {
-        let state = app_state(ctx)?;
-        let auth_user = authenticated_user(ctx)?;
-        set_lore_permission_impl(state, auth_user.user_id, auth_user.is_admin, input)
-            .await
-            .map(GraphQLLorePermission::from)
-    }
-
-    async fn remove_lore_permission(
-        &self,
-        ctx: &Context<'_>,
-        lore_entry_id: Uuid,
-        user_id: Uuid,
-    ) -> GraphQLResult<bool> {
-        let state = app_state(ctx)?;
-        let auth_user = authenticated_user(ctx)?;
-        remove_lore_permission_impl(
-            state,
-            auth_user.user_id,
-            auth_user.is_admin,
-            lore_entry_id,
-            user_id,
-        )
-        .await
-    }
-}
+pub use crate::graphql::permissioned_entity_resolvers::{
+    LorePermissionMutation, LorePermissionQuery, SetLorePermissionInput,
+    lore_entry_permissions_impl, remove_lore_permission_impl, set_lore_permission_impl,
+};
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::graphql::mutations_lore::{CreateLoreEntryInput, create_lore_entry_impl};
+    use crate::graphql::types::ActorPermissionLevel;
+    use crate::schema::{world_lore_entries, world_lore_permissions};
     use crate::test_support::{
         insert_test_user, insert_test_world, insert_test_world_member, test_app_state,
     };
+    use diesel::prelude::*;
 
     /// FR-003: only the DM may view or change the ownership block; a
     /// non-DM member (even one holding explicit Owner via a prior grant)

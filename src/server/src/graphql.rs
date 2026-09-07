@@ -69,6 +69,7 @@ pub mod anonymous;
 pub mod mutations_collection_shares;
 pub mod mutations_collections;
 pub mod mutations_invites;
+pub mod permissioned_entity_resolvers;
 pub mod share_codes;
 pub mod share_rate_limit;
 pub use mutations_invites::InviteMutation;
