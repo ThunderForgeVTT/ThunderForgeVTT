@@ -187,3 +187,15 @@ VALUES
     now()
   )
 ON CONFLICT (actor_id) DO NOTHING;
+
+-- Spec 035 / ADR-072: a fresh install starts `invite_only`, because the
+-- migration branches on whether any user exists and a brand-new database has
+-- none. That is right for a real instance and wrong for every stack this seed
+-- builds: `make dev` and the e2e harness both migrate an empty database and
+-- *then* create these accounts, so the instance they hand over refuses the
+-- signup that most of the suite — and most of a first demo — begins with.
+--
+-- Opening it here rather than changing the migration keeps the product's
+-- default fail-shut. This file is already refused against a non-local
+-- DATABASE_URL, which is what makes it safe to say `open` in it.
+UPDATE instance_access_settings SET access_policy = 'open' WHERE id = 1;
