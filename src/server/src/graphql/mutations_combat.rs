@@ -142,14 +142,25 @@ fn next_turn_index(ordered: &[Combatant], active_id: Option<Uuid>) -> Option<(us
 
     let current = active_id.and_then(|id| ordered.iter().position(|c| c.id == id));
 
-    // From just past the current position, walk the whole ring exactly
-    // once. Starting at `start + i` for i in 1..=len (rather than 0..len)
-    // is what makes "next" skip the current combatant instead of landing
-    // back on it when it is the only active one.
-    let start = current.unwrap_or(0);
+    // Walk the whole ring exactly once, and where it starts depends on
+    // whether anybody is holding the turn.
+    //
+    // Moving on from a combatant starts *just past* them — offset 1 — which
+    // is what makes "next" skip the current one rather than landing back on
+    // it when it is the only active combatant.
+    //
+    // Entering the order starts *at* the top — offset 0. Starting past it
+    // meant the combatant who rolled highest never acted in the first round:
+    // `start_combat` leaves `active_combatant_id` NULL, so the first advance
+    // arrived here with `current` as `None` and opened the encounter on
+    // second place.
     let len = ordered.len();
+    let (start, first_offset) = match current {
+        Some(index) => (index, 1),
+        None => (0, 0),
+    };
 
-    for offset in 1..=len {
+    for offset in first_offset..(first_offset + len) {
         let idx = (start + offset) % len;
         if ordered[idx].active {
             // A wrap happened if we passed index 0 on the way. With no
@@ -815,9 +826,12 @@ mod tests {
             combatant(3, 5, 0, true),
         ];
 
-        // Entering the order for the first time is not a new round.
+        // Entering the order for the first time lands on the top of it, and
+        // is not a new round. This asserted combatant 2 until 2026-09-07 —
+        // the combatant who rolled highest was skipped in round one, and the
+        // test that should have caught it had the same off-by-one written in.
         let (idx, wrapped) = next_turn_index(&ordered, None).unwrap();
-        assert_eq!(ordered[idx].id.as_u128(), 2);
+        assert_eq!(ordered[idx].id.as_u128(), 1);
         assert!(!wrapped);
 
         let (idx, wrapped) = next_turn_index(&ordered, Some(Uuid::from_u128(1))).unwrap();
