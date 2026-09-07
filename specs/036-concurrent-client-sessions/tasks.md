@@ -122,11 +122,11 @@ a stat change agrees in both and only one holds the canvas.
 - [X] T024 [US3a] Implement `claimPlayField` and `releasePlayField` in `src/server/src/graphql/mutations_play_field.rs` per `contracts/play-field-claim.md`, enforcing world membership at the boundary
 - [X] T025 [US3a] Add the `playFieldClaimChanged` subscription to `src/server/src/graphql/subscriptions.rs`, account-scoped, carrying the demotion notice
 - [X] T026 [US3a] Register both surfaces on the roots in `src/server/src/graphql/mod.rs` and add an SDL guard test asserting the field names the client uses, in the style of `the_access_surface_is_registered_under_the_names_the_client_uses`
-- [ ] T027 [US3a] Create `apps/web/src/services/playFieldClaim.ts` — claim on engine mount, release on unmount, per-page-load client id, and the demotion state
-- [ ] T028 [US3a] Claim from the play-field shell in `apps/web/src/pages/world/` immediately before the engine is created, and decline to mount without a held claim (research.md § R4: the canvas defines the play field, not the URL)
-- [ ] T029 [US3a] Add the demotion notice and a "take the table back" control to the play-field shell in `apps/web/src/pages/world/`
-- [ ] T030 [P] [US3a] Add vitest coverage for `playFieldClaim.ts` in `apps/web/src/services/__tests__/playFieldClaim.test.ts`
-- [ ] T031 [US3a] Add `apps/web/e2e/companion-sheet.spec.ts` covering US3a's four acceptance scenarios via the US2 fixture
+- [X] T027 [US3a] Create `apps/web/src/services/playFieldClaim.ts` — claim on engine mount, release on unmount, per-page-load client id, and the demotion state
+- [X] T028 [US3a] Claim from the play-field shell in `apps/web/src/pages/world/` immediately before the engine is created, and decline to mount without a held claim (research.md § R4: the canvas defines the play field, not the URL)
+- [X] T029 [US3a] Add the demotion notice and a "take the table back" control to the play-field shell in `apps/web/src/pages/world/`
+- [X] T030 [P] [US3a] Add vitest coverage for `playFieldClaim.ts` in `apps/web/src/services/__tests__/playFieldClaim.test.ts`
+- [X] T031 [US3a] Add `apps/web/e2e/companion-sheet.spec.ts` covering US3a's four acceptance scenarios via the US2 fixture
 
 **Checkpoint**: sheet on one screen, table on the other, one account
 
@@ -196,14 +196,14 @@ intact, roll, and assert the refusal names the play field and leaves no record.
 
 ### Tests for User Story 3c
 
-- [ ] T049 [P] [US3c] Add a server test in `src/server/src/peer_signaling.rs` asserting registration is refused for a caller holding no play-field claim (FR-038)
+- [X] T049 [P] [US3c] Add a server test in `src/server/src/peer_signaling.rs` asserting registration is refused for a caller holding no play-field claim (FR-038)
 
 ### Implementation for User Story 3c
 
-- [ ] T050 [US3c] Gate `peerSignals` registration on a held claim in `src/server/src/peer_signaling.rs` and `src/server/src/graphql/subscriptions.rs`, refusing at registration rather than inspecting relayed payloads (which the server deliberately never interprets)
-- [ ] T051 [US3c] Ensure a companion surface opens no peer connection at all in `apps/web/src/services/peerTransfer.ts` — the engine asks, and a companion has no engine
+- [X] T050 [US3c] Gate `peerSignals` registration on a held claim in `src/server/src/peer_signaling.rs` and `src/server/src/graphql/subscriptions.rs`, refusing at registration rather than inspecting relayed payloads (which the server deliberately never interprets)
+- [X] T051 [US3c] Ensure a companion surface opens no peer connection at all in `apps/web/src/services/peerTransfer.ts` — the engine asks, and a companion has no engine
 - [ ] T052 [US3c] Refuse adjudicated actions in companion surfaces while the server is unreachable, naming the play field, in `apps/web/src/components/sheet/` — record nothing and queue nothing (FR-040)
-- [ ] T053 [US3c] Add `apps/web/e2e/companion-offline.spec.ts` using `apps/web/e2e/fixtures/offline.ts`, asserting the refusal, the absence of any record, and that the play field's own ADR-052 continuation is unchanged (FR-041)
+- [X] T053 [US3c] Add `apps/web/e2e/companion-offline.spec.ts` using `apps/web/e2e/fixtures/offline.ts`, asserting the refusal, the absence of any record, and that the play field's own ADR-052 continuation is unchanged (FR-041)
 
 **Checkpoint**: the hard line is a behaviour with a test, not a paragraph
 

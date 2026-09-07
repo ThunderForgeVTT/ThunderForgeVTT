@@ -781,3 +781,63 @@ export async function catchUpWorldEvents(
 
   return "caught-up";
 }
+
+/** What the server says about who holds an account's play field. */
+export interface PlayFieldClaimMessage {
+  clientId: string;
+  worldId: string;
+  claimedAt: string;
+  isMine: boolean;
+}
+
+const PLAY_FIELD_SUBSCRIPTION = `
+subscription PlayField($worldId: UUID!, $clientId: String!) {
+  playField(worldId: $worldId, clientId: $clientId) {
+    clientId
+    worldId
+    claimedAt
+    isMine
+  }
+}
+`;
+
+/**
+ * Take this account's play field, and hold it for as long as the returned
+ * disposer is uncalled (spec 036 US3a).
+ *
+ * Subscribing *is* claiming — there is no mutation — so the lifetime of this
+ * subscription is the lifetime of the claim, and disposing it releases with
+ * no timeout and nothing for the server to reap. `null` means nobody holds
+ * it, which a companion needs in order to know that taking the table would
+ * take it from nobody.
+ *
+ * Shares the one socket every other subscription uses. A second client would
+ * be a second connection for one page, and the claim is per account rather
+ * than per connection, so nothing would be gained by isolating it.
+ */
+export function subscribeToPlayField(
+  worldId: string,
+  clientId: string,
+  handlers: {
+    next: (claim: PlayFieldClaimMessage | null) => void;
+    error: (message: string) => void;
+  },
+): () => void {
+  return getClient().subscribe<{ playField: PlayFieldClaimMessage | null }>(
+    { query: PLAY_FIELD_SUBSCRIPTION, variables: { worldId, clientId } },
+    {
+      next: (result) => {
+        handlers.next(result.data?.playField ?? null);
+      },
+      error: (err) => {
+        handlers.error(err instanceof Error ? err.message : String(err));
+      },
+      complete: () => {
+        // The server closed the stream, so this client is no longer holding
+        // anything. Reported as an absence rather than an error: a completed
+        // subscription is an orderly end, not a failure.
+        handlers.next(null);
+      },
+    },
+  );
+}

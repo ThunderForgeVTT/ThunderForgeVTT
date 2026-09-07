@@ -7,6 +7,11 @@ import {
   useSyncExternalStore,
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import {
+  claimPlayField,
+  subscribeToPlayFieldState,
+  type PlayFieldState,
+} from "../../services/playFieldClaim";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { WorldLayout } from "@/layouts/world-layout/WorldLayout";
@@ -185,6 +190,27 @@ export default function WorldPage() {
     }),
   );
   const [worldState, setWorldState] = useState(() => worldStore.getState());
+
+  // Spec 036 US3a: this window is the account's play field for as long as it
+  // is mounted. Subscribing is claiming — there is no mutation — so the claim
+  // lives exactly as long as this effect, and a window that is displaced by
+  // another of the same account finds out on the same stream.
+  const [playField, setPlayField] = useState<PlayFieldState>({
+    status: "unknown",
+    holderClientId: null,
+    error: null,
+  });
+  useEffect(() => {
+    if (!id) {
+      return;
+    }
+    const unwatch = subscribeToPlayFieldState(setPlayField);
+    const release = claimPlayField(id);
+    return () => {
+      release();
+      unwatch();
+    };
+  }, [id]);
 
   // Spec 029: the selected token's resources, read back from the engine rather
   // than held here. React observes; it does not become a second store
@@ -2169,6 +2195,32 @@ export default function WorldPage() {
   return (
     <>
       <SEO {...seo} />
+      {/* Always present, so "has this window taken the table yet?" is
+          observable rather than inferred from the absence of a banner —
+          which is also true before anything has happened. */}
+      <span
+        hidden
+        data-testid="play-field-status"
+        data-status={playField.status}
+      />
+      {playField.status === "companion" ? (
+        <div
+          role="status"
+          data-testid="play-field-taken-over-notice"
+          className="fixed inset-x-0 top-0 z-50 bg-amber-900/90 px-4 py-2 text-center text-sm text-amber-50"
+        >
+          Another window of your account has taken the table. This one is now a
+          companion — it will not apply changes to the map.{" "}
+          <button
+            type="button"
+            data-testid="take-play-field-back"
+            className="underline underline-offset-2"
+            onClick={() => claimPlayField(id)}
+          >
+            Take it back here
+          </button>
+        </div>
+      ) : null}
       {stackPicker ? (
         <TokenStackPicker
           members={stackPicker.members}
