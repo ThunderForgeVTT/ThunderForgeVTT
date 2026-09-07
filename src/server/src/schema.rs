@@ -575,6 +575,8 @@ diesel::table! {
         two_factor_admin_required -> Bool,
         is_admin -> Bool,
         email -> Varchar,
+        two_factor_pending_secret_encrypted -> Nullable<Text>,
+        two_factor_pending_started_at -> Nullable<Timestamp>,
     }
 }
 

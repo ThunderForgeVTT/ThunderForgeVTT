@@ -84,12 +84,21 @@ pub(crate) async fn two_factor_setup_start(
     };
 
     let mut conn = state.db_pool.get().expect("Failed to get DB connection");
+    let started_at = Utc::now().naive_utc();
     tokio::task::spawn_blocking(move || {
+        // ADR-081 / spec 041 FR-013: an enrolment in progress lives *beside*
+        // the live second factor, never on top of it.
+        //
+        // This used to write the new secret over the live one and set
+        // `two_factor_enabled = false` in the same statement, on a password
+        // alone — which made starting an enrolment a way to remove a
+        // confirmed factor without ever proving possession of it. Nothing
+        // live is touched here now; `two_factor_setup_confirm` promotes the
+        // pending secret once a code has proved it works.
         diesel::update(users::table.filter(users::id.eq(user_id)))
             .set((
-                users::two_factor_secret_encrypted.eq(Some(encrypted_secret)),
-                users::two_factor_enabled.eq(false),
-                users::two_factor_confirmed_at.eq::<Option<chrono::NaiveDateTime>>(None),
+                users::two_factor_pending_secret_encrypted.eq(Some(encrypted_secret)),
+                users::two_factor_pending_started_at.eq(Some(started_at)),
             ))
             .execute(&mut conn)
     })
@@ -126,7 +135,7 @@ pub(crate) async fn two_factor_setup_confirm(
             .select((
                 users::id,
                 users::password_hash,
-                users::two_factor_secret_encrypted,
+                users::two_factor_pending_secret_encrypted,
             ))
             .first::<(uuid::Uuid, String, Option<String>)>(&mut conn)
             .optional()
@@ -147,6 +156,9 @@ pub(crate) async fn two_factor_setup_confirm(
         return error_response(StatusCode::UNAUTHORIZED, "failure", "Invalid credentials");
     }
 
+    // No enrolment in progress. Deliberately the same answer whether the
+    // account has a live second factor or none at all: confirming is about the
+    // enrolment that was started, and there was not one.
     let Some(secret_encrypted) = secret_encrypted else {
         return error_response(
             StatusCode::BAD_REQUEST,
@@ -182,10 +194,19 @@ pub(crate) async fn two_factor_setup_confirm(
         Ok(true) => {
             let mut conn = state.db_pool.get().expect("Failed to get DB connection");
             tokio::task::spawn_blocking(move || {
+                // The code proved the pending secret works, so it becomes the
+                // live one and the pending slot is emptied. Until this
+                // statement runs, whatever the account had before is still
+                // what it has.
                 diesel::update(users::table.filter(users::id.eq(user_id)))
                     .set((
+                        users::two_factor_secret_encrypted
+                            .eq(users::two_factor_pending_secret_encrypted.nullable()),
                         users::two_factor_enabled.eq(true),
                         users::two_factor_confirmed_at.eq(Some(now)),
+                        users::two_factor_pending_secret_encrypted.eq::<Option<String>>(None),
+                        users::two_factor_pending_started_at
+                            .eq::<Option<chrono::NaiveDateTime>>(None),
                     ))
                     .execute(&mut conn)
             })

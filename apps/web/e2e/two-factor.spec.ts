@@ -53,15 +53,15 @@ import {
  *
  * # Known defects this file records rather than papers over
  *
- *   1. **There is no way to switch two-factor off.** Nothing in the server
- *      sets `two_factor_enabled` back to false except registration, admin
- *      bootstrap, and `setup/start` itself. The last one is the problem, and
- *      it is asserted against in the final test: anyone holding *only the
- *      password* can call `setup/start` and the account's confirmed second
- *      factor stops being required, without ever proving possession of the
- *      first secret. That test is `test.fail()`-marked — the assertion is the
- *      correct one, and it is expected to fail until the server keeps the
- *      confirmed factor in force until a replacement is confirmed.
+ *   1. **There is still no way to switch two-factor off deliberately.**
+ *      Nothing in the server sets `two_factor_enabled` back to false except
+ *      registration and admin bootstrap. FR-012 and FR-014 specify a removal
+ *      that proves possession; it does not exist yet.
+ *
+ *      What *was* here — `setup/start` clearing the confirmed factor on a
+ *      password alone, so the only route off was also a route round — is
+ *      fixed as of 2026-09-07 (ADR-081). The final test asserted the correct
+ *      behaviour while it was still broken and now passes unchanged.
  *   2. Turning the instance policy on locks out every account that has not
  *      enrolled: they are challenged, they have no secret, and
  *      `verify_two_factor_for_user` answers `false` for a user with no stored
@@ -602,25 +602,25 @@ test.describe("the instance-wide policy", () => {
 
 test.describe("switching two-factor back off", () => {
   /**
-   * **Expected to fail. This is a product defect, not a broken test.**
+   * Spec 041 FR-013, fixed 2026-09-07 by ADR-081.
    *
-   * There is no disable endpoint at all — nothing in `src/server/src` clears
-   * `two_factor_enabled` for an existing account except `setup/start`, which
-   * asks for the password and nothing else. So the only route off two-factor
-   * is also a route *round* it: a stranger holding the password of an enrolled
-   * account calls `setup/start`, never confirms, and the account is back to
-   * password-only. The second factor is removed by someone who only ever
-   * proved the first.
+   * This was an expected failure, and it recorded a real hole: there is no
+   * disable endpoint at all, so the only route *off* two-factor was also a
+   * route *round* it. `setup/start` asked for the password and nothing else,
+   * then wrote a fresh secret over the live one and cleared
+   * `two_factor_enabled` in the same statement — a stranger holding only the
+   * password could start an enrolment, never confirm it, and leave the account
+   * back on passwords alone. The second factor removed by somebody who proved
+   * only the first.
    *
-   * The assertion below is the one the product should satisfy — a confirmed
-   * factor stays in force until a replacement is confirmed — and it is written
-   * as such rather than softened to describe what happens today. When the
-   * server is fixed, Playwright will report this as "expected to fail but
-   * passed"; drop the `test.fail()` line then, and add the disable surface's
-   * own coverage (a person with a valid code, or their password plus a code,
-   * turning it off deliberately) beside it.
+   * An enrolment in progress now lives beside the live factor rather than on
+   * top of it, and is promoted only when a code proves the new secret works.
+   * The assertion below did not change when the product was fixed; the
+   * `test.fail()` above it was simply removed.
+   *
+   * Still missing, and not covered here: a deliberate way to turn a second
+   * factor off, which FR-012 and FR-014 specify and nothing yet implements.
    */
-  test.fail();
   test("a fresh enrolment request must not silently strip the confirmed factor", async ({
     page,
   }) => {
