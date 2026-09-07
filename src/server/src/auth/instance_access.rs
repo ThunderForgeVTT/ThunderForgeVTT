@@ -331,11 +331,30 @@ mod tests {
         test_app_state,
     };
 
+    /// The instance's access policy is one row, and the events table is
+    /// global. So these tests cannot be isolated by giving each its own data
+    /// the way the rest of the suite is: whatever policy one sets, the next
+    /// one reads. They are serialised instead — `arrange` takes the lock and
+    /// hands it to the test, which holds it until it returns.
+    ///
+    /// Without this they pass alone and fail together, which is the worst way
+    /// for a test to be wrong: a `--test-threads=1` rerun says "green" and the
+    /// default command says "broken gate". `repo_host_tests.rs` serialises
+    /// process-global environment variables behind the same idiom.
+    static POLICY_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
     /// The policy must be set explicitly rather than inherited from the
     /// migration's seed: the shared test database has users in it, so it
     /// seeded `open`, and a test that assumed otherwise would pass for the
     /// wrong reason.
-    fn arrange(policy: &str) -> (crate::state::AppState, uuid::Uuid) {
+    async fn arrange(
+        policy: &str,
+    ) -> (
+        tokio::sync::MutexGuard<'static, ()>,
+        crate::state::AppState,
+        uuid::Uuid,
+    ) {
+        let guard = POLICY_LOCK.lock().await;
         dotenvy::dotenv().ok();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
@@ -360,7 +379,7 @@ mod tests {
         };
         set_instance_access_policy(&mut conn, policy);
         drop(conn);
-        (state, admin_id)
+        (guard, state, admin_id)
     }
 
     /// Fail shut. A stored policy this build does not understand must not be
@@ -387,7 +406,7 @@ mod tests {
     /// FR-001 and the contract's decision table, all three states.
     #[tokio::test]
     async fn the_policy_decides_admission_on_every_route() {
-        let (state, admin_id) = arrange("open");
+        let (_policy, state, admin_id) = arrange("open").await;
         let route = AdmissionRoute::Local;
 
         assert!(
@@ -447,7 +466,7 @@ mod tests {
     /// they guessed a real one.
     #[tokio::test]
     async fn every_unusable_invitation_refuses_identically() {
-        let (state, admin_id) = arrange("invite_only");
+        let (_policy, state, admin_id) = arrange("invite_only").await;
         let route = AdmissionRoute::Local;
 
         let (revoked, expired, exhausted) = {
@@ -486,7 +505,7 @@ mod tests {
     /// consume followed by a release leaves the count where it started.
     #[tokio::test]
     async fn a_released_use_returns_to_the_invitation() {
-        let (state, admin_id) = arrange("invite_only");
+        let (_policy, state, admin_id) = arrange("invite_only").await;
         let (id, code) = {
             let mut conn = state.db_pool.get().unwrap();
             insert_test_instance_invitation(&mut conn, admin_id, 1, None, false)
@@ -515,7 +534,7 @@ mod tests {
     /// conditional UPDATE back to read-then-write.
     #[tokio::test]
     async fn an_n_use_invitation_admits_exactly_n_under_concurrency() {
-        let (state, admin_id) = arrange("invite_only");
+        let (_policy, state, admin_id) = arrange("invite_only").await;
         const N: i32 = 3;
         let attempts = (N + 2) as usize;
 
@@ -561,7 +580,24 @@ mod tests {
     /// address. The struct makes that structural, and this asserts it stays so.
     #[tokio::test]
     async fn access_events_record_the_act_and_never_the_person() {
-        let (state, admin_id) = arrange("closed");
+        let (_policy, state, admin_id) = arrange("closed").await;
+
+        // The events table is global, and this test asserts on the rows *it*
+        // wrote. `POLICY_LOCK` stops another test writing beside it, but
+        // earlier runs against the same database have left their own rows
+        // behind — so the ids already present are subtracted afterwards
+        // rather than trusting that the newest few are ours. A set difference
+        // is used in preference to a timestamp or id boundary because both
+        // order ambiguously for anything written in the same millisecond.
+        let existing: std::collections::HashSet<Uuid> = {
+            let mut conn = state.db_pool.get().unwrap();
+            crate::schema::instance_access_events::table
+                .select(crate::schema::instance_access_events::id)
+                .load::<Uuid>(&mut conn)
+                .unwrap()
+                .into_iter()
+                .collect()
+        };
 
         record_refusal(&state, &AdmissionRoute::OAuth("google".to_string())).await;
         crate::admin::update_instance_access_policy(
@@ -576,9 +612,16 @@ mod tests {
         let rows = crate::schema::instance_access_events::table
             .order(crate::schema::instance_access_events::occurred_at.desc())
             .select(crate::models::InstanceAccessEvent::as_select())
-            .limit(10)
             .load::<crate::models::InstanceAccessEvent>(&mut conn)
-            .unwrap();
+            .unwrap()
+            .into_iter()
+            .filter(|r| !existing.contains(&r.id))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            rows.len(),
+            2,
+            "this test writes exactly one refusal and one policy change"
+        );
 
         let refusal = rows
             .iter()
