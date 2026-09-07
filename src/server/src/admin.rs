@@ -653,119 +653,6 @@ fn to_i64(value: u64) -> i64 {
     i64::try_from(value).unwrap_or(i64::MAX)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{default_manifest, editable_manifest_keys, is_editable_manifest_key, user_role};
-
-    /// The shipped seed file parses, and seeds what it says it seeds.
-    ///
-    /// It is compiled in with `include_str!`, so a malformed or renamed key is
-    /// a runtime panic on first boot rather than a compile error — the one
-    /// failure mode this arrangement has, and the reason this test exists. It
-    /// caught exactly that: the file shipped `schemaVersion` while the struct
-    /// expected `schema_version`, and everything still built.
-    #[test]
-    fn the_shipped_realm_defaults_parse_and_seed_a_manifest() {
-        let manifest = default_manifest();
-
-        assert!(
-            !manifest.schema_version.is_empty(),
-            "a realm seeded with no schema version"
-        );
-        // Every key the settings page offers to edit must actually be seeded,
-        // or an operator opens the page to a blank field for a setting the
-        // product claims to have.
-        for key in editable_manifest_keys() {
-            assert!(
-                manifest.metadata.contains_key(*key),
-                "editable setting `{key}` is not seeded by config/realm-defaults.json"
-            );
-        }
-    }
-
-    /// A manifest written before a seed key existed gains it (traced bug).
-    ///
-    /// `ensure_manifest_exists` returns early once the file is there, so a key
-    /// added to the product later was absent on every install that already
-    /// existed — permanently and silently. This machine's manifest predated
-    /// `default_game_system_id`, so `default_game_system_id()` answered `None`
-    /// and a world created without naming a system came out with **no system
-    /// at all**: no error, no default, and a sheet with nothing on it.
-    #[test]
-    fn a_manifest_written_before_a_seed_existed_gains_it_on_read() {
-        let mut stored = default_manifest();
-        stored.metadata.remove("default_game_system_id");
-        assert!(!stored.metadata.contains_key("default_game_system_id"));
-
-        super::backfill_missing_seeds(&mut stored);
-
-        assert_eq!(
-            stored.metadata.get("default_game_system_id"),
-            default_manifest().metadata.get("default_game_system_id"),
-            "a key the stored manifest never had must arrive from the shipped seeds"
-        );
-    }
-
-    /// And a value an operator set is theirs, including one that differs from
-    /// the shipped default on purpose. Backfilling absent keys is a migration;
-    /// correcting present ones would be an override, and would silently undo
-    /// somebody's decision on every read.
-    #[test]
-    fn an_operators_own_value_is_never_corrected_to_the_shipped_one() {
-        let mut stored = default_manifest();
-        stored
-            .metadata
-            .insert("realm_name".to_string(), "The Iron Table".to_string());
-        stored.metadata.insert(
-            "default_game_system_id".to_string(),
-            "fate_core".to_string(),
-        );
-
-        super::backfill_missing_seeds(&mut stored);
-
-        assert_eq!(stored.metadata.get("realm_name").unwrap(), "The Iron Table");
-        assert_eq!(
-            stored.metadata.get("default_game_system_id").unwrap(),
-            "fate_core"
-        );
-    }
-
-    /// Blanking the seeded system would make every new world systemless on
-    /// every install, which is a silent regression rather than a tidy-up: no
-    /// world would name a system and nothing would say why.
-    #[test]
-    fn a_fresh_realm_is_seeded_with_a_game_system() {
-        let manifest = default_manifest();
-        let seeded = manifest
-            .metadata
-            .get("default_game_system_id")
-            .map(String::as_str)
-            .unwrap_or("");
-
-        assert!(!seeded.is_empty(), "a realm seeded with no game system");
-        // Deliberately not asserting *which*. That is an operator's choice and
-        // a shipped default, and pinning it here would put the system's name
-        // back into src/server — which is the thing T014a3 just removed.
-    }
-
-    #[test]
-    fn editable_manifest_keys_are_whitelisted() {
-        assert!(is_editable_manifest_key("interface_pack_id"));
-        // Which system a new world starts with is an operator's decision, and
-        // this is where operators make it — spec 032 FR-029 is what moved it
-        // out of `prepare_world_input`.
-        assert!(is_editable_manifest_key("default_game_system_id"));
-        assert!(!is_editable_manifest_key("schema_version"));
-        assert_eq!(editable_manifest_keys().len(), 6);
-    }
-
-    #[test]
-    fn user_role_reflects_admin_flag() {
-        assert_eq!(user_role(true), "admin");
-        assert_eq!(user_role(false), "user");
-    }
-}
-
 /// Spec 035 / ADR-072: read the instance's admission policy.
 ///
 /// The settings row is seeded by the migration, conditionally on whether the
@@ -877,4 +764,117 @@ pub async fn update_instance_access_policy(
     .await
     .map_err(|_| "Failed to spawn blocking task".to_string())?
     .map_err(|_| "Failed to update the instance access policy".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{default_manifest, editable_manifest_keys, is_editable_manifest_key, user_role};
+
+    /// The shipped seed file parses, and seeds what it says it seeds.
+    ///
+    /// It is compiled in with `include_str!`, so a malformed or renamed key is
+    /// a runtime panic on first boot rather than a compile error — the one
+    /// failure mode this arrangement has, and the reason this test exists. It
+    /// caught exactly that: the file shipped `schemaVersion` while the struct
+    /// expected `schema_version`, and everything still built.
+    #[test]
+    fn the_shipped_realm_defaults_parse_and_seed_a_manifest() {
+        let manifest = default_manifest();
+
+        assert!(
+            !manifest.schema_version.is_empty(),
+            "a realm seeded with no schema version"
+        );
+        // Every key the settings page offers to edit must actually be seeded,
+        // or an operator opens the page to a blank field for a setting the
+        // product claims to have.
+        for key in editable_manifest_keys() {
+            assert!(
+                manifest.metadata.contains_key(*key),
+                "editable setting `{key}` is not seeded by config/realm-defaults.json"
+            );
+        }
+    }
+
+    /// A manifest written before a seed key existed gains it (traced bug).
+    ///
+    /// `ensure_manifest_exists` returns early once the file is there, so a key
+    /// added to the product later was absent on every install that already
+    /// existed — permanently and silently. This machine's manifest predated
+    /// `default_game_system_id`, so `default_game_system_id()` answered `None`
+    /// and a world created without naming a system came out with **no system
+    /// at all**: no error, no default, and a sheet with nothing on it.
+    #[test]
+    fn a_manifest_written_before_a_seed_existed_gains_it_on_read() {
+        let mut stored = default_manifest();
+        stored.metadata.remove("default_game_system_id");
+        assert!(!stored.metadata.contains_key("default_game_system_id"));
+
+        super::backfill_missing_seeds(&mut stored);
+
+        assert_eq!(
+            stored.metadata.get("default_game_system_id"),
+            default_manifest().metadata.get("default_game_system_id"),
+            "a key the stored manifest never had must arrive from the shipped seeds"
+        );
+    }
+
+    /// And a value an operator set is theirs, including one that differs from
+    /// the shipped default on purpose. Backfilling absent keys is a migration;
+    /// correcting present ones would be an override, and would silently undo
+    /// somebody's decision on every read.
+    #[test]
+    fn an_operators_own_value_is_never_corrected_to_the_shipped_one() {
+        let mut stored = default_manifest();
+        stored
+            .metadata
+            .insert("realm_name".to_string(), "The Iron Table".to_string());
+        stored.metadata.insert(
+            "default_game_system_id".to_string(),
+            "fate_core".to_string(),
+        );
+
+        super::backfill_missing_seeds(&mut stored);
+
+        assert_eq!(stored.metadata.get("realm_name").unwrap(), "The Iron Table");
+        assert_eq!(
+            stored.metadata.get("default_game_system_id").unwrap(),
+            "fate_core"
+        );
+    }
+
+    /// Blanking the seeded system would make every new world systemless on
+    /// every install, which is a silent regression rather than a tidy-up: no
+    /// world would name a system and nothing would say why.
+    #[test]
+    fn a_fresh_realm_is_seeded_with_a_game_system() {
+        let manifest = default_manifest();
+        let seeded = manifest
+            .metadata
+            .get("default_game_system_id")
+            .map(String::as_str)
+            .unwrap_or("");
+
+        assert!(!seeded.is_empty(), "a realm seeded with no game system");
+        // Deliberately not asserting *which*. That is an operator's choice and
+        // a shipped default, and pinning it here would put the system's name
+        // back into src/server — which is the thing T014a3 just removed.
+    }
+
+    #[test]
+    fn editable_manifest_keys_are_whitelisted() {
+        assert!(is_editable_manifest_key("interface_pack_id"));
+        // Which system a new world starts with is an operator's decision, and
+        // this is where operators make it — spec 032 FR-029 is what moved it
+        // out of `prepare_world_input`.
+        assert!(is_editable_manifest_key("default_game_system_id"));
+        assert!(!is_editable_manifest_key("schema_version"));
+        assert_eq!(editable_manifest_keys().len(), 6);
+    }
+
+    #[test]
+    fn user_role_reflects_admin_flag() {
+        assert_eq!(user_role(true), "admin");
+        assert_eq!(user_role(false), "user");
+    }
 }

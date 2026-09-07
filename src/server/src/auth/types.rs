@@ -190,6 +190,14 @@ pub(crate) enum ResolveOutcome {
     NoMatchingUser,
     /// Spec 035 / ADR-072: the instance's policy refuses to admit this
     /// identity. No account was created and no session is issued.
+    ///
+    /// Never constructed today: the pre-flight gate in `oauth.rs` returns
+    /// early, so the blocking closure cannot yield it. It exists so that
+    /// `resolve_oauth_login`'s caller keeps a place to put the refusal if the
+    /// decision ever moves inside the closure, and `oauth.rs` matches it for
+    /// the same reason. `expect` rather than `allow` so that the day it *is*
+    /// constructed, the unfulfilled expectation says the note above is stale.
+    #[expect(dead_code, reason = "matched for exhaustiveness; see oauth.rs")]
     NotAdmitted(String),
 }
 
