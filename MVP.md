@@ -42,6 +42,31 @@ set works — with Discord, Google, GitHub and Keycloak as built-in presets, and
 multiple named instances of one provider type are supported (two Keycloak
 realms, say). ADR-041.
 
+**Sessions changed on 2026-09-07 (spec 036, ADR-073).** Signing in used to
+revoke every live session for the account — one line in `create_session`,
+deliberate, "to reduce session replay risk" — so one account could be signed
+in in exactly one place and a second browser signed the first one out. That is
+gone. An account now holds up to ten concurrent sessions, the eleventh ends
+the least recently used, and a person can list their own sessions and end one
+or all of them (`mySessions`, `endSession`, `endAllSessions`). Exactly one
+client is at the table; the rest are companion surfaces.
+
+**Two-factor is still not something a person can switch on.** The verifier,
+the challenge and the instance-wide policy all work and are now covered end to
+end (`apps/web/e2e/two-factor.spec.ts`), and as of 2026-09-07 a confirmed
+factor can no longer be stripped by a password alone (ADR-081) and enrolment
+issues ten single-use recovery codes. What is missing is the enrolment
+interface itself — the setup endpoints are still called from nowhere in
+`apps/web/src` — and a deliberate way to turn a second factor off, which spec
+041's FR-012 and FR-014 specify and nothing implements. Until the first
+exists, turning the instance-wide requirement on locks out every account that
+has not enrolled by hand.
+
+**There is no password-change path at all.** `password_hash` is only ever
+written at registration, admin bootstrap and OAuth auto-provisioning. Recorded
+because spec 036 FR-008 assumes one, and it is the sort of absence that reads
+as an oversight in a feature list.
+
 ### [x] Phase 2 — World creation
 
 `createWorld` with `game_system_id`/`interface_pack_id`, plus listing and
@@ -222,7 +247,14 @@ Invite codes and shareable links, `joinWorld`, `world_members` and
 dead link the _same_ message, whatever the cause — telling the holder which
 cause applied is exactly what the server refuses to disclose (FR-011/SC-005).
 
-**Closed since the last pass**: GM override of character selection, previously
+**Closed since the last pass**: one account can now be signed in on several
+clients at once (spec 036, ADR-073), which was the defect that interrupted a
+demo — a second browser used to sign the first one out. Exactly one of those
+clients holds the play field; the others are companion surfaces, and peer
+reachability belongs to the play field alone (ADR-075), so a companion cannot
+become a second peer endpoint for one person.
+
+**Also closed**: GM override of character selection, previously
 recorded here as unaudited, is delivered by spec 017. A GM may un-claim any
 character at any time under their existing Owner-level authority over every
 actor in their world (spec 010's DM-always-full-control rule), and the
