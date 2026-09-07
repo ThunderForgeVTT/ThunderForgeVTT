@@ -1,0 +1,92 @@
+{
+  "_comment": [
+    "The redaction rules FR-012 is judged against (spec 037, research R6,",
+    "contracts/attachments.md §2).",
+    "",
+    "One list, two consumers: apps/web/src/services/feedbackRedaction.ts",
+    "applies it in the browser at push time into the log ring buffer, and the",
+    "server's feedback validator applies the same list to the approved payload",
+    "and *refuses* rather than rewrites. A rule that existed only on the server",
+    "would produce refusals the person could not have anticipated; a rule that",
+    "existed only on the client would be no rule at all. So neither side owns",
+    "the rules — this file does.",
+    "",
+    "It lives in config/ next to realm-defaults.json and is read the same way:",
+    "imported by the bundler on the web side, include_str! on the Rust side.",
+    "A rule set that can be absent at runtime is a rule set that will be.",
+    "",
+    "PATTERN DIALECT — the one constraint that matters. Every pattern here",
+    "must mean the same thing to JavaScript's RegExp and to Rust's `regex`",
+    "crate, so it is written in the subset both share: no lookahead, no",
+    "lookbehind, no backreferences (Rust has none of them), and no inline",
+    "flags (each side sets them from `ignore_case`). Matching is always",
+    "global — every occurrence in a line, not the first. Replacements are",
+    "literal text with no capture-group references, because `$1` and `${1}`",
+    "do not mean the same thing on both sides.",
+    "",
+    "Every replacement is VISIBLE. A secret is never silently deleted: the",
+    "person is entitled to see that something was removed and what kind of",
+    "thing it was, and a silent removal is indistinguishable from a rule that",
+    "never fired.",
+    "",
+    "Order is significant. Rules are applied in the order listed, so the",
+    "widest shapes (a PEM block, a whole header line) come before the narrow",
+    "ones that could otherwise chew a hole in the middle of them.",
+    "",
+    "A rule marked \"dynamic\": true has no pattern here because its pattern is",
+    "not a constant — it is built at runtime from a value the side in question",
+    "knows (the signed-in account's own email address). It is declared anyway",
+    "so that both sides agree the kind exists and share its replacement."
+  ],
+  "schema_version": "feedback-redaction-2026.09",
+  "rules": [
+    {
+      "kind": "pem",
+      "why": "A private key pasted or logged in full. Widest shape, so it runs first: the base64 body would otherwise be diced up by the jwt and aws_key rules and the result would still contain most of the key. The second alternative takes everything after a BEGIN marker that has no END — a key truncated by the per-entry byte bound is still a key, and both engines prefer the leftmost alternative, so a complete block still ends at its END line.",
+      "pattern": "-----BEGIN[^-\\n]{0,100}-----[\\s\\S]*?-----END[^-\\n]{0,100}-----|-----BEGIN[^-\\n]{0,100}-----[\\s\\S]*",
+      "ignore_case": false,
+      "replacement": "[redacted: private key]"
+    },
+    {
+      "kind": "cookie",
+      "why": "Cookie and Set-Cookie headers, and the session cookie's own name wherever it appears in an assignment. The names are the two this product actually sets: crates/thunderforge-axum-auth-core/src/session.rs SESSION_COOKIE_NAME and CSRF_COOKIE_NAME. Matching the bare word `session` anywhere would redact half of every log this feature exists to deliver, so it is matched only where it is being assigned a value.",
+      "pattern": "(?:set-)?cookie\\s*:[^\\n\\r]*|\\b(?:session|csrf_token)\\s*=\\s*[^\\s;,&\"']+",
+      "ignore_case": true,
+      "replacement": "[redacted: cookie]"
+    },
+    {
+      "kind": "bearer_token",
+      "why": "An Authorization header, or a bare `Bearer <token>` in a logged request. The header prefix is optional so that a token logged on its own is still caught.",
+      "pattern": "(?:authorization\\s*[:=]\\s*)?bearer\\s+[A-Za-z0-9\\-._~+/]{4,}=*",
+      "ignore_case": true,
+      "replacement": "[redacted: bearer token]"
+    },
+    {
+      "kind": "jwt",
+      "why": "A compact JWS triple. Two alternatives rather than a generic xxx.yyy.zzz, which would redact every dotted package name and hostname in the buffer: the first anchors on `eyJ` (the base64url of `{\"`, which every JWT header begins with), the second catches a non-JWT dotted token only when all three segments are long enough that no ordinary identifier could be mistaken for one.",
+      "pattern": "\\beyJ[A-Za-z0-9_-]{4,}\\.[A-Za-z0-9_-]{4,}\\.[A-Za-z0-9_-]{4,}|\\b[A-Za-z0-9_-]{20,}\\.[A-Za-z0-9_-]{20,}\\.[A-Za-z0-9_-]{20,}\\b",
+      "ignore_case": false,
+      "replacement": "[redacted: token]"
+    },
+    {
+      "kind": "url_credential",
+      "why": "How a presigned storage URL leaks. Not hypothetical: src/server/src/storage/rustfs.rs mints per-call STS credentials scoped to one key, and a failing asset fetch logs the URL that carried them. The leading ? or & is consumed because Rust's regex has no lookbehind, so the separator cannot be matched without being taken.",
+      "pattern": "[?&](?:token|access_token|key|sig|signature|x-amz-signature|x-amz-credential|x-amz-security-token)=[^&\\s\"'<>]+",
+      "ignore_case": true,
+      "replacement": "[redacted: signed url]"
+    },
+    {
+      "kind": "aws_key",
+      "why": "Access key ids have a fixed shape; STS session tokens have a recognisable prefix; a secret access key has no shape at all, so it is caught by the name it is written down under.",
+      "pattern": "\\b(?:AKIA|ASIA)[0-9A-Z]{16}\\b|\\b(?:FwoG|FQoG|IQoJ)[A-Za-z0-9+/=_-]{20,}|(?:aws_)?secret_access_key\\s*[:=]\\s*[^\\s,;\"']+",
+      "ignore_case": true,
+      "replacement": "[redacted: storage credential]"
+    },
+    {
+      "kind": "submitter_email",
+      "why": "FR-013: the submitter's address must not reach the destination, and a log line is one of the two routes it could take (the other is the issue body, which carries an opaque submission reference instead). Dynamic because the address is not a constant — the client learns it from the signed-in account, the server from the row.",
+      "dynamic": true,
+      "replacement": "[redacted: email]"
+    }
+  ]
+}
