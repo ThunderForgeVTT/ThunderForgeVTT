@@ -62,12 +62,18 @@ import {
  *      password alone, so the only route off was also a route round — is
  *      fixed as of 2026-09-07 (ADR-081). The final test asserted the correct
  *      behaviour while it was still broken and now passes unchanged.
- *   2. Turning the instance policy on locks out every account that has not
- *      enrolled: they are challenged, they have no secret, and
+ *   2. Turning the instance policy on still locks out every account that has
+ *      not enrolled: they are challenged, they have no secret, and
  *      `verify_two_factor_for_user` answers `false` for a user with no stored
- *      secret. With no enrolment UI there is no way for them to fix it. The
- *      policy test below proves the enforcement (which is the FR), and
- *      deliberately does not pretend the lockout is fine.
+ *      secret. The challenge screen offers no way to enrol *from there*, which
+ *      is spec 041 FR-019 and is unbuilt — an account caught by the policy
+ *      cannot fix it at the point it is refused.
+ *
+ *      What changed on 2026-09-07: there is now an enrolment screen at
+ *      `/settings/security`, so an account that has not yet been locked out
+ *      can enrol before the policy is turned on. The lockout is narrower than
+ *      it was and is not gone. The policy test below proves the enforcement
+ *      (which is the FR), and deliberately does not pretend it is fine.
  *   3. A code is not bound to the step it was minted for
  *      (`totp.check_current(...).is_some()` drops the matched step), so the
  *      same six digits verify against a *new* challenge for as long as the

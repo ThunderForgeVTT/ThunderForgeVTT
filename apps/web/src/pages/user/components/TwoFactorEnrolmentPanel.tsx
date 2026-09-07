@@ -191,7 +191,11 @@ export function TwoFactorEnrolmentPanel() {
   };
 
   return (
-    <Card surface="parchment" className="grid gap-5 p-6">
+    <Card
+      surface="parchment"
+      className="grid gap-5 p-6"
+      data-testid="two-factor-enrolment-panel"
+    >
       <header className="grid gap-1">
         <h2 className="text-lg font-semibold">Two-factor authentication</h2>
         <p className="text-sm text-muted-foreground">
@@ -227,6 +231,7 @@ export function TwoFactorEnrolmentPanel() {
             hint="Confirms it is you before a new second factor is issued."
           >
             <Input
+              data-testid="two-factor-password"
               id="two-factor-password"
               name="password"
               type="password"
@@ -238,6 +243,7 @@ export function TwoFactorEnrolmentPanel() {
           </Field>
           <div>
             <Button
+              data-testid="two-factor-begin"
               type="submit"
               variant="primary"
               icon="shield"
@@ -285,6 +291,7 @@ export function TwoFactorEnrolmentPanel() {
                 hint="Spaces are only there to make it readable — type it with or without them."
               >
                 <code
+                  data-testid="two-factor-setup-key"
                   id="two-factor-secret"
                   className="block rounded-md border border-border bg-muted px-3 py-2 font-mono text-sm break-all select-all"
                 >
@@ -316,6 +323,7 @@ export function TwoFactorEnrolmentPanel() {
               hint="Six digits. If it is refused, wait for the next one and try again — you will not need to scan anything twice."
             >
               <Input
+                data-testid="two-factor-code"
                 ref={codeInputRef}
                 id="two-factor-code"
                 name="twoFactorCode"
@@ -329,6 +337,7 @@ export function TwoFactorEnrolmentPanel() {
             </Field>
             <div className="flex flex-wrap gap-3">
               <Button
+                data-testid="two-factor-confirm"
                 type="submit"
                 variant="primary"
                 icon="shield"
@@ -373,7 +382,9 @@ export function TwoFactorEnrolmentPanel() {
           </div>
           <ul className="grid grid-cols-2 gap-2 rounded-md border border-border bg-muted p-3 font-mono text-sm select-all">
             {state.recoveryCodes.map((recoveryCode) => (
-              <li key={recoveryCode}>{recoveryCode}</li>
+              <li key={recoveryCode} data-testid="two-factor-recovery-code">
+                {recoveryCode}
+              </li>
             ))}
           </ul>
           <div>

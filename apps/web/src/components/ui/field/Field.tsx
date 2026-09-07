@@ -30,7 +30,13 @@ export function Field({
         ) : null}
       </Label>
       {children}
-      {error ? <span className="text-sm text-destructive">{error}</span> : null}
+      {error ? (
+        // Addressable, because a form's error is the thing a test most often
+        // needs to assert and the least stable thing to select by text.
+        <span data-testid="field-error" className="text-sm text-destructive">
+          {error}
+        </span>
+      ) : null}
       {hint && !error ? (
         <span className="text-sm text-muted-foreground">{hint}</span>
       ) : null}

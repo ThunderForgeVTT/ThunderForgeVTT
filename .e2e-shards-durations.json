@@ -105,5 +105,6 @@
   "e2e/dmca-counter-notice.spec.ts": 34.92,
   "e2e/two-factor.spec.ts": 41.009,
   "e2e/concurrent-sessions.spec.ts": 21.166,
-  "e2e/play-field-claim.spec.ts": 38.643
+  "e2e/play-field-claim.spec.ts": 38.643,
+  "e2e/two-factor-enrolment.spec.ts": 8.825
 }
