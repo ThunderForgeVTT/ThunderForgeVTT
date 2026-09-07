@@ -98,5 +98,10 @@
   "e2e/lore-repository-sync.spec.ts": 28.262,
   "e2e/singleton-share-anonymous-access.spec.ts": 5.709,
   "e2e/instance-access-gate.spec.ts": 3.854,
-  "e2e/instance-invitations.spec.ts": 2.97
+  "e2e/instance-invitations.spec.ts": 2.97,
+  "e2e/user-data-export.spec.ts": 19.45,
+  "e2e/chat-panel.spec.ts": 26.912,
+  "e2e/combat-panel.spec.ts": 40.488,
+  "e2e/dmca-counter-notice.spec.ts": 34.92,
+  "e2e/two-factor.spec.ts": 24.233
 }
