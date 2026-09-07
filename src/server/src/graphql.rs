@@ -70,6 +70,7 @@ pub mod mutations_collection_shares;
 pub mod mutations_collections;
 pub mod mutations_instance_access;
 pub mod mutations_invites;
+pub mod mutations_sessions;
 pub mod permissioned_entity_resolvers;
 pub mod share_codes;
 pub mod share_rate_limit;
@@ -260,6 +261,8 @@ pub struct QueryRoot(
     ActorPermissionQuery,
     ActorShareQuery,
     mutations_instance_access::InstanceAccessQuery,
+    // Spec 036 US4: the sessions a person holds, now that they may hold several.
+    mutations_sessions::SessionQuery,
     LoreQuery,
     LorePermissionQuery,
     // Spec 034: the world's repository connection, its runs, and whether this
@@ -319,6 +322,7 @@ pub struct MutationRoot(
     ActorPermissionMutation,
     ActorShareMutation,
     mutations_instance_access::InstanceAccessMutation,
+    mutations_sessions::SessionMutation,
     mutations_actor_images::ActorImageMutation,
     LoreMutation,
     LorePermissionMutation,

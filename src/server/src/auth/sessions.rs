@@ -16,10 +16,17 @@ pub(crate) const MAX_CONCURRENT_SESSIONS: usize = 10;
 ///
 /// The set is mirrored by a CHECK constraint in the spec-036 migration, so a
 /// value added here without adding it there fails at the insert rather than
-/// silently widening the column.
+/// silently widening the column. The constraint also carries
+/// `password_changed` and `expired`, which nothing writes yet: this product
+/// has no password-change path at all, and expiry is decided by comparing
+/// `expires_at` rather than by writing a row. Both are in the constraint
+/// because the migration is where the vocabulary is fixed; neither is a
+/// constant here, because a constant nothing uses is a constant nobody
+/// maintains.
 pub(crate) mod ended_reason {
     pub(crate) const SIGNED_OUT: &str = "signed_out";
     pub(crate) const BOUND_EXCEEDED: &str = "bound_exceeded";
+    pub(crate) const ENDED_BY_USER: &str = "ended_by_user";
 }
 
 pub(crate) async fn basic_authentication(

@@ -168,6 +168,11 @@ pub(crate) use admin_setup::*;
 pub(crate) mod sessions;
 pub(crate) use sessions::*;
 
+/// Spec 036 US4: reading and ending the sessions one account holds. Separate
+/// from `sessions`, which is about becoming signed in.
+#[path = "session_registry.rs"]
+pub mod session_registry;
+
 #[path = "two_factor.rs"]
 pub(crate) mod two_factor;
 pub(crate) use two_factor::*;

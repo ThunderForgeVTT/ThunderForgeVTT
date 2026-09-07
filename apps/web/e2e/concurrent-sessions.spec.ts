@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { freshCredentials, graphql, register } from "./fixtures/helpers";
 import { openAnotherClient } from "./fixtures/clients";
 
@@ -28,6 +28,23 @@ const CREATE_WORLD = `
 `;
 
 const MY_WORLDS = `query MyWorlds { myWorlds { id name } }`;
+
+/**
+ * Assert a client's session is no longer accepted.
+ *
+ * A revoked session is refused by the auth middleware *before* GraphQL runs,
+ * so the answer is a bare 401 with no body rather than a GraphQL error
+ * document — and `graphql()` throws on it by design, because a non-JSON
+ * answer is usually a proxy failure worth surfacing loudly. Asserting the
+ * throw is therefore asserting the real shape of being signed out.
+ */
+async function expectSignedOut(
+  client: Page,
+  query: string,
+  label: string,
+): Promise<void> {
+  await expect(graphql(client, query, {}), label).rejects.toThrow(/status 401/);
+}
 
 test.describe("Spec 036: an account may be signed in more than once", () => {
   test("a second sign-in leaves the first session working", async ({
@@ -157,5 +174,119 @@ test.describe("Spec 036: an account may be signed in more than once", () => {
 
     await second.context().close();
     await third.context().close();
+  });
+});
+
+test.describe("Spec 036 US4: seeing and ending sessions", () => {
+  const MY_SESSIONS = `
+    query MySessions {
+      mySessions { id createdAt lastSeenAt expiresAt clientDescription isCurrent }
+    }
+  `;
+
+  test("a person sees every client signed in as them, and which one they are on", async ({
+    page,
+    browser,
+  }) => {
+    const creds = freshCredentials("e2esesslist");
+    await register(page, creds);
+    const second = await openAnotherClient(browser, creds, "context");
+    const third = await openAnotherClient(browser, creds, "context");
+
+    const listed = await graphql<{
+      data: {
+        mySessions: {
+          id: string;
+          isCurrent: boolean;
+          clientDescription: string | null;
+        }[];
+      };
+    }>(page, MY_SESSIONS, {});
+
+    expect(listed.data.mySessions).toHaveLength(3);
+    expect(listed.data.mySessions.filter((s) => s.isCurrent)).toHaveLength(1);
+
+    // Never an address. Spec 035 set the rule that a record describes the act
+    // and not the person, and a session row is read by its owner to answer
+    // one question — "is that one me?" — which an IP does not answer.
+    const rendered = JSON.stringify(listed.data.mySessions);
+    expect(rendered).not.toMatch(/\b\d{1,3}(\.\d{1,3}){3}\b/);
+
+    await second.context().close();
+    await third.context().close();
+  });
+
+  test("ending one session leaves the others working", async ({
+    page,
+    browser,
+  }) => {
+    const creds = freshCredentials("e2esessend");
+    await register(page, creds);
+    const doomed = await openAnotherClient(browser, creds, "context");
+
+    const listed = await graphql<{
+      data: { mySessions: { id: string; isCurrent: boolean }[] };
+    }>(doomed, MY_SESSIONS, {});
+    const doomedId = listed.data.mySessions.find((s) => s.isCurrent)!.id;
+
+    await graphql(
+      page,
+      `
+        mutation EndSession($id: UUID!) {
+          endSession(sessionId: $id)
+        }
+      `,
+      { id: doomedId },
+    );
+
+    // The ended client is refused on its very next request...
+    await expectSignedOut(
+      doomed,
+      MY_SESSIONS,
+      "an ended session must be refused immediately, not at its next expiry",
+    );
+
+    // ...and the one that did the ending is untouched.
+    const stillHere = await graphql<{ data: unknown | null }>(
+      page,
+      MY_SESSIONS,
+      {},
+    );
+    expect(stillHere.data).not.toBeNull();
+
+    await doomed.context().close();
+  });
+
+  test("ending them all signs out every client including this one", async ({
+    page,
+    browser,
+  }) => {
+    const creds = freshCredentials("e2esessall");
+    await register(page, creds);
+    const other = await openAnotherClient(browser, creds, "context");
+
+    const ended = await graphql<{ data: { endAllSessions: number } }>(
+      page,
+      `
+        mutation EndAll {
+          endAllSessions
+        }
+      `,
+      {},
+    );
+    expect(ended.data.endAllSessions).toBeGreaterThanOrEqual(2);
+
+    for (const [label, client] of [
+      ["the client that asked", page],
+      ["the other client", other],
+    ] as const) {
+      await expectSignedOut(
+        client,
+        MY_SESSIONS,
+        `${label} must be signed out by "end all sessions"`,
+      );
+    }
+
+    await other.context().close();
   });
 });
