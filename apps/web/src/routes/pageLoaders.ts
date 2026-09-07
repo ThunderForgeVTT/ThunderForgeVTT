@@ -13,6 +13,7 @@ export const pageLoaders = {
   counter: () => import("@/pages/counter/CounterPage"),
   welcome: () => import("@/pages/user/WelcomePage"),
   storageSettings: () => import("@/pages/user/StorageSettingsPage"),
+  securitySettings: () => import("@/pages/user/SecuritySettingsPage"),
   worldList: () => import("@/pages/world/WorldListPage"),
   createWorld: () => import("@/pages/world/CreateWorldPage"),
   worldDashboard: () => import("@/pages/world/WorldDashboardPage"),

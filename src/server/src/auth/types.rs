@@ -277,3 +277,18 @@ pub(crate) enum LinkConfirmOutcome {
     LinkConflict,
     Linked(uuid::Uuid),
 }
+
+/// Spec 041 FR-005: an account's own second factor, as its owner sees it.
+#[derive(Debug, Serialize)]
+pub(crate) struct TwoFactorStatusResponse {
+    pub(crate) status: &'static str,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub(crate) message: String,
+    pub(crate) enabled: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) confirmed_at: Option<String>,
+    pub(crate) enrolment_pending: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) recovery_codes_remaining: Option<i64>,
+    pub(crate) recovery_codes_low: bool,
+}

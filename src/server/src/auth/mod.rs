@@ -145,6 +145,10 @@ pub fn router() -> Router<AppState> {
             post(two_factor_setup_confirm),
         )
         .route("/authentication/2fa/verify", post(two_factor_verify))
+        // Spec 041 FR-005: what this account's own second factor looks like.
+        // The enrolment screen cannot offer to turn something on without
+        // being able to ask whether it already is.
+        .route("/authentication/2fa/status", get(two_factor_status))
         // Spec 041 US2 (FR-010): a fresh set of recovery codes, which costs
         // possession of the factor and invalidates every earlier code.
         .route(

@@ -55,6 +55,7 @@ const InstanceInvitePage = lazy(pageLoaders.instanceInvite);
 const WorldCollectionsPage = lazy(pageLoaders.worldCollections);
 const WorldSystemSettingsPage = lazy(pageLoaders.worldSystemSettings);
 const StorageSettingsPage = lazy(pageLoaders.storageSettings);
+const SecuritySettingsPage = lazy(pageLoaders.securitySettings);
 const JoinWorldPage = lazy(pageLoaders.joinWorld);
 const NotFoundPage = lazy(pageLoaders.notFound);
 
@@ -736,6 +737,24 @@ export default function AppRoutes({
               {renderLazyPage(
                 <StorageSettingsPage />,
                 "Loading storage settings",
+              )}
+            </RequireAuthenticated>
+          }
+        />
+        {/*
+          Spec 041 US1 (FR-001). The account holder's own security screen, not
+          /admin/security: that one is the instance-wide policy switch and
+          belongs to an admin. Enrolling a second factor is something every
+          signed-in person must be able to do for themselves, and before this
+          route the only way to do it was to post JSON at the API by hand.
+        */}
+        <Route
+          path="/settings/security"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(
+                <SecuritySettingsPage />,
+                "Loading account security",
               )}
             </RequireAuthenticated>
           }

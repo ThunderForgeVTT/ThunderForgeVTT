@@ -187,6 +187,31 @@ export default function WelcomePage() {
               </Card>
             </div>
           </section>
+
+          {/*
+            Spec 041 US1 (FR-001): the entrance to account settings. Enrolment
+            has to be *reachable*, and the app has no account menu — the other
+            per-user settings page (/settings/storage) is likewise only linked
+            from the widgets that concern it. This is where a signed-in person
+            already lands, so this is where the door goes.
+          */}
+          <section className="grid gap-4">
+            <h2 className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+              Your account
+            </h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Card surface="stone" className="grid gap-3 p-6">
+                <h3 className="text-lg font-semibold">Account security</h3>
+                <p className="text-muted-foreground">
+                  Add a second factor, so a password on its own is not enough to
+                  sign in as you.
+                </p>
+                <Button asChild variant="secondary" icon="shield">
+                  <Link to="/settings/security">Account security</Link>
+                </Button>
+              </Card>
+            </div>
+          </section>
         </main>
       </Container>
     </>
