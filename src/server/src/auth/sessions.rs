@@ -3,6 +3,25 @@
 
 use super::*;
 
+/// How many live sessions one account may hold at once (spec 036 FR-004).
+///
+/// Ten, which is more clients than anybody uses deliberately and few enough
+/// that a list of them is readable. Reaching it ends the least recently used
+/// rather than refusing the new sign-in — see `issue_session_cookie`.
+pub(crate) const MAX_CONCURRENT_SESSIONS: usize = 10;
+
+/// Why a session ended. `revoked_at` records *that* it did; these record
+/// which of the several reasons applied, which only became a question once
+/// ending one was something a person does deliberately.
+///
+/// The set is mirrored by a CHECK constraint in the spec-036 migration, so a
+/// value added here without adding it there fails at the insert rather than
+/// silently widening the column.
+pub(crate) mod ended_reason {
+    pub(crate) const SIGNED_OUT: &str = "signed_out";
+    pub(crate) const BOUND_EXCEEDED: &str = "bound_exceeded";
+}
+
 pub(crate) async fn basic_authentication(
     cookies: Cookies,
     headers: HeaderMap,
@@ -321,7 +340,13 @@ pub(crate) async fn logout(
         if let Ok(mut conn) = state.db_pool.get() {
             let _ = tokio::task::spawn_blocking(move || {
                 diesel::update(user_sessions::table.filter(user_sessions::id.eq(session_id)))
-                    .set(user_sessions::revoked_at.eq(Some(now)))
+                    // Spec 036 FR-006: signing out ends this session and no
+                    // other. Saying *why* it ended matters now that there are
+                    // several ways for one to.
+                    .set((
+                        user_sessions::revoked_at.eq(Some(now)),
+                        user_sessions::ended_reason.eq(Some(ended_reason::SIGNED_OUT)),
+                    ))
                     .execute(&mut conn)
             })
             .await;
@@ -359,6 +384,13 @@ pub(crate) async fn issue_session_cookie(
         expires_at,
         revoked_at: None,
         created_at: now,
+        last_seen_at: now,
+        // Spec 036 FR-005 wants a coarse description here — browser family and
+        // platform, never an address — and the callers that have the request
+        // headers to derive one are not all of them. Left unset until the
+        // session list (US4) is built, rather than inventing a value nobody
+        // can act on.
+        client_description: None,
     };
 
     let mut conn = state
@@ -366,14 +398,37 @@ pub(crate) async fn issue_session_cookie(
         .get()
         .map_err(|_| "Failed to get DB connection")?;
     tokio::task::spawn_blocking(move || {
-        // Revoke existing active sessions on new login to reduce session replay risk.
-        diesel::update(
-            user_sessions::table
-                .filter(user_sessions::user_id.eq(user_id))
-                .filter(user_sessions::revoked_at.is_null()),
-        )
-        .set(user_sessions::revoked_at.eq(Some(now)))
-        .execute(&mut conn)?;
+        // ADR-073: signing in no longer ends the sessions that came before it.
+        //
+        // It used to, "to reduce session replay risk" — and the cost was that
+        // one account could be signed in in exactly one place, so a second
+        // browser signed the first one out. What replaces that protection is
+        // a person being able to see their own sessions and end the one they
+        // do not recognise, which is a control they can actually operate.
+        //
+        // What is kept is a bound. An account holds at most
+        // `MAX_CONCURRENT_SESSIONS` live sessions; reaching it ends the least
+        // recently used rather than refusing the new sign-in, because
+        // refusing the new thing is the failure this whole change exists to
+        // remove.
+        let live: Vec<(uuid::Uuid, chrono::NaiveDateTime)> = user_sessions::table
+            .filter(user_sessions::user_id.eq(user_id))
+            .filter(user_sessions::revoked_at.is_null())
+            .filter(user_sessions::expires_at.gt(now))
+            .select((user_sessions::id, user_sessions::last_seen_at))
+            .order(user_sessions::last_seen_at.asc())
+            .load(&mut conn)?;
+
+        let over = (live.len() + 1).saturating_sub(MAX_CONCURRENT_SESSIONS);
+        if over > 0 {
+            let evict: Vec<uuid::Uuid> = live.iter().take(over).map(|(id, _)| *id).collect();
+            diesel::update(user_sessions::table.filter(user_sessions::id.eq_any(&evict)))
+                .set((
+                    user_sessions::revoked_at.eq(Some(now)),
+                    user_sessions::ended_reason.eq(Some(ended_reason::BOUND_EXCEEDED)),
+                ))
+                .execute(&mut conn)?;
+        }
 
         diesel::insert_into(user_sessions::table)
             .values(&new_session)
@@ -403,6 +458,9 @@ pub(crate) async fn issue_session_cookie(
         expires_at,
         revoked_at: None,
         created_at: now,
+        last_seen_at: now,
+        client_description: None,
+        ended_reason: None,
     })
 }
 
@@ -585,4 +643,122 @@ pub(crate) fn auth_session_error(
             requires_email_verification: false,
         }),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::schema::user_sessions;
+    use crate::test_support::{insert_test_user, test_app_state};
+    use tower_cookies::Cookies;
+
+    /// Every live session row for one account, oldest use first.
+    fn live_sessions(state: &AppState, user_id: uuid::Uuid) -> Vec<(uuid::Uuid, Option<String>)> {
+        let mut conn = state.db_pool.get().unwrap();
+        user_sessions::table
+            .filter(user_sessions::user_id.eq(user_id))
+            .filter(user_sessions::revoked_at.is_null())
+            .order(user_sessions::last_seen_at.asc())
+            .select((user_sessions::id, user_sessions::ended_reason))
+            .load(&mut conn)
+            .unwrap()
+    }
+
+    /// Insert a live session whose last use was `minutes_ago`, so the eviction
+    /// order under test is decided by the data rather than by insert order.
+    fn seed_session(state: &AppState, user_id: uuid::Uuid, minutes_ago: i64) -> uuid::Uuid {
+        let id = uuid::Uuid::now_v7();
+        let now = Utc::now().naive_utc();
+        let mut conn = state.db_pool.get().unwrap();
+        diesel::insert_into(user_sessions::table)
+            .values((
+                user_sessions::id.eq(id),
+                user_sessions::user_id.eq(user_id),
+                user_sessions::expires_at.eq(now + chrono::Duration::hours(1)),
+                user_sessions::created_at.eq(now - chrono::Duration::minutes(minutes_ago)),
+                user_sessions::last_seen_at.eq(now - chrono::Duration::minutes(minutes_ago)),
+            ))
+            .execute(&mut conn)
+            .expect("failed to seed a session");
+        id
+    }
+
+    /// ADR-073 / FR-001. The defect this replaced: a second sign-in revoked
+    /// every session that came before it, so one account could be signed in
+    /// in exactly one place.
+    #[tokio::test]
+    async fn a_second_sign_in_leaves_the_first_session_live() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let user_id = insert_test_user(&mut conn);
+        drop(conn);
+
+        let first = issue_session_cookie(&state, &Cookies::default(), user_id)
+            .await
+            .expect("the first sign-in should issue a session");
+        let second = issue_session_cookie(&state, &Cookies::default(), user_id)
+            .await
+            .expect("the second sign-in should issue a session");
+
+        assert_ne!(first.id, second.id);
+        let live: Vec<uuid::Uuid> = live_sessions(&state, user_id)
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect();
+        assert!(
+            live.contains(&first.id) && live.contains(&second.id),
+            "both sessions must be live; got {live:?}"
+        );
+    }
+
+    /// FR-004. The bound exists, and reaching it ends the least recently used
+    /// rather than refusing the new sign-in — refusing the newest is the
+    /// failure this whole change removes, and it would simply reappear at a
+    /// higher number.
+    #[tokio::test]
+    async fn the_bound_ends_the_least_recently_used_and_only_that_one() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let user_id = insert_test_user(&mut conn);
+        drop(conn);
+
+        // Fill the account to the bound, oldest use first.
+        let seeded: Vec<uuid::Uuid> = (0..MAX_CONCURRENT_SESSIONS)
+            .map(|i| seed_session(&state, user_id, (MAX_CONCURRENT_SESSIONS - i) as i64))
+            .collect();
+        let oldest = seeded[0];
+
+        let fresh = issue_session_cookie(&state, &Cookies::default(), user_id)
+            .await
+            .expect("a sign-in at the bound must still succeed");
+
+        let live: Vec<uuid::Uuid> = live_sessions(&state, user_id)
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect();
+        assert_eq!(
+            live.len(),
+            MAX_CONCURRENT_SESSIONS,
+            "the account should sit at the bound, not above it"
+        );
+        assert!(live.contains(&fresh.id), "the new session must be live");
+        assert!(
+            !live.contains(&oldest),
+            "the least recently used session should have been ended"
+        );
+        for kept in &seeded[1..] {
+            assert!(
+                live.contains(kept),
+                "no session other than the least recently used may be ended"
+            );
+        }
+
+        let mut conn = state.db_pool.get().unwrap();
+        let reason: Option<String> = user_sessions::table
+            .filter(user_sessions::id.eq(oldest))
+            .select(user_sessions::ended_reason)
+            .first(&mut conn)
+            .unwrap();
+        assert_eq!(reason.as_deref(), Some(ended_reason::BOUND_EXCEEDED));
+    }
 }

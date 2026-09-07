@@ -554,6 +554,9 @@ diesel::table! {
         expires_at -> Timestamp,
         revoked_at -> Nullable<Timestamp>,
         created_at -> Timestamp,
+        last_seen_at -> Timestamp,
+        client_description -> Nullable<Text>,
+        ended_reason -> Nullable<Text>,
     }
 }
 

@@ -280,6 +280,30 @@ pub async fn resolve_authenticated_user(
         return Err(StatusCode::UNAUTHORIZED);
     };
 
+    // Spec 036 FR-005: an account may now hold several live sessions, so a
+    // person reading their own list needs to tell them apart, and the
+    // concurrent bound needs something to evict by. Both want "when was this
+    // one last used".
+    //
+    // Written at most once a minute per session. Every authenticated request
+    // passes through here, and a write on each of them would turn a read path
+    // into a write path for a value nobody reads at that resolution.
+    if session.last_seen_at + chrono::Duration::minutes(1) < now {
+        let session_id = session.id;
+        let mut conn = state
+            .db_pool
+            .get()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        // Best effort: a failed touch must not fail a request that is
+        // otherwise perfectly authenticated.
+        let _ = tokio::task::spawn_blocking(move || {
+            diesel::update(user_sessions::table.filter(user_sessions::id.eq(session_id)))
+                .set(user_sessions::last_seen_at.eq(now))
+                .execute(&mut conn)
+        })
+        .await;
+    }
+
     Ok(AuthenticatedUser {
         user_id: session.user_id,
         session_id: session.id,

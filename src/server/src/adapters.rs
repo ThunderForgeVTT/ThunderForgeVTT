@@ -119,6 +119,13 @@ impl From<CoreUserSession> for DbUserSession {
             expires_at: core.expires_at,
             revoked_at: core.revoked_at,
             created_at: core.created_at,
+            // The core type predates spec 036 and carries none of these. A
+            // session converted back from it has not been read since it was
+            // created, and describes no client — which is true of the only
+            // caller, and honest rather than invented.
+            last_seen_at: core.created_at,
+            client_description: None,
+            ended_reason: None,
         }
     }
 }

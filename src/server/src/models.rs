@@ -318,6 +318,14 @@ pub struct UserSession {
     pub expires_at: chrono::NaiveDateTime,
     pub revoked_at: Option<chrono::NaiveDateTime>,
     pub created_at: chrono::NaiveDateTime,
+    /// When this session was last used. Spec 036: an account may hold several
+    /// at once, so "which of these is the one I am on?" needs an answer, and
+    /// the concurrent bound needs something to evict by.
+    pub last_seen_at: chrono::NaiveDateTime,
+    /// Coarse origin — browser family and platform. Never an address.
+    pub client_description: Option<String>,
+    /// Which of the several ways a session can end applied to this one.
+    pub ended_reason: Option<String>,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
@@ -328,6 +336,8 @@ pub struct NewUserSession {
     pub expires_at: chrono::NaiveDateTime,
     pub revoked_at: Option<chrono::NaiveDateTime>,
     pub created_at: chrono::NaiveDateTime,
+    pub last_seen_at: chrono::NaiveDateTime,
+    pub client_description: Option<String>,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]

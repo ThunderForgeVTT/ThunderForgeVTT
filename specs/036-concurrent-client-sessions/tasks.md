@@ -36,7 +36,7 @@ shell in `apps/web/src/`, Playwright suite in `apps/web/e2e/`, system packs in
 Constitution Principle IV requires these in the same change set, and research.md
 already contains their substance.
 
-- [ ] T001 [P] Write ADR-073 (concurrent sessions and the single play-field claim) in `docs/adrs/20260907-073-concurrent-sessions-and-play-field-claim.md`, superseding the revoke-on-login policy at `src/server/src/auth/sessions.rs:370` and recording what replaces it
+- [X] T001 [P] Write ADR-073 (concurrent sessions and the single play-field claim) in `docs/adrs/20260907-073-concurrent-sessions-and-play-field-claim.md`, superseding the revoke-on-login policy at `src/server/src/auth/sessions.rs:370` and recording what replaces it
 - [ ] T002 [P] Write ADR-074 (system-declared checks and sheet-initiated rolls) in `docs/adrs/20260907-074-system-declared-checks.md`, extending ADR-044 and recording why the six existing per-pack roll keys are left alone
 - [ ] T003 [P] Write ADR-075 (the peer boundary belongs to the play field) in `docs/adrs/20260907-075-peer-boundary-play-field.md`, amending ADR-052 and naming the fourth separation it adds to hold/continue/distribute
 - [ ] T004 Confirm the harness seeds an instance that admits new accounts by checking `src/server/seeds/demo_accounts.sql` sets `access_policy = 'open'`, and record in this file if it does not (the spec assumes it)
@@ -50,12 +50,12 @@ user-visible on its own.
 
 **⚠️ CRITICAL**: No user story work begins until this phase is complete
 
-- [ ] T005 Create the Diesel migration `src/server/migrations/2026-09-07-000000-0000_session_description/up.sql` and `down.sql` adding `last_seen_at`, `client_description` and `ended_reason` to `user_sessions` per data-model.md § 1
-- [ ] T006 Regenerate `src/server/src/schema.rs` for the new columns and extend `UserSession` / `NewUserSession` in `src/server/src/models.rs`
+- [X] T005 Create the Diesel migration `src/server/migrations/2026-09-07-000000-0000_session_description/up.sql` and `down.sql` adding `last_seen_at`, `client_description` and `ended_reason` to `user_sessions` per data-model.md § 1
+- [X] T006 Regenerate `src/server/src/schema.rs` for the new columns and extend `UserSession` / `NewUserSession` in `src/server/src/models.rs`
 - [ ] T007 [P] Add the check declaration types (`CheckDeclaration`, binding source, placeholder binding) to `crates/thunderforge-canvas-core/src/system_rules.rs` with native unit tests for parsing and rejection
 - [ ] T008 [P] Create the play-field claim registry in `src/server/src/play_field.rs` — an account-keyed registry whose entry is owned by a guard, modelled on `PeerRegistry::register` in `src/server/src/peer_signaling.rs`, with unit tests for takeover, drop-on-guard-release and concurrent claims
 - [ ] T009 Wire `play_field.rs` into `src/server/src/lib.rs` and hold the registry on `AppState` in `src/server/src/state.rs`
-- [ ] T010 Update `last_seen_at` from `resolve_authenticated_user` in `src/server/src/auth_middleware.rs`, coarsely (at most once per minute per session) so a live session does not write on every request
+- [X] T010 Update `last_seen_at` from `resolve_authenticated_user` in `src/server/src/auth_middleware.rs`, coarsely (at most once per minute per session) so a live session does not write on every request
 
 **Checkpoint**: schema, shared types and the registry exist; stories can start
 
@@ -70,13 +70,13 @@ each, and confirm both stay authenticated and both see each other's changes.
 
 ### Tests for User Story 1
 
-- [ ] T011 [P] [US1] Add a server test in `src/server/src/auth/sessions.rs` asserting that creating a second session leaves the first live, and that both resolve through `resolve_authenticated_user`
-- [ ] T012 [P] [US1] Add a server test in `src/server/src/auth/sessions.rs` asserting the 11th live session ends the least recently used and only that one (FR-004)
+- [X] T011 [P] [US1] Add a server test in `src/server/src/auth/sessions.rs` asserting that creating a second session leaves the first live, and that both resolve through `resolve_authenticated_user`
+- [X] T012 [P] [US1] Add a server test in `src/server/src/auth/sessions.rs` asserting the 11th live session ends the least recently used and only that one (FR-004)
 
 ### Implementation for User Story 1
 
-- [ ] T013 [US1] Remove the revoke-on-login statement from `create_session` in `src/server/src/auth/sessions.rs` and capture `client_description` from the request instead (coarse; no address — follow spec 035's "record the act, never the person")
-- [ ] T014 [US1] Enforce the 10-session bound with LRU eviction in `src/server/src/auth/sessions.rs`, writing `ended_reason = 'bound_exceeded'`
+- [X] T013 [US1] Remove the revoke-on-login statement from `create_session` in `src/server/src/auth/sessions.rs` and capture `client_description` from the request instead (coarse; no address — follow spec 035's "record the act, never the person")
+- [X] T014 [US1] Enforce the 10-session bound with LRU eviction in `src/server/src/auth/sessions.rs`, writing `ended_reason = 'bound_exceeded'`
 - [ ] T015 [US1] Confirm every remaining caller of session creation (`auth/oauth.rs`, `auth/two_factor.rs`, `auth/admin_setup.rs`) still behaves correctly with no eviction, and add a test for the two-factor path in `src/server/src/auth/two_factor.rs` (a second sign-in must still challenge — spec.md Edge Cases)
 
 **Checkpoint**: two browsers, one account, both alive — the reported defect is gone
@@ -93,12 +93,12 @@ action in one is visible in the other, under the sharded harness.
 
 ### Implementation for User Story 2
 
-- [ ] T016 [US2] Create `apps/web/e2e/fixtures/clients.ts` exporting `openAnotherClient(browser, creds, kind, from?)` per `contracts/e2e-fixtures.md`, signing in for real rather than copying `storageState`
-- [ ] T017 [US2] Add `apps/web/e2e/concurrent-sessions.spec.ts` covering US1's acceptance scenarios through the fixture
-- [ ] T018 [US2] Add the eviction regression guard to `apps/web/e2e/concurrent-sessions.spec.ts` — sign in in a second context, then act in the first (FR-020)
+- [X] T016 [US2] Create `apps/web/e2e/fixtures/clients.ts` exporting `openAnotherClient(browser, creds, kind, from?)` per `contracts/e2e-fixtures.md`, signing in for real rather than copying `storageState`
+- [X] T017 [US2] Add `apps/web/e2e/concurrent-sessions.spec.ts` covering US1's acceptance scenarios through the fixture
+- [X] T018 [US2] Add the eviction regression guard to `apps/web/e2e/concurrent-sessions.spec.ts` — sign in in a second context, then act in the first (FR-020)
 - [ ] T019 [P] [US2] Move specs that register a second account only to obtain a second window onto the fixture; audit `apps/web/e2e/` for them first and list what moved in the commit body
 - [ ] T020 [P] [US2] Leave `inviteAndJoinAsPlayer` in `apps/web/e2e/fixtures/helpers.ts` as it is, and add a comment naming which fixture to use when the two clients are one person (FR-019)
-- [ ] T021 [US2] Verify a two-client spec passes under `node scripts/e2e-parallel.mjs --shards=2` with no serialisation (FR-018)
+- [X] T021 [US2] Verify a two-client spec passes under `node scripts/e2e-parallel.mjs --shards=2` with no serialisation (FR-018)
 
 **Checkpoint**: the suite can express "one person, two windows"
 

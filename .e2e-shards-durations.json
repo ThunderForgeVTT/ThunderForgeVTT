@@ -103,5 +103,6 @@
   "e2e/chat-panel.spec.ts": 26.912,
   "e2e/combat-panel.spec.ts": 40.488,
   "e2e/dmca-counter-notice.spec.ts": 34.92,
-  "e2e/two-factor.spec.ts": 24.233
+  "e2e/two-factor.spec.ts": 24.233,
+  "e2e/concurrent-sessions.spec.ts": 11.571
 }
