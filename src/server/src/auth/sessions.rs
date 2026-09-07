@@ -471,6 +471,18 @@ pub(crate) async fn issue_session_cookie(
     })
 }
 
+/// Hash a password — or any secret verified the same way — for storage.
+///
+/// `Argon2::default()` is **Argon2id**, and `hash_password` (as distinct from
+/// `hash_password_with_salt`) generates a large random salt per call, so two
+/// people with the same password get different stored strings and a stolen
+/// table cannot be attacked once for everybody. What comes back is a PHC
+/// string carrying the variant, the version, the parameters and the salt
+/// alongside the digest, which is what lets `argon2_upgrade` re-hash on
+/// verify when the parameters move.
+///
+/// Both properties are asserted in this module's tests rather than trusted:
+/// `hash_password` losing its salt would be a silent, one-character change.
 pub(crate) fn hash_password(value: &str) -> Result<String, String> {
     Argon2::default()
         .hash_password(value.as_bytes())
@@ -688,6 +700,41 @@ mod tests {
             .execute(&mut conn)
             .expect("failed to seed a session");
         id
+    }
+
+    /// Argon2id, salted per call, and not by accident.
+    ///
+    /// The whole of password storage is one expression, and every property
+    /// worth having comes from which method is called on it —
+    /// `hash_password` salts, `hash_password_with_salt` does not choose for
+    /// you, and a plain digest would satisfy neither. Asserting the shape
+    /// means a change that dropped the salt fails here rather than in a
+    /// breach report.
+    #[test]
+    fn a_password_is_stored_argon2id_and_individually_salted() {
+        let first = hash_password("correct horse battery staple").expect("a hash");
+        let second = hash_password("correct horse battery staple").expect("a hash");
+
+        assert!(
+            first.starts_with("$argon2id$"),
+            "expected an Argon2id PHC string, got {first}"
+        );
+        assert_ne!(
+            first, second,
+            "two hashes of one password must differ — equal means unsalted, \
+             and unsalted means one attack breaks every account that shares a password"
+        );
+
+        // And both still verify, so the salt is carried in the string rather
+        // than being an input the verifier has to be told about separately.
+        for stored in [&first, &second] {
+            let parsed = PasswordHash::new(stored).expect("a parseable PHC string");
+            assert!(
+                Argon2::default()
+                    .verify_password("correct horse battery staple".as_bytes(), &parsed)
+                    .is_ok()
+            );
+        }
     }
 
     /// ADR-073 / FR-001. The defect this replaced: a second sign-in revoked
