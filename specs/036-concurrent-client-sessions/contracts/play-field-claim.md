@@ -1,5 +1,25 @@
 # Contract: The play-field claim
 
+> **Revised during implementation, 2026-09-07.** This contract specified a
+> `claimPlayField` mutation beside a `playFieldClaimChanged` subscription, and
+> that shape cannot satisfy FR-030. The registry hands back a guard whose drop
+> releases the claim, and **a mutation has nowhere to put one** — it would have
+> to be stored, which needs a heartbeat and a reaper to decide when the storing
+> client is gone, which is the precise failure this design exists to avoid.
+>
+> What was built instead: **subscribing is claiming**, exactly as `peerSignals`
+> registration is itself the grant of reachability. `playField(worldId,
+> clientId)` takes the table on open, carries every subsequent change including
+> `null` for nobody, and releases on drop with no timeout and nothing to reap.
+> `playFieldClaim(clientId)` is a query for a companion asking who holds it.
+>
+> There is no `releasePlayField`, and the SDL guard asserts there is not:
+> closing the stream is the release, and a mutation able to release a claim
+> would be a way to push a person off their own table from another window.
+>
+> The rules below still hold; the surface they are expressed through changed.
+
+
 One claim per account. The client asks for it as it mounts the engine and
 releases it as it tears the engine down; a companion surface never calls
 anything here.

@@ -53,8 +53,8 @@ user-visible on its own.
 - [X] T005 Create the Diesel migration `src/server/migrations/2026-09-07-000000-0000_session_description/up.sql` and `down.sql` adding `last_seen_at`, `client_description` and `ended_reason` to `user_sessions` per data-model.md § 1
 - [X] T006 Regenerate `src/server/src/schema.rs` for the new columns and extend `UserSession` / `NewUserSession` in `src/server/src/models.rs`
 - [ ] T007 [P] Add the check declaration types (`CheckDeclaration`, binding source, placeholder binding) to `crates/thunderforge-canvas-core/src/system_rules.rs` with native unit tests for parsing and rejection
-- [ ] T008 [P] Create the play-field claim registry in `src/server/src/play_field.rs` — an account-keyed registry whose entry is owned by a guard, modelled on `PeerRegistry::register` in `src/server/src/peer_signaling.rs`, with unit tests for takeover, drop-on-guard-release and concurrent claims
-- [ ] T009 Wire `play_field.rs` into `src/server/src/lib.rs` and hold the registry on `AppState` in `src/server/src/state.rs`
+- [X] T008 [P] Create the play-field claim registry in `src/server/src/play_field.rs` — an account-keyed registry whose entry is owned by a guard, modelled on `PeerRegistry::register` in `src/server/src/peer_signaling.rs`, with unit tests for takeover, drop-on-guard-release and concurrent claims
+- [X] T009 Wire `play_field.rs` into `src/server/src/lib.rs` and hold the registry on `AppState` in `src/server/src/state.rs`
 - [X] T010 Update `last_seen_at` from `resolve_authenticated_user` in `src/server/src/auth_middleware.rs`, coarsely (at most once per minute per session) so a live session does not write on every request
 
 **Checkpoint**: schema, shared types and the registry exist; stories can start
@@ -114,14 +114,14 @@ a stat change agrees in both and only one holds the canvas.
 
 ### Tests for User Story 3a
 
-- [ ] T022 [P] [US3a] Add server tests for `claimPlayField` / `releasePlayField` in `src/server/src/graphql/mutations_play_field.rs` covering takeover, idempotent re-claim, non-member refusal and concurrent claims resolving to exactly one holder
-- [ ] T023 [P] [US3a] Add a server test in `src/server/src/play_field.rs` asserting a dropped guard releases the claim, so a killed client does not lock the account out (FR-030)
+- [X] T022 [P] [US3a] Add server tests for `claimPlayField` / `releasePlayField` in `src/server/src/graphql/mutations_play_field.rs` covering takeover, idempotent re-claim, non-member refusal and concurrent claims resolving to exactly one holder
+- [X] T023 [P] [US3a] Add a server test in `src/server/src/play_field.rs` asserting a dropped guard releases the claim, so a killed client does not lock the account out (FR-030)
 
 ### Implementation for User Story 3a
 
-- [ ] T024 [US3a] Implement `claimPlayField` and `releasePlayField` in `src/server/src/graphql/mutations_play_field.rs` per `contracts/play-field-claim.md`, enforcing world membership at the boundary
-- [ ] T025 [US3a] Add the `playFieldClaimChanged` subscription to `src/server/src/graphql/subscriptions.rs`, account-scoped, carrying the demotion notice
-- [ ] T026 [US3a] Register both surfaces on the roots in `src/server/src/graphql/mod.rs` and add an SDL guard test asserting the field names the client uses, in the style of `the_access_surface_is_registered_under_the_names_the_client_uses`
+- [X] T024 [US3a] Implement `claimPlayField` and `releasePlayField` in `src/server/src/graphql/mutations_play_field.rs` per `contracts/play-field-claim.md`, enforcing world membership at the boundary
+- [X] T025 [US3a] Add the `playFieldClaimChanged` subscription to `src/server/src/graphql/subscriptions.rs`, account-scoped, carrying the demotion notice
+- [X] T026 [US3a] Register both surfaces on the roots in `src/server/src/graphql/mod.rs` and add an SDL guard test asserting the field names the client uses, in the style of `the_access_surface_is_registered_under_the_names_the_client_uses`
 - [ ] T027 [US3a] Create `apps/web/src/services/playFieldClaim.ts` — claim on engine mount, release on unmount, per-page-load client id, and the demotion state
 - [ ] T028 [US3a] Claim from the play-field shell in `apps/web/src/pages/world/` immediately before the engine is created, and decline to mount without a held claim (research.md § R4: the canvas defines the play field, not the URL)
 - [ ] T029 [US3a] Add the demotion notice and a "take the table back" control to the play-field shell in `apps/web/src/pages/world/`

@@ -224,6 +224,24 @@ impl SubscriptionRoot {
         crate::peer_signaling::peer_signals_stream(ctx, world_id, session_id).await
     }
 
+    /// Spec 036 US3a: take this account's play field, and hold it for as long
+    /// as this stream is open.
+    ///
+    /// Subscribing *is* claiming, the way `peer_signals` registration is
+    /// itself the grant of reachability — see `mutations_play_field.rs` for
+    /// why a mutation could not do this. Yields the claim as it stands after
+    /// taking it, then every time it moves, including `null` for nobody.
+    async fn play_field(
+        &self,
+        ctx: &Context<'_>,
+        world_id: uuid::Uuid,
+        client_id: String,
+    ) -> impl Stream<
+        Item = Result<Option<crate::graphql::mutations_play_field::GraphQLPlayFieldClaim>, Error>,
+    > {
+        crate::graphql::mutations_play_field::play_field_stream(ctx, world_id, client_id).await
+    }
+
     /// Subscribe to player presence changes (Phase 4.9.B.3)
     ///
     /// Streams updates when players connect, disconnect, or change scenes.

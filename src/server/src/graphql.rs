@@ -70,6 +70,7 @@ pub mod mutations_collection_shares;
 pub mod mutations_collections;
 pub mod mutations_instance_access;
 pub mod mutations_invites;
+pub mod mutations_play_field;
 pub mod mutations_sessions;
 pub mod permissioned_entity_resolvers;
 pub mod share_codes;
@@ -262,6 +263,7 @@ pub struct QueryRoot(
     ActorShareQuery,
     mutations_instance_access::InstanceAccessQuery,
     // Spec 036 US4: the sessions a person holds, now that they may hold several.
+    mutations_play_field::PlayFieldQuery,
     mutations_sessions::SessionQuery,
     LoreQuery,
     LorePermissionQuery,
