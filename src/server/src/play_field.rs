@@ -159,10 +159,22 @@ impl PlayFieldRegistry {
 
     /// Watch this account's claim. Fires whenever it moves, so a demoted
     /// client learns it has become a companion.
+    ///
+    /// Prunes senders nobody is listening to on the way past. Without it the
+    /// map grows by one entry per account that has ever watched and never
+    /// shrinks — slow, but unbounded, and `peer_signaling` now calls this on
+    /// every peer registration rather than only when a play field mounts,
+    /// which is what made a slow leak worth closing. A scan is affordable
+    /// because this runs when a window opens a table or starts a transfer,
+    /// not per request, and the map is keyed by account rather than by
+    /// connection.
     pub fn watch(&self, account_id: Uuid) -> broadcast::Receiver<Option<Claim>> {
-        self.listeners
+        let mut listeners = self
+            .listeners
             .lock()
-            .expect("play field listeners mutex poisoned")
+            .expect("play field listeners mutex poisoned");
+        listeners.retain(|watched, tx| *watched == account_id || tx.receiver_count() > 0);
+        listeners
             .entry(account_id)
             .or_insert_with(|| broadcast::channel(CLAIM_CHANNEL_CAPACITY).0)
             .subscribe()
@@ -253,6 +265,28 @@ mod tests {
             .current(account)
             .expect("the newer claim must survive the older guard being dropped");
         assert_eq!(held.client_id, "window-b");
+    }
+
+    /// The leak `peer_signaling` found: a sender per account, kept forever.
+    #[test]
+    fn watchers_nobody_is_listening_to_are_not_kept() {
+        let registry = registry_for_test();
+        let account = Uuid::now_v7();
+
+        // A hundred accounts watch and go away — the shape of a hundred peer
+        // registrations, each of which now watches to answer "is this client
+        // at the table?".
+        for _ in 0..100 {
+            let _ = registry.watch(Uuid::now_v7());
+        }
+        // One that is still listening.
+        let _live = registry.watch(account);
+
+        let held = registry.listeners.lock().expect("listeners").len();
+        assert_eq!(
+            held, 1,
+            "only the account with a live listener should still have a sender, got {held}"
+        );
     }
 
     /// One person's table is not another's.
