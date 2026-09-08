@@ -59,20 +59,20 @@ below reads. Nothing here is user-visible on its own.
 
 ### Schema
 
-- [ ] T007 Create the Diesel migration `src/server/migrations/2026-09-07-000000-0000_instance_settings/up.sql` and `down.sql` for `instance_settings` and `instance_setting_changes` per data-model.md § 1–2, following the commenting style of `src/server/migrations/2026-09-06-000000-0000_instance_access/up.sql`
-- [ ] T008 Regenerate `src/server/src/schema.rs` and add `InstanceSetting` / `NewInstanceSetting` / `InstanceSettingChange` structs to `src/server/src/models.rs`
+- [x] T007 Create the Diesel migration `src/server/migrations/2026-09-07-000000-0000_instance_settings/up.sql` and `down.sql` for `instance_settings` and `instance_setting_changes` per data-model.md § 1–2, following the commenting style of `src/server/migrations/2026-09-06-000000-0000_instance_access/up.sql`
+- [x] T008 Regenerate `src/server/src/schema.rs` and add `InstanceSetting` / `NewInstanceSetting` / `InstanceSettingChange` structs to `src/server/src/models.rs`
 - [ ] T009 Add a migration test asserting `up.sql` → `down.sql` → `up.sql` leaves the schema clean, in `src/server/src/settings/settings_migration_tests.rs` (FR-028's upgrade promise starts with a reversible migration)
 
 ### The declaration list and the resolver
 
-- [ ] T010 Create the declaration types and `declarations()` in `src/server/src/settings/registry.rs` per `contracts/settings.md`, with every setting in data-model.md § 0, and a compile-time-checked shape so a declaration cannot omit `env_var`, `secret` or `requirement`
-- [ ] T011 [P] Add a registry test in `src/server/src/settings/registry.rs` asserting every declaration has a unique key, that every non-`Prose` declaration has an `env_var`, and that no two declarations share an `env_var` (FR-010, FR-012)
-- [ ] T012 Implement `Source`, `Resolved` and `resolve_all` / `resolve` in `src/server/src/settings/resolver.rs`, reading `Backing::Row` from `instance_settings`, `Backing::ManifestFile` through `admin::read_system_manifest`, and `Backing::AccessPolicy` through `auth::instance_access::load_policy` — one row-set load per request, memoised, not a query per setting
-- [ ] T013 [P] Add resolver tests in `src/server/src/settings/resolver.rs` asserting environment beats row beats default **for every declared setting** rather than for a sample, and that a `secret` whose ciphertext will not decrypt resolves as unset rather than panicking (data-model.md § 1)
-- [ ] T014 Implement the FR-004 validators in `src/server/src/settings/validate.rs` — blank-after-trim, email syntax, reserved TLDs (`.local`, `.example`, `.invalid`, `.test`), and the shipped defaults `stewards@thunderforge.local` and `dmca@thunderforge.example` by name (research.md § R15)
-- [ ] T015 [P] Add validator tests in `src/server/src/settings/validate.rs` including that a refusal message never echoes the submitted value
-- [ ] T016 Implement the append-only change record in `src/server/src/settings/changes.rs`, redacting per the declaration and storing `redacted` rather than recomputing it (data-model.md § 2)
-- [ ] T017 Wire secret encryption and decryption through the existing `src/server/src/crypto.rs` — no second implementation, for the reason that module's own docs give
+- [x] T010 Create the declaration types and `declarations()` in `src/server/src/settings/registry.rs` per `contracts/settings.md`, with every setting in data-model.md § 0, and a compile-time-checked shape so a declaration cannot omit `env_var`, `secret` or `requirement`
+- [x] T011 [P] Add a registry test in `src/server/src/settings/registry.rs` asserting every declaration has a unique key, that every non-`Prose` declaration has an `env_var`, and that no two declarations share an `env_var` (FR-010, FR-012)
+- [x] T012 Implement `Source`, `Resolved` and `resolve_all` / `resolve` in `src/server/src/settings/resolver.rs`, reading `Backing::Row` from `instance_settings`, `Backing::ManifestFile` through `admin::read_system_manifest`, and `Backing::AccessPolicy` through `auth::instance_access::load_policy` — one row-set load per request, memoised, not a query per setting
+- [x] T013 [P] Add resolver tests in `src/server/src/settings/resolver.rs` asserting environment beats row beats default **for every declared setting** rather than for a sample, and that a `secret` whose ciphertext will not decrypt resolves as unset rather than panicking (data-model.md § 1)
+- [x] T014 Implement the FR-004 validators in `src/server/src/settings/validate.rs` — blank-after-trim, email syntax, reserved TLDs (`.local`, `.example`, `.invalid`, `.test`), and the shipped defaults `stewards@thunderforge.local` and `dmca@thunderforge.example` by name (research.md § R15)
+- [x] T015 [P] Add validator tests in `src/server/src/settings/validate.rs` including that a refusal message never echoes the submitted value
+- [x] T016 Implement the append-only change record in `src/server/src/settings/changes.rs`, redacting per the declaration and storing `redacted` rather than recomputing it (data-model.md § 2)
+- [x] T017 Wire secret encryption and decryption through the existing `src/server/src/crypto.rs` — no second implementation, for the reason that module's own docs give
 - [ ] T018 Add `pub mod settings;` to `src/server/src/lib.rs` and hold the memoised resolution on `AppState` in `src/server/src/state.rs`
 
 ### Harness
@@ -100,15 +100,15 @@ already worked around.
 
 ### Tests for User Story 3
 
-- [ ] T021 [P] [US3] Add a server test in `src/server/src/graphql/queries/instance_settings.rs` asserting `instanceSettings` reports `ENVIRONMENT` with `fixedBy` for an env-set key and `editable: false` for it (FR-009, FR-011)
+- [x] T021 [P] [US3] Add a server test in `src/server/src/graphql/queries/instance_settings.rs` asserting `instanceSettings` reports `ENVIRONMENT` with `fixedBy` for an env-set key and `editable: false` for it (FR-009, FR-011)
 - [ ] T022 [P] [US3] Add a server test in `src/server/src/graphql/mutations_instance_settings.rs` asserting `updateInstanceSetting` on an env-fixed key is **refused naming the variable**, not a silent no-op (FR-009, and what ADR-041 records the silent no-op cost the OAuth surface)
-- [ ] T023 [P] [US3] Add a redaction test asserting no `secret` declaration is reachable from any read surface except as `SET` / `NOT_SET` — no masked preview, no length — in `src/server/src/graphql/queries/instance_settings.rs` (FR-023, FR-027, SC-007)
+- [x] T023 [P] [US3] Add a redaction test asserting no `secret` declaration is reachable from any read surface except as `SET` / `NOT_SET` — no masked preview, no length — in `src/server/src/graphql/queries/instance_settings.rs` (FR-023, FR-027, SC-007)
 
 ### Implementation for User Story 3
 
-- [ ] T024 [US3] Implement the `instanceSettings` and `instanceSettingChanges` queries in `src/server/src/graphql/queries/instance_settings.rs` per `contracts/settings.md`, behind `admin_user(ctx)?`
-- [ ] T025 [US3] Implement `updateInstanceSetting` in `src/server/src/graphql/mutations_instance_settings.rs`, writing the change record in the same transaction as the value
-- [ ] T026 [US3] Register both surfaces on the roots in `src/server/src/graphql/mod.rs` with an SDL guard test asserting the field names the client uses, in the style of the existing `the_access_surface_is_registered_under_the_names_the_client_uses`
+- [x] T024 [US3] Implement the `instanceSettings` and `instanceSettingChanges` queries in `src/server/src/graphql/queries/instance_settings.rs` per `contracts/settings.md`, behind `admin_user(ctx)?`
+- [x] T025 [US3] Implement `updateInstanceSetting` in `src/server/src/graphql/mutations_instance_settings.rs`, writing the change record in the same transaction as the value
+- [x] T026 [US3] Register both surfaces on the roots in `src/server/src/graphql/mod.rs` with an SDL guard test asserting the field names the client uses, in the style of the existing `the_access_surface_is_registered_under_the_names_the_client_uses`
 - [ ] T027 [US3] Map `oauth_providers.config_source` onto the same `SettingSource` enum in `src/server/src/graphql/admin_types.rs`, and add `source` / `fixedBy` to `GraphQLSystemManifest`'s `entries` beside the `editable` flag it already carries
 - [ ] T028 [P] [US3] Create `apps/web/src/api/instanceSettings.ts` with the GraphQL operations, and `apps/web/src/pages/admin/components/InstanceSettingsPanel.tsx` rendering each setting, its source, and "fixed by `<VAR>`" instead of a disabled field with no explanation
 - [ ] T029 [US3] Update `apps/web/src/pages/admin/components/ManifestEditor.tsx` to render `fixedBy` rather than greying a key out, and add the panel to `ADMIN_SECTIONS` in `apps/web/src/pages/admin/components/adminSections.ts`
@@ -129,16 +129,16 @@ with who, when and what it was before.
 
 ### Tests for User Story 2
 
-- [ ] T030 [P] [US2] Add a server test in `src/server/src/settings/changes.rs` asserting a change to a **secret** records the transition `set` → `set` with `redacted: true` and never either value (FR-008 against FR-023)
-- [ ] T031 [P] [US2] Add a server test asserting a changed setting is observed by the next request with no restart, in `src/server/src/settings/resolver.rs` (FR-007)
+- [x] T030 [P] [US2] Add a server test in `src/server/src/settings/changes.rs` asserting a change to a **secret** records the transition `set` → `set` with `redacted: true` and never either value (FR-008 against FR-023)
+- [x] T031 [P] [US2] Add a server test asserting a changed setting is observed by the next request with no restart, in `src/server/src/settings/resolver.rs` (FR-007)
 
 ### Implementation for User Story 2
 
 - [ ] T032 [US2] Add the change-history view to `apps/web/src/pages/admin/components/InstanceSettingsPanel.tsx` — who, when, and what it was before, with redacted rows plainly marked as such
 - [ ] T033 [US2] Add the operator identity and notice-contact fields to the panel, grouped so a person editing "who to serve a copyright notice on" is not doing it in a list of thirty keys
 - [ ] T034 [P] [US2] Add vitest coverage for the panel's fixed/editable/redacted renderings in `apps/web/src/pages/admin/components/__tests__/InstanceSettingsPanel.test.tsx`
-- [ ] T035 [US2] Add `apps/web/e2e/instance-settings.spec.ts` covering quickstart Scenarios B and C: change a value and see it take effect, read its history, and confirm an env-fixed value is shown as fixed and cannot be edited
-- [ ] T036 [P] [US2] Document the new environment variable families in `.env.example`, in the same style `SYNC_GITHUB_APP_*` is documented — what each does, and what happens when it is absent
+- [x] T035 [US2] Add `apps/web/e2e/instance-settings.spec.ts` covering quickstart Scenarios B and C: change a value and see it take effect, read its history, and confirm an env-fixed value is shown as fixed and cannot be edited
+- [x] T036 [P] [US2] Document the new environment variable families in `.env.example`, in the same style `SYNC_GITHUB_APP_*` is documented — what each does, and what happens when it is absent
 
 **Checkpoint**: a wrong value entered once is not permanent, and changing it leaves a trail
 
@@ -160,20 +160,20 @@ surface, reached from a different place.
 
 ### Tests for User Story 6
 
-- [ ] T037 [P] [US6] Add a server test in `src/server/src/readiness.rs` asserting no gap contains a value, a fragment or a length, for settings that are set as well as unset (FR-027)
-- [ ] T038 [P] [US6] Add a server test asserting a fully configured instance reports `fullyConfigured: true` positively rather than by an empty gap list (FR-025 scenario 3)
+- [x] T037 [P] [US6] Add a server test in `src/server/src/readiness.rs` asserting no gap contains a value, a fragment or a length, for settings that are set as well as unset (FR-027)
+- [x] T038 [P] [US6] Add a server test asserting a fully configured instance reports `fullyConfigured: true` positively rather than by an empty gap list (FR-025 scenario 3)
 - [ ] T039 [P] [US6] Add a server test asserting the server starts and serves with **every** setting unset (FR-028, SC-009)
-- [ ] T040 [P] [US6] Add a server test asserting an **existing** share link still resolves while the notice contact is unset — only creation is gated, because removing a setting must not break links already issued
+- [x] T040 [P] [US6] Add a server test asserting an **existing** share link still resolves while the notice contact is unset — only creation is gated, because removing a setting must not break links already issued
 
 ### Implementation for User Story 6
 
-- [ ] T041 [US6] Implement `InstanceReadiness` in `src/server/src/readiness.rs`, derived from `settings::registry` per `contracts/readiness.md`, with no stored flag and no cache
+- [x] T041 [US6] Implement `InstanceReadiness` in `src/server/src/readiness.rs`, derived from `settings::registry` per `contracts/readiness.md`, with no stored flag and no cache
 - [ ] T042 [US6] Fold `instanceRepositoryIntegration` into the report as one capability in `src/server/src/graphql/queries/lore_sync.rs`, reusing `RegistrationProblem::guidance()` verbatim rather than writing a second vocabulary
-- [ ] T043 [US6] Record source flips at startup and expose them, in `src/server/src/readiness.rs` — the spec's "a container is redeployed with a fresh environment and an existing database" edge case
-- [ ] T044 [US6] Implement `readiness::may_publish_beyond_world(state)` in `src/server/src/readiness.rs` as the single predicate the gate calls
-- [ ] T045 [US6] Apply the gate in `src/server/src/graphql/mutations_collection_shares.rs`, refusing creation with a message naming the missing setting (FR-026, spec 039 FR-053)
-- [ ] T046 [P] [US6] Apply the same gate to singleton share creation in `src/server/src/graphql/mutations_actor_shares.rs`, `mutations_item_shares.rs` and `mutations_ability_shares.rs` — the family ADR-069/070/071 already treat as one
-- [ ] T047 [US6] Add the `instanceReadiness` query to `src/server/src/graphql/queries/instance_settings.rs` and register it in `src/server/src/graphql/mod.rs` with an SDL guard
+- [x] T043 [US6] Record source flips at startup and expose them, in `src/server/src/readiness.rs` — the spec's "a container is redeployed with a fresh environment and an existing database" edge case
+- [x] T044 [US6] Implement `readiness::may_publish_beyond_world(state)` in `src/server/src/readiness.rs` as the single predicate the gate calls
+- [x] T045 [US6] Apply the gate in `src/server/src/graphql/mutations_collection_shares.rs`, refusing creation with a message naming the missing setting (FR-026, spec 039 FR-053)
+- [x] T046 [P] [US6] Apply the same gate to singleton share creation in `src/server/src/graphql/mutations_actor_shares.rs`, `mutations_item_shares.rs` and `mutations_ability_shares.rs` — the family ADR-069/070/071 already treat as one
+- [x] T047 [US6] Add the `instanceReadiness` query to `src/server/src/graphql/queries/instance_settings.rs` and register it in `src/server/src/graphql/mod.rs` with an SDL guard
 - [ ] T048 [US6] Create `apps/web/src/pages/admin/components/ReadinessPanel.tsx` and add its entry to `apps/web/src/pages/admin/components/adminSections.ts`
 - [ ] T049 [US6] Add `apps/web/e2e/instance-readiness.spec.ts` covering quickstart Scenario F, including that a world stays fully playable with no notice contact
 - [ ] T050 [US6] Close spec 039's dependency by noting in `specs/039-sharing-attestation/spec.md` (FR-053's pointer) that the gate is implemented here, so the two do not drift
@@ -254,26 +254,26 @@ subsystem anywhere in this codebase — confirmed across every `Cargo.toml`,
 
 ### Tests for User Story 4
 
-- [ ] T075 [P] [US4] Add unit tests for the outbox state machine in `src/server/src/mail/outbox.rs` — `queued`/`blocked`/`sending`/`sent`/`failed`, and that configuring mail moves `blocked` back to `queued` (FR-015)
-- [ ] T076 [P] [US4] Add a test in `src/server/src/mail/mod.rs` asserting no `DeliveryFailure::reason` for any `lettre` error class contains a configured value — host, username or password (FR-014, SC-004)
-- [ ] T077 [P] [US4] Add a test asserting no read surface returns a message body, in `src/server/src/graphql/mutations_mail.rs` (FR-016)
-- [ ] T078 [P] [US4] Add a test asserting a `sent` message is never sent twice by a retry, guarded by `sent_at` written in the same transaction as the state (idempotence)
-- [ ] T079 [US4] Add a Rust **integration** test sending through a real `SmtpTransport` to Mailpit in `src/server/src/mail/smtp_integration_tests.rs`, asserting the From address and that the message arrives — the level it is tempting to skip and the one where mail actually fails
+- [x] T075 [P] [US4] Add unit tests for the outbox state machine in `src/server/src/mail/outbox.rs` — `queued`/`blocked`/`sending`/`sent`/`failed`, and that configuring mail moves `blocked` back to `queued` (FR-015)
+- [x] T076 [P] [US4] Add a test in `src/server/src/mail/mod.rs` asserting no `DeliveryFailure::reason` for any `lettre` error class contains a configured value — host, username or password (FR-014, SC-004)
+- [x] T077 [P] [US4] Add a test asserting no read surface returns a message body, in `src/server/src/graphql/mutations_mail.rs` (FR-016)
+- [x] T078 [P] [US4] Add a test asserting a `sent` message is never sent twice by a retry, guarded by `sent_at` written in the same transaction as the state (idempotence)
+- [x] T079 [US4] Add a Rust **integration** test sending through a real `SmtpTransport` to Mailpit in `src/server/src/mail/smtp_integration_tests.rs`, asserting the From address and that the message arrives — the level it is tempting to skip and the one where mail actually fails
 
 ### Implementation for User Story 4
 
-- [ ] T080 [US4] Create the Diesel migration `src/server/migrations/2026-09-07-000100-0000_mail_outbox/up.sql` and `down.sql` for `mail_outbox` per data-model.md § 3, and regenerate `src/server/src/schema.rs`
-- [ ] T081 [US4] Add `lettre` with `tokio1-rustls-tls` and `smtp-transport`, `default-features = false`, to `src/server/Cargo.toml` — rustls, not native-tls, because the first-party tree is rustls throughout and `openssl` appears only through the legacy `websocket` chain
-- [ ] T082 [US4] Define `MailTransport`, `OutgoingMessage`, `Availability` and `DeliveryFailure` in `src/server/src/mail/mod.rs` per `contracts/mail.md`, with `Unconfigured` refusing with the list of missing settings rather than being an `Option` every call site must remember to check
-- [ ] T083 [US4] Implement `SmtpTransport` in `src/server/src/mail/smtp.rs`, built from resolved `mail.*` settings and rebuilt when one changes so FR-007 holds with no restart
-- [ ] T084 [P] [US4] Implement `CapturingTransport` in `src/server/src/mail/capture.rs` behind `#[cfg(any(test, feature = "test-support"))]`, and expose it from `src/server/src/test_support.rs` the way the adjudicator already is
-- [ ] T085 [US4] Implement `enqueue` and the operator-visible projection in `src/server/src/mail/outbox.rs` — **nothing calls `MailTransport::send` directly**, which is what makes FR-015 true by construction
-- [ ] T086 [US4] Implement `spawn_mail_task` and `due_now` in `src/server/src/mail/schedule.rs`, modelled on `src/server/src/lore_sync/schedule.rs` — the same nine-step backoff array, and selection extracted **outside** the spawned loop for the reason that file states
-- [ ] T087 [US4] Register `mail::schedule::spawn_mail_task(app_state)` in `src/app/src/main.rs` beside the five `spawn_*_task` calls already there, and add `pub mod mail;` to `src/server/src/lib.rs`
-- [ ] T088 [US4] Implement `mailAvailability`, `mailOutbox`, `sendTestMail` and `retryOutboxMessage` in `src/server/src/graphql/mutations_mail.rs` per `contracts/mail.md`, with `sendTestMail` behind `admin_user(ctx)?` **and** the existing limiter from `src/server/src/graphql/share_rate_limit.rs` — an unrestricted send-to-any-address mutation is an open relay
-- [ ] T089 [US4] Register the mail surface in `src/server/src/graphql/mod.rs` with an SDL guard asserting `OutboxEntry` has no body field
+- [x] T080 [US4] Create the Diesel migration `src/server/migrations/2026-09-07-000100-0000_mail_outbox/up.sql` and `down.sql` for `mail_outbox` per data-model.md § 3, and regenerate `src/server/src/schema.rs`
+- [x] T081 [US4] Add `lettre` with `tokio1-rustls-tls` and `smtp-transport`, `default-features = false`, to `src/server/Cargo.toml` — rustls, not native-tls, because the first-party tree is rustls throughout and `openssl` appears only through the legacy `websocket` chain
+- [x] T082 [US4] Define `MailTransport`, `OutgoingMessage`, `Availability` and `DeliveryFailure` in `src/server/src/mail/mod.rs` per `contracts/mail.md`, with `Unconfigured` refusing with the list of missing settings rather than being an `Option` every call site must remember to check
+- [x] T083 [US4] Implement `SmtpTransport` in `src/server/src/mail/smtp.rs`, built from resolved `mail.*` settings and rebuilt when one changes so FR-007 holds with no restart
+- [x] T084 [P] [US4] Implement `CapturingTransport` in `src/server/src/mail/capture.rs` behind `#[cfg(any(test, feature = "test-support"))]`, and expose it from `src/server/src/test_support.rs` the way the adjudicator already is
+- [x] T085 [US4] Implement `enqueue` and the operator-visible projection in `src/server/src/mail/outbox.rs` — **nothing calls `MailTransport::send` directly**, which is what makes FR-015 true by construction
+- [x] T086 [US4] Implement `spawn_mail_task` and `due_now` in `src/server/src/mail/schedule.rs`, modelled on `src/server/src/lore_sync/schedule.rs` — the same nine-step backoff array, and selection extracted **outside** the spawned loop for the reason that file states
+- [x] T087 [US4] Register `mail::schedule::spawn_mail_task(app_state)` in `src/app/src/main.rs` beside the five `spawn_*_task` calls already there, and add `pub mod mail;` to `src/server/src/lib.rs`
+- [x] T088 [US4] Implement `mailAvailability`, `mailOutbox`, `sendTestMail` and `retryOutboxMessage` in `src/server/src/graphql/mutations_mail.rs` per `contracts/mail.md`, with `sendTestMail` behind `admin_user(ctx)?` **and** the existing limiter from `src/server/src/graphql/share_rate_limit.rs` — an unrestricted send-to-any-address mutation is an open relay
+- [x] T089 [US4] Register the mail surface in `src/server/src/graphql/mod.rs` with an SDL guard asserting `OutboxEntry` has no body field
 - [ ] T090 [US4] Create `apps/web/src/pages/admin/components/MailPanel.tsx` — settings, the test message, and the outbox with no body anywhere — and add its entry to `apps/web/src/pages/admin/components/adminSections.ts`
-- [ ] T091 [US4] Add mail to the readiness capability list in `src/server/src/readiness.rs`, naming the missing settings and what is limited (FR-015, FR-017)
+- [x] T091 [US4] Add mail to the readiness capability list in `src/server/src/readiness.rs`, naming the missing settings and what is limited (FR-015, FR-017)
 - [ ] T092 [P] [US4] Create `apps/web/e2e/fixtures/mailpit.ts` with `inbox`, `waitForMessage` and `clearInbox` per `contracts/e2e-fixtures.md`
 - [ ] T093 [US4] Add a Mailpit SMTP and API port per shard in `scripts/e2e-parallel.mjs`, exactly as backends, vite servers and buckets already get one
 - [ ] T094 [US4] Add `apps/web/e2e/mail-delivery.spec.ts` covering quickstart Scenario D — configure, test, receive, break it, confirm nothing prints a password, clear the settings, confirm a message is blocked rather than discarded, reconfigure, confirm it goes
