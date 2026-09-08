@@ -322,7 +322,24 @@ alone.
 - [ ] T110 Make the six guards fail on purpose per quickstart.md § "Making the guards fail on purpose" and record in the commit body that each was seen to bite
 - [ ] T111 Run quickstart Scenario G by hand — an existing deployment upgraded with no reconfiguration and no failure to start (FR-024, FR-028, SC-009) — and record the result; it is not automatable in the current harness
 - [ ] T112 Run quickstart Scenarios A–F by hand against `make dev` and note anything the suite does not catch; Scenario A with a stopwatch, because SC-001 is a claim about a human
-- [ ] T113 Search the entire product for a rendered credential — screens, GraphQL responses, logs, the audit trail — and record what was searched and found. SC-007 says "demonstrated by attempting to find one", so the attempt is the deliverable
+  - **Partly done, 2026-09-08: Scenario A walked by hand, findings acted on,
+    not timed.** Left unticked deliberately — SC-001 is a claim about ten
+    minutes and there is no measurement, so ticking this would assert
+    something nobody checked. The pass was not re-run to obtain the number
+    because setup completes once and a second walk by somebody who already
+    knows the flow would have produced an optimistic figure rather than a
+    true one.
+  - What it found, all since fixed: finishing setup left the operator on a
+    summary they had to dismiss before reaching `/admin` (the readiness
+    report it guarded is a permanent admin section now, so the interstitial
+    had become a speed bump); the signed-out menu offered three destinations
+    that all bounce to `/login`; the header rendered an invented name and the
+    role "Member" to a visitor with neither; and **nothing in the product
+    linked to `/legal/dmca`**, which spec 039 FR-056 requires to be
+    discoverable without an account — it was reachable only by typing the URL.
+  - Scenarios B–F remain unwalked. D and F are covered end to end by
+    `mail-delivery.spec.ts` and `instance-readiness.spec.ts`.
+- [x] T113 Search the entire product for a rendered credential — screens, GraphQL responses, logs, the audit trail — and record what was searched and found. SC-007 says "demonstrated by attempting to find one", so the attempt is the deliverable — recorded in `credential-search.md`
 - [ ] T114 Run `cargo test --workspace -j 4`, `make lint` (lint-host + lint-wasm + file length) and `pnpm --filter @thunderforge/web test`
 - [x] T115 Run the full suite via `node scripts/e2e-parallel.mjs --shards=2`, including the `first-run` project, and record the figures in the commit body
 - [ ] T116 Run `pnpm verify` and fix what it reports **in the code this feature added** — keep it to that; wide lint passes get their own commit
