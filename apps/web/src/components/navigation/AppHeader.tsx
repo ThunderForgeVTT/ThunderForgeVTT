@@ -83,31 +83,43 @@ export function AppHeader({ brandHref, navItems }: AppHeaderProps) {
                 Menu
               </Button>
             }
-            items={[
-              {
-                label: isAdmin
-                  ? "Open admin command center"
-                  : "Open welcome hall",
-                icon: isAdmin ? "crown" : "scene",
-                onSelect: () => navigate(isAdmin ? "/admin" : "/welcome"),
-              },
-              {
-                label: "World archive",
-                icon: "worlds",
-                onSelect: () => navigate("/worlds"),
-              },
-              {
-                label: "System settings",
-                icon: "settings",
-                onSelect: () => navigate(isAdmin ? "/admin" : "/counter"),
-              },
-              {
-                label: "Enter demo workspace",
-                icon: "spark",
-                onSelect: () => navigate("/world/demo-world/play"),
-              },
-              ...(isAuthenticated
+            /*
+             * Signed out, this menu offers the demo and nothing else.
+             *
+             * It used to offer the welcome hall, the world archive and system
+             * settings to everybody, and all three are behind authentication —
+             * so a visitor who had never signed in was given three doors that
+             * bounce them to `/login` and one that works. Signing in is not
+             * missing from the header as a result: the primary nav carries
+             * Login and Register for exactly this visitor (`AppRoutes.tsx`),
+             * which is why there is deliberately no sign-in entry duplicated
+             * here.
+             */
+            items={
+              isAuthenticated
                 ? [
+                    {
+                      label: isAdmin
+                        ? "Open admin command center"
+                        : "Open welcome hall",
+                      icon: isAdmin ? ("crown" as const) : ("scene" as const),
+                      onSelect: () => navigate(isAdmin ? "/admin" : "/welcome"),
+                    },
+                    {
+                      label: "World archive",
+                      icon: "worlds" as const,
+                      onSelect: () => navigate("/worlds"),
+                    },
+                    {
+                      label: "System settings",
+                      icon: "settings" as const,
+                      onSelect: () => navigate(isAdmin ? "/admin" : "/counter"),
+                    },
+                    {
+                      label: "Enter demo workspace",
+                      icon: "spark" as const,
+                      onSelect: () => navigate("/world/demo-world/play"),
+                    },
                     {
                       label: "Sign out",
                       icon: "arrow-left" as const,
@@ -116,28 +128,36 @@ export function AppHeader({ brandHref, navItems }: AppHeaderProps) {
                       },
                     },
                   ]
-                : []),
-            ]}
+                : [
+                    {
+                      label: "Enter demo workspace",
+                      icon: "spark" as const,
+                      onSelect: () => navigate("/world/demo-world/play"),
+                    },
+                  ]
+            }
           />
-          <div className="flex items-center gap-2 border-l border-border pl-3">
-            <Avatar
-              seed={user?.id ?? "archmage-of-thunderforge"}
-              name={user?.username ?? "Archmage"}
-              size="sm"
-            />
-            <div className="hidden sm:grid">
-              <strong className="text-sm">
-                {user?.username ?? "Archmage"}
-              </strong>
-              <small className="text-xs tracking-wide text-muted-foreground uppercase">
-                {isAuthenticated
-                  ? user?.role === "admin"
-                    ? "Administrator"
-                    : "Member"
-                  : "Member"}
-              </small>
+          {/* Only for somebody who actually is somebody. This block used to
+              render "Archmage" and the role "Member" to a signed-out visitor,
+              which is a made-up name and a membership they do not have sitting
+              where their own identity would go. */}
+          {isAuthenticated ? (
+            <div className="flex items-center gap-2 border-l border-border pl-3">
+              <Avatar
+                seed={user?.id ?? "archmage-of-thunderforge"}
+                name={user?.username ?? "Archmage"}
+                size="sm"
+              />
+              <div className="hidden sm:grid">
+                <strong className="text-sm">
+                  {user?.username ?? "Archmage"}
+                </strong>
+                <small className="text-xs tracking-wide text-muted-foreground uppercase">
+                  {user?.role === "admin" ? "Administrator" : "Member"}
+                </small>
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
       </div>
     </header>
