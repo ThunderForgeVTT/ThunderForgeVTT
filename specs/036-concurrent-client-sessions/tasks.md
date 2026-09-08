@@ -38,8 +38,8 @@ already contains their substance.
 
 - [X] T001 [P] Write ADR-073 (concurrent sessions and the single play-field claim) in `docs/adrs/20260907-073-concurrent-sessions-and-play-field-claim.md`, superseding the revoke-on-login policy at `src/server/src/auth/sessions.rs:370` and recording what replaces it
 - [ ] T002 [P] Write ADR-074 (system-declared checks and sheet-initiated rolls) in `docs/adrs/20260907-074-system-declared-checks.md`, extending ADR-044 and recording why the six existing per-pack roll keys are left alone
-- [ ] T003 [P] Write ADR-075 (the peer boundary belongs to the play field) in `docs/adrs/20260907-075-peer-boundary-play-field.md`, amending ADR-052 and naming the fourth separation it adds to hold/continue/distribute
-- [ ] T004 Confirm the harness seeds an instance that admits new accounts by checking `src/server/seeds/demo_accounts.sql` sets `access_policy = 'open'`, and record in this file if it does not (the spec assumes it)
+- [X] T003 [P] Write ADR-075 (the peer boundary belongs to the play field) in `docs/adrs/20260907-075-peer-boundary-play-field.md`, amending ADR-052 and naming the fourth separation it adds to hold/continue/distribute
+- [X] T004 Confirm the harness seeds an instance that admits new accounts by checking `src/server/seeds/demo_accounts.sql` sets `access_policy = 'open'`, and record in this file if it does not (the spec assumes it)
 
 ---
 
@@ -52,7 +52,7 @@ user-visible on its own.
 
 - [X] T005 Create the Diesel migration `src/server/migrations/2026-09-07-000000-0000_session_description/up.sql` and `down.sql` adding `last_seen_at`, `client_description` and `ended_reason` to `user_sessions` per data-model.md § 1
 - [X] T006 Regenerate `src/server/src/schema.rs` for the new columns and extend `UserSession` / `NewUserSession` in `src/server/src/models.rs`
-- [ ] T007 [P] Add the check declaration types (`CheckDeclaration`, binding source, placeholder binding) to `crates/thunderforge-canvas-core/src/system_rules.rs` with native unit tests for parsing and rejection
+- [X] T007 [P] Add the check declaration types (`CheckDeclaration`, binding source, placeholder binding) to `crates/thunderforge-canvas-core/src/system_rules.rs` with native unit tests for parsing and rejection
 - [X] T008 [P] Create the play-field claim registry in `src/server/src/play_field.rs` — an account-keyed registry whose entry is owned by a guard, modelled on `PeerRegistry::register` in `src/server/src/peer_signaling.rs`, with unit tests for takeover, drop-on-guard-release and concurrent claims
 - [X] T009 Wire `play_field.rs` into `src/server/src/lib.rs` and hold the registry on `AppState` in `src/server/src/state.rs`
 - [X] T010 Update `last_seen_at` from `resolve_authenticated_user` in `src/server/src/auth_middleware.rs`, coarsely (at most once per minute per session) so a live session does not write on every request
@@ -234,7 +234,7 @@ first time.
 **Independent Test**: a GM drives the combat panel while a second client
 follows the round and active combatant.
 
-- [ ] T058 [US5] Add `apps/web/e2e/combat-panel.spec.ts` driving the existing test ids in `apps/web/src/components/.../CombatPanel.tsx` — `combat-panel`, `start-combat-button`, `start-combat-with-selection-button`, `combat-round-counter`, `advance-turn-button`, `end-combat-button`, `combatant-list`
+- [X] T058 [US5] Add `apps/web/e2e/combat-panel.spec.ts` driving the existing test ids in `apps/web/src/components/.../CombatPanel.tsx` — `combat-panel`, `start-combat-button`, `start-combat-with-selection-button`, `combat-round-counter`, `advance-turn-button`, `end-combat-button`, `combatant-list`
 - [ ] T059 [US5] Cover start, add/update/remove combatant, advance turn and end combat in that spec, against `src/server/src/graphql/mutations_combat.rs`'s behaviour
 - [ ] T060 [US5] Assert a second client of the same account follows the round counter and active combatant without a reload, via the US2 fixture
 - [ ] T061 [P] [US5] Update `MVP.md`'s "the gap worth closing: combat has no e2e" note to say what now covers it

@@ -47,7 +47,7 @@ claim 076–080. 041 takes **081–084** as the first unclaimed block. If those
 five plans are reconciled before this phase runs, renumber to match and change
 the four filenames below — the decisions are what matter, not the digits.
 
-- [ ] T001 [P] Write ADR-081 (a confirmed second factor is replaced, never disarmed) in `docs/adrs/20260907-081-second_factor_replaced_never_disarmed.md`, superseding the `setup/start` behaviour at `src/server/src/auth/two_factor.rs:91` and recording why the pending secret gets its own row
+- [X] T001 [P] Write ADR-081 (a confirmed second factor is replaced, never disarmed) in `docs/adrs/20260907-081-second_factor_replaced_never_disarmed.md`, superseding the `setup/start` behaviour at `src/server/src/auth/two_factor.rs:91` and recording why the pending secret gets its own row
 - [ ] T002 [P] Write ADR-082 (one enrolment flow, three authorisations) in `docs/adrs/20260907-082-one_enrolment_flow_three_authorisations.md`, recording the `purpose` extension to `login_two_factor_challenges` and why an enrolment-scoped session was rejected
 - [ ] T003 [P] Write ADR-083 (recovery codes are credentials, not links) in `docs/adrs/20260907-083-recovery_codes_are_credentials.md`, citing the admin bootstrap code as the precedent followed and the raw-stored share codes as the one rejected
 - [ ] T004 [P] Write ADR-097 (an administrator's second factor is a property of the role) in `docs/adrs/20260907-084-administrator_second_factor_is_a_role_property.md`, recording the computed-not-stored rule, the first-run gate, and the boundary with spec 040's FR-002a
@@ -64,13 +64,13 @@ reads. Nothing here is user-visible on its own.
 **⚠️ CRITICAL**: No user story work begins until this phase is complete
 
 - [ ] T007 Create the Diesel migration `src/server/migrations/2026-09-07-100000-0000_two_factor_enrolment/up.sql` and `down.sql` creating `two_factor_enrolments` (with `UNIQUE (user_id)`) and adding `users.two_factor_last_used_step` and `users.two_factor_required_by` per data-model.md §§ 1–2. The `100000` timestamp is deliberate: spec 036's work already holds `2026-09-07-000000-0000_session_description`, and Diesel keys a migration on that leading version, so two directories sharing it collide
-- [ ] T008 Create the Diesel migration `src/server/migrations/2026-09-07-100001-0000_recovery_codes/up.sql` and `down.sql` creating `user_recovery_codes` with the partial index on `(user_id) WHERE used_at IS NULL`, per data-model.md § 3
+- [X] T008 Create the Diesel migration `src/server/migrations/2026-09-07-100001-0000_recovery_codes/up.sql` and `down.sql` creating `user_recovery_codes` with the partial index on `(user_id) WHERE used_at IS NULL`, per data-model.md § 3
 - [ ] T009 Create the Diesel migration `src/server/migrations/2026-09-07-100002-0000_two_factor_events/up.sql` and `down.sql` creating `two_factor_events` with its `event_type` CHECK and `actor_user_id … ON DELETE SET NULL`, and adding `purpose` and `failed_attempts` to `login_two_factor_challenges`, per data-model.md §§ 4, 6. Carry spec 035's comment forward: no identifier column, and none may be added
 - [ ] T010 Regenerate `src/server/src/schema.rs` and add the `TwoFactorEnrolment`, `UserRecoveryCode` and `TwoFactorEvent` `Queryable`/`Insertable` pairs to `src/server/src/models.rs`
 - [ ] T011 [P] Add `matched_step_at` (and the internal step-returning form the existing `verify_totp_code` / `verify_totp_code_at` are re-expressed in terms of) to `crates/thunderforge-axum-auth-core/src/totp.rs`, with a proptest asserting the returned step is the one the code was generated for across the skew window. **Change no parameter**: SHA1, 6 digits, 30s, skew 1, issuer `ThunderForge`
 - [ ] T012 [P] Create `crates/thunderforge-axum-auth-core/src/recovery_codes.rs` — generation over `random_setup_code()`'s alphabet, normalisation (case-fold, strip hyphens and whitespace), and the constant-work match rule — with a proptest that the number of hash comparisons does not depend on whether or where a code matched
 - [ ] T013 [P] Create `src/server/src/qr.rs` — `otpauth://` URI to a module matrix (`size` plus one `0`/`1` string per row) and nothing else — adding the pure-Rust QR crate to `src/server/Cargo.toml`, with a unit test asserting a fixed URI produces a fixed matrix. No SVG, no PNG, no markup (research.md § R10)
-- [ ] T014 Collapse `required(user)` into one function in `src/server/src/auth/two_factor/policy.rs` per data-model.md § 5 — adding the `is_admin` term, dropping the `two_factor_enabled` term — and route both `is_two_factor_required_for_user` and the inline duplicate at `src/server/src/auth/sessions.rs:477` through it, with unit tests for each of the three terms independently
+- [X] T014 Collapse `required(user)` into one function in `src/server/src/auth/two_factor/policy.rs` per data-model.md § 5 — adding the `is_admin` term, dropping the `two_factor_enabled` term — and route both `is_two_factor_required_for_user` and the inline duplicate at `src/server/src/auth/sessions.rs:477` through it, with unit tests for each of the three terms independently
 
 **Checkpoint**: schema, shared rules, QR and the requirement rule exist
 
@@ -92,14 +92,14 @@ be challenged.
 
 ### Implementation for User Story 1
 
-- [ ] T018 [US1] Rewrite `two_factor_setup_start` in `src/server/src/auth/two_factor/enrolment.rs` per `contracts/enrolment.md`: take an authorisation instead of `{username, password}`, write the pending secret to `two_factor_enrolments` only, and return the URI, the grouped secret, the QR matrix and the current `two_factor_enabled`
-- [ ] T019 [US1] Rewrite `two_factor_setup_confirm` in `src/server/src/auth/two_factor/enrolment.rs` — one transaction: verify against the pending secret, write `users`, issue codes (US2's T026), delete the pending row, record the event
-- [ ] T020 [US1] Add `purpose` handling and ticket issue/consume to `src/server/src/auth/two_factor/verification.rs`, and the `2fa/status` route, wiring all of it in `src/server/src/auth/two_factor/mod.rs` and `src/server/src/auth/mod.rs`
+- [X] T018 [US1] Rewrite `two_factor_setup_start` in `src/server/src/auth/two_factor/enrolment.rs` per `contracts/enrolment.md`: take an authorisation instead of `{username, password}`, write the pending secret to `two_factor_enrolments` only, and return the URI, the grouped secret, the QR matrix and the current `two_factor_enabled`
+- [X] T019 [US1] Rewrite `two_factor_setup_confirm` in `src/server/src/auth/two_factor/enrolment.rs` — one transaction: verify against the pending secret, write `users`, issue codes (US2's T026), delete the pending row, record the event
+- [X] T020 [US1] Add `purpose` handling and ticket issue/consume to `src/server/src/auth/two_factor/verification.rs`, and the `2fa/status` route, wiring all of it in `src/server/src/auth/two_factor/mod.rs` and `src/server/src/auth/mod.rs`
 - [ ] T021 [US1] Remove `TwoFactorSetupStartRequest`/`TwoFactorSetupConfirmRequest`'s `username` and `password` fields in `src/server/src/auth/types.rs` and add the ticket and QR-matrix response shapes
 - [ ] T022 [P] [US1] Create `apps/web/src/components/two-factor/QrMatrix.tsx` — inline SVG rectangles from the matrix, with a vitest case in `apps/web/src/components/two-factor/__tests__/QrMatrix.test.tsx`. No `dangerouslySetInnerHTML`, no dependency
 - [ ] T023 [US1] Create `apps/web/src/components/two-factor/EnrolmentFlow.tsx` — the one flow: QR beside the grouped copyable secret, the confirming code, retry without re-scan, then the codes. It takes where-to-go-afterwards as a prop and nothing else differs between entrances (FR-001a)
-- [ ] T024 [US1] Create `apps/web/src/api/twoFactor.ts` and `apps/web/src/pages/user/SecuritySettingsPage.tsx`, and register `/settings/security` in `apps/web/src/routes/AppRoutes.tsx` and `apps/web/src/routes/pageLoaders.ts` beside `/settings/storage`
-- [ ] T025 [US1] Rewrite `apps/web/e2e/two-factor.spec.ts`'s enrolment cases to drive the **interface** rather than `page.request`, and delete the file-header paragraph that says the UI does not exist — it is the reason the file was written that way
+- [X] T024 [US1] Create `apps/web/src/api/twoFactor.ts` and `apps/web/src/pages/user/SecuritySettingsPage.tsx`, and register `/settings/security` in `apps/web/src/routes/AppRoutes.tsx` and `apps/web/src/routes/pageLoaders.ts` beside `/settings/storage`
+- [X] T025 [US1] Rewrite `apps/web/e2e/two-factor.spec.ts`'s enrolment cases to drive the **interface** rather than `page.request`, and delete the file-header paragraph that says the UI does not exist — it is the reason the file was written that way
 
 **Checkpoint**: a person can enrol from a screen. This is the feature existing at all.
 
@@ -118,14 +118,14 @@ an account.
 
 ### Tests for User Story 2
 
-- [ ] T026 [P] [US2] Add server tests in `src/server/src/auth/two_factor/recovery.rs` for single use via the conditional `UPDATE` (zero rows means refuse), for whole-set replacement on regeneration, and for the low-water count (FR-008, FR-010, FR-011)
+- [X] T026 [P] [US2] Add server tests in `src/server/src/auth/two_factor/recovery.rs` for single use via the conditional `UPDATE` (zero rows means refuse), for whole-set replacement on regeneration, and for the low-water count (FR-008, FR-010, FR-011)
 - [ ] T027 [P] [US2] Add a server test asserting **no route anywhere returns an issued code** after the body that created it — assert over the registered route table, not by inspection (FR-009)
 - [ ] T028 [P] [US2] Add a server test asserting a recovery code does not advance `users.two_factor_last_used_step` (contracts/recovery-codes.md rule 7)
 
 ### Implementation for User Story 2
 
-- [ ] T029 [US2] Implement issue, spend, regenerate and count-remaining in `src/server/src/auth/two_factor/recovery.rs` per `contracts/recovery-codes.md`, Argon2 via T006's shared helper, full-scan matching with no early exit
-- [ ] T030 [US2] Accept `recovery_code` at `POST /authentication/2fa/verify` in `src/server/src/auth/two_factor/verification.rs`, refusing a request carrying both `code` and `recovery_code` before evaluating either
+- [X] T029 [US2] Implement issue, spend, regenerate and count-remaining in `src/server/src/auth/two_factor/recovery.rs` per `contracts/recovery-codes.md`, Argon2 via T006's shared helper, full-scan matching with no early exit
+- [X] T030 [US2] Accept `recovery_code` at `POST /authentication/2fa/verify` in `src/server/src/auth/two_factor/verification.rs`, refusing a request carrying both `code` and `recovery_code` before evaluating either
 - [ ] T031 [US2] Add `POST /authentication/2fa/recovery-codes` (session + possession) in `src/server/src/auth/two_factor/recovery.rs` and wire it in `src/server/src/auth/two_factor/mod.rs`
 - [ ] T032 [US2] Report `recovery_codes_remaining` and `recovery_codes_low` on the session response in `src/server/src/auth/sessions.rs`, so a person is told at sign-in and not only if they visit a settings page (FR-011)
 - [ ] T033 [P] [US2] Create `apps/web/src/components/two-factor/RecoveryCodeSheet.tsx` — shown once, copyable, downloadable, with an explicit acknowledgement before it can be dismissed
@@ -210,7 +210,7 @@ enrolled and complete enrolment in that same flow.
 
 ### Implementation for User Story 5
 
-- [ ] T058 [US5] Return `two_factor_enrolment_required` plus an `enrol` ticket from `authenticate_password_login` in `src/server/src/auth/sessions.rs:477-499`, per `contracts/verification.md` § The login path
+- [X] T058 [US5] Return `two_factor_enrolment_required` plus an `enrol` ticket from `authenticate_password_login` in `src/server/src/auth/sessions.rs:477-499`, per `contracts/verification.md` § The login path
 - [ ] T059 [US5] Apply the same three rows on the OAuth path in `src/server/src/auth/oauth.rs:475-505`, with the instance-wide term not applying to a provider-only account and the administrator term still applying
 - [ ] T060 [US5] Add `twoFactorCoverage` to `src/server/src/graphql/queries/admin.rs` beside `auth_security_settings`, returning counts and never a list of accounts (FR-021)
 - [ ] T061 [US5] Render the enrolment branch of the challenge step in `apps/web/src/pages/auth/LoginView.tsx` using `EnrolmentFlow` unchanged, preserving the `returnTo` the page already carries (FR-020)

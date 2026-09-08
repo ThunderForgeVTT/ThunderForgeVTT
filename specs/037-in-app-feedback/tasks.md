@@ -55,16 +55,16 @@ below reads. Nothing here is user-visible on its own.
 
 **⚠️ CRITICAL**: No user story work begins until this phase is complete
 
-- [ ] T008 Create the Diesel migration `src/server/migrations/2026-09-07-010000-0000_feedback_submissions/up.sql` and `down.sql` with `feedback_submissions`, `feedback_attachments`, `feedback_delivery_attempts` and `feedback_destination` per data-model.md, including every CHECK constraint and the three partial indexes
-- [ ] T009 Regenerate `src/server/src/schema.rs` for the four tables (`diesel migration run`, then the `joinable!` and `allow_tables_to_appear_in_same_query!` entries), and add `FeedbackSubmission`/`NewFeedbackSubmission`, `FeedbackAttachment`/`NewFeedbackAttachment`, `FeedbackDeliveryAttempt`/`NewFeedbackDeliveryAttempt`, `FeedbackDestination` to `src/server/src/models.rs`
+- [X] T008 Create the Diesel migration `src/server/migrations/2026-09-07-010000-0000_feedback_submissions/up.sql` and `down.sql` with `feedback_submissions`, `feedback_attachments`, `feedback_delivery_attempts` and `feedback_destination` per data-model.md, including every CHECK constraint and the three partial indexes
+- [X] T009 Regenerate `src/server/src/schema.rs` for the four tables (`diesel migration run`, then the `joinable!` and `allow_tables_to_appear_in_same_query!` entries), and add `FeedbackSubmission`/`NewFeedbackSubmission`, `FeedbackAttachment`/`NewFeedbackAttachment`, `FeedbackDeliveryAttempt`/`NewFeedbackDeliveryAttempt`, `FeedbackDestination` to `src/server/src/models.rs`
 - [ ] T010 Add `AppScope`, `Field`, `ScopedApp` and `registration_for(scope)` to `src/server/src/repo_host.rs` per `contracts/github-app-scopes.md`, with per-field fallback and a recorded source per field; keep `registration_from_env()` delegating to `AppScope::Sync`
 - [ ] T011 Move the `git_is_available()` check out of the shared resolver into the sync scope only, in `src/server/src/repo_host.rs`, and add a test in `src/server/src/repo_host_tests.rs` asserting a feedback-scope resolution succeeds with no `git` on PATH
 - [ ] T012 [P] Add tests in `src/server/src/repo_host_tests.rs` for scoped resolution: specific-wins-per-field, global-fills-the-rest, all three private-key forms under each prefix, and that no `RegistrationProblem` message contains a value, a fragment or a length
-- [ ] T013 [P] Add `rustfs::delete_object(cfg, key)` to `src/server/src/storage/rustfs.rs`, refusing any key not under `feedback/` **inside the function**, with unit tests for both the accept and the refuse case
+- [X] T013 [P] Add `rustfs::delete_object(cfg, key)` to `src/server/src/storage/rustfs.rs`, refusing any key not under `feedback/` **inside the function**, with unit tests for both the accept and the refuse case
 - [ ] T014 [P] Update the module docs in `src/server/src/storage/dedupe.rs` — object deletion now exists, where it is confined, why feedback attachments are safe to delete (they are never deduped and carry no `content_hash`), and that widening it to canvas assets still needs the reference counting that module already describes
 - [ ] T015 [P] Add the application version surface: `env!("CARGO_PKG_VERSION")` plus `option_env!("THUNDERFORGE_GIT_SHA")` on an authenticated GraphQL query in `src/server/src/graphql/queries/healthcheck.rs`, and a `define` block in `apps/web/vite.config.mts` exposing the same pair to the client — **not** on `/api/status`, which deliberately reports no build identifier and is unauthenticated
-- [ ] T016 Create `config/feedback-redaction.json` with the seven rule kinds from `contracts/attachments.md` § 2, as the single list both the client filter and the server validator read
-- [ ] T017 Create `src/server/src/feedback/mod.rs` (record, states, retention constants) and `src/server/src/feedback/redaction.rs` (the validator that refuses and never rewrites), wire `pub mod feedback;` into `src/server/src/lib.rs`, with unit tests per rule kind including one that asserts an approved payload is returned byte-identical when it contains nothing
+- [X] T016 Create `config/feedback-redaction.json` with the seven rule kinds from `contracts/attachments.md` § 2, as the single list both the client filter and the server validator read
+- [X] T017 Create `src/server/src/feedback/mod.rs` (record, states, retention constants) and `src/server/src/feedback/redaction.rs` (the validator that refuses and never rewrites), wire `pub mod feedback;` into `src/server/src/lib.rs`, with unit tests per rule kind including one that asserts an approved payload is returned byte-identical when it contains nothing
 
 **Checkpoint**: schema, scoped credentials, deletable storage, a version and the redaction rules exist; stories can start
 
@@ -81,18 +81,18 @@ confirm each is accepted, acknowledged, and does not navigate the person away.
 ### Tests for User Story 1
 
 - [ ] T018 [P] [US1] Add server tests in `src/server/src/graphql/mutations_feedback.rs` for `submitFeedback`: each of the three kinds recorded, `game_system_id` resolved from `world_id` and never taken from the input, a submission with no `world_id` accepted, and the row committed before any delivery call exists
-- [ ] T019 [P] [US1] Add server tests in `src/server/src/graphql/feedback_rate_limit.rs` for the window and the per-account key, including `the_e2e_auth_bypass_does_not_disable_this_limiter` mirroring the test of that name in `src/server/src/graphql/share_rate_limit.rs`
+- [X] T019 [P] [US1] Add server tests in `src/server/src/graphql/feedback_rate_limit.rs` for the window and the per-account key, including `the_e2e_auth_bypass_does_not_disable_this_limiter` mirroring the test of that name in `src/server/src/graphql/share_rate_limit.rs`
 
 ### Implementation for User Story 1
 
-- [ ] T020 [US1] Create `src/server/src/graphql/feedback_rate_limit.rs` — 5 per 10 minutes, keyed on the account id, on the sliding-window shape of `src/server/src/graphql/share_rate_limit.rs`, returning `extensions.code = "FEEDBACK_RATE_LIMITED"`
-- [ ] T021 [US1] Implement `submitFeedback` in `src/server/src/graphql/mutations_feedback.rs` per `contracts/feedback.md` — authorize, rate limit, validate redaction, write submission + attachment rows + objects in one transaction, return
+- [X] T020 [US1] Create `src/server/src/graphql/feedback_rate_limit.rs` — 5 per 10 minutes, keyed on the account id, on the sliding-window shape of `src/server/src/graphql/share_rate_limit.rs`, returning `extensions.code = "FEEDBACK_RATE_LIMITED"`
+- [X] T021 [US1] Implement `submitFeedback` in `src/server/src/graphql/mutations_feedback.rs` per `contracts/feedback.md` — authorize, rate limit, validate redaction, write submission + attachment rows + objects in one transaction, return
 - [ ] T022 [US1] Register the feedback query and mutation objects on `QueryRoot` and `MutationRoot` in `src/server/src/graphql.rs`, with an SDL guard test asserting the field names the client uses
-- [ ] T023 [P] [US1] Create `apps/web/src/services/feedbackDraft.ts` — `sessionStorage`, debounced write, cleared on success, never `localStorage` (research.md § R13)
-- [ ] T024 [P] [US1] Create `apps/web/src/api/feedback.ts` calling `postGraphQL` from `@/api/graphqlClient`, surfacing `FEEDBACK_RATE_LIMITED` and `FEEDBACK_CONTAINS_SECRET` from `GraphQLRequestError.codes` rather than by matching messages
-- [ ] T025 [US1] Create `apps/web/src/components/feedback/FeedbackLauncher.tsx` and `FeedbackDialog.tsx` — the three kinds, fields per kind (FR-003), context assembled from `useLocation()`, `useParams()` and `useAuth()` since there is no `WorldContext` to read
-- [ ] T026 [US1] Mount the launcher from `apps/web/src/main.tsx` above the router — FR-001 says "any screen" and `main.tsx` is the only place above every route; this adds the app's first root-level overlay host, and `apps/web/src/components/ui/sonner.tsx`'s `Toaster` (defined but never mounted anywhere today) is mounted here too for FR-004's acknowledgement
-- [ ] T027 [P] [US1] Add vitest coverage for `feedbackDraft.ts` in `apps/web/src/services/__tests__/feedbackDraft.test.ts`, including that a cleared storage returns an empty draft rather than throwing
+- [X] T023 [P] [US1] Create `apps/web/src/services/feedbackDraft.ts` — `sessionStorage`, debounced write, cleared on success, never `localStorage` (research.md § R13)
+- [X] T024 [P] [US1] Create `apps/web/src/api/feedback.ts` calling `postGraphQL` from `@/api/graphqlClient`, surfacing `FEEDBACK_RATE_LIMITED` and `FEEDBACK_CONTAINS_SECRET` from `GraphQLRequestError.codes` rather than by matching messages
+- [X] T025 [US1] Create `apps/web/src/components/feedback/FeedbackLauncher.tsx` and `FeedbackDialog.tsx` — the three kinds, fields per kind (FR-003), context assembled from `useLocation()`, `useParams()` and `useAuth()` since there is no `WorldContext` to read
+- [X] T026 [US1] Mount the launcher from `apps/web/src/main.tsx` above the router — FR-001 says "any screen" and `main.tsx` is the only place above every route; this adds the app's first root-level overlay host, and `apps/web/src/components/ui/sonner.tsx`'s `Toaster` (defined but never mounted anywhere today) is mounted here too for FR-004's acknowledgement
+- [X] T027 [P] [US1] Add vitest coverage for `feedbackDraft.ts` in `apps/web/src/services/__tests__/feedbackDraft.test.ts`, including that a cleared storage returns an empty draft rather than throwing
 - [ ] T028 [US1] Add `apps/web/e2e/feedback-submit.spec.ts` covering US1's four acceptance scenarios plus FR-006's "a refusal does not discard what the person wrote"
 
 **Checkpoint**: a person can send feedback from anywhere and it is kept — even with nothing configured (FR-030)
@@ -111,16 +111,16 @@ person chose it.
 
 ### Tests for User Story 2
 
-- [ ] T029 [P] [US2] Add vitest coverage for `apps/web/src/services/feedbackLogBuffer.ts` in `apps/web/src/services/__tests__/feedbackLogBuffer.test.ts`: the entry cap, the byte cap, per-entry truncation, `droppedCount`, that the original console function is still called, and that nothing is written to any storage API
-- [ ] T030 [P] [US2] Add vitest coverage for `apps/web/src/services/feedbackRedaction.ts` in `apps/web/src/services/__tests__/feedbackRedaction.test.ts`, one case per rule kind from `config/feedback-redaction.json`, asserting the marker is visible and the value is absent
+- [X] T029 [P] [US2] Add vitest coverage for `apps/web/src/services/feedbackLogBuffer.ts` in `apps/web/src/services/__tests__/feedbackLogBuffer.test.ts`: the entry cap, the byte cap, per-entry truncation, `droppedCount`, that the original console function is still called, and that nothing is written to any storage API
+- [X] T030 [P] [US2] Add vitest coverage for `apps/web/src/services/feedbackRedaction.ts` in `apps/web/src/services/__tests__/feedbackRedaction.test.ts`, one case per rule kind from `config/feedback-redaction.json`, asserting the marker is visible and the value is absent
 - [ ] T031 [P] [US2] Add a server test in `src/server/src/feedback/redaction.rs` asserting that a payload containing a secret is **refused** with `FEEDBACK_CONTAINS_SECRET` and that nothing is written — not rewritten, not partially stored
 
 ### Implementation for User Story 2
 
-- [ ] T032 [US2] Create `apps/web/src/services/feedbackRedaction.ts` reading `config/feedback-redaction.json`, exporting `redact(line)` returning the text, a count and the kinds found
-- [ ] T033 [US2] Create `apps/web/src/services/feedbackLogBuffer.ts` — patch `console.error`/`warn`/`info`, register `window.onerror` and `unhandledrejection`, redact **at push**, bound at 500 entries / 128 KB / 2 KB per entry, expose `snapshot()`; start it from `apps/web/src/main.tsx`
-- [ ] T034 [US2] Create `apps/web/src/services/feedbackScreenshot.ts` — `getDisplayMedia`, one frame to an `OffscreenCanvas`, PNG, track stopped in a `finally`; resolve `null` on refusal, dismissal or an absent API so declining costs nothing
-- [ ] T035 [US2] Create `apps/web/src/components/feedback/FeedbackReview.tsx` — message, context, the full scrollable log bundle with kept/dropped/redaction counts, the screenshot at inspectable size, a remove control on every part, and FR-014's notice **in this step** rather than after it
+- [X] T032 [US2] Create `apps/web/src/services/feedbackRedaction.ts` reading `config/feedback-redaction.json`, exporting `redact(line)` returning the text, a count and the kinds found
+- [X] T033 [US2] Create `apps/web/src/services/feedbackLogBuffer.ts` — patch `console.error`/`warn`/`info`, register `window.onerror` and `unhandledrejection`, redact **at push**, bound at 500 entries / 128 KB / 2 KB per entry, expose `snapshot()`; start it from `apps/web/src/main.tsx`
+- [X] T034 [US2] Create `apps/web/src/services/feedbackScreenshot.ts` — `getDisplayMedia`, one frame to an `OffscreenCanvas`, PNG, track stopped in a `finally`; resolve `null` on refusal, dismissal or an absent API so declining costs nothing
+- [X] T035 [US2] Create `apps/web/src/components/feedback/FeedbackReview.tsx` — message, context, the full scrollable log bundle with kept/dropped/redaction counts, the screenshot at inspectable size, a remove control on every part, and FR-014's notice **in this step** rather than after it
 - [ ] T036 [US2] Store attachments server-side in `src/server/src/feedback/mod.rs`: screenshot through the existing `transcode::transcode_to_webp` (inheriting `MAX_UPLOAD_BYTES` and `TooLarge`), logs as `text/plain`, both under `feedback/{submission_id}/{attachment_id}` and **never** through `storage::dedupe::object_holding`
 - [ ] T037 [US2] Add the authenticated attachment route in `src/server/src/assets_serve/feedback.rs` and register `/feedback-assets/{attachment_id}` in `src/app/src/main.rs` beside the other asset routes, checking that the caller owns the submission or is an administrator
 - [ ] T038 [US2] Add the capture flags to `launchOptions.args` in `apps/web/playwright.config.ts` per `contracts/e2e-harness.md` § 1, with a comment saying what they do and do not prove
@@ -140,7 +140,7 @@ each kind, and confirm three issues arrive with their attachments intact.
 
 ### Tests for User Story 3
 
-- [ ] T040 [P] [US3] Add tests in `src/server/src/feedback/issue_body.rs` for title, labels and body: one kind label per kind, the `delivery_key` comment present, the submitter rendered as a reference and **never** an email, and the inline log block cut at 48 KB with the withheld count stated
+- [X] T040 [P] [US3] Add tests in `src/server/src/feedback/issue_body.rs` for title, labels and body: one kind label per kind, the `delivery_key` comment present, the submitter rendered as a reference and **never** an email, and the inline log block cut at 48 KB with the withheld count stated
 - [ ] T041 [P] [US3] Add tests in `src/server/src/feedback/schedule.rs` for `due_now`: a pending submission is due, one with an unfinished attempt is not, backoff is respected, a purged submission is excluded, and ordering is oldest-first
 
 ### Implementation for User Story 3
@@ -148,9 +148,9 @@ each kind, and confirm three issues arrive with their attachments intact.
 - [ ] T042 [US3] Make `open_issue` check `response.status()` in `src/server/src/repo_host.rs` and classify the outcome (2xx / 4xx / 5xx / transport), add a scope-carrying sibling, and accept `labels` in the create POST
 - [ ] T043 [US3] Add `put_file(scope, installation, owner, name, branch, path, bytes)` to `src/server/src/repo_host.rs` using the Contents API, creating the `feedback-attachments` branch from the default head on first use — no new permission needed, `github::REQUESTED_PERMISSIONS` already asks for `contents:write`
 - [ ] T044 [US3] Add `repo_host` support for `GITHUB_API_BASE` / `GITHUB_WEB_BASE` via the existing, currently unused `GitHubApp::with_bases` in `crates/thunderforge-repo-host/src/github.rs` — configuration, not a test branch
-- [ ] T045 [US3] Implement `src/server/src/feedback/issue_body.rs` per `contracts/delivery.md` § 3, including the public-embed / private-link choice driven by the destination's observed visibility
-- [ ] T046 [US3] Implement `src/server/src/feedback/deliver.rs` — one attempt: resolve credentials, upload attachments, create the issue, finish the attempt row, map host errors to `FeedbackFailureReason` **and never carry a host body through**
-- [ ] T047 [US3] Implement `src/server/src/feedback/schedule.rs` with `TICK_SECONDS`, `BACKOFF_SECONDS`, `next_attempt_after` and `due_now`, modelled on `src/server/src/lore_sync/schedule.rs`, and spawn it from `src/app/src/main.rs` beside `spawn_lore_sync_task` — unconditionally, for the reason that call site already gives
+- [X] T045 [US3] Implement `src/server/src/feedback/issue_body.rs` per `contracts/delivery.md` § 3, including the public-embed / private-link choice driven by the destination's observed visibility
+- [X] T046 [US3] Implement `src/server/src/feedback/deliver.rs` — one attempt: resolve credentials, upload attachments, create the issue, finish the attempt row, map host errors to `FeedbackFailureReason` **and never carry a host body through**
+- [X] T047 [US3] Implement `src/server/src/feedback/schedule.rs` with `TICK_SECONDS`, `BACKOFF_SECONDS`, `next_attempt_after` and `due_now`, modelled on `src/server/src/lore_sync/schedule.rs`, and spawn it from `src/app/src/main.rs` beside `spawn_lore_sync_task` — unconditionally, for the reason that call site already gives
 - [ ] T048 [US3] Refresh and store the destination's visibility (`repo_host::repository_is_public`) on the pass, with `visibility_checked_at`, and surface `feedbackDestinationNotice` in `src/server/src/graphql/queries/feedback.rs`
 - [ ] T049 [P] [US3] Create `apps/web/e2e/fixtures/githubStub.ts` per `contracts/e2e-harness.md` § 2, and give each shard a port in `scripts/e2e-parallel.mjs` exactly as backends and vite servers already get one
 - [ ] T050 [US3] Seed a `feedback_destination` row pointing at the stub in `src/server/seeds/e2e_demo.sql`, and set `FEEDBACK_GITHUB_APP_*` from `crates/thunderforge-repo-host/tests/fixtures/throwaway-test-app-key.pem` in the harness
@@ -178,7 +178,7 @@ item arrives once.
 ### Implementation for User Story 6
 
 - [ ] T055 [US6] Implement the search-before-create adoption path in `src/server/src/feedback/deliver.rs` per `contracts/delivery.md` § 4, using `GET /search/issues` against the `delivery_key`
-- [ ] T056 [US6] Implement `undeliveredFeedback`, `abandonFeedbackDelivery` and `resumeFeedbackDelivery` in `src/server/src/graphql/queries/feedback.rs` and `src/server/src/graphql/mutations_feedback.rs`, administrator-only, per `contracts/delivery.md` § 5
+- [X] T056 [US6] Implement `undeliveredFeedback`, `abandonFeedbackDelivery` and `resumeFeedbackDelivery` in `src/server/src/graphql/queries/feedback.rs` and `src/server/src/graphql/mutations_feedback.rs`, administrator-only, per `contracts/delivery.md` § 5
 - [ ] T057 [US6] Add the undelivered-feedback view to the admin surface in `apps/web/src/pages/admin/`, showing attempt count, next attempt, reason and expiry
 - [ ] T058 [US6] Add `/_control/fail-next` handling to `apps/web/e2e/fixtures/githubStub.ts` — record the issue, then drop the connection, which is the only way to produce the failure FR-019 is actually about
 - [ ] T059 [US6] Extend `apps/web/e2e/feedback-delivery.spec.ts` with US6's three acceptance scenarios, including the ambiguous-failure case asserting exactly one issue exists and the attempt row says `adopted`
@@ -215,7 +215,7 @@ else's.
 confirm the submitter sees the change.
 
 - [ ] T065 [P] [US5] Add a server test in `src/server/src/graphql/queries/feedback.rs` asserting `mySubmissions` returns only the caller's rows and that there is no argument by which another account's could be reached
-- [ ] T066 [US5] Implement `mySubmissions` in `src/server/src/graphql/queries/feedback.rs` per `contracts/feedback.md`
+- [X] T066 [US5] Implement `mySubmissions` in `src/server/src/graphql/queries/feedback.rs` per `contracts/feedback.md`
 - [ ] T067 [US5] Add the state refresh to the delivery pass in `src/server/src/feedback/schedule.rs` — bounded per tick, oldest-refreshed-first, `open`/`closed` only, recording `issue_state_checked_at`
 - [ ] T068 [US5] Create `apps/web/src/components/feedback/MySubmissions.tsx` and route it under the account pages, showing what was sent, its state, when that was observed, and when the instance's copies expire
 - [ ] T069 [US5] Add `apps/web/e2e/feedback-status.spec.ts` covering US5's three acceptance scenarios, including that a second account sees none of the first's
@@ -230,7 +230,7 @@ confirm the submitter sees the change.
 is the only place this feature deletes anything.
 
 - [ ] T070 [P] Add server tests in `src/server/src/feedback/mod.rs` asserting the sweep deletes only expired feedback objects, sets `attachments_purged_at`, leaves the rows, and leaves every canvas, lore, actor and scene object untouched
-- [ ] T071 Implement the retention sweep on the delivery task's tick in `src/server/src/feedback/schedule.rs` — one schedule, not a second one
+- [X] T071 Implement the retention sweep on the delivery task's tick in `src/server/src/feedback/schedule.rs` — one schedule, not a second one
 - [ ] T072 Show the expiry and the purged state in `apps/web/src/components/feedback/MySubmissions.tsx` and in the pre-submission notice, stating plainly that the destination's copy is unaffected and cannot be recalled by the instance
 - [ ] T073 Add the `ATTACHMENTS_EXPIRED` failure path — a submission whose evidence expired before delivery succeeded fails permanently, says so, and does not deliver a report without the thing it was for
 
