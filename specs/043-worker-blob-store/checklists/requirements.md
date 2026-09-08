@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,11 +31,17 @@
 
 ## Notes
 
-- **Two [NEEDS CLARIFICATION] markers remain**, both deliberate and both
-  recorded in the spec's Open Questions. Neither has a safe default: Q1 decides
-  what spec 028's FR-021 means under the new store, and Q2 decides whether the
-  fallback is a permanent product surface or a migration aid. Answering them is
-  the next step before `/speckit-plan`.
+- **All items pass as of the Phase 0/1 pass (2026-09-08).** The two
+  clarification markers were resolved in `research.md` (R2, R3) and the spec
+  now records them under "Resolved Questions".
+
+- **One resolution changed the spec rather than filling a blank.** Research R1
+  found that the API this feature introduces has been Baseline widely available
+  since March 2023, while the call the cache uses today only reached Baseline in
+  September 2025. The feature is therefore the *more* portable path, not an
+  optimisation over a well-supported base — which is why the spec gained a
+  stretch goal and why the fallback's stated purpose was narrowed to "no worker
+  available".
 
 - **On "no implementation details"**: this spec names the platform API in its
   title and input, which would normally fail that check. It is kept because the

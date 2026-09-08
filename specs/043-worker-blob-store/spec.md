@@ -289,6 +289,9 @@ them into the contended case on purpose.
   reported, and the engine bundle stays inside its existing budget.
 - **SC-007**: A build that stops using the fast path where it is available
   fails a test, demonstrated by making it happen on purpose.
+- **SC-008** *(stretch)*: The measurement in SC-002 exists for at least one
+  non-Chromium browser, and the remaining blockers to supporting it are written
+  down by name rather than estimated.
 
 ## Assumptions
 
@@ -299,9 +302,11 @@ them into the contended case on purpose.
 - **The fast path is an optimisation, never a requirement.** The existing store
   remains the reference implementation and the fallback, and its tests remain
   the definition of correct.
-- **Chromium is the reference browser.** The constitution states Chromium-only
-  support today; the fallback exists for contexts rather than for a second
-  browser, and the spec does not commit to supporting one.
+- **Chromium is the reference browser**, and remains the only supported one
+  when this feature ships. The fallback exists for contexts rather than for a
+  second browser — per research R1 there is no browser it rescues. The stretch
+  goal asks what else would be needed for a second engine; it does not deliver
+  one.
 - **"Large" means at least 1 MB** for the purposes of the threshold in US1 and
   SC-002, subject to what the benchmark finds.
 - **No change to what is cached or when.** Eviction, budget, prefetch and
@@ -324,16 +329,52 @@ them into the contended case on purpose.
 - Changing what is cached, when it is cached, or what is evicted.
 - Any change to the server.
 
-## Open Questions
+## Resolved Questions
 
-- **Q1 (FR-012, FR-014)**: Which locking posture should the fast path take —
-  the exclusive default, which refuses a second opener outright, or the
-  permissive mode, which allows several and leaves ordering to the caller?
-  This decides what FR-021 *means* under the new store and cannot be defaulted
-  safely. [NEEDS CLARIFICATION: exclusive-by-default versus permissive locking]
-- **Q2 (FR-008, SC-003)**: Is the fallback path a permanent part of the
-  product, or a migration aid to be removed once the reference browser
-  baseline covers the fast path? The codebase has a stated aversion to
-  well-tested, entirely uninvoked code, and a fallback nothing exercises is
-  exactly that. [NEEDS CLARIFICATION: permanent fallback versus time-limited
-  migration path]
+Both were answered in [research.md](./research.md), and one finding reversed
+this spec's framing.
+
+- **Q1 — locking posture (FR-012, FR-014)**: **Exclusive `readwrite`, the
+  default, with the `mode` option not passed at all.** The option is a later
+  addition and is not portable, and choosing a single-engine option to enable a
+  goal about portability would be incoherent. See research R2 for what FR-021
+  becomes as a result: the guarantee is unchanged and the mechanism is simpler,
+  because a reader is refused rather than shown an empty file — but
+  `BlobShape::Incomplete` survives, since a write killed mid-flight still
+  leaves a short file behind.
+- **Q2 — fallback lifetime (FR-008, SC-003)**: **Retained, with its purpose
+  narrowed to contexts rather than browsers.** It exists for "a worker could
+  not start", and for nothing else. It is explicitly *not* a browser-support
+  story, because there is no browser it rescues — see below.
+
+## The framing this feature was written on was wrong
+
+`createSyncAccessHandle` has been Baseline **widely available since March
+2023**. `createWritable` — the call this cache uses today — became Baseline
+**newly available in September 2025**, two and a half years later.
+
+So the path being introduced here is not an optimisation layered on a
+well-supported base. It is the **more portable** of the two, and the current
+store is the narrower one. That does not change any requirement below, but it
+changes what this feature is for, and it is why the stretch goal exists.
+
+## Stretch Goal — More browsers than one
+
+The constitution states Chromium-only support, and the world cache is the
+reason: it depends on OPFS, WebCrypto and IndexedDB, and Chromium is where all
+three were verified.
+
+This feature replaces the storage layer's single largest portability blocker
+with an API that has been available across engines for years. That does not
+make Firefox or Safari supported — WebCrypto and IndexedDB usage would each
+need their own verification, and that is a separate piece of work — but it
+makes the question worth asking for the first time.
+
+- **SG-001**: The benchmark (US3) MUST be run on at least one non-Chromium
+  browser, against the existing store as well as the new one. What it finds is
+  the deliverable, including if the finding is that the current store does not
+  work there at all.
+- **SG-002**: The cache suite SHOULD be run on that browser and the remaining
+  blockers recorded by name. **The list is the deliverable, not a support
+  claim.** Nothing here promises a second supported browser, and no
+  constitution constraint is relaxed by this feature.
