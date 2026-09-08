@@ -78,7 +78,7 @@ below reads. Nothing here is user-visible on its own.
 ### Harness
 
 - [ ] T019 Add the `mailpit` service to `compose.yml` beside `postgres` and `rustfs` per `contracts/e2e-fixtures.md`, and wait for it in the `services-up` target in `Makefile` the way `rustfs` already is
-- [ ] T020 Add the migrated-but-unseeded template database and its per-shard clone to `scripts/e2e-parallel.mjs`, plus a `first-run` Playwright project in `apps/web/playwright.config.ts` pinned to it — US1 is unobservable against the seeded template and that is why no `setup.spec.ts` exists today
+- [x] T020 Add the migrated-but-unseeded template database and its per-shard clone to `scripts/e2e-parallel.mjs`, plus a `first-run` Playwright project in `apps/web/playwright.config.ts` pinned to it — US1 is unobservable against the seeded template and that is why no `setup.spec.ts` exists today
 
 **Checkpoint**: a setting can be declared, resolved and changed with a record; the harness can start an instance that has never been set up
 
