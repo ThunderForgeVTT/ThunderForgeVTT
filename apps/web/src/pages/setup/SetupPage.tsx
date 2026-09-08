@@ -1,20 +1,86 @@
-import type { FormEvent } from "react";
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
+import { getCurrentSession } from "@/services/auth";
+import { readTwoFactorStatus } from "@/api/twoFactor";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
 import { Field } from "@/components/ui/field/Field";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
-import { Tabs } from "@/components/ui/tabs/Tabs";
-import { Tooltip } from "@/components/ui/tooltip/Tooltip";
 import { AuthLayout } from "@/layouts/auth-layout/AuthLayout";
-import { setupBasic, startSetupOAuth } from "@/services/auth";
+import { AccountStep } from "@/pages/setup/steps/AccountStep";
+import { ReviewStep } from "@/pages/setup/steps/ReviewStep";
+import { SecondFactorStep } from "@/pages/setup/steps/SecondFactorStep";
+import { SettingsStep } from "@/pages/setup/steps/SettingsStep";
+import {
+  buildSetupSteps,
+  completeSetup,
+  fetchInstanceReadiness,
+  firstUnansweredStep,
+  initialValues,
+  readSetupStatus,
+  saveSetupSettings,
+  SetupRequestError,
+  stepPayload,
+  validateStep,
+  visibleSteps,
+  type ReadinessReport,
+  type RequiredSetting,
+  type SetupStatusWithSettings,
+  type SetupStep,
+} from "@/services/instanceSetup";
 import type { SetupStatus } from "@/types/auth";
 import type { SeoConfig } from "@/types/seo";
 import { cn } from "@/lib/utils";
+
+/**
+ * Spec 040 US1 — first run, as a wizard the registry drives (T069 … T073).
+ *
+ * # What this page is not, any more
+ *
+ * It used to be one screen with the account form on it and three decorative
+ * captions calling themselves "setup steps". Nothing on it collected the
+ * operator identity, the notice contact, the support address or the mail
+ * settings that FR-002 says setup collects, and nothing on it could, because
+ * the screen was a list of fields somebody typed out by hand.
+ *
+ * # How the step list is built
+ *
+ * `GET /authentication/setup/status` returns `required_settings` — the
+ * registry's declarations, each saying whether it is satisfied and where its
+ * value came from. `buildSetupSteps` groups them by the registry's own group
+ * and returns one step per group, in the server's order, with the account, the
+ * second factor and the review around them. **No file under `pages/setup/`
+ * names a setting key**, except `SettingsStep`'s `notice.` test for where the
+ * designated-agent obligation belongs (T073) — and that keys off the
+ * declaration, not off a step. Adding a declaration to `settings/registry.rs`
+ * puts a field in this wizard with nothing edited here (FR-012).
+ *
+ * # Resumability (FR-006) is storage, not state
+ *
+ * Every step writes as it is left, through `POST
+ * /authentication/setup/settings`. On load the page asks the server what is
+ * answered and starts at the first thing that is not. Nothing is kept in
+ * `sessionStorage`, nothing is accumulated across steps and posted at the end.
+ * Close the browser, restart the container, come back: the wizard picks up
+ * where it stopped because the *instance* did.
+ *
+ * The one thing that cannot be recovered from storage is the password of a
+ * locally created administrator, which the second-factor step needs to
+ * authorise enrolment. A reload between creating the account and enrolling
+ * therefore means signing in and enrolling there instead — which is spec 041
+ * FR-019's entrance, and is the same place an OAuth-bootstrapped administrator
+ * ends up. Storing the password to avoid that was considered and rejected.
+ *
+ * # FR-009 in one sentence
+ *
+ * A setting whose `source` is `ENVIRONMENT` is never rendered as an input; a
+ * step where *every* setting is like that has nothing to ask and is dropped
+ * from the walk entirely. An instance configured wholly by environment is
+ * therefore asked for the account and the second factor, and then shown the
+ * review.
+ */
 
 export const setupPageSeo: SeoConfig = {
   title: "Secure first-run setup",
@@ -35,110 +101,9 @@ interface SetupPageProps {
   onSetupComplete: () => Promise<unknown> | unknown;
 }
 
-type SetupFieldName =
-  | "adminCode"
-  | "username"
-  | "email"
-  | "password"
-  | "passwordConfirmation"
-  | "oauthUsername";
-
-type PasswordStrengthTone = "weak" | "fair" | "good" | "strong";
-
-interface PasswordStrength {
-  label: string;
-  score: number;
-  tone: PasswordStrengthTone;
-  copy: string;
-}
-
-const STRENGTH_BAR_CLASSES: Record<PasswordStrengthTone, string> = {
-  weak: "bg-destructive",
-  fair: "bg-amber-500",
-  good: "bg-emerald-500",
-  strong: "bg-primary",
-};
-
-const emailPattern = /\S+@\S+\.\S+/;
-
-function evaluatePasswordStrength(password: string): PasswordStrength {
-  let score = 0;
-  if (password.length >= 12) score += 1;
-  if (/[A-Z]/.test(password) && /[a-z]/.test(password)) score += 1;
-  if (/\d/.test(password)) score += 1;
-  if (/[^A-Za-z0-9]/.test(password)) score += 1;
-
-  if (password.length === 0) {
-    return {
-      label: "None",
-      score: 0,
-      tone: "weak",
-      copy: "A long passphrase with mixed character types is harder to break.",
-    };
-  }
-
-  if (score <= 1) {
-    return {
-      label: "Weak",
-      score,
-      tone: "weak",
-      copy: "Add more length and variety before using this password.",
-    };
-  }
-
-  if (score === 2) {
-    return {
-      label: "Fair",
-      score,
-      tone: "fair",
-      copy: "A serviceable start. Add a number or symbol to strengthen it.",
-    };
-  }
-
-  if (score === 3) {
-    return {
-      label: "Good",
-      score,
-      tone: "good",
-      copy: "Solid password. A longer phrase would improve it further.",
-    };
-  }
-
-  return {
-    label: "Strong",
-    score,
-    tone: "strong",
-    copy: "This passphrase has strong entropy and is well suited for the founding account.",
-  };
-}
-
-function statusVariant(message: string | null) {
-  if (!message) {
-    return "info" as const;
-  }
-
-  const normalized = message.toLowerCase();
-  if (
-    normalized.includes("fail") ||
-    normalized.includes("error") ||
-    normalized.includes("mismatch")
-  ) {
-    return "danger" as const;
-  }
-
-  if (
-    normalized.includes("success") ||
-    normalized.includes("complete") ||
-    normalized.includes("created")
-  ) {
-    return "success" as const;
-  }
-
-  if (normalized.includes("warn") || normalized.includes("missing")) {
-    return "warning" as const;
-  }
-
-  return "info" as const;
+interface AdminCredentials {
+  username: string;
+  password: string;
 }
 
 export default function SetupPage({
@@ -148,633 +113,464 @@ export default function SetupPage({
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { code } = useParams();
-  const [adminCode, setAdminCode] = useState("");
-  const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [passwordConfirmation, setPasswordConfirmation] = useState("");
-  const [oauthUsername, setOauthUsername] = useState("");
-  const [status, setStatus] = useState<string | null>(null);
-  const [touched, setTouched] = useState<
-    Partial<Record<SetupFieldName, boolean>>
-  >({});
-  const [localAttempted, setLocalAttempted] = useState(false);
-  const [oauthAttempted, setOAuthAttempted] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isStartingOAuth, setIsStartingOAuth] = useState<string | null>(null);
 
-  const oauthError = searchParams.get("oauth_error");
-  const resolvedAdminCode = adminCode || code || "";
-  const resolvedStatus = status ?? oauthError;
-  const passwordStrength = evaluatePasswordStrength(password);
-  const hasConfiguredProviders =
-    setupStatus.configured_oauth_providers.length > 0;
+  const [adminCode, setAdminCode] = useState(code ?? "");
+  const [status, setStatus] = useState<SetupStatusWithSettings>(
+    setupStatus as SetupStatusWithSettings,
+  );
+  const [accountCreated, setAccountCreated] = useState(false);
+  const [secondFactorConfirmed, setSecondFactorConfirmed] = useState(false);
+  const [credentials, setCredentials] = useState<AdminCredentials | null>(null);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  /**
+   * The step the operator has *chosen*, or null while they have chosen none.
+   *
+   * Null is not "step 0": it means "wherever this pass had got to", which is
+   * derived from what the server stored (FR-006) rather than remembered. It
+   * was a `useState(0)` plus an effect that corrected it after the first
+   * status read; that is a cascading render, `react-hooks/set-state-in-effect`
+   * says so, and the correction is a derivation rather than a side effect.
+   */
+  const [chosenIndex, setChosenIndex] = useState<number | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
+  const [notice, setNotice] = useState<string | null>(
+    searchParams.get("oauth_error"),
+  );
+  const [readiness, setReadiness] = useState<ReadinessReport | null>(null);
+  const [completion, setCompletion] = useState<string | null>(null);
+  const [completionFailure, setCompletionFailure] = useState<string | null>(
+    null,
+  );
+  const [missing, setMissing] = useState<string[]>([]);
 
-  const localErrors = {
-    adminCode: resolvedAdminCode.trim()
-      ? undefined
-      : "Enter the one-time admin code issued by the server.",
-    username:
-      username.trim().length >= 3
-        ? undefined
-        : "Choose a username with at least 3 characters.",
-    email: emailPattern.test(email.trim())
-      ? undefined
-      : "Enter a valid email address for recovery and notices.",
-    password:
-      password.length >= 12
-        ? undefined
-        : "Use at least 12 characters for a stronger password.",
-    passwordConfirmation:
-      password === passwordConfirmation
-        ? undefined
-        : "The confirmation must match the chosen password.",
-  } as const;
+  const requiredSettings: RequiredSetting[] = useMemo(
+    () => status.required_settings ?? [],
+    [status],
+  );
 
-  const oauthErrors = {
-    adminCode: resolvedAdminCode.trim()
-      ? undefined
-      : "OAuth bootstrap still requires the server's one-time admin code.",
-    oauthUsername:
-      oauthUsername.trim().length === 0 || oauthUsername.trim().length >= 3
-        ? undefined
-        : "If you override the provider identity, use at least 3 characters.",
-  } as const;
+  /**
+   * Everything the instance knows about this pass, in one read: what is
+   * answered, who is signed in, and whether that account holds a second
+   * factor.
+   *
+   * Reading and applying are separate so that the mount effect can apply in a
+   * `.then` callback rather than in the effect body — the shape
+   * `react-hooks/set-state-in-effect` asks for, and the shape
+   * `TwoFactorEnrolmentPanel` already uses for the same reason.
+   */
+  const readSnapshot = useCallback(async () => {
+    const next = await readSetupStatus().catch(() => null);
+    const session = await getCurrentSession().catch(() => null);
+    const admin = Boolean(session?.session?.user?.is_admin);
 
-  const setupSteps = [
-    {
-      label: "Enter the code",
-      copy: "Provide the one-time admin code from the server to unlock setup.",
-      state: resolvedAdminCode.trim() ? "complete" : "active",
-    },
-    {
-      label: "Choose a method",
-      copy: "Select local credentials or a configured OAuth provider.",
-      state:
-        username.trim() || oauthUsername.trim() || isStartingOAuth
-          ? "complete"
-          : resolvedAdminCode.trim()
-            ? "active"
-            : "idle",
-    },
-    {
-      label: "Finish setup",
-      copy: "Complete with a secure password or federated identity to open the instance.",
-      state:
-        passwordStrength.score >= 3 &&
-        !localErrors.email &&
-        !localErrors.passwordConfirmation
-          ? "complete"
-          : username.trim() || oauthUsername.trim()
-            ? "active"
-            : "idle",
-    },
-  ] as const;
+    // A server that does not report `second_factor_confirmed` yet: ask the
+    // account itself. The field is the contract's, and this is what to do
+    // until it exists.
+    const secondFactor =
+      typeof next?.second_factor_confirmed === "boolean"
+        ? next.second_factor_confirmed
+        : admin
+          ? Boolean(
+              (await readTwoFactorStatus().catch(() => null))?.confirmedAt,
+            )
+          : false;
 
-  const guideTabs = [
-    {
-      value: "code",
-      label: "Code",
-      icon: "rune" as const,
-      content: (
-        <div className="grid gap-3 text-sm text-muted-foreground">
-          <p>
-            The bootstrap code is single-use. It binds this setup session to the
-            server instance before any account can claim it.
-          </p>
-          <ul className="grid list-disc gap-1.5 pl-4">
-            <li>Paste the code exactly as issued by the server.</li>
-            <li>
-              Use the local path if no OAuth providers are configured yet.
-            </li>
-            <li>Keep the code private until setup is complete.</li>
-          </ul>
-        </div>
-      ),
-    },
-    {
-      value: "local",
-      label: "Local",
-      icon: "quill" as const,
-      content: (
-        <div className="grid gap-3 text-sm text-muted-foreground">
-          <p>
-            Local bootstrap is the fastest route for a fresh deployment. You
-            define the username, recovery email, and password in one pass.
-          </p>
-          <p>
-            Recommended when you want direct control before enabling broader
-            federation.
-          </p>
-        </div>
-      ),
-    },
-    {
-      value: "oauth",
-      label: "OAuth",
-      icon: "wand" as const,
-      content: (
-        <div className="grid gap-3 text-sm text-muted-foreground">
-          <p>
-            OAuth bootstrap creates the first administrator from a trusted
-            provider already configured on the instance.
-          </p>
-          <p>
-            Use an override username only when you want a local display name
-            that differs from the upstream identity.
-          </p>
-        </div>
-      ),
-    },
-  ];
+    return { next, admin, secondFactor };
+  }, []);
 
-  const markTouched = (...fields: SetupFieldName[]) => {
-    setTouched((current) => ({
-      ...current,
-      ...Object.fromEntries(fields.map((field) => [field, true])),
-    }));
+  const applySnapshot = useCallback(
+    ({
+      next,
+      admin,
+      secondFactor,
+    }: Awaited<ReturnType<typeof readSnapshot>>) => {
+      if (next) {
+        setStatus(next);
+        // What the operator has typed wins over what the server stored: a
+        // refresh must not overwrite an edit in progress.
+        setValues((current) => ({
+          ...initialValues(next.required_settings ?? []),
+          ...current,
+        }));
+      }
+      // Both of these only ever ratchet forward. A session read that fails —
+      // a transient network error, a `/session` call racing the cookie that
+      // `/setup/basic` just issued — must not throw an operator back to the
+      // account step to create an administrator that already exists.
+      setAccountCreated((previous) => previous || admin);
+      setSecondFactorConfirmed((previous) => previous || secondFactor);
+    },
+    [],
+  );
+
+  /** Called after every write: the server's answer is the truth, ours a guess. */
+  const refresh = useCallback(
+    () => readSnapshot().then(applySnapshot),
+    [readSnapshot, applySnapshot],
+  );
+
+  useEffect(() => {
+    void readSnapshot().then(applySnapshot);
+  }, [readSnapshot, applySnapshot]);
+
+  const steps = useMemo(
+    () =>
+      buildSetupSteps({
+        requiredSettings,
+        accountCreated,
+        secondFactorConfirmed,
+      }),
+    [requiredSettings, accountCreated, secondFactorConfirmed],
+  );
+
+  const walk = useMemo(() => visibleSteps(steps), [steps]);
+  const skippedCount = steps.length - walk.length;
+
+  // Where a resumed pass lands, until the operator moves: the first step the
+  // instance says is unanswered. Once they have moved, their choice stands —
+  // re-deriving it on every refresh would drag somebody who stepped back to
+  // correct something forward again.
+  const index = Math.min(
+    chosenIndex ?? firstUnansweredStep(steps),
+    Math.max(walk.length - 1, 0),
+  );
+  const current: SetupStep | undefined = walk[index];
+
+  useEffect(() => {
+    if (current?.kind === "review" && !readiness) {
+      void fetchInstanceReadiness().then((report) => {
+        if (report) {
+          setReadiness(report);
+        }
+      });
+    }
+  }, [current, readiness]);
+
+  const onChange = (key: string, value: string) => {
+    setValues((previous) => ({ ...previous, [key]: value }));
+    setErrors((previous) => {
+      if (!previous[key]) {
+        return previous;
+      }
+      const next = { ...previous };
+      delete next[key];
+      return next;
+    });
   };
 
-  const onSubmitBasic = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setLocalAttempted(true);
-    markTouched(
-      "adminCode",
-      "username",
-      "email",
-      "password",
-      "passwordConfirmation",
-    );
+  const goTo = (nextIndex: number) => {
+    setChosenIndex(Math.max(0, Math.min(nextIndex, walk.length - 1)));
+    setNotice(null);
+  };
 
-    if (
-      localErrors.adminCode ||
-      localErrors.username ||
-      localErrors.email ||
-      localErrors.password ||
-      localErrors.passwordConfirmation
-    ) {
-      setStatus("Setup is incomplete. Correct the marked fields.");
+  /** Step forward, writing this step's answers first (contract rule 2). */
+  const onNext = async () => {
+    if (!current) {
       return;
     }
 
-    if (password !== passwordConfirmation) {
-      setStatus("Passwords do not match.");
-      return;
+    if (current.kind === "settings" && current.askable.length > 0) {
+      const problems = validateStep(current, values);
+      if (Object.keys(problems).length > 0) {
+        setErrors(problems);
+        return;
+      }
+
+      const payload = stepPayload(current, values);
+      if (Object.keys(payload).length > 0) {
+        if (!adminCode.trim()) {
+          setNotice("Enter the one-time admin code before saving this step.");
+          return;
+        }
+
+        setIsSaving(true);
+        try {
+          await saveSetupSettings(adminCode.trim(), payload);
+          await refresh();
+        } catch (error) {
+          if (error instanceof SetupRequestError) {
+            if (error.field) {
+              setErrors({ [error.field]: error.message });
+            } else {
+              setNotice(error.message);
+            }
+
+            // The environment took this over while the wizard had it on
+            // screen. Re-reading turns the input into a fixed rendering rather
+            // than leaving an operator arguing with a field.
+            if (error.code === "fixed_by_environment") {
+              await refresh();
+            }
+          } else {
+            setNotice(
+              error instanceof Error ? error.message : "That step failed.",
+            );
+          }
+          return;
+        } finally {
+          setIsSaving(false);
+        }
+      }
     }
 
-    setIsSubmitting(true);
-    setStatus(null);
+    goTo(index + 1);
+  };
 
-    try {
-      const result = await setupBasic(
-        resolvedAdminCode,
-        username,
-        email,
-        password,
+  const onComplete = async () => {
+    setCompletionFailure(null);
+    setMissing([]);
+
+    if (!adminCode.trim()) {
+      setCompletionFailure(
+        "Enter the one-time admin code issued by the server.",
       );
-      setStatus(result);
-      await onSetupComplete();
-      navigate("/admin?bootstrap=complete", { replace: true });
+      return;
+    }
+
+    setIsCompleting(true);
+    try {
+      const result = await completeSetup(adminCode.trim());
+      setCompletion(result.message);
+      setReadiness(result.readiness ?? (await fetchInstanceReadiness()));
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Setup failed.");
+      if (error instanceof SetupRequestError) {
+        setCompletionFailure(error.message);
+        setMissing(error.missing);
+      } else {
+        setCompletionFailure(
+          error instanceof Error ? error.message : "Setup could not finish.",
+        );
+      }
     } finally {
-      setIsSubmitting(false);
+      setIsCompleting(false);
     }
   };
 
-  const onStartOAuth = async (providerKey: string, displayName: string) => {
-    setOAuthAttempted(true);
-    markTouched("adminCode", "oauthUsername");
-
-    if (oauthErrors.adminCode || oauthErrors.oauthUsername) {
-      setStatus("OAuth setup cannot start yet. Fix the highlighted fields.");
-      return;
-    }
-
-    setIsStartingOAuth(providerKey);
-    setStatus(`Opening ${displayName}...`);
-
-    try {
-      await startSetupOAuth(
-        providerKey,
-        resolvedAdminCode,
-        oauthUsername || username,
-      );
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "OAuth setup failed.");
-      setIsStartingOAuth(null);
-    }
+  /**
+   * Leaving deliberately, not automatically.
+   *
+   * `onSetupComplete` re-reads the instance status, which flips
+   * `setup_required` to false and makes `AppRoutes` navigate away from
+   * `/setup`. Calling it the moment `/complete` returned would unmount the
+   * readiness report before it had been read, which is exactly the screen
+   * T072 exists to put in front of an operator.
+   */
+  const onLeave = async () => {
+    await onSetupComplete();
+    navigate("/admin?bootstrap=complete", { replace: true });
   };
 
-  const localFieldError = (field: keyof typeof localErrors) =>
-    localAttempted || touched[field] ? localErrors[field] : undefined;
-
-  const oauthFieldError = (field: keyof typeof oauthErrors) =>
-    oauthAttempted || touched[field] ? oauthErrors[field] : undefined;
+  const onRevisit = (settingKey: string) => {
+    const target = walk.findIndex((step) =>
+      step.settings.some((setting) => setting.key === settingKey),
+    );
+    if (target >= 0) {
+      goTo(target);
+    }
+  };
 
   return (
     <>
       <SEO {...setupPageSeo} />
       <AuthLayout
         eyebrow="First-run setup"
-        title="Set up your first administrator account."
-        description="ThunderForge is awaiting its first administrator. Enter the one-time code from the server, choose the method that fits your instance, and finish with secure credentials or a configured OAuth provider."
+        title="Make this deployment into an instance."
+        description="This instance has no administrator and no identity yet. Setup asks for what it needs, tells you what the environment has already fixed, and finishes by saying what it can and cannot do."
         aside={
-          <div className="grid gap-4">
-            <Card surface="parchment" className="p-6">
-              <div className="grid gap-2">
-                <p className="flex items-center gap-2 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-                  <FantasyIcon name="spells" size={16} />
-                  Setup steps
-                </p>
-                <h2 className="text-lg font-semibold">Getting started</h2>
-                <p className="text-sm text-muted-foreground">
-                  The setup flow is brief, but every step should feel clear.
-                </p>
-              </div>
-              <ol className="mt-4 grid list-decimal gap-2 pl-4 text-sm text-muted-foreground">
-                <li>
-                  Claim the bootstrap code from the server logs or startup
-                  output.
-                </li>
-                <li>
-                  Choose your path: local credentials or a configured OAuth
-                  provider.
-                </li>
-                <li>
-                  Finish setup and enter the admin welcome page as the first
-                  administrator.
-                </li>
-              </ol>
-              <p className="mt-4 text-sm text-muted-foreground">
-                {hasConfiguredProviders
-                  ? `${setupStatus.configured_oauth_providers.length} OAuth provider${setupStatus.configured_oauth_providers.length === 1 ? "" : "s"} available.`
-                  : "No OAuth providers are configured yet, so the local path is the safest option."}
+          <Card surface="parchment" className="grid gap-4 p-6">
+            <div className="grid gap-1">
+              <h2 className="text-lg font-semibold">Where you are</h2>
+              <p className="text-sm text-muted-foreground">
+                These steps come from what this instance declares it needs, not
+                from a fixed list.
               </p>
-            </Card>
-
-            <Card surface="stone" className="p-6">
-              <div className="grid gap-2">
-                <p className="flex items-center gap-2 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-                  <FantasyIcon name="rune" size={16} />
-                  Reference
-                </p>
-                <h2 className="text-lg font-semibold">Quick reference</h2>
-              </div>
-              <Tabs items={guideTabs} defaultValue="code" className="mt-4" />
-            </Card>
-          </div>
+            </div>
+            <ol data-testid="setup-progress" className="grid gap-2">
+              {walk.map((step, position) => (
+                <li
+                  key={step.id}
+                  data-testid={`setup-progress-${step.id}`}
+                  data-state={
+                    position === index
+                      ? "active"
+                      : step.complete
+                        ? "complete"
+                        : "pending"
+                  }
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm",
+                    position === index && "border-ring",
+                    step.complete && "border-primary/40 bg-primary/5",
+                  )}
+                >
+                  <span className="inline-flex size-6 items-center justify-center rounded-full bg-muted text-xs font-semibold">
+                    {step.complete ? "✓" : position + 1}
+                  </span>
+                  <span>{step.title}</span>
+                </li>
+              ))}
+            </ol>
+            {skippedCount > 0 ? (
+              <p
+                data-testid="setup-skipped-steps"
+                className="text-sm text-muted-foreground"
+              >
+                {skippedCount} step{skippedCount === 1 ? "" : "s"} skipped: this
+                deployment&rsquo;s environment already fixes everything on
+                {skippedCount === 1 ? " it" : " them"}.
+              </p>
+            ) : null}
+            <Field
+              label="One-time admin code"
+              htmlFor="setup-admin-code"
+              accent="Required"
+              hint="Printed in the server log when this instance started. Every step is written with it."
+            >
+              <Input
+                data-testid="setup-admin-code"
+                id="setup-admin-code"
+                name="adminCode"
+                autoComplete="one-time-code"
+                value={adminCode}
+                onChange={(event) => setAdminCode(event.target.value)}
+                placeholder="ABCD-EFGH-JKLM"
+              />
+            </Field>
+          </Card>
         }
       >
-        <div className="grid gap-6">
-          <Card surface="stone" className="p-6">
-            <div className="flex flex-wrap items-start justify-between gap-6">
-              <div className="grid max-w-xl gap-2">
-                <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-                  Instance bootstrap
-                </p>
-                <h2 className="text-2xl font-semibold">
-                  Choose the setup method for this instance.
-                </h2>
-                <p className="text-muted-foreground">
-                  Local credentials favor direct control. OAuth bootstrap lets a
-                  trusted identity step through an already configured provider.
-                  Both paths use the same server-approved first-run flow.
-                </p>
+        <div data-testid="setup-wizard" className="grid gap-6">
+          <Card
+            surface="stone"
+            className="grid gap-6 p-6"
+            data-testid={current ? `setup-step-${current.id}` : undefined}
+          >
+            <header className="grid gap-1">
+              <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+                Step {Math.min(index + 1, walk.length)} of {walk.length}
+              </p>
+              <h2
+                data-testid="setup-step-title"
+                className="text-2xl font-semibold"
+              >
+                {current?.title ?? "Setup"}
+              </h2>
+            </header>
+
+            {notice ? (
+              <div data-testid="setup-notice">
+                <StatusBadge variant="warning">{notice}</StatusBadge>
               </div>
-              <div className="grid justify-items-end gap-1 text-right">
-                <span className="text-xs text-muted-foreground">
-                  First administrator
-                </span>
-                <strong>
-                  {hasConfiguredProviders
-                    ? "Two paths available"
-                    : "Local setup ready"}
-                </strong>
-                <small className="text-xs text-muted-foreground">
-                  {hasConfiguredProviders
-                    ? `${setupStatus.configured_oauth_providers.length} configured providers`
-                    : "Awaiting first setup"}
-                </small>
-              </div>
-            </div>
+            ) : null}
 
-            <div className="mt-6 grid gap-3 sm:grid-cols-3">
-              {setupSteps.map((step, index) => (
-                <article
-                  key={step.label}
-                  className={cn(
-                    "rounded-lg border border-border p-4",
-                    step.state === "complete" &&
-                      "border-primary/40 bg-primary/5",
-                    step.state === "active" && "border-ring",
-                  )}
-                >
-                  <span className="mb-2 inline-flex size-6 items-center justify-center rounded-full bg-muted text-xs font-semibold">
-                    {step.state === "complete" ? "✓" : index + 1}
-                  </span>
-                  <h3 className="font-semibold">{step.label}</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {step.copy}
-                  </p>
-                </article>
-              ))}
-            </div>
-          </Card>
+            {current?.kind === "account" ? (
+              <AccountStep
+                providers={status.configured_oauth_providers}
+                adminCode={adminCode}
+                created={accountCreated}
+                onCreated={(created) => {
+                  setCredentials(created);
+                  setAccountCreated(true);
+                  void refresh();
+                  goTo(index + 1);
+                }}
+              />
+            ) : null}
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card surface="leather" className="p-6">
-              <form onSubmit={onSubmitBasic} className="grid gap-6">
-                <header className="grid gap-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="flex items-center gap-2 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-                      <FantasyIcon name="quill" size={16} />
-                      Local setup
-                    </p>
-                    <Tooltip content="Use a long passphrase and matching recovery email so the first administrator account is easy to preserve and hard to compromise.">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        icon="spark"
-                        aria-label="Password guidance"
-                      >
-                        <span className="sr-only">Password guidance</span>
-                      </Button>
-                    </Tooltip>
-                  </div>
-                  <h3 className="text-lg font-semibold">
-                    Create administrator account
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    Set up the first local administrator with a username,
-                    recovery email, and a strong password.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-                      Immediate control
-                    </span>
-                    <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-                      Recovery ready
-                    </span>
-                    <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-                      Password strength check
-                    </span>
-                  </div>
-                </header>
+            {current?.kind === "settings" ? (
+              <SettingsStep
+                step={current}
+                values={values}
+                errors={errors}
+                onChange={onChange}
+              />
+            ) : null}
 
-                <div className="grid gap-4">
-                  <Field
-                    label="Bootstrap admin code"
-                    htmlFor="setup-admin-code"
-                    accent="Required"
-                    error={localFieldError("adminCode")}
-                    hint="Use the one-time code emitted by the server."
-                  >
-                    <Input
-                      id="setup-admin-code"
-                      name="adminCode"
-                      autoComplete="one-time-code"
-                      value={resolvedAdminCode}
-                      onBlur={() => markTouched("adminCode")}
-                      onChange={(event) => setAdminCode(event.target.value)}
-                      placeholder="ABCD-EFGH-JKLM"
-                    />
-                  </Field>
+            {current?.kind === "second-factor" ? (
+              <SecondFactorStep
+                credentials={credentials}
+                confirmed={secondFactorConfirmed}
+                onConfirmed={() => {
+                  setSecondFactorConfirmed(true);
+                  void refresh();
+                }}
+              />
+            ) : null}
 
-                  <Field
-                    label="Username"
-                    htmlFor="setup-username"
-                    accent="Required"
-                    error={localFieldError("username")}
-                    hint="This name appears throughout the app and future worlds."
-                  >
-                    <Input
-                      id="setup-username"
-                      name="username"
-                      autoComplete="username"
-                      value={username}
-                      onBlur={() => markTouched("username")}
-                      onChange={(event) => setUsername(event.target.value)}
-                      placeholder="founder"
-                    />
-                  </Field>
+            {current?.kind === "review" ? (
+              <ReviewStep
+                requiredSettings={requiredSettings}
+                readiness={readiness}
+                completion={completion}
+                failure={completionFailure}
+                missing={missing}
+                isCompleting={isCompleting}
+                onComplete={() => void onComplete()}
+                onRevisit={onRevisit}
+              />
+            ) : null}
 
-                  <Field
-                    label="Email"
-                    htmlFor="setup-email"
-                    accent="Required"
-                    error={localFieldError("email")}
-                    hint="Used for recovery, notices, and future account flows."
-                  >
-                    <Input
-                      id="setup-email"
-                      name="email"
-                      type="email"
-                      autoComplete="email"
-                      value={email}
-                      onBlur={() => markTouched("email")}
-                      onChange={(event) => setEmail(event.target.value)}
-                      placeholder="admin@example.com"
-                    />
-                  </Field>
+            <footer className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
+              <Button
+                data-testid="setup-back"
+                type="button"
+                variant="ghost"
+                disabled={index === 0}
+                onClick={() => goTo(index - 1)}
+              >
+                Back
+              </Button>
 
-                  <Field
-                    label="Password"
-                    htmlFor="setup-password"
-                    accent="Required"
-                    error={localFieldError("password")}
-                  >
-                    <Input
-                      id="setup-password"
-                      name="password"
-                      type="password"
-                      autoComplete="new-password"
-                      value={password}
-                      onBlur={() => markTouched("password")}
-                      onChange={(event) => setPassword(event.target.value)}
-                      placeholder="Create a strong password"
-                    />
-                  </Field>
-
-                  <div className="grid gap-2 rounded-lg border border-border p-3">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">
-                        Password strength
-                      </span>
-                      <strong>{passwordStrength.label}</strong>
-                    </div>
-                    <div
-                      className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
-                      aria-hidden="true"
-                    >
-                      <div
-                        className={cn(
-                          "h-full rounded-full transition-all",
-                          STRENGTH_BAR_CLASSES[passwordStrength.tone],
-                        )}
-                        style={{
-                          width: `${Math.max(passwordStrength.score, 0) * 25}%`,
-                        }}
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {passwordStrength.copy}
-                    </p>
-                  </div>
-
-                  <Field
-                    label="Confirm password"
-                    htmlFor="setup-password-confirmation"
-                    accent="Required"
-                    error={localFieldError("passwordConfirmation")}
-                    hint="The confirmation must match before setup can finish."
-                  >
-                    <Input
-                      id="setup-password-confirmation"
-                      name="passwordConfirmation"
-                      type="password"
-                      autoComplete="new-password"
-                      value={passwordConfirmation}
-                      onBlur={() => markTouched("passwordConfirmation")}
-                      onChange={(event) =>
-                        setPasswordConfirmation(event.target.value)
-                      }
-                      placeholder="Confirm the password"
-                    />
-                  </Field>
-                </div>
-
+              {current && current.kind !== "review" ? (
                 <Button
-                  type="submit"
-                  variant="primary"
-                  size="lg"
-                  fullWidth
-                  disabled={isSubmitting}
-                  icon="shield"
+                  data-testid="setup-next"
+                  type="button"
+                  variant="secondary"
+                  icon="rune"
+                  disabled={
+                    isSaving ||
+                    (current.kind === "account" && !accountCreated) ||
+                    (current.kind === "second-factor" && !secondFactorConfirmed)
+                  }
+                  onClick={() => void onNext()}
                 >
-                  {isSubmitting
-                    ? "Creating administrator..."
-                    : "Create Administrator Account"}
+                  {isSaving ? "Saving..." : "Save and continue"}
                 </Button>
+              ) : null}
 
-                <footer className="border-t border-border pt-4 text-sm text-muted-foreground">
-                  <p>
-                    The local method stores credentials on this instance and
-                    opens the admin welcome page immediately after a successful
-                    setup.
-                  </p>
-                </footer>
-              </form>
-            </Card>
+              {current?.kind === "settings" &&
+              current.askable.length > 0 &&
+              current.askable.every(
+                (setting) => setting.requirement === "OPTIONAL",
+              ) ? (
+                /* FR-003: an entirely optional step may be walked past, and
+                 * the review will then say what was left unset. */
+                <Button
+                  data-testid="setup-skip-step"
+                  type="button"
+                  variant="ghost"
+                  disabled={isSaving}
+                  onClick={() => goTo(index + 1)}
+                >
+                  Skip this
+                </Button>
+              ) : null}
 
-            <Card surface="parchment" className="p-6">
-              <div className="grid gap-6">
-                <header className="grid gap-2">
-                  <p className="flex items-center gap-2 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-                    <FantasyIcon name="wand" size={16} />
-                    Federated bootstrap
-                  </p>
-                  <h3 className="text-lg font-semibold">Use OAuth Bootstrap</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Invite a configured provider to create the first
-                    administrator from a trusted external identity.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-                      Federated identity
-                    </span>
-                    <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-                      Reduced password handling
-                    </span>
-                    <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-                      Guided redirect flow
-                    </span>
-                  </div>
-                </header>
-
-                <div className="grid gap-4">
-                  <Field
-                    label="Bootstrap admin code"
-                    htmlFor="setup-oauth-code"
-                    accent="Required"
-                    error={oauthFieldError("adminCode")}
-                    hint="The same one-time code also governs OAuth bootstrap."
-                  >
-                    <Input
-                      id="setup-oauth-code"
-                      name="oauthAdminCode"
-                      autoComplete="one-time-code"
-                      value={resolvedAdminCode}
-                      onBlur={() => markTouched("adminCode")}
-                      onChange={(event) => setAdminCode(event.target.value)}
-                      placeholder="ABCD-EFGH-JKLM"
-                    />
-                  </Field>
-
-                  <Field
-                    label="Preferred username"
-                    htmlFor="setup-oauth-username"
-                    accent="Optional"
-                    error={oauthFieldError("oauthUsername")}
-                    hint="Leave blank to inherit the provider's preferred identity."
-                  >
-                    <Input
-                      id="setup-oauth-username"
-                      name="oauthUsername"
-                      autoComplete="username"
-                      value={oauthUsername}
-                      onBlur={() => markTouched("oauthUsername")}
-                      onChange={(event) => setOauthUsername(event.target.value)}
-                      placeholder="Optional username override"
-                    />
-                  </Field>
-                </div>
-
-                <div className="grid gap-3">
-                  {hasConfiguredProviders ? (
-                    setupStatus.configured_oauth_providers.map((provider) => (
-                      <Button
-                        key={provider.provider_key}
-                        variant="secondary"
-                        icon="wand"
-                        fullWidth
-                        disabled={Boolean(isStartingOAuth)}
-                        onClick={() =>
-                          void onStartOAuth(
-                            provider.provider_key,
-                            provider.display_name,
-                          )
-                        }
-                      >
-                        {isStartingOAuth === provider.provider_key
-                          ? `Opening ${provider.display_name}...`
-                          : `Continue with ${provider.display_name}`}
-                      </Button>
-                    ))
-                  ) : (
-                    <StatusBadge variant="warning">
-                      No OAuth providers are configured yet.
-                    </StatusBadge>
-                  )}
-                </div>
-
-                <footer className="border-t border-border pt-4 text-sm text-muted-foreground">
-                  <p>
-                    Recommended when your instance already trusts an external
-                    identity provider and you want the founding administrator to
-                    begin with federation.
-                  </p>
-                </footer>
-              </div>
-            </Card>
-          </div>
-
-          {resolvedStatus ? (
-            <StatusBadge variant={statusVariant(resolvedStatus)}>
-              {resolvedStatus}
-            </StatusBadge>
-          ) : null}
+              {completion ? (
+                <Button
+                  data-testid="setup-leave"
+                  type="button"
+                  variant="primary"
+                  icon="shield"
+                  onClick={() => void onLeave()}
+                >
+                  Go to the administration screen
+                </Button>
+              ) : null}
+            </footer>
+          </Card>
         </div>
       </AuthLayout>
     </>
