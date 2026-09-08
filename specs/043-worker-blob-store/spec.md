@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-08
 
-**Status**: Draft
+**Status**: **Stopped at the measurement gate, 2026-09-08.** SC-002 was not met — see [measurements.md](./measurements.md). The benchmark is the deliverable.
 
 **Input**: User description: "Move the client world cache's blob I/O into a dedicated Web Worker so it can use the OPFS synchronous access handle API (`FileSystemFileHandle.createSyncAccessHandle`), which is markedly faster for large blobs and is unavailable on the main thread where the cache currently runs inside the engine wasm."
 
@@ -359,6 +359,12 @@ store is the narrower one. That does not change any requirement below, but it
 changes what this feature is for, and it is why the stretch goal exists.
 
 ## Stretch Goal — More browsers than one
+
+> **Measured 2026-09-08 and the premise did not hold.** Firefox 153 runs
+> `createWritable` perfectly well, so the argument that this feature would
+> unlock a second browser was wrong — see [measurements.md](./measurements.md)
+> § "What the numbers actually say", point 3. Firefox may still be supportable;
+> this feature is simply not what would make it so.
 
 The constitution states Chromium-only support, and the world cache is the
 reason: it depends on OPFS, WebCrypto and IndexedDB, and Chromium is where all

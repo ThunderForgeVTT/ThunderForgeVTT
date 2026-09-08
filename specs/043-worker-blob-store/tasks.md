@@ -14,6 +14,22 @@ requirements about tests — the benchmark, the native concurrency coverage and
 the silent-regression guard are deliverables of this feature, not verification
 of it.
 
+---
+
+## ⛔ STOPPED AT THE GATE — 2026-09-08
+
+Phase 3 ran and **SC-002 was not met on either browser** (×0.93–1.47 Chromium,
+×1.13–1.28 Firefox, against a ×2 threshold). Per plan.md's checkpoint, the
+feature stops and [measurements.md](./measurements.md) is the deliverable.
+
+**Phases 1 and 3 are complete. Phases 2, 4, 5, 6, 7 and 8 are cancelled** and
+left unticked deliberately — they describe work that was not done and should
+not now be done. Nothing about them is "pending".
+
+The gate cost one throwaway harness. Had the original ordering stood — two ADRs
+and the whole worker before any measurement — it would have cost a
+week.
+
 ## Format: `[ID] [P?] [Story] Description`
 
 - **[P]**: Can run in parallel (different files, no dependencies)
@@ -32,22 +48,37 @@ first anyway**, because SC-002 can end this feature and the number should
 arrive before the architecture is committed to. Phase 3 ends in an explicit
 decision point.
 
+### Correction, made during implementation (2026-09-08)
+
+The first draft of this ledger had a gate that could not fire. `--store=sync`
+was written to depend on the full worker implementation (T028), and Phase 2
+blocked every story behind two ADRs — so answering "is this worth building?"
+required building it, and writing two ADRs about decisions the answer might
+make moot.
+
+Phase 3 is therefore now a **standalone measurement harness** that talks to
+OPFS directly, both ways, with no storage crate, no message protocol and no
+ADRs behind it. It is deliberately throwaway code whose only job is to produce
+a number. Phase 2 no longer blocks it; Phase 2 blocks Phase 4 onwards, which
+is what it was really for.
+
 ---
 
 ## Phase 1: Setup
 
 **Purpose**: The scaffolding both the benchmark and the worker need.
 
-- [ ] T001 Create `scripts/bench-blob-store.mjs` as a runnable stub that parses `--store`, `--sizes` and `--out`, and exits non-zero with usage when given neither store name
-- [ ] T002 [P] Add a `bench-blob-store` target to `Makefile` beside `test-mail`, documenting in its comment that it needs a secure context and therefore `pnpm dev` rather than a file:// page
-- [ ] T003 [P] Add `specs/043-worker-blob-store/` results directory convention to `.gitignore` for raw benchmark output, keeping only the committed summary
+- [X] T001 Create `scripts/bench-blob-store.mjs` as a runnable stub that parses `--store`, `--sizes` and `--out`, and exits non-zero with usage when given neither store name
+- [X] T002 [P] Add a `bench-blob-store` target to `Makefile` beside `test-mail`, documenting in its comment that it needs a secure context and therefore `pnpm dev` rather than a file:// page
+- [X] T003 [P] Add `specs/043-worker-blob-store/` results directory convention to `.gitignore` for raw benchmark output, keeping only the committed summary
 
 ---
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
 **Purpose**: Decisions on paper, shared types, and the lint wiring the new
-artefact needs. **No user story work begins until this phase is complete.**
+artefact needs. **Blocks Phase 4 onwards — not Phase 3.** The gate is a
+throwaway harness and must not wait on ADRs for a feature that may not exist.
 
 **⚠️ Principle IV**: the two ADRs land *with* the implementation, not after it.
 
@@ -72,18 +103,19 @@ artefact needs. **No user story work begins until this phase is complete.**
 throughput figures for three blob sizes, with the browser, machine and corpus
 named. Valuable even if the feature stops here.
 
-- [ ] T012 [US3] Derive the benchmark corpus from a real world's asset distribution — record the sizes chosen and where they came from in `specs/043-worker-blob-store/measurements.md`, rather than inventing a synthetic curve
-- [ ] T013 [US3] Implement the write and read loops in `scripts/bench-blob-store.mjs` against the existing async store, reporting bytes per second per size class, read and write separately
-- [ ] T014 [P] [US3] Emit browser, machine and corpus alongside every figure in `scripts/bench-blob-store.mjs` (FR-018) — a throughput number without them is not reproducible and does not count
-- [ ] T015 [US3] Run it on Chromium and record the results in `specs/043-worker-blob-store/measurements.md`
-- [ ] T016 [US3] Run it on Firefox and record the results in `specs/043-worker-blob-store/measurements.md`, **including the case where the existing store does not work there at all** — research R1 predicts this and it is the more interesting outcome (also serves SG-001)
-- [ ] T017 [US3] Add a `--store=sync` path to the benchmark that is skipped with a clear message until Phase 4 lands, so the harness is complete before the implementation it measures
+- [X] T012 [US3] Derive the benchmark corpus from a real world's asset distribution — record the sizes chosen and where they came from in `specs/043-worker-blob-store/measurements.md`, rather than inventing a synthetic curve
+- [X] T013 [US3] Implement the in-page harness `apps/web/public/bench/blob-store-bench.js`: write and read a corpus through `createWritable` on the main thread, reporting bytes per second per size class, read and write separately
+- [X] T014 [P] [US3] Implement the worker half `apps/web/public/bench/blob-store-bench.worker.js` doing the same through `createSyncAccessHandle`, with `flush()` before `close()` on every path
+- [X] T015 [US3] Drive both from `scripts/bench-blob-store.mjs` over Playwright against the dev server, emitting browser, machine and corpus alongside every figure (FR-018) — a throughput number without them is not reproducible and does not count
+- [X] T016 [US3] Run it on Chromium and record the results in `specs/043-worker-blob-store/measurements.md`
+- [X] T017 [US3] Run it on Firefox and record the results in `specs/043-worker-blob-store/measurements.md`, **including the case where the main-thread path does not work there at all** — research R1 predicts this and it is the more interesting outcome (also serves SG-001)
 
-**🚦 CHECKPOINT — decision point.** With the async figures in hand and the sync
-path implemented (T028), compare. **If writes of 1 MB and above are not at
-least twice as fast, SC-002 is not met: stop the feature, keep the benchmark
-and the measurements, and record the decision in `measurements.md`.** That is a
-successful outcome, not a failed one.
+**🚦 CHECKPOINT — decision point.** Both figures come from this phase alone.
+**If writes of 1 MB and above are not at least twice as fast through the
+synchronous handle, SC-002 is not met: stop the feature, keep the harness and
+the measurements, and record the decision in `measurements.md`.** That is a
+successful outcome, not a failed one — and it costs one throwaway harness
+rather than a worker, a protocol and two ADRs.
 
 ---
 
@@ -111,7 +143,7 @@ baseline.
 - [ ] T025 [US1] Serialise writes to one fingerprint inside `apps/web/src/workers/blobStore.worker.ts` (FR-005) — the channel alone does not order them once payloads are transferred
 - [ ] T026 [US1] Transfer payloads above the threshold rather than copying, in `crates/thunderforge-cache-browser/src/worker_client.rs` (FR-006), and record the threshold's origin in a comment
 - [ ] T027 [US1] Wire `crates/thunderforge-cache-browser/src/opfs.rs` to use the worker client when the probe says so, keeping crypto and fingerprint verification exactly where they are (FR-002)
-- [ ] T028 [US1] Enable `--store=sync` in `scripts/bench-blob-store.mjs` and run the Phase 3 checkpoint comparison
+- [ ] T028 [US1] Re-run `scripts/bench-blob-store.mjs` through the real store rather than the harness, and record in `specs/043-worker-blob-store/measurements.md` how much of Phase 3's measured gain survives the protocol and the crate boundary
 - [ ] T029 [US1] Add `apps/web/e2e/world-cache-worker.spec.ts` covering a cold scene load that caches through the worker and reads back identical on reload
 - [ ] T030 [US1] Measure frame pacing during a cold load against the caching-disabled baseline and record it in `measurements.md` (SC-001)
 

@@ -29,6 +29,19 @@ export default tseslint.config(
     },
   },
   {
+    // Spec 043's benchmark harness. Served from `public/` rather than bundled,
+    // so it is plain browser JavaScript outside the app's module graph — and
+    // it therefore needs its environment declared, exactly as `sw.js` does.
+    // The worker half runs with worker globals and no `window`; the page half
+    // runs with browser globals and constructs the worker.
+    files: ["public/bench/*.js"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "module",
+      globals: { ...globals.browser, ...globals.worker },
+    },
+  },
+  {
     files: ["src/**/*.{ts,tsx}"],
     languageOptions: {
       ecmaVersion: "latest",

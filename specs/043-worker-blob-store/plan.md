@@ -4,6 +4,11 @@
 
 **Input**: Feature specification from `/specs/043-worker-blob-store/spec.md`
 
+> **Outcome: stopped at the Phase 3 gate on 2026-09-08.** SC-002 was not met on
+> either browser and the synchronous path was slower than the shipped one at
+> 8 MB on Chromium. See [measurements.md](./measurements.md). The plan below is
+> kept as written, because what it planned for is exactly what happened.
+
 ## Summary
 
 Move the client world cache's blob reads, writes and deletions into a dedicated

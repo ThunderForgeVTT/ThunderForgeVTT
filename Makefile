@@ -1,4 +1,4 @@
-.PHONY: dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-mail test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean
+.PHONY: dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-mail bench-blob-store test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean
 
 # Loads DATABASE_URL (and anything else) from the repo-root .env for targets
 # that shell out to tools which don't read it themselves (diesel-cli).
@@ -16,6 +16,7 @@ help:
 	@echo "  make services-up      Start postgres+rustfs only (docker compose), detached"
 	@echo "  make services-down    Stop postgres+rustfs, keep their data volumes"
 	@echo "  make test-mail        SMTP tests against a real Mailpit (starts it first)"
+	@echo "  make bench-blob-store OPFS throughput, both paths, in a real browser (needs pnpm dev)"
 	@echo "  make services-down-clean  Stop postgres+rustfs and DELETE their data volumes"
 	@echo "  make migrate          Run pending Diesel migrations against DATABASE_URL"
 	@echo "  make seed             Seed local demo logins (admin/admin, user1/user1, user2/user2) + a ready-to-play world"
@@ -140,6 +141,18 @@ check-file-length:
 # The consequence was that they were written, correct, and never run. This
 # target is the way they get run: it starts the service first, so "I forgot to
 # start Mailpit" is not a reason a mail regression ships.
+# OPFS throughput, both ways, in a real browser.
+#
+# Spec 043's gate. It needs a secure context (OPFS refuses otherwise) and a
+# dedicated worker, so it drives a real browser against the dev server rather
+# than measuring anything in Node — a figure taken anywhere else would be a
+# figure about something else.
+#
+# Run `pnpm dev` first; 127.0.0.1 counts as a secure context.
+bench-blob-store:
+	node scripts/bench-blob-store.mjs --browser=chromium
+	node scripts/bench-blob-store.mjs --browser=firefox
+
 test-mail:
 	docker compose up -d mailpit
 	cargo test -p thunderforge-server --lib mail::smtp_integration -- --ignored --test-threads=1

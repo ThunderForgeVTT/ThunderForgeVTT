@@ -200,3 +200,7 @@ apps/web/torture-results/
 ### OS cruft ###
 .DS_Store
 Thumbs.db
+
+# Spec 043 benchmark output is appended to measurements.md by the tool;
+# raw per-run artefacts are not worth committing.
+specs/043-worker-blob-store/raw/
