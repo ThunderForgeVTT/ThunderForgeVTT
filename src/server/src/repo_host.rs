@@ -71,6 +71,13 @@ use base64::Engine as _;
 use base64::engine::general_purpose;
 use thunderforge_repo_host::github::GitHubApp;
 
+/// Spec 037 (FR-023 – FR-029): the same application registration, per
+/// subsystem, resolved from the settings this instance declares rather than
+/// from five constants naming one prefix. A child of this module rather than a
+/// second one — research § R2's "one module speaks to the host" — split into
+/// its own file because this one was already near the length cap.
+pub mod scoped;
+
 /// The application's **client ID**, which the assertion is issued by.
 ///
 /// GitHub accepts either the client ID or the numeric application ID as a

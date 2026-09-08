@@ -46,6 +46,15 @@ pub struct AppState {
     /// `mail::MailSeam` for why this is not an `Arc<dyn MailTransport>` fixed
     /// at startup.
     pub mail: crate::mail::MailSeam,
+    /// Spec 037: where a submission goes when this instance delivers one.
+    ///
+    /// Empty in production — the host is built from the `github_app.*`
+    /// settings and the destination row as they stand for each attempt, so an
+    /// operator correcting a client ID does not have to restart. A test puts
+    /// one implementation in it and asserts what would have been sent without
+    /// sending it. See `feedback::FeedbackSeam`, which is `mail::MailSeam`
+    /// again and for the same reasons.
+    pub feedback: crate::feedback::FeedbackSeam,
 }
 
 impl FromRef<AppState> for Key {

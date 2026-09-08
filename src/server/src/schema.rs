@@ -95,6 +95,78 @@ diesel::table! {
 }
 
 diesel::table! {
+    feedback_attachments (id) {
+        id -> Uuid,
+        submission_id -> Uuid,
+        kind -> Text,
+        storage_path -> Text,
+        content_type -> Text,
+        byte_size -> Int8,
+        entries_kept -> Nullable<Int4>,
+        entries_dropped -> Nullable<Int4>,
+        redaction_count -> Int4,
+        purged_at -> Nullable<Timestamp>,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    feedback_delivery_attempts (id) {
+        id -> Uuid,
+        submission_id -> Uuid,
+        attempt -> Int4,
+        started_at -> Timestamp,
+        finished_at -> Nullable<Timestamp>,
+        outcome -> Nullable<Text>,
+        failure_reason -> Nullable<Text>,
+        http_status -> Nullable<Int4>,
+    }
+}
+
+diesel::table! {
+    feedback_destination (id) {
+        id -> Uuid,
+        installation_ref -> Text,
+        repository_ref -> Text,
+        attachment_branch -> Text,
+        is_public -> Nullable<Bool>,
+        visibility_checked_at -> Nullable<Timestamp>,
+        created_by -> Nullable<Uuid>,
+        updated_by -> Nullable<Uuid>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    feedback_submissions (id) {
+        id -> Uuid,
+        user_id -> Uuid,
+        kind -> Text,
+        message -> Text,
+        summary -> Nullable<Text>,
+        screen_path -> Nullable<Text>,
+        world_id -> Nullable<Uuid>,
+        game_system_id -> Nullable<Text>,
+        client_version -> Text,
+        server_version -> Text,
+        browser -> Text,
+        delivery_state -> Text,
+        delivery_key -> Uuid,
+        issue_url -> Nullable<Text>,
+        issue_number -> Nullable<Int4>,
+        issue_state -> Nullable<Text>,
+        issue_state_checked_at -> Nullable<Timestamp>,
+        attachments_expire_at -> Timestamp,
+        attachments_purged_at -> Nullable<Timestamp>,
+        created_by -> Uuid,
+        updated_by -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     fog_masks (fog_id) {
         fog_id -> Uuid,
         scene_id -> Uuid,
@@ -1168,6 +1240,9 @@ diesel::table! {
 
 diesel::joinable!(admin_bootstrap_oauth_sessions -> oauth_providers (provider_id));
 diesel::joinable!(canvas_image_assets -> worlds (world_id));
+diesel::joinable!(feedback_attachments -> feedback_submissions (submission_id));
+diesel::joinable!(feedback_delivery_attempts -> feedback_submissions (submission_id));
+diesel::joinable!(feedback_submissions -> worlds (world_id));
 diesel::joinable!(fog_masks -> scenes (scene_id));
 diesel::joinable!(fog_masks -> users (updated_by));
 diesel::joinable!(instance_access_events -> users (actor_user_id));
@@ -1284,6 +1359,10 @@ diesel::allow_tables_to_appear_in_same_query!(
     auth_security_settings,
     canvas_image_assets,
     content_moderation_actions,
+    feedback_attachments,
+    feedback_delivery_attempts,
+    feedback_destination,
+    feedback_submissions,
     fog_masks,
     game_systems,
     instance_access_events,

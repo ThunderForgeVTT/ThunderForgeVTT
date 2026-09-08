@@ -54,6 +54,12 @@ pub enum StorageError {
     CreateBucket(String),
     #[error("S3 HeadBucket failed: {0}")]
     HealthCheck(String),
+    #[error("S3 DeleteObject failed: {0}")]
+    DeleteObject(String),
+    /// A deletion was asked for outside the one prefix this product may
+    /// delete under. Not a host failure — a refusal by this module.
+    #[error("refusing to delete {0}: only feedback attachments may be deleted")]
+    DeleteRefused(String),
     #[error("STS AssumeRole response was missing credentials")]
     MissingCredentials,
 }
@@ -297,6 +303,49 @@ pub async fn write_object(
     Ok(key.to_string())
 }
 
+/// The **only** deletion path in this codebase, and it refuses every key that
+/// is not a feedback attachment.
+///
+/// # Why the restriction is inside the function
+///
+/// `storage/dedupe.rs` states the rule this is bounded by: "Nothing in this
+/// product deletes stored objects… which is what makes a shared path safe
+/// today: a reference cannot dangle when references are never dropped… Adding
+/// object deletion means adding reference counting first." Feedback
+/// attachments are the one case that needs no reference counting, because they
+/// are **never deduplicated** — one row, one object, no other referrer, and
+/// `feedback_attachments` deliberately has no `content_hash` column by which a
+/// shared path could be introduced.
+///
+/// So the prefix check lives here rather than in the callers, because
+/// `dedupe.rs` warns that deleting a shared object "would silently blank the
+/// background of every other scene sharing those bytes" — and a rule kept by
+/// callers is a rule until somebody adds a caller.
+///
+/// Spec 037 FR-016: retention has to be bounded, and bounded retention means
+/// deletion.
+pub async fn delete_object(cfg: &RustFsConfig, key: &str) -> Result<(), StorageError> {
+    if !key.starts_with(FEEDBACK_PREFIX) {
+        return Err(StorageError::DeleteRefused(key.to_string()));
+    }
+
+    root_s3_client(cfg)
+        .delete_object()
+        .bucket(&cfg.bucket)
+        .key(key)
+        .send()
+        .await
+        .map_err(|e| StorageError::DeleteObject(e.to_string()))?;
+
+    Ok(())
+}
+
+/// The one prefix `delete_object` will touch. Duplicated from
+/// `feedback::STORAGE_PREFIX` on purpose: this module must not depend on a
+/// feature module for a safety rule about its own bucket, and the test below
+/// pins the two together.
+pub const FEEDBACK_PREFIX: &str = "feedback/";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -339,5 +388,35 @@ mod tests {
         assert!(!resources[0].as_str().unwrap().contains('*'));
         let actions = parsed["Statement"][0]["Action"].as_array().unwrap();
         assert_eq!(actions, &vec![serde_json::json!("s3:GetObject")]);
+    }
+
+    /// The restriction that keeps `dedupe.rs`'s warning true. A key outside
+    /// the feedback prefix names an object that may be shared by rows nothing
+    /// counts, and deleting one would blank a scene nobody touched.
+    #[tokio::test]
+    async fn delete_object_refuses_every_key_outside_the_feedback_prefix() {
+        let cfg = RustFsConfig {
+            endpoint: "http://127.0.0.1:1".to_string(),
+            region: "us-east-1".to_string(),
+            bucket: "b".to_string(),
+            root_access_key: "k".to_string(),
+            root_secret_key: "s".to_string(),
+        };
+        // A canvas asset key: owner/world/scene/asset.webp. No network call is
+        // made, which is the point — the refusal happens before the client is
+        // built, so a bug here cannot become a deletion that "only" failed to
+        // connect.
+        let refused = delete_object(&cfg, "a/b/c/d.webp").await;
+        assert!(matches!(refused, Err(StorageError::DeleteRefused(_))));
+        let refused = delete_object(&cfg, "notfeedback/x.webp").await;
+        assert!(matches!(refused, Err(StorageError::DeleteRefused(_))));
+    }
+
+    /// The prefix this module enforces and the prefix the feedback module
+    /// writes under are one string. Two would drift, and the drift would be
+    /// invisible until a sweep silently deleted nothing.
+    #[test]
+    fn the_deletable_prefix_is_the_one_feedback_writes_under() {
+        assert_eq!(FEEDBACK_PREFIX, crate::feedback::STORAGE_PREFIX);
     }
 }

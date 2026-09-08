@@ -232,6 +232,18 @@ impl GitHubApp {
         format!("{}/installation/repositories", self.api_base)
     }
 
+    /// Where to look an issue up by something written into its body.
+    ///
+    /// Spec 037 research § R4: the host offers no idempotency key on issue
+    /// creation, so a retry after an *ambiguous* failure finds the issue a
+    /// previous attempt may already have made by searching for a key this
+    /// product generated and wrote into the body. A URL, not a query — the
+    /// caller supplies `q`, because what is being searched for is the caller's
+    /// business and this crate deliberately does not know it.
+    pub fn search_issues_url(&self) -> String {
+        format!("{}/search/issues", self.api_base)
+    }
+
     pub fn with_bases(mut self, web_base: impl Into<String>, api_base: impl Into<String>) -> Self {
         self.web_base = web_base.into().trim_end_matches('/').to_string();
         self.api_base = api_base.into().trim_end_matches('/').to_string();

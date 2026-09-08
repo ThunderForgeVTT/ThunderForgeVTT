@@ -407,6 +407,10 @@ async fn run() {
         // Spec 040 US4: no pinned transport. The mail settings are resolved
         // per send, so an operator correcting an SMTP host does not restart.
         mail: thunderforge_server::mail::MailSeam::from_settings(),
+        // Spec 037: nothing held here either. The destination and the
+        // application are read for each attempt, so configuring feedback takes
+        // effect without a restart.
+        feedback: thunderforge_server::feedback::FeedbackSeam::from_settings(),
     };
 
     // Materialize any OAUTH_*-env-var-configured provider instances (ADR-041)
@@ -494,6 +498,13 @@ async fn run() {
     // configures mail does not have to restart to use it.
     eprintln!("[Server] 🚀 Starting mail outbox sender task");
     thunderforge_server::mail::schedule::spawn_mail_task(app_state.clone());
+
+    // Spec 037 (FR-017 – FR-019): the feedback delivery pass, beside the two
+    // above and unconditional for the same reason. It also carries the
+    // retention sweep and US5's issue-state refresh, so there is one schedule
+    // for the feature rather than three.
+    eprintln!("[Server] 🚀 Starting feedback delivery task");
+    thunderforge_server::feedback::schedule::spawn_feedback_delivery_task(app_state.clone());
 
     // Spawn the presence listener task (Phase 4.9.B.3)
     eprintln!("[Server] 🚀 Starting presence listener task");

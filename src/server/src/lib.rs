@@ -35,6 +35,7 @@ pub mod db_types;
 pub mod declared_values;
 pub mod door_effects;
 pub mod errors;
+pub mod feedback;
 pub mod graphql;
 pub mod instance_identity;
 pub mod interaction;

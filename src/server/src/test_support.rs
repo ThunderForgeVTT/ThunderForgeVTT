@@ -72,6 +72,10 @@ pub fn test_app_state() -> AppState {
         // most instances are, and therefore the right default to be tested
         // against.
         mail: crate::mail::MailSeam::from_settings(),
+        // No override, for the same reason: a test that cares about where
+        // feedback goes sets one, and a test that does not gets an instance
+        // with no destination configured — which is what most instances are.
+        feedback: crate::feedback::FeedbackSeam::from_settings(),
     }
 }
 
