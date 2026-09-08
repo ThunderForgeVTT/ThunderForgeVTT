@@ -169,18 +169,18 @@ neither dice nor outcome.
 
 ### Tests for User Story 3b
 
-- [ ] T040 [P] [US3b] Add parsing tests for the `checks` declaration in `crates/thunderforge-canvas-core/src/system_rules.rs`, including a pack that declares none
-- [ ] T041 [P] [US3b] Add server tests for `rollCheck` in `src/server/src/graphql/mutations_roll_check.rs`: unknown `checkId` refused and never treated as a formula, actor permission enforced, result recorded on the same path as `rollDice`
+- [X] T040 [P] [US3b] Add parsing tests for the `checks` declaration in `crates/thunderforge-canvas-core/src/system_rules.rs`, including a pack that declares none
+- [X] T041 [P] [US3b] Add server tests for `rollCheck` in `src/server/src/graphql/mutations_roll_check.rs`: unknown `checkId` refused and never treated as a formula, actor permission enforced, result recorded on the same path as `rollDice`
 
 ### Implementation for User Story 3b
 
-- [ ] T042 [US3b] Parse `checks` off the manifest in `src/server/src/systems.rs` and expose it on the system a world is using
-- [ ] T043 [US3b] Add the `checks` block to `packs/systems/dnd5e/system.json`, generated from its existing `abilities` and `skills` (each skill already names its governing ability)
-- [ ] T044 [US3b] Implement `rollCheck` in `src/server/src/graphql/mutations_roll_check.rs` per `contracts/system-checks.md` — resolve bindings against the actor, hand the finished formula to the existing authoritative path in `src/server/src/graphql/mutations_roll.rs`
-- [ ] T045 [US3b] Register `rollCheck` on the mutation root in `src/server/src/graphql/mod.rs` with an SDL guard asserting it takes no formula argument
-- [ ] T046 [US3b] Add the check control to the sheet in `apps/web/src/components/sheet/`, rendering only what the system declares and offering nothing when it declares none (FR-037)
+- [X] T042 [US3b] Parse `checks` off the manifest in `src/server/src/systems.rs` and expose it on the system a world is using
+- [X] T043 [US3b] Add the `checks` block to `packs/systems/dnd5e/system.json`, generated from its existing `abilities` and `skills` (each skill already names its governing ability)
+- [X] T044 [US3b] Implement `rollCheck` in `src/server/src/graphql/mutations_roll_check.rs` per `contracts/system-checks.md` — resolve bindings against the actor, hand the finished formula to the existing authoritative path in `src/server/src/graphql/mutations_roll.rs`
+- [X] T045 [US3b] Register `rollCheck` on the mutation root in `src/server/src/graphql/mod.rs` with an SDL guard asserting it takes no formula argument
+- [X] T046 [US3b] Add the check control to the sheet in `apps/web/src/components/sheet/`, rendering only what the system declares and offering nothing when it declares none (FR-037)
 - [ ] T047 [P] [US3b] Update `packs/systems/README.md` with the `checks` declaration as part of the published author contract
-- [ ] T048 [US3b] Extend `apps/web/e2e/companion-sheet.spec.ts` to roll a check from the sheet in two different systems and assert each is its own system's check, visible to the table
+- [X] T048 [US3b] Extend `apps/web/e2e/companion-sheet.spec.ts` to roll a check from the sheet in two different systems and assert each is its own system's check, visible to the table
 
 **Checkpoint**: a 5e player rolls Strength from the sheet and the table sees it
 
@@ -217,10 +217,10 @@ does not.
 **Independent Test**: change a shared thing in one client and a private thing in
 another; exactly one crosses.
 
-- [ ] T054 [P] [US3] Add `apps/web/e2e/companion-shared-state.spec.ts` asserting the active scene, membership, role and per-object permission changes reach every client of the account without a reload (FR-011, FR-012)
-- [ ] T055 [P] [US3] Assert in the same spec that selection and camera do not cross between clients (FR-013)
-- [ ] T056 [US3] Assert presence counts a person once however many clients they hold, and shows them present while at least one is live, in `apps/web/e2e/companion-shared-state.spec.ts` (FR-014) — `players_online` is already keyed by `(player_id, world_id)`, so this is a guard on existing behaviour
-- [ ] T057 [US3] Assert a member removed mid-session loses access in every one of their clients, not only the one that acted (spec.md Edge Cases)
+- [X] T054 [P] [US3] Add `apps/web/e2e/companion-shared-state.spec.ts` asserting the active scene, membership, role and per-object permission changes reach every client of the account without a reload (FR-011, FR-012)
+- [X] T055 [P] [US3] Assert in the same spec that selection and camera do not cross between clients (FR-013)
+- [X] T056 [US3] Assert presence counts a person once however many clients they hold, and shows them present while at least one is live, in `apps/web/e2e/companion-shared-state.spec.ts` (FR-014) — `players_online` is already keyed by `(player_id, world_id)`, so this is a guard on existing behaviour
+- [X] T057 [US3] Assert a member removed mid-session loses access in every one of their clients, not only the one that acted (spec.md Edge Cases)
 
 **Checkpoint**: "the same experience across clients" is defined and enforced
 
