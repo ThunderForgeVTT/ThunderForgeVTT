@@ -521,6 +521,21 @@ pub fn update_manifest_key(
     Ok(manifest)
 }
 
+/// What the manifest keys hold as shipped, before anybody edits them.
+///
+/// Spec 040 needs this to answer a question the manifest file alone cannot:
+/// whether a value is one an operator chose or one that was seeded. Reporting
+/// a freshly seeded `realm_name` as the *instance's* value would imply
+/// somebody set it, and readiness would then have no way to notice that a
+/// support address is still `stewards@thunderforge.local` (research.md § D6).
+///
+/// Read from the same compiled-in file `default_manifest` and
+/// `backfill_missing_seeds` use, so there is one shipped answer rather than
+/// two that can drift.
+pub fn shipped_manifest_defaults() -> BTreeMap<String, String> {
+    realm_defaults().metadata
+}
+
 pub fn editable_manifest_keys() -> &'static [&'static str] {
     &[
         "realm_name",

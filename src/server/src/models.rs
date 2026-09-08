@@ -2,20 +2,21 @@ use crate::schema::{
     admin_bootstrap_oauth_sessions, admin_bootstrap_setup, auth_security_settings,
     canvas_image_assets, content_moderation_actions, fog_masks, game_systems,
     instance_access_events, instance_access_settings, instance_invitation_redemptions,
-    instance_invitations, interaction_requests, interactives, light_sources,
-    login_two_factor_challenges, lore_disassociation_notices, lore_exported_entries,
-    lore_fidelity_notes, lore_pending_incoming_changes, lore_repository_connections,
-    lore_sync_runs, oauth_authorization_sessions, oauth_link_challenges, oauth_providers,
-    players_online, scene_state_fingerprints, scenes, shapes, tokens, user_oauth_accounts,
-    user_recovery_codes, user_sessions, users, walls, world_abilities, world_ability_effects,
-    world_ability_permissions, world_ability_shares, world_actor_abilities, world_actor_claims,
-    world_actor_images, world_actor_inventory, world_actor_permissions, world_actor_shares,
-    world_actor_system_data, world_actors, world_authoring_tool_grants, world_chat_messages,
-    world_collection_members, world_collection_shares, world_collections, world_combatants,
-    world_combats, world_events, world_invites, world_item_abilities, world_item_effects,
-    world_item_permissions, world_item_prices, world_item_shares, world_items, world_lore_entries,
-    world_lore_image_assets, world_lore_links, world_lore_permissions, world_lore_revisions,
-    world_lore_tags, world_members, world_roll_records, world_tokens, worlds,
+    instance_invitations, instance_setting_changes, instance_settings, interaction_requests,
+    interactives, light_sources, login_two_factor_challenges, lore_disassociation_notices,
+    lore_exported_entries, lore_fidelity_notes, lore_pending_incoming_changes,
+    lore_repository_connections, lore_sync_runs, oauth_authorization_sessions,
+    oauth_link_challenges, oauth_providers, players_online, scene_state_fingerprints, scenes,
+    shapes, tokens, user_oauth_accounts, user_recovery_codes, user_sessions, users, walls,
+    world_abilities, world_ability_effects, world_ability_permissions, world_ability_shares,
+    world_actor_abilities, world_actor_claims, world_actor_images, world_actor_inventory,
+    world_actor_permissions, world_actor_shares, world_actor_system_data, world_actors,
+    world_authoring_tool_grants, world_chat_messages, world_collection_members,
+    world_collection_shares, world_collections, world_combatants, world_combats, world_events,
+    world_invites, world_item_abilities, world_item_effects, world_item_permissions,
+    world_item_prices, world_item_shares, world_items, world_lore_entries, world_lore_image_assets,
+    world_lore_links, world_lore_permissions, world_lore_revisions, world_lore_tags, world_members,
+    world_roll_records, world_tokens, worlds,
 };
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -2393,4 +2394,65 @@ pub struct NewCollectionShare {
     pub collection_id: uuid::Uuid,
     pub share_code: String,
     pub created_by: uuid::Uuid,
+}
+
+/// Spec 040 / ADR-091: one configured instance setting.
+///
+/// The key must be one `settings::registry` declares; a row for anything else
+/// is inert rather than invalid. `value` is ciphertext when the declaration
+/// says the setting is a secret — there is no column recording which, because
+/// the declaration decides and a second answer could disagree with it.
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = instance_settings)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct InstanceSetting {
+    pub key: String,
+    pub value: String,
+    pub updated_by: Option<uuid::Uuid>,
+    pub updated_at: chrono::NaiveDateTime,
+    pub created_by: Option<uuid::Uuid>,
+    pub created_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = instance_settings)]
+pub struct NewInstanceSetting {
+    pub key: String,
+    pub value: String,
+    pub updated_by: Option<uuid::Uuid>,
+    pub updated_at: chrono::NaiveDateTime,
+    pub created_by: Option<uuid::Uuid>,
+    pub created_at: chrono::NaiveDateTime,
+}
+
+/// Spec 040: one entry in the append-only record of setting changes (FR-008).
+///
+/// `previous_value`/`new_value` hold the transition rather than the value when
+/// `redacted` is true: `set`/`not set`, never a credential and never a
+/// fragment of one.
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = instance_setting_changes)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct InstanceSettingChange {
+    pub id: uuid::Uuid,
+    pub key: String,
+    pub previous_value: Option<String>,
+    pub new_value: Option<String>,
+    pub redacted: bool,
+    pub changed_by: Option<uuid::Uuid>,
+    pub changed_at: chrono::NaiveDateTime,
+    pub source: String,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = instance_setting_changes)]
+pub struct NewInstanceSettingChange {
+    pub id: uuid::Uuid,
+    pub key: String,
+    pub previous_value: Option<String>,
+    pub new_value: Option<String>,
+    pub redacted: bool,
+    pub changed_by: Option<uuid::Uuid>,
+    pub changed_at: chrono::NaiveDateTime,
+    pub source: String,
 }

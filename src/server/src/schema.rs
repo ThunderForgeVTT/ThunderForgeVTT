@@ -178,6 +178,30 @@ diesel::table! {
 }
 
 diesel::table! {
+    instance_setting_changes (id) {
+        id -> Uuid,
+        key -> Text,
+        previous_value -> Nullable<Text>,
+        new_value -> Nullable<Text>,
+        redacted -> Bool,
+        changed_by -> Nullable<Uuid>,
+        changed_at -> Timestamp,
+        source -> Text,
+    }
+}
+
+diesel::table! {
+    instance_settings (key) {
+        key -> Text,
+        value -> Text,
+        updated_by -> Nullable<Uuid>,
+        updated_at -> Timestamp,
+        created_by -> Nullable<Uuid>,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     interaction_requests (request_id) {
         request_id -> Uuid,
         interactive_id -> Uuid,
@@ -1133,6 +1157,7 @@ diesel::joinable!(instance_access_settings -> users (updated_by));
 diesel::joinable!(instance_invitation_redemptions -> instance_invitations (invitation_id));
 diesel::joinable!(instance_invitation_redemptions -> users (user_id));
 diesel::joinable!(instance_invitations -> users (created_by));
+diesel::joinable!(instance_setting_changes -> users (changed_by));
 diesel::joinable!(interaction_requests -> interactives (interactive_id));
 diesel::joinable!(interaction_requests -> scenes (scene_id));
 diesel::joinable!(interactives -> scenes (scene_id));
@@ -1247,6 +1272,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     instance_identity,
     instance_invitation_redemptions,
     instance_invitations,
+    instance_setting_changes,
+    instance_settings,
     interaction_requests,
     interactives,
     light_sources,

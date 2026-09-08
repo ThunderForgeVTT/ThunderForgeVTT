@@ -342,6 +342,97 @@ fn recovery_codes_error(
     )
 }
 
+/// What this account's own second factor looks like, to its owner
+/// (spec 041 FR-005).
+///
+/// # Why this exists
+///
+/// The enrolment interface has to answer "is this already on?" before it can
+/// offer to turn it on, and nothing could answer it: `PublicUser` carries no
+/// two-factor field, and the only GraphQL one is the *instance-wide* policy.
+/// So the panel either had to claim two-factor was off — which is a lie to
+/// somebody who has it on — or say it could not tell.
+///
+/// Self-only, like every other field on this surface. There is no argument by
+/// which one account could ask about another's, and adding one would be a
+/// different feature with a different review.
+pub(crate) async fn two_factor_status(
+    cookies: Cookies,
+    State(state): State<AppState>,
+) -> (StatusCode, Json<TwoFactorStatusResponse>) {
+    let Ok(authenticated) = resolve_authenticated_user(&state, &cookies).await else {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(TwoFactorStatusResponse {
+                status: "failure",
+                message: "Authentication required".to_string(),
+                enabled: false,
+                confirmed_at: None,
+                enrolment_pending: false,
+                recovery_codes_remaining: None,
+                recovery_codes_low: false,
+            }),
+        );
+    };
+    let user_id = authenticated.user_id;
+
+    let mut conn = state.db_pool.get().expect("Failed to get DB connection");
+    let row = tokio::task::spawn_blocking(move || {
+        users::table
+            .filter(users::id.eq(user_id))
+            .select((
+                users::two_factor_enabled,
+                users::two_factor_confirmed_at,
+                users::two_factor_pending_secret_encrypted,
+            ))
+            .first::<(bool, Option<chrono::NaiveDateTime>, Option<String>)>(&mut conn)
+            .optional()
+    })
+    .await
+    .expect("Failed to spawn blocking task")
+    .expect("Failed to read the account");
+
+    let Some((enabled, confirmed_at, pending)) = row else {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(TwoFactorStatusResponse {
+                status: "failure",
+                message: "Authentication required".to_string(),
+                enabled: false,
+                confirmed_at: None,
+                enrolment_pending: false,
+                recovery_codes_remaining: None,
+                recovery_codes_low: false,
+            }),
+        );
+    };
+
+    // Only meaningful once a factor is actually in force. Reporting a count
+    // for an account with no second factor would invite a screen that offers
+    // to regenerate codes that protect nothing.
+    let remaining = if enabled {
+        count_unspent_recovery_codes(&state, user_id).await.ok()
+    } else {
+        None
+    };
+
+    (
+        StatusCode::OK,
+        Json(TwoFactorStatusResponse {
+            status: "success",
+            message: String::new(),
+            enabled,
+            confirmed_at: confirmed_at.map(|at| at.to_string()),
+            // An enrolment in progress is not a second factor. Saying so lets
+            // the panel offer "finish what you started" rather than starting
+            // again — and ADR-081 is what makes the distinction real.
+            enrolment_pending: pending.is_some(),
+            recovery_codes_remaining: remaining,
+            recovery_codes_low: remaining.is_some_and(recovery_codes_low),
+        }),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -597,95 +688,4 @@ mod tests {
             );
         }
     }
-}
-
-/// What this account's own second factor looks like, to its owner
-/// (spec 041 FR-005).
-///
-/// # Why this exists
-///
-/// The enrolment interface has to answer "is this already on?" before it can
-/// offer to turn it on, and nothing could answer it: `PublicUser` carries no
-/// two-factor field, and the only GraphQL one is the *instance-wide* policy.
-/// So the panel either had to claim two-factor was off — which is a lie to
-/// somebody who has it on — or say it could not tell.
-///
-/// Self-only, like every other field on this surface. There is no argument by
-/// which one account could ask about another's, and adding one would be a
-/// different feature with a different review.
-pub(crate) async fn two_factor_status(
-    cookies: Cookies,
-    State(state): State<AppState>,
-) -> (StatusCode, Json<TwoFactorStatusResponse>) {
-    let Ok(authenticated) = resolve_authenticated_user(&state, &cookies).await else {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(TwoFactorStatusResponse {
-                status: "failure",
-                message: "Authentication required".to_string(),
-                enabled: false,
-                confirmed_at: None,
-                enrolment_pending: false,
-                recovery_codes_remaining: None,
-                recovery_codes_low: false,
-            }),
-        );
-    };
-    let user_id = authenticated.user_id;
-
-    let mut conn = state.db_pool.get().expect("Failed to get DB connection");
-    let row = tokio::task::spawn_blocking(move || {
-        users::table
-            .filter(users::id.eq(user_id))
-            .select((
-                users::two_factor_enabled,
-                users::two_factor_confirmed_at,
-                users::two_factor_pending_secret_encrypted,
-            ))
-            .first::<(bool, Option<chrono::NaiveDateTime>, Option<String>)>(&mut conn)
-            .optional()
-    })
-    .await
-    .expect("Failed to spawn blocking task")
-    .expect("Failed to read the account");
-
-    let Some((enabled, confirmed_at, pending)) = row else {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(TwoFactorStatusResponse {
-                status: "failure",
-                message: "Authentication required".to_string(),
-                enabled: false,
-                confirmed_at: None,
-                enrolment_pending: false,
-                recovery_codes_remaining: None,
-                recovery_codes_low: false,
-            }),
-        );
-    };
-
-    // Only meaningful once a factor is actually in force. Reporting a count
-    // for an account with no second factor would invite a screen that offers
-    // to regenerate codes that protect nothing.
-    let remaining = if enabled {
-        count_unspent_recovery_codes(&state, user_id).await.ok()
-    } else {
-        None
-    };
-
-    (
-        StatusCode::OK,
-        Json(TwoFactorStatusResponse {
-            status: "success",
-            message: String::new(),
-            enabled,
-            confirmed_at: confirmed_at.map(|at| at.to_string()),
-            // An enrolment in progress is not a second factor. Saying so lets
-            // the panel offer "finish what you started" rather than starting
-            // again — and ADR-081 is what makes the distinction real.
-            enrolment_pending: pending.is_some(),
-            recovery_codes_remaining: remaining,
-            recovery_codes_low: remaining.is_some_and(recovery_codes_low),
-        }),
-    )
 }

@@ -50,10 +50,17 @@ pub mod peer_signaling;
 /// Spec 036: which client of an account is at the table.
 pub mod play_field;
 pub mod pubsub;
+/// Spec 040: what this instance cannot do given how it is configured, and
+/// what to set. Derived from `settings::registry` on every read — never a
+/// stored flag.
+pub mod readiness;
 pub mod repo_host;
 pub mod scene_fingerprint;
 pub mod schema;
 pub mod session;
+/// Spec 040 / ADR-088: the declaration list, and one precedence rule for
+/// every instance setting.
+pub mod settings;
 pub mod sheet;
 pub mod state;
 pub mod static_files;

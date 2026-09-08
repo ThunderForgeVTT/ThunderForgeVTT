@@ -270,6 +270,9 @@ pub struct QueryRoot(
     ActorPermissionQuery,
     ActorShareQuery,
     mutations_instance_access::InstanceAccessQuery,
+    // Spec 040: every setting, its source, its history, and what this
+    // instance is not ready for.
+    crate::settings::graphql::InstanceSettingsQuery,
     // Spec 036 US3b: `systemChecks(worldId)` — what a sheet may offer.
     RollCheckQuery,
     // Spec 036 US4: the sessions a person holds, now that they may hold several.
@@ -334,6 +337,7 @@ pub struct MutationRoot(
     ActorPermissionMutation,
     ActorShareMutation,
     mutations_instance_access::InstanceAccessMutation,
+    crate::settings::graphql::InstanceSettingsMutation,
     mutations_sessions::SessionMutation,
     mutations_actor_images::ActorImageMutation,
     LoreMutation,
