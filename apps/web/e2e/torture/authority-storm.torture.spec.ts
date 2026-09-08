@@ -424,13 +424,27 @@ test(`a Game Master in two sessions and ${PLAYERS} players all writing at once`,
       "a promoted co-GM must be able to edit content on a scene they did not create",
     ).toBe(0);
 
-    // The rule that reshaped this test, pinned where it will be noticed.
-    // Signing in again revokes the previous session — deliberate, and
-    // documented in `issue_session_cookie` as reducing session replay risk.
-    // The product consequence is real: one account cannot hold a laptop and
-    // a tablet at once. If this ever stops being true, this assertion fails
-    // and whoever changed it gets to decide whether the test above should go
-    // back to using one person in two sessions.
+    // The rule that reshaped this test — and it has now changed, exactly the
+    // way the note here said it would.
+    //
+    // Signing in again used to revoke the previous session, documented in
+    // `issue_session_cookie` as reducing session replay risk, with the real
+    // product consequence that one account could not hold a laptop and a
+    // tablet at once. Spec 036 and ADR-073 removed that on 2026-09-07: an
+    // account may now be signed in many times, and what is bounded is the
+    // *play field* — one client of an account is at the table — rather than
+    // the sessions themselves.
+    //
+    // So the assertion is inverted rather than deleted. It is still the thing
+    // worth pinning: a silent return to login-time eviction would sign people
+    // out of their other windows, and `concurrent-sessions.spec.ts` has a
+    // test named for that regression precisely because it is easy to
+    // reintroduce.
+    //
+    // The two-account arrangement above stays as it is. It was adopted to
+    // work around this limit, but what it now tests — a promoted co-GM
+    // editing a scene they did not create — is a different claim and worth
+    // keeping on its own merits.
     const rival = await browser.newContext();
     contexts.push(rival);
     const rivalPage = await rival.newPage();
@@ -459,9 +473,10 @@ test(`a Game Master in two sessions and ${PLAYERS} players all writing at once`,
     );
     expect(
       originalStillValid,
-      "signing in again must revoke the earlier session (issue_session_cookie, " +
-        "'to reduce session replay risk')",
-    ).toBe(401);
+      "signing in again must leave the earlier session working (ADR-073): an " +
+        "account may be signed in more than once, and only the play field is " +
+        "held by one client at a time",
+    ).toBe(200);
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
   }
