@@ -62,6 +62,12 @@ import {
 /** Away from 5173/30000 on purpose, so a `pnpm dev` can stay up while this runs. */
 const WEB_PORT_BASE = 5200;
 const BACKEND_PORT_BASE = 30100;
+// One Mailpit per shard, exactly as backends, vite servers and buckets already
+// get one (contracts/e2e-fixtures.md § 2 rule 2). Sharing the dev stack's
+// single sink would make "the newest message" mean whichever shard sent last.
+const MAILPIT_SMTP_PORT_BASE = 31025;
+const MAILPIT_API_PORT_BASE = 38025;
+const MAILPIT_IMAGE = "axllent/mailpit:v1.21";
 
 const POSTGRES_CONTAINER =
   process.env.THUNDERFORGE_POSTGRES_CONTAINER ?? "thunderforge-postgres";
@@ -426,6 +432,81 @@ async function waitForUrl(url, name, timeoutMs = 180_000) {
   return false;
 }
 
+/**
+ * This shard's mail sink: a real SMTP server, in a container of its own.
+ *
+ * # Why a container per shard rather than the compose one
+ *
+ * `compose.yml` runs a single Mailpit for `make dev`. Pointing four shards at
+ * it would mean every shard's assertions read every other shard's messages,
+ * and `clearInbox` — which the fixtures contract requires between tests —
+ * would delete a neighbour's evidence mid-assertion. The failures would be
+ * intermittent and would look like delivery bugs.
+ *
+ * # Why `--rm` and a name derived from the index
+ *
+ * A run killed with Ctrl-C never reaches teardown, and a leftover container
+ * holds the port the next run needs. The name is deterministic so the next run
+ * can remove the corpse before starting; `--rm` handles the ordinary exit.
+ *
+ * Returns null if it never becomes ready, which fails the shard rather than
+ * leaving mail specs to time out one by one against nothing.
+ */
+const startedMailpits = [];
+
+async function startMailpit(index) {
+  const name = `thunderforge-e2e-mailpit-${index}`;
+  const smtpPort = MAILPIT_SMTP_PORT_BASE + index;
+  const apiPort = MAILPIT_API_PORT_BASE + index;
+
+  // A previous run that was killed rather than stopped.
+  try {
+    execFileSync("docker", ["rm", "-f", name], { stdio: "ignore" });
+  } catch {
+    // Nothing to remove, which is the ordinary case.
+  }
+
+  execFileSync(
+    "docker",
+    [
+      "run", "--rm", "-d",
+      "--name", name,
+      "-p", `${smtpPort}:1025`,
+      "-p", `${apiPort}:8025`,
+      // The dev stack's settings: Mailpit's SMTP listener is plaintext, which
+      // is what the `none` security option exists for, and it accepts any
+      // credentials so a spec can prove the username/password path is wired
+      // without a real account.
+      "-e", "MP_SMTP_AUTH_ACCEPT_ANY=1",
+      "-e", "MP_SMTP_AUTH_ALLOW_INSECURE=1",
+      MAILPIT_IMAGE,
+    ],
+    { stdio: "ignore" },
+  );
+
+  // Recorded before the readiness wait, not after: a container that started
+  // and never answered is exactly the one that must still be torn down.
+  startedMailpits.push(name);
+
+  const api = `http://127.0.0.1:${apiPort}`;
+  if (!(await waitForUrl(`${api}/api/v1/info`, `mailpit ${index}`, 60_000))) {
+    return null;
+  }
+  return { name, smtpPort, apiPort, api };
+}
+
+/** Remove every sink this run started, including ones that never came up. */
+function stopMailpit() {
+  while (startedMailpits.length) {
+    const name = startedMailpits.pop();
+    try {
+      execFileSync("docker", ["rm", "-f", name], { stdio: "ignore" });
+    } catch {
+      // Already gone.
+    }
+  }
+}
+
 /** Starts one shard's backend and frontend, and resolves once both answer. */
 async function startShard(index, { firstRun = false } = {}) {
   const database = cloneShardDatabase(index, { firstRun });
@@ -512,7 +593,13 @@ async function startShard(index, { firstRun = false } = {}) {
     return null;
   }
 
-  return { index, database, webPort, backendPort, firstRun, backendLog };
+  // Started after the stack rather than before it: the instance is configured
+  // to talk to this sink by a *test*, through the settings mutation, which is
+  // the whole of what Scenario D is about. Nothing in `shared` above names it.
+  const mailpit = await startMailpit(index);
+  if (!mailpit) return null;
+
+  return { index, database, webPort, backendPort, firstRun, backendLog, mailpit };
 }
 
 /** Runs one Playwright shard against an already-started stack. */
@@ -556,6 +643,8 @@ function runShard(shard, files, label = "parallel") {
       THUNDERFORGE_E2E_EXTERNAL_STACK: "1",
       THUNDERFORGE_E2E_DEMO_DIR: demoDir,
       THUNDERFORGE_DB_NAME: shard.database,
+      THUNDERFORGE_E2E_MAILPIT_API: shard.mailpit.api,
+      THUNDERFORGE_E2E_MAILPIT_SMTP_PORT: String(shard.mailpit.smtpPort),
       // Global setup applies `e2e_demo.sql` and then signs in as the demo user
       // to capture a reusable storage state. Against an unseeded database
       // there is no demo user to sign in as, so it would fail before the first
@@ -757,6 +846,10 @@ async function main() {
   }
 
   await terminateChildren("SIGTERM");
+  // Containers are not children of this process, so `terminateChildren` does
+  // not reach them. Removed even under `--keep`, which preserves *databases*
+  // for inspection; a held port is nobody's idea of a useful artefact.
+  stopMailpit();
   if (!args.keep) {
     for (const shard of shards) {
       psql("postgres", `DROP DATABASE IF EXISTS ${shard.database} WITH (FORCE);`);
@@ -770,5 +863,6 @@ async function main() {
 main().catch((error) => {
   log("e2e", String(error?.stack ?? error), process.stderr);
   releaseLock();
+  stopMailpit();
   void terminateChildren("SIGTERM").finally(() => process.exit(1));
 });

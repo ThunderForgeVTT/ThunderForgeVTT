@@ -274,9 +274,9 @@ subsystem anywhere in this codebase — confirmed across every `Cargo.toml`,
 - [x] T089 [US4] Register the mail surface in `src/server/src/graphql/mod.rs` with an SDL guard asserting `OutboxEntry` has no body field
 - [x] T090 [US4] Create `apps/web/src/pages/admin/components/MailPanel.tsx` — settings, the test message, and the outbox with no body anywhere — and add its entry to `apps/web/src/pages/admin/components/adminSections.ts`
 - [x] T091 [US4] Add mail to the readiness capability list in `src/server/src/readiness.rs`, naming the missing settings and what is limited (FR-015, FR-017)
-- [ ] T092 [P] [US4] Create `apps/web/e2e/fixtures/mailpit.ts` with `inbox`, `waitForMessage` and `clearInbox` per `contracts/e2e-fixtures.md`
-- [ ] T093 [US4] Add a Mailpit SMTP and API port per shard in `scripts/e2e-parallel.mjs`, exactly as backends, vite servers and buckets already get one
-- [ ] T094 [US4] Add `apps/web/e2e/mail-delivery.spec.ts` covering quickstart Scenario D — configure, test, receive, break it, confirm nothing prints a password, clear the settings, confirm a message is blocked rather than discarded, reconfigure, confirm it goes
+- [x] T092 [P] [US4] Create `apps/web/e2e/fixtures/mailpit.ts` with `inbox`, `waitForMessage` and `clearInbox` per `contracts/e2e-fixtures.md`
+- [x] T093 [US4] Add a Mailpit SMTP and API port per shard in `scripts/e2e-parallel.mjs`, exactly as backends, vite servers and buckets already get one
+- [x] T094 [US4] Add `apps/web/e2e/mail-delivery.spec.ts` covering quickstart Scenario D — configure, test, receive, break it, confirm nothing prints a password, clear the settings, confirm a message is blocked rather than discarded, reconfigure, confirm it goes
 
 **Checkpoint**: the instance can tell somebody something, and says so honestly when it cannot
 

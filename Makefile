@@ -1,4 +1,4 @@
-.PHONY: dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean
+.PHONY: dev dev-tunnel seed services-up services-down services-down-clean migrate build clean format help lint lint-host lint-wasm check-file-length test-mail test-torture-session test-torture-session-5 test-torture-session-10 test-torture-session-25 test-torture-session-50 test-torture-session-100 test-torture-clean
 
 # Loads DATABASE_URL (and anything else) from the repo-root .env for targets
 # that shell out to tools which don't read it themselves (diesel-cli).
@@ -15,6 +15,7 @@ help:
 	@echo "                          without them you get an ephemeral https://*.trycloudflare.com URL"
 	@echo "  make services-up      Start postgres+rustfs only (docker compose), detached"
 	@echo "  make services-down    Stop postgres+rustfs, keep their data volumes"
+	@echo "  make test-mail        SMTP tests against a real Mailpit (starts it first)"
 	@echo "  make services-down-clean  Stop postgres+rustfs and DELETE their data volumes"
 	@echo "  make migrate          Run pending Diesel migrations against DATABASE_URL"
 	@echo "  make seed             Seed local demo logins (admin/admin, user1/user1, user2/user2) + a ready-to-play world"
@@ -130,6 +131,18 @@ lint-wasm:
 
 check-file-length:
 	@./scripts/check-file-length.sh
+
+# The mail tests that talk to a real SMTP server.
+#
+# They are `#[ignore]`d because they need Mailpit, which a plain `cargo test`
+# cannot start — and an ignored test that says how to run it is honest, while
+# one that silently passes when its server is absent is worse than nothing.
+# The consequence was that they were written, correct, and never run. This
+# target is the way they get run: it starts the service first, so "I forgot to
+# start Mailpit" is not a reason a mail regression ships.
+test-mail:
+	docker compose up -d mailpit
+	cargo test -p thunderforge-server --lib mail::smtp_integration -- --ignored --test-threads=1
 
 # Load/torture tiers. Deliberately standalone: nothing depends on these and
 # they are wired into no aggregate target, because each one stands up its own
