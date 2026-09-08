@@ -594,6 +594,26 @@ with a version.
   nothing; a blank or obviously placeholder value MUST be refused rather than
   published.
 
+> **FR-050 to FR-057 are built, and they are built in spec 040.**
+>
+> They were written here first because attestation is what needs them, but
+> instance setup is where they belong, and building them twice would have
+> produced two operator identities that could disagree. What exists today:
+>
+> | Here | There |
+> |---|---|
+> | FR-050, FR-051 | the `operator.*` and `notice.*` declarations in `src/server/src/settings/registry.rs`, stored as rows |
+> | FR-052 | `publishedOperatorValues` on `/api/graphql/public`, read by the legal pages |
+> | FR-053 | `src/server/src/graphql/publishing_gate.rs`, covered end to end by `apps/web/e2e/publishing-gate.spec.ts` |
+> | FR-054 | `instance_setting_changes`, surfaced per key in the instance settings panel |
+> | FR-055 | the designated-agent notice in the setup wizard |
+> | FR-056 | the same anonymous query as FR-052 |
+> | FR-057 | `Validator::NotAShippedPlaceholder` and `NonEmptyAfterTrim` |
+>
+> So 039 does not implement these; it **depends on** them, and the dependency
+> is satisfied. What 039 still owns is the attestation record itself. Spec 040
+> T050 is this note.
+
 **Saying what the instance is**
 
 - **FR-025**: The published terms MUST state that content is uploaded, added

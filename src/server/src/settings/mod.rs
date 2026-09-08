@@ -39,6 +39,13 @@ pub mod registry;
 pub mod resolver;
 pub mod validate;
 
+/// The migration's own test: `up` → `down` → `up` leaves the schema clean.
+/// Kept beside the module whose migration it is, rather than in a test-only
+/// directory nobody reads when they edit the SQL.
+#[cfg(test)]
+#[path = "settings_migration_tests.rs"]
+mod settings_migration_tests;
+
 pub use registry::{Backing, Capability, Kind, Requirement, SettingDeclaration, declarations};
 pub use resolver::{Resolved, Settings, Source, resolve, resolve_all};
 

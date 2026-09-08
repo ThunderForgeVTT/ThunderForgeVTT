@@ -672,4 +672,77 @@ mod tests {
             );
         });
     }
+
+    /// Spec 040 T039, FR-028 and SC-009: an instance with **every** setting
+    /// unset still starts and still serves.
+    ///
+    /// The report answering is the test above. This is the other half, and the
+    /// distinction matters: a readiness report that answers "nothing is
+    /// configured" is worthless if the thing reporting it could not come up.
+    /// The failure this guards against is a required setting introduced by an
+    /// upgrade that makes an existing deployment refuse to start — the single
+    /// worst outcome available to this feature, because the operator cannot
+    /// even reach the screen that would tell them what to set.
+    ///
+    /// Three things are exercised, chosen because each is a place a missing
+    /// setting could plausibly become a panic rather than a gap:
+    ///
+    /// 1. **The schema builds.** Every root is constructed, which is what the
+    ///    binary does before it binds a port.
+    /// 2. **An anonymous query is answered.** `publishedOperatorValues` is the
+    ///    one the legal pages read through `/api/graphql/public`, and it is
+    ///    the query most entitled to fail here, since with nothing set it has
+    ///    nothing to report. Answering with unset markers is correct; erroring
+    ///    is not.
+    /// 3. **The mail seam resolves.** It is the only subsystem that builds a
+    ///    live client out of settings, so it is the one that would panic on an
+    ///    absent host rather than degrade.
+    #[test]
+    fn the_server_builds_and_serves_with_every_setting_unset() {
+        let state = test_app_state();
+        let vars: Vec<(&str, Option<&str>)> = declarations()
+            .iter()
+            .flat_map(|d| d.env_var.into_iter().chain(d.env_aliases.iter().copied()))
+            .map(|name| (name, None))
+            .collect();
+
+        temp_env(&vars, || {
+            let schema = async_graphql::Schema::build(
+                crate::graphql::QueryRoot::default(),
+                crate::graphql::MutationRoot::default(),
+                crate::graphql::SubscriptionRoot,
+            )
+            .data(state.clone())
+            .finish();
+
+            let response =
+                block_on(schema.execute(
+                    "query { publishedOperatorValues { operatorName noticeContactEmail } }",
+                ));
+            assert!(
+                response.errors.is_empty(),
+                "an instance with nothing configured could not answer the anonymous \
+                 operator query: {:?}",
+                response.errors
+            );
+
+            let settings = block_on(resolve_all(&state)).expect("resolves");
+            let transport = state.mail.transport(&settings);
+            assert!(
+                !transport.availability().is_ready(),
+                "mail reported itself ready with no settings at all"
+            );
+
+            // Every declaration resolves to something — a default or nothing —
+            // and none of them is an error. A declaration that could fail to
+            // resolve is a declaration that could stop the server.
+            for d in declarations() {
+                assert!(
+                    settings.get(d.key).is_some(),
+                    "`{}` did not resolve with everything unset",
+                    d.key
+                );
+            }
+        });
+    }
 }

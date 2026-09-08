@@ -302,6 +302,7 @@ pub fn configured_keys(settings: &Settings) -> Vec<&'static str> {
 #[allow(clippy::await_holding_lock)]
 mod tests {
     use super::*;
+    use crate::settings::registry::declarations;
     use crate::settings::resolver::Source;
     use crate::settings::test_env::lock;
     use crate::test_support::{insert_test_user, test_app_state};
@@ -566,5 +567,82 @@ mod tests {
         .await
         .expect_err("refused");
         assert!(refusal.contains("setInstanceAccessPolicy"));
+    }
+
+    /// Spec 040 T022 / FR-009, and ADR-041's lesson stated as a test.
+    ///
+    /// The failure this is written against is not "the write succeeded" — it
+    /// is the write **silently doing nothing**, which is what the OAuth
+    /// surface did before ADR-041: rows sourced from the environment were
+    /// rendered as editable, the save reported success, and the value never
+    /// changed. So this asserts three things and the third is the one that
+    /// matters: it is refused, the refusal names the variable, and the stored
+    /// row is untouched.
+    ///
+    /// Every declaration with an environment name is covered rather than one
+    /// chosen example. A rule that holds for `operator.name` and not for
+    /// `mail.port` is not a rule.
+    #[test]
+    fn a_write_to_an_environment_fixed_key_is_refused_and_names_the_variable() {
+        let state = test_app_state();
+
+        for d in declarations() {
+            let Some(name) = d.env_var else { continue };
+            if matches!(d.backing, Backing::AccessPolicy) {
+                // Refused earlier and for a different reason, which its own
+                // test above covers. Asserting the environment message here
+                // would be asserting the wrong refusal.
+                continue;
+            }
+
+            let mut vars: Vec<(&str, Option<&str>)> = vec![(name, Some("from-the-environment"))];
+            vars.extend(d.env_aliases.iter().map(|alias| (*alias, None)));
+
+            crate::settings::test_env::temp_env(&vars, || {
+                let stored_before = stored_row(&state, d.key);
+
+                let refusal = block_on(write_setting(
+                    &state,
+                    d.key,
+                    Some("a value an operator typed"),
+                    None,
+                    ChangeSource::Admin,
+                ))
+                .expect_err("an environment-fixed key must refuse a write");
+
+                assert!(
+                    refusal.contains(name),
+                    "refusing `{}` did not name `{name}`: {refusal}",
+                    d.key
+                );
+                assert_eq!(
+                    stored_row(&state, d.key),
+                    stored_before,
+                    "`{}` was written despite being refused",
+                    d.key
+                );
+            });
+        }
+    }
+
+    /// The stored row for a key, or `None`. Read directly rather than through
+    /// the resolver, because the resolver would answer with the environment's
+    /// value and hide exactly what this is checking.
+    fn stored_row(state: &AppState, key: &str) -> Option<String> {
+        let mut conn = state.db_pool.get().expect("conn");
+        instance_settings::table
+            .filter(instance_settings::key.eq(key))
+            .select(instance_settings::value)
+            .first::<String>(&mut conn)
+            .optional()
+            .expect("read")
+    }
+
+    fn block_on<F: std::future::Future>(f: F) -> F::Output {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("runtime")
+            .block_on(f)
     }
 }

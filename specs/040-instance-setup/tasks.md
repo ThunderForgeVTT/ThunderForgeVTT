@@ -61,7 +61,7 @@ below reads. Nothing here is user-visible on its own.
 
 - [x] T007 Create the Diesel migration `src/server/migrations/2026-09-07-000000-0000_instance_settings/up.sql` and `down.sql` for `instance_settings` and `instance_setting_changes` per data-model.md § 1–2, following the commenting style of `src/server/migrations/2026-09-06-000000-0000_instance_access/up.sql`
 - [x] T008 Regenerate `src/server/src/schema.rs` and add `InstanceSetting` / `NewInstanceSetting` / `InstanceSettingChange` structs to `src/server/src/models.rs`
-- [ ] T009 Add a migration test asserting `up.sql` → `down.sql` → `up.sql` leaves the schema clean, in `src/server/src/settings/settings_migration_tests.rs` (FR-028's upgrade promise starts with a reversible migration)
+- [x] T009 Add a migration test asserting `up.sql` → `down.sql` → `up.sql` leaves the schema clean, in `src/server/src/settings/settings_migration_tests.rs` (FR-028's upgrade promise starts with a reversible migration)
 
 ### The declaration list and the resolver
 
@@ -101,7 +101,7 @@ already worked around.
 ### Tests for User Story 3
 
 - [x] T021 [P] [US3] Add a server test in `src/server/src/graphql/queries/instance_settings.rs` asserting `instanceSettings` reports `ENVIRONMENT` with `fixedBy` for an env-set key and `editable: false` for it (FR-009, FR-011)
-- [ ] T022 [P] [US3] Add a server test in `src/server/src/graphql/mutations_instance_settings.rs` asserting `updateInstanceSetting` on an env-fixed key is **refused naming the variable**, not a silent no-op (FR-009, and what ADR-041 records the silent no-op cost the OAuth surface)
+- [x] T022 [P] [US3] Add a server test in `src/server/src/graphql/mutations_instance_settings.rs` asserting `updateInstanceSetting` on an env-fixed key is **refused naming the variable**, not a silent no-op (FR-009, and what ADR-041 records the silent no-op cost the OAuth surface)
 - [x] T023 [P] [US3] Add a redaction test asserting no `secret` declaration is reachable from any read surface except as `SET` / `NOT_SET` — no masked preview, no length — in `src/server/src/graphql/queries/instance_settings.rs` (FR-023, FR-027, SC-007)
 
 ### Implementation for User Story 3
@@ -162,7 +162,7 @@ surface, reached from a different place.
 
 - [x] T037 [P] [US6] Add a server test in `src/server/src/readiness.rs` asserting no gap contains a value, a fragment or a length, for settings that are set as well as unset (FR-027)
 - [x] T038 [P] [US6] Add a server test asserting a fully configured instance reports `fullyConfigured: true` positively rather than by an empty gap list (FR-025 scenario 3)
-- [ ] T039 [P] [US6] Add a server test asserting the server starts and serves with **every** setting unset (FR-028, SC-009)
+- [x] T039 [P] [US6] Add a server test asserting the server starts and serves with **every** setting unset (FR-028, SC-009)
 - [x] T040 [P] [US6] Add a server test asserting an **existing** share link still resolves while the notice contact is unset — only creation is gated, because removing a setting must not break links already issued
 
 ### Implementation for User Story 6
@@ -175,8 +175,8 @@ surface, reached from a different place.
 - [x] T046 [P] [US6] Apply the same gate to singleton share creation in `src/server/src/graphql/mutations_actor_shares.rs`, `mutations_item_shares.rs` and `mutations_ability_shares.rs` — the family ADR-069/070/071 already treat as one
 - [x] T047 [US6] Add the `instanceReadiness` query to `src/server/src/graphql/queries/instance_settings.rs` and register it in `src/server/src/graphql/mod.rs` with an SDL guard
 - [x] T048 [US6] Create `apps/web/src/pages/admin/components/ReadinessPanel.tsx` and add its entry to `apps/web/src/pages/admin/components/adminSections.ts`
-- [ ] T049 [US6] Add `apps/web/e2e/instance-readiness.spec.ts` covering quickstart Scenario F, including that a world stays fully playable with no notice contact
-- [ ] T050 [US6] Close spec 039's dependency by noting in `specs/039-sharing-attestation/spec.md` (FR-053's pointer) that the gate is implemented here, so the two do not drift
+- [x] T049 [US6] Add `apps/web/e2e/instance-readiness.spec.ts` covering quickstart Scenario F, including that a world stays fully playable with no notice contact
+- [x] T050 [US6] Close spec 039's dependency by noting in `specs/039-sharing-attestation/spec.md` (FR-053's pointer) that the gate is implemented here, so the two do not drift
 
 **Checkpoint**: an unconfigured instance is honest about it, and the one gate spec 039 depends on is a refusal
 
@@ -324,7 +324,7 @@ alone.
 - [ ] T112 Run quickstart Scenarios A–F by hand against `make dev` and note anything the suite does not catch; Scenario A with a stopwatch, because SC-001 is a claim about a human
 - [ ] T113 Search the entire product for a rendered credential — screens, GraphQL responses, logs, the audit trail — and record what was searched and found. SC-007 says "demonstrated by attempting to find one", so the attempt is the deliverable
 - [ ] T114 Run `cargo test --workspace -j 4`, `make lint` (lint-host + lint-wasm + file length) and `pnpm --filter @thunderforge/web test`
-- [ ] T115 Run the full suite via `node scripts/e2e-parallel.mjs --shards=2`, including the `first-run` project, and record the figures in the commit body
+- [x] T115 Run the full suite via `node scripts/e2e-parallel.mjs --shards=2`, including the `first-run` project, and record the figures in the commit body
 - [ ] T116 Run `pnpm verify` and fix what it reports **in the code this feature added** — keep it to that; wide lint passes get their own commit
 
 ---
