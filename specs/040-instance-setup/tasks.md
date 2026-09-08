@@ -110,8 +110,8 @@ already worked around.
 - [x] T025 [US3] Implement `updateInstanceSetting` in `src/server/src/graphql/mutations_instance_settings.rs`, writing the change record in the same transaction as the value
 - [x] T026 [US3] Register both surfaces on the roots in `src/server/src/graphql/mod.rs` with an SDL guard test asserting the field names the client uses, in the style of the existing `the_access_surface_is_registered_under_the_names_the_client_uses`
 - [ ] T027 [US3] Map `oauth_providers.config_source` onto the same `SettingSource` enum in `src/server/src/graphql/admin_types.rs`, and add `source` / `fixedBy` to `GraphQLSystemManifest`'s `entries` beside the `editable` flag it already carries
-- [ ] T028 [P] [US3] Create `apps/web/src/api/instanceSettings.ts` with the GraphQL operations, and `apps/web/src/pages/admin/components/InstanceSettingsPanel.tsx` rendering each setting, its source, and "fixed by `<VAR>`" instead of a disabled field with no explanation
-- [ ] T029 [US3] Update `apps/web/src/pages/admin/components/ManifestEditor.tsx` to render `fixedBy` rather than greying a key out, and add the panel to `ADMIN_SECTIONS` in `apps/web/src/pages/admin/components/adminSections.ts`
+- [x] T028 [P] [US3] Create `apps/web/src/api/instanceSettings.ts` with the GraphQL operations, and `apps/web/src/pages/admin/components/InstanceSettingsPanel.tsx` rendering each setting, its source, and "fixed by `<VAR>`" instead of a disabled field with no explanation
+- [x] T029 [US3] Update `apps/web/src/pages/admin/components/ManifestEditor.tsx` to render `fixedBy` rather than greying a key out, and add the panel to `ADMIN_SECTIONS` in `apps/web/src/pages/admin/components/adminSections.ts`
 
 **Checkpoint**: every setting in the product resolves by one rule and says where its value came from
 
@@ -134,9 +134,9 @@ with who, when and what it was before.
 
 ### Implementation for User Story 2
 
-- [ ] T032 [US2] Add the change-history view to `apps/web/src/pages/admin/components/InstanceSettingsPanel.tsx` — who, when, and what it was before, with redacted rows plainly marked as such
-- [ ] T033 [US2] Add the operator identity and notice-contact fields to the panel, grouped so a person editing "who to serve a copyright notice on" is not doing it in a list of thirty keys
-- [ ] T034 [P] [US2] Add vitest coverage for the panel's fixed/editable/redacted renderings in `apps/web/src/pages/admin/components/__tests__/InstanceSettingsPanel.test.tsx`
+- [x] T032 [US2] Add the change-history view to `apps/web/src/pages/admin/components/InstanceSettingsPanel.tsx` — who, when, and what it was before, with redacted rows plainly marked as such
+- [x] T033 [US2] Add the operator identity and notice-contact fields to the panel, grouped so a person editing "who to serve a copyright notice on" is not doing it in a list of thirty keys
+- [x] T034 [P] [US2] Add vitest coverage for the panel's fixed/editable/redacted renderings in `apps/web/src/pages/admin/components/__tests__/InstanceSettingsPanel.test.tsx`
 - [x] T035 [US2] Add `apps/web/e2e/instance-settings.spec.ts` covering quickstart Scenarios B and C: change a value and see it take effect, read its history, and confirm an env-fixed value is shown as fixed and cannot be edited
 - [x] T036 [P] [US2] Document the new environment variable families in `.env.example`, in the same style `SYNC_GITHUB_APP_*` is documented — what each does, and what happens when it is absent
 
@@ -174,7 +174,7 @@ surface, reached from a different place.
 - [x] T045 [US6] Apply the gate in `src/server/src/graphql/mutations_collection_shares.rs`, refusing creation with a message naming the missing setting (FR-026, spec 039 FR-053)
 - [x] T046 [P] [US6] Apply the same gate to singleton share creation in `src/server/src/graphql/mutations_actor_shares.rs`, `mutations_item_shares.rs` and `mutations_ability_shares.rs` — the family ADR-069/070/071 already treat as one
 - [x] T047 [US6] Add the `instanceReadiness` query to `src/server/src/graphql/queries/instance_settings.rs` and register it in `src/server/src/graphql/mod.rs` with an SDL guard
-- [ ] T048 [US6] Create `apps/web/src/pages/admin/components/ReadinessPanel.tsx` and add its entry to `apps/web/src/pages/admin/components/adminSections.ts`
+- [x] T048 [US6] Create `apps/web/src/pages/admin/components/ReadinessPanel.tsx` and add its entry to `apps/web/src/pages/admin/components/adminSections.ts`
 - [ ] T049 [US6] Add `apps/web/e2e/instance-readiness.spec.ts` covering quickstart Scenario F, including that a world stays fully playable with no notice contact
 - [ ] T050 [US6] Close spec 039's dependency by noting in `specs/039-sharing-attestation/spec.md` (FR-053's pointer) that the gate is implemented here, so the two do not drift
 
@@ -272,7 +272,7 @@ subsystem anywhere in this codebase — confirmed across every `Cargo.toml`,
 - [x] T087 [US4] Register `mail::schedule::spawn_mail_task(app_state)` in `src/app/src/main.rs` beside the five `spawn_*_task` calls already there, and add `pub mod mail;` to `src/server/src/lib.rs`
 - [x] T088 [US4] Implement `mailAvailability`, `mailOutbox`, `sendTestMail` and `retryOutboxMessage` in `src/server/src/graphql/mutations_mail.rs` per `contracts/mail.md`, with `sendTestMail` behind `admin_user(ctx)?` **and** the existing limiter from `src/server/src/graphql/share_rate_limit.rs` — an unrestricted send-to-any-address mutation is an open relay
 - [x] T089 [US4] Register the mail surface in `src/server/src/graphql/mod.rs` with an SDL guard asserting `OutboxEntry` has no body field
-- [ ] T090 [US4] Create `apps/web/src/pages/admin/components/MailPanel.tsx` — settings, the test message, and the outbox with no body anywhere — and add its entry to `apps/web/src/pages/admin/components/adminSections.ts`
+- [x] T090 [US4] Create `apps/web/src/pages/admin/components/MailPanel.tsx` — settings, the test message, and the outbox with no body anywhere — and add its entry to `apps/web/src/pages/admin/components/adminSections.ts`
 - [x] T091 [US4] Add mail to the readiness capability list in `src/server/src/readiness.rs`, naming the missing settings and what is limited (FR-015, FR-017)
 - [ ] T092 [P] [US4] Create `apps/web/e2e/fixtures/mailpit.ts` with `inbox`, `waitForMessage` and `clearInbox` per `contracts/e2e-fixtures.md`
 - [ ] T093 [US4] Add a Mailpit SMTP and API port per shard in `scripts/e2e-parallel.mjs`, exactly as backends, vite servers and buckets already get one

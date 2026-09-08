@@ -21,7 +21,7 @@
 use async_graphql::{Context, Enum, Object, Result as GraphQLResult, SimpleObject};
 
 use super::changes::{ChangeSource, history, write_setting};
-use super::registry::{Requirement, declaration};
+use super::registry::{Kind, Requirement, declaration};
 use super::resolver::{Resolved, Source, resolve_all};
 use crate::graphql::{admin_user, app_state};
 use crate::readiness;
@@ -70,10 +70,43 @@ impl From<Requirement> for GraphQLSettingRequirement {
     }
 }
 
+/// The shape of a value, so an editor renders the field the declaration
+/// describes rather than one inferred from the key's name. `Enum` carries its
+/// choices in `enum_options`; every other kind leaves that empty.
+#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
+#[graphql(name = "SettingKind")]
+pub enum GraphQLSettingKind {
+    Text,
+    Email,
+    Url,
+    Port,
+    Bool,
+    Enum,
+    Prose,
+}
+
+impl From<Kind> for GraphQLSettingKind {
+    fn from(value: Kind) -> Self {
+        match value {
+            Kind::Text => GraphQLSettingKind::Text,
+            Kind::Email => GraphQLSettingKind::Email,
+            Kind::Url => GraphQLSettingKind::Url,
+            Kind::Port => GraphQLSettingKind::Port,
+            Kind::Bool => GraphQLSettingKind::Bool,
+            Kind::Enum(_) => GraphQLSettingKind::Enum,
+            Kind::Prose => GraphQLSettingKind::Prose,
+        }
+    }
+}
+
 #[derive(SimpleObject, Debug, Clone)]
 #[graphql(name = "ResolvedSetting")]
 pub struct GraphQLResolvedSetting {
     pub key: String,
+    /// The shape of the value, so an editor offers the right field.
+    pub kind: GraphQLSettingKind,
+    /// The permitted values, for `ENUM`. Empty for every other kind.
+    pub enum_options: Vec<String>,
     /// Absent for a secret. Present and literal for everything else.
     pub value: Option<String>,
     /// Set / not set, for a secret. Null for everything else.
@@ -118,6 +151,11 @@ impl From<&Resolved> for GraphQLResolvedSetting {
 
         GraphQLResolvedSetting {
             key: d.key.to_string(),
+            kind: d.kind.into(),
+            enum_options: match d.kind {
+                Kind::Enum(options) => options.iter().map(|o| (*o).to_string()).collect(),
+                _ => Vec::new(),
+            },
             value,
             secret_state,
             source: resolved.source.into(),

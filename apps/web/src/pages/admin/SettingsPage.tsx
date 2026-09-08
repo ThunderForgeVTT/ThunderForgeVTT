@@ -28,9 +28,12 @@ import { AccessPanel } from "./components/AccessPanel";
 import { AdminSectionShell } from "./components/AdminSectionShell";
 import { DiskUsageChart } from "./components/DiskUsageChart";
 import { GitHubAppsPanel } from "./components/GitHubAppsPanel";
+import { InstanceSettingsPanel } from "./components/InstanceSettingsPanel";
+import { MailPanel } from "./components/MailPanel";
 import { ManifestEditor } from "./components/ManifestEditor";
 import { MetricsCard } from "./components/MetricsCard";
 import { OAuthProviderForm } from "./components/OAuthProviderForm";
+import { ReadinessPanel } from "./components/ReadinessPanel";
 import { SecurityPanel } from "./components/SecurityPanel";
 
 type AdminSettingsSection =
@@ -38,7 +41,10 @@ type AdminSettingsSection =
   | "configuration"
   | "storage"
   | "security"
-  | "access";
+  | "access"
+  | "instance"
+  | "readiness"
+  | "mail";
 
 interface SettingsPageProps {
   initialSection?: AdminSettingsSection;
@@ -62,6 +68,12 @@ function sectionLabel(section: AdminSettingsSection) {
       return "Security";
     case "access":
       return "Access";
+    case "instance":
+      return "Instance";
+    case "readiness":
+      return "Readiness";
+    case "mail":
+      return "Mail";
     default:
       return "Overview";
   }
@@ -398,6 +410,68 @@ export default function SettingsPage({
                     />
                   </Card>
                 </div>
+              </section>
+            ) : null}
+
+            {/* Spec 040: the three panels below read their own data rather
+                than joining `getAdminSettingsData`, for the reason
+                `GitHubAppsPanel` gives — folding a resolution only these
+                screens need into the page's single fetch would make every
+                other admin screen pay for it. */}
+            {section === "instance" ? (
+              <section className="grid gap-3" id="instance">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="inline-flex items-center gap-2 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+                      <FantasyIcon name="settings" size={16} />
+                      Instance
+                    </p>
+                    <h2 className="text-xl font-semibold">
+                      Settings, their source, and their history
+                    </h2>
+                  </div>
+                </div>
+                <Card surface="parchment" className="grid gap-4 p-6">
+                  <InstanceSettingsPanel />
+                </Card>
+              </section>
+            ) : null}
+
+            {section === "readiness" ? (
+              <section className="grid gap-3" id="readiness">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="inline-flex items-center gap-2 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+                      <FantasyIcon name="compass" size={16} />
+                      Readiness
+                    </p>
+                    <h2 className="text-xl font-semibold">
+                      What this instance can and cannot do
+                    </h2>
+                  </div>
+                </div>
+                <Card surface="stone" className="grid gap-4 p-6">
+                  <ReadinessPanel />
+                </Card>
+              </section>
+            ) : null}
+
+            {section === "mail" ? (
+              <section className="grid gap-3" id="mail">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="inline-flex items-center gap-2 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+                      <FantasyIcon name="rune" size={16} />
+                      Mail
+                    </p>
+                    <h2 className="text-xl font-semibold">
+                      Delivery, proof of delivery, and the outbox
+                    </h2>
+                  </div>
+                </div>
+                <Card surface="stone" className="grid gap-4 p-6">
+                  <MailPanel />
+                </Card>
               </section>
             ) : null}
 

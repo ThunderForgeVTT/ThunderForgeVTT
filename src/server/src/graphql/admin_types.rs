@@ -139,11 +139,19 @@ impl From<OAuthProvider> for GraphQLOAuthProvider {
 }
 
 /// System manifest entry
+///
+/// Spec 040 FR-009: a key the environment has fixed is not offered for
+/// editing **and says which variable fixed it**. A field greyed out with no
+/// stated reason is the thing that feature exists to stop, so `editable` and
+/// `fixed_by` are answered together and by the same resolver the settings
+/// surface uses — not by a rule restated here.
 #[derive(SimpleObject, Debug, Clone)]
 pub struct GraphQLManifestEntry {
     pub key: String,
     pub value: String,
     pub editable: bool,
+    /// The environment variable that fixed this value, when one has.
+    pub fixed_by: Option<String>,
 }
 
 /// System manifest configuration document
@@ -160,12 +168,19 @@ impl GraphQLSystemManifest {
         let mut entries = manifest
             .metadata
             .into_iter()
-            .map(|(key, value)| GraphQLManifestEntry {
-                editable: editable_manifest_keys()
-                    .iter()
-                    .any(|candidate| *candidate == key),
-                key,
-                value,
+            .map(|(key, value)| {
+                let fixed_by = crate::settings::registry::declaration(&key)
+                    .and_then(|d| d.env_name_in_use())
+                    .map(str::to_string);
+                GraphQLManifestEntry {
+                    editable: fixed_by.is_none()
+                        && editable_manifest_keys()
+                            .iter()
+                            .any(|candidate| *candidate == key),
+                    fixed_by,
+                    key,
+                    value,
+                }
             })
             .collect::<Vec<_>>();
         entries.sort_by(|left, right| left.key.cmp(&right.key));

@@ -49,6 +49,12 @@ export interface ManifestEntry {
   key: string;
   value: string;
   editable: boolean;
+  /**
+   * Spec 040 FR-009: the environment variable that fixed this value, when one
+   * has. A key with this set is not editable, and the editor says which
+   * variable rather than greying the field out with no reason given.
+   */
+  fixedBy: string | null;
 }
 
 export interface SystemManifest {

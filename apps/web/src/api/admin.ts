@@ -78,6 +78,7 @@ export function getAdminSettingsData(): Promise<AdminSettingsData> {
           key
           value
           editable
+          fixedBy
         }
       }
       oauthProviders {
@@ -161,6 +162,7 @@ export function updateManifestKey(
             key
             value
             editable
+            fixedBy
           }
         }
       }

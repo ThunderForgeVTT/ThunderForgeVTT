@@ -38,6 +38,33 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
     icon: "wand",
     testId: "admin-nav-configuration",
   },
+  /* Spec 040 US3/US6/US4: the three operator-facing halves of instance
+     setup. They are separate sections rather than three more cards under
+     Configuration because they answer different questions — what is set, what
+     that lets the instance do, and whether mail actually leaves the building —
+     and because a person sent here to fix a copyright-notice address should
+     not have to scroll past OAuth to find it. */
+  {
+    label: "Instance",
+    description: "Every setting, where it came from, and who changed it",
+    to: "/admin/instance",
+    icon: "settings",
+    testId: "admin-nav-instance",
+  },
+  {
+    label: "Readiness",
+    description: "What this instance can and cannot do yet",
+    to: "/admin/readiness",
+    icon: "compass",
+    testId: "admin-nav-readiness",
+  },
+  {
+    label: "Mail",
+    description: "Delivery settings, a test message, and the outbox",
+    to: "/admin/mail",
+    icon: "rune",
+    testId: "admin-nav-mail",
+  },
   {
     label: "Storage",
     description: "Disk posture and persisted footprint",

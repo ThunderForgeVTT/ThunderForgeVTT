@@ -15,6 +15,9 @@ describe("admin sections", () => {
     expect(ADMIN_SECTIONS.map((section) => section.to)).toEqual([
       "/admin",
       "/admin/configuration",
+      "/admin/instance",
+      "/admin/readiness",
+      "/admin/mail",
       "/admin/storage",
       "/admin/security",
       "/admin/access",
@@ -32,6 +35,9 @@ describe("admin sections", () => {
   it("resolves a path to exactly the section being shown", () => {
     expect(adminSectionForPath("/admin/storage")?.label).toBe("Storage");
     expect(adminSectionForPath("/admin")?.label).toBe("Overview");
+    expect(adminSectionForPath("/admin/instance")?.label).toBe("Instance");
+    expect(adminSectionForPath("/admin/readiness")?.label).toBe("Readiness");
+    expect(adminSectionForPath("/admin/mail")?.label).toBe("Mail");
   });
 
   it("does not treat /admin as the active section on every admin page", () => {

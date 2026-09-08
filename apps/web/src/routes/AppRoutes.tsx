@@ -425,6 +425,39 @@ export default function AppRoutes({
           }
         />
         <Route
+          path="/admin/instance"
+          element={
+            <RequireAdmin>
+              {renderLazyPage(
+                <AdminSettingsPage initialSection="instance" />,
+                "Loading instance settings",
+              )}
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="/admin/readiness"
+          element={
+            <RequireAdmin>
+              {renderLazyPage(
+                <AdminSettingsPage initialSection="readiness" />,
+                "Loading instance readiness",
+              )}
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="/admin/mail"
+          element={
+            <RequireAdmin>
+              {renderLazyPage(
+                <AdminSettingsPage initialSection="mail" />,
+                "Loading mail settings",
+              )}
+            </RequireAdmin>
+          }
+        />
+        <Route
           path="/admin/analytics"
           element={<Navigate to="/admin/storage" replace />}
         />
