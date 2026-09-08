@@ -334,6 +334,9 @@ export default function SetupPage({
       const result = await completeSetup(adminCode.trim());
       setCompletion(result.message);
       setReadiness(result.readiness ?? (await fetchInstanceReadiness()));
+      // Setup is over; the administration screen is where the operator now
+      // lives. See `onLeave` for why this is no longer an interstitial.
+      await onLeave();
     } catch (error) {
       if (error instanceof SetupRequestError) {
         setCompletionFailure(error.message);
@@ -349,13 +352,20 @@ export default function SetupPage({
   };
 
   /**
-   * Leaving deliberately, not automatically.
+   * Finishing setup lands on the administration screen.
    *
-   * `onSetupComplete` re-reads the instance status, which flips
-   * `setup_required` to false and makes `AppRoutes` navigate away from
-   * `/setup`. Calling it the moment `/complete` returned would unmount the
-   * readiness report before it had been read, which is exactly the screen
-   * T072 exists to put in front of an operator.
+   * This used to be a button, because the readiness report rendered on this
+   * page was the **only** place an operator would ever see what their instance
+   * could not yet do, and navigating away the moment `/complete` returned
+   * would have unmounted it unread. That was true when it was written and is
+   * not true now: readiness is a permanent admin section
+   * (`/admin/readiness`), listed in the nav, derived on every read. Keeping a
+   * one-time copy of it behind an extra click made the last step of setup a
+   * screen the operator had to dismiss to get anywhere.
+   *
+   * The report is still built above and still rendered — a completion that
+   * happens to fail on the way out leaves it on screen — but nobody has to
+   * acknowledge it to leave.
    */
   const onLeave = async () => {
     await onSetupComplete();
@@ -558,6 +568,9 @@ export default function SetupPage({
                 </Button>
               ) : null}
 
+              {/* Kept as a fallback for the one case that still needs it: a
+                  completion that succeeded and whose navigation did not, which
+                  would otherwise strand the operator on a finished wizard. */}
               {completion ? (
                 <Button
                   data-testid="setup-leave"

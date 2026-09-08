@@ -250,9 +250,11 @@ test.describe("Spec 040 US1: from an empty database to a contactable instance", 
     await expect(page.getByTestId("setup-review-unset")).toBeVisible();
 
     await page.getByTestId("setup-complete").click();
-    await expect(page.getByTestId("setup-complete-message")).toBeVisible({
-      timeout: 30_000,
-    });
+    // Finishing setup lands on the administration screen rather than on a
+    // summary the operator has to dismiss. Readiness is a permanent admin
+    // section now, so the one-time copy of it had become a speed bump — the
+    // by-hand pass of Scenario A said so, and this is that change.
+    await page.waitForURL(/\/admin(\?|$)/, { timeout: 30_000 });
 
     // 9. And now the part that makes "contactable" mean something: a stranger,
     //    with no account, reads the legal pages and finds this operator named
