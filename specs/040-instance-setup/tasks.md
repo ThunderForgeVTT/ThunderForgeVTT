@@ -41,12 +41,12 @@ Web application, per plan.md § Structure Decision: Rust server under
 Constitution Principle IV requires them in the same change set, and research.md
 already contains their substance.
 
-- [ ] T001 [P] Write ADR-088 (one precedence rule for every instance setting) in `docs/adrs/20260907-088-one_precedence_rule_for_every_setting.md`, extending ADR-041 from OAuth to the product and recording why the OAuth materialisation is kept rather than rewritten (research.md § R5)
-- [ ] T002 [P] Write ADR-089 (mail is a transport seam with a durable outbox) in `docs/adrs/20260907-089-mail_transport_seam_and_outbox.md`, recording the `lettre`/rustls choice, the three levels of proof, and why `blocked` is a separate state from `failed` (research.md § R7–R9)
-- [ ] T003 [P] Write ADR-090 (credential resolution: scope outside, source inside) in `docs/adrs/20260907-090-credential_scope_before_source.md`, deciding what the spec left open and recording that an application resolves whole rather than field by field (research.md § R10)
-- [ ] T004 [P] Write ADR-091 (instance configuration is rows) in `docs/adrs/20260907-091-instance_configuration_is_rows.md`, recording why not the manifest file, why emphatically not `instance_identity`, and why the six manifest keys are presented rather than migrated (research.md § R1, § R2, § R6)
-- [ ] T005 [P] Write ADR-092 (operator values are substituted into compiled-in legal prose at render time) in `docs/adrs/20260907-092-operator_values_in_legal_prose.md`, recording the closed token set, the values-as-text rule, and the trust boundary `apps/web/src/legal/legalDocuments.ts` documents
-- [ ] T006 Add the five ADRs to the index table in `docs/adrs/README.md` and re-confirm 088–092 are still free before writing them — specs 036, 037, 039 and 041 are being planned in parallel and several of their reservations already collide with each other (036: 073–075; 037: 078 and 084–087; 039: 080–083; 041: 081–084), so this block was chosen to sit clear of all of them
+- [x] T001 [P] Write ADR-088 (one precedence rule for every instance setting) in `docs/adrs/20260907-088-one_precedence_rule_for_every_setting.md`, extending ADR-041 from OAuth to the product and recording why the OAuth materialisation is kept rather than rewritten (research.md § R5)
+- [x] T002 [P] Write ADR-089 (mail is a transport seam with a durable outbox) in `docs/adrs/20260907-089-mail_transport_seam_and_outbox.md`, recording the `lettre`/rustls choice, the three levels of proof, and why `blocked` is a separate state from `failed` (research.md § R7–R9)
+- [x] T003 [P] Write ADR-090 (credential resolution: scope outside, source inside) in `docs/adrs/20260907-090-credential_scope_before_source.md`, deciding what the spec left open and recording that an application resolves whole rather than field by field (research.md § R10)
+- [x] T004 [P] Write ADR-091 (instance configuration is rows) in `docs/adrs/20260907-091-instance_configuration_is_rows.md`, recording why not the manifest file, why emphatically not `instance_identity`, and why the six manifest keys are presented rather than migrated (research.md § R1, § R2, § R6)
+- [x] T005 [P] Write ADR-092 (operator values are substituted into compiled-in legal prose at render time) in `docs/adrs/20260907-092-operator_values_in_legal_prose.md`, recording the closed token set, the values-as-text rule, and the trust boundary `apps/web/src/legal/legalDocuments.ts` documents
+- [x] T006 Add the five ADRs to the index table in `docs/adrs/README.md` and re-confirm 088–092 are still free before writing them — specs 036, 037, 039 and 041 are being planned in parallel and several of their reservations already collide with each other (036: 073–075; 037: 078 and 084–087; 039: 080–083; 041: 081–084), so this block was chosen to sit clear of all of them
 
 ---
 
@@ -294,22 +294,22 @@ alone.
 
 ### Tests for User Story 5
 
-- [ ] T095 [P] [US5] Add the **back-compatibility** test in `src/server/src/github_apps.rs`: a process with only `SYNC_GITHUB_APP_*` set resolves lore sync's application identically to `registration_from_env()` today (FR-024). This is the test that protects somebody's running deployment and it is written first
-- [ ] T096 [P] [US5] Add a resolution test asserting the order in `contracts/github-applications.md` — subsystem-env, subsystem-instance, global-env, global-instance — including the case the spec left open: a global env application does **not** beat a deliberately configured subsystem one (research.md § R10)
-- [ ] T097 [P] [US5] Add a test asserting a partially specified subsystem application is reported incomplete and falls through to the **whole** global application rather than borrowing its private key (FR-021, US5 scenario 4)
-- [ ] T098 [P] [US5] Add a test asserting no field, message or log line carries a key, a fragment or a length, in `src/server/src/graphql/mutations_github_apps.rs` (FR-023, SC-007)
+- [x] T095 [P] [US5] Add the **back-compatibility** test in `src/server/src/github_apps.rs`: a process with only `SYNC_GITHUB_APP_*` set resolves lore sync's application identically to `registration_from_env()` today (FR-024). This is the test that protects somebody's running deployment and it is written first
+- [x] T096 [P] [US5] Add a resolution test asserting the order in `contracts/github-applications.md` — subsystem-env, subsystem-instance, global-env, global-instance — including the case the spec left open: a global env application does **not** beat a deliberately configured subsystem one (research.md § R10)
+- [x] T097 [P] [US5] Add a test asserting a partially specified subsystem application is reported incomplete and falls through to the **whole** global application rather than borrowing its private key (FR-021, US5 scenario 4)
+- [x] T098 [P] [US5] Add a test asserting no field, message or log line carries a key, a fragment or a length, in `src/server/src/graphql/mutations_github_apps.rs` (FR-023, SC-007)
 
 ### Implementation for User Story 5
 
-- [ ] T099 [US5] Implement `registration_for(subsystem)` in `src/server/src/github_apps.rs`, with `repo_host::registration_from_env()` unchanged as its first step, and reuse `RegistrationProblem` and `guidance()` rather than writing a second error vocabulary
-- [ ] T100 [US5] Add the `github_app.global.*` and `github_app.<subsystem>.*` declarations to `src/server/src/settings/registry.rs`, with the private key marked `secret` and the `_FILE` form storing a path rather than the key so a Docker secret stays one
-- [ ] T101 [US5] Parse a private key on save in `src/server/src/graphql/mutations_github_apps.rs` exactly as `registration_from_env` parses it at startup, refusing a value that is not a key rather than storing it as configured (FR-022)
-- [ ] T102 [US5] Implement `githubApplications`, `setGithubApplication` and `checkGithubApplication` in `src/server/src/graphql/mutations_github_apps.rs` per `contracts/github-applications.md`, with `actsFor` computed from the current resolution (FR-020)
-- [ ] T103 [US5] Register the surface in `src/server/src/graphql/mod.rs` with an SDL guard asserting no field returns a key
-- [ ] T104 [US5] Create `apps/web/src/pages/admin/components/GitHubAppsPanel.tsx` showing each scope, its source, its completeness, and — wherever global credentials are set — which subsystems the application will act for
-- [ ] T105 [US5] Add the `GLOBAL_GITHUB_APP_*` family to `.env.example`, documented in the same style `SYNC_GITHUB_APP_*` already is, including the three private-key forms and their precedence
-- [ ] T106 [US5] Add `apps/web/e2e/github-apps.spec.ts` covering quickstart Scenario E, starting with the FR-024 case: a `SYNC_GITHUB_APP_*`-only deployment behaves exactly as before
-- [ ] T107 [P] [US5] Update spec 037's FR-023–FR-026 pointer in `specs/037-in-app-feedback/spec.md` to name this contract, so `FEEDBACK_GITHUB_APP_*` is configured here rather than invented there
+- [x] T099 [US5] Implement `registration_for(subsystem)` in `src/server/src/github_apps.rs`, with `repo_host::registration_from_env()` unchanged as its first step, and reuse `RegistrationProblem` and `guidance()` rather than writing a second error vocabulary
+- [x] T100 [US5] Add the `github_app.global.*` and `github_app.<subsystem>.*` declarations to `src/server/src/settings/registry.rs`, with the private key marked `secret` and the `_FILE` form storing a path rather than the key so a Docker secret stays one
+- [x] T101 [US5] Parse a private key on save in `src/server/src/graphql/mutations_github_apps.rs` exactly as `registration_from_env` parses it at startup, refusing a value that is not a key rather than storing it as configured (FR-022)
+- [x] T102 [US5] Implement `githubApplications`, `setGithubApplication` and `checkGithubApplication` in `src/server/src/graphql/mutations_github_apps.rs` per `contracts/github-applications.md`, with `actsFor` computed from the current resolution (FR-020)
+- [x] T103 [US5] Register the surface in `src/server/src/graphql/mod.rs` with an SDL guard asserting no field returns a key
+- [x] T104 [US5] Create `apps/web/src/pages/admin/components/GitHubAppsPanel.tsx` showing each scope, its source, its completeness, and — wherever global credentials are set — which subsystems the application will act for
+- [x] T105 [US5] Add the `GLOBAL_GITHUB_APP_*` family to `.env.example`, documented in the same style `SYNC_GITHUB_APP_*` already is, including the three private-key forms and their precedence
+- [x] T106 [US5] Add `apps/web/e2e/github-apps.spec.ts` covering quickstart Scenario E, starting with the FR-024 case: a `SYNC_GITHUB_APP_*`-only deployment behaves exactly as before
+- [x] T107 [P] [US5] Update spec 037's FR-023–FR-026 pointer in `specs/037-in-app-feedback/spec.md` to name this contract, so `FEEDBACK_GITHUB_APP_*` is configured here rather than invented there
 
 **Checkpoint**: one application or several, and the operator knows which acts for what
 
