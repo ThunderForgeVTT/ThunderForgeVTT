@@ -289,6 +289,10 @@ pub struct QueryRoot(
     crate::feedback::graphql::FeedbackQuery,
     // Spec 037 FR-021: `undeliveredFeedback`, administrators only.
     crate::feedback::graphql::FeedbackAdminQuery,
+    // Terms disputes and privacy requests: the operator's intake queue.
+    // Takedowns are not here — they are moderation cases, because they are
+    // the only one of the three that disables content.
+    crate::legal_intake::graphql::LegalEnquiryQuery,
     // Spec 036 US3b: `systemChecks(worldId)` — what a sheet may offer.
     RollCheckQuery,
     // Spec 036 US4: the sessions a person holds, now that they may hold several.
@@ -366,6 +370,9 @@ pub struct MutationRoot(
     crate::mail::graphql::MailMutation,
     // Spec 037: `submitFeedback`, and an operator's abandon/resume.
     crate::feedback::graphql::FeedbackMutation,
+    // `submitLegalEnquiry` — the one unauthenticated write in this product
+    // that stores prose, and rate limited accordingly.
+    crate::legal_intake::graphql::LegalEnquiryMutation,
     mutations_sessions::SessionMutation,
     mutations_actor_images::ActorImageMutation,
     LoreMutation,

@@ -21,6 +21,7 @@ describe("admin sections", () => {
       "/admin/storage",
       "/admin/security",
       "/admin/access",
+      "/admin/legal",
       "/admin/moderation",
     ]);
   });
@@ -38,6 +39,7 @@ describe("admin sections", () => {
     expect(adminSectionForPath("/admin/instance")?.label).toBe("Instance");
     expect(adminSectionForPath("/admin/readiness")?.label).toBe("Readiness");
     expect(adminSectionForPath("/admin/mail")?.label).toBe("Mail");
+    expect(adminSectionForPath("/admin/legal")?.label).toBe("Legal");
   });
 
   it("does not treat /admin as the active section on every admin page", () => {

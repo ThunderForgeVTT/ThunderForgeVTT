@@ -88,12 +88,40 @@ export default function DmcaCompliancePage() {
               published before — which is the honest one: it also cannot mint
               a share link, because spec 040's publishing gate refuses while
               the notice contact is unset. */}
+          {/*
+            The form first, the designation second.
+
+            Nearly everybody arriving here wants to report something, and
+            the form is the path that gets tracked, acknowledged and
+            worked. The designation is not hidden and must not be: 17
+            U.S.C. § 512(c)(2) conditions the safe harbour on the agent's
+            name, address and email being publicly available on the site,
+            and an operator who loses that protection becomes liable for
+            what their users upload. So it stays, in full, below — quieter
+            rather than absent.
+          */}
+          <Card surface="leather" className="grid gap-3 p-6">
+            <h2 className="text-lg font-semibold">Submit a Takedown Notice</h2>
+            <p className="text-sm text-muted-foreground">
+              If you believe specific user-entered content on ThunderForge
+              infringes your copyright, submit a notice below. We will disable
+              access to the identified content and notify its owner, who may
+              submit a counter-notice if they believe the removal was a mistake.
+            </p>
+            <TakedownNoticeForm />
+          </Card>
+
           <Card
             surface="stone"
             className="grid gap-3 p-6"
             data-testid="dmca-agent-designation"
           >
-            <h2 className="text-lg font-semibold">Designated DMCA Agent</h2>
+            <h2 className="text-base font-semibold">Designated DMCA Agent</h2>
+            <p className="text-xs text-muted-foreground">
+              Published because 17 U.S.C. § 512(c)(2) requires it. Most people
+              should use the form above — it reaches the same person and is
+              tracked.
+            </p>
             <dl className="grid gap-1 text-sm">
               <AgentValue
                 label="Name/Title"
@@ -115,17 +143,6 @@ export default function DmcaCompliancePage() {
               This designation is kept current with the U.S. Copyright
               Office&apos;s Designated Agent Directory (17 U.S.C. § 512(c)(2)).
             </p>
-          </Card>
-
-          <Card surface="leather" className="grid gap-3 p-6">
-            <h2 className="text-lg font-semibold">Submit a Takedown Notice</h2>
-            <p className="text-sm text-muted-foreground">
-              If you believe specific user-entered content on ThunderForge
-              infringes your copyright, submit a notice below. We will disable
-              access to the identified content and notify its owner, who may
-              submit a counter-notice if they believe the removal was a mistake.
-            </p>
-            <TakedownNoticeForm />
           </Card>
 
           {body.map((section) => (

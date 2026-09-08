@@ -87,6 +87,13 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
     testId: "admin-nav-access",
   },
   {
+    label: "Legal",
+    description: "Terms disputes and privacy requests",
+    to: "/admin/legal",
+    icon: "quill",
+    testId: "admin-nav-legal",
+  },
+  {
     label: "Moderation",
     description: "Takedown cases and repeat-infringer flags",
     to: "/admin/moderation",

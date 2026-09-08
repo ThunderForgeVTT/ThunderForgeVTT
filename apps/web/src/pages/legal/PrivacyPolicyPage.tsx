@@ -1,3 +1,4 @@
+import { LegalEnquiryForm } from "@/components/legal/LegalEnquiryForm";
 import { LegalDocumentPage } from "@/pages/legal/LegalDocumentPage";
 import type { SeoConfig } from "@/types/seo";
 
@@ -16,6 +17,13 @@ export default function PrivacyPolicyPage() {
       slug="privacy-policy"
       title="Privacy Policy"
       seo={privacyPolicySeo}
+      afterProse={
+        <LegalEnquiryForm
+          kind="PRIVACY"
+          heading="Ask about your data"
+          description="Ask what this instance holds about you, ask for a copy, or ask for it to be deleted. This reaches the people who run it directly."
+        />
+      }
     />
   );
 }

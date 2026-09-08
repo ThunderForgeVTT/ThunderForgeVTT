@@ -310,6 +310,23 @@ diesel::table! {
 }
 
 diesel::table! {
+    legal_enquiries (id) {
+        id -> Uuid,
+        kind -> Text,
+        submitter_name -> Text,
+        submitter_contact -> Text,
+        subject -> Text,
+        body -> Text,
+        status -> Text,
+        submitted_by -> Nullable<Uuid>,
+        created_at -> Timestamp,
+        handled_by -> Nullable<Uuid>,
+        handled_at -> Nullable<Timestamp>,
+        resolution_note -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
     light_sources (light_id) {
         light_id -> Uuid,
         scene_id -> Uuid,
@@ -1374,6 +1391,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     instance_settings,
     interaction_requests,
     interactives,
+    legal_enquiries,
     light_sources,
     login_two_factor_challenges,
     lore_disassociation_notices,

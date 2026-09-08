@@ -44,6 +44,9 @@ pub mod graphql;
 pub mod instance_identity;
 pub mod interaction;
 pub mod interface_packs;
+/// Spec 040 / ADR-088: the declaration list, and one precedence rule for
+/// every instance setting.
+pub mod legal_intake;
 pub mod light_effects;
 pub mod lore_sync;
 /// Spec 040 US4: whether this instance can tell somebody something.
@@ -70,8 +73,6 @@ pub mod repo_host;
 pub mod scene_fingerprint;
 pub mod schema;
 pub mod session;
-/// Spec 040 / ADR-088: the declaration list, and one precedence rule for
-/// every instance setting.
 pub mod settings;
 pub mod sheet;
 pub mod state;

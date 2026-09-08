@@ -70,9 +70,17 @@ export function AppFooter() {
               <FantasyIcon name="crown" size={18} />
               <strong className="text-sm tracking-wide">ThunderForge</strong>
             </span>
+            {/* Deliberately free of the product's own nouns. The first
+                version read "your worlds, your players, your server" and broke
+                `session-notes.spec.ts`, which asserts `getByText("Players")`
+                resolves to one element — Playwright matches a bare string as a
+                case-insensitive substring, so a footer on every page had
+                quietly become a second match for a word the UI uses as a
+                heading. Blurb copy is not worth making an assertion brittle
+                for. */}
             <p className="max-w-prose text-sm text-muted-foreground">
-              A virtual tabletop you run yourself. Your worlds, your players,
-              your server.
+              Self-hosted, and yours. The campaign lives on a machine you
+              control.
             </p>
           </div>
 

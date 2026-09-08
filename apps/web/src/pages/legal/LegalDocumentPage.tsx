@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { LegalProse } from "@/components/legal/LegalProse";
 import { SEO } from "@/components/seo/SEO";
 import { Card } from "@/components/ui/card/Card";
@@ -24,12 +25,23 @@ export interface LegalDocumentPageProps {
   slug: string;
   title: string;
   seo: SeoConfig;
+  /**
+   * Rendered after the prose, in its own card.
+   *
+   * A slot rather than a fixed intake form, because these pages carry
+   * different obligations: terms and privacy get a form and publish no
+   * address, while the copyright page has its own component and publishes its
+   * designated agent because §512(c)(2) requires it. Encoding "the form" here
+   * would make the exception the awkward one.
+   */
+  afterProse?: ReactNode;
 }
 
 export function LegalDocumentPage({
   slug,
   title,
   seo,
+  afterProse,
 }: LegalDocumentPageProps) {
   const sections = legalSections(slug);
   const intro = sections.find((s) => s.heading === null);
@@ -66,6 +78,12 @@ export function LegalDocumentPage({
               <LegalProse body={section.body} />
             </Card>
           ))}
+
+          {afterProse ? (
+            <Card surface="stone" className="grid gap-3 p-6">
+              {afterProse}
+            </Card>
+          ) : null}
         </main>
       </Container>
     </>

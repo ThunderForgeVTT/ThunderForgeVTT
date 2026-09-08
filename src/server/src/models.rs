@@ -2456,3 +2456,38 @@ pub struct NewInstanceSettingChange {
     pub changed_at: chrono::NaiveDateTime,
     pub source: String,
 }
+
+/// A terms-of-service dispute or a privacy request.
+///
+/// Sibling to `ContentModerationAction` rather than a variant of it: a DMCA
+/// case carries statutory elements and disables content, and neither of those
+/// is true here. See the migration for the argument.
+#[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = crate::schema::legal_enquiries)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct LegalEnquiry {
+    pub id: uuid::Uuid,
+    pub kind: String,
+    pub submitter_name: String,
+    pub submitter_contact: String,
+    pub subject: String,
+    pub body: String,
+    pub status: String,
+    pub submitted_by: Option<uuid::Uuid>,
+    pub created_at: chrono::NaiveDateTime,
+    pub handled_by: Option<uuid::Uuid>,
+    pub handled_at: Option<chrono::NaiveDateTime>,
+    pub resolution_note: Option<String>,
+}
+
+#[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
+#[diesel(table_name = crate::schema::legal_enquiries)]
+pub struct NewLegalEnquiry {
+    pub id: uuid::Uuid,
+    pub kind: String,
+    pub submitter_name: String,
+    pub submitter_contact: String,
+    pub subject: String,
+    pub body: String,
+    pub submitted_by: Option<uuid::Uuid>,
+}

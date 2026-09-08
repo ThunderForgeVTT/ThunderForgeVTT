@@ -29,6 +29,7 @@ import { AdminSectionShell } from "./components/AdminSectionShell";
 import { DiskUsageChart } from "./components/DiskUsageChart";
 import { GitHubAppsPanel } from "./components/GitHubAppsPanel";
 import { InstanceSettingsPanel } from "./components/InstanceSettingsPanel";
+import { LegalEnquiriesPanel } from "./components/LegalEnquiriesPanel";
 import { MailPanel } from "./components/MailPanel";
 import { ManifestEditor } from "./components/ManifestEditor";
 import { MetricsCard } from "./components/MetricsCard";
@@ -44,7 +45,8 @@ type AdminSettingsSection =
   | "access"
   | "instance"
   | "readiness"
-  | "mail";
+  | "mail"
+  | "legal";
 
 interface SettingsPageProps {
   initialSection?: AdminSettingsSection;
@@ -74,6 +76,8 @@ function sectionLabel(section: AdminSettingsSection) {
       return "Readiness";
     case "mail":
       return "Mail";
+    case "legal":
+      return "Legal";
     default:
       return "Overview";
   }
@@ -471,6 +475,25 @@ export default function SettingsPage({
                 </div>
                 <Card surface="stone" className="grid gap-4 p-6">
                   <MailPanel />
+                </Card>
+              </section>
+            ) : null}
+
+            {section === "legal" ? (
+              <section className="grid gap-3" id="legal">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="inline-flex items-center gap-2 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+                      <FantasyIcon name="quill" size={16} />
+                      Legal
+                    </p>
+                    <h2 className="text-xl font-semibold">
+                      Terms disputes and privacy requests
+                    </h2>
+                  </div>
+                </div>
+                <Card surface="parchment" className="grid gap-4 p-6">
+                  <LegalEnquiriesPanel />
                 </Card>
               </section>
             ) : null}

@@ -458,6 +458,17 @@ export default function AppRoutes({
           }
         />
         <Route
+          path="/admin/legal"
+          element={
+            <RequireAdmin>
+              {renderLazyPage(
+                <AdminSettingsPage initialSection="legal" />,
+                "Loading legal enquiries",
+              )}
+            </RequireAdmin>
+          }
+        />
+        <Route
           path="/admin/analytics"
           element={<Navigate to="/admin/storage" replace />}
         />
