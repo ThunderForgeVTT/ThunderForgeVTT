@@ -1,5 +1,8 @@
 use super::*;
 use crate::graphql::mutations_collection_shares::create_collection_share_link_impl;
+use crate::graphql::mutations_collection_shares::publishing_gate::{
+    InstancePublishing, publishable_instance,
+};
 use crate::graphql::mutations_collections::{
     AddCollectionMemberInput, CreateCollectionInput, add_collection_member_impl,
     create_collection_impl,
@@ -8,6 +11,10 @@ use crate::test_support::*;
 use diesel::expression_methods::AggregateExpressionMethods;
 
 struct Source {
+    /// Every fixture here shares a collection, and spec 040 FR-026 refuses
+    /// that on an instance with no contact for copyright notices. Held for
+    /// the length of the test that built the fixture.
+    _publishing: InstancePublishing,
     state: AppState,
     owner_id: Uuid,
     world_id: Uuid,
@@ -23,6 +30,7 @@ struct Source {
 /// A source world with one of each type, plus a recipient with a world of
 /// their own to copy into.
 fn source() -> Source {
+    let _publishing = publishable_instance();
     dotenvy::dotenv().ok();
     let state = test_app_state();
     let mut conn = state.db_pool.get().expect("connection");
@@ -42,6 +50,7 @@ fn source() -> Source {
     insert_test_scene(&mut conn, destination_world_id, recipient_id);
 
     Source {
+        _publishing,
         state,
         owner_id,
         world_id,

@@ -198,6 +198,16 @@ pub async fn create_actor_share_link_impl(
     is_admin: bool,
     actor_id: Uuid,
 ) -> GraphQLResult<ActorShare> {
+    // Spec 040 FR-026: an instance with no contact for copyright notices
+    // publishes nothing beyond a world. Asked first, before ownership, so a
+    // misconfigured instance answers the same sentence to every caller
+    // instead of leaking which of them owns what — and asked here, in the
+    // impl, so a caller that bypasses the page is refused too (spec 039
+    // FR-011, FR-014). Reading an existing share is deliberately not gated.
+    crate::readiness::may_publish_beyond_world(state)
+        .await
+        .map_err(Error::new)?;
+
     let level = effective_actor_permission(state, user_id, is_admin, actor_id).await?;
     if level.rank() < ActorPermissionLevel::Owner.rank() {
         return Err(Error::new(
@@ -472,6 +482,7 @@ impl ActorShareMutation {
 mod tests {
     use super::*;
     use crate::graphql::mutations_actors::{CreateActorInput, create_actor_impl};
+    use crate::graphql::mutations_collection_shares::publishing_gate::publishable_instance;
     use crate::test_support::{
         insert_test_scene, insert_test_user, insert_test_world, test_app_state,
     };
@@ -487,6 +498,7 @@ mod tests {
     /// access) may generate a share link.
     #[tokio::test]
     async fn create_share_link_requires_owner_level() {
+        let _publishing = publishable_instance();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -530,6 +542,7 @@ mod tests {
     /// source world/scene/owner identity.
     #[tokio::test]
     async fn shared_actor_rejects_revoked_and_scrubs_identity() {
+        let _publishing = publishable_instance();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -581,6 +594,7 @@ mod tests {
     /// requirement is re-checked server-side.
     #[tokio::test]
     async fn copy_produces_independent_actor_and_rechecks_destination_access() {
+        let _publishing = publishable_instance();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let source_owner_id = insert_test_user(&mut conn);
@@ -669,6 +683,7 @@ mod tests {
     /// the probe is now free.
     #[tokio::test]
     async fn a_revoked_share_is_indistinguishable_from_a_code_that_never_existed() {
+        let _publishing = publishable_instance();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -720,6 +735,7 @@ mod tests {
     /// way rather than asserting the absence of a line of code.
     #[tokio::test]
     async fn the_read_needs_no_account() {
+        let _publishing = publishable_instance();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -757,6 +773,7 @@ mod tests {
     /// bounded, and the account requirement that used to bound them is gone.
     #[tokio::test]
     async fn the_anonymous_read_is_rate_limited() {
+        let _publishing = publishable_instance();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -810,6 +827,7 @@ mod tests {
     /// code permanently.
     #[tokio::test]
     async fn the_owner_can_recover_the_share_code_after_closing_the_page() {
+        let _publishing = publishable_instance();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);

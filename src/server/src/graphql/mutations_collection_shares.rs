@@ -162,6 +162,16 @@ pub async fn create_collection_share_link_impl(
     is_admin: bool,
     collection_id: Uuid,
 ) -> GraphQLResult<CollectionShare> {
+    // Spec 040 FR-026: an instance with no contact for copyright notices
+    // publishes nothing beyond a world. Asked first, before ownership, so a
+    // misconfigured instance answers the same sentence to every caller
+    // instead of leaking which of them owns what — and asked here, in the
+    // impl, so a caller that bypasses the page is refused too (spec 039
+    // FR-011, FR-014). Reading an existing share is deliberately not gated.
+    crate::readiness::may_publish_beyond_world(state)
+        .await
+        .map_err(Error::new)?;
+
     let (world_id, created_by) = collection_world_and_owner(state, collection_id).await?;
 
     // The collection's creator, or a DM of its world.
@@ -490,9 +500,22 @@ impl CollectionShareMutation {
     }
 }
 
+/// The guard that keeps the publishing gate true for a fifth content type,
+/// and the fixtures the four share modules' tests share.
+///
+/// Declared here, by path, because `graphql.rs` is the module list every
+/// feature edits at once and this is a test-only sibling of the four files
+/// that need it. See the module's own documentation.
+#[cfg(test)]
+#[path = "publishing_gate.rs"]
+pub(crate) mod publishing_gate;
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::graphql::mutations_collection_shares::publishing_gate::{
+        InstancePublishing, publishable_instance,
+    };
     use crate::graphql::mutations_collections::{
         AddCollectionMemberInput, CreateCollectionInput, add_collection_member_impl,
         create_collection_impl, delete_collection_impl,
@@ -500,6 +523,11 @@ mod tests {
     use crate::test_support::*;
 
     struct Fixture {
+        /// Every test in this module mints a share link, and spec 040 FR-026
+        /// refuses that on an instance with no notice contact. Held for the
+        /// length of the test, and for the length of the test *only*, so a
+        /// readiness test asserting the opposite is not racing us.
+        _publishing: InstancePublishing,
         state: AppState,
         owner_id: Uuid,
         world_id: Uuid,
@@ -510,6 +538,7 @@ mod tests {
     }
 
     fn fixture() -> Fixture {
+        let _publishing = publishable_instance();
         dotenvy::dotenv().ok();
         let state = test_app_state();
         let mut conn = state.db_pool.get().expect("connection");
@@ -527,6 +556,7 @@ mod tests {
             .expect("world name");
 
         Fixture {
+            _publishing,
             state,
             owner_id,
             world_id,

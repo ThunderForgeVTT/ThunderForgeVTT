@@ -195,6 +195,16 @@ pub async fn create_item_share_link_impl(
     is_admin: bool,
     item_id: Uuid,
 ) -> GraphQLResult<ItemShare> {
+    // Spec 040 FR-026: an instance with no contact for copyright notices
+    // publishes nothing beyond a world. Asked first, before permission, so a
+    // misconfigured instance answers the same sentence to every caller
+    // instead of leaking which of them owns what — and asked here, in the
+    // impl, so a caller that bypasses the page is refused too (spec 039
+    // FR-011, FR-014). Reading an existing share is deliberately not gated.
+    crate::readiness::may_publish_beyond_world(state)
+        .await
+        .map_err(Error::new)?;
+
     let level = effective_item_permission(state, user_id, is_admin, item_id).await?;
     if level.rank() < ActorPermissionLevel::Owner.rank() {
         return Err(Error::new("Only an Owner-level member may share this item"));
@@ -454,6 +464,7 @@ impl ItemShareMutation {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::graphql::mutations_collection_shares::publishing_gate::publishable_instance;
     use crate::graphql::mutations_items::{
         CreateItemInput, ItemEffectInput, add_item_effect_impl, create_item_impl,
     };
@@ -471,6 +482,7 @@ mod tests {
     /// access) may generate a share link.
     #[tokio::test]
     async fn create_share_link_requires_owner_level() {
+        let _publishing = publishable_instance();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -507,6 +519,7 @@ mod tests {
     /// and an empty ownership block; destination DM access is re-checked.
     #[tokio::test]
     async fn copy_produces_independent_item_with_cloned_effects() {
+        let _publishing = publishable_instance();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let source_owner_id = insert_test_user(&mut conn);
@@ -592,6 +605,7 @@ mod tests {
     /// its real content — the share link must not be a takedown bypass.
     #[tokio::test]
     async fn shared_item_is_unavailable_once_moderation_disabled() {
+        let _publishing = publishable_instance();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -651,6 +665,7 @@ mod tests {
     /// the probe is now free.
     #[tokio::test]
     async fn a_revoked_share_is_indistinguishable_from_a_code_that_never_existed() {
+        let _publishing = publishable_instance();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -698,6 +713,7 @@ mod tests {
     /// way rather than asserting the absence of a line of code.
     #[tokio::test]
     async fn the_read_needs_no_account() {
+        let _publishing = publishable_instance();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -731,6 +747,7 @@ mod tests {
     /// bounded, and the account requirement that used to bound them is gone.
     #[tokio::test]
     async fn the_anonymous_read_is_rate_limited() {
+        let _publishing = publishable_instance();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
@@ -780,6 +797,7 @@ mod tests {
     /// code permanently.
     #[tokio::test]
     async fn the_owner_can_recover_the_share_code_after_closing_the_page() {
+        let _publishing = publishable_instance();
         let state = test_app_state();
         let mut conn = state.db_pool.get().unwrap();
         let owner_id = insert_test_user(&mut conn);
