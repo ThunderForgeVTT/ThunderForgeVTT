@@ -199,3 +199,31 @@ ON CONFLICT (actor_id) DO NOTHING;
 -- default fail-shut. This file is already refused against a non-local
 -- DATABASE_URL, which is what makes it safe to say `open` in it.
 UPDATE instance_access_settings SET access_policy = 'open' WHERE id = 1;
+
+-- Spec 040 FR-026: an instance with no contact for copyright notices publishes
+-- nothing beyond a world, so every share link is refused until one is set.
+--
+-- That is right for a real instance and wrong for every stack this seed
+-- builds. `make dev` and the e2e harness both migrate an empty database, and a
+-- fresh one has no contact by design — so without this, four share mutations
+-- refuse on a dev stack and eleven e2e specs that mint links fail with a
+-- message about copyright. This is the same shape as the `access_policy`
+-- default above: correct product behaviour, wrong starting point for a
+-- machine that exists to be tested on.
+--
+-- `example.org` rather than a `.invalid` address, and the reason is worth
+-- knowing: the validator refuses the reserved TLDs `.local`, `.example`,
+-- `.invalid` and `.test`, because mail sent to one can never arrive. That rule
+-- is right, and it does not catch `example.org` — a second-level
+-- documentation domain reserved by the same RFC, equally undeliverable, and
+-- far more commonly typed. Used here deliberately; noted because a real
+-- operator could paste one past the check.
+--
+-- This file is already refused against a non-local DATABASE_URL, which is what
+-- keeps a fixture contact out of a real instance.
+INSERT INTO instance_settings (key, value, created_at, updated_at)
+VALUES
+    ('notice.contact_name', 'ThunderForge Development Instance', now(), now()),
+    ('notice.contact_email', 'notices@example.org', now(), now()),
+    ('notice.contact_postal_address', '1 Development Way, Local Testing', now(), now())
+ON CONFLICT (key) DO NOTHING;
