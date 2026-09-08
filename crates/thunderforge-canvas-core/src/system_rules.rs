@@ -255,6 +255,92 @@ impl DeclaredValues {
     }
 }
 
+/// Where one placeholder in a check's formula gets its number.
+///
+/// # Why this names a declared value and not a slot
+///
+/// A binding could have said "read `strength` out of the ability slot and
+/// turn it into a modifier". That sentence contains 5e's arithmetic —
+/// `(score - 10) / 2` — and the only place it could be executed is shared
+/// code, which is the exact rule [`crate::attributes`] and
+/// [`crate::resource_display`] were each purged of once already.
+///
+/// So a binding names an identifier in the vocabulary the system *already*
+/// publishes about an actor. A pack that wants a check to roll against a
+/// modifier declares the modifier as a value — 5e's rules already derive
+/// `strengthMod` — and the check binds to it. The arithmetic stays in the
+/// pack that owns the ruleset, and this contract only looks a number up.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "from", rename_all = "camelCase")]
+pub enum CheckBinding {
+    /// The value the system publishes about the actor under this identifier.
+    ///
+    /// Stored or derived without distinction: which half of the sheet a
+    /// number comes from is the system's business, and a check asking for
+    /// `strengthMod` should not have to know whether the player typed it in
+    /// or the ruleset computed it.
+    Value { id: String },
+}
+
+/// One thing a character can be asked to roll, as its system declares it.
+///
+/// The sheet names the check; it never says what to roll. Everything that
+/// decides the result — the dice, which of the actor's numbers go into them —
+/// is here, in the pack, and is read only by the server.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckDeclaration {
+    /// The system's own identifier, unique within the system.
+    pub id: String,
+    /// What a person is shown on the button.
+    pub label: String,
+    /// The set this belongs to — "abilities", "skills" — when it is in one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
+    /// A `thunderforge_dice` formula, whose placeholders `bindings` fills.
+    ///
+    /// Not validated here: this crate compiles for wasm32 and deliberately
+    /// does not depend on the dice crate. A formula that does not parse is
+    /// refused at roll time by the one path allowed to produce a result, and
+    /// the shipped packs' formulas are checked by a native test on the
+    /// server side.
+    pub formula: String,
+    /// Placeholder name -> where its number comes from on the actor.
+    ///
+    /// A placeholder with no binding is not defaulted to zero. An unfilled
+    /// sheet is the absence of a number, not the number nought, which is the
+    /// same call [`DeclaredValues::integer`] already makes; the roll is
+    /// refused instead.
+    #[serde(default)]
+    pub bindings: BTreeMap<String, CheckBinding>,
+}
+
+/// The checks a system's manifest declares, in the order it declared them.
+///
+/// A pack declaring none is valid and gets an empty list — seven of the eight
+/// bundled packs ship that way, and their sheets offer no check. The absence
+/// is a fact about the ruleset, not an omission to be filled in with a guess.
+///
+/// # Why a malformed entry is dropped rather than raised
+///
+/// The same call [`resolve`] makes about an undeclared derivation, for the
+/// same reason: a check missing its `formula` is a build-time mistake in a
+/// bundled pack, not something a player at a table can act on, and offering
+/// a button that cannot be rolled is worse than offering none. It is caught
+/// in the test that walks every shipped pack, not at a table.
+pub fn checks_from_manifest(manifest: &serde_json::Value) -> Vec<CheckDeclaration> {
+    manifest
+        .get("checks")
+        .and_then(serde_json::Value::as_array)
+        .map(|entries| {
+            entries
+                .iter()
+                .filter_map(|entry| serde_json::from_value(entry.clone()).ok())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// What a game system contributes: the values it computes from the ones it stores.
 ///
 /// A system's *stored* values need no code — its manifest already declares

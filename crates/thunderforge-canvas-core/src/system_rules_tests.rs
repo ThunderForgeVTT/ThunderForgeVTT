@@ -405,3 +405,135 @@ fn resolve_keeps_the_first_of_two_values_sharing_an_identifier() {
     assert_eq!(resolved[0].value.as_integer(), Some(1));
     assert_eq!(resolved[0].label, "might-1");
 }
+
+// ---------------------------------------------------------------------------
+// Spec 036 US3b: the `checks` declaration.
+//
+// Everything below reads a manifest and nothing below rolls anything. What a
+// check *does* is the server's, on the one path allowed to produce a result;
+// what a check *is* is content, and this is where content is read.
+// ---------------------------------------------------------------------------
+
+/// The shape a pack writes, end to end: id, label, group, formula, bindings.
+#[test]
+fn a_declared_check_is_read_whole_off_the_manifest() {
+    let manifest = serde_json::json!({
+        "id": "example",
+        "checks": [
+            {
+                "id": "athletics",
+                "label": "Athletics",
+                "group": "skills",
+                "formula": "1d20 + MODIFIER",
+                "bindings": {
+                    "MODIFIER": { "from": "value", "id": "skillAthletics" }
+                }
+            }
+        ]
+    });
+
+    let checks = checks_from_manifest(&manifest);
+
+    assert_eq!(checks.len(), 1);
+    let check = &checks[0];
+    assert_eq!(check.id, "athletics");
+    assert_eq!(check.label, "Athletics");
+    assert_eq!(check.group.as_deref(), Some("skills"));
+    assert_eq!(check.formula, "1d20 + MODIFIER");
+    assert_eq!(
+        check.bindings.get("MODIFIER"),
+        Some(&CheckBinding::Value {
+            id: "skillAthletics".to_string()
+        }),
+        "a binding names a value the system already publishes, never a rule \
+         for computing one"
+    );
+}
+
+/// FR-037. Seven of the eight bundled packs are this case today, and a sheet
+/// for one of them offers no check at all.
+#[test]
+fn a_pack_declaring_no_checks_offers_none_rather_than_failing() {
+    let manifest = serde_json::json!({
+        "id": "example",
+        "title": "A system with a core mechanic and no checks block",
+        "coreCheck": "1d20+modifier"
+    });
+
+    assert!(
+        checks_from_manifest(&manifest).is_empty(),
+        "a pack's own core-mechanic key is not this contract, and its absence \
+         is not an error"
+    );
+}
+
+/// A manifest that is not an object, or whose `checks` is not a list, is the
+/// same answer as a manifest that declares none: nothing to offer.
+#[test]
+fn a_checks_key_that_is_not_a_list_yields_nothing() {
+    for manifest in [
+        serde_json::json!({ "checks": "1d20" }),
+        serde_json::json!({ "checks": {} }),
+        serde_json::json!({ "checks": null }),
+        serde_json::json!([]),
+    ] {
+        assert!(checks_from_manifest(&manifest).is_empty());
+    }
+}
+
+/// A check with no formula is not a check. It is dropped rather than offered,
+/// for the reason `resolve` drops an undeclared derivation: a button that
+/// cannot be rolled is worse at a table than no button.
+#[test]
+fn a_malformed_entry_is_dropped_and_its_neighbours_survive() {
+    let manifest = serde_json::json!({
+        "checks": [
+            { "id": "no_formula", "label": "Broken" },
+            { "id": "fine", "label": "Fine", "formula": "1d20" },
+            { "label": "No id", "formula": "1d20" },
+            { "id": "bad_binding", "label": "Bad", "formula": "1d20 + X",
+              "bindings": { "X": { "from": "the_ether" } } }
+        ]
+    });
+
+    let ids: Vec<String> = checks_from_manifest(&manifest)
+        .into_iter()
+        .map(|c| c.id)
+        .collect();
+
+    assert_eq!(ids, vec!["fine"]);
+}
+
+/// Bindings are optional. A flat check — Blades' base action roll, a Fate
+/// ladder roll with nothing to add — declares none and is complete.
+#[test]
+fn a_check_may_bind_nothing_at_all() {
+    let manifest = serde_json::json!({
+        "checks": [{ "id": "flat", "label": "Flat", "formula": "2d6" }]
+    });
+
+    let checks = checks_from_manifest(&manifest);
+    assert_eq!(checks.len(), 1);
+    assert!(checks[0].bindings.is_empty());
+    assert_eq!(checks[0].group, None);
+}
+
+/// The order a pack declares its checks in is the order they come back, for
+/// the same reason `resolve` stopped alphabetising values: a system's order is
+/// the system's own, and a sheet listing them is not entitled to a new one.
+#[test]
+fn declared_order_is_preserved() {
+    let manifest = serde_json::json!({
+        "checks": [
+            { "id": "strength", "label": "Strength", "formula": "1d20" },
+            { "id": "dexterity", "label": "Dexterity", "formula": "1d20" },
+            { "id": "constitution", "label": "Constitution", "formula": "1d20" }
+        ]
+    });
+
+    let ids: Vec<String> = checks_from_manifest(&manifest)
+        .into_iter()
+        .map(|c| c.id)
+        .collect();
+    assert_eq!(ids, vec!["strength", "dexterity", "constitution"]);
+}

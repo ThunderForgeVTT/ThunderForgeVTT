@@ -183,6 +183,14 @@ pub use mutations_moderation::ModerationMutation;
 pub mod mutations_roll;
 pub use mutations_roll::RollMutation;
 
+// Spec 036 US3b: `rollCheck` — a check a sheet names and the server resolves.
+// A sibling of `mutations_roll` rather than part of it, because it produces
+// nothing itself: it looks a check up, substitutes the actor's own numbers,
+// and hands the result to the module above, which stays the only path a roll
+// comes from (ADR-044).
+pub mod mutations_roll_check;
+pub use mutations_roll_check::{RollCheckMutation, RollCheckQuery};
+
 // Spec 018's Genie session loop used to be declared here — thirteen
 // mutations and the queries beside them, 2,763 lines of one ruleset's rules
 // in shared server code. It lives in `packs/systems/genie/server` now, which
@@ -262,6 +270,8 @@ pub struct QueryRoot(
     ActorPermissionQuery,
     ActorShareQuery,
     mutations_instance_access::InstanceAccessQuery,
+    // Spec 036 US3b: `systemChecks(worldId)` — what a sheet may offer.
+    RollCheckQuery,
     // Spec 036 US4: the sessions a person holds, now that they may hold several.
     mutations_play_field::PlayFieldQuery,
     mutations_sessions::SessionQuery,
@@ -347,6 +357,8 @@ pub struct MutationRoot(
     PartyMutation,
     ModerationMutation,
     RollMutation,
+    // Spec 036 US3b: `rollCheck(worldId, actorId, checkId)`.
+    RollCheckMutation,
     ActorClaimMutation,
     // Spec 031 (FR-046): per-player authoring tool grants.
     AuthoringToolMutation,

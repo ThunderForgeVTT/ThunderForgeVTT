@@ -143,6 +143,296 @@
       "order": 5
     }
   },
+  "checks": [
+    {
+      "id": "strength",
+      "label": "Strength",
+      "group": "abilities",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "strengthMod"
+        }
+      }
+    },
+    {
+      "id": "dexterity",
+      "label": "Dexterity",
+      "group": "abilities",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "dexterityMod"
+        }
+      }
+    },
+    {
+      "id": "constitution",
+      "label": "Constitution",
+      "group": "abilities",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "constitutionMod"
+        }
+      }
+    },
+    {
+      "id": "intelligence",
+      "label": "Intelligence",
+      "group": "abilities",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "intelligenceMod"
+        }
+      }
+    },
+    {
+      "id": "wisdom",
+      "label": "Wisdom",
+      "group": "abilities",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "wisdomMod"
+        }
+      }
+    },
+    {
+      "id": "charisma",
+      "label": "Charisma",
+      "group": "abilities",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "charismaMod"
+        }
+      }
+    },
+    {
+      "id": "acrobatics",
+      "label": "Acrobatics",
+      "group": "skills",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "skillAcrobatics"
+        }
+      }
+    },
+    {
+      "id": "animal_handling",
+      "label": "Animal Handling",
+      "group": "skills",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "skillAnimalHandling"
+        }
+      }
+    },
+    {
+      "id": "arcana",
+      "label": "Arcana",
+      "group": "skills",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "skillArcana"
+        }
+      }
+    },
+    {
+      "id": "athletics",
+      "label": "Athletics",
+      "group": "skills",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "skillAthletics"
+        }
+      }
+    },
+    {
+      "id": "deception",
+      "label": "Deception",
+      "group": "skills",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "skillDeception"
+        }
+      }
+    },
+    {
+      "id": "history",
+      "label": "History",
+      "group": "skills",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "skillHistory"
+        }
+      }
+    },
+    {
+      "id": "insight",
+      "label": "Insight",
+      "group": "skills",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "skillInsight"
+        }
+      }
+    },
+    {
+      "id": "intimidation",
+      "label": "Intimidation",
+      "group": "skills",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "skillIntimidation"
+        }
+      }
+    },
+    {
+      "id": "investigation",
+      "label": "Investigation",
+      "group": "skills",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "skillInvestigation"
+        }
+      }
+    },
+    {
+      "id": "medicine",
+      "label": "Medicine",
+      "group": "skills",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "skillMedicine"
+        }
+      }
+    },
+    {
+      "id": "nature",
+      "label": "Nature",
+      "group": "skills",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "skillNature"
+        }
+      }
+    },
+    {
+      "id": "perception",
+      "label": "Perception",
+      "group": "skills",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "skillPerception"
+        }
+      }
+    },
+    {
+      "id": "performance",
+      "label": "Performance",
+      "group": "skills",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "skillPerformance"
+        }
+      }
+    },
+    {
+      "id": "persuasion",
+      "label": "Persuasion",
+      "group": "skills",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "skillPersuasion"
+        }
+      }
+    },
+    {
+      "id": "religion",
+      "label": "Religion",
+      "group": "skills",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "skillReligion"
+        }
+      }
+    },
+    {
+      "id": "sleight_of_hand",
+      "label": "Sleight of Hand",
+      "group": "skills",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "skillSleightOfHand"
+        }
+      }
+    },
+    {
+      "id": "stealth",
+      "label": "Stealth",
+      "group": "skills",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "skillStealth"
+        }
+      }
+    },
+    {
+      "id": "survival",
+      "label": "Survival",
+      "group": "skills",
+      "formula": "1d20 + MODIFIER",
+      "bindings": {
+        "MODIFIER": {
+          "from": "value",
+          "id": "skillSurvival"
+        }
+      }
+    }
+  ],
   "spellSlots": {
     "1": [
       2,
