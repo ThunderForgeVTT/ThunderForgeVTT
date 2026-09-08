@@ -82,6 +82,13 @@ test.describe("Spec 036 US3a: one account, one play field", () => {
     page,
     browser,
   }) => {
+    // Playwright's default budget is 30 seconds and this test declares three
+    // waits of 30 seconds each on top of registering, creating a world and
+    // loading the engine twice. A test whose own waits exceed its budget can
+    // only ever fail at the budget, which reports the clock rather than the
+    // claim — and says nothing about whether releasing works.
+    test.setTimeout(3 * 60_000);
+
     const { creds, worldId } = await openThePlayField(
       page,
       `Released ${Date.now().toString(36)}`,

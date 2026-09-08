@@ -2203,14 +2203,32 @@ export default function WorldPage() {
         data-testid="play-field-status"
         data-status={playField.status}
       />
-      {playField.status === "companion" ? (
+      {/* Two states, one notice — because "not at the table" is one situation
+          for the person even though the registry distinguishes two.
+
+          `unclaimed` was the gap, and e2e found it. A displaced window is
+          told `companion` and offered the way back; when the window that took
+          the table then closes, the release arrives on that same stream as
+          "nobody holds it" and the status becomes `unclaimed`. Rendering only
+          for `companion` made the notice — and the only route back to the
+          table — disappear at exactly that moment, leaving a window that
+          looks ordinary, applies nothing to the map, and says nothing about
+          why. Silent limbo is the worst of the three states to be in and was
+          the only one with no way out.
+
+          Not re-claiming automatically is deliberate: the person moved to the
+          other window on purpose, and that window closing is not them asking
+          to be dragged back. It is an offer, not a restoration. */}
+      {playField.status === "companion" || playField.status === "unclaimed" ? (
         <div
           role="status"
           data-testid="play-field-taken-over-notice"
+          data-play-field-state={playField.status}
           className="fixed inset-x-0 top-0 z-50 bg-amber-900/90 px-4 py-2 text-center text-sm text-amber-50"
         >
-          Another window of your account has taken the table. This one is now a
-          companion — it will not apply changes to the map.{" "}
+          {playField.status === "companion"
+            ? "Another window of your account has taken the table. This one is now a companion — it will not apply changes to the map."
+            : "No window of your account is at the table, so this one will not apply changes to the map."}{" "}
           <button
             type="button"
             data-testid="take-play-field-back"
