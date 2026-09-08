@@ -286,8 +286,6 @@ pub use wasm::{
 mod wasm {
     use std::collections::BTreeMap;
 
-    use wasm_bindgen::JsCast as _;
-
     use thunderforge_cache_core::budget;
     use thunderforge_cache_core::delta::SyncPlan;
     use thunderforge_cache_core::manifest::Manifest;
@@ -755,28 +753,19 @@ mod wasm {
     /// `estimate`, a rejected promise, or a result with no numeric `quota`.
     /// Every one of those is "we do not know", and the caller must not read
     /// any of them as "no space" (see [`enforce_budget`]).
+    ///
+    /// The call itself lives in `thunderforge_opfs::quota`, which also reads
+    /// `usage` and turns the pair into a pressure verdict. This function
+    /// stayed a thin wrapper because `enforce_budget` genuinely only wants the
+    /// quota: it computes what is in use from the index, which counts
+    /// plaintext this cache is responsible for, while `usage` counts every
+    /// byte the origin is charged for including IndexedDB and the service
+    /// worker. Substituting one for the other here would silently change what
+    /// the budget is a budget *of*.
     async fn storage_quota() -> Option<u64> {
-        let navigator = crate::global_property("navigator").ok()?;
-        let storage =
-            js_sys::Reflect::get(&navigator, &wasm_bindgen::JsValue::from_str("storage")).ok()?;
-        if storage.is_undefined() || storage.is_null() {
-            return None;
-        }
-        let estimate =
-            js_sys::Reflect::get(&storage, &wasm_bindgen::JsValue::from_str("estimate")).ok()?;
-        let estimate: js_sys::Function = estimate.dyn_into().ok()?;
-        let promise = estimate.call0(&storage).ok()?;
-        let promise: js_sys::Promise = promise.dyn_into().ok()?;
-        let result = wasm_bindgen_futures::JsFuture::from(promise).await.ok()?;
-        let quota =
-            js_sys::Reflect::get(&result, &wasm_bindgen::JsValue::from_str("quota")).ok()?;
-        // `as_f64` rejects a missing or non-numeric quota, which is the same
-        // "we do not know" as the platform having no API at all.
-        let quota = quota.as_f64()?;
-        if !quota.is_finite() || quota < 0.0 {
-            return None;
-        }
-        Some(quota as u64)
+        thunderforge_opfs::quota::estimate()
+            .await
+            .map(|estimate| estimate.quota)
     }
 
     /// Whether any surviving row in this world still points at a blob.

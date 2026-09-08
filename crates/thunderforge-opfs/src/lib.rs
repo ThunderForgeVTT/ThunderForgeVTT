@@ -38,6 +38,7 @@
 
 pub mod memory;
 pub mod paths;
+pub mod quota;
 pub mod store;
 
 #[cfg(target_arch = "wasm32")]
