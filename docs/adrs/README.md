@@ -80,6 +80,15 @@ This directory contains architecture decisions for ThunderForgeVTT, captured usi
 | [20260905-070](./20260905-070-anonymous_collection_read_path.md) | Accepted | A Collection's Preview Is Read Without an Account |
 | [20260906-071](./20260906-071-singleton_shares_read_without_an_account.md) | Accepted | A Shared Ability, Item or Actor Is Read Without an Account |
 | [20260906-072](./20260906-072-instance_admission_precedes_provisioning.md) | Accepted | The Instance Decides Admission Before ADR-042 Decides Provisioning |
+| [20260907-073](./20260907-073-concurrent_sessions_and_the_play_field_claim.md) | Accepted | An Account May Be Signed In Many Times, and Be at the Table Once |
+| [20260907-075](./20260907-075-peer_reachability_belongs_to_the_play_field.md) | Accepted | Peer Reachability Belongs to the Play Field |
+| [20260907-081](./20260907-081-a_confirmed_second_factor_is_replaced_never_disarmed.md) | Accepted | A Confirmed Second Factor Is Replaced, Never Disarmed |
+| [20260907-088](./20260907-088-one_precedence_rule_for_every_setting.md) | Accepted | One Precedence Rule For Every Setting, And Two Mechanisms Implementing It |
+| [20260907-089](./20260907-089-mail_transport_seam_and_outbox.md) | Accepted | Mail Is a Transport Seam Behind a Durable Outbox |
+| [20260907-090](./20260907-090-credential_scope_before_source.md) | Accepted | Credential Scope Before Source, And An Application Resolves Whole |
+| [20260907-091](./20260907-091-instance_configuration_is_rows.md) | Accepted | Instance Configuration Is Rows — Not the Manifest File, and Emphatically Not `instance_identity` |
+| [20260907-092](./20260907-092-operator_values_in_legal_prose.md) | Accepted | Operator Values Are Substituted Into Compiled-In Legal Prose at Render Time |
+| [20260907-093](./20260907-093-setup_finishes_at_complete_not_at_the_first_administrator.md) | Accepted | Setup Finishes At `/complete`, Not At The First Administrator |
 
 > **Note (2026-08-19):** ADRs 020–024 originally collided with an unrelated "pack system" batch that reused the same day-020 through day-024 numbers. The world-domain ADRs (020–024 above) were committed first and are documented here; the colliding pack-system ADRs were renumbered to 026–030. See `docs/SYSTEM_HOOKS_API_GUIDE.md` and ADR-036's "Related Decisions" for the corrected references.
 
