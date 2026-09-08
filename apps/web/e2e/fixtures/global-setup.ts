@@ -75,6 +75,20 @@ function applySeedSql(): void {
 export default async function globalSetup(config: FullConfig): Promise<void> {
   fs.mkdirSync(DEMO_DIR, { recursive: true });
 
+  // The first-run lane gets none of this, and that is the point of it.
+  //
+  // Spec 040 US1 runs against a migrated-but-unseeded database, where there is
+  // no demo user to sign in as — so the login below would fail before the
+  // first test ran. Seeding to fix that would destroy the very condition the
+  // lane exists to reproduce: an instance nobody has set up yet.
+  //
+  // Playwright runs `globalSetup` once for the whole config, not per project,
+  // so the lane is identified by the environment variable `e2e-parallel.mjs`
+  // sets when it starts the unseeded stack rather than by inspecting projects.
+  if (process.env.THUNDERFORGE_E2E_FIRST_RUN === "1") {
+    return;
+  }
+
   applySeedSql();
 
   const baseURL =

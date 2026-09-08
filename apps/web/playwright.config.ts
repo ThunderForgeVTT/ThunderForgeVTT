@@ -61,10 +61,30 @@ export default defineConfig({
       ],
     },
   },
+  // Two projects, and they are a partition of the suite by *stack* rather than
+  // by browser.
+  //
+  // Spec 040 US1 is first-run setup, and it cannot be observed against the
+  // stack every other spec uses: that one is cloned from a seeded template
+  // where the platform administrator already exists and setup is already
+  // complete, so `/setup` redirects and the story is unreachable. That is the
+  // whole reason no setup spec existed before — not that nobody wrote one, but
+  // that there was nowhere to run it.
+  //
+  // `chromium` ignores the setup spec and `first-run` matches only it, so
+  // neither lane can pick up the other's files even when `e2e-parallel.mjs`
+  // names them positionally. Both use the same browser; what differs is the
+  // database behind `PLAYWRIGHT_BASE_URL`.
   projects: [
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
+      testIgnore: /instance-setup\.spec\.ts$/,
+    },
+    {
+      name: "first-run",
+      use: { ...devices["Desktop Chrome"] },
+      testMatch: /instance-setup\.spec\.ts$/,
     },
   ],
   webServer: stackIsExternal

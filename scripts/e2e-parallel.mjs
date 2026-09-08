@@ -67,6 +67,20 @@ const POSTGRES_CONTAINER =
   process.env.THUNDERFORGE_POSTGRES_CONTAINER ?? "thunderforge-postgres";
 const DB_USER = process.env.THUNDERFORGE_DB_USER ?? "postgres";
 const TEMPLATE_DB = "thunderforge_e2e_template";
+/**
+ * The other template: migrated, and deliberately **not** seeded.
+ *
+ * Spec 040 US1 is first-run setup, and first-run is unobservable against the
+ * seeded template — `demo_accounts.sql` has already created the platform
+ * administrator and marked setup complete, so `/setup` redirects and the whole
+ * story is unreachable. That is why no setup spec existed before this: not
+ * because nobody wrote one, but because there was nowhere for it to run.
+ *
+ * Migrations only. Anything a migration inserts is part of an empty
+ * deployment by definition and belongs here; anything a *seed* inserts is a
+ * convenience for the other lane and would defeat the point of this one.
+ */
+const FIRST_RUN_TEMPLATE_DB = "thunderforge_e2e_firstrun_template";
 const SHARD_DIR = join(ROOT_DIR, ".e2e-shards");
 /** Measured seconds per spec file, so each run balances better than the last. */
 const DURATIONS_PATH = join(ROOT_DIR, ".e2e-shards-durations.json");
@@ -136,6 +150,18 @@ function allSpecFiles() {
   };
   walk(root);
   return found.sort();
+}
+
+/**
+ * The specs that need a database nobody has set up yet.
+ *
+ * Matched by filename rather than by content: unlike `isPerfSpec`, which reads
+ * assertions because "measures the machine" is a property of what a test
+ * checks, "needs an unconfigured instance" is a property of which *stack* it
+ * must run against, and that is a lane, not a heuristic.
+ */
+function isFirstRunSpec(file) {
+  return file.endsWith("instance-setup.spec.ts");
 }
 
 function isPerfSpec(file) {
@@ -320,10 +346,35 @@ async function provisionTemplate() {
   log("e2e", "Template ready.");
 }
 
-function cloneShardDatabase(index) {
+/**
+ * The same migration chain, and none of the seeds.
+ *
+ * Built only when a first-run spec is actually selected, because it costs a
+ * full `diesel migration run` and almost every run of this script has nothing
+ * to do with setup.
+ */
+async function provisionFirstRunTemplate() {
+  log("e2e", `Building the first-run template (${FIRST_RUN_TEMPLATE_DB})...`);
+  psql("postgres", `DROP DATABASE IF EXISTS ${FIRST_RUN_TEMPLATE_DB} WITH (FORCE);`);
+  psql("postgres", `CREATE DATABASE ${FIRST_RUN_TEMPLATE_DB};`);
+
+  await runCommand("diesel migration run", {
+    name: "migrate first-run template",
+    cwd: join(ROOT_DIR, "src/server"),
+    prefix: "e2e",
+    env: {
+      DATABASE_URL: `postgres://${DB_USER}:password@localhost:5432/${FIRST_RUN_TEMPLATE_DB}`,
+    },
+  });
+
+  log("e2e", "First-run template ready (migrated, unseeded).");
+}
+
+function cloneShardDatabase(index, { firstRun = false } = {}) {
   const name = shardDbName(index);
+  const template = firstRun ? FIRST_RUN_TEMPLATE_DB : TEMPLATE_DB;
   psql("postgres", `DROP DATABASE IF EXISTS ${name} WITH (FORCE);`);
-  psql("postgres", `CREATE DATABASE ${name} TEMPLATE ${TEMPLATE_DB};`);
+  psql("postgres", `CREATE DATABASE ${name} TEMPLATE ${template};`);
   return name;
 }
 
@@ -376,8 +427,8 @@ async function waitForUrl(url, name, timeoutMs = 180_000) {
 }
 
 /** Starts one shard's backend and frontend, and resolves once both answer. */
-async function startShard(index) {
-  const database = cloneShardDatabase(index);
+async function startShard(index, { firstRun = false } = {}) {
+  const database = cloneShardDatabase(index, { firstRun });
   const backendPort = BACKEND_PORT_BASE + index;
   const webPort = WEB_PORT_BASE + index;
   const dataPath = join(SHARD_DIR, `shard-${index}`, "data");
@@ -430,11 +481,16 @@ async function startShard(index) {
     return null;
   }
 
-  return { index, database, webPort, backendPort };
+  return { index, database, webPort, backendPort, firstRun };
 }
 
 /** Runs one Playwright shard against an already-started stack. */
 function runShard(shard, files, label = "parallel") {
+  // Which Playwright project this lane is. The projects are a partition of the
+  // suite by *stack*, not by browser: `first-run` matches only the setup spec
+  // and `chromium` ignores it, so neither lane can pick up the other's files
+  // even when someone names them positionally.
+  const project = shard.firstRun ? "first-run" : "chromium";
   // An empty list is not "run nothing" to Playwright — `playwright test` with
   // no positional arguments runs the *entire* suite. So a shard that legitimately
   // drew no files (a small `--only`, more shards than specs) would quietly run
@@ -458,7 +514,7 @@ function runShard(shard, files, label = "parallel") {
   // (`partitionByDuration`), because Playwright's own divides by test count and
   // cannot know that one file is a quarter of the suite.
   const command =
-    `pnpm exec playwright test ${files.join(" ")}` +
+    `pnpm exec playwright test ${files.join(" ")} --project=${project}` +
     ` --workers=1 --reporter=list,json --output=test-results/shard-${shard.index}`;
 
   const child = spawnManaged(command, {
@@ -469,6 +525,12 @@ function runShard(shard, files, label = "parallel") {
       THUNDERFORGE_E2E_EXTERNAL_STACK: "1",
       THUNDERFORGE_E2E_DEMO_DIR: demoDir,
       THUNDERFORGE_DB_NAME: shard.database,
+      // Global setup applies `e2e_demo.sql` and then signs in as the demo user
+      // to capture a reusable storage state. Against an unseeded database
+      // there is no demo user to sign in as, so it would fail before the first
+      // test ran — and seeding to fix that would destroy the very condition
+      // this lane exists to reproduce.
+      ...(shard.firstRun ? { THUNDERFORGE_E2E_FIRST_RUN: "1" } : {}),
       // Playwright names the JSON report by env var, not by flag. Labelled
       // because shard 0 runs twice — its share of the parallel lane, then the
       // measured lane alone — and a single name meant the second run erased
@@ -573,13 +635,26 @@ async function main() {
   if (specs.length === 0) {
     throw new Error(`--only=${args.only} matched no spec files`);
   }
-  const parallelSpecs = args.all ? specs : specs.filter((file) => !isPerfSpec(file));
-  const serialSpecs = args.all ? [] : specs.filter(isPerfSpec);
+  // Three lanes, and they are a partition of `specs`.
+  //
+  // The first-run lane is separated before the other two rather than after,
+  // because its specs must never reach a seeded stack: an `instance-setup`
+  // spec run against shard 0 would find setup already complete and fail for a
+  // reason that has nothing to do with what it tests. `--all` shards the
+  // *measured* specs; it deliberately does not move these, because the
+  // distinction here is which database they need, not how they are timed.
+  const firstRunSpecs = specs.filter(isFirstRunSpec);
+  const rest = specs.filter((file) => !isFirstRunSpec(file));
+  const parallelSpecs = args.all ? rest : rest.filter((file) => !isPerfSpec(file));
+  const serialSpecs = args.all ? [] : rest.filter(isPerfSpec);
 
   // `--only` naming nothing but measured specs is almost always a mistake: the
   // sharded lane gets no files, and the whole run collapses to the serial lane
   // on one shard, which is not what someone asking for shards wanted. Say so,
   // and name the flag that does what they meant.
+  if (parallelSpecs.length === 0 && serialSpecs.length === 0 && firstRunSpecs.length > 0) {
+    log("e2e", `${firstRunSpecs.length} first-run spec file(s); the sharded lane has nothing to do.`);
+  }
   if (parallelSpecs.length === 0 && serialSpecs.length > 0 && onlyPatterns) {
     log(
       "e2e",
@@ -606,6 +681,31 @@ async function main() {
   if (serialSpecs.length > 0) {
     log("e2e", "Sharded lane done; running the measured specs alone.");
     results.push(await runShard(shards[0], serialSpecs, "serial"));
+  }
+
+  // First run, on a stack of its own, after everything else.
+  //
+  // It needs its own stack because it *completes setup* — it writes the
+  // instance's identity, its operator and its first administrator — and those
+  // are instance-wide. Sharing a database with any other lane would leave that
+  // lane's later tests running against an instance somebody else just
+  // configured, which is exactly the class of cross-test contamination the
+  // per-shard database exists to prevent.
+  if (firstRunSpecs.length > 0) {
+    log("e2e", "Running the first-run lane on an unseeded stack.");
+    await provisionFirstRunTemplate();
+    const firstRunShard = await startShard(total, { firstRun: true });
+    if (!firstRunShard) {
+      log("e2e", "The first-run stack failed to start.", process.stderr);
+      results.push({ index: total, code: 1, label: "first-run" });
+    } else {
+      shards.push(firstRunShard);
+      log(
+        "e2e",
+        `First-run stack up on :${firstRunShard.webPort} (db ${firstRunShard.database}, unseeded).`,
+      );
+      results.push(await runShard(firstRunShard, firstRunSpecs, "first-run"));
+    }
   }
 
   recordDurations(
