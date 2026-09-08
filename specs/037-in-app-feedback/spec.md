@@ -343,6 +343,24 @@ item arrives.
 > blast-radius explanation. The requirements below remain the statement of what
 > this feature needs; 040 is where an operator actually sets it. They must
 > agree.
+>
+> The contract is
+> `specs/040-instance-setup/contracts/github-applications.md`, decided in that
+> feature's `research.md` § R10 and recorded as ADR-090. In the code it is
+> `src/server/src/github_apps.rs`; `repo_host::scoped` re-exports it, and
+> `settings::registry` declares the nine keys — three scopes by three fields —
+> that are the only place these variable names are written down. So
+> `FEEDBACK_GITHUB_APP_*` is **configured there, not invented here**: there is
+> one credential vocabulary for the product.
+>
+> Two things that contract decides, which the requirements below do not:
+>
+> - **Scope is the outer axis and source is the inner one.** FR-024 below and
+>   spec 040's FR-010 point opposite ways when a global application is set in
+>   the environment and a subsystem application in the administration screens.
+>   The subsystem's wins. Somebody who configured a subsystem application
+>   meant it.
+> - **An application resolves whole.** See the amendment to FR-029.
 
 - **FR-023**: The feedback destination MUST be configurable by environment as
   `FEEDBACK_GITHUB_APP_*`, following the existing `SYNC_GITHUB_APP_*` shape:
@@ -363,6 +381,18 @@ item arrives.
   someone's submission.
 - **FR-029**: When resolution draws on both global and specific values, the
   operator MUST be able to see which value came from where.
+  > **Amended by spec 040 (FR-021, US5 scenario 4, ADR-090):** resolution never
+  > draws on both *for one application*. An application resolves whole — a
+  > subsystem application with a client ID and no private key does not borrow
+  > the global one's key; it is reported incomplete, naming what is missing,
+  > and the subsystem falls through to the global application entire. A client
+  > ID from one registration signed by a key from another is not an
+  > application, it is an authentication failure that reads like a bad key.
+  > What the operator is shown is therefore which *application*, from which
+  > scope, with each field's source and the variable that fixed it — which is
+  > this requirement at the granularity that exists. Spec 040's US5.4 and the
+  > field-merging reading of this sentence cannot both hold; the acceptance
+  > scenario won.
 - **FR-030**: With no destination configured at all, the feedback control MUST
   still work and submissions MUST still be kept (FR-018) — an unconfigured
   instance collects feedback, it just cannot forward it yet.

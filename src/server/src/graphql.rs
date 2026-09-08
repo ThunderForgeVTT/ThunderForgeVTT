@@ -68,6 +68,10 @@ pub use queries::{
 pub mod anonymous;
 pub mod mutations_collection_shares;
 pub mod mutations_collections;
+// Spec 040 US5: `githubApplications`, `setGithubApplication` and
+// `checkGithubApplication` — one application for everything, or one per
+// subsystem, and which acts for what. Resolution itself is `crate::github_apps`.
+pub mod mutations_github_apps;
 pub mod mutations_instance_access;
 pub mod mutations_invites;
 pub mod mutations_play_field;
@@ -270,6 +274,9 @@ pub struct QueryRoot(
     ActorPermissionQuery,
     ActorShareQuery,
     mutations_instance_access::InstanceAccessQuery,
+    // Spec 040 US5: every GitHub application scope, and how each subsystem
+    // currently resolves.
+    mutations_github_apps::GithubAppQuery,
     // Spec 040: every setting, its source, its history, and what this
     // instance is not ready for.
     crate::settings::graphql::InstanceSettingsQuery,
@@ -350,6 +357,10 @@ pub struct MutationRoot(
     ActorPermissionMutation,
     ActorShareMutation,
     mutations_instance_access::InstanceAccessMutation,
+    // Spec 040 US5: `setGithubApplication` (which parses the key on save) and
+    // `checkGithubApplication` (which is the only thing here that touches a
+    // network, deliberately and only when an operator asks).
+    mutations_github_apps::GithubAppMutation,
     crate::settings::graphql::InstanceSettingsMutation,
     // Spec 040 US4: `sendTestMail` and `retryOutboxMessage`.
     crate::mail::graphql::MailMutation,

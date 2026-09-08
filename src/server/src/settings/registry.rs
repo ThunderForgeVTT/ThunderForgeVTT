@@ -543,9 +543,42 @@ static DECLARATIONS: [SettingDeclaration; 33] = [
     // -- GitHub applications ------------------------------------------------
     //
     // Declared here so they resolve by the one rule and appear in one list.
-    // Which application a subsystem actually uses, and what a partially
-    // specified one falls back to, is spec 040's US5 and is decided in its own
-    // module — not here, and not by this file's ordering.
+    // **These nine are the only place a variable name for these credentials is
+    // written down**, and they serve both scales: three scopes (global, and one
+    // per subsystem) by three fields.
+    //
+    // Which application a subsystem actually uses is `crate::github_apps`
+    // (spec 040 US5, ADR-090) — not here, and not by this file's ordering. Two
+    // rules live there and neither is expressible as a declaration: scope is
+    // the outer axis and source the inner one, so a subsystem application set
+    // in the screens beats a global one set in the environment; and an
+    // application resolves whole, so a partially specified subsystem is
+    // stepped over entire rather than completed from the global one's key.
+    //
+    // The private key's three forms are **one declaration with two aliases**,
+    // so `Resolved::fixed_by` names the variable that actually set the value
+    // and `github_apps::private_key_bytes` decides the form from that rather
+    // than by sniffing the value.
+    //
+    // **They are ordered file, base64, inline, and the order is load-bearing.**
+    // `env_name_in_use` takes `env_var` first and then the aliases in order, so
+    // this list IS the precedence — and it has to be the same precedence
+    // `repo_host::read_private_key` has had since spec 034: a path wins,
+    // because "an operator who has gone to the trouble of a mounted secret
+    // should not be silently overridden by a stale inline value left in an
+    // environment file". It was written the other way round first, primary
+    // last, and a deployment setting both a `_FILE` and an inline key then
+    // resolved to *different keys* through `registration_from_env` and through
+    // `github_apps` — two answers for one configuration, from the function
+    // whose whole job is to give the same answer as the old one.
+    // `github_apps_tests::the_three_key_forms_keep_their_precedence` is that
+    // bug, kept.
+    //
+    // A tenth declaration for the file form is not possible here in any case:
+    // `everything_but_prose_can_be_set_by_the_environment` requires it to have
+    // a variable and `no_two_declarations_read_the_same_variable` forbids it
+    // from reusing this one's. That is why the file form stays an environment
+    // form and a mounted secret is never copied into the database.
     SettingDeclaration {
         key: "github_app.global.client_id",
         kind: Kind::Text,
@@ -582,17 +615,20 @@ static DECLARATIONS: [SettingDeclaration; 33] = [
         key: "github_app.global.private_key",
         kind: Kind::Text,
         backing: Backing::Row,
-        env_var: Some("GLOBAL_GITHUB_APP_PRIVATE_KEY"),
+        // Ordered file, base64, inline — see the note at the head of this
+        // group. The order is the precedence, and it must match
+        // `repo_host::read_private_key`'s.
+        env_var: Some("GLOBAL_GITHUB_APP_PRIVATE_KEY_FILE"),
         env_aliases: &[
-            "GLOBAL_GITHUB_APP_PRIVATE_KEY_FILE",
             "GLOBAL_GITHUB_APP_PRIVATE_KEY_BASE64",
+            "GLOBAL_GITHUB_APP_PRIVATE_KEY",
         ],
         requirement: Requirement::Optional,
         secret: true,
         default: None,
         validators: &[Validator::NonEmptyAfterTrim],
         capability: None,
-        what_to_set: "That application's PEM private key. A path or base64 form may be given by the environment instead.",
+        what_to_set: "That application's PEM private key. The environment names it three ways, highest precedence first: `..._PRIVATE_KEY_FILE` (a path to the PEM), `..._PRIVATE_KEY_BASE64` (the .env-safe form) and `..._PRIVATE_KEY` (the PEM itself).",
         what_is_limited: "Each subsystem needs its own application.",
         group: "GitHub applications",
         since: "0.40",
@@ -633,17 +669,17 @@ static DECLARATIONS: [SettingDeclaration; 33] = [
         key: "github_app.sync.private_key",
         kind: Kind::Text,
         backing: Backing::Row,
-        env_var: Some(crate::repo_host::APP_PRIVATE_KEY_ENV),
+        env_var: Some(crate::repo_host::APP_PRIVATE_KEY_FILE_ENV),
         env_aliases: &[
-            crate::repo_host::APP_PRIVATE_KEY_FILE_ENV,
             crate::repo_host::APP_PRIVATE_KEY_BASE64_ENV,
+            crate::repo_host::APP_PRIVATE_KEY_ENV,
         ],
         requirement: Requirement::RequiredFor(Capability::SyncLore),
         secret: true,
         default: None,
         validators: &[Validator::NonEmptyAfterTrim],
         capability: Some(Capability::SyncLore),
-        what_to_set: "That application's PEM private key. The environment may give a path or the base64 form instead.",
+        what_to_set: "That application's PEM private key. The environment names it three ways, highest precedence first: `..._PRIVATE_KEY_FILE` (a path to the PEM), `..._PRIVATE_KEY_BASE64` (the .env-safe form) and `..._PRIVATE_KEY` (the PEM itself).",
         what_is_limited: "A world cannot be connected to a repository.",
         group: "GitHub applications",
         since: "0.40",
@@ -684,17 +720,17 @@ static DECLARATIONS: [SettingDeclaration; 33] = [
         key: "github_app.feedback.private_key",
         kind: Kind::Text,
         backing: Backing::Row,
-        env_var: Some("FEEDBACK_GITHUB_APP_PRIVATE_KEY"),
+        env_var: Some("FEEDBACK_GITHUB_APP_PRIVATE_KEY_FILE"),
         env_aliases: &[
-            "FEEDBACK_GITHUB_APP_PRIVATE_KEY_FILE",
             "FEEDBACK_GITHUB_APP_PRIVATE_KEY_BASE64",
+            "FEEDBACK_GITHUB_APP_PRIVATE_KEY",
         ],
         requirement: Requirement::Optional,
         secret: true,
         default: None,
         validators: &[Validator::NonEmptyAfterTrim],
         capability: Some(Capability::Feedback),
-        what_to_set: "That application's PEM private key.",
+        what_to_set: "That application's PEM private key. The environment names it three ways, highest precedence first: `..._PRIVATE_KEY_FILE` (a path to the PEM), `..._PRIVATE_KEY_BASE64` (the .env-safe form) and `..._PRIVATE_KEY` (the PEM itself).",
         what_is_limited: "Feedback cannot be raised on the project's repository.",
         group: "GitHub applications",
         since: "0.40",

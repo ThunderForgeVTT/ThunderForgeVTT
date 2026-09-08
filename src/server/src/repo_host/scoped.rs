@@ -1,374 +1,48 @@
-//! One GitHub application per subsystem, or one for all of them — resolved
-//! field by field, with a record of where each value came from.
+//! The calls a subsystem makes against the repository host, as the application
+//! it resolved to.
 //!
-//! # Why this is beside [`super`] rather than inside it
+//! # What used to be here, and where it went
 //!
-//! Research § R2 is explicit that **one module speaks to the host**, and this
-//! is a child of that module rather than a second one: `repo_host::scoped`.
-//! It is a separate *file* only because `repo_host.rs` was already 723 lines
-//! and `scripts/check-file-length.sh` caps a source file at 1,000 — a limit
-//! that exists so a file full of logic stays testable, and splitting along
-//! "the sync app's five constants" versus "any subsystem's application" is
-//! the seam that was already there.
+//! This file was written by spec 037 and carried two halves: *which* GitHub
+//! application a subsystem acts as, and *what* it then does with it. Spec 040
+//! US5 owns the first half — one credential vocabulary for the whole product,
+//! not one per subsystem — so `AppScope`, `Field`, `setting_key`,
+//! `CredentialProblem`, `ScopedApp` and `registration_for` now live in
+//! [`crate::github_apps`] and are re-exported below. Every caller keeps the
+//! path it had.
 //!
-//! # Resolution is per field, and that is the requirement
+//! **The one behavioural change is deliberate and is the point of the move.**
+//! The version here resolved *field by field*: a feedback application with a
+//! slug and no key borrowed the global application's key. Spec 040 FR-021, its
+//! US5 acceptance scenario 4 and research.md § R10 all require the opposite —
+//! an application resolves whole or is stepped over whole — because a client
+//! ID from one registration with a private key from another is not an
+//! application, it is an authentication failure that reads like a bad key.
+//! Spec 037's own FR-029 assumed the merging reading; its pointer now names
+//! spec 040's contract, and the two agree.
 //!
-//! FR-025 says the subsystem-specific value wins and the global one serves
-//! what is left. Resolving whole *sets* would satisfy that sentence and break
-//! its point: a feedback application with a slug and no key would silently
-//! fall back to the global application's identity **and** the global
-//! application's key, which is a third application neither the operator nor
-//! the product ever chose. So each of the three fields resolves on its own and
-//! [`ScopedApp::sources`] records which declaration supplied it, which is what
-//! makes FR-029's "a half-configured application is never silently completed"
-//! observable rather than asserted.
+//! What remains here is the effects half, which is genuinely `repo_host`'s
+//! job: research § R2 is explicit that **one module speaks to the host**, and
+//! this is a child of that module rather than a second one.
 //!
-//! # Where the values come from
+//! # Why a separate file at all
 //!
-//! `crate::settings::registry` already declares all nine keys —
-//! `github_app.{global,sync,feedback}.{client_id,slug,private_key}` — with
-//! their environment variables and aliases, and `settings::resolver` already
-//! implements "the environment beats the instance's store beats the default".
-//! This module consumes those declarations; it does not read the environment
-//! itself, and it declares nothing of its own. A tenth variable name appearing
-//! here would be a variable no readiness surface knows about.
-//!
-//! # The private key still arrives in three forms
-//!
-//! The declaration for a private key names `..._PRIVATE_KEY` and aliases
-//! `..._PRIVATE_KEY_FILE` and `..._PRIVATE_KEY_BASE64`, and the resolver hands
-//! back whatever the variable in use contained — a path, base64, or the PEM.
-//! Which of those it is, is decided by [`Resolved::fixed_by`], the variable
-//! that actually set it, rather than by sniffing the value: sniffing is how
-//! `"not a key at all"` turned out to be valid base64, which
-//! [`super::normalise_pem`] documents at length.
-//!
-//! And it is parsed **here**, at resolution time, not at first use (FR-028) —
-//! a key that is present but is not a key is the failure a presence check
-//! calls "configured".
+//! `repo_host.rs` was already 723 lines and `scripts/check-file-length.sh`
+//! caps a source file at 1,000 — a limit that exists so a file full of logic
+//! stays testable.
 
 use base64::Engine as _;
 use base64::engine::general_purpose;
 use thunderforge_repo_host::github::GitHubApp;
 use thunderforge_repo_host::{RepoHost, RepositoryCredential};
 
-use crate::settings::resolver::{Resolved, Settings};
-
-/// Which subsystem is asking. `Global` is not a subsystem — it is the
-/// fallback every other scope draws on — but it resolves like one so that an
-/// operator surface can report it the same way.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AppScope {
-    Global,
-    Sync,
-    Feedback,
-}
-
-impl AppScope {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            AppScope::Global => "global",
-            AppScope::Sync => "sync",
-            AppScope::Feedback => "feedback",
-        }
-    }
-
-    /// What an operator is told this application is used for. FR-026: the
-    /// global application's *scope* is an explanation, not a field.
-    pub fn serves(self) -> &'static str {
-        match self {
-            AppScope::Global => {
-                "every subsystem that talks to GitHub — lore synchronisation \
-                 and feedback today, and anything added later"
-            }
-            AppScope::Sync => "lore synchronisation",
-            AppScope::Feedback => "feedback",
-        }
-    }
-}
-
-/// One of the three values an application is described by.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Field {
-    ClientId,
-    Slug,
-    PrivateKey,
-}
-
-impl Field {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Field::ClientId => "client_id",
-            Field::Slug => "slug",
-            Field::PrivateKey => "private_key",
-        }
-    }
-}
-
-/// The declared setting key for one scope and one field.
-///
-/// A table rather than string concatenation, because a `&'static str` is what
-/// the settings registry deals in and a `format!` here would produce a key
-/// that no declaration matches the moment somebody renames one.
-pub fn setting_key(scope: AppScope, field: Field) -> &'static str {
-    match (scope, field) {
-        (AppScope::Global, Field::ClientId) => "github_app.global.client_id",
-        (AppScope::Global, Field::Slug) => "github_app.global.slug",
-        (AppScope::Global, Field::PrivateKey) => "github_app.global.private_key",
-        (AppScope::Sync, Field::ClientId) => "github_app.sync.client_id",
-        (AppScope::Sync, Field::Slug) => "github_app.sync.slug",
-        (AppScope::Sync, Field::PrivateKey) => "github_app.sync.private_key",
-        (AppScope::Feedback, Field::ClientId) => "github_app.feedback.client_id",
-        (AppScope::Feedback, Field::Slug) => "github_app.feedback.slug",
-        (AppScope::Feedback, Field::PrivateKey) => "github_app.feedback.private_key",
-    }
-}
-
-/// Where one field's value actually came from. FR-029 renders this verbatim.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FieldSource {
-    pub field: Field,
-    /// The declaration that supplied it — the subsystem's own, or the global.
-    pub key: &'static str,
-    pub scope: AppScope,
-    /// The environment variable that fixed it, when one did.
-    pub fixed_by: Option<&'static str>,
-}
-
-/// A resolved application, and the record of how it was assembled.
-pub struct ScopedApp {
-    pub app: GitHubApp,
-    pub scope: AppScope,
-    pub sources: Vec<FieldSource>,
-}
-
-/// Why an application could not be resolved.
-///
-/// **No variant carries a value, a fragment of one, or its length** (FR-027,
-/// FR-021). Every one names declarations an operator can go and set, which is
-/// the same contract `settings::registry` keeps and the reason this reports
-/// setting keys rather than inventing a second vocabulary of variable names.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CredentialProblem {
-    Missing {
-        field: Field,
-        specific: &'static str,
-        global: &'static str,
-    },
-    /// The value was a path, and the path could not be read. The path is named
-    /// because an operator chose it and it is not the secret; the file's
-    /// contents are never mentioned.
-    UnreadableKeyFile {
-        key: &'static str,
-        path: String,
-        detail: String,
-    },
-    /// `..._PRIVATE_KEY_BASE64` was set to something that is not base64.
-    /// Reported against that variable rather than falling through, because the
-    /// operator declared an encoding and deserves to be told it was wrong.
-    UndecodableBase64 { key: &'static str, detail: String },
-    /// Present, and not a key. The case a presence check calls "configured".
-    UnreadableKey { key: &'static str, detail: String },
-}
-
-impl CredentialProblem {
-    /// The setting key an operator should go and look at.
-    pub fn key(&self) -> &'static str {
-        match self {
-            CredentialProblem::Missing { specific, .. } => specific,
-            CredentialProblem::UnreadableKeyFile { key, .. }
-            | CredentialProblem::UndecodableBase64 { key, .. }
-            | CredentialProblem::UnreadableKey { key, .. } => key,
-        }
-    }
-
-    /// What to do about it, naming declarations and never values.
-    pub fn guidance(&self) -> String {
-        match self {
-            CredentialProblem::Missing {
-                field,
-                specific,
-                global,
-            } => format!(
-                "Neither `{specific}` nor `{global}` is set, so this instance has no {} \
-                 for that application. Set the first to give this subsystem its own \
-                 application, or the second to share one.",
-                match field {
-                    Field::ClientId => "client ID",
-                    Field::Slug => "URL slug",
-                    Field::PrivateKey => "private key",
-                }
-            ),
-            CredentialProblem::UnreadableKeyFile { key, path, detail } => {
-                format!("`{key}` names the file {path}, which could not be read ({detail}).")
-            }
-            CredentialProblem::UndecodableBase64 { key, detail } => format!(
-                "`{key}` was given in its base64 form and is not valid base64 ({detail}). \
-                 It must be the PEM file encoded whole — for example `base64 -w0 app-key.pem`."
-            ),
-            CredentialProblem::UnreadableKey { key, detail } => format!(
-                "`{key}` is set but could not be read as an RSA private key ({detail}). \
-                 Accepted forms are a PEM, a path to one, or the PEM base64-encoded."
-            ),
-        }
-    }
-}
-
-/// Every problem's guidance, as one sentence an operator can act on in a pass.
-pub fn join_problems(problems: &[CredentialProblem]) -> String {
-    problems
-        .iter()
-        .map(CredentialProblem::guidance)
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-/// The declarations to name when nothing is configured — keys only, never
-/// values, which is what makes this safe to render on an operator surface.
-pub fn missing_keys(problems: &[CredentialProblem]) -> Vec<&'static str> {
-    problems.iter().map(CredentialProblem::key).collect()
-}
-
-/// One field, resolved from the subsystem's declaration or the global one.
-///
-/// Returns the resolved setting *and* which scope answered, because the second
-/// is the half FR-029 is about.
-fn field_of(
-    settings: &Settings,
-    scope: AppScope,
-    field: Field,
-) -> Option<(&Resolved, AppScope, &'static str)> {
-    let specific = setting_key(scope, field);
-    if let Some(resolved) = settings.get(specific).filter(|r| r.is_set()) {
-        return Some((resolved, scope, specific));
-    }
-    if scope == AppScope::Global {
-        return None;
-    }
-    let global = setting_key(AppScope::Global, field);
-    settings
-        .get(global)
-        .filter(|r| r.is_set())
-        .map(|resolved| (resolved, AppScope::Global, global))
-}
-
-/// Resolve the application one subsystem should act as.
-///
-/// Returns **every** problem rather than the first, so an operator fixes their
-/// configuration in one pass instead of discovering the next gap after each
-/// restart — the posture [`super::registration_from_env`] already takes.
-pub fn registration_for(
-    scope: AppScope,
-    settings: &Settings,
-) -> Result<ScopedApp, Vec<CredentialProblem>> {
-    let mut problems = Vec::new();
-    let mut sources = Vec::new();
-
-    let mut plain = |field: Field, problems: &mut Vec<CredentialProblem>| -> Option<String> {
-        match field_of(settings, scope, field) {
-            Some((resolved, from, key)) => {
-                sources.push(FieldSource {
-                    field,
-                    key,
-                    scope: from,
-                    fixed_by: resolved.fixed_by,
-                });
-                resolved.value.clone()
-            }
-            None => {
-                problems.push(CredentialProblem::Missing {
-                    field,
-                    specific: setting_key(scope, field),
-                    global: setting_key(AppScope::Global, field),
-                });
-                None
-            }
-        }
-    };
-
-    let client_id = plain(Field::ClientId, &mut problems);
-    let slug = plain(Field::Slug, &mut problems);
-
-    let key_pem = match field_of(settings, scope, Field::PrivateKey) {
-        None => {
-            problems.push(CredentialProblem::Missing {
-                field: Field::PrivateKey,
-                specific: setting_key(scope, Field::PrivateKey),
-                global: setting_key(AppScope::Global, Field::PrivateKey),
-            });
-            None
-        }
-        Some((resolved, from, key)) => {
-            sources.push(FieldSource {
-                field: Field::PrivateKey,
-                key,
-                scope: from,
-                fixed_by: resolved.fixed_by,
-            });
-            match private_key_bytes(resolved, key) {
-                Ok(bytes) => Some(bytes),
-                Err(problem) => {
-                    problems.push(problem);
-                    None
-                }
-            }
-        }
-    };
-
-    let (Some(client_id), Some(slug), Some(key_pem)) = (client_id, slug, key_pem) else {
-        return Err(problems);
-    };
-
-    // Parsed now, not at first use (FR-028).
-    match GitHubApp::new(client_id, slug, &key_pem) {
-        Ok(app) if problems.is_empty() => Ok(ScopedApp {
-            app,
-            scope,
-            sources,
-        }),
-        Ok(_) => Err(problems),
-        Err(e) => {
-            problems.push(CredentialProblem::UnreadableKey {
-                key: setting_key(scope, Field::PrivateKey),
-                detail: e.to_string(),
-            });
-            Err(problems)
-        }
-    }
-}
-
-/// The PEM bytes behind a resolved private-key setting.
-///
-/// **The form is decided by the variable that set it, not by the value.** A
-/// value that arrived through `..._PRIVATE_KEY_FILE` is a path; one that
-/// arrived through `..._PRIVATE_KEY_BASE64` is base64 and a failure to decode
-/// is reported against that variable; anything else — including a value stored
-/// in the instance's own settings — goes through
-/// [`super::normalise_pem`], which accepts a PEM, literal `\n` escapes, or
-/// base64 *whose result is a PEM*.
-fn private_key_bytes(resolved: &Resolved, key: &'static str) -> Result<Vec<u8>, CredentialProblem> {
-    let raw = resolved.value.clone().unwrap_or_default();
-    let raw = raw.trim();
-    match resolved.fixed_by {
-        Some(var) if var.ends_with("_PRIVATE_KEY_FILE") => {
-            std::fs::read(raw).map_err(|e| CredentialProblem::UnreadableKeyFile {
-                key,
-                path: raw.to_string(),
-                detail: e.to_string(),
-            })
-        }
-        Some(var) if var.ends_with("_PRIVATE_KEY_BASE64") => {
-            let compact: String = raw.chars().filter(|c| !c.is_whitespace()).collect();
-            general_purpose::STANDARD.decode(&compact).map_err(|e| {
-                CredentialProblem::UndecodableBase64 {
-                    key,
-                    detail: e.to_string(),
-                }
-            })
-        }
-        _ => Ok(super::normalise_pem(raw)),
-    }
-}
+// The credential vocabulary, owned by `github_apps` and re-exported so that
+// `use crate::repo_host::scoped::{AppScope, registration_for}` keeps working.
+// One vocabulary, two paths to it — not two vocabularies.
+pub use crate::github_apps::{
+    AppScope, CredentialProblem, Field, FieldSource, ScopedApp, acts_for, join_problems,
+    missing_keys, registration_for, setting_key, stepped_over_guidance,
+};
 
 // ============================================================================
 // The effects half, scoped: the calls delivery makes and lore sync does not.
@@ -760,47 +434,11 @@ async fn ensure_branch(
 mod tests {
     use super::*;
 
-    #[test]
-    fn every_scope_and_field_names_a_declared_setting() {
-        for scope in [AppScope::Global, AppScope::Sync, AppScope::Feedback] {
-            for field in [Field::ClientId, Field::Slug, Field::PrivateKey] {
-                let key = setting_key(scope, field);
-                assert!(
-                    crate::settings::registry::declaration(key).is_some(),
-                    "`{key}` is not declared in settings::registry"
-                );
-            }
-        }
-    }
-
-    /// FR-027 and FR-021 in one assertion: a diagnostic may help an operator
-    /// and must not help someone reading their logs.
-    #[test]
-    fn no_problem_carries_a_value_a_fragment_or_a_length() {
-        let secret = "-----BEGIN RSA PRIVATE KEY-----abcdef-----END RSA PRIVATE KEY-----";
-        let problems = [
-            CredentialProblem::Missing {
-                field: Field::PrivateKey,
-                specific: setting_key(AppScope::Feedback, Field::PrivateKey),
-                global: setting_key(AppScope::Global, Field::PrivateKey),
-            },
-            CredentialProblem::UndecodableBase64 {
-                key: setting_key(AppScope::Feedback, Field::PrivateKey),
-                detail: "Invalid symbol 33".to_string(),
-            },
-            CredentialProblem::UnreadableKey {
-                key: setting_key(AppScope::Feedback, Field::PrivateKey),
-                detail: "InvalidKeyFormat".to_string(),
-            },
-        ];
-        for problem in &problems {
-            let guidance = problem.guidance();
-            assert!(!guidance.contains(secret), "{guidance}");
-            assert!(!guidance.contains("abcdef"), "{guidance}");
-            assert!(!guidance.contains("length"), "{guidance}");
-            assert!(guidance.contains("github_app."), "{guidance}");
-        }
-    }
+    // The resolution cases that used to live here — the declared-key walk, the
+    // no-value-no-fragment-no-length assertion, the global scope's lack of a
+    // fallback and the both-places guidance — moved with the code they test,
+    // to `github_apps_tests.rs`. Duplicating them here would be a second
+    // statement of one contract, which is the thing spec 040 US5 removes.
 
     /// A 4xx means the host declined and created nothing; a 5xx or a transport
     /// failure means it may have acted. The whole of "search before create,
@@ -825,32 +463,5 @@ mod tests {
         assert_eq!(encoded, "018f3c9a%20repo%3Aowner%2Fname");
         assert!(!encoded.contains(' '));
         assert_eq!(percent_encode("abc-DEF_1.2~3"), "abc-DEF_1.2~3");
-    }
-
-    #[test]
-    fn the_global_scope_has_no_fallback_of_its_own() {
-        let settings = Settings::default();
-        let problems = registration_for(AppScope::Global, &settings)
-            .err()
-            .expect("nothing is configured");
-        assert_eq!(problems.len(), 3);
-        assert!(missing_keys(&problems).contains(&"github_app.global.client_id"));
-    }
-
-    #[test]
-    fn an_unconfigured_instance_names_both_places_a_value_could_go() {
-        let settings = Settings::default();
-        let problems = registration_for(AppScope::Feedback, &settings)
-            .err()
-            .expect("nothing is configured");
-        let guidance = join_problems(&problems);
-        assert!(
-            guidance.contains("github_app.feedback.client_id"),
-            "{guidance}"
-        );
-        assert!(
-            guidance.contains("github_app.global.client_id"),
-            "{guidance}"
-        );
     }
 }

@@ -27,6 +27,7 @@ import {
 import { AccessPanel } from "./components/AccessPanel";
 import { AdminSectionShell } from "./components/AdminSectionShell";
 import { DiskUsageChart } from "./components/DiskUsageChart";
+import { GitHubAppsPanel } from "./components/GitHubAppsPanel";
 import { ManifestEditor } from "./components/ManifestEditor";
 import { MetricsCard } from "./components/MetricsCard";
 import { OAuthProviderForm } from "./components/OAuthProviderForm";
@@ -362,6 +363,26 @@ export default function SettingsPage({
                         </StatusBadge>
                       )}
                     </div>
+                  </Card>
+
+                  {/* Spec 040 US5 / ADR-090: one GitHub application for
+                      everything, or one per subsystem, and which acts for
+                      what. Reads its own data rather than joining
+                      `getAdminSettingsData` — it is the only surface that
+                      needs the resolution, and folding it into the page's
+                      single fetch would make every other admin screen carry
+                      it. */}
+                  <Card surface="parchment" className="grid gap-4 p-6">
+                    <div className="grid gap-1">
+                      <h3 className="text-lg font-semibold">
+                        GitHub applications
+                      </h3>
+                      <p className="text-muted-foreground">
+                        Which application each subsystem acts as, and where each
+                        value came from.
+                      </p>
+                    </div>
+                    <GitHubAppsPanel />
                   </Card>
 
                   <Card surface="parchment" className="grid gap-4 p-6">
