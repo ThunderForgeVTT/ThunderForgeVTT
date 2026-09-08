@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import { postGraphQL } from "@/api/graphqlClient";
+
+/** The anonymous transport, as `api/collections.ts` and four others name it. */
+const GRAPHQL_PUBLIC_ENDPOINT = "/api/graphql/public";
 import type { OperatorValues } from "@/legal/operatorTokens";
 
 /**
@@ -68,7 +71,19 @@ let inFlight: Promise<OperatorValues> | null = null;
  * far smaller problem than re-querying on every card.
  */
 export function fetchPublishedOperatorValues(): Promise<OperatorValues> {
-  inFlight ??= postGraphQL<PublishedOperatorValuesData>(QUERY)
+  // `/api/graphql/public`, not `/api/graphql`. The default endpoint is wrapped
+  // in `require_authenticated_user`, so this query — whose entire reason for
+  // existing is that the reader has no account — came back 401 and the legal
+  // pages silently fell back to their unset markers. The failure was invisible
+  // because the fallback is *correct behaviour* for an unconfigured instance:
+  // a configured one looked identical to one nobody had set up.
+  //
+  // Found by the first-run e2e; the five other anonymous readers
+  // (`collections`, `abilityShares`, `itemShares`, `actorShares`,
+  // `moderation`) already name this endpoint, and this is now the sixth.
+  inFlight ??= postGraphQL<PublishedOperatorValuesData>(QUERY, undefined, {
+    endpoint: GRAPHQL_PUBLIC_ENDPOINT,
+  })
     .then((data) => {
       const v = data.publishedOperatorValues;
       if (!v) {

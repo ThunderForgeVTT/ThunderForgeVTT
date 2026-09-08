@@ -2,7 +2,7 @@ import { Field } from "@/components/ui/field/Field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  isOptional,
+  requirementLabel,
   settingLabel,
   type RequiredSetting,
 } from "@/services/instanceSetup";
@@ -132,7 +132,7 @@ export function SettingField({
       <Field
         label={label}
         htmlFor={id}
-        accent={isOptional(setting) ? "Optional" : "Required"}
+        accent={requirementLabel(setting)}
         hint={error ? undefined : hint}
       >
         {control()}

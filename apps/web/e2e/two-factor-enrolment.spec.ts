@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
-import { createHmac } from "node:crypto";
 import { freshCredentials, register } from "./fixtures/helpers";
+import { totpAt } from "./fixtures/totp";
 
 /**
  * Spec 041 US1: turning two-factor on, through the screen a person would use.
@@ -12,43 +12,6 @@ import { freshCredentials, register } from "./fixtures/helpers";
  * nowhere in the app, so a capability MVP.md lists as shipped was reachable
  * only by hand-rolled requests.
  */
-
-/** RFC 4648 base32, unpadded — what the provisioning URI carries. */
-function decodeBase32(secret: string): Buffer {
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-  let bits = 0;
-  let value = 0;
-  const out: number[] = [];
-  for (const char of secret.toUpperCase().replace(/=+$/, "")) {
-    const index = alphabet.indexOf(char);
-    if (index < 0) {
-      throw new Error(`not base32: ${char}`);
-    }
-    value = (value << 5) | index;
-    bits += 5;
-    if (bits >= 8) {
-      bits -= 8;
-      out.push((value >>> bits) & 0xff);
-    }
-  }
-  return Buffer.from(out);
-}
-
-/** RFC 6238, matching `thunderforge-axum-auth-core`: SHA1, 6 digits, 30s. */
-function totpAt(secretBase32: string, unixSeconds: number): string {
-  const counter = Buffer.alloc(8);
-  counter.writeBigUInt64BE(BigInt(Math.floor(unixSeconds / 30)));
-  const digest = createHmac("sha1", decodeBase32(secretBase32))
-    .update(counter)
-    .digest();
-  const offset = digest[digest.length - 1] & 0x0f;
-  const binary =
-    ((digest[offset] & 0x7f) << 24) |
-    (digest[offset + 1] << 16) |
-    (digest[offset + 2] << 8) |
-    digest[offset + 3];
-  return (binary % 1_000_000).toString().padStart(6, "0");
-}
 
 test.describe("Spec 041 US1: enrolling from the account's own screen", () => {
   test("a person turns two-factor on, mistypes once, and keeps their recovery codes", async ({

@@ -3,7 +3,7 @@ import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import {
   blocksCompletion,
   isFixedByEnvironment,
-  isOptional,
+  requirementLabel,
   settingLabel,
   type ReadinessReport,
   type RequiredSetting,
@@ -99,7 +99,7 @@ export function ReviewStep({
                     {setting.key}
                   </code>
                   <span className="text-xs text-muted-foreground">
-                    {isOptional(setting) ? "Optional" : "Required"}
+                    {requirementLabel(setting)}
                   </span>
                 </span>
                 {setting.what_to_set ? (

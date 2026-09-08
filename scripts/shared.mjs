@@ -2,6 +2,7 @@ import { spawn } from "child_process";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import {
+  createWriteStream,
   existsSync,
   readFileSync,
   readdirSync,
@@ -46,9 +47,13 @@ export function log(prefix, message, stream = process.stdout) {
   stream.write(`${color}[${prefix}]${ANSI_RESET} ${message}\n`);
 }
 
-function pipeWithPrefix(stream, prefix, target) {
+function pipeWithPrefix(stream, prefix, target, logStream = null) {
   const rl = readline.createInterface({ input: stream });
   rl.on("line", (line) => {
+    // The file copy is written unprefixed and uncoloured, because something
+    // reads it rather than someone: an e2e test scraping a process's own
+    // output should not have to know this script's presentation.
+    logStream?.write(`${line}\n`);
     if (line.length === 0) {
       target.write("\n");
       return;
@@ -59,9 +64,17 @@ function pipeWithPrefix(stream, prefix, target) {
   return rl;
 }
 
+/**
+ * `logPath` additionally writes this process's output to a file.
+ *
+ * Added for spec 040's first-run e2e, which has to read the setup link the
+ * server prints. That link cannot come from the database — only the Argon2
+ * hash of the bootstrap code is stored, deliberately — so the log is the only
+ * place it exists in plaintext, which is exactly the operator's own situation.
+ */
 export function spawnManaged(
   command,
-  { cwd = ROOT_DIR, prefix, detached = true, env = {} },
+  { cwd = ROOT_DIR, prefix, detached = true, env = {}, logPath = null },
 ) {
   const child = spawn(command, {
     cwd,
@@ -81,12 +94,16 @@ export function spawnManaged(
 
   runningChildren.add(child);
 
-  const stdoutRl = pipeWithPrefix(child.stdout, prefix, process.stdout);
-  const stderrRl = pipeWithPrefix(child.stderr, prefix, process.stderr);
+  // Both streams into one file, in arrival order, because `tracing` writes to
+  // stderr and a reader wants the process's output rather than one half of it.
+  const logStream = logPath ? createWriteStream(logPath, { flags: "a" }) : null;
+  const stdoutRl = pipeWithPrefix(child.stdout, prefix, process.stdout, logStream);
+  const stderrRl = pipeWithPrefix(child.stderr, prefix, process.stderr, logStream);
 
   child.on("close", () => {
     stdoutRl.close();
     stderrRl.close();
+    logStream?.end();
     runningChildren.delete(child);
   });
 

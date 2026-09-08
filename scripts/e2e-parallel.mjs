@@ -443,6 +443,14 @@ async function startShard(index, { firstRun = false } = {}) {
     // auth limiter accounted for 18 of the 42 failures the last full sweep
     // started from, and every shard registers users from the same IP.
     THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT: "1",
+    // Only the first-run stack, and it is doing double duty. The setup link
+    // the server prints is what the e2e follows, so it has to be a real URL
+    // rather than the bare path an unconfigured instance logs — and setting it
+    // is also the only exercise T060's fix gets, since the alternative branch
+    // is what every containerised operator sees today.
+    ...(firstRun
+      ? { THUNDERFORGE_PUBLIC_URL: `http://127.0.0.1:${webPort}` }
+      : {}),
     // Postgres allows 100 connections; one backend defaults to a pool of 32,
     // sized per core for a machine running one server. Four shards plus a
     // developer's own `pnpm dev` ask for 160, and the failure is not a slow
@@ -455,10 +463,19 @@ async function startShard(index, { firstRun = false } = {}) {
     DATABASE_POOL_MAX_SIZE: "8",
   };
 
+  // The first-run lane keeps a copy of the backend's output, because the setup
+  // link the server prints is the only place the bootstrap code exists in
+  // plaintext — the database stores an Argon2 hash of it, deliberately. Which
+  // is precisely the operator's own position: they read it out of the log too.
+  const backendLog = firstRun
+    ? join(SHARD_DIR, `shard-${index}`, "backend.log")
+    : null;
+
   spawnManaged(`./target/debug/thunderforge --port ${backendPort}`, {
     cwd: ROOT_DIR,
     prefix: `be${index}`,
     env: shared,
+    logPath: backendLog,
   });
   // `/api/readyz`, not `/readyz`: every backend route is nested under `/api`
   // (`main.rs`), and readiness rather than liveness because it is the one that
@@ -481,7 +498,7 @@ async function startShard(index, { firstRun = false } = {}) {
     return null;
   }
 
-  return { index, database, webPort, backendPort, firstRun };
+  return { index, database, webPort, backendPort, firstRun, backendLog };
 }
 
 /** Runs one Playwright shard against an already-started stack. */
@@ -530,7 +547,12 @@ function runShard(shard, files, label = "parallel") {
       // there is no demo user to sign in as, so it would fail before the first
       // test ran — and seeding to fix that would destroy the very condition
       // this lane exists to reproduce.
-      ...(shard.firstRun ? { THUNDERFORGE_E2E_FIRST_RUN: "1" } : {}),
+      ...(shard.firstRun
+        ? {
+            THUNDERFORGE_E2E_FIRST_RUN: "1",
+            THUNDERFORGE_E2E_BACKEND_LOG: shard.backendLog,
+          }
+        : {}),
       // Playwright names the JSON report by env var, not by flag. Labelled
       // because shard 0 runs twice — its share of the parallel lane, then the
       // measured lane alone — and a single name meant the second run erased

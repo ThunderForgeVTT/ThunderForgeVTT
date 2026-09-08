@@ -100,6 +100,10 @@ export interface RequiredSetting {
   group?: string | null;
   /** The registry's `what_to_set`, rendered verbatim as the field's hint. */
   what_to_set?: string | null;
+  /** The capability a `REQUIRED_FOR` declaration serves. */
+  capability?: string | null;
+  /** The registry's `what_is_limited` — what an instance loses while this is unset. */
+  what_is_limited?: string | null;
   /** For `ENUM`. */
   options?: string[] | null;
   secret?: boolean | null;
@@ -223,6 +227,28 @@ export function isFixedByEnvironment(setting: RequiredSetting): boolean {
 
 export function isOptional(setting: RequiredSetting): boolean {
   return setting.requirement === "OPTIONAL";
+}
+
+/**
+ * What to call this setting's requirement, in three states rather than two.
+ *
+ * There are genuinely three, and collapsing them to "Optional or Required"
+ * mislabels the middle one — which is what happened, and what the first-run
+ * e2e caught. `operator.jurisdiction` is `RequiredFor(PublishTerms)`: the
+ * server does not include it in `missing_required_settings` and `/complete`
+ * succeeds without it, so calling it "Required" told the operator something
+ * the product does not enforce, and worse, the step refused to advance on it.
+ *
+ * FR-003 is precisely this distinction — what setup requires, versus what it
+ * merely offers — so losing it in the label loses the requirement.
+ */
+export function requirementLabel(setting: RequiredSetting): string {
+  if (isOptional(setting)) {
+    return "Optional";
+  }
+  return setting.requirement === "REQUIRED_FOR"
+    ? "Needed for a feature"
+    : "Required";
 }
 
 /** Blocks completion while unset — the predicate `/complete` enforces. */
@@ -363,9 +389,15 @@ export function validateSettingValue(
     // one today — so a resumed pass shows an empty box over a stored value,
     // and refusing that box would make FR-006's resumability unusable: the
     // operator would have to retype every answer they had already given.
-    return isOptional(setting) || setting.satisfied
-      ? undefined
-      : "This is required before setup can finish.";
+    // The gate is `blocksCompletion`, not `!isOptional`. Those differ for a
+    // `REQUIRED_FOR` declaration, and using the wrong one made the wizard
+    // stricter than the server it fronts: it refused to advance past a field
+    // `/complete` would have been perfectly happy to leave unset. A step that
+    // cannot be passed is worse than a feature that is not configured.
+    if (!blocksCompletion(setting)) {
+      return undefined;
+    }
+    return "This is required before setup can finish.";
   }
 
   if (setting.kind === "EMAIL") {
