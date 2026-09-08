@@ -37,7 +37,38 @@
  * — it cost a confused round of debugging on the day these were added. If a
  * document is missing, check a fresh process (`pnpm --filter @thunderforge/web
  * test`) before touching the pattern.
+ *
+ * # The one thing in here that is not ours
+ *
+ * Spec 040 lets a handful of `{{...}}` tokens in these documents resolve to
+ * settings an operator typed — their name, their contact. That is the single
+ * exception to "this text is ours", and it is deliberately narrow: the closed
+ * token set, what an unset token renders, and the segment split that keeps an
+ * operator's text out of the inline parser all live in `./operatorTokens.ts`,
+ * re-exported below so a page importing legal text and the boundary around it
+ * imports them from one place.
+ *
+ * Substitution is *not* applied here, to `sectionsOf`. It happens in
+ * `LegalProse` after the body has been split into paragraphs, because doing it
+ * earlier would let a value containing a blank line introduce a paragraph
+ * break into a reviewed document — and because a section body is a `string`,
+ * which cannot carry the prose/value distinction that keeps the parser off
+ * operator input. Substituting into the string was tried first and is exactly
+ * the shortcut that loses the trust boundary.
  */
+
+export {
+  OPERATOR_TOKENS,
+  OPERATOR_UNSET_MARKERS,
+  resolveOperatorValue,
+  substituteOperatorValues,
+} from "./operatorTokens";
+export type {
+  LegalSegment,
+  OperatorValueKey,
+  OperatorValues,
+  Substituted,
+} from "./operatorTokens";
 
 const DISCOVERED = import.meta.glob<string>("../../../../legal/*.md", {
   query: "?raw",

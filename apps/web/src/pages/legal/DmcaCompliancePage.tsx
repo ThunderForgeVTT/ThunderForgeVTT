@@ -3,7 +3,13 @@ import { TakedownNoticeForm } from "@/components/legal/TakedownNoticeForm";
 import { SEO } from "@/components/seo/SEO";
 import { Card } from "@/components/ui/card/Card";
 import { Container } from "@/components/ui/container/Container";
-import { legalSections } from "@/legal/legalDocuments";
+import {
+  legalSections,
+  resolveOperatorValue,
+  type OperatorValueKey,
+  type OperatorValues,
+} from "@/legal/legalDocuments";
+import { usePublishedOperatorValues } from "@/legal/publishedOperatorValues";
 import type { SeoConfig } from "@/types/seo";
 
 export const dmcaComplianceSeo: SeoConfig = {
@@ -39,6 +45,7 @@ export const dmcaComplianceSeo: SeoConfig = {
 
 export default function DmcaCompliancePage() {
   const sections = legalSections("dmca-policy");
+  const operatorValues = usePublishedOperatorValues();
   const intro = sections.find((s) => s.heading === null);
   const body = sections.filter((s) => s.heading !== null);
 
@@ -63,11 +70,24 @@ export default function DmcaCompliancePage() {
           </section>
 
           {/* Structured, not prose: these are instance configuration values
-              rendered as a definition list, and they carry a pre-launch
-              placeholder. They stay here rather than in the markdown because a
-              reviewer editing policy text should not be editing an address
-              field, and because the mailing address is a value the operator
-              supplies rather than something anyone writes. */}
+              rendered as a definition list. They stay here rather than in the
+              markdown because a reviewer editing policy text should not be
+              editing an address field, and because the mailing address is a
+              value the operator supplies rather than something anyone writes.
+
+              That comment was written waiting for spec 040, and this is it:
+              the three literals that used to sit here — "Copyright Agent,
+              ThunderForge", a placeholder address, and an @example.com
+              mailbox — now come from the notice-contact settings, read over
+              the unauthenticated query because whoever needs to file a notice
+              has no account here (spec 039 FR-056).
+
+              A value nobody has set still renders the pre-launch placeholder,
+              unchanged and marked so it reads as unconfigured. An instance
+              that has not been through setup therefore publishes the page it
+              published before — which is the honest one: it also cannot mint
+              a share link, because spec 040's publishing gate refuses while
+              the notice contact is unset. */}
           <Card
             surface="stone"
             className="grid gap-3 p-6"
@@ -75,25 +95,21 @@ export default function DmcaCompliancePage() {
           >
             <h2 className="text-lg font-semibold">Designated DMCA Agent</h2>
             <dl className="grid gap-1 text-sm">
-              <div>
-                <dt className="inline font-medium">Name/Title: </dt>
-                <dd className="inline text-muted-foreground">
-                  Copyright Agent, ThunderForge
-                </dd>
-              </div>
-              <div>
-                <dt className="inline font-medium">Mailing Address: </dt>
-                <dd className="inline text-muted-foreground">
-                  [Configure via instance legal/compliance settings before
-                  launch]
-                </dd>
-              </div>
-              <div>
-                <dt className="inline font-medium">Electronic Contact: </dt>
-                <dd className="inline text-muted-foreground">
-                  dmca@thunderforge.example
-                </dd>
-              </div>
+              <AgentValue
+                label="Name/Title"
+                settingKey="notice.contact_name"
+                values={operatorValues}
+              />
+              <AgentValue
+                label="Mailing Address"
+                settingKey="notice.contact_postal_address"
+                values={operatorValues}
+              />
+              <AgentValue
+                label="Electronic Contact"
+                settingKey="notice.contact_email"
+                values={operatorValues}
+              />
             </dl>
             <p className="text-xs text-muted-foreground">
               This designation is kept current with the U.S. Copyright
@@ -126,6 +142,41 @@ export default function DmcaCompliancePage() {
         </main>
       </Container>
     </>
+  );
+}
+
+/**
+ * One row of the agent designation, resolved or visibly unconfigured.
+ *
+ * The value is printed as text and never parsed — the same rule
+ * `LegalProse.tsx` follows, for the same reason: this is an operator's typed
+ * setting rendered on a page that carries a statutory designation.
+ *
+ * An unset value keeps the "configure before launch" placeholder rather than
+ * rendering blank. A designation naming nobody, that reads as complete, is
+ * worse than one that says out loud it has not been filled in.
+ */
+function AgentValue({
+  label,
+  settingKey,
+  values,
+}: {
+  label: string;
+  settingKey: OperatorValueKey;
+  values: OperatorValues;
+}) {
+  const { text, isSet } = resolveOperatorValue(settingKey, values);
+  return (
+    <div>
+      <dt className="inline font-medium">{label}: </dt>
+      <dd
+        className="inline text-muted-foreground"
+        data-testid={`dmca-agent-${settingKey.replace(/[^a-z]+/g, "-")}`}
+        data-configured={isSet ? "true" : "false"}
+      >
+        {text}
+      </dd>
+    </div>
   );
 }
 

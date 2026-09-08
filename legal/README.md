@@ -18,12 +18,12 @@ review actionable rather than advisory.
 
 ## What is here
 
-| File | Where it appears | Status |
-|---|---|---|
-| `dmca-policy.md` | `/legal/dmca` | **Needs legal review before launch** |
-| `notice-attestations.md` | The takedown and counter-notice forms | **Needs legal review before launch** — statutory |
-| `terms-of-service.md` | `/legal/terms` | **Base draft. Never reviewed.** Carries `[OPERATOR]` markers |
-| `privacy-policy.md` | `/legal/privacy` | **Base draft. Never reviewed.** Carries `[OPERATOR]` markers |
+| File                     | Where it appears                      | Status                                                       |
+| ------------------------ | ------------------------------------- | ------------------------------------------------------------ |
+| `dmca-policy.md`         | `/legal/dmca`                         | **Needs legal review before launch**                         |
+| `notice-attestations.md` | The takedown and counter-notice forms | **Needs legal review before launch** — statutory             |
+| `terms-of-service.md`    | `/legal/terms`                        | **Base draft. Never reviewed.** Carries `[OPERATOR]` markers |
+| `privacy-policy.md`      | `/legal/privacy`                      | **Base draft. Never reviewed.** Carries `[OPERATOR]` markers |
 
 `notice-attestations.md` is read differently from the others, and the
 difference matters if you edit it. Its `##` headings are **stable identifiers**
@@ -35,14 +35,14 @@ still resolves, so a rename fails in CI and not in front of a submitter.
 Reword the text under a heading freely. Change a heading only alongside the
 code that references it.
 
-## What is deliberately *not* here
+## What is deliberately _not_ here
 
 - **Structured data**: the designated agent's name, address and electronic
   contact. Those are instance configuration, not prose, and they render as a
   definition list the page owns. They also carry a pre-launch placeholder.
 - **The notice and counter-notice forms' field labels.** "Location of the
   allegedly infringing material" is UI, not policy. The statutory attestations
-  those forms ask a submitter to affirm *are* policy, and they are here, in
+  those forms ask a submitter to affirm _are_ policy, and they are here, in
   `notice-attestations.md`.
 - **Per-system licence and attribution text.** That lives in each pack's
   `system.json` under its `legal` block, because it belongs to the pack and
@@ -71,20 +71,59 @@ missing document is a title over nothing, with no error anywhere.
   review. Two sections are flagged in the terms as most likely to be wrong for
   a given jurisdiction: the warranty disclaimer and the limitation of
   liability.
-- **Both carry `[OPERATOR — ...]` markers that must be replaced before
-  publishing.** Who runs the instance, how to contact them, the governing
-  jurisdiction, and any minimum age. A test asserts these markers survive
-  rendering rather than being silently swallowed: a page that omits who holds
-  your data while reading as complete is worse than one that visibly has a
-  blank.
+- **The markers in those two drafts are of two kinds, and only one kind is
+  filled by software.** Spec 040 split the fourteen `[OPERATOR — ...]` markers
+  that used to be here:
+  - **Four are values.** The operator's name and their contact address, in each
+    document. These are now `{{operator.name}}` and
+    `{{operator.contact_email}}`, substituted at render time from the settings
+    setup collects, so an operator names themselves without editing a file.
+    The closed set of tokens that may appear in these documents — and the
+    marker each one falls back to — is
+    `apps/web/src/legal/operatorTokens.ts`. A `{{...}}` outside that set is
+    left on the page verbatim, and a test fails on it.
+  - **Ten are prose an operator has to write.** The governing jurisdiction, how
+    a change to the terms and to the privacy policy will be announced, whether
+    the instance is invite-only, community-specific additions, the warranty
+    disclaimer, the limitation of liability, and whether the instance is
+    directed at children. No field collects these and none is planned to: they
+    are judgements, not data. They stay as `[OPERATOR — ...]` until a human
+    replaces them.
+
+  Collecting the four does not make either document placeholder-free, and
+  nothing in the product claims it does.
+
+- **An unset value still renders its visible marker.** Substitution can only
+  fill a blank, never hide one — an unconfigured instance publishes the same
+  page it published before spec 040. A test asserts both halves of this: the
+  markers survive rendering, and a null, empty or whitespace setting is treated
+  as unset rather than published as the operator's name. A page that omits who
+  holds your data while reading as complete is worse than one that visibly has
+  a blank.
+
+- **An operator's typed value is printed, never parsed.** It is rendered as its
+  own text segment and does not pass through the inline `**bold**` /
+  `[text](url)` matcher that the prose here does, so an operator name
+  containing link markup appears as that text rather than as a link inside the
+  terms of service. If a value ever needs formatting, that is an ADR, not a
+  change to the renderer.
 - **Nothing here has been reviewed by a lawyer.** All of it was drafted
   in-repo. The agent designation on the DMCA page already carries a "configure
   before launch" placeholder; this text needs the same gate.
-- **The designated agent's mailing address and electronic contact are
-  placeholders.** `[Configure via instance legal/compliance settings before
-  launch]` and `dmca@thunderforge.example`. These are instance configuration
-  rather than prose, which is why they are not in this directory — but they
-  block launch just as hard.
+- **The designated agent's name, mailing address and electronic contact now
+  come from the notice-contact settings** rather than from literals in
+  `DmcaCompliancePage.tsx`. They are instance configuration rather than prose,
+  which is why they are still not in this directory. Unset, the page keeps its
+  `[Configure via instance legal/compliance settings before launch]` text, and
+  they block launch just as hard as before — an instance with no notice contact
+  also cannot publish: spec 040's gate refuses to mint a share link while it is
+  unset, deliberately, so nothing leaves an instance nobody can file a notice
+  against.
+
+- **Registering a designated agent is the operator's obligation, not this
+  software's** (spec 039 FR-055). Filling the fields publishes a designation on
+  the DMCA page; it files nothing with any copyright office. The setup screen
+  that collects the notice contact says so.
 - **`notice-attestations.md` is a plain-language rendering of statutory
   elements, not a quotation of them.** 17 U.S.C. § 512(c)(3)(A) governs the
   notice elements and § 512(g)(3) the counter-notice elements. Whether the

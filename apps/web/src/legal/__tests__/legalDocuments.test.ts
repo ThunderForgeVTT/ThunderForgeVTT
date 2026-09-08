@@ -3,7 +3,11 @@ import {
   LEGAL_DOCUMENTS,
   legalSections,
   legalStatement,
+  OPERATOR_TOKENS,
+  OPERATOR_UNSET_MARKERS,
+  resolveOperatorValue,
   sectionsOf,
+  substituteOperatorValues,
 } from "@/legal/legalDocuments";
 
 /**
@@ -147,5 +151,170 @@ describe("notice attestations", () => {
     expect(() =>
       legalStatement("notice-attestations", "no-such-statement"),
     ).toThrow(/missing from legal/);
+  });
+});
+
+/**
+ * Spec 040 T055/T064/T065: the four *value* markers now resolve from settings.
+ *
+ * The invariant these guard is the one the placeholder test above states, moved
+ * one layer down. Before this feature an unfilled operator name was a literal
+ * `[OPERATOR — ...]` in the markdown and could only ever render. Now it is a
+ * token, and a token has a way to render as nothing — which would produce the
+ * page that reads as complete while naming nobody, on the two documents where
+ * that matters most. So the unset rendering is asserted directly.
+ */
+describe("operator value tokens", () => {
+  const NAME_MARKER = OPERATOR_UNSET_MARKERS["operator.name"];
+
+  /** The rendered text of a substitution, prose and values alike. */
+  const rendered = (text: string, values = {}) =>
+    substituteOperatorValues(text, values)
+      .segments.map((segment) => segment.text)
+      .join("");
+
+  it("renders the visible marker for a token nobody has set", () => {
+    const out = substituteOperatorValues("Operator: {{operator.name}}");
+    expect(out.segments.map((s) => s.kind)).toEqual(["prose"]);
+    expect(rendered("Operator: {{operator.name}}")).toBe(
+      `Operator: ${NAME_MARKER}`,
+    );
+    expect(NAME_MARKER).toContain("[OPERATOR");
+  });
+
+  /**
+   * Null and blank are the shapes an unset setting actually arrives in — the
+   * GraphQL field is nullable, and a text input that was focused and left
+   * empty submits `""`. Neither may be published as the operator's name.
+   */
+  it.each([
+    ["absent", undefined],
+    ["null", null],
+    ["empty", ""],
+    ["whitespace", "   "],
+  ])("treats a %s value as unset rather than as a name", (_label, value) => {
+    expect(rendered("{{operator.name}}", { "operator.name": value })).toBe(
+      NAME_MARKER,
+    );
+  });
+
+  it("substitutes a value that is set", () => {
+    expect(
+      rendered("Operator: {{operator.name}}", {
+        "operator.name": "Riverside Table",
+      }),
+    ).toBe("Operator: Riverside Table");
+  });
+
+  /**
+   * The trust boundary, asserted as data rather than as rendering: a value is
+   * its own segment, so `LegalProse` can print it without passing it through
+   * the `**bold**` / `[text](url)` matcher. An operator name that looks like a
+   * link must reach the page as text — publishing an operator-chosen link
+   * inside the terms of service is the failure this whole split exists to
+   * prevent.
+   */
+  it("keeps a substituted value in its own segment, apart from the prose", () => {
+    const out = substituteOperatorValues(
+      "Operator: {{operator.name}}, contact **{{operator.contact_email}}**.",
+      {
+        "operator.name": "[click here](https://elsewhere.example)",
+        "operator.contact_email": "gm@riverside.example",
+      },
+    );
+    expect(out.segments).toEqual([
+      { kind: "prose", text: "Operator: " },
+      { kind: "value", text: "[click here](https://elsewhere.example)" },
+      { kind: "prose", text: ", contact **" },
+      { kind: "value", text: "gm@riverside.example" },
+      { kind: "prose", text: "**." },
+    ]);
+  });
+
+  /**
+   * Prose either side of an unset token is merged back into one segment, so a
+   * marker sitting inside a `**bold**` run does not split the emphasis in half
+   * and leave the asterisks on the page.
+   */
+  it("merges prose around an unset token into one segment", () => {
+    const out = substituteOperatorValues("**Operator: {{operator.name}}**");
+    expect(out.segments).toHaveLength(1);
+    expect(out.segments[0].kind).toBe("prose");
+  });
+
+  it("leaves a token outside the closed set exactly as written", () => {
+    expect(rendered("Say {{operator.favourite_colour}} here")).toBe(
+      "Say {{operator.favourite_colour}} here",
+    );
+  });
+
+  /**
+   * A `{{...}}` nobody implemented renders verbatim rather than throwing, which
+   * is the right behaviour for a page and the wrong one for a review: it would
+   * ship as visible braces in a published policy. So the documents are checked
+   * against the closed set here, where it fails in CI instead.
+   */
+  it("uses no token in legal/*.md that the closed set does not declare", () => {
+    const declared = new Set(Object.keys(OPERATOR_TOKENS));
+    for (const slug of Object.keys(LEGAL_DOCUMENTS)) {
+      // The published sections, not the raw file: each document opens with an
+      // HTML comment explaining the token mechanism to a reviewer, and that
+      // comment names token shapes it is describing rather than using.
+      const published = legalSections(slug)
+        .map((section) => section.body)
+        .join("\n");
+      for (const token of published.match(/\{\{[^}]*\}\}/g) ?? []) {
+        expect(declared.has(token), `legal/${slug}.md uses ${token}`).toBe(
+          true,
+        );
+      }
+    }
+  });
+
+  /**
+   * The four value markers, named per document. Counted would pass while the
+   * wrong ones were present, and these two documents are the pages FR-005 is
+   * about: an instance that finished setup must publish an operator and a
+   * contact on both, with no file edited.
+   */
+  it.each(["terms-of-service", "privacy-policy"])(
+    "resolves the operator and the contact in %s",
+    (slug) => {
+      const body = legalSections(slug)
+        .map((s) => s.body)
+        .join("\n");
+      expect(body).toContain("{{operator.name}}");
+      expect(body).toContain("{{operator.contact_email}}");
+
+      const filled = rendered(body, {
+        "operator.name": "Riverside Table",
+        "operator.contact_email": "gm@riverside.example",
+      });
+      expect(filled).toContain("Riverside Table");
+      expect(filled).toContain("gm@riverside.example");
+      // The ten prose markers are not values and are not filled by anything.
+      // They stay visible until a human writes them (research.md § D2).
+      expect(rendered(body)).toContain("[OPERATOR");
+    },
+  );
+
+  /**
+   * The DMCA agent designation reads the same settings as a definition list
+   * rather than as prose. Unset, it keeps the "configure before launch" text
+   * the page has always shown — a designation that names nobody must say so.
+   */
+  it("keeps the pre-launch placeholder for an unset notice contact", () => {
+    for (const key of [
+      "notice.contact_name",
+      "notice.contact_email",
+      "notice.contact_postal_address",
+    ] as const) {
+      const unset = resolveOperatorValue(key);
+      expect(unset.isSet).toBe(false);
+      expect(unset.text).toContain("before launch");
+
+      const set = resolveOperatorValue(key, { [key]: "Copyright Agent" });
+      expect(set).toEqual({ text: "Copyright Agent", isSet: true });
+    }
   });
 });

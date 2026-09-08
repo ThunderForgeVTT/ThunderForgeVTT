@@ -9,8 +9,13 @@ claim ("no analytics", "sessions record no IP address") that claim was checked,
 and it stops being true the moment someone adds the thing it denies. Treat a
 change to data collection as a change to this file.
 
-Two things an operator MUST replace before publishing, marked [OPERATOR] below:
-who runs the instance, and how to contact them.
+Who runs the instance and how to contact them are {{...}} *values*: setup
+collects them and apps/web/src/legal/operatorTokens.ts substitutes them at
+render time, falling back to a visible [OPERATOR - ...] marker while unset.
+
+The remaining [OPERATOR - ...] markers are *prose an operator has to write* -
+whether the instance is directed at children, and how a change to this policy
+will be announced. No field collects those. See spec 040 research.md D2.
 -->
 
 ThunderForge is self-hosted software. This policy describes what **this
@@ -18,10 +23,9 @@ instance** collects and does with it. Whoever operates this instance decides
 that, not the ThunderForge project — if you are reading this on someone's
 server, they are the people who hold your data and the people to ask about it.
 
-**Operator of this instance:** [OPERATOR — name and, if applicable, legal
-entity]
+**Operator of this instance:** {{operator.name}}
 
-**Contact for privacy questions:** [OPERATOR — email address]
+**Contact for privacy questions:** {{operator.contact_email}}
 
 ## What this instance stores about you
 

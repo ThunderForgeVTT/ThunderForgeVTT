@@ -6,7 +6,24 @@ BASE DRAFT — never reviewed by a lawyer. See ./README.md.
 This is written for a *self-hosted* instance, which is the shape that makes it
 different from a template: the operator of the instance is the party offering
 the service, and the ThunderForge project is not a party to it at all. An
-operator adopting this must replace every [OPERATOR] marker.
+operator adopting this must supply every marker below.
+
+There are two kinds of marker, and the difference is load-bearing (spec 040
+research.md D2):
+
+  {{operator.name}} and friends are *values* setup collects. They are filled
+  from instance settings at render time by
+  apps/web/src/legal/operatorTokens.ts, which holds the closed set of tokens
+  that may appear here. A token nobody has set still renders a visible
+  [OPERATOR - ...] marker rather than a blank; the marker text lives beside
+  the token in that file.
+
+  [OPERATOR - ...] markers are *prose an operator has to write*. No field
+  collects them and no software can fill them. They stay exactly as written
+  until a human replaces them.
+
+Do not invent a new {{...}} token here. One that is not in OPERATOR_TOKENS is
+left in the page verbatim, and legalDocuments.test.ts fails on it.
 
 The disclaimer and liability sections are the ones most likely to be wrong for
 a given jurisdiction, and the ones a review should start with.
@@ -16,10 +33,9 @@ ThunderForge is self-hosted software licensed under the GNU Affero General
 Public License v3.0. These terms govern **this instance** — the one you are
 signed in to — and the agreement is between you and whoever runs it.
 
-**Operator of this instance:** [OPERATOR — name and, if applicable, legal
-entity]
+**Operator of this instance:** {{operator.name}}
 
-**Contact:** [OPERATOR — email address]
+**Contact:** {{operator.contact_email}}
 
 The ThunderForge project publishes the software. It does not run this instance,
 holds none of your data, and is not a party to this agreement. Questions about
