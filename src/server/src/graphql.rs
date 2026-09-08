@@ -273,6 +273,10 @@ pub struct QueryRoot(
     // Spec 040: every setting, its source, its history, and what this
     // instance is not ready for.
     crate::settings::graphql::InstanceSettingsQuery,
+    // Spec 040 US4: whether this instance can send mail, and what it has
+    // failed to send. Declared by `mail/graphql.rs` for the reason that file
+    // gives.
+    crate::mail::graphql::MailQuery,
     // Spec 036 US3b: `systemChecks(worldId)` — what a sheet may offer.
     RollCheckQuery,
     // Spec 036 US4: the sessions a person holds, now that they may hold several.
@@ -338,6 +342,8 @@ pub struct MutationRoot(
     ActorShareMutation,
     mutations_instance_access::InstanceAccessMutation,
     crate::settings::graphql::InstanceSettingsMutation,
+    // Spec 040 US4: `sendTestMail` and `retryOutboxMessage`.
+    crate::mail::graphql::MailMutation,
     mutations_sessions::SessionMutation,
     mutations_actor_images::ActorImageMutation,
     LoreMutation,

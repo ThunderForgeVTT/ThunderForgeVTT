@@ -404,6 +404,9 @@ async fn run() {
         key,
         db_pool: db_pool.clone(),
         adjudicator,
+        // Spec 040 US4: no pinned transport. The mail settings are resolved
+        // per send, so an operator correcting an SMTP host does not restart.
+        mail: thunderforge_server::mail::MailSeam::from_settings(),
     };
 
     // Materialize any OAUTH_*-env-var-configured provider instances (ADR-041)
@@ -483,6 +486,14 @@ async fn run() {
     // trade than a query that finds no rows.
     eprintln!("[Server] 🚀 Starting lore repository sync task");
     thunderforge_server::lore_sync::schedule::spawn_lore_sync_task(app_state.clone());
+
+    // Spec 040 US4 (FR-013 – FR-017): the outbox sender. Spawned
+    // unconditionally, like the lore sync task above and for the same reason:
+    // with no mail configured it releases nothing and selects nothing, at the
+    // cost of one indexed query every fifteen seconds, and an operator who
+    // configures mail does not have to restart to use it.
+    eprintln!("[Server] 🚀 Starting mail outbox sender task");
+    thunderforge_server::mail::schedule::spawn_mail_task(app_state.clone());
 
     // Spawn the presence listener task (Phase 4.9.B.3)
     eprintln!("[Server] 🚀 Starting presence listener task");

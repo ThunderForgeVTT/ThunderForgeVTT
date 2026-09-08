@@ -37,6 +37,15 @@ pub struct AppState {
     // (`LocalAdjudicator` by default, or `RemoteAdjudicator` when
     // `CRUCIBLE_MODE=remote` — selected once at startup in `main.rs`).
     pub adjudicator: std::sync::Arc<dyn thunderforge_crucible::SessionAdjudicator + Send + Sync>,
+    /// Spec 040 US4: where a message goes when this instance sends one.
+    ///
+    /// Empty in production — the transport is built from the `mail.*` settings
+    /// as they resolve for each send, so correcting an SMTP host takes effect
+    /// without a restart (FR-007). A test puts one implementation in it and
+    /// asserts what would have been sent without sending it. See
+    /// `mail::MailSeam` for why this is not an `Arc<dyn MailTransport>` fixed
+    /// at startup.
+    pub mail: crate::mail::MailSeam,
 }
 
 impl FromRef<AppState> for Key {

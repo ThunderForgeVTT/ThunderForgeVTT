@@ -26,6 +26,27 @@ services:
       - "9000:9000"
     volumes:
       - rustfs_data:/data
+  # Spec 040 US4: a real SMTP server for the dev stack and for the mail tests.
+  #
+  # Mailpit speaks real SMTP on 1025 and exposes a JSON API on 8025 that a test
+  # reads the delivered message back from. It is here because the level of
+  # proof it provides is the one it is tempting to skip and the one where mail
+  # actually fails: a capturing transport proves the code around `lettre` and
+  # nothing about `lettre`, STARTTLS negotiation, or whether the From address
+  # is the one the operator set (research.md § R8).
+  #
+  # It stores messages in memory and forwards nothing anywhere. There is no
+  # configuration in which this container can deliver mail to a real person.
+  mailpit:
+    container_name: thunderforge-mailpit
+    image: axllent/mailpit:v1.21
+    restart: always
+    environment:
+      - MP_SMTP_AUTH_ACCEPT_ANY=1
+      - MP_SMTP_AUTH_ALLOW_INSECURE=1
+    ports:
+      - "1025:1025"
+      - "8025:8025"
 volumes:
   db:
     driver: local

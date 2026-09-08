@@ -67,6 +67,11 @@ pub fn test_app_state() -> AppState {
         key: Key::generate(),
         db_pool,
         adjudicator: std::sync::Arc::new(thunderforge_crucible::local::LocalAdjudicator),
+        // No override: a test that cares about mail sets one, and a test that
+        // does not gets an instance with no mail configured — which is what
+        // most instances are, and therefore the right default to be tested
+        // against.
+        mail: crate::mail::MailSeam::from_settings(),
     }
 }
 

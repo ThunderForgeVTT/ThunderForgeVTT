@@ -41,6 +41,13 @@ pub mod interaction;
 pub mod interface_packs;
 pub mod light_effects;
 pub mod lore_sync;
+/// Spec 040 US4: whether this instance can tell somebody something.
+///
+/// A transport behind a trait, a durable outbox nothing bypasses, and a
+/// background sender modelled on `lore_sync::schedule`. An instance with no
+/// mail configured runs, serves and plays — it holds messages rather than
+/// discarding them (FR-015, FR-017).
+pub mod mail;
 pub mod map_import;
 pub mod markdown;
 pub mod models;

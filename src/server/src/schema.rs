@@ -377,6 +377,24 @@ diesel::table! {
 }
 
 diesel::table! {
+    mail_outbox (id) {
+        id -> Uuid,
+        purpose -> Text,
+        to_address -> Text,
+        subject_encrypted -> Text,
+        body_encrypted -> Text,
+        state -> Text,
+        attempts -> Int4,
+        last_attempt_at -> Nullable<Timestamp>,
+        next_attempt_at -> Nullable<Timestamp>,
+        last_failure_reason -> Nullable<Text>,
+        sent_at -> Nullable<Timestamp>,
+        created_by -> Nullable<Uuid>,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     oauth_authorization_sessions (id) {
         id -> Uuid,
         provider_id -> Uuid,
@@ -1176,6 +1194,7 @@ diesel::joinable!(lore_repository_connections -> worlds (world_id));
 diesel::joinable!(lore_sync_grant_sessions -> users (started_by));
 diesel::joinable!(lore_sync_grant_sessions -> worlds (world_id));
 diesel::joinable!(lore_sync_runs -> lore_repository_connections (connection_id));
+diesel::joinable!(mail_outbox -> users (created_by));
 diesel::joinable!(oauth_authorization_sessions -> oauth_providers (provider_id));
 diesel::joinable!(oauth_link_challenges -> oauth_providers (provider_id));
 diesel::joinable!(oauth_link_challenges -> users (user_id));
@@ -1285,6 +1304,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     lore_repository_connections,
     lore_sync_grant_sessions,
     lore_sync_runs,
+    mail_outbox,
     oauth_authorization_sessions,
     oauth_link_challenges,
     oauth_providers,

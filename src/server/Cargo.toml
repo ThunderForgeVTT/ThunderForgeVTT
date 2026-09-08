@@ -123,6 +123,28 @@ comrak = "0.54.0"
 ammonia = "4.1.4"
 slug = "0.1.6"
 regex = "1.13.1"
+# Spec 040 US4: SMTP. `lettre` is the only maintained Rust SMTP client with a
+# native async Tokio transport, and the TLS choice matters more than the crate
+# choice: the first-party dependency tree is rustls throughout (`reqwest` is
+# declared `default-features = false, features = [..., "rustls"]`), and
+# `openssl` appears in the lock only through the legacy `websocket 0.27.1`
+# chain. Taking `native-tls` here would put a system library in every build and
+# every image for one subsystem. Default features are off for the same reason —
+# they pull in the file/sendmail transports and a second TLS stack.
+lettre = { version = "0.11", default-features = false, features = [
+  "smtp-transport",
+  "tokio1",
+  "tokio1-rustls-tls",
+  "ring",
+  "webpki-roots",
+  "builder",
+  "hostname",
+] }
+# `dyn`-compatible async traits. Needed for exactly one thing — `dyn
+# MailTransport`, whose whole purpose is that a test can hold a different
+# implementation than production does — because a native `async fn` in a trait
+# is not object-safe.
+async-trait = "0.1"
 
 [dependencies.thunderforge_core]
 path = "../core"
