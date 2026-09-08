@@ -2,13 +2,19 @@ use super::*;
 
 /// Set some variables, run, restore.
 ///
-/// The environment is process-global and `cargo test` is threaded, so
-/// these cases are serialised behind one lock. Without it they pass alone
-/// and fail together, which is the worst way for a test to be wrong.
+/// The environment is process-global and `cargo test` is threaded, so these
+/// cases are serialised behind a lock. Without it they pass alone and fail
+/// together, which is the worst way for a test to be wrong.
+///
+/// **The lock is `settings::test_env`'s, deliberately, and this file used to
+/// have its own.** Two mutexes guarding one process environment serialise
+/// nothing: these tests set `SYNC_GITHUB_APP_*` under one while spec 040's
+/// readiness tests set every declared variable — including those — under the
+/// other, and the pair produced eight failures every few full runs, in
+/// modules that had never heard of each other. The resource is the
+/// environment, so there is one lock for it.
 fn temp_env(vars: &[(&str, Option<&str>)], body: impl FnOnce()) {
-    use std::sync::Mutex;
-    static LOCK: Mutex<()> = Mutex::new(());
-    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _guard = crate::settings::test_env::lock();
 
     let previous: Vec<(String, Option<String>)> = vars
         .iter()
