@@ -359,4 +359,134 @@ test.describe("Spec 040 FR-026: the publishing gate", () => {
       await visitorContext.close();
     }
   });
+  test("a world is fully playable while the instance has nobody to serve a notice on", async ({
+    page,
+    browser,
+  }) => {
+    test.skip(
+      fixedByEnvironment.length > 0,
+      `this stack fixes ${fixedByEnvironment.join(", ")} in the environment`,
+    );
+
+    // The refusal message promises that "things inside a world are
+    // unaffected", and until now that promise was tested by asserting the
+    // message *says* it. That is a test of the wording, not of the claim —
+    // it would pass unchanged if the gate had shut a world down, so long as
+    // the sentence survived. This plays a world instead.
+    await unconfigure();
+
+    const { worldId } = await aGameMaster(page);
+
+    // Content authored inside the world. Lore is the pointed case: the same
+    // entry becomes publishable-beyond-the-world material the moment somebody
+    // shares a collection, so if the gate were drawn in the wrong place this
+    // is where it would bite.
+    const lore = await graphql<GqlResult<{ createLoreEntry: { id: string } }>>(
+      page,
+      `
+        mutation CL($input: CreateLoreEntryInput!) {
+          createLoreEntry(input: $input) {
+            id
+          }
+        }
+      `,
+      {
+        input: {
+          worldId,
+          title: `Unserved ${uniqueSuffix()}`,
+          content: "Written while nobody could be served a notice.",
+        },
+      },
+    );
+    expect(
+      lore.errors,
+      "authoring inside a world must not need a notice contact",
+    ).toBeFalsy();
+    expect(lore.data?.createLoreEntry?.id).toBeTruthy();
+
+    // And a second person can be invited and can play. Sharing *within* a
+    // world is the capability the gate deliberately does not cover — spec 040
+    // gates `PublishBeyondWorld`, and a table is not beyond the world.
+    const invite = await graphql<
+      GqlResult<{ generateInviteCode: { inviteCode: string } }>
+    >(
+      page,
+      `
+        mutation GI($input: GenerateInviteCodeInput!) {
+          generateInviteCode(input: $input) {
+            inviteCode
+          }
+        }
+      `,
+      { input: { worldId, maxUses: 5 } },
+    );
+    expect(
+      invite.errors,
+      "inviting somebody to a table must not need a notice contact",
+    ).toBeFalsy();
+    const code = invite.data?.generateInviteCode?.inviteCode;
+    expect(code).toBeTruthy();
+
+    const playerContext = await browser.newContext();
+    const player = await playerContext.newPage();
+    try {
+      await register(player, freshCredentials("e2egateplay"));
+      const joined = await graphql<
+        GqlResult<{ joinWorld: { worldId: string } }>
+      >(
+        player,
+        `
+          mutation JW($input: JoinWorldInput!) {
+            joinWorld(input: $input) {
+              worldId
+            }
+          }
+        `,
+        { input: { inviteCode: code } },
+      );
+      expect(
+        joined.errors,
+        "joining a table must not need a notice contact",
+      ).toBeFalsy();
+      expect(joined.data?.joinWorld?.worldId).toBe(worldId);
+
+      // Present at the table, which is the plainest statement of "playable".
+      const beat = await graphql<GqlResult<{ heartbeat: unknown }>>(
+        player,
+        `
+          mutation HB($worldId: UUID!) {
+            heartbeat(worldId: $worldId)
+          }
+        `,
+        { worldId },
+      );
+      expect(
+        beat.errors,
+        "being present at a table must not need a notice contact",
+      ).toBeFalsy();
+
+      const presence = await graphql<
+        GqlResult<{ worldPresence: { userId: string }[] }>
+      >(
+        page,
+        `
+          query WP($worldId: UUID!) {
+            worldPresence(worldId: $worldId) {
+              userId
+            }
+          }
+        `,
+        { worldId },
+      );
+      expect(presence.errors).toBeFalsy();
+      expect(
+        presence.data?.worldPresence?.length,
+        "the invited player must actually be at the table",
+      ).toBeGreaterThan(0);
+    } finally {
+      await playerContext.close();
+    }
+
+    await configure();
+  });
 });

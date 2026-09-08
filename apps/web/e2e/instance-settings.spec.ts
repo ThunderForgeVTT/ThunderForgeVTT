@@ -235,10 +235,16 @@ test.describe("Spec 040 US2/US3: an administrator's view of the settings", () =>
   test("a value the environment has fixed says so and refuses a write", async () => {
     const settings = await readSettings(admin);
     const fixed = settings.find((s) => s.source === "ENVIRONMENT");
-    test.skip(
-      !fixed,
-      "no declared setting is fixed by the environment on this stack, so there is nothing to refuse a write to",
-    );
+    // Not a skip any more. `scripts/e2e-parallel.mjs` fixes `realm_name` in
+    // the environment deliberately so this test always has a target: it used
+    // to look for one and skip when there was none, and on this harness there
+    // never was — so the refusal it exists to pin was pinned by nothing, and
+    // the test passed by not running. A missing target is now a failure,
+    // because it means the harness stopped providing one.
+    expect(
+      fixed,
+      "the harness must fix one declared setting in the environment (THUNDERFORGE_REALM_NAME) for this to test anything",
+    ).toBeTruthy();
 
     const target = fixed!;
     expect(target.editable).toBe(false);

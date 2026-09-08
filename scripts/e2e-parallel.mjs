@@ -443,6 +443,20 @@ async function startShard(index, { firstRun = false } = {}) {
     // auth limiter accounted for 18 of the 42 failures the last full sweep
     // started from, and every shard registers users from the same IP.
     THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT: "1",
+    // One declared setting, fixed in the environment on purpose.
+    //
+    // `instance-settings.spec.ts` asserts that an environment-fixed setting
+    // reports its variable and refuses a write — and it used to find its
+    // target by looking for any setting the environment happened to fix,
+    // skipping itself when there was none. On this harness there was none, so
+    // the refusal was pinned by nothing: the test passed by not running.
+    //
+    // `realm_name` is the one to fix because it costs nothing to fix. It is
+    // `Optional` with no capability, so it stays out of the setup wizard's
+    // `required_settings`; nothing in `apps/web/src` reads it; and it is
+    // neither of the two keys that spec writes, so its own writable-setting
+    // tests are unaffected.
+    THUNDERFORGE_REALM_NAME: "ThunderForge (e2e)",
     // Only the first-run stack, and it is doing double duty. The setup link
     // the server prints is what the e2e follows, so it has to be a real URL
     // rather than the bare path an unconfigured instance logs — and setting it
