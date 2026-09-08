@@ -9,6 +9,7 @@ import { Loader } from "@/components/ui/loader/Loader";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { useAuth } from "@/hooks/useAuth";
 import type { SeoConfig } from "@/types/seo";
+import { AppFooter } from "@/components/navigation/AppFooter";
 
 interface WorldInfo {
   id: string;
@@ -259,6 +260,9 @@ export default function JoinWorldPage() {
           )}
         </main>
       </Container>
+      {/* Outside `MainLayout` like the play field, but unlike the play field
+          it is an ordinary page with room for a footer. */}
+      <AppFooter />
     </>
   );
 }

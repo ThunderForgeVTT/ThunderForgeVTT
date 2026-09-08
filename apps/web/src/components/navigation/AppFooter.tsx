@@ -1,6 +1,10 @@
 import { Link } from "react-router-dom";
 import { Container } from "@/components/ui/container/Container";
 import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
+import {
+  SITE_LINK_GROUPS,
+  type SiteLinkGroup,
+} from "@/components/navigation/siteLinks";
 
 /**
  * The site footer.
@@ -34,33 +38,7 @@ import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
  * are not: one is a legal document and the other is a diagnostic.
  */
 
-interface FooterLink {
-  label: string;
-  to: string;
-}
-
-const LEGAL: FooterLink[] = [
-  { label: "Terms of service", to: "/legal/terms" },
-  { label: "Privacy policy", to: "/legal/privacy" },
-  // Named for what a person is trying to do, not for the statute. Somebody
-  // looking to report stolen artwork is not searching for "DMCA".
-  { label: "Copyright notices", to: "/legal/dmca" },
-];
-
-const INSTANCE: FooterLink[] = [
-  { label: "System status", to: "/status" },
-  { label: "Enter demo workspace", to: "/world/demo-world/play" },
-];
-
-function LinkColumn({
-  heading,
-  links,
-  testId,
-}: {
-  heading: string;
-  links: FooterLink[];
-  testId: string;
-}) {
+function LinkColumn({ heading, links, testId }: SiteLinkGroup) {
   return (
     <nav className="grid gap-2" aria-label={heading} data-testid={testId}>
       <h2 className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
@@ -98,16 +76,9 @@ export function AppFooter() {
             </p>
           </div>
 
-          <LinkColumn
-            heading="This instance"
-            links={INSTANCE}
-            testId="footer-instance-links"
-          />
-          <LinkColumn
-            heading="Legal"
-            links={LEGAL}
-            testId="footer-legal-links"
-          />
+          {SITE_LINK_GROUPS.map((group) => (
+            <LinkColumn key={group.heading} {...group} />
+          ))}
         </div>
       </Container>
     </footer>

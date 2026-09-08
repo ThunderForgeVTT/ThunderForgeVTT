@@ -140,6 +140,7 @@ import {
 } from "@/components/world/GmToolRail/GmToolRail";
 import { SelectionFilterMenu } from "@/components/world/GmToolRail/SelectionFilterMenu";
 import { PlacedItemPrompt } from "@/components/world/PlacedItemPrompt";
+import { AboutInstance } from "@/components/navigation/AboutInstance";
 import { getMyActorClaim } from "@/api/actorClaims";
 import {
   WorldDock,
@@ -2619,6 +2620,13 @@ export default function WorldPage() {
         container. Spec 031 FR-014.
       */}
       <PlacedItemPrompt worldId={id} actorId={claimedActorId} />
+
+      {/*
+        The play field is the one shell with no footer, because it is a canvas
+        that fills the viewport. The links live behind this instead — small,
+        dim and in the corner, because it is the least important control here.
+      */}
+      <AboutInstance />
     </>
   );
 }

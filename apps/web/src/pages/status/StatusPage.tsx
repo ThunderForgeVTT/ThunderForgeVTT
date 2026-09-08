@@ -10,6 +10,7 @@ import { RuneDivider } from "@/components/ui/rune-divider/RuneDivider";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
 import { cn } from "@/lib/utils";
 import type { SeoConfig } from "@/types/seo";
+import { AppFooter } from "@/components/navigation/AppFooter";
 
 export const statusPageSeo: SeoConfig = {
   title: "System Status",
@@ -249,6 +250,13 @@ export default function StatusPage() {
           </div>
         </Container>
       </main>
+      {/*
+        Rendered here rather than inherited, because this page is served ahead
+        of the router in `App.tsx` — deliberately, so it still answers when the
+        setup service does not. That exemption is about the *data* it needs,
+        not about being a page without links.
+      */}
+      <AppFooter />
     </>
   );
 }

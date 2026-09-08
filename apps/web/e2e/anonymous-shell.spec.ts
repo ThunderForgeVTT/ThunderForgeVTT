@@ -66,6 +66,25 @@ test.describe("The shell, to somebody who has never signed in", () => {
     await expect(page.locator("main").first()).toContainText(/notice/i);
   });
 
+  test("the status page carries the footer too, though it is served ahead of the router", async ({
+    page,
+  }) => {
+    // `/status` is rendered before the router in `App.tsx`, deliberately, so
+    // that it still answers when the setup service does not. That exemption is
+    // about the data it needs and not about being a page without links — and
+    // because it is reached by a full load rather than a route, a footer added
+    // to the layout alone would silently miss it.
+    await page.goto("/status");
+    await expect(page.getByTestId("footer-legal-links")).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(
+      page.getByTestId("footer-legal-links").getByRole("link", {
+        name: "Copyright notices",
+      }),
+    ).toBeVisible();
+  });
+
   test("the legal pages are reachable from each other's footer too", async ({
     page,
   }) => {
