@@ -10,7 +10,7 @@ import { Card } from "@/components/ui/card/Card";
 import { Field } from "@/components/ui/field/Field";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
-import { TwoFactorQrCode } from "@/components/security/TwoFactorQrCode";
+import { TwoFactorEnrolmentSteps } from "@/components/security/TwoFactorEnrolmentSteps";
 import { useAuth } from "@/hooks/useAuth";
 import {
   initialTwoFactorEnrolmentState,
@@ -50,7 +50,10 @@ import type { TwoFactorStatus } from "@/types/twoFactor";
  *
  * `research.md` § R10 decided the server encodes a module matrix and the
  * client draws rects — no QR dependency, no `dangerouslySetInnerHTML`. The
- * client half of that is `TwoFactorQrCode` and it is wired up here. The
+ * client half of that is `TwoFactorQrCode`, drawn by the shared
+ * `TwoFactorEnrolmentSteps` this panel renders (FR-001a: one flow, three
+ * entrances — this is the account-settings one, and the sign-in entrance is
+ * `LoginView`). The
  * server half does not exist yet: `two_factor_setup_start` returns
  * `{status, message, otpauth_url}` and no `qr` field. Contract rule 6 already
  * says what to do about that — "a failure to build the QR is not a failure to
@@ -265,147 +268,15 @@ export function TwoFactorEnrolmentPanel() {
         </form>
       ) : null}
 
-      {state.step === "provisioning" ? (
-        <div className="grid gap-5">
-          <div className="grid gap-4 sm:grid-cols-[auto_1fr] sm:items-start">
-            {state.enrolment.qr ? (
-              <TwoFactorQrCode matrix={state.enrolment.qr} />
-            ) : null}
-            <div className="grid gap-3">
-              <div className="grid gap-1">
-                <h3 className="text-sm font-semibold">
-                  {state.enrolment.qr
-                    ? "Scan this, or type the key"
-                    : "Add this key to your authenticator"}
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  {state.enrolment.qr
-                    ? "Scan the code with your authenticator app, or type the key below if you are setting this up on the same device."
-                    : "This instance does not draw a scannable code yet. Type the key below into your authenticator, or paste the setup link if your app or password manager accepts one."}
-                </p>
-              </div>
-
-              <Field
-                label="Setup key"
-                htmlFor="two-factor-secret"
-                hint="Spaces are only there to make it readable — type it with or without them."
-              >
-                <code
-                  data-testid="two-factor-setup-key"
-                  id="two-factor-secret"
-                  className="block rounded-md border border-border bg-muted px-3 py-2 font-mono text-sm break-all select-all"
-                >
-                  {state.enrolment.secret || state.enrolment.otpauthUrl}
-                </code>
-              </Field>
-
-              <Field
-                label="Setup link"
-                htmlFor="two-factor-otpauth"
-                hint="Some desktop authenticators and password managers take this whole link."
-              >
-                <code
-                  id="two-factor-otpauth"
-                  className="block rounded-md border border-border bg-muted px-3 py-2 font-mono text-xs break-all select-all"
-                >
-                  {state.enrolment.otpauthUrl}
-                </code>
-              </Field>
-            </div>
-          </div>
-
-          <form onSubmit={onConfirm} className="grid gap-4">
-            <Field
-              label="Code from your authenticator"
-              htmlFor="two-factor-code"
-              accent="Required"
-              error={state.error ?? undefined}
-              hint="Six digits. If it is refused, wait for the next one and try again — you will not need to scan anything twice."
-            >
-              <Input
-                data-testid="two-factor-code"
-                ref={codeInputRef}
-                id="two-factor-code"
-                name="twoFactorCode"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={7}
-                value={code}
-                onChange={(event) => setCode(event.target.value)}
-                disabled={state.isConfirming}
-              />
-            </Field>
-            <div className="flex flex-wrap gap-3">
-              <Button
-                data-testid="two-factor-confirm"
-                type="submit"
-                variant="primary"
-                icon="shield"
-                disabled={state.isConfirming}
-              >
-                {state.isConfirming ? "Checking..." : "Turn on two-factor"}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={onAbandon}
-                disabled={state.isConfirming}
-              >
-                Cancel
-              </Button>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Nothing has changed on your account yet. If you stop here, you
-              sign in exactly the way you do now.
-            </p>
-          </form>
-        </div>
-      ) : null}
-
-      {state.step === "confirmed" ? (
-        <div className="grid gap-4">
-          <StatusBadge variant="success">
-            Two-factor authentication is on.
-          </StatusBadge>
-          <div className="grid gap-1">
-            <h3 className="text-sm font-semibold">
-              Save these recovery codes now
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              {state.recoveryCodesNotice}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              They are what gets you back into your account if you lose the
-              device with your authenticator on it. This is the only time they
-              will be shown — there is no page that can display them again.
-            </p>
-          </div>
-          <ul className="grid grid-cols-2 gap-2 rounded-md border border-border bg-muted p-3 font-mono text-sm select-all">
-            {state.recoveryCodes.map((recoveryCode) => (
-              <li key={recoveryCode} data-testid="two-factor-recovery-code">
-                {recoveryCode}
-              </li>
-            ))}
-          </ul>
-          <div>
-            <Button
-              type="button"
-              variant="secondary"
-              icon="shield"
-              onClick={() => dispatch({ type: "acknowledgeRecoveryCodes" })}
-            >
-              I have saved these codes
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
-      {state.step === "acknowledged" ? (
-        <StatusBadge variant="success">
-          Two-factor authentication is on. Your recovery codes have been hidden
-          and cannot be shown again.
-        </StatusBadge>
-      ) : null}
+      <TwoFactorEnrolmentSteps
+        state={state}
+        code={code}
+        onCodeChange={setCode}
+        onConfirm={onConfirm}
+        onAbandon={state.step === "provisioning" ? onAbandon : undefined}
+        onAcknowledge={() => dispatch({ type: "acknowledgeRecoveryCodes" })}
+        codeInputRef={codeInputRef}
+      />
     </Card>
   );
 }

@@ -128,7 +128,13 @@ async function expectAuthResponse(
   );
 
   if (!response.ok) {
-    if (payload.status === "two_factor_required") {
+    // Spec 041 FR-019. Both of these are a 401 that is not a refusal: one
+    // asks for a code, the other asks the person to enrol before the sign-in
+    // can finish. Throwing on either would turn a step into an error.
+    if (
+      payload.status === "two_factor_required" ||
+      payload.status === "two_factor_enrolment_required"
+    ) {
       return payload;
     }
 

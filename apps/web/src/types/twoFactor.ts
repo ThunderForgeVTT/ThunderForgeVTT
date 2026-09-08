@@ -51,6 +51,12 @@ export interface PendingTwoFactorEnrolment {
 /** The one response that ever carries recovery-code plaintext (FR-006/FR-009). */
 export interface TwoFactorConfirmation {
   confirmedAt: string | null;
+  /**
+   * FR-020: true when a login challenge authorised the enrolment, in which
+   * case the server issued a session cookie with this response and the
+   * sign-in that was interrupted is finished.
+   */
+  signedIn: boolean;
   recoveryCodes: readonly string[];
   recoveryCodesNotice: string;
 }

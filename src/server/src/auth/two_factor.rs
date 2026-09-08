@@ -11,50 +11,45 @@ use super::*;
 pub(crate) mod recovery;
 pub(crate) use recovery::*;
 
+/// Spec 041 US4 (FR-019 … FR-022): who must hold a factor, what a sign-in does
+/// about it, and the ticket that lets an account caught by a requirement enrol
+/// at the moment it is asked to.
+#[path = "two_factor/requirement.rs"]
+pub(crate) mod requirement;
+pub(crate) use requirement::*;
+
 pub(crate) async fn two_factor_setup_start(
     State(state): State<AppState>,
     Json(request): Json<TwoFactorSetupStartRequest>,
 ) -> (StatusCode, Json<TwoFactorSetupStartResponse>) {
-    let username = request.username.clone();
-    let username_for_query = username.clone();
-    let mut conn = state.db_pool.get().expect("Failed to get DB connection");
-
-    let user = tokio::task::spawn_blocking(move || {
-        users::table
-            .filter(users::username.eq(&username_for_query))
-            .select((users::id, users::password_hash))
-            .first::<(uuid::Uuid, String)>(&mut conn)
-            .optional()
-    })
+    // One flow, three entrances (FR-001a). Account settings and first-run
+    // setup arrive with a username and a password; a sign-in that requires
+    // enrolment arrives with the login challenge it was just handed, because
+    // it has a correct password and no session and re-posting the password
+    // from a challenge screen is not what the contract asks for. See
+    // `authorise_enrolment`.
+    let authorised = match authorise_enrolment(
+        &state,
+        request.username.as_deref(),
+        request.password.as_deref(),
+        request.challenge_id,
+    )
     .await
-    .expect("Failed to spawn blocking task")
-    .expect("Failed to query DB");
-
-    let Some((user_id, password_hash)) = user else {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(TwoFactorSetupStartResponse {
-                status: "failure",
-                message: "Invalid credentials".to_string(),
-                otpauth_url: None,
-            }),
-        );
-    };
-
-    let parsed_hash = PasswordHash::new(&password_hash).expect("Invalid hash in db");
-    if Argon2::default()
-        .verify_password(request.password.as_bytes(), &parsed_hash)
-        .is_err()
     {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(TwoFactorSetupStartResponse {
-                status: "failure",
-                message: "Invalid credentials".to_string(),
-                otpauth_url: None,
-            }),
-        );
-    }
+        Ok(value) => value,
+        Err(error) => {
+            return (
+                error.code,
+                Json(TwoFactorSetupStartResponse {
+                    status: error.status,
+                    message: error.message.to_string(),
+                    otpauth_url: None,
+                }),
+            );
+        }
+    };
+    let user_id = authorised.user_id;
+    let username = authorised.username;
 
     let secret_base32 = {
         let mut secret_bytes = [0u8; 20];
@@ -130,39 +125,37 @@ pub(crate) async fn two_factor_setup_start(
 }
 
 pub(crate) async fn two_factor_setup_confirm(
+    cookies: Cookies,
     State(state): State<AppState>,
     Json(request): Json<TwoFactorSetupConfirmRequest>,
 ) -> (StatusCode, Json<TwoFactorSetupConfirmResponse>) {
-    let username = request.username.clone();
-    let username_for_query = username.clone();
-    let mut conn = state.db_pool.get().expect("Failed to get DB connection");
+    let authorised = match authorise_enrolment(
+        &state,
+        request.username.as_deref(),
+        request.password.as_deref(),
+        request.challenge_id,
+    )
+    .await
+    {
+        Ok(value) => value,
+        Err(error) => return confirm_error(error.code, error.status, error.message),
+    };
+    let user_id = authorised.user_id;
+    let username = authorised.username;
+    let ticket = authorised.ticket;
 
-    let user = tokio::task::spawn_blocking(move || {
+    let mut conn = state.db_pool.get().expect("Failed to get DB connection");
+    let secret_encrypted = tokio::task::spawn_blocking(move || {
         users::table
-            .filter(users::username.eq(&username_for_query))
-            .select((
-                users::id,
-                users::password_hash,
-                users::two_factor_pending_secret_encrypted,
-            ))
-            .first::<(uuid::Uuid, String, Option<String>)>(&mut conn)
+            .filter(users::id.eq(user_id))
+            .select(users::two_factor_pending_secret_encrypted)
+            .first::<Option<String>>(&mut conn)
             .optional()
     })
     .await
     .expect("Failed to spawn blocking task")
-    .expect("Failed to query DB");
-
-    let Some((user_id, password_hash, secret_encrypted)) = user else {
-        return confirm_error(StatusCode::UNAUTHORIZED, "failure", "Invalid credentials");
-    };
-
-    let parsed_hash = PasswordHash::new(&password_hash).expect("Invalid hash in db");
-    if Argon2::default()
-        .verify_password(request.password.as_bytes(), &parsed_hash)
-        .is_err()
-    {
-        return confirm_error(StatusCode::UNAUTHORIZED, "failure", "Invalid credentials");
-    }
+    .expect("Failed to query DB")
+    .flatten();
 
     // No enrolment in progress. Deliberately the same answer whether the
     // account has a live second factor or none at all: confirming is about the
@@ -216,8 +209,19 @@ pub(crate) async fn two_factor_setup_confirm(
             };
 
             let mut conn = state.db_pool.get().expect("Failed to get DB connection");
-            tokio::task::spawn_blocking(move || {
+            let committed = tokio::task::spawn_blocking(move || {
                 conn.transaction::<_, diesel::result::Error, _>(|conn| {
+                    // FR-019/FR-020: when a login challenge authorised this,
+                    // spending it is part of the same commit that turns the
+                    // factor on. Zero rows means somebody else spent it
+                    // between the authorisation and here, and the enrolment
+                    // rolls back rather than half-happening.
+                    if let Some(ticket) = ticket
+                        && consume_enrolment_ticket_sync(conn, ticket, now)? == 0
+                    {
+                        return Err(diesel::result::Error::RollbackTransaction);
+                    }
+
                     // The code proved the pending secret works, so it becomes
                     // the live one and the pending slot is emptied. Until this
                     // statement runs, whatever the account had before is still
@@ -242,8 +246,32 @@ pub(crate) async fn two_factor_setup_confirm(
                 })
             })
             .await
-            .expect("Failed to spawn blocking task")
-            .expect("Failed to enable 2FA");
+            .expect("Failed to spawn blocking task");
+
+            if committed.is_err() {
+                return confirm_error(
+                    StatusCode::BAD_REQUEST,
+                    "two_factor_challenge_invalid",
+                    "2FA challenge is expired or already used",
+                );
+            }
+
+            // FR-020: the person was signing in when they were sent here, so
+            // finishing enrolment finishes the sign-in. Only the ticket
+            // entrance gets a session — the settings entrance already has one
+            // and the request that started it proved nothing about a browser.
+            let signed_in = if ticket.is_some() {
+                if let Err(msg) = issue_session_cookie(&state, &cookies, user_id).await {
+                    return confirm_error(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "session_error",
+                        msg.as_str(),
+                    );
+                }
+                Some(true)
+            } else {
+                None
+            };
 
             (
                 StatusCode::OK,
@@ -253,6 +281,7 @@ pub(crate) async fn two_factor_setup_confirm(
                     confirmed_at: Some(now),
                     recovery_codes: Some(codes),
                     recovery_codes_notice: Some(RECOVERY_CODES_NOTICE.to_string()),
+                    signed_in,
                 }),
             )
         }
@@ -487,33 +516,6 @@ pub(crate) async fn load_global_two_factor_requirement(state: &AppState) -> Resu
         .unwrap_or(false))
 }
 
-pub(crate) async fn is_two_factor_required_for_user(
-    state: &AppState,
-    user_id: uuid::Uuid,
-) -> Result<bool, String> {
-    let global_required = load_global_two_factor_requirement(state).await?;
-    let mut conn = state
-        .db_pool
-        .get()
-        .map_err(|_| "Failed to get DB connection")?;
-    let local = tokio::task::spawn_blocking(move || {
-        users::table
-            .filter(users::id.eq(user_id))
-            .select((users::two_factor_enabled, users::two_factor_admin_required))
-            .first::<(bool, bool)>(&mut conn)
-            .optional()
-    })
-    .await
-    .map_err(|_| "Failed to spawn blocking task".to_string())
-    .and_then(|r| r.map_err(|_| "Failed to query user 2FA state".to_string()))?;
-
-    let Some((enabled, admin_required)) = local else {
-        return Ok(false);
-    };
-
-    Ok(global_required || enabled || admin_required)
-}
-
 pub(crate) async fn create_login_two_factor_challenge(
     state: &AppState,
     user_id: uuid::Uuid,
@@ -592,6 +594,7 @@ fn confirm_error(
             confirmed_at: None,
             recovery_codes: None,
             recovery_codes_notice: None,
+            signed_in: None,
         }),
     )
 }

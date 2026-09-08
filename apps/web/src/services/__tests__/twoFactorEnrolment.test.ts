@@ -81,6 +81,7 @@ describe("two-factor enrolment: a wrong code (FR-001c)", () => {
     const confirmed = twoFactorEnrolmentReducer(afterThreeMisses, {
       type: "confirmed",
       confirmation: {
+        signedIn: false,
         confirmedAt: "2026-09-07T12:04:11Z",
         recoveryCodes: ["4KJH-92MX-QW3T"],
         recoveryCodesNotice: "Keep these somewhere else.",
@@ -108,6 +109,7 @@ describe("two-factor enrolment: recovery codes are shown once (FR-009)", () => {
     twoFactorEnrolmentReducer(provisioning(), {
       type: "confirmed",
       confirmation: {
+        signedIn: false,
         confirmedAt: "2026-09-07T12:04:11Z",
         recoveryCodes: CODES,
         recoveryCodesNotice: "Each works once.",
@@ -188,6 +190,7 @@ describe("two-factor enrolment: abandoning (FR-004)", () => {
         {
           type: "confirmed",
           confirmation: {
+            signedIn: false,
             confirmedAt: "2026-09-07T12:04:11Z",
             recoveryCodes: [],
             recoveryCodesNotice: "",

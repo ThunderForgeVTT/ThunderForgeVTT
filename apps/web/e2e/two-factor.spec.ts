@@ -35,16 +35,19 @@ import {
  *
  * The pieces, read out of `src/server/src/auth/two_factor.rs`:
  *
- *   - `POST /authentication/2fa/setup/start` — username + password, no
- *     session needed. Generates 20 random bytes, stores them encrypted, and
+ *   - `POST /authentication/2fa/setup/start` — username + password *or* a
+ *     `challenge_id` from the login response, no session needed. Generates 20
+ *     random bytes, stores them encrypted, and
  *     hands back `otpauth://totp/ThunderForge:<user>?secret=<base32>&issuer=…`.
  *     The secret in that URI is **unpadded base32**, and that is what the
  *     codes below are computed from.
  *   - `POST /authentication/2fa/setup/confirm` — one correct code flips
  *     `two_factor_enabled` to true.
  *   - `POST /authentication/login` — answers `401 two_factor_required` with a
- *     `login_two_factor_challenge_id` when the account (or the instance) needs
- *     a second factor, instead of a session.
+ *     `login_two_factor_challenge_id` when the account holds a second factor,
+ *     and `401 two_factor_enrolment_required` with one when the instance (or
+ *     an administrator) requires a factor the account has not got. Neither is
+ *     a session, and neither is a refusal.
  *   - `POST /authentication/2fa/verify` — challenge id + code, and the session
  *     cookie is issued here. The challenge is consumed on success and expires
  *     after ten minutes.
@@ -62,18 +65,40 @@ import {
  *      password alone, so the only route off was also a route round — is
  *      fixed as of 2026-09-07 (ADR-081). The final test asserted the correct
  *      behaviour while it was still broken and now passes unchanged.
- *   2. Turning the instance policy on still locks out every account that has
- *      not enrolled: they are challenged, they have no secret, and
+ *   2. ~~Turning the instance policy on locks out every account that has not
+ *      enrolled.~~ **Fixed on 2026-09-07 (spec 041 FR-019).** It did: they
+ *      were handed a *verification* challenge, they had no secret, and
  *      `verify_two_factor_for_user` answers `false` for a user with no stored
- *      secret. The challenge screen offers no way to enrol *from there*, which
- *      is spec 041 FR-019 and is unbuilt — an account caught by the policy
- *      cannot fix it at the point it is refused.
+ *      secret — a refusal with no way to fix it from the screen that issued
+ *      it.
  *
- *      What changed on 2026-09-07: there is now an enrolment screen at
- *      `/settings/security`, so an account that has not yet been locked out
- *      can enrol before the policy is turned on. The lockout is narrower than
- *      it was and is not gone. The policy test below proves the enforcement
- *      (which is the FR), and deliberately does not pretend it is fine.
+ *      What the server does now is answer `401 two_factor_enrolment_required`
+ *      (rather than `two_factor_required`) with the same
+ *      `login_two_factor_challenge_id`, and that challenge authorises the
+ *      enrolment that follows: `POST /authentication/2fa/setup/start` and
+ *      `.../confirm` take **either** a username and password **or** a
+ *      `challenge_id`. Confirmation spends the challenge, issues the session
+ *      cookie and returns `signed_in: true`, so the interrupted sign-in
+ *      finishes where it was going (FR-020). `LoginView` renders the shared
+ *      enrolment steps in place, so the challenge screen now *does* offer a
+ *      way to enrol from there.
+ *
+ *      The ticket is fenced to the case that needs it: a challenge for an
+ *      account that already holds a confirmed factor is a challenge to verify
+ *      it, and is refused as an enrolment authorisation.
+ *
+ *      **The policy test below needs updating for this and has not been**
+ *      (this file is owned by another change in flight). It signs in as an
+ *      unenrolled account under the policy and waits for `#login-two-factor`,
+ *      the *code* field. That field is no longer what such an account is
+ *      shown: it now gets the enrolment card,
+ *      `[data-testid="login-two-factor-enrol"]`, whose code input is
+ *      `#two-factor-code`. The half of the assertion that still holds is
+ *      `isSignedIn(user) === false` — the policy is still enforced, and the
+ *      account still does not get in without a factor. What the test should
+ *      assert instead is that the account is offered enrolment, completes it
+ *      with a code computed from the secret the card shows, and lands signed
+ *      in where it was going (FR-019, FR-020).
  *   3. A code is not bound to the step it was minted for
  *      (`totp.check_current(...).is_some()` drops the matched step), so the
  *      same six digits verify against a *new* challenge for as long as the
@@ -586,7 +611,19 @@ test.describe("the instance-wide policy", () => {
       ).toBeVisible({ timeout: 20_000 });
 
       await submitCredentials(user, creds.username, creds.password);
-      await expect(twoFactorField(user)).toBeVisible({ timeout: 15_000 });
+
+      // Spec 041 FR-019, closed 2026-09-07: an account the policy catches is
+      // taken through enrolment rather than refused. So what appears here is
+      // the *enrolment* card, not the code field — this used to wait on
+      // `#login-two-factor` and would now hang, having asked for the one
+      // screen the fix replaced.
+      //
+      // The half that has not changed is the half worth keeping: whatever the
+      // screen offers, the account is not signed in until it satisfies the
+      // policy.
+      await expect(user.getByTestId("login-two-factor-enrol")).toBeVisible({
+        timeout: 15_000,
+      });
       expect(
         await isSignedIn(user),
         "an instance that requires 2FA must not sign in an account that has not satisfied it",

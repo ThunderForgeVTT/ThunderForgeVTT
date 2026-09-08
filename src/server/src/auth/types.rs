@@ -43,8 +43,19 @@ pub(crate) struct OAuthLinkConfirmRequest {
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct TwoFactorSetupStartRequest {
-    pub(crate) username: String,
-    pub(crate) password: String,
+    /// Spec 041 FR-001a: one flow, three entrances, and they do not all have
+    /// the same thing to prove with. Account settings and first-run setup send
+    /// a username and password; a sign-in that requires enrolment sends the
+    /// login challenge it was just handed, because at that moment the person
+    /// has a correct password and no session. Exactly one of the two is
+    /// accepted — `authorise_enrolment` refuses both together and neither at
+    /// all.
+    #[serde(default)]
+    pub(crate) username: Option<String>,
+    #[serde(default)]
+    pub(crate) password: Option<String>,
+    #[serde(default)]
+    pub(crate) challenge_id: Option<uuid::Uuid>,
 }
 
 #[derive(Debug, Serialize)]
@@ -56,8 +67,14 @@ pub(crate) struct TwoFactorSetupStartResponse {
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct TwoFactorSetupConfirmRequest {
-    pub(crate) username: String,
-    pub(crate) password: String,
+    /// As `TwoFactorSetupStartRequest`: exactly one of a username and password
+    /// or a login challenge.
+    #[serde(default)]
+    pub(crate) username: Option<String>,
+    #[serde(default)]
+    pub(crate) password: Option<String>,
+    #[serde(default)]
+    pub(crate) challenge_id: Option<uuid::Uuid>,
     pub(crate) code: String,
 }
 
@@ -76,6 +93,12 @@ pub(crate) struct TwoFactorSetupConfirmResponse {
     pub(crate) recovery_codes: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) recovery_codes_notice: Option<String>,
+    /// FR-020: present, and true, only when a login challenge authorised this
+    /// enrolment — in which case the sign-in the person was already doing is
+    /// finished here and a session cookie came back with this body. The
+    /// settings entrance already had a session and gets no field.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) signed_in: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]

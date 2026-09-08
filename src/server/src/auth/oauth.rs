@@ -472,7 +472,13 @@ pub(crate) async fn resolve_oauth_login(
             "OAuth provider is not configured or disabled",
         ),
         ResolveOutcome::LinkedUser(user_id) | ResolveOutcome::ProvisionedUser(user_id) => {
-            let two_factor_required = match is_two_factor_required_for_user(&state, user_id).await {
+            // Spec 041 FR-019, and `contracts/verification.md` rule 4: the same
+            // three outcomes apply here. What used to be
+            // `is_two_factor_required_for_user` collapsed "holds one" and
+            // "must hold one" into a single boolean, so a provider sign-in by
+            // an account caught by the instance policy was handed a challenge
+            // it had nothing to answer with.
+            let step = match login_second_factor_step_for_user(&state, user_id).await {
                 Ok(v) => v,
                 Err(msg) => {
                     return error_response(
@@ -483,7 +489,7 @@ pub(crate) async fn resolve_oauth_login(
                 }
             };
 
-            if two_factor_required {
+            if step != LoginSecondFactorStep::SignIn {
                 let challenge_id = match create_login_two_factor_challenge(&state, user_id).await {
                     Ok(v) => v,
                     Err(msg) => {
@@ -498,8 +504,17 @@ pub(crate) async fn resolve_oauth_login(
                 return (
                     StatusCode::UNAUTHORIZED,
                     Json(OAuthResponse {
-                        status: "two_factor_required",
-                        message: "2FA code required to complete sign-in".to_string(),
+                        status: if step == LoginSecondFactorStep::Enrol {
+                            "two_factor_enrolment_required"
+                        } else {
+                            "two_factor_required"
+                        },
+                        message: if step == LoginSecondFactorStep::Enrol {
+                            "This instance requires a second factor. Set one up to finish signing in."
+                                .to_string()
+                        } else {
+                            "2FA code required to complete sign-in".to_string()
+                        },
                         challenge_id: None,
                         login_two_factor_challenge_id: Some(challenge_id),
                     }),

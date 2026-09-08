@@ -9,33 +9,50 @@ import type {
 const API_BASE = "/api";
 
 /**
- * Spec 041 US1 — the three calls the enrolment flow makes.
+ * Spec 041 US1/US4 — the three calls the enrolment flow makes, and the two
+ * ways a caller is allowed to have earned them.
  *
- * # The authorisation, and why it is a password
+ * # The authorisation, and why there are two of them
  *
  * `contracts/enrolment.md` says these routes take "exactly one" of a live
- * session or a single-use ticket, and never a username. That is the shape the
- * contract wants and it is not the shape the server has: as of today
- * `two_factor_setup_start`/`two_factor_setup_confirm` deserialize
- * `TwoFactorSetupStartRequest { username, password }`
- * (`src/server/src/auth/types.rs:44`) and verify the Argon2 hash themselves.
- * So the flow re-authorises with the account password, which is what the
- * server will accept.
+ * session or a single-use ticket, and never a username. The server takes
+ * exactly one of a username-and-password or a single-use ticket, which is the
+ * same shape with one entrance still spelled the old way:
  *
- * TODO(spec-041): when the server takes a session cookie or a ticket
- * (contracts/enrolment.md, "The authorisation, and what changes about it"),
- * drop `password` from `TwoFactorEnrolmentCredentials` and the password step
- * from `TwoFactorEnrolmentPanel`. Nothing else in the flow moves — the panel
- * already treats the credentials as an opaque handle it holds for the length
- * of one enrolment.
+ *   - **Account settings** (`TwoFactorEnrolmentPanel`) sends the account
+ *     password. It reads as a re-authentication, which is normal on a security
+ *     screen, and it is what the server has always accepted.
+ *   - **A sign-in that requires enrolment** (`LoginView`, FR-019) sends the
+ *     `login_two_factor_challenge_id` the login response just handed it.
+ *     There is no session yet and re-posting the password from a challenge
+ *     screen is not what the contract asks for. The challenge is minted only
+ *     after a correct password, is bound to one account, dies in ten minutes,
+ *     and is spent by the confirmation — which is also where the session
+ *     cookie is issued, so the sign-in finishes where it left off (FR-020).
  *
- * Re-typing a password on a security screen is defensible on its own terms
- * (it is a re-authentication, and every other product does it), so this is a
- * survivable gap rather than a broken flow.
+ * Both entrances drive the identical flow: same reducer
+ * (`services/twoFactorEnrolment`), same steps and wording
+ * (`components/security/TwoFactorEnrolmentSteps`), differing only in where the
+ * person arrives afterwards. That is FR-001a, and it is why the credentials
+ * are an opaque handle here rather than a password the flow knows about.
  */
-export interface TwoFactorEnrolmentCredentials {
-  username: string;
-  password: string;
+export type TwoFactorEnrolmentCredentials =
+  /** Account settings and first-run setup. */
+  | { username: string; password: string }
+  /** A sign-in that requires enrolment: the challenge it was just handed. */
+  | { challengeId: string };
+
+/**
+ * The credentials as the server names them. One of the two shapes, never
+ * both — `authorise_enrolment` refuses a request carrying two proofs before it
+ * evaluates either.
+ */
+export function enrolmentAuthorisationBody(
+  credentials: TwoFactorEnrolmentCredentials,
+): Record<string, string> {
+  return "challengeId" in credentials
+    ? { challenge_id: credentials.challengeId }
+    : { username: credentials.username, password: credentials.password };
 }
 
 /** An error that keeps the server's machine-readable `status` alongside its prose. */
@@ -64,6 +81,8 @@ interface SetupConfirmPayload {
   confirmed_at?: string | null;
   recovery_codes?: string[] | null;
   recovery_codes_notice?: string | null;
+  /** True when a challenge authorised this and a session cookie came back. */
+  signed_in?: boolean | null;
 }
 
 interface StatusPayload {
@@ -152,7 +171,7 @@ export async function beginTwoFactorEnrolment(
     method: "POST",
     credentials: "same-origin",
     headers: withCsrf({ "Content-Type": "application/json" }),
-    body: JSON.stringify(credentials),
+    body: JSON.stringify(enrolmentAuthorisationBody(credentials)),
   });
 
   const payload = await readJson<SetupStartPayload>(response);
@@ -201,7 +220,10 @@ export async function confirmTwoFactorEnrolment(
     method: "POST",
     credentials: "same-origin",
     headers: withCsrf({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ ...credentials, code: code.replace(/\s+/g, "") }),
+    body: JSON.stringify({
+      ...enrolmentAuthorisationBody(credentials),
+      code: code.replace(/\s+/g, ""),
+    }),
   });
 
   const payload = await readJson<SetupConfirmPayload>(response);
@@ -215,6 +237,7 @@ export async function confirmTwoFactorEnrolment(
 
   return {
     confirmedAt: payload?.confirmed_at ?? null,
+    signedIn: payload?.signed_in === true,
     recoveryCodes: payload?.recovery_codes ?? [],
     recoveryCodesNotice:
       payload?.recovery_codes_notice ||

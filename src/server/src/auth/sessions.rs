@@ -552,8 +552,52 @@ pub(crate) async fn authenticate_password_login(
         }
     };
 
-    let two_factor_required = global_required || two_factor_admin_required || two_factor_enabled;
-    if two_factor_required && two_factor_code.is_none() {
+    // Spec 041 FR-019 / `contracts/verification.md`. This used to be one
+    // boolean — `global || admin_required || enabled` — and one challenge,
+    // which meant an account the policy required and had never offered
+    // enrolment to was handed a *verification* challenge it could not answer:
+    // `verify_two_factor_for_user` returns false for an account with no stored
+    // secret, so the policy was a lockout with no way out. The rule is now
+    // three outcomes, and none of them is a refusal.
+    let step = login_second_factor_step(
+        two_factor_enabled,
+        global_required,
+        two_factor_admin_required,
+    );
+
+    if step == LoginSecondFactorStep::Enrol {
+        // FR-019. Not conditional on `two_factor_code`: there is no secret for
+        // a code to prove, so a client that sent one is answered the same way
+        // as one that did not — go and enrol, with the ticket that lets you.
+        let challenge_id = match create_login_two_factor_challenge(state, user_id).await {
+            Ok(value) => value,
+            Err(message) => {
+                return auth_session_error(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "two_factor_error",
+                    message.as_str(),
+                );
+            }
+        };
+
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(AuthSessionResponse {
+                // Distinct on the wire from `two_factor_required` so the sign-in
+                // screen can tell "enrol now" from "your code was wrong", and
+                // neither is said before the password is correct, so neither
+                // discloses anything to somebody who does not already hold it.
+                status: "two_factor_enrolment_required",
+                message: "This instance requires a second factor. Set one up to finish signing in."
+                    .to_string(),
+                session: None,
+                login_two_factor_challenge_id: Some(challenge_id),
+                requires_email_verification: false,
+            }),
+        );
+    }
+
+    if step == LoginSecondFactorStep::Verify && two_factor_code.is_none() {
         let challenge_id = match create_login_two_factor_challenge(state, user_id).await {
             Ok(value) => value,
             Err(message) => {

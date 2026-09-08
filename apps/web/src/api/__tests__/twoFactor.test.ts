@@ -168,6 +168,7 @@ describe("confirmTwoFactorEnrolment", () => {
     await expect(
       confirmTwoFactorEnrolment(CREDENTIALS, "492013"),
     ).resolves.toEqual({
+      signedIn: false,
       confirmedAt: "2026-09-07T12:04:11",
       recoveryCodes: ["4KJH-92MX-QW3T", "8PLM-31QA-ZX9V"],
       recoveryCodesNotice: "Each works once.",
@@ -245,5 +246,84 @@ describe("readTwoFactorStatus (FR-005)", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(readTwoFactorStatus()).resolves.toBe(null);
+  });
+});
+
+describe("enrolmentAuthorisationBody (FR-001a, FR-019)", () => {
+  it("sends a username and password from the account-settings entrance", () => {
+    expect(
+      twoFactorApi.enrolmentAuthorisationBody({
+        username: "wizard",
+        password: "correct horse",
+      }),
+    ).toEqual({ username: "wizard", password: "correct horse" });
+  });
+
+  it("sends the login challenge, and no password, from the sign-in entrance", () => {
+    // FR-019's whole point: at this moment the person has a correct password
+    // and no session, and the challenge the login response carried is what
+    // stands in for both. A password in this body would mean the challenge
+    // screen had re-posted one, which is what the ticket exists to avoid.
+    const body = twoFactorApi.enrolmentAuthorisationBody({
+      challengeId: "0199a0f4-0000-7000-8000-000000000001",
+    });
+
+    expect(body).toEqual({
+      challenge_id: "0199a0f4-0000-7000-8000-000000000001",
+    });
+    expect(body).not.toHaveProperty("password");
+    expect(body).not.toHaveProperty("username");
+  });
+
+  it("carries the challenge through both calls of one enrolment", async () => {
+    const fetchMock = stubFetch(
+      jsonResponse({
+        status: "success",
+        otpauth_url:
+          "otpauth://totp/ThunderForge:wizard?secret=GEZDGNBVGY3TQOJQ&issuer=ThunderForge",
+      }),
+      jsonResponse({
+        status: "success",
+        confirmed_at: "2026-09-07T12:00:00Z",
+        recovery_codes: ["4KJH-92MX-QW3T"],
+        recovery_codes_notice: "Keep these somewhere else.",
+        signed_in: true,
+      }),
+    );
+
+    const credentials = {
+      challengeId: "0199a0f4-0000-7000-8000-000000000001",
+    } as const;
+    await beginTwoFactorEnrolment(credentials);
+    const confirmation = await confirmTwoFactorEnrolment(
+      credentials,
+      "123 456",
+    );
+
+    for (const call of fetchMock.mock.calls) {
+      const body = JSON.parse(String(call[1]?.body)) as Record<string, unknown>;
+      expect(body.challenge_id).toBe(credentials.challengeId);
+      expect(body.password).toBeUndefined();
+    }
+
+    // FR-020: the server spent the challenge and issued a session with the
+    // confirmation, so the sign-in that was interrupted is finished and the
+    // screen may send the person where they were going.
+    expect(confirmation.signedIn).toBe(true);
+    expect(confirmation.recoveryCodes).toEqual(["4KJH-92MX-QW3T"]);
+  });
+
+  it("reports no session for the settings entrance, which already had one", async () => {
+    stubFetch(
+      jsonResponse({
+        status: "success",
+        confirmed_at: "2026-09-07T12:00:00Z",
+        recovery_codes: ["4KJH-92MX-QW3T"],
+      }),
+    );
+
+    await expect(
+      confirmTwoFactorEnrolment(CREDENTIALS, "123456"),
+    ).resolves.toMatchObject({ signedIn: false });
   });
 });
