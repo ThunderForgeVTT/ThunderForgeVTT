@@ -51,16 +51,19 @@ the least recently used, and a person can list their own sessions and end one
 or all of them (`mySessions`, `endSession`, `endAllSessions`). Exactly one
 client is at the table; the rest are companion surfaces.
 
-**Two-factor is still not something a person can switch on.** The verifier,
-the challenge and the instance-wide policy all work and are now covered end to
-end (`apps/web/e2e/two-factor.spec.ts`), and as of 2026-09-07 a confirmed
-factor can no longer be stripped by a password alone (ADR-081) and enrolment
-issues ten single-use recovery codes. What is missing is the enrolment
-interface itself — the setup endpoints are still called from nowhere in
-`apps/web/src` — and a deliberate way to turn a second factor off, which spec
-041's FR-012 and FR-014 specify and nothing implements. Until the first
-exists, turning the instance-wide requirement on locks out every account that
-has not enrolled by hand.
+**Two-factor can now be switched on, and cannot be switched off.** The
+verifier, the challenge and the instance-wide policy are covered end to end
+(`apps/web/e2e/two-factor.spec.ts`), a confirmed factor can no longer be
+stripped by a password alone (ADR-081), and as of 2026-09-07 enrolment has an
+interface a person can actually reach: `/settings/security` for an account
+that has one, and — since the policy would otherwise lock out every account
+that had not enrolled by hand — the sign-in itself, where the login challenge
+doubles as the enrolment ticket (FR-019). Both entrances share one component,
+and enrolment issues ten single-use recovery codes.
+
+What is still missing is a deliberate way to turn a second factor **off**,
+which spec 041's FR-012 and FR-014 specify and nothing implements. An account
+that enrols today cannot un-enrol; it can only replace its factor.
 
 **There is no password-change path at all.** `password_hash` is only ever
 written at registration, admin bootstrap and OAuth auto-provisioning. Recorded
