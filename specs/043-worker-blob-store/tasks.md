@@ -82,8 +82,8 @@ throwaway harness and must not wait on ADRs for a feature that may not exist.
 
 **⚠️ Principle IV**: the two ADRs land *with* the implementation, not after it.
 
-- [ ] T004 Write ADR-092 (blob I/O crosses a worker boundary) in `docs/adrs/20260908-092-blob_io_worker_boundary.md`: what crosses, why the store and not the crypto, what the protocol guarantees, and why the engine bundle is not duplicated
-- [ ] T005 Write ADR-093 (FR-021 under exclusive locking) in `docs/adrs/20260908-093-fr021_under_exclusive_locking.md`: what spec 028's guarantee means when a reader is refused rather than shown an empty file, and why `BlobShape::Incomplete` survives regardless — a write killed mid-flight still leaves a short file
+- [ ] T004 ~~Write ADR-092~~ **(cancelled; and 092 is already taken — pick the next free number if this is ever revived)** (blob I/O crosses a worker boundary) in `docs/adrs/20260908-092-blob_io_worker_boundary.md`: what crosses, why the store and not the crypto, what the protocol guarantees, and why the engine bundle is not duplicated
+- [ ] T005 ~~Write ADR-093~~ **(cancelled; 093 is already taken)** (FR-021 under exclusive locking) in `docs/adrs/20260908-093-fr021_under_exclusive_locking.md`: what spec 028's guarantee means when a reader is refused rather than shown an empty file, and why `BlobShape::Incomplete` survives regardless — a write killed mid-flight still leaves a short file
 - [ ] T006 [P] Add both ADRs to the index table in `docs/adrs/README.md`, confirming 092 and 093 are still free
 - [ ] T007 Add `protocol.rs` to `crates/thunderforge-opfs/src/` with `BlobRequest`, `BlobResponse`, `Outcome` and `PROTOCOL_VERSION` per [data-model.md](./data-model.md), with native tests for serialisation round-trip and for refusing an unknown version
 - [ ] T008 [P] Add a native test in `crates/thunderforge-opfs/src/protocol.rs` asserting a `Read` request carrying a payload is rejected as malformed rather than silently ignoring the payload

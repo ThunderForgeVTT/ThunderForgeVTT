@@ -55,6 +55,8 @@ export interface ManifestEntry {
    * variable rather than greying the field out with no reason given.
    */
   fixedBy: string | null;
+  /** Where the value came from, in the vocabulary every other surface uses. */
+  source: "ENVIRONMENT" | "INSTANCE" | "DEFAULT";
 }
 
 export interface SystemManifest {

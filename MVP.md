@@ -81,6 +81,39 @@ Proven end to end against a migrated-but-unseeded database — a lane that had
 to be built, because every other e2e stack is cloned from a seeded template
 where setup is already finished and first run is therefore unobservable.
 
+**Everything collected at setup is changeable afterwards, from a screen.** As
+of 2026-09-08 the administration area carries Instance, Readiness and Mail
+sections. Instance lists every declared setting in its registry group with
+where the value came from and its change history; a value the environment has
+fixed shows the variable that fixed it rather than a disabled box with no
+explanation. Readiness says what this instance can and cannot do, derived on
+every read, with the registry's own sentence for each gap. Mail sends a test
+message through the real outbox and shows that outbox, with no message body
+anywhere on the screen. The precedence rule — environment, then instance row,
+then declared default — is the same for every setting in the product, resolved
+per request, so a change takes effect without a restart. See
+[docs/INSTANCE_CONFIGURATION.md](docs/INSTANCE_CONFIGURATION.md).
+
+**Mail is proven end to end, against a real SMTP server.** Configure it in the
+admin screens, send a test, receive it in a per-shard Mailpit; break the port
+and the failure names what to fix without ever printing the password; clear the
+settings and the next message is *held* rather than discarded; reconfigure and
+it leaves on its own, because the operator fixed the settings and that should
+be all they have to do.
+
+**An instance with nobody to serve a copyright notice on cannot publish beyond
+a world** — share links are refused, naming what is missing, while playing,
+editing and sharing *inside* a world are unaffected. A link minted while the
+instance was configured keeps resolving afterwards: removing a setting must not
+break links already given out. This is spec 039's FR-053, built here.
+
+**Terms disputes and privacy requests have a channel.** The terms and privacy
+pages take a form and publish no address; submissions need no account, because
+somebody objecting to the terms is often objecting to the terms they were asked
+to accept. The copyright page keeps its published designated agent, because 17
+U.S.C. § 512(c)(2) conditions the safe harbour on it being publicly available —
+the form is first and the designation sits at the foot of the page.
+
 **There is no password-change path at all.** `password_hash` is only ever
 written at registration, admin bootstrap and OAuth auto-provisioning. Recorded
 because spec 036 FR-008 assumes one, and it is the sort of absence that reads

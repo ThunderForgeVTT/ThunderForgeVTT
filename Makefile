@@ -62,6 +62,20 @@ services-up:
 	@echo "Waiting for rustfs to accept connections..."
 	@i=0; until curl -s -o /dev/null --max-time 2 http://127.0.0.1:9000 || [ $$i -ge 60 ]; do 		i=$$((i+1)); sleep 1; 	done; 	if [ $$i -ge 60 ]; then 		echo "rustfs did not answer on :9000 after 60s — uploads and map imports will fail."; 		exit 1; 	fi
 	@echo "rustfs is ready."
+	@# mailpit catches everything this instance sends in development. Unlike
+	@# postgres and rustfs the backend does not need it to start — mail simply
+	@# resolves as unconfigured and messages are held — so this waits but does
+	@# not fail the target. A developer who has not started it should get a
+	@# working stack and a note, not a refusal to come up.
+	@echo "Waiting for mailpit to accept connections..."
+	@i=0; until curl -s -o /dev/null --max-time 2 http://127.0.0.1:8025 || [ $$i -ge 20 ]; do \
+		i=$$((i+1)); sleep 1; \
+	done; \
+	if [ $$i -ge 20 ]; then \
+		echo "mailpit did not answer on :8025 — mail will resolve as unconfigured (see make test-mail)."; \
+	else \
+		echo "mailpit is ready."; \
+	fi
 
 services-down:
 	docker compose stop

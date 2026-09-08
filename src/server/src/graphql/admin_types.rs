@@ -7,6 +7,7 @@ use crate::admin::{
     SystemManifestDocument, editable_manifest_keys,
 };
 use crate::models::{AdminBootstrapSetup, AuthSecuritySetting, OAuthProvider};
+use crate::settings::graphql::GraphQLSettingSource;
 
 /// Disk usage breakdown for admin statistics
 #[derive(SimpleObject, Debug, Clone)]
@@ -116,6 +117,17 @@ pub struct GraphQLOAuthProvider {
     pub has_client_secret: bool,
     pub updated_at: chrono::NaiveDateTime,
     pub config_source: GraphQLOAuthConfigSource,
+    /// The same vocabulary every other setting reports (spec 040 FR-011,
+    /// T027). `config_source` predates it and is kept because clients read it;
+    /// this is the field a client should use when it wants to say "where did
+    /// this value come from" in the words the rest of the product uses.
+    ///
+    /// There is deliberately **no `fixedBy`** here. A provider is fixed by a
+    /// *set* of variables — `OAUTH_<segment>_<key>_CLIENT_ID`, `_CLIENT_SECRET`
+    /// and possibly an issuer field — so naming one of them would be picking a
+    /// representative and calling it the answer. A settings key has exactly one
+    /// variable and can honestly name it; this cannot.
+    pub source: GraphQLSettingSource,
 }
 
 impl From<OAuthProvider> for GraphQLOAuthProvider {
@@ -133,6 +145,10 @@ impl From<OAuthProvider> for GraphQLOAuthProvider {
             enabled: value.enabled,
             has_client_secret: value.oauth_client_secret.is_some(),
             updated_at: value.updated_at,
+            source: match value.config_source.as_str() {
+                "env" => GraphQLSettingSource::Environment,
+                _ => GraphQLSettingSource::Instance,
+            },
             config_source: value.config_source.as_str().into(),
         }
     }
@@ -152,6 +168,8 @@ pub struct GraphQLManifestEntry {
     pub editable: bool,
     /// The environment variable that fixed this value, when one has.
     pub fixed_by: Option<String>,
+    /// Where the value came from, in the vocabulary every other surface uses.
+    pub source: GraphQLSettingSource,
 }
 
 /// System manifest configuration document
@@ -169,10 +187,24 @@ impl GraphQLSystemManifest {
             .metadata
             .into_iter()
             .map(|(key, value)| {
-                let fixed_by = crate::settings::registry::declaration(&key)
+                let declaration = crate::settings::registry::declaration(&key);
+                let fixed_by = declaration
                     .and_then(|d| d.env_name_in_use())
                     .map(str::to_string);
+                // Three-way and computed from the declaration rather than
+                // guessed: a key equal to its shipped default is reporting a
+                // default, not an operator's choice, and conflating the two is
+                // how a settings screen tells somebody they configured
+                // something they never touched.
+                let source = if fixed_by.is_some() {
+                    GraphQLSettingSource::Environment
+                } else if declaration.and_then(|d| d.default) == Some(value.as_str()) {
+                    GraphQLSettingSource::Default
+                } else {
+                    GraphQLSettingSource::Instance
+                };
                 GraphQLManifestEntry {
+                    source,
                     editable: fixed_by.is_none()
                         && editable_manifest_keys()
                             .iter()

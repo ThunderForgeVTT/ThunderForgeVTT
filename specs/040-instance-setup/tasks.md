@@ -73,11 +73,20 @@ below reads. Nothing here is user-visible on its own.
 - [x] T015 [P] Add validator tests in `src/server/src/settings/validate.rs` including that a refusal message never echoes the submitted value
 - [x] T016 Implement the append-only change record in `src/server/src/settings/changes.rs`, redacting per the declaration and storing `redacted` rather than recomputing it (data-model.md § 2)
 - [x] T017 Wire secret encryption and decryption through the existing `src/server/src/crypto.rs` — no second implementation, for the reason that module's own docs give
-- [ ] T018 Add `pub mod settings;` to `src/server/src/lib.rs` and hold the memoised resolution on `AppState` in `src/server/src/state.rs`
+- [x] T018 Add `pub mod settings;` to `src/server/src/lib.rs` and hold the memoised resolution on `AppState` in `src/server/src/state.rs`
+  - **Half of this was deliberately not built, and the reason is recorded in
+    the code.** The module is wired in. The memoised resolution on `AppState`
+    is not, because ADR-088 decided against a process-wide cache and
+    `settings/resolver.rs` says why: a cache is a second answer to "what is
+    this value now", and it goes stale in the direction that hurts. Resolution
+    happens per request instead, which is what makes a settings change take
+    effect without a restart. Ticked because the task's intent — wire the
+    module in and settle where resolution lives — was met; the design changed
+    and did not silently drift.
 
 ### Harness
 
-- [ ] T019 Add the `mailpit` service to `compose.yml` beside `postgres` and `rustfs` per `contracts/e2e-fixtures.md`, and wait for it in the `services-up` target in `Makefile` the way `rustfs` already is
+- [x] T019 Add the `mailpit` service to `compose.yml` beside `postgres` and `rustfs` per `contracts/e2e-fixtures.md`, and wait for it in the `services-up` target in `Makefile` the way `rustfs` already is
 - [x] T020 Add the migrated-but-unseeded template database and its per-shard clone to `scripts/e2e-parallel.mjs`, plus a `first-run` Playwright project in `apps/web/playwright.config.ts` pinned to it — US1 is unobservable against the seeded template and that is why no `setup.spec.ts` exists today
 
 **Checkpoint**: a setting can be declared, resolved and changed with a record; the harness can start an instance that has never been set up
@@ -109,7 +118,7 @@ already worked around.
 - [x] T024 [US3] Implement the `instanceSettings` and `instanceSettingChanges` queries in `src/server/src/graphql/queries/instance_settings.rs` per `contracts/settings.md`, behind `admin_user(ctx)?`
 - [x] T025 [US3] Implement `updateInstanceSetting` in `src/server/src/graphql/mutations_instance_settings.rs`, writing the change record in the same transaction as the value
 - [x] T026 [US3] Register both surfaces on the roots in `src/server/src/graphql/mod.rs` with an SDL guard test asserting the field names the client uses, in the style of the existing `the_access_surface_is_registered_under_the_names_the_client_uses`
-- [ ] T027 [US3] Map `oauth_providers.config_source` onto the same `SettingSource` enum in `src/server/src/graphql/admin_types.rs`, and add `source` / `fixedBy` to `GraphQLSystemManifest`'s `entries` beside the `editable` flag it already carries
+- [x] T027 [US3] Map `oauth_providers.config_source` onto the same `SettingSource` enum in `src/server/src/graphql/admin_types.rs`, and add `source` / `fixedBy` to `GraphQLSystemManifest`'s `entries` beside the `editable` flag it already carries
 - [x] T028 [P] [US3] Create `apps/web/src/api/instanceSettings.ts` with the GraphQL operations, and `apps/web/src/pages/admin/components/InstanceSettingsPanel.tsx` rendering each setting, its source, and "fixed by `<VAR>`" instead of a disabled field with no explanation
 - [x] T029 [US3] Update `apps/web/src/pages/admin/components/ManifestEditor.tsx` to render `fixedBy` rather than greying a key out, and add the panel to `ADMIN_SECTIONS` in `apps/web/src/pages/admin/components/adminSections.ts`
 
@@ -168,7 +177,7 @@ surface, reached from a different place.
 ### Implementation for User Story 6
 
 - [x] T041 [US6] Implement `InstanceReadiness` in `src/server/src/readiness.rs`, derived from `settings::registry` per `contracts/readiness.md`, with no stored flag and no cache
-- [ ] T042 [US6] Fold `instanceRepositoryIntegration` into the report as one capability in `src/server/src/graphql/queries/lore_sync.rs`, reusing `RegistrationProblem::guidance()` verbatim rather than writing a second vocabulary
+- [x] T042 [US6] Fold `instanceRepositoryIntegration` into the report as one capability in `src/server/src/graphql/queries/lore_sync.rs`, reusing `RegistrationProblem::guidance()` verbatim rather than writing a second vocabulary
 - [x] T043 [US6] Record source flips at startup and expose them, in `src/server/src/readiness.rs` — the spec's "a container is redeployed with a fresh environment and an existing database" edge case
 - [x] T044 [US6] Implement `readiness::may_publish_beyond_world(state)` in `src/server/src/readiness.rs` as the single predicate the gate calls
 - [x] T045 [US6] Apply the gate in `src/server/src/graphql/mutations_collection_shares.rs`, refusing creation with a message naming the missing setting (FR-026, spec 039 FR-053)
@@ -317,8 +326,8 @@ alone.
 
 ## Phase 9: Polish & Cross-Cutting Concerns
 
-- [ ] T108 [P] Document instance configuration in `docs/` — the precedence rule, how to add a setting, and what the declaration's fields buy you
-- [ ] T109 [P] Update `MVP.md` with what this feature changed: first-run setup, the settings surface, mail, and the publish gate
+- [x] T108 [P] Document instance configuration in `docs/` — the precedence rule, how to add a setting, and what the declaration's fields buy you
+- [x] T109 [P] Update `MVP.md` with what this feature changed: first-run setup, the settings surface, mail, and the publish gate
 - [x] T110 Make the six guards fail on purpose per quickstart.md § "Making the guards fail on purpose" and record in the commit body that each was seen to bite
 - [ ] T111 Run quickstart Scenario G by hand — an existing deployment upgraded with no reconfiguration and no failure to start (FR-024, FR-028, SC-009) — and record the result; it is not automatable in the current harness
 - [ ] T112 Run quickstart Scenarios A–F by hand against `make dev` and note anything the suite does not catch; Scenario A with a stopwatch, because SC-001 is a claim about a human
@@ -340,9 +349,9 @@ alone.
   - Scenarios B–F remain unwalked. D and F are covered end to end by
     `mail-delivery.spec.ts` and `instance-readiness.spec.ts`.
 - [x] T113 Search the entire product for a rendered credential — screens, GraphQL responses, logs, the audit trail — and record what was searched and found. SC-007 says "demonstrated by attempting to find one", so the attempt is the deliverable — recorded in `credential-search.md`
-- [ ] T114 Run `cargo test --workspace -j 4`, `make lint` (lint-host + lint-wasm + file length) and `pnpm --filter @thunderforge/web test`
+- [x] T114 Run `cargo test --workspace -j 4`, `make lint` (lint-host + lint-wasm + file length) and `pnpm --filter @thunderforge/web test`
 - [x] T115 Run the full suite via `node scripts/e2e-parallel.mjs --shards=2`, including the `first-run` project, and record the figures in the commit body
-- [ ] T116 Run `pnpm verify` and fix what it reports **in the code this feature added** — keep it to that; wide lint passes get their own commit
+- [x] T116 Run `pnpm verify` and fix what it reports **in the code this feature added** — keep it to that; wide lint passes get their own commit
 
 ---
 
