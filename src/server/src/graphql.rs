@@ -302,6 +302,10 @@ pub struct QueryRoot(
     mutations_collections::CollectionQuery,
     // Spec 026: `sharedCollection` — the anonymous read (ADR-070).
     mutations_collection_shares::CollectionShareQuery,
+    // Spec 040 US1 / spec 039 FR-056: `publishedOperatorValues` — the six
+    // values the published legal pages render, readable without an account
+    // because somebody serving a copyright notice does not have one.
+    anonymous::PublishedOperatorValuesQuery,
     ActorAbilityQuery,
     ItemQuery,
     ItemPermissionQuery,

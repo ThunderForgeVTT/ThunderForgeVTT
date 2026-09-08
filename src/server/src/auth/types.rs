@@ -207,6 +207,14 @@ pub(crate) struct SetupStatusResponse {
     /// Ships as a constant `false` until US3 exists. Present now so the
     /// front-end shape does not change when it does.
     pub(crate) accepting_access_requests: bool,
+    /// Spec 040 (FR-002, FR-003, FR-009): every `RequiredAtSetup` declaration,
+    /// resolved — so the wizard is driven by `settings::registry` and not by a
+    /// hard-coded list of steps. Empty once setup is complete; see
+    /// `admin_setup::setup_status` for why an anonymous caller on a running
+    /// instance is not told which of its settings are unset.
+    pub(crate) required_settings: Vec<crate::auth::setup_requirements::RequiredSetting>,
+    /// Spec 040 FR-002a. The predicate is 040's; the enrolment flow is 041's.
+    pub(crate) second_factor_confirmed: bool,
 }
 
 #[derive(Debug, Serialize)]

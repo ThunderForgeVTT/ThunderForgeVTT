@@ -106,6 +106,10 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/authentication/setup/status", get(setup_status))
         .route("/authentication/setup/basic", post(admin_setup_basic))
+        // Spec 040 US1: one step of the pass, written as it is completed
+        // (FR-006), and the one place setup finishes (FR-002a).
+        .route("/authentication/setup/settings", post(setup_settings))
+        .route("/authentication/setup/complete", post(setup_complete))
         .route(
             "/authentication/setup/oauth/{provider_key}/start",
             post(admin_setup_oauth_start),
@@ -169,6 +173,12 @@ pub fn router() -> Router<AppState> {
 #[path = "types.rs"]
 pub(crate) mod types;
 pub(crate) use types::*;
+
+/// Spec 040 US1: what setup still needs and whether it may finish. Separate
+/// from the handlers so the predicate can be read and tested without an HTTP
+/// request in sight, and so `admin_setup.rs` stays under the 1000-line gate.
+#[path = "setup_requirements.rs"]
+pub(crate) mod setup_requirements;
 
 #[path = "admin_setup.rs"]
 pub(crate) mod admin_setup;

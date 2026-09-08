@@ -1,24 +1,129 @@
 //! The one-time bootstrap code that lets the first administrator exist, and
 //! the OAuth-provisioned account it can create.
+//!
+//! # The code survives a restart (spec 040 FR-006, `contracts/setup.md` rule 7)
+//!
+//! This module used to mint a fresh code on **every** start while setup was
+//! incomplete. An operator who was handed a link, closed the browser and
+//! restarted the container found their link rejected with no explanation, and
+//! the new one was only in a log line they had already scrolled past. So
+//! "setup is resumable" was a claim rather than a behaviour.
+//!
+//! An unconsumed code is now left alone. The cost is that it cannot be printed
+//! again — only the Argon2 hash is stored, deliberately, and the alternative to
+//! not printing it is keeping the plaintext of a credential that creates an
+//! administrator. The log therefore says the earlier link is still valid and
+//! names the deliberate way to get a new one (`THUNDERFORGE_REGENERATE_SETUP_CODE`).
+//!
+//! # The logged link is not `127.0.0.1:5173` (rule 8)
+//!
+//! It used to be. That address is the Vite dev server on the machine running
+//! `make dev`, and it is wrong for every containerised deployment — which is
+//! every deployment that is not the author's laptop, and it is the *first*
+//! thing an operator sees. There is no public-URL setting in
+//! `settings::registry` to derive it from (checked; there is not one, and this
+//! module may not add one), so `THUNDERFORGE_PUBLIC_URL` is read directly and,
+//! when it is unset, the path alone is logged rather than a host that would be
+//! a guess. See ADR-093.
 
 use super::*;
+
+/// The variable that says where this instance is reachable from outside.
+///
+/// Read here rather than declared in `settings::registry` because a setting
+/// stored in the database cannot help the one message that has to be right
+/// before anybody has configured anything. It is a candidate for a declaration
+/// once something else needs it — ADR-093 records that.
+const PUBLIC_URL_VAR: &str = "THUNDERFORGE_PUBLIC_URL";
+
+/// Set this to ask for a new bootstrap code on the next start, replacing an
+/// unconsumed one. The deliberate regeneration rule 7 asks for, in the one form
+/// available to somebody whose only handle on the instance is its environment.
+const REGENERATE_VAR: &str = "THUNDERFORGE_REGENERATE_SETUP_CODE";
+
+/// What a start should do about the bootstrap code.
+///
+/// Pure, and separate from the statements that carry it out, because the whole
+/// defect this replaces was a decision made implicitly by the order of two
+/// `if`s. It is also the only way to test the restart case: the development
+/// database this suite runs against has administrators in it, so
+/// "an instance with no administrator restarts" cannot be arranged with real
+/// rows without destroying somebody's data.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BootstrapAction {
+    /// Mint a code, store its hash, and log the link.
+    Mint,
+    /// A code from an earlier start is unconsumed. Leave it exactly as it is —
+    /// FR-006. The operator's existing link keeps working.
+    Keep,
+    /// An administrator exists and no setup is in progress: this instance is
+    /// set up, and the record should say so.
+    MarkComplete,
+}
+
+/// The decision, from the four facts it depends on.
+///
+/// `admin_exists` alone is deliberately **not** completion any more. Since
+/// FR-002a, an instance whose first administrator exists but has not confirmed
+/// a second factor is mid-setup, not finished — and a restart in that window
+/// has to leave the code alone rather than declare victory. See ADR-093.
+pub(crate) fn bootstrap_action(
+    admin_exists: bool,
+    setup_completed: bool,
+    has_unconsumed_code: bool,
+    regeneration_requested: bool,
+) -> BootstrapAction {
+    // Refused on an instance that is already set up: a variable left in a
+    // container's environment must not be able to reopen setup on a live
+    // deployment months later.
+    if regeneration_requested && !(admin_exists && setup_completed) {
+        return BootstrapAction::Mint;
+    }
+
+    if has_unconsumed_code && !setup_completed {
+        return BootstrapAction::Keep;
+    }
+
+    if admin_exists {
+        return BootstrapAction::MarkComplete;
+    }
+
+    BootstrapAction::Mint
+}
+
+/// Where an operator should go to finish setup.
+///
+/// `None` for the host half when `THUNDERFORGE_PUBLIC_URL` is unset: a path is
+/// incomplete, a wrong host is misleading, and this line is read by somebody
+/// who has not got the instance working yet.
+fn setup_link(code: &str) -> String {
+    match crate::settings::registry::read_env(PUBLIC_URL_VAR) {
+        Some(base) => format!("{}/setup/{code}", base.trim_end_matches('/')),
+        None => format!(
+            "/setup/{code} on this instance (set {PUBLIC_URL_VAR} to have this printed as a full link)"
+        ),
+    }
+}
 
 pub async fn ensure_admin_bootstrap_code(state: &AppState) -> Result<(), String> {
     let now = Utc::now().naive_utc();
     let bootstrap_code = random_setup_code();
     let bootstrap_code_hash = hash_password(&bootstrap_code)?;
+    let regeneration_requested = crate::settings::registry::read_env(REGENERATE_VAR)
+        .is_some_and(|v| matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"));
     let mut conn = state
         .db_pool
         .get()
         .map_err(|_| "Failed to get DB connection".to_string())?;
 
-    let generated_code = tokio::task::spawn_blocking(move || -> Result<Option<String>, String> {
+    let outcome = tokio::task::spawn_blocking(move || -> Result<BootstrapAction, String> {
         let admin_exists = users::table
             .filter(users::is_admin.eq(true))
             .select(users::id)
             .first::<uuid::Uuid>(&mut conn)
             .optional()
-            .map_err(|_| "Failed to query admin users".to_string())?;
+            .map_err(|_| "Failed to query admin users".to_string())?
+            .is_some();
 
         let existing = admin_bootstrap_setup::table
             .filter(admin_bootstrap_setup::id.eq(1))
@@ -27,66 +132,108 @@ pub async fn ensure_admin_bootstrap_code(state: &AppState) -> Result<(), String>
             .optional()
             .map_err(|_| "Failed to load bootstrap setup state".to_string())?;
 
-        if admin_exists.is_some() {
-            if existing.is_some() {
-                mark_admin_setup_complete_sync(&mut conn, now)?;
-            } else {
-                let new_row = NewAdminBootstrapSetup {
-                    id: 1,
-                    setup_completed_at: Some(now),
-                    admin_code_hash: None,
-                    admin_code_generated_at: None,
-                    created_at: now,
-                    updated_at: now,
-                };
-                diesel::insert_into(admin_bootstrap_setup::table)
-                    .values(&new_row)
-                    .execute(&mut conn)
-                    .map_err(|_| "Failed to persist bootstrap setup state".to_string())?;
+        let setup_completed = existing
+            .as_ref()
+            .is_some_and(|row| row.setup_completed_at.is_some());
+        let has_unconsumed_code = existing
+            .as_ref()
+            .is_some_and(|row| row.admin_code_hash.is_some());
+
+        let action = bootstrap_action(
+            admin_exists,
+            setup_completed,
+            has_unconsumed_code,
+            regeneration_requested,
+        );
+
+        match action {
+            BootstrapAction::Keep => {}
+            BootstrapAction::MarkComplete => {
+                if existing.is_some() {
+                    mark_admin_setup_complete_sync(&mut conn, now)?;
+                } else {
+                    let new_row = NewAdminBootstrapSetup {
+                        id: 1,
+                        setup_completed_at: Some(now),
+                        admin_code_hash: None,
+                        admin_code_generated_at: None,
+                        created_at: now,
+                        updated_at: now,
+                    };
+                    diesel::insert_into(admin_bootstrap_setup::table)
+                        .values(&new_row)
+                        .execute(&mut conn)
+                        .map_err(|_| "Failed to persist bootstrap setup state".to_string())?;
+                }
             }
-
-            return Ok(None);
+            BootstrapAction::Mint => {
+                if existing.is_some() {
+                    diesel::update(
+                        admin_bootstrap_setup::table.filter(admin_bootstrap_setup::id.eq(1)),
+                    )
+                    .set((
+                        admin_bootstrap_setup::setup_completed_at
+                            .eq::<Option<chrono::NaiveDateTime>>(None),
+                        admin_bootstrap_setup::admin_code_hash.eq(Some(bootstrap_code_hash)),
+                        admin_bootstrap_setup::admin_code_generated_at.eq(Some(now)),
+                        admin_bootstrap_setup::updated_at.eq(now),
+                    ))
+                    .execute(&mut conn)
+                    .map_err(|_| "Failed to update bootstrap setup state".to_string())?;
+                } else {
+                    let new_row = NewAdminBootstrapSetup {
+                        id: 1,
+                        setup_completed_at: None,
+                        admin_code_hash: Some(bootstrap_code_hash),
+                        admin_code_generated_at: Some(now),
+                        created_at: now,
+                        updated_at: now,
+                    };
+                    diesel::insert_into(admin_bootstrap_setup::table)
+                        .values(&new_row)
+                        .execute(&mut conn)
+                        .map_err(|_| "Failed to persist bootstrap setup state".to_string())?;
+                }
+            }
         }
 
-        if existing.is_some() {
-            diesel::update(admin_bootstrap_setup::table.filter(admin_bootstrap_setup::id.eq(1)))
-                .set((
-                    admin_bootstrap_setup::setup_completed_at
-                        .eq::<Option<chrono::NaiveDateTime>>(None),
-                    admin_bootstrap_setup::admin_code_hash.eq(Some(bootstrap_code_hash)),
-                    admin_bootstrap_setup::admin_code_generated_at.eq(Some(now)),
-                    admin_bootstrap_setup::updated_at.eq(now),
-                ))
-                .execute(&mut conn)
-                .map_err(|_| "Failed to update bootstrap setup state".to_string())?;
-        } else {
-            let new_row = NewAdminBootstrapSetup {
-                id: 1,
-                setup_completed_at: None,
-                admin_code_hash: Some(bootstrap_code_hash),
-                admin_code_generated_at: Some(now),
-                created_at: now,
-                updated_at: now,
-            };
-            diesel::insert_into(admin_bootstrap_setup::table)
-                .values(&new_row)
-                .execute(&mut conn)
-                .map_err(|_| "Failed to persist bootstrap setup state".to_string())?;
-        }
-
-        Ok(Some(bootstrap_code))
+        Ok(action)
     })
     .await
     .map_err(|_| "Failed to spawn blocking task".to_string())??;
 
-    if let Some(bootstrap_code) = generated_code {
-        tracing::warn!(
-            "Initial admin setup is incomplete. To create an admin account, visit: http://127.0.0.1:5173/setup/{}",
-            bootstrap_code
-        );
+    match outcome {
+        BootstrapAction::Mint => tracing::warn!(
+            "Initial admin setup is incomplete. To create an admin account, visit: {}",
+            setup_link(&bootstrap_code)
+        ),
+        BootstrapAction::Keep => tracing::warn!(
+            "Initial admin setup is incomplete. The setup link issued earlier is still \
+             valid — this instance does not reissue it, because only its hash is stored. \
+             Set {}=1 and restart to replace it with a new one.",
+            REGENERATE_VAR
+        ),
+        BootstrapAction::MarkComplete => {}
     }
 
     Ok(())
+}
+
+/// Whether setup is finished, from the two facts that decide it.
+///
+/// Since ADR-093 this is the row's `setup_completed_at` and not "an
+/// administrator exists": the first administrator now exists for the whole
+/// second half of the wizard. The `admin_exists && !has_unconsumed_code` arm
+/// is the back-compatibility one — a deployment upgraded from before this
+/// feature, or an administrator created outside setup, is set up, and reading
+/// it any other way would reopen the wizard on a running instance.
+pub(crate) fn setup_is_completed(admin_exists: bool, setup: Option<&AdminBootstrapSetup>) -> bool {
+    match setup {
+        Some(row) => {
+            row.setup_completed_at.is_some() || (admin_exists && row.admin_code_hash.is_none())
+        }
+        None => admin_exists,
+    }
 }
 
 pub(crate) async fn ensure_admin_setup_code_valid(
@@ -116,10 +263,8 @@ pub(crate) async fn ensure_admin_setup_code_valid(
             .select(users::id)
             .first::<uuid::Uuid>(&mut conn)
             .optional()
-            .map_err(|_| "Failed to query admin users".to_string())?;
-        if admin_exists.is_some() {
-            return Ok(Err("Setup has already been completed".to_string()));
-        }
+            .map_err(|_| "Failed to query admin users".to_string())?
+            .is_some();
 
         let setup = admin_bootstrap_setup::table
             .filter(admin_bootstrap_setup::id.eq(1))
@@ -128,13 +273,17 @@ pub(crate) async fn ensure_admin_setup_code_valid(
             .optional()
             .map_err(|_| "Failed to load bootstrap setup state".to_string())?;
 
+        // ADR-093: an existing administrator is no longer the end of setup.
+        // The account step creates them and the second factor and the required
+        // settings come after, so this used to refuse the code for the whole
+        // second half of the wizard it is the gate for.
+        if setup_is_completed(admin_exists, setup.as_ref()) {
+            return Ok(Err("Setup has already been completed".to_string()));
+        }
+
         let Some(setup) = setup else {
             return Ok(Err("Setup state is not initialized yet".to_string()));
         };
-
-        if setup.setup_completed_at.is_some() {
-            return Ok(Err("Setup has already been completed".to_string()));
-        }
 
         let Some(admin_code_hash) = setup.admin_code_hash else {
             return Ok(Err("Bootstrap admin code is not active".to_string()));
@@ -405,7 +554,12 @@ pub(crate) async fn create_admin_user_from_oauth(
             .execute(&mut conn)
             .map_err(|_| "Failed to link OAuth account".to_string())?;
 
-        mark_admin_setup_complete_sync(&mut conn, now)?;
+        // ADR-093: deliberately NOT `mark_admin_setup_complete_sync`. Setup
+        // finishes at `/authentication/setup/complete`, once the required
+        // settings resolve and the second factor is confirmed (FR-002a).
+        // Completing here would consume the bootstrap code the remaining steps
+        // authenticate with, and would declare an instance set up whose
+        // administrator holds only a password.
 
         Ok(user_id)
     })
@@ -459,4 +613,128 @@ pub(crate) fn mark_admin_setup_complete_sync(
         .map_err(|_| "Failed to update bootstrap setup state".to_string())?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod bootstrap_code_tests {
+    use super::*;
+
+    /// T052 / FR-006, `contracts/setup.md` rule 7. **The defect this file
+    /// existed with**: an unconsumed code was replaced on every start, so
+    /// closing the browser and restarting the container silently killed the
+    /// operator's link.
+    ///
+    /// Asserted against `bootstrap_action` rather than against a live
+    /// database, because "an instance with no administrator restarts" cannot
+    /// be arranged against the development database this suite shares — it has
+    /// three hundred administrators in it, and clearing them to make the test
+    /// pass would be destroying somebody's data to check a decision that is
+    /// pure anyway.
+    #[test]
+    fn an_unconsumed_code_survives_a_restart() {
+        assert_eq!(
+            bootstrap_action(false, false, true, false),
+            BootstrapAction::Keep,
+            "a restart reissued a code that had not been used, killing the operator's link"
+        );
+    }
+
+    /// The same is true once the first administrator exists: since FR-002a the
+    /// account step is the middle of the wizard, so a restart in that window
+    /// must not declare victory and consume the code the remaining steps
+    /// authenticate with.
+    #[test]
+    fn a_restart_mid_wizard_does_not_end_setup() {
+        assert_eq!(
+            bootstrap_action(true, false, true, false),
+            BootstrapAction::Keep,
+            "restarting after the account step ended a setup that had not finished"
+        );
+    }
+
+    /// A fresh database still gets a code, and a finished instance is recorded
+    /// as finished — the two behaviours that were already right.
+    #[test]
+    fn an_empty_instance_is_given_a_code_and_a_finished_one_is_recorded() {
+        assert_eq!(
+            bootstrap_action(false, false, false, false),
+            BootstrapAction::Mint
+        );
+        assert_eq!(
+            bootstrap_action(true, false, false, false),
+            BootstrapAction::MarkComplete,
+            "an instance with an administrator and no setup in progress is set up"
+        );
+        assert_eq!(
+            bootstrap_action(true, true, false, false),
+            BootstrapAction::MarkComplete
+        );
+    }
+
+    /// Rule 7's "and offers a deliberate regeneration". An operator who has
+    /// lost the link asks for a new one and gets one; the same variable left
+    /// behind in a container's environment cannot reopen setup on a live
+    /// instance months later.
+    #[test]
+    fn regeneration_is_deliberate_and_refused_on_a_finished_instance() {
+        assert_eq!(
+            bootstrap_action(false, false, true, true),
+            BootstrapAction::Mint,
+            "an operator who asked for a new code did not get one"
+        );
+        assert_eq!(
+            bootstrap_action(true, true, false, true),
+            BootstrapAction::MarkComplete,
+            "a stale environment variable reopened setup on a configured instance"
+        );
+    }
+
+    /// Rule 8. The line an operator reads first must not name the author's
+    /// Vite dev server, and must not invent a host it cannot know.
+    #[test]
+    fn the_logged_link_is_derived_from_configuration() {
+        crate::settings::test_env::temp_env(
+            &[(PUBLIC_URL_VAR, Some("https://play.example.org/"))],
+            || {
+                let link = setup_link("abc123");
+                assert_eq!(link, "https://play.example.org/setup/abc123");
+            },
+        );
+
+        crate::settings::test_env::temp_env(&[(PUBLIC_URL_VAR, None)], || {
+            let link = setup_link("abc123");
+            assert!(
+                !link.contains("127.0.0.1") && !link.contains("5173"),
+                "the setup link still hard-codes the development server: {link}"
+            );
+            assert!(
+                link.contains("/setup/abc123") && link.contains(PUBLIC_URL_VAR),
+                "an unconfigured instance must log the path and say how to get a full link: {link}"
+            );
+        });
+    }
+
+    /// ADR-093's back-compatibility arm, which is the one that decides whether
+    /// an upgraded deployment reopens its own setup wizard.
+    #[test]
+    fn an_upgraded_instance_is_already_set_up() {
+        let row = |completed: bool, code: bool| AdminBootstrapSetup {
+            id: 1,
+            setup_completed_at: completed.then(|| Utc::now().naive_utc()),
+            admin_code_hash: code.then(|| "hash".to_string()),
+            admin_code_generated_at: code.then(|| Utc::now().naive_utc()),
+            created_at: Utc::now().naive_utc(),
+            updated_at: Utc::now().naive_utc(),
+        };
+
+        assert!(setup_is_completed(true, Some(&row(true, false))));
+        // An administrator and no code in flight: nothing is in progress.
+        assert!(setup_is_completed(true, Some(&row(false, false))));
+        // Mid-wizard: the administrator exists and the code is still live.
+        assert!(!setup_is_completed(true, Some(&row(false, true))));
+        assert!(!setup_is_completed(false, Some(&row(false, true))));
+        // No row at all — an administrator created outside setup entirely.
+        assert!(setup_is_completed(true, None));
+        assert!(!setup_is_completed(false, None));
+    }
 }
