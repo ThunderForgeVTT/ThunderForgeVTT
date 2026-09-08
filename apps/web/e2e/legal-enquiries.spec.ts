@@ -125,6 +125,28 @@ test.describe("Legal enquiries", () => {
     // safe harbour to save an operator some spam is not a trade worth making.
     await expect(designation).toContainText("Mailing Address");
     await expect(designation).toContainText("Electronic Contact");
+
+    // And it is last on the page, after the form and after the prose.
+    // Asserted on DOM order rather than on styling, because "below" is the
+    // requirement and a card that merely *looks* lower would satisfy a
+    // screenshot and not this.
+    const order = await page.evaluate(() => {
+      const form = document.querySelector(
+        '[data-testid="takedown-notice-form"]',
+      );
+      const agent = document.querySelector(
+        '[data-testid="dmca-agent-designation"]',
+      );
+      if (!form || !agent) return null;
+      // 4 === DOCUMENT_POSITION_FOLLOWING: the agent comes after the form.
+      return form.compareDocumentPosition(agent) & 4
+        ? "agent-last"
+        : "agent-first";
+    });
+    expect(
+      order,
+      "the takedown form and the designation must both be present",
+    ).toBe("agent-last");
   });
 });
 

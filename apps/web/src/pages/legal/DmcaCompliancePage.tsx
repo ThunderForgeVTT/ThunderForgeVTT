@@ -111,6 +111,32 @@ export default function DmcaCompliancePage() {
             <TakedownNoticeForm />
           </Card>
 
+          {body.map((section) => (
+            <Card
+              key={section.heading}
+              surface="parchment"
+              className="grid gap-3 p-6"
+              data-testid={`dmca-section-${slugify(section.heading ?? "")}`}
+            >
+              <h2 className="text-lg font-semibold">{section.heading}</h2>
+              <LegalProse body={section.body} />
+            </Card>
+          ))}
+
+          {/*
+            Last on the page, deliberately.
+
+            Nearly everybody who reaches this page wants to report
+            something, and the form at the top is the path that gets
+            tracked and answered. The designation is not an alternative
+            channel offered alongside it — it is the statutory notice that
+            17 U.S.C. § 512(c)(2) requires be publicly available, and the
+            safe harbour depends on it being here. So it stays, in full,
+            at the foot of the page where a notice of that kind belongs:
+            findable by anyone looking for it, and not competing with the
+            form for the attention of somebody who just wants to report a
+            stolen map.
+          */}
           <Card
             surface="stone"
             className="grid gap-3 p-6"
@@ -144,18 +170,6 @@ export default function DmcaCompliancePage() {
               Office&apos;s Designated Agent Directory (17 U.S.C. § 512(c)(2)).
             </p>
           </Card>
-
-          {body.map((section) => (
-            <Card
-              key={section.heading}
-              surface="parchment"
-              className="grid gap-3 p-6"
-              data-testid={`dmca-section-${slugify(section.heading ?? "")}`}
-            >
-              <h2 className="text-lg font-semibold">{section.heading}</h2>
-              <LegalProse body={section.body} />
-            </Card>
-          ))}
         </main>
       </Container>
     </>

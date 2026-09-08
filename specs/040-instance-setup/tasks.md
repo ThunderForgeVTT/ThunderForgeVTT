@@ -319,7 +319,7 @@ alone.
 
 - [ ] T108 [P] Document instance configuration in `docs/` — the precedence rule, how to add a setting, and what the declaration's fields buy you
 - [ ] T109 [P] Update `MVP.md` with what this feature changed: first-run setup, the settings surface, mail, and the publish gate
-- [ ] T110 Make the six guards fail on purpose per quickstart.md § "Making the guards fail on purpose" and record in the commit body that each was seen to bite
+- [x] T110 Make the six guards fail on purpose per quickstart.md § "Making the guards fail on purpose" and record in the commit body that each was seen to bite
 - [ ] T111 Run quickstart Scenario G by hand — an existing deployment upgraded with no reconfiguration and no failure to start (FR-024, FR-028, SC-009) — and record the result; it is not automatable in the current harness
 - [ ] T112 Run quickstart Scenarios A–F by hand against `make dev` and note anything the suite does not catch; Scenario A with a stopwatch, because SC-001 is a claim about a human
   - **Partly done, 2026-09-08: Scenario A walked by hand, findings acted on,
