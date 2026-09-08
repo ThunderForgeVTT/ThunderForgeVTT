@@ -65,6 +65,22 @@ What is still missing is a deliberate way to turn a second factor **off**,
 which spec 041's FR-012 and FR-014 specify and nothing implements. An account
 that enrols today cannot un-enrol; it can only replace its factor.
 
+**First run now sets an instance up, and says what it did not.** As of
+2026-09-07 an empty database is walked through one pass — administrator
+account, operator identity, the contact for copyright notices, the support
+address, mail, a second factor, review — with the steps derived from the
+settings registry rather than hard-coded, so a declaration added later
+appears without the wizard being edited. A setting the environment has
+already fixed is shown as fixed and not asked for, which takes a
+fully-configured container to the review screen in two steps. Setup no longer
+ends when the administrator's account is created (ADR-093); it ends at
+`/complete`, which is what makes the second half of the wizard reachable at
+all.
+
+Proven end to end against a migrated-but-unseeded database — a lane that had
+to be built, because every other e2e stack is cloned from a seeded template
+where setup is already finished and first run is therefore unobservable.
+
 **There is no password-change path at all.** `password_hash` is only ever
 written at registration, admin bootstrap and OAuth auto-provisioning. Recorded
 because spec 036 FR-008 assumes one, and it is the sort of absence that reads

@@ -199,39 +199,39 @@ application (041's own Context says so). T063 implements the *predicate*; the
 
 ### Tests for User Story 1
 
-- [ ] T051 [P] [US1] Add a server test in `src/server/src/auth/admin_setup.rs` asserting two concurrent `/authentication/setup/complete` calls produce one success and one `409 setup_complete` — never a generic `500` from a unique-constraint violation (spec Edge Case; today the check-then-insert has no transaction)
-- [ ] T052 [P] [US1] Add a server test in `src/server/src/auth/admin_bootstrap.rs` asserting an unconsumed bootstrap code **survives a restart** rather than being regenerated (FR-006; today `ensure_admin_bootstrap_code` mints a fresh one on every start and silently kills the operator's link)
-- [ ] T053 [P] [US1] Add a server test asserting `/authentication/setup/complete` is refused while any `RequiredAtSetup` declaration is unset, naming which (FR-002, FR-003)
-- [ ] T054 [P] [US1] Add a server test asserting `/authentication/setup/complete` is refused while the first administrator's `two_factor_confirmed_at` is null (FR-002a)
-- [ ] T055 [P] [US1] Add a vitest in `apps/web/src/legal/__tests__/legalDocuments.test.ts` asserting an **unset** token still renders its visible `[OPERATOR — …]` marker, preserving that file's existing invariant
+- [x] T051 [P] [US1] Add a server test in `src/server/src/auth/admin_setup.rs` asserting two concurrent `/authentication/setup/complete` calls produce one success and one `409 setup_complete` — never a generic `500` from a unique-constraint violation (spec Edge Case; today the check-then-insert has no transaction)
+- [x] T052 [P] [US1] Add a server test in `src/server/src/auth/admin_bootstrap.rs` asserting an unconsumed bootstrap code **survives a restart** rather than being regenerated (FR-006; today `ensure_admin_bootstrap_code` mints a fresh one on every start and silently kills the operator's link)
+- [x] T053 [P] [US1] Add a server test asserting `/authentication/setup/complete` is refused while any `RequiredAtSetup` declaration is unset, naming which (FR-002, FR-003)
+- [x] T054 [P] [US1] Add a server test asserting `/authentication/setup/complete` is refused while the first administrator's `two_factor_confirmed_at` is null (FR-002a)
+- [x] T055 [P] [US1] Add a vitest in `apps/web/src/legal/__tests__/legalDocuments.test.ts` asserting an **unset** token still renders its visible `[OPERATOR — …]` marker, preserving that file's existing invariant
 
 ### Implementation for User Story 1 — the server
 
-- [ ] T056 [US1] Extend `SetupStatusResponse` with `required_settings` and `second_factor_confirmed` in `src/server/src/auth/admin_setup.rs` per `contracts/setup.md`, so the wizard is driven by the registry and not by a hard-coded list of steps
-- [ ] T057 [US1] Add `POST /authentication/setup/settings` in `src/server/src/auth/admin_setup.rs`, writing each step's values as it is completed so resumability is a property of the storage (FR-006)
-- [ ] T058 [US1] Add `POST /authentication/setup/complete` in `src/server/src/auth/admin_setup.rs`, wrapping the admin-exists check, the user insert and `setup_completed_at` in **one** `conn.transaction`, following `instance_identity::instance_id`'s reasoning about check-then-insert windows
-- [ ] T059 [US1] Reuse an existing unconsumed bootstrap code in `src/server/src/auth/admin_bootstrap.rs` and offer a deliberate regeneration instead of minting one per start
-- [ ] T060 [US1] Stop hard-coding `http://127.0.0.1:5173/setup/{code}` in the `tracing::warn!` in `src/server/src/auth/admin_bootstrap.rs` — it is the first thing an operator running a container sees and it is wrong for every one of them
-- [ ] T061 [US1] Register the two new routes in `src/server/src/auth/mod.rs`'s `router()`
-- [ ] T062 [US1] Add the unauthenticated `publishedOperatorValues` query in `src/server/src/graphql/anonymous.rs` per `contracts/legal-rendering.md` — spec 039's FR-056 requires the notice contact be reachable without an account — exposing those six values and nothing else
-- [ ] T063 [US1] Implement the completion predicate in `src/server/src/auth/admin_setup.rs`: every `RequiredAtSetup` declaration resolves **and** `users.two_factor_confirmed_at` is non-null for the first administrator. **The enrolment flow is spec 041's and is not designed here** (FR-002a)
+- [x] T056 [US1] Extend `SetupStatusResponse` with `required_settings` and `second_factor_confirmed` in `src/server/src/auth/admin_setup.rs` per `contracts/setup.md`, so the wizard is driven by the registry and not by a hard-coded list of steps
+- [x] T057 [US1] Add `POST /authentication/setup/settings` in `src/server/src/auth/admin_setup.rs`, writing each step's values as it is completed so resumability is a property of the storage (FR-006)
+- [x] T058 [US1] Add `POST /authentication/setup/complete` in `src/server/src/auth/admin_setup.rs`, wrapping the admin-exists check, the user insert and `setup_completed_at` in **one** `conn.transaction`, following `instance_identity::instance_id`'s reasoning about check-then-insert windows
+- [x] T059 [US1] Reuse an existing unconsumed bootstrap code in `src/server/src/auth/admin_bootstrap.rs` and offer a deliberate regeneration instead of minting one per start
+- [x] T060 [US1] Stop hard-coding `http://127.0.0.1:5173/setup/{code}` in the `tracing::warn!` in `src/server/src/auth/admin_bootstrap.rs` — it is the first thing an operator running a container sees and it is wrong for every one of them
+- [x] T061 [US1] Register the two new routes in `src/server/src/auth/mod.rs`'s `router()`
+- [x] T062 [US1] Add the unauthenticated `publishedOperatorValues` query in `src/server/src/graphql/anonymous.rs` per `contracts/legal-rendering.md` — spec 039's FR-056 requires the notice contact be reachable without an account — exposing those six values and nothing else
+- [x] T063 [US1] Implement the completion predicate in `src/server/src/auth/admin_setup.rs`: every `RequiredAtSetup` declaration resolves **and** `users.two_factor_confirmed_at` is non-null for the first administrator. **The enrolment flow is spec 041's and is not designed here** (FR-002a)
 
 ### Implementation for User Story 1 — the legal pages
 
-- [ ] T064 [US1] Replace the four *value* markers in `legal/terms-of-service.md` and `legal/privacy-policy.md` with the closed tokens from `contracts/legal-rendering.md`, leaving the ten *prose* markers exactly as they are (research.md § D2)
-- [ ] T065 [US1] Create `apps/web/src/legal/operatorTokens.ts` with the closed token set and the substitution returning literal/value segments, and apply it in `apps/web/src/legal/legalDocuments.ts` — a substituted value is rendered as **text** and never passes through `LegalProse`'s inline parser
-- [ ] T066 [US1] Render the segments in `apps/web/src/components/legal/LegalProse.tsx` without extending what it parses, keeping its "trusted input only" invariant intact
-- [ ] T067 [US1] Replace the hard-coded designated-agent literals in `apps/web/src/pages/legal/DmcaCompliancePage.tsx` with the resolved notice-contact values, keeping the "configure before launch" text as the unset rendering
-- [ ] T068 [P] [US1] Update `legal/README.md`'s "Open items" to record the split between fillable values and operator prose blocks, and what is now filled from settings
+- [x] T064 [US1] Replace the four *value* markers in `legal/terms-of-service.md` and `legal/privacy-policy.md` with the closed tokens from `contracts/legal-rendering.md`, leaving the ten *prose* markers exactly as they are (research.md § D2)
+- [x] T065 [US1] Create `apps/web/src/legal/operatorTokens.ts` with the closed token set and the substitution returning literal/value segments, and apply it in `apps/web/src/legal/legalDocuments.ts` — a substituted value is rendered as **text** and never passes through `LegalProse`'s inline parser
+- [x] T066 [US1] Render the segments in `apps/web/src/components/legal/LegalProse.tsx` without extending what it parses, keeping its "trusted input only" invariant intact
+- [x] T067 [US1] Replace the hard-coded designated-agent literals in `apps/web/src/pages/legal/DmcaCompliancePage.tsx` with the resolved notice-contact values, keeping the "configure before launch" text as the unset rendering
+- [x] T068 [P] [US1] Update `legal/README.md`'s "Open items" to record the split between fillable values and operator prose blocks, and what is now filled from settings
 
 ### Implementation for User Story 1 — the wizard
 
-- [ ] T069 [US1] Break `apps/web/src/pages/setup/SetupPage.tsx` into steps under `apps/web/src/pages/setup/steps/` — account, operator, notices, support, mail, second factor, review — driven by `required_settings` rather than by a hard-coded sequence
-- [ ] T070 [US1] Add data-testids throughout the setup steps; **there are none on `SetupPage.tsx` today**, which is part of why first-run has never been tested
-- [ ] T071 [US1] Show a setting the environment has fixed as fixed, and do not ask for it, in `apps/web/src/pages/setup/steps/` (FR-009) — an instance configured wholly by environment reaches the review step in two screens
-- [ ] T072 [US1] Show the readiness report on the review step so setup ends by saying what is still unset (FR-003, FR-005 scenario 5)
-- [ ] T073 [US1] State on the notices step that registering a designated agent, where the operator's jurisdiction requires one, is the operator's own obligation and is not performed by this software (spec 039 FR-055)
-- [ ] T074 [US1] Add `apps/web/e2e/instance-setup.spec.ts` in the `first-run` project, covering quickstart Scenario A end to end — including reading the bootstrap link from the server log as an operator would, and asserting the legal pages name the entered operator afterwards
+- [x] T069 [US1] Break `apps/web/src/pages/setup/SetupPage.tsx` into steps under `apps/web/src/pages/setup/steps/` — account, operator, notices, support, mail, second factor, review — driven by `required_settings` rather than by a hard-coded sequence
+- [x] T070 [US1] Add data-testids throughout the setup steps; **there are none on `SetupPage.tsx` today**, which is part of why first-run has never been tested
+- [x] T071 [US1] Show a setting the environment has fixed as fixed, and do not ask for it, in `apps/web/src/pages/setup/steps/` (FR-009) — an instance configured wholly by environment reaches the review step in two screens
+- [x] T072 [US1] Show the readiness report on the review step so setup ends by saying what is still unset (FR-003, FR-005 scenario 5)
+- [x] T073 [US1] State on the notices step that registering a designated agent, where the operator's jurisdiction requires one, is the operator's own obligation and is not performed by this software (spec 039 FR-055)
+- [x] T074 [US1] Add `apps/web/e2e/instance-setup.spec.ts` in the `first-run` project, covering quickstart Scenario A end to end — including reading the bootstrap link from the server log as an operator would, and asserting the legal pages name the entered operator afterwards
 
 **Checkpoint**: an empty database becomes a usable, contactable instance in one pass, with no file edited — SC-001
 
