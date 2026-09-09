@@ -48,9 +48,9 @@ five plans are reconciled before this phase runs, renumber to match and change
 the four filenames below — the decisions are what matter, not the digits.
 
 - [X] T001 [P] Write ADR-081 (a confirmed second factor is replaced, never disarmed) in `docs/adrs/20260907-081-second_factor_replaced_never_disarmed.md`, superseding the `setup/start` behaviour at `src/server/src/auth/two_factor.rs:91` and recording why the pending secret gets its own row
-- [ ] T002 [P] Write ADR-082 (one enrolment flow, three authorisations) in `docs/adrs/20260907-082-one_enrolment_flow_three_authorisations.md`, recording the `purpose` extension to `login_two_factor_challenges` and why an enrolment-scoped session was rejected
-- [ ] T003 [P] Write ADR-083 (recovery codes are credentials, not links) in `docs/adrs/20260907-083-recovery_codes_are_credentials.md`, citing the admin bootstrap code as the precedent followed and the raw-stored share codes as the one rejected
-- [ ] T004 [P] Write ADR-097 (an administrator's second factor is a property of the role) in `docs/adrs/20260907-084-administrator_second_factor_is_a_role_property.md`, recording the computed-not-stored rule, the first-run gate, and the boundary with spec 040's FR-002a
+- [X] T002 [P] Write ADR-082 (one enrolment flow, three authorisations) in `docs/adrs/20260907-082-one_enrolment_flow_three_authorisations.md`, recording the `purpose` extension to `login_two_factor_challenges` and why an enrolment-scoped session was rejected
+- [X] T003 [P] Write ADR-083 (recovery codes are credentials, not links) in `docs/adrs/20260907-083-recovery_codes_are_credentials.md`, citing the admin bootstrap code as the precedent followed and the raw-stored share codes as the one rejected
+- [X] T004 [P] Write ADR-094 (an administrator's second factor is a property of the role) in `docs/adrs/20260907-094-administrator_second_factor_is_a_role_property.md` — numbered 094 rather than the planned 097/084 because 084–093 were taken by specs 037 and 040, recording the computed-not-stored rule, the first-run gate, and the boundary with spec 040's FR-002a
 - [ ] T005 Split `src/server/src/auth/two_factor.rs` (491 lines, against a 1000-line gate) into the module directory `src/server/src/auth/two_factor/` — `mod.rs`, `enrolment.rs`, `verification.rs`, `policy.rs` — as pure movement with no behaviour change, so every task below names a small file. Confirm `./scripts/check-file-length.sh` and `cargo test --workspace` are green before anything else lands
   - **Landed as `crates/thunderforge-axum-auth-core/src/hashing.rs`**, not a
     module inside `src/server` — hashing needs no pool, no request and no
@@ -186,7 +186,7 @@ complete without the administrator enrolling.
 ### Tests for User Story 3
 
 - [ ] T046 [P] [US3] Add server tests in `src/server/src/auth/admin_setup.rs` asserting `setup_status` reads incomplete while an administrator exists without a confirmed factor — **both** halves of `admin_exists || setup_completed_at.is_some()` at `admin_setup.rs:37` (FR-028)
-- [X] T047 [P] [US3] Add server tests in `src/server/src/auth/two_factor/policy.rs` asserting `required(user)` is true for every `is_admin` regardless of the instance switch and the per-account flag, and that clearing `is_admin` writes no two-factor column (FR-027, FR-032) — **landed as `two_factor/requirement.rs`**, not `policy.rs`; `required(user)` is one function with the `is_admin` term and no `two_factor_enabled` term, and its tests are in that file
+- [X] T047 [P] [US3] Add server tests in `src/server/src/auth/two_factor/policy.rs` asserting `required(user)` is true for every `is_admin` regardless of the instance switch and the per-account flag, and that clearing `is_admin` writes no two-factor column (FR-027, FR-032) — **landed as `two_factor/requirement.rs`**, not `policy.rs`; `required(user)` is one function with no `two_factor_enabled` term. The `is_admin` term was **missing** until 2026-09-09 — `refusal_for` honoured FR-027 on removal while the login path let an unenrolled administrator straight in — and is now the first term of `second_factor_required`, pinned by `an_administrator_is_required_to_hold_one_by_the_role_alone`
 
 ### Implementation for User Story 3
 

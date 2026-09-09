@@ -92,7 +92,7 @@ pub(crate) fn refusal_for(
         Some(DisableRefusal::AdminRole)
     } else if instance_required {
         Some(DisableRefusal::InstancePolicy)
-    } else if second_factor_required(instance_required, admin_required) {
+    } else if second_factor_required(is_admin, instance_required, admin_required) {
         Some(DisableRefusal::AdminRequired)
     } else {
         None

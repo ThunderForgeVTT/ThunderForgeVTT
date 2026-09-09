@@ -49,16 +49,26 @@ pub(crate) enum LoginSecondFactorStep {
     Enrol,
 }
 
-/// `required(user)` from `contracts/requirement-policy.md`, minus the term
-/// that is a property of a role.
+/// `required(user)` from `contracts/requirement-policy.md`, whole.
 ///
-/// `user.is_admin` (FR-027) belongs in this expression and is not here yet:
-/// it is US5's, it changes what happens to every administrator on an upgraded
-/// instance, and adding it as a side effect of US4 would be a different
-/// feature landing without its own review. When it lands it is one more `||`
-/// on this line and nothing else in this module moves.
-pub(crate) fn second_factor_required(instance_required: bool, admin_required: bool) -> bool {
-    instance_required || admin_required
+/// Three terms, and the first of them is the one ADR-094 is about: an
+/// administrator must hold a second factor **because of the role** (FR-027),
+/// computed here rather than stored anywhere. There is no
+/// `two_factor_required` column, and the two that exist are inputs to this
+/// line rather than caches of its answer — so an account that becomes an
+/// administrator is required from that instant, with nothing to keep in step.
+///
+/// The `is_admin` term arrived after the other two. While it was missing,
+/// `refusal_for` in `disable.rs` honoured FR-027 on the way *out* and this
+/// expression did not honour it on the way *in*: an administrator who had
+/// never enrolled simply signed in. Half a rule is the shape of the lockout
+/// bug this module was written to remove, in the other direction.
+pub(crate) fn second_factor_required(
+    is_admin: bool,
+    instance_required: bool,
+    admin_required: bool,
+) -> bool {
+    is_admin || instance_required || admin_required
 }
 
 /// The three rows of `contracts/verification.md`'s login table.
@@ -68,6 +78,7 @@ pub(crate) fn second_factor_required(instance_required: bool, admin_required: bo
 /// the thing worth testing without a database in the way.
 pub(crate) fn login_second_factor_step(
     two_factor_enabled: bool,
+    is_admin: bool,
     instance_required: bool,
     admin_required: bool,
 ) -> LoginSecondFactorStep {
@@ -75,7 +86,7 @@ pub(crate) fn login_second_factor_step(
         // FR-022. A factor in force is asked for whatever the policy says,
         // and turning a requirement off does not reach it.
         LoginSecondFactorStep::Verify
-    } else if second_factor_required(instance_required, admin_required) {
+    } else if second_factor_required(is_admin, instance_required, admin_required) {
         LoginSecondFactorStep::Enrol
     } else {
         LoginSecondFactorStep::SignIn
@@ -96,20 +107,25 @@ pub(crate) async fn login_second_factor_step_for_user(
     let row = tokio::task::spawn_blocking(move || {
         users::table
             .filter(users::id.eq(user_id))
-            .select((users::two_factor_enabled, users::two_factor_admin_required))
-            .first::<(bool, bool)>(&mut conn)
+            .select((
+                users::two_factor_enabled,
+                users::is_admin,
+                users::two_factor_admin_required,
+            ))
+            .first::<(bool, bool, bool)>(&mut conn)
             .optional()
     })
     .await
     .map_err(|_| "Failed to spawn blocking task".to_string())
     .and_then(|r| r.map_err(|_| "Failed to query user 2FA state".to_string()))?;
 
-    let Some((enabled, admin_required)) = row else {
+    let Some((enabled, is_admin, admin_required)) = row else {
         return Ok(LoginSecondFactorStep::SignIn);
     };
 
     Ok(login_second_factor_step(
         enabled,
+        is_admin,
         instance_required,
         admin_required,
     ))
@@ -412,12 +428,12 @@ mod tests {
     #[test]
     fn a_required_account_without_a_factor_is_sent_to_enrol_not_refused() {
         assert_eq!(
-            login_second_factor_step(false, true, false),
+            login_second_factor_step(false, false, true, false),
             LoginSecondFactorStep::Enrol,
             "the instance-wide requirement must take an unenrolled account through enrolment"
         );
         assert_eq!(
-            login_second_factor_step(false, false, true),
+            login_second_factor_step(false, false, false, true),
             LoginSecondFactorStep::Enrol,
             "a per-account requirement must do the same"
         );
@@ -428,12 +444,47 @@ mod tests {
     #[test]
     fn turning_the_requirement_off_still_asks_an_enrolled_account_for_its_code() {
         assert_eq!(
-            login_second_factor_step(true, false, false),
+            login_second_factor_step(true, false, false, false),
             LoginSecondFactorStep::Verify
         );
         assert_eq!(
-            login_second_factor_step(true, true, true),
+            login_second_factor_step(true, false, true, true),
             LoginSecondFactorStep::Verify
+        );
+    }
+
+    /// FR-027, ADR-094. The role carries the requirement, and it carries it on
+    /// the way *in* as well as on the way out.
+    ///
+    /// This is the assertion that was missing while `refusal_for` refused an
+    /// administrator's removal and this expression let an administrator who had
+    /// never enrolled sign in untouched. Neither switch is on in any row here:
+    /// being an administrator is the whole reason.
+    #[test]
+    fn an_administrator_is_required_to_hold_one_by_the_role_alone() {
+        assert!(
+            second_factor_required(true, false, false),
+            "the role requires a factor with no policy switched on anywhere"
+        );
+        assert_eq!(
+            login_second_factor_step(false, true, false, false),
+            LoginSecondFactorStep::Enrol,
+            "an unenrolled administrator is taken through enrolment, not signed in"
+        );
+        assert_eq!(
+            login_second_factor_step(true, true, false, false),
+            LoginSecondFactorStep::Verify,
+            "an enrolled administrator is asked for the factor it holds"
+        );
+    }
+
+    /// The other half of "computed, never stored": clearing `is_admin` is the
+    /// whole of giving up the requirement, and needs no second write.
+    #[test]
+    fn giving_up_the_role_gives_up_the_requirement() {
+        assert!(
+            !second_factor_required(false, false, false),
+            "with the role gone and no policy on, nothing requires a factor"
         );
     }
 
@@ -442,7 +493,7 @@ mod tests {
     #[test]
     fn an_unenrolled_account_nobody_requires_anything_of_just_signs_in() {
         assert_eq!(
-            login_second_factor_step(false, false, false),
+            login_second_factor_step(false, false, false, false),
             LoginSecondFactorStep::SignIn
         );
     }

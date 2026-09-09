@@ -533,16 +533,18 @@ pub(crate) async fn authenticate_password_login(
                 users::id,
                 users::password_hash,
                 users::two_factor_enabled,
+                users::is_admin,
                 users::two_factor_admin_required,
             ))
-            .first::<(uuid::Uuid, String, bool, bool)>(&mut conn)
+            .first::<(uuid::Uuid, String, bool, bool, bool)>(&mut conn)
             .optional()
     })
     .await
     .expect("Failed to spawn blocking task")
     .expect("Failed to query DB");
 
-    let Some((user_id, password_hash, two_factor_enabled, two_factor_admin_required)) = outcome
+    let Some((user_id, password_hash, two_factor_enabled, is_admin, two_factor_admin_required)) =
+        outcome
     else {
         return auth_session_error(StatusCode::UNAUTHORIZED, "failure", "Invalid credentials");
     };
@@ -575,6 +577,7 @@ pub(crate) async fn authenticate_password_login(
     // three outcomes, and none of them is a refusal.
     let step = login_second_factor_step(
         two_factor_enabled,
+        is_admin,
         global_required,
         two_factor_admin_required,
     );
