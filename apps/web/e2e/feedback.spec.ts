@@ -204,6 +204,53 @@ test.describe("Spec 037: feedback reaches the instance before it reaches anywher
     expect(accepted.data?.submitFeedback.attachments?.[0]?.kind).toBe("LOGS");
   });
 
+  test("the bytes come back to the person who sent them, and to nobody else", async ({
+    page,
+    browser,
+  }) => {
+    const creds = freshCredentials("e2efbbytes");
+    await register(page, creds);
+
+    const body = "GET /api/worlds\nnothing secret here at all\n";
+    const accepted = await graphql<GqlResult<{ submitFeedback: Submission }>>(
+      page,
+      SUBMIT,
+      {
+        input: submission("Here are my logs", {
+          attachments: [{ kind: "LOGS", content: base64(body) }],
+        }),
+      },
+    );
+    expect(accepted.errors).toBeFalsy();
+    const attachmentId = accepted.data?.submitFeedback.attachments?.[0]?.id;
+    expect(
+      attachmentId,
+      "the submission carried no attachment, so this proves nothing",
+    ).toBeTruthy();
+
+    // Until `/feedback-assets/{id}` existed, this was the gap: the row was
+    // written, the object was in storage, and nothing could read either back.
+    const mine = await page.request.get(`/api/feedback-assets/${attachmentId}`);
+    expect(mine.status()).toBe(200);
+    expect(await mine.text()).toContain("nothing secret here at all");
+    // A screenshot of somebody's session must not sit in a shared cache.
+    expect(mine.headers()["cache-control"]).toContain("no-store");
+
+    // And a second account holding the identifier gets nothing. The id is a
+    // database key, not a capability, and there is no share link for this.
+    const stranger = await browser.newContext();
+    const strangerPage = await stranger.newPage();
+    await register(strangerPage, freshCredentials("e2efbnosy"));
+    const theirs = await strangerPage.request.get(
+      `/api/feedback-assets/${attachmentId}`,
+    );
+    expect(
+      theirs.status(),
+      "another account read an attachment by holding its id",
+    ).toBe(403);
+    await stranger.close();
+  });
+
   test("one account cannot read another's submissions", async ({
     page,
     browser,

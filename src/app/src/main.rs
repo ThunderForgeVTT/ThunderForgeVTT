@@ -580,6 +580,13 @@ async fn run() {
             app_state.clone(),
             thunderforge_server::auth_middleware::require_authenticated_user,
         ));
+    // Spec 037 US2: a submission's own attachments, readable by the person who
+    // filed it or by an administrator triaging it.
+    let feedback_assets_router =
+        thunderforge_server::assets_serve::feedback::router().route_layer(from_fn_with_state(
+            app_state.clone(),
+            thunderforge_server::auth_middleware::require_authenticated_user,
+        ));
     let scene_assets_router =
         thunderforge_server::assets_serve::scene::router().route_layer(from_fn_with_state(
             app_state.clone(),
@@ -629,6 +636,7 @@ async fn run() {
         .merge(canvas_assets_router)
         .merge(lore_assets_router)
         .merge(actor_assets_router)
+        .merge(feedback_assets_router)
         .merge(scene_assets_router);
 
     let systems_admin_router =

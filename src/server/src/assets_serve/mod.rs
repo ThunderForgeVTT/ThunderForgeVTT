@@ -13,5 +13,7 @@
 
 pub mod actor;
 pub mod canvas;
+/// Spec 037 US2: the bytes somebody attached to a feedback submission.
+pub mod feedback;
 pub mod lore;
 pub mod scene;
