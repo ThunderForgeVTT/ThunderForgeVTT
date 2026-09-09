@@ -23,6 +23,11 @@ pub(crate) use recovery::*;
 pub(crate) mod requirement;
 pub(crate) use requirement::*;
 
+/// Spec 041 FR-017: repeated incorrect codes are limited **per account**, not
+/// merely per address. See the module header for why the difference matters.
+#[path = "two_factor/throttle.rs"]
+pub(crate) mod throttle;
+
 /// Spec 041 FR-015 / FR-025: what happened to a second factor, and who did
 /// it. The act, never the person — see the module header.
 #[path = "two_factor/events.rs"]
@@ -404,14 +409,34 @@ pub(crate) async fn two_factor_verify(
                 "Invalid 2FA code",
             );
         }
-        (None, None) => Ok(false),
-        (Some(code), None) => verify_two_factor_for_user(&state, user_id, code).await,
+        (None, None) => Ok(throttle::SecondFactor::Refused),
+        // FR-017: the bound is inside `guarded`, so it applies to both kinds
+        // of credential and to every route that verifies one.
+        (Some(code), None) => {
+            throttle::guarded(&state, user_id, || {
+                verify_two_factor_for_user(&state, user_id, code)
+            })
+            .await
+        }
         // FR-008: spending is the conditional write inside this call, so a
         // code that two requests present at once is spent by exactly one.
-        (None, Some(recovery_code)) => consume_recovery_code(&state, user_id, recovery_code).await,
+        (None, Some(recovery_code)) => {
+            throttle::guarded(&state, user_id, || {
+                consume_recovery_code(&state, user_id, recovery_code)
+            })
+            .await
+        }
     };
 
-    match held {
+    if matches!(held, Ok(throttle::SecondFactor::Throttled)) {
+        return verify_error(
+            StatusCode::TOO_MANY_REQUESTS,
+            "two_factor_throttled",
+            "Too many incorrect codes. Wait a moment and try again.",
+        );
+    }
+
+    match held.map(|outcome| outcome == throttle::SecondFactor::Held) {
         Ok(true) => {
             let mut conn = state.db_pool.get().expect("Failed to get DB connection");
             tokio::task::spawn_blocking(move || {

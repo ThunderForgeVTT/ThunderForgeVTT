@@ -729,6 +729,8 @@ diesel::table! {
         two_factor_pending_secret_encrypted -> Nullable<Text>,
         two_factor_pending_started_at -> Nullable<Timestamp>,
         two_factor_last_used_step -> Nullable<Int8>,
+        two_factor_failed_attempts -> Int4,
+        two_factor_locked_until -> Nullable<Timestamp>,
     }
 }
 

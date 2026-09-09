@@ -85,6 +85,16 @@ export function LoginView() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [twoFactorCode, setTwoFactorCode] = useState("");
+  /**
+   * Spec 041 FR-007/FR-011: the way back in when the phone is gone.
+   *
+   * The server has accepted `recovery_code` at this endpoint since the codes
+   * were first issued. This screen had nowhere to type one — the only field
+   * was validated against `/^\d{6}$/` — so the credential that exists for
+   * exactly this moment was unreachable by the person who needed it.
+   */
+  const [useRecoveryCode, setUseRecoveryCode] = useState(false);
+  const [recoveryCode, setRecoveryCode] = useState("");
   const [twoFactorChallengeId, setTwoFactorChallengeId] = useState<
     string | null
   >(null);
@@ -161,9 +171,17 @@ export function LoginView() {
   } as const;
 
   const twoFactorErrors = {
-    twoFactorCode: twoFactorCodePattern.test(twoFactorCode.trim())
-      ? undefined
-      : "Enter the 6-digit code from your authenticator.",
+    // A recovery code is not six digits and is not checked here: its shape is
+    // the server's business (it normalises case and hyphens before hashing),
+    // and a client-side pattern would be a second definition of the format
+    // that could drift from the one that issues them.
+    twoFactorCode: useRecoveryCode
+      ? recoveryCode.trim().length === 0
+        ? "Enter one of your recovery codes."
+        : undefined
+      : twoFactorCodePattern.test(twoFactorCode.trim())
+        ? undefined
+        : "Enter the 6-digit code from your authenticator.",
   } as const;
 
   const credentialFieldError = (field: keyof typeof credentialErrors) =>
@@ -339,7 +357,11 @@ export function LoginView() {
     }
 
     if (twoFactorErrors.twoFactorCode) {
-      setStatus("Enter a valid 6-digit code.");
+      setStatus(
+        useRecoveryCode
+          ? "Enter one of your recovery codes."
+          : "Enter a valid 6-digit code.",
+      );
       return;
     }
 
@@ -349,7 +371,9 @@ export function LoginView() {
     try {
       const response = await completeTwoFactorChallenge(
         twoFactorChallengeId,
-        twoFactorCode.trim(),
+        useRecoveryCode
+          ? { recoveryCode: recoveryCode.trim() }
+          : { code: twoFactorCode.trim() },
       );
       setStatus(response.message);
       navigate(
@@ -600,31 +624,78 @@ export function LoginView() {
               <form onSubmit={onSubmitTwoFactor} className="grid gap-4">
                 <h3 className="text-lg font-semibold">Two-factor code</h3>
 
-                <Field
-                  label="Authentication code"
-                  htmlFor="login-two-factor"
-                  accent="Required"
-                  error={twoFactorFieldError("twoFactorCode")}
-                  hint="Use the latest 6-digit code from your authenticator."
+                {useRecoveryCode ? (
+                  <Field
+                    label="Recovery code"
+                    htmlFor="login-recovery-code"
+                    accent="Required"
+                    error={twoFactorFieldError("twoFactorCode")}
+                    hint="One of the codes you saved when you turned two-factor on. Each works once."
+                  >
+                    <Input
+                      id="login-recovery-code"
+                      name="recoveryCode"
+                      data-testid="login-recovery-code"
+                      autoComplete="one-time-code"
+                      value={recoveryCode}
+                      onBlur={() => markTouched("twoFactorCode")}
+                      // Typed as it was written down. Case and hyphens are
+                      // normalised server-side, so nothing here has to guess
+                      // at a format it does not own.
+                      onChange={(event) => setRecoveryCode(event.target.value)}
+                      className="text-center text-lg tracking-[0.2em]"
+                      placeholder="abcd-efgh-jkmn"
+                    />
+                  </Field>
+                ) : (
+                  <Field
+                    label="Authentication code"
+                    htmlFor="login-two-factor"
+                    accent="Required"
+                    error={twoFactorFieldError("twoFactorCode")}
+                    hint="Use the latest 6-digit code from your authenticator."
+                  >
+                    <Input
+                      ref={twoFactorInputRef}
+                      id="login-two-factor"
+                      name="twoFactorCode"
+                      data-testid="login-two-factor"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      value={twoFactorCode}
+                      onBlur={() => markTouched("twoFactorCode")}
+                      onChange={(event) =>
+                        setTwoFactorCode(
+                          event.target.value.replace(/\D/g, "").slice(0, 6),
+                        )
+                      }
+                      className="text-center text-lg tracking-[0.3em]"
+                      placeholder="123456"
+                    />
+                  </Field>
+                )}
+
+                {/* FR-011. Offered plainly rather than hidden behind "having
+                    trouble?": somebody reaching for this has already lost
+                    their phone, and making them hunt is the wrong moment for
+                    a puzzle. Switching clears the other field so a stale value
+                    cannot be submitted by the branch that no longer owns it. */}
+                <button
+                  type="button"
+                  data-testid="login-use-recovery-code"
+                  className="justify-self-start text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                  onClick={() => {
+                    setUseRecoveryCode((on) => !on);
+                    setTwoFactorCode("");
+                    setRecoveryCode("");
+                    setStatus(null);
+                  }}
                 >
-                  <Input
-                    ref={twoFactorInputRef}
-                    id="login-two-factor"
-                    name="twoFactorCode"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    maxLength={6}
-                    value={twoFactorCode}
-                    onBlur={() => markTouched("twoFactorCode")}
-                    onChange={(event) =>
-                      setTwoFactorCode(
-                        event.target.value.replace(/\D/g, "").slice(0, 6),
-                      )
-                    }
-                    className="text-center text-lg tracking-[0.3em]"
-                    placeholder="123456"
-                  />
-                </Field>
+                  {useRecoveryCode
+                    ? "Use a code from your authenticator instead"
+                    : "Lost your authenticator? Use a recovery code"}
+                </button>
 
                 <div className="flex flex-wrap gap-3">
                   <Button

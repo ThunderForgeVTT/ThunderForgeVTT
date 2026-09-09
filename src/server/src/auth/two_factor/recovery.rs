@@ -299,12 +299,30 @@ pub(crate) async fn regenerate_recovery_codes(
         (None, Some(code)) => TwoFactorProof::Recovery(code.to_string()),
     };
 
-    let held = match proof {
-        TwoFactorProof::Totp(ref code) => verify_two_factor_for_user(&state, user_id, code).await,
-        TwoFactorProof::Recovery(ref code) => consume_recovery_code(&state, user_id, code).await,
-    };
+    // FR-017. A fresh set of codes is a fresh way in, so guessing at the
+    // possession this route asks for is worth an attacker's time — and before
+    // the bound moved under the verification, this route did not consult it.
+    let held = super::throttle::guarded(&state, user_id, || async {
+        match proof {
+            TwoFactorProof::Totp(ref code) => {
+                verify_two_factor_for_user(&state, user_id, code).await
+            }
+            TwoFactorProof::Recovery(ref code) => {
+                consume_recovery_code(&state, user_id, code).await
+            }
+        }
+    })
+    .await;
 
-    match held {
+    if matches!(held, Ok(super::throttle::SecondFactor::Throttled)) {
+        return recovery_codes_error(
+            StatusCode::TOO_MANY_REQUESTS,
+            "two_factor_throttled",
+            "Too many incorrect codes. Wait a moment and try again.",
+        );
+    }
+
+    match held.map(|outcome| outcome == super::throttle::SecondFactor::Held) {
         Ok(true) => {}
         Ok(false) => {
             return recovery_codes_error(
@@ -382,10 +400,19 @@ pub(crate) async fn verify_second_factor_proof(
         (None, Some(code)) => TwoFactorProof::Recovery(code.to_string()),
     };
 
-    match proof {
-        TwoFactorProof::Totp(ref code) => verify_two_factor_for_user(state, user_id, code).await,
-        TwoFactorProof::Recovery(ref code) => consume_recovery_code(state, user_id, code).await,
-    }
+    // FR-017, same reasoning: turning a factor *off* is the action that makes
+    // every future sign-in cheaper, so it is the last place to leave a
+    // guessable proof unbounded.
+    super::throttle::guarded(state, user_id, || async {
+        match proof {
+            TwoFactorProof::Totp(ref code) => {
+                verify_two_factor_for_user(state, user_id, code).await
+            }
+            TwoFactorProof::Recovery(ref code) => consume_recovery_code(state, user_id, code).await,
+        }
+    })
+    .await
+    .map(|outcome| outcome == super::throttle::SecondFactor::Held)
 }
 
 fn recovery_codes_error(

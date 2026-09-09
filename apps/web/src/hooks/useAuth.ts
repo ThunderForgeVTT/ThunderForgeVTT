@@ -33,9 +33,10 @@ type AuthContextValue = {
   isAdmin: boolean;
   isLoading: boolean;
   login: (payload: LoginPayload) => Promise<AuthSessionResponse>;
+  /** Exactly one of `code` or `recoveryCode` — see `verifyTwoFactor`. */
   completeTwoFactorChallenge: (
     challengeId: string,
-    code: string,
+    credential: { code?: string; recoveryCode?: string },
   ) => Promise<AuthSessionResponse>;
   register: (payload: RegisterPayload) => Promise<AuthSessionResponse>;
   redirectAfterLogin: (userOverride?: AuthUser | null) => string;
@@ -124,8 +125,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const completeTwoFactorChallenge = useCallback(
-    async (challengeId: string, code: string) => {
-      const verification = await verifyTwoFactorRequest(challengeId, code);
+    async (
+      challengeId: string,
+      credential: { code?: string; recoveryCode?: string },
+    ) => {
+      const verification = await verifyTwoFactorRequest(
+        challengeId,
+        credential,
+      );
       const refreshed = await refreshRequest();
       setSession(refreshed.session ?? null);
 

@@ -149,10 +149,13 @@ export default function OAuthCallbackPage() {
 
     setIsWorking(true);
     try {
-      const response = await verifyTwoFactor(
-        twoFactorChallengeId,
-        twoFactorCode,
-      );
+      // Only the authenticator code here. The recovery route is offered on the
+      // sign-in screen, which is where somebody who has lost their phone
+      // starts; a provider round trip is not a path they can be on, because
+      // the provider has already vouched for them.
+      const response = await verifyTwoFactor(twoFactorChallengeId, {
+        code: twoFactorCode,
+      });
       setStatus(response.message);
       await refresh();
       navigate(consumeOAuthReturnTo("/welcome"), { replace: true });

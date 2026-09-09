@@ -298,9 +298,23 @@ export function confirmOAuthLink(
   }).then(expectOAuthResponse);
 }
 
+/**
+ * Answer a login challenge with an authenticator code **or** a recovery code.
+ *
+ * Spec 041 FR-007. Exactly one: the server refuses a request carrying both,
+ * because a client sending both is asking for two chances counted as one
+ * attempt. `undefined` is used rather than an empty string so the field is
+ * absent from the JSON entirely — the server distinguishes "not offered" from
+ * "offered and blank".
+ *
+ * Recovery codes were spendable here from the day they were issued, and
+ * unreachable: this function took a `code` and the sign-in screen validated it
+ * against `/^\d{6}$/`, so somebody who had lost their phone had nowhere to
+ * type the credential that exists precisely for that moment.
+ */
 export function verifyTwoFactor(
   challengeId: string,
-  code: string,
+  credential: { code?: string; recoveryCode?: string },
 ): Promise<OAuthActionResponse> {
   return fetch(`${API_BASE}/authentication/2fa/verify`, {
     method: "POST",
@@ -310,7 +324,8 @@ export function verifyTwoFactor(
     }),
     body: JSON.stringify({
       challenge_id: challengeId,
-      code,
+      code: credential.code?.trim() || undefined,
+      recovery_code: credential.recoveryCode?.trim() || undefined,
     }),
   }).then(expectOAuthResponse);
 }

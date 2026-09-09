@@ -633,9 +633,24 @@ pub(crate) async fn authenticate_password_login(
     }
 
     if let Some(code) = two_factor_code {
-        match verify_two_factor_for_user(state, user_id, code).await {
-            Ok(true) => {}
-            Ok(false) => {
+        // FR-017 through `guarded`, which is the point of `guarded` existing.
+        // This route takes a code directly, so before the bound moved under
+        // the verification it was a way to guess codes without ever touching
+        // `/2fa/verify` — the throttle guarded one door and this was another.
+        match crate::auth::two_factor::throttle::guarded(state, user_id, || {
+            verify_two_factor_for_user(state, user_id, code)
+        })
+        .await
+        {
+            Ok(crate::auth::two_factor::throttle::SecondFactor::Held) => {}
+            Ok(crate::auth::two_factor::throttle::SecondFactor::Throttled) => {
+                return auth_session_error(
+                    StatusCode::TOO_MANY_REQUESTS,
+                    "two_factor_throttled",
+                    "Too many incorrect codes. Wait a moment and try again.",
+                );
+            }
+            Ok(crate::auth::two_factor::throttle::SecondFactor::Refused) => {
                 return auth_session_error(
                     StatusCode::UNAUTHORIZED,
                     "two_factor_invalid",

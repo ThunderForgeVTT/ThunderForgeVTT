@@ -136,8 +136,8 @@ an account.
 - [ ] T031 [US2] Add `POST /authentication/2fa/recovery-codes` (session + possession) in `src/server/src/auth/two_factor/recovery.rs` and wire it in `src/server/src/auth/two_factor/mod.rs`
 - [ ] T032 [US2] Report `recovery_codes_remaining` and `recovery_codes_low` on the session response in `src/server/src/auth/sessions.rs`, so a person is told at sign-in and not only if they visit a settings page (FR-011)
 - [ ] T033 [P] [US2] Create `apps/web/src/components/two-factor/RecoveryCodeSheet.tsx` — shown once, copyable, downloadable, with an explicit acknowledgement before it can be dismissed
-- [ ] T034 [US2] Add the recovery-code field to the challenge card in `apps/web/src/pages/auth/LoginView.tsx`, and the low-codes notice plus "generate a new set" to `apps/web/src/pages/user/SecuritySettingsPage.tsx`
-- [ ] T035 [US2] Add the recovery-code cases to `apps/web/e2e/two-factor.spec.ts`: sign in with one, refuse the same one twice, regenerate and confirm every earlier code is dead
+- [X] T034 [US2] Add the recovery-code field to the challenge card in `apps/web/src/pages/auth/LoginView.tsx`, and the low-codes notice plus "generate a new set" to `apps/web/src/pages/user/SecuritySettingsPage.tsx`
+- [X] T035 [US2] Add the recovery-code cases (landed as `apps/web/e2e/two-factor-recovery.spec.ts`): sign in with one, refuse the same one twice, regenerate and confirm every earlier code is dead
 
 **Checkpoint**: enrolling can no longer cost somebody their account
 
