@@ -380,6 +380,9 @@ pub(crate) async fn logout(
             status: "logged_out",
             message: "Session cleared".to_string(),
             session: None,
+            // A refusal carries no session, so there is nothing to report.
+            recovery_codes_remaining: None,
+            recovery_codes_low: None,
             login_two_factor_challenge_id: None,
             requires_email_verification: false,
         }),
@@ -602,6 +605,9 @@ pub(crate) async fn authenticate_password_login(
                 message: "This instance requires a second factor. Set one up to finish signing in."
                     .to_string(),
                 session: None,
+                // A refusal carries no session, so there is nothing to report.
+                recovery_codes_remaining: None,
+                recovery_codes_low: None,
                 login_two_factor_challenge_id: Some(challenge_id),
                 requires_email_verification: false,
             }),
@@ -626,6 +632,9 @@ pub(crate) async fn authenticate_password_login(
                 status: "two_factor_required",
                 message: "2FA code required to complete sign-in".to_string(),
                 session: None,
+                // A refusal carries no session, so there is nothing to report.
+                recovery_codes_remaining: None,
+                recovery_codes_low: None,
                 login_two_factor_challenge_id: Some(challenge_id),
                 requires_email_verification: false,
             }),
@@ -704,6 +713,22 @@ pub(crate) async fn build_session_response(
     message: &str,
 ) -> Result<AuthSessionResponse, String> {
     let user = load_public_user(state, user_id).await?;
+
+    // FR-011, in the one place every successful session response is built, so
+    // no sign-in path can be the one that forgets to say it. `None` for an
+    // account with no factor and for a count that could not be read — see the
+    // field's own comment.
+    let remaining = if user_holds_second_factor(state, user_id)
+        .await
+        .unwrap_or(false)
+    {
+        crate::auth::two_factor::count_unspent_recovery_codes(state, user_id)
+            .await
+            .ok()
+    } else {
+        None
+    };
+
     Ok(AuthSessionResponse {
         status,
         message: message.to_string(),
@@ -712,9 +737,33 @@ pub(crate) async fn build_session_response(
             user,
             session_expires_at,
         }),
+        recovery_codes_remaining: remaining,
+        recovery_codes_low: remaining.map(crate::auth::two_factor::recovery_codes_low),
         login_two_factor_challenge_id: None,
         requires_email_verification: false,
     })
+}
+
+/// Whether this account has a confirmed second factor.
+///
+/// Asked separately so an account with none reports `None` rather than zero:
+/// "no recovery codes" and "no second factor" are different facts, and a
+/// client showing "0 codes left" to somebody who never enrolled would be
+/// alarming and wrong.
+async fn user_holds_second_factor(state: &AppState, user_id: uuid::Uuid) -> Result<bool, String> {
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| "Failed to get DB connection".to_string())?;
+    tokio::task::spawn_blocking(move || {
+        users::table
+            .filter(users::id.eq(user_id))
+            .select(users::two_factor_enabled)
+            .first::<bool>(&mut conn)
+    })
+    .await
+    .map_err(|_| "Failed to spawn blocking task".to_string())?
+    .map_err(|_| "Failed to read the account".to_string())
 }
 
 pub(crate) fn auth_session_error(
@@ -728,6 +777,9 @@ pub(crate) fn auth_session_error(
             status,
             message: message.to_string(),
             session: None,
+            // A refusal carries no session, so there is nothing to report.
+            recovery_codes_remaining: None,
+            recovery_codes_low: None,
             login_two_factor_challenge_id: None,
             requires_email_verification: false,
         }),

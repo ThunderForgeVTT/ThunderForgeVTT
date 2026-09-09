@@ -289,6 +289,21 @@ pub(crate) struct AuthSessionResponse {
     pub(crate) status: &'static str,
     pub(crate) message: String,
     pub(crate) session: Option<SessionStateResponse>,
+    /// Spec 041 FR-011: how many recovery codes are left, and whether that is
+    /// few.
+    ///
+    /// On the **session** response, not only on `/2fa/verify`'s, because a
+    /// person who signs in with an inline `two_factor_code` never sees that
+    /// one — and somebody down to their last code should learn it at the
+    /// moment they sign in rather than at the moment they need it.
+    ///
+    /// `None` for an account with no second factor, and for a count that could
+    /// not be read: a failure to count is not a reason to fail a sign-in that
+    /// has already succeeded, so the fields simply go unsaid.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) recovery_codes_remaining: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) recovery_codes_low: Option<bool>,
     pub(crate) login_two_factor_challenge_id: Option<uuid::Uuid>,
     pub(crate) requires_email_verification: bool,
 }
