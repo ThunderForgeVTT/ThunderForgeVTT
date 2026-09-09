@@ -212,14 +212,14 @@ enrolled and complete enrolment in that same flow.
 
 ### Tests for User Story 5
 
-- [ ] T056 [P] [US5] Add a server test in `src/server/src/auth/sessions.rs` asserting a required-but-not-enrolled account receives `two_factor_enrolment_required` and an `enrol` ticket after a correct password — never a refusal (FR-019)
-- [ ] T057 [P] [US5] Add a server test asserting turning any requirement off leaves every confirmed factor in force (FR-022)
+- [X] T056 [P] [US5] Add a server test — **landed as `src/server/src/auth/enrolment_at_login_tests.rs`** — asserting a required-but-not-enrolled account receives `two_factor_enrolment_required` and an `enrol` ticket after a correct password — never a refusal (FR-019)
+- [X] T057 [P] [US5] Add a server test asserting turning any requirement off leaves every confirmed factor in force (FR-022) — `requirement.rs::clearing_a_requirement_leaves_the_factor_in_force` against the database, plus `turning_the_requirement_off_still_asks_an_enrolled_account_for_its_code` as arithmetic. The instance-wide half is deliberately not driven: it is a single shared row, and flipping it makes every other test that reads it non-deterministic
 
 ### Implementation for User Story 5
 
 - [X] T058 [US5] Return `two_factor_enrolment_required` plus an `enrol` ticket from `authenticate_password_login` in `src/server/src/auth/sessions.rs:477-499`, per `contracts/verification.md` § The login path
-- [ ] T059 [US5] Apply the same three rows on the OAuth path in `src/server/src/auth/oauth.rs:475-505`, with the instance-wide term not applying to a provider-only account and the administrator term still applying
-- [ ] T060 [US5] Add `twoFactorCoverage` to `src/server/src/graphql/queries/admin.rs` beside `auth_security_settings`, returning counts and never a list of accounts (FR-021)
+- [X] T059 [US5] Apply the same three rows on the OAuth path in `src/server/src/auth/oauth.rs:475-505` — it calls `login_second_factor_step_for_user`, so it gets all three, the administrator term included. **The provider-only carve-out in this task text is not implemented and should not be**: `contracts/requirement-policy.md`'s `required(user)` has no such term, nothing in the schema records that an account is provider-only (OAuth provisioning writes a random password hash), and adding one would be a new requirement rather than this task
+- [X] T060 [US5] Add `twoFactorCoverage` to `src/server/src/graphql/queries/admin.rs` beside `auth_security_settings`, returning counts and never a list of accounts (FR-021)
 - [ ] T061 [US5] Render the enrolment branch of the challenge step in `apps/web/src/pages/auth/LoginView.tsx` using `EnrolmentFlow` unchanged, preserving the `returnTo` the page already carries (FR-020)
 - [ ] T062 [US5] Show the coverage figures beside the switch in `apps/web/src/pages/admin/components/SecurityPanel.tsx`, including how many people the switch is about to ask something of
 - [ ] T063 [US5] Update the policy test in `apps/web/e2e/two-factor.spec.ts` to complete enrolment through the challenge and arrive signed in, and **delete the comment saying it "deliberately does not pretend the lockout is fine"** — the lockout is gone

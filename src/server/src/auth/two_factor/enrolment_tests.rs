@@ -11,7 +11,6 @@
 //! confirmed factor is replaced, never disarmed; these assert it against the
 //! database rather than against the intention.
 
-use diesel::prelude::*;
 use uuid::Uuid;
 
 use super::*;

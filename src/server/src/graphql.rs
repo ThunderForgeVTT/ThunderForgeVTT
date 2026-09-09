@@ -30,7 +30,7 @@ pub mod admin_types;
 pub use admin_types::{
     GraphQLAdminBootstrapSettings, GraphQLAdminStats, GraphQLAdminWelcomeSummary,
     GraphQLAuthSecuritySettings, GraphQLOAuthProvider, GraphQLOAuthProviderConfigInput,
-    GraphQLSystemManifest,
+    GraphQLSystemManifest, GraphQLTwoFactorCoverage,
 };
 
 // Phase 4.9.Z Step 3: Input & utility types extracted to separate module
@@ -435,3 +435,9 @@ mod world_default_system_tests;
 #[cfg(test)]
 #[path = "graphql_world_interface_pack_tests.rs"]
 mod world_interface_pack_tests;
+
+/// Spec 041 FR-021 / SC-007: what an operator can see about second-factor
+/// coverage, and what they deliberately cannot.
+#[cfg(test)]
+#[path = "graphql/two_factor_coverage_tests.rs"]
+mod two_factor_coverage_tests;

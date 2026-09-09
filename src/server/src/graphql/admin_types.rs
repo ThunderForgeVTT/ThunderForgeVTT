@@ -242,6 +242,49 @@ impl From<AuthSecuritySetting> for GraphQLAuthSecuritySettings {
     }
 }
 
+/// Spec 041 FR-021: how much of the instance holds a second factor.
+///
+/// # Counts, never a roster
+///
+/// SC-007 asks an operator to tell "at a glance, how much of their instance
+/// has a second factor". A list of who has not enrolled would answer that and
+/// also hand whoever reads it — or whoever takes over the account that reads
+/// it — a target list: the accounts on it are exactly the ones a stolen
+/// password is sufficient for. Three integers answer the question the operator
+/// actually has and cannot be turned into that list.
+///
+/// It sits beside `authSecuritySettings` because the switch it explains lives
+/// there: the point of `requiredNotEnrolled` is to say, before the switch is
+/// thrown, how many people it is about to ask something of.
+///
+/// Named `TwoFactorCoverage` on the wire, as `contracts/requirement-policy.md`
+/// specifies, rather than carrying the crate's `GraphQL` prefix into the
+/// schema a client reads.
+#[derive(SimpleObject, Debug, Clone)]
+#[graphql(name = "TwoFactorCoverage")]
+pub struct GraphQLTwoFactorCoverage {
+    /// Accounts holding a confirmed second factor.
+    pub enrolled: i32,
+    /// Accounts without one.
+    pub not_enrolled: i32,
+    /// Of those, how many are required to have one and have not — which
+    /// includes every administrator, because the role requires it (FR-027).
+    pub required_not_enrolled: i32,
+}
+
+impl From<crate::admin::TwoFactorCoverage> for GraphQLTwoFactorCoverage {
+    fn from(value: crate::admin::TwoFactorCoverage) -> Self {
+        // Saturating rather than `as`: a count that overflowed an i32 would
+        // otherwise arrive as a negative, and a negative account count is
+        // worse than a clamped one.
+        Self {
+            enrolled: i32::try_from(value.enrolled).unwrap_or(i32::MAX),
+            not_enrolled: i32::try_from(value.not_enrolled).unwrap_or(i32::MAX),
+            required_not_enrolled: i32::try_from(value.required_not_enrolled).unwrap_or(i32::MAX),
+        }
+    }
+}
+
 /// Admin bootstrap/setup configuration
 #[derive(SimpleObject, Debug, Clone)]
 pub struct GraphQLAdminBootstrapSettings {

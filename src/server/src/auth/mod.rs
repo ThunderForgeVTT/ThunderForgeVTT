@@ -292,3 +292,9 @@ mod admin_routes_tests;
 #[cfg(test)]
 #[path = "second_sign_in_tests.rs"]
 mod second_sign_in_tests;
+
+/// Spec 041 US5 (FR-019, FR-027, FR-031, FR-032): what a sign-in does about an
+/// account the rule requires and that has not enrolled.
+#[cfg(test)]
+#[path = "enrolment_at_login_tests.rs"]
+mod enrolment_at_login_tests;

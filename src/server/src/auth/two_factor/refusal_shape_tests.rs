@@ -17,7 +17,6 @@
 //! reading the source, because a constant used in four places and a *response*
 //! that differs in a fifth are not the same guarantee.
 
-use diesel::prelude::*;
 use uuid::Uuid;
 
 use super::verification::CREDENTIAL_REFUSED;

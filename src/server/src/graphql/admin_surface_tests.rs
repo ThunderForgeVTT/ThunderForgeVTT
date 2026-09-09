@@ -68,6 +68,9 @@ const ADMIN_ONLY: &[(&str, &str)] = &[
         "authSecuritySettings",
         "{ authSecuritySettings { __typename } }",
     ),
+    // Spec 041 FR-021: counts, and admin-only because the shape of an
+    // instance's coverage is an operator's business and nobody else's.
+    ("twoFactorCoverage", "{ twoFactorCoverage { __typename } }"),
     (
         "instanceAccessSettings",
         "{ instanceAccessSettings { __typename } }",

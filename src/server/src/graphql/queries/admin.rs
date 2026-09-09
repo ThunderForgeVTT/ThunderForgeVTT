@@ -81,6 +81,20 @@ impl AdminQuery {
             .map_err(Error::new)
     }
 
+    /// Spec 041 FR-021. Counts, never a list of accounts — see
+    /// [`GraphQLTwoFactorCoverage`].
+    async fn two_factor_coverage(
+        &self,
+        ctx: &Context<'_>,
+    ) -> GraphQLResult<GraphQLTwoFactorCoverage> {
+        let state = app_state(ctx)?;
+        let _ = admin_user(ctx)?;
+        crate::admin::load_two_factor_coverage(state)
+            .await
+            .map(GraphQLTwoFactorCoverage::from)
+            .map_err(Error::new)
+    }
+
     async fn admin_bootstrap_settings(
         &self,
         ctx: &Context<'_>,
