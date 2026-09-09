@@ -242,7 +242,8 @@ pub(crate) use sessions::*;
 #[path = "session_registry.rs"]
 pub mod session_registry;
 
-#[path = "two_factor.rs"]
+/// Spec 041. A module *directory* since T005: see `two_factor/mod.rs` for the
+/// seam between enrolment, verification, policy and the rest.
 pub(crate) mod two_factor;
 pub(crate) use two_factor::*;
 
