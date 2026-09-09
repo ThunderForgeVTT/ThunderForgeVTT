@@ -581,3 +581,71 @@ fn submitter_email(state: &crate::state::AppState, user_id: Uuid) -> GraphQLResu
         .map_err(|_| async_graphql::Error::new("Failed to read the account"))?;
     Ok(email.unwrap_or_default())
 }
+
+#[cfg(test)]
+mod prepare_tests {
+    use super::*;
+    use base64::Engine as _;
+
+    fn attachment(content: &str) -> GraphQLAttachmentInput {
+        GraphQLAttachmentInput {
+            kind: GraphQLAttachmentKind::Logs,
+            content: general_purpose::STANDARD.encode(content),
+            entries_kept: None,
+            entries_dropped: None,
+            redaction_count: None,
+        }
+    }
+
+    /// FR-012, and the guard `quickstart.md` asks to be broken on purpose:
+    /// **the server refuses; it never rewrites.**
+    ///
+    /// Asserted on `prepare` rather than through the resolver because this is
+    /// where the decision is made, and because the failure worth catching is
+    /// somebody "being helpful" — stripping the secret and carrying on. Before
+    /// this test existed that change left **every** test in the crate passing:
+    /// the submission still succeeded, the stored payload still contained no
+    /// secret, and the person had silently had their approved evidence edited.
+    #[test]
+    fn an_attachment_carrying_a_secret_is_refused_and_not_scrubbed() {
+        let leaking =
+            attachment("GET /api/worlds\nauthorization: Bearer abcdefgh12345678ABCDEFGH\n");
+        let refused = prepare(&leaking, "someone@example.org")
+            .expect_err("a bundle carrying a bearer token must be refused");
+
+        let message = refused.message.clone();
+        assert!(
+            message.contains("bearer_token"),
+            "the refusal does not name the kind it matched: {message}"
+        );
+        // And it never quotes the payload — an error message is one of the
+        // places a credential gets logged next.
+        assert!(!message.contains("abcdefgh12345678"), "{message}");
+    }
+
+    /// The false positive that would silently refuse every *correctly*
+    /// filtered bundle: the client's own marker contains the words the bearer
+    /// rule matches.
+    #[test]
+    fn a_correctly_redacted_bundle_is_accepted() {
+        let clean = attachment("GET /api/worlds\nauthorization: [redacted: bearer token]\n");
+        let prepared = prepare(&clean, "someone@example.org")
+            .expect("a redacted bundle must not be refused for its own marker");
+        assert_eq!(prepared.kind, AttachmentKind::Logs);
+    }
+
+    /// The submitter's own address is a rule too, and the only one that
+    /// depends on who is asking rather than on the bytes alone.
+    #[test]
+    fn the_submitters_own_address_is_refused_for_them_and_nobody_else() {
+        let carrying = attachment("signed in as archmage@example.org\n");
+        assert!(
+            prepare(&carrying, "archmage@example.org").is_err(),
+            "a bundle carrying the submitter's own address was accepted"
+        );
+        assert!(
+            prepare(&carrying, "someone-else@example.org").is_ok(),
+            "another account's address was treated as this submitter's"
+        );
+    }
+}
