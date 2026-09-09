@@ -23,6 +23,12 @@ pub(crate) use recovery::*;
 pub(crate) mod requirement;
 pub(crate) use requirement::*;
 
+/// Spec 041 FR-024/FR-025: an operator resets a second factor for somebody who
+/// has lost both their authenticator and their recovery codes. Admin-only, and
+/// recorded with the operator's own id against it.
+#[path = "two_factor/operator_reset.rs"]
+pub(crate) mod operator_reset;
+
 /// Spec 041 FR-017: repeated incorrect codes are limited **per account**, not
 /// merely per address. See the module header for why the difference matters.
 #[path = "two_factor/throttle.rs"]

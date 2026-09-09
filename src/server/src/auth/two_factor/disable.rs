@@ -110,10 +110,18 @@ pub(crate) fn refusal_for(
 /// removal nobody recorded did not happen, and this is a caller that can
 /// record without risking the action, because it is still holding the
 /// transaction that performs it.
+///
+/// `event_type` distinguishes the two ways a factor goes: an account holder
+/// turning their own off (`removed`), and an operator resetting somebody
+/// else's (`reset_by_operator`). The clearing is identical and the *record* is
+/// not, which is the whole reason `two_factor_events` carries two user
+/// columns — collapsing them here would lose the distinction at the only
+/// moment it exists.
 pub(crate) fn clear_second_factor_sync(
     conn: &mut PgConnection,
     user_id: uuid::Uuid,
     actor_user_id: Option<uuid::Uuid>,
+    event_type: &str,
 ) -> Result<(), diesel::result::Error> {
     conn.transaction::<_, diesel::result::Error, _>(|conn| {
         diesel::update(users::table.filter(users::id.eq(user_id)))
@@ -126,12 +134,17 @@ pub(crate) fn clear_second_factor_sync(
             ))
             .execute(conn)?;
         delete_recovery_codes_sync(conn, user_id)?;
-        super::events::record_sync(
-            conn,
-            user_id,
-            actor_user_id,
-            super::events::event_type::REMOVED,
-        )?;
+        super::events::record_sync(conn, user_id, actor_user_id, event_type)?;
+
+        // FR-017's counter goes with it. An account whose factor an operator
+        // has just reset must not still be serving a cooling-off from the
+        // guesses that led somebody to ask for the reset.
+        diesel::update(users::table.filter(users::id.eq(user_id)))
+            .set((
+                users::two_factor_failed_attempts.eq(0),
+                users::two_factor_locked_until.eq(None::<chrono::NaiveDateTime>),
+            ))
+            .execute(conn)?;
         Ok(())
     })
 }
@@ -298,7 +311,16 @@ pub(crate) async fn two_factor_disable(
         }
     };
     let cleared = tokio::task::spawn_blocking(move || {
-        clear_second_factor_sync(&mut conn, user_id, Some(user_id))
+        // `removed`, not `reset_by_operator`: this is the account holder
+        // turning their own factor off, having paid password *and* possession
+        // for it. The operator path is `operator_reset`, and the record has to
+        // be able to tell them apart.
+        clear_second_factor_sync(
+            &mut conn,
+            user_id,
+            Some(user_id),
+            super::events::event_type::REMOVED,
+        )
     })
     .await;
 

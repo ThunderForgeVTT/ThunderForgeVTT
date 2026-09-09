@@ -163,14 +163,6 @@ pub fn router() -> Router<AppState> {
             "/authentication/2fa/disable",
             post(crate::auth::two_factor::disable::two_factor_disable),
         )
-        .route(
-            "/authentication/admin/2fa/requirement",
-            post(set_admin_two_factor_requirement),
-        )
-        .route(
-            "/authentication/admin/users/{user_id}/2fa/required",
-            post(set_admin_user_two_factor_required),
-        )
         // Spec 036 FR-008: changing the password ends every other session.
         // There was no password-change path at all until this route, which is
         // why the requirement had nothing to attach to.
@@ -179,6 +171,45 @@ pub fn router() -> Router<AppState> {
             post(crate::auth::password_change::change_password),
         )
         .route("/authentication/logout", post(logout))
+}
+
+/// Every administrator-only authentication route, in one place.
+///
+/// # Why these are a separate router
+///
+/// So the guard can be a **layer** rather than a line each handler remembers.
+/// Each of these also calls `verify_admin_request` itself, and that stays —
+/// two independent checks, in different mechanisms, is the shape worth having
+/// in front of "reset somebody else's second factor". But the per-handler
+/// check is the fragile half: it is correct today because three authors each
+/// remembered, and a fourth route added below would be admin-only in intent
+/// and open in fact.
+///
+/// `main.rs` applies `require_admin_user` to this router. The layer refuses
+/// before the handler is entered at all, so a route added here is guarded by
+/// having been added here.
+///
+/// Grouped by path rather than by feature deliberately: every route in this
+/// router is under `/authentication/admin/`, which means the guarantee is
+/// checkable by reading the paths — and is asserted in `admin_routes_tests`.
+pub fn admin_router() -> Router<AppState> {
+    Router::new()
+        .route(
+            "/authentication/admin/2fa/requirement",
+            post(set_admin_two_factor_requirement),
+        )
+        .route(
+            "/authentication/admin/users/{user_id}/2fa/required",
+            post(set_admin_user_two_factor_required),
+        )
+        // Spec 041 FR-024: the defined path for an account that has lost both
+        // its authenticator and its recovery codes, recorded with the
+        // operator's own id against it. What it replaces is a database edit,
+        // which is unaudited by construction.
+        .route(
+            "/authentication/admin/users/{user_id}/2fa/reset",
+            post(crate::auth::two_factor::operator_reset::reset_second_factor),
+        )
 }
 
 #[path = "types.rs"]
@@ -248,6 +279,12 @@ pub(crate) mod password_change;
 #[cfg(test)]
 #[path = "argon2_upgrade_tests.rs"]
 mod argon2_upgrade_tests;
+
+/// The admin surface is guarded by *where a route lives*, not by what its
+/// author remembered. See the module header for the audit that prompted it.
+#[cfg(test)]
+#[path = "admin_routes_tests.rs"]
+mod admin_routes_tests;
 
 /// Spec 036 T015: the behaviours that must survive ADR-073's removal of the
 /// login-time eviction — chiefly that a second sign-in is still challenged.

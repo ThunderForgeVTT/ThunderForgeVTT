@@ -630,6 +630,22 @@ async fn run() {
         .merge(graphql_router)
         .merge(public_graphql_router)
         .merge(thunderforge_server::auth::router())
+        // Spec 041 FR-024, and the shape the whole admin surface should have.
+        //
+        // Every `/authentication/admin/` route lives in `auth::admin_router()`
+        // and is refused here, by a layer, **before the handler is entered**.
+        // Each handler also checks for itself, and that stays: two independent
+        // mechanisms in front of "reset somebody else's second factor" is worth
+        // the duplication. But the per-handler check is the fragile half — it
+        // is correct today because each author remembered, and the next route
+        // added would be admin-only in intent and open in fact. A layer is
+        // guarded by construction.
+        .merge(
+            thunderforge_server::auth::admin_router().route_layer(from_fn_with_state(
+                app_state.clone(),
+                thunderforge_server::auth_middleware::require_admin_user,
+            )),
+        )
         .merge(user_router)
         .merge(world_router)
         .merge(map_import_router)
