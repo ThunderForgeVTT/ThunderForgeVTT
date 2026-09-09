@@ -585,7 +585,6 @@ fn submitter_email(state: &crate::state::AppState, user_id: Uuid) -> GraphQLResu
 #[cfg(test)]
 mod prepare_tests {
     use super::*;
-    use base64::Engine as _;
 
     fn attachment(content: &str) -> GraphQLAttachmentInput {
         GraphQLAttachmentInput {

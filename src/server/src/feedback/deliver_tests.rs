@@ -467,7 +467,11 @@ async fn an_issue_a_maintainer_closes_is_reflected_to_the_submitter() {
 /// and mine contains none of theirs.
 #[tokio::test]
 async fn my_submissions_are_mine_and_contain_nobody_elses() {
-    let _guard = TABLE.lock();
+    // `.await`: `TEST_TABLE` is a tokio mutex, so `lock()` without it binds a
+    // future and takes no lock at all — silently, with no warning, because the
+    // future is bound rather than dropped. The test then races every other
+    // test that calls `clear_for_test`, passes alone, and fails in a suite.
+    let _guard = TABLE.lock().await;
     let state = test_app_state();
     clear_for_test(&mut state.db_pool.get().expect("a connection"));
 
@@ -498,7 +502,7 @@ async fn my_submissions_are_mine_and_contain_nobody_elses() {
 /// would look like tidy housekeeping while doing it.
 #[tokio::test]
 async fn the_sweep_takes_expired_evidence_and_leaves_the_report() {
-    let _guard = TABLE.lock();
+    let _guard = TABLE.lock().await;
     let state = test_app_state();
     clear_for_test(&mut state.db_pool.get().expect("a connection"));
 

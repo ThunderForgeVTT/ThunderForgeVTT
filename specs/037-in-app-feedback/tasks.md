@@ -264,11 +264,19 @@ is the only place this feature deletes anything.
     contract itself names as the seam and which an operator running GitHub
     Enterprise configures the same way.
 - [X] T076 Confirm no product file changed to make the harness work (`contracts/e2e-harness.md` § "What must NOT appear in product code"); if any did, the stub is wrong
-- [ ] T077 Make the five guards fail on purpose per `quickstart.md` § "Making the guards fail on purpose" and record in the commit that each was seen to bite
+  - **All five broken and seen to bite, 2026-09-09.** Redaction moved from
+    capture to submit → `feedback-evidence` fails on the secret reaching the
+    review. Server rewrites instead of refusing → the refusal test fails
+    (**and did not exist until this pass** — the break left every test in the
+    crate passing, which is why T031 was re-opened and written properly).
+    Delivery ignoring an unfinished attempt → the backoff test fails. A 422
+    treated as ambiguous → two search tests fail. `delete_object` widened →
+    `delete_object_refuses_every_key_outside_the_feedback_prefix` fails.
+- [X] T077 Make the five guards fail on purpose per `quickstart.md` § "Making the guards fail on purpose" and record in the commit that each was seen to bite
 - [ ] T078 Run the quickstart scenarios A–I by hand against `make dev`, including the two only a person can judge — the screenshot picker and the pre-submission notice — and note anything the suite does not catch
-- [ ] T079 Run `cargo test --workspace -j 4`, `make lint` and `pnpm --filter @thunderforge/web test`
+- [X] T079 Run `cargo test --workspace -j 4`, `make lint` and `pnpm --filter @thunderforge/web test`
 - [ ] T080 Run the full suite via `node scripts/e2e-parallel.mjs --shards=2` with `THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT=1` and `--workers=1` for any external-stack run, and record the figures in the commit body
-- [ ] T081 Run `pnpm verify` and fix what it reports **in the code this feature added** — keep it to that; wide lint passes get their own commit
+- [X] T081 Run `pnpm verify` and fix what it reports **in the code this feature added** — keep it to that; wide lint passes get their own commit
 
 ---
 
