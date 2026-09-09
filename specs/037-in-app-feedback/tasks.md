@@ -212,7 +212,7 @@ feedback while the global still serves everything else.
 - [X] T060 [P] [US4] Add a server test asserting lore sync resolves through `GLOBAL_GITHUB_APP_*` when no `SYNC_GITHUB_APP_*` is set, in `src/server/src/repo_host_tests.rs` — the half of FR-024 that is about the *other* subsystem
 - [X] T061 [US4] Surface the resolution report — per field, which prefix, for every scope — on the administrator configuration query in `src/server/src/graphql/queries/admin.rs`, rendering `ScopedApp::sources` verbatim
 - [X] T062 [US4] Render the resolution report and the subsystem list in `apps/web/src/pages/admin/`, so that wherever global credentials appear the operator is told **which subsystems** the application will act for (FR-026, SC-007)
-- [ ] T063 [US4] Add `apps/web/e2e/feedback-credentials.spec.ts` covering US4's four acceptance scenarios, including the partial-specification case where the report shows a mixed origin
+- [X] T063 [US4] Add `apps/web/e2e/feedback-credentials.spec.ts` covering US4's four acceptance scenarios, including the partial-specification case where the report shows a mixed origin
 - [X] T064 [US4] Add a note to `specs/040-instance-setup/spec.md`'s GitHub section pointing at `specs/037-in-app-feedback/contracts/github-app-scopes.md` as the resolver this feature builds and 040's surface consumes, so the two cannot drift apart unnoticed
 
 **Checkpoint**: one application, several subsystems, and nobody surprised by the blast radius

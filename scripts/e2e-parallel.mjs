@@ -572,6 +572,23 @@ async function startShard(index, { firstRun = false } = {}) {
     // not a client id borrowed from one place and a key from another. The key
     // is the committed throwaway fixture the repo-host crate's own tests use;
     // it is worthless and the README beside it says so.
+    // Cleared, deliberately. `dotenvy` loads the developer's `.env` into the
+    // backend, and a machine with real `SYNC_GITHUB_APP_*` credentials would
+    // resolve lore sync from the environment while a CI machine resolved it
+    // from the instance store — so a credential-resolution test would pass or
+    // fail depending on whose laptop it ran on. Empty rather than removed:
+    // the registry treats a blank variable as unset, and removing one is what
+    // `dotenv()` undoes on the next call.
+    SYNC_GITHUB_APP_CLIENT_ID: "",
+    SYNC_GITHUB_APP_SLUG: "",
+    SYNC_GITHUB_APP_PRIVATE_KEY: "",
+    SYNC_GITHUB_APP_PRIVATE_KEY_FILE: "",
+    SYNC_GITHUB_APP_PRIVATE_KEY_BASE64: "",
+    GLOBAL_GITHUB_APP_CLIENT_ID: "",
+    GLOBAL_GITHUB_APP_SLUG: "",
+    GLOBAL_GITHUB_APP_PRIVATE_KEY: "",
+    GLOBAL_GITHUB_APP_PRIVATE_KEY_FILE: "",
+    GLOBAL_GITHUB_APP_PRIVATE_KEY_BASE64: "",
     FEEDBACK_GITHUB_APP_CLIENT_ID: "Iv1.e2efeedbackstub",
     FEEDBACK_GITHUB_APP_SLUG: "thunderforge-feedback-stub",
     FEEDBACK_GITHUB_APP_PRIVATE_KEY_FILE: join(
