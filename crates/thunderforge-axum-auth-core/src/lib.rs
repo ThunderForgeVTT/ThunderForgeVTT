@@ -9,6 +9,7 @@
 //! call in here for every decision. See `docs/CLIENT_WORLD_CACHE.md` for the
 //! precedent this split follows.
 
+pub mod client_description;
 pub mod constant_time;
 pub mod csrf;
 pub mod hashing;

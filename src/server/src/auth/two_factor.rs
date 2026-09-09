@@ -131,6 +131,7 @@ pub(crate) async fn two_factor_setup_start(
 
 pub(crate) async fn two_factor_setup_confirm(
     cookies: Cookies,
+    client: ClientDescription,
     State(state): State<AppState>,
     Json(request): Json<TwoFactorSetupConfirmRequest>,
 ) -> (StatusCode, Json<TwoFactorSetupConfirmResponse>) {
@@ -266,7 +267,7 @@ pub(crate) async fn two_factor_setup_confirm(
             // entrance gets a session — the settings entrance already has one
             // and the request that started it proved nothing about a browser.
             let signed_in = if ticket.is_some() {
-                if let Err(msg) = issue_session_cookie(&state, &cookies, user_id).await {
+                if let Err(msg) = issue_session_cookie(&state, &cookies, user_id, client).await {
                     return confirm_error(
                         StatusCode::INTERNAL_SERVER_ERROR,
                         "session_error",
@@ -305,6 +306,7 @@ pub(crate) async fn two_factor_setup_confirm(
 
 pub(crate) async fn two_factor_verify(
     cookies: Cookies,
+    client: ClientDescription,
     State(state): State<AppState>,
     Json(request): Json<TwoFactorVerifyRequest>,
 ) -> (StatusCode, Json<TwoFactorVerifyResponse>) {
@@ -381,7 +383,7 @@ pub(crate) async fn two_factor_verify(
             .expect("Failed to spawn blocking task")
             .expect("Failed to consume 2FA challenge");
 
-            if let Err(msg) = issue_session_cookie(&state, &cookies, user_id).await {
+            if let Err(msg) = issue_session_cookie(&state, &cookies, user_id, client).await {
                 return verify_error(
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "session_error",

@@ -448,6 +448,7 @@ pub(crate) fn complete_setup_exclusively(
 
 pub(crate) async fn admin_setup_basic(
     cookies: Cookies,
+    client: ClientDescription,
     State(state): State<AppState>,
     Json(request): Json<AdminSetupBasicRequest>,
 ) -> (StatusCode, Json<OAuthResponse>) {
@@ -592,7 +593,7 @@ pub(crate) async fn admin_setup_basic(
         }
     };
 
-    if let Err(msg) = issue_session_cookie(&state, &cookies, user_id).await {
+    if let Err(msg) = issue_session_cookie(&state, &cookies, user_id, client).await {
         return error_response(
             StatusCode::INTERNAL_SERVER_ERROR,
             "session_error",
@@ -703,6 +704,7 @@ pub(crate) async fn admin_setup_oauth_callback(
     Path(provider_key): Path<String>,
     Query(query): Query<OAuthCallbackQuery>,
     cookies: Cookies,
+    client: ClientDescription,
     State(state): State<AppState>,
 ) -> axum::response::Response {
     if let Some(err) = query.error {
@@ -786,7 +788,7 @@ pub(crate) async fn admin_setup_oauth_callback(
         Err((_, payload)) => return bootstrap_error_redirect(payload.message.as_str()),
     };
 
-    if let Err(msg) = issue_session_cookie(&state, &cookies, user_id).await {
+    if let Err(msg) = issue_session_cookie(&state, &cookies, user_id, client).await {
         return bootstrap_error_redirect(msg.as_str());
     }
 

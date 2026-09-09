@@ -189,6 +189,13 @@ pub(crate) mod setup_requirements;
 pub(crate) mod admin_setup;
 pub(crate) use admin_setup::*;
 
+/// Spec 036 FR-005: the coarse client name a session is recognised by, read
+/// from the request and nowhere else. See the module header for why the raw
+/// `User-Agent` stops here.
+#[path = "client_hint.rs"]
+pub(crate) mod client_hint;
+pub(crate) use client_hint::ClientDescription;
+
 #[path = "sessions.rs"]
 pub(crate) mod sessions;
 pub(crate) use sessions::*;

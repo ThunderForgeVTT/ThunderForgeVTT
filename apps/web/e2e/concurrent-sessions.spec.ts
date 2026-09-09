@@ -206,11 +206,30 @@ test.describe("Spec 036 US4: seeing and ending sessions", () => {
     expect(listed.data.mySessions).toHaveLength(3);
     expect(listed.data.mySessions.filter((s) => s.isCurrent)).toHaveLength(1);
 
+    // FR-005's "where from". A real browser sent a real `User-Agent`, so
+    // every one of these must be named — this is the assertion that catches
+    // the column being written as null, which is what it was until the list
+    // existed to read it.
+    for (const session of listed.data.mySessions) {
+      expect(
+        session.clientDescription,
+        "a session opened by a real browser must be recognisable",
+      ).toBeTruthy();
+      // A fixed vocabulary, assembled server-side: family, optionally
+      // " on " platform. Nothing from the header itself.
+      expect(session.clientDescription).toMatch(
+        /^[A-Za-z]+( on [A-Za-z]+)?$/,
+      );
+    }
+
     // Never an address. Spec 035 set the rule that a record describes the act
     // and not the person, and a session row is read by its owner to answer
     // one question — "is that one me?" — which an IP does not answer.
     const rendered = JSON.stringify(listed.data.mySessions);
     expect(rendered).not.toMatch(/\b\d{1,3}(\.\d{1,3}){3}\b/);
+    // Nor a version, nor the raw header. `Mozilla/5.0` opens almost every
+    // real `User-Agent`; if it reached the list, the header was echoed.
+    expect(rendered).not.toContain("Mozilla");
 
     await second.context().close();
     await third.context().close();
@@ -288,5 +307,103 @@ test.describe("Spec 036 US4: seeing and ending sessions", () => {
     }
 
     await other.context().close();
+  });
+});
+
+/** The smallest query that proves a client is still authenticated. */
+const MY_SESSIONS_UI = `query MySessions { mySessions { id } }`;
+
+/**
+ * Spec 036 US4 through the screen rather than the endpoint.
+ *
+ * The GraphQL tests above prove the capability exists. This proves a person
+ * can reach it — the same gap `two-factor-enrolment.spec.ts` exists to close
+ * for spec 041, and the reason `client_description` was written as `null` for
+ * months: nothing rendered it, so nothing noticed.
+ */
+test.describe("Spec 036 US4: the session list a person actually uses", () => {
+  test("a second client appears in the list, is named, and can be ended from the screen", async ({
+    page,
+    browser,
+  }) => {
+    const creds = freshCredentials("e2esessui");
+    await register(page, creds);
+    const second = await openAnotherClient(browser, creds, "context");
+
+    await page.goto("/settings/security");
+    const list = page.getByTestId("session-list");
+    await expect(list).toBeVisible({ timeout: 15_000 });
+
+    const rows = list.locator("li[data-testid^='session-']");
+    await expect(rows).toHaveCount(2, { timeout: 15_000 });
+
+    // Exactly one row is this browser, and it says so.
+    await expect(list.locator("li[data-current='true']")).toHaveCount(1);
+
+    // FR-005: recognisable. A row reading "An unrecognised client" is the
+    // symptom of the description never being written, so it must not appear
+    // when a real browser opened the session.
+    await expect(list).not.toContainText("An unrecognised client");
+    // And never the person: no address anywhere in the rendered list.
+    const rendered = (await list.innerText()).replace(/\s+/g, " ");
+    expect(rendered).not.toMatch(/\b\d{1,3}(\.\d{1,3}){3}\b/);
+    expect(rendered).not.toContain("Mozilla");
+
+    // End the *other* one from this screen. FR-003: this client survives it.
+    const other = list.locator("li[data-current='false']").first();
+    const otherId = (await other.getAttribute("data-testid"))!.replace(
+      "session-",
+      "",
+    );
+    await page.getByTestId(`session-end-${otherId}`).click();
+
+    await expect(rows).toHaveCount(1, { timeout: 15_000 });
+    await expect(list.locator("li[data-current='true']")).toHaveCount(1);
+
+    // The ended client is refused on its next request, from the screen's
+    // doing rather than a mutation issued by the test.
+    await expectSignedOut(
+      second,
+      MY_SESSIONS_UI,
+      "a session ended from the list must be ended for real",
+    );
+
+    // With nothing else signed in there is no everywhere-button to click:
+    // it only appears when it would do something beyond the row above it.
+    await expect(page.getByTestId("session-end-all")).toHaveCount(0);
+
+    await second.context().close();
+  });
+
+  /**
+   * The button promises to sign out *everywhere, including here*, because
+   * that is what `endAllSessions` does (FR-007). It said "the other N
+   * sessions" for a while, which was a promise the server does not make — the
+   * click signed this browser out too and the list then failed to reload.
+   */
+  test("signing out everywhere ends this client too and says so first", async ({
+    page,
+    browser,
+  }) => {
+    const creds = freshCredentials("e2esessall");
+    await register(page, creds);
+    const second = await openAnotherClient(browser, creds, "context");
+
+    await page.goto("/settings/security");
+    const everywhere = page.getByTestId("session-end-all");
+    await expect(everywhere).toBeVisible({ timeout: 15_000 });
+    await expect(everywhere).toContainText("including here");
+
+    await everywhere.click();
+
+    // This browser lands on the sign-in screen rather than on an error.
+    await page.waitForURL(/\/login/, { timeout: 15_000 });
+    await expectSignedOut(
+      second,
+      MY_SESSIONS_UI,
+      "signing out everywhere must reach the other client",
+    );
+
+    await second.context().close();
   });
 });

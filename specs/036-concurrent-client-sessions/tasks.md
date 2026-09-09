@@ -143,7 +143,7 @@ others survive; end all and assert every client is signed out next request.
 ### Tests for User Story 4
 
 - [X] T032 [P] [US4] Add server tests in `src/server/src/graphql/mutations_sessions.rs` for `mySessions`, `endSession` (own only; another account's id is indistinguishable from a missing one) and `endAllSessions`
-- [ ] T033 [P] [US4] Add a server test asserting a rendered session row carries no address, mirroring spec 035's `access_events_record_the_act_and_never_the_person`
+- [X] T033 [P] [US4] Add a server test asserting a rendered session row carries no address, mirroring spec 035's `access_events_record_the_act_and_never_the_person`
 
 ### Implementation for User Story 4
 
@@ -151,7 +151,7 @@ others survive; end all and assert every client is signed out next request.
 - [X] T035 [US4] Implement `mySessions`, `endSession` and `endAllSessions` in `src/server/src/graphql/mutations_sessions.rs` per `contracts/sessions.md`, writing `ended_reason`
 - [ ] T036 [US4] Close the live streams and release any play-field claim held by an ended session, in `src/server/src/graphql/subscriptions.rs` and `src/server/src/play_field.rs` (FR-010)
 - [ ] T037 [US4] End every other session on password change in `src/server/src/auth/sessions.rs`, with `ended_reason = 'password_changed'` (FR-008)
-- [ ] T038 [US4] Add the session list and its controls to the account page in `apps/web/src/pages/user/`
+- [X] T038 [US4] Add the session list and its controls to the account page in `apps/web/src/pages/user/`
 - [X] T039 [US4] Extend `apps/web/e2e/concurrent-sessions.spec.ts` with US4's five acceptance scenarios
 
 **Checkpoint**: sessions are visible and endable — the eviction's job is covered

@@ -157,6 +157,7 @@ pub async fn end_all_sessions(state: &AppState, user_id: uuid::Uuid) -> Result<i
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::auth::ClientDescription;
     use crate::auth::sessions::issue_session_cookie;
     use crate::test_support::{insert_test_user, test_app_state};
     use tower_cookies::Cookies;
@@ -170,10 +171,15 @@ mod tests {
         let mut ids = Vec::new();
         for _ in 0..3 {
             ids.push(
-                issue_session_cookie(&state, &Cookies::default(), user_id)
-                    .await
-                    .expect("a session")
-                    .id,
+                issue_session_cookie(
+                    &state,
+                    &Cookies::default(),
+                    user_id,
+                    ClientDescription::unknown(),
+                )
+                .await
+                .expect("a session")
+                .id,
             );
         }
         (state, user_id, ids)
@@ -197,6 +203,66 @@ mod tests {
             vec![ids[1]],
             "exactly one session is the current one"
         );
+    }
+
+    /// FR-005's "where from", and spec 035's limit on it. The row a person
+    /// reads names the client coarsely and carries nothing that identifies
+    /// *them* — no address, no device name, no version. The description is
+    /// built in `thunderforge_axum_auth_core::client_description` from a fixed
+    /// vocabulary; this asserts it survives the round trip through the column
+    /// and the summary unchanged, which is the join the unit tests there
+    /// cannot see.
+    #[tokio::test]
+    async fn a_listed_session_names_the_client_and_never_the_person() {
+        let state = test_app_state();
+        let mut conn = state.db_pool.get().unwrap();
+        let user_id = insert_test_user(&mut conn);
+        drop(conn);
+
+        let described = issue_session_cookie(
+            &state,
+            &Cookies::default(),
+            user_id,
+            ClientDescription(Some("Firefox on Linux".to_string())),
+        )
+        .await
+        .expect("a described session");
+        let anonymous = issue_session_cookie(
+            &state,
+            &Cookies::default(),
+            user_id,
+            ClientDescription::unknown(),
+        )
+        .await
+        .expect("an undescribed session");
+
+        let listed = live_sessions(&state, user_id, described.id).await.unwrap();
+
+        let row = |id: uuid::Uuid| {
+            listed
+                .iter()
+                .find(|s| s.id == id)
+                .unwrap_or_else(|| panic!("session {id} is listed"))
+        };
+        assert_eq!(
+            row(described.id).client_description.as_deref(),
+            Some("Firefox on Linux"),
+        );
+        assert_eq!(
+            row(anonymous.id).client_description,
+            None,
+            "a client we did not recognise stays unnamed rather than guessed at",
+        );
+
+        for summary in &listed {
+            let rendered = summary.client_description.clone().unwrap_or_default();
+            for leak in ["127.0.0.1", "::1", "@", "Mozilla", "/"] {
+                assert!(
+                    !rendered.contains(leak),
+                    "{rendered:?} carried {leak:?} into the session list",
+                );
+            }
+        }
     }
 
     /// FR-003 and FR-006. Ending one leaves the others alone — the property

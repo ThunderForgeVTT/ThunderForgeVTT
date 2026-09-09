@@ -97,6 +97,7 @@ pub(crate) async fn oauth_callback(
     Path(provider_key): Path<String>,
     Query(query): Query<OAuthCallbackQuery>,
     cookies: Cookies,
+    client: ClientDescription,
     State(state): State<AppState>,
 ) -> (StatusCode, Json<OAuthResponse>) {
     // An `error` present means the provider refused, even if it also sent a
@@ -130,29 +131,40 @@ pub(crate) async fn oauth_callback(
         );
     };
 
-    handle_oauth_code_flow(state, cookies, provider_key, state_token, code).await
+    handle_oauth_code_flow(state, cookies, client, provider_key, state_token, code).await
 }
 
 pub(crate) async fn oauth_token_exchange(
     Path(provider_key): Path<String>,
     State(state): State<AppState>,
     cookies: Cookies,
+    client: ClientDescription,
     Json(payload): Json<OAuthTokenExchangeRequest>,
 ) -> (StatusCode, Json<OAuthResponse>) {
-    handle_oauth_code_flow(state, cookies, provider_key, payload.state, payload.code).await
+    handle_oauth_code_flow(
+        state,
+        cookies,
+        client,
+        provider_key,
+        payload.state,
+        payload.code,
+    )
+    .await
 }
 
 pub(crate) async fn oauth_resolve(
     cookies: Cookies,
+    client: ClientDescription,
     State(state): State<AppState>,
     Json(request): Json<OAuthResolveRequest>,
 ) -> (StatusCode, Json<OAuthResponse>) {
-    resolve_oauth_login(state, cookies, request).await
+    resolve_oauth_login(state, cookies, client, request).await
 }
 
 pub(crate) async fn handle_oauth_code_flow(
     state: AppState,
     cookies: Cookies,
+    client: ClientDescription,
     provider_key: String,
     state_token: String,
     code: String,
@@ -214,12 +226,13 @@ pub(crate) async fn handle_oauth_code_flow(
         token_expires_at: expires_at,
     };
 
-    resolve_oauth_login(state, cookies, resolve_request).await
+    resolve_oauth_login(state, cookies, client, resolve_request).await
 }
 
 pub(crate) async fn resolve_oauth_login(
     state: AppState,
     cookies: Cookies,
+    client: ClientDescription,
     request: OAuthResolveRequest,
 ) -> (StatusCode, Json<OAuthResponse>) {
     let encryption_key = match encryption_key_from_config_secret(&state.config.secret) {
@@ -521,7 +534,7 @@ pub(crate) async fn resolve_oauth_login(
                 );
             }
 
-            if let Err(msg) = issue_session_cookie(&state, &cookies, user_id).await {
+            if let Err(msg) = issue_session_cookie(&state, &cookies, user_id, client).await {
                 return error_response(
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "session_error",
@@ -640,6 +653,7 @@ async fn would_auto_provision(
 
 pub(crate) async fn oauth_link_confirm(
     cookies: Cookies,
+    client: ClientDescription,
     State(state): State<AppState>,
     Json(request): Json<OAuthLinkConfirmRequest>,
 ) -> (StatusCode, Json<OAuthResponse>) {
@@ -756,7 +770,7 @@ pub(crate) async fn oauth_link_confirm(
             "That OAuth identity is already linked to a different account",
         ),
         LinkConfirmOutcome::Linked(user_id) => {
-            if let Err(msg) = issue_session_cookie(&state, &cookies, user_id).await {
+            if let Err(msg) = issue_session_cookie(&state, &cookies, user_id, client).await {
                 return error_response(
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "session_error",

@@ -32,6 +32,7 @@ pub(crate) mod ended_reason {
 pub(crate) async fn basic_authentication(
     cookies: Cookies,
     headers: HeaderMap,
+    client: ClientDescription,
     State(state): State<AppState>,
     credentials: String,
 ) -> (StatusCode, Json<OAuthResponse>) {
@@ -53,6 +54,7 @@ pub(crate) async fn basic_authentication(
         &cred.username,
         &cred.password,
         code.as_deref(),
+        client,
     )
     .await;
 
@@ -69,6 +71,7 @@ pub(crate) async fn basic_authentication(
 
 pub(crate) async fn login(
     cookies: Cookies,
+    client: ClientDescription,
     State(state): State<AppState>,
     Json(request): Json<LoginRequest>,
 ) -> (StatusCode, Json<AuthSessionResponse>) {
@@ -78,12 +81,14 @@ pub(crate) async fn login(
         &request.identifier,
         &request.password,
         request.two_factor_code.as_deref(),
+        client,
     )
     .await
 }
 
 pub(crate) async fn register(
     cookies: Cookies,
+    client: ClientDescription,
     State(state): State<AppState>,
     Json(request): Json<RegisterRequest>,
 ) -> (StatusCode, Json<AuthSessionResponse>) {
@@ -216,7 +221,7 @@ pub(crate) async fn register(
                 .await;
     }
 
-    let session = match issue_session_cookie(&state, &cookies, user_id).await {
+    let session = match issue_session_cookie(&state, &cookies, user_id, client).await {
         Ok(value) => value,
         Err(message) => {
             return auth_session_error(
@@ -287,6 +292,7 @@ pub(crate) async fn current_session(
 
 pub(crate) async fn refresh_session(
     cookies: Cookies,
+    client: ClientDescription,
     State(state): State<AppState>,
 ) -> (StatusCode, Json<AuthSessionResponse>) {
     let authenticated_user = match resolve_authenticated_user(&state, &cookies).await {
@@ -307,16 +313,17 @@ pub(crate) async fn refresh_session(
         }
     };
 
-    let session = match issue_session_cookie(&state, &cookies, authenticated_user.user_id).await {
-        Ok(value) => value,
-        Err(message) => {
-            return auth_session_error(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "session_error",
-                message.as_str(),
-            );
-        }
-    };
+    let session =
+        match issue_session_cookie(&state, &cookies, authenticated_user.user_id, client).await {
+            Ok(value) => value,
+            Err(message) => {
+                return auth_session_error(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "session_error",
+                    message.as_str(),
+                );
+            }
+        };
 
     match build_session_response(
         &state,
@@ -377,14 +384,23 @@ pub(crate) async fn logout(
     )
 }
 
+/// Create a session, evict down to the bound, and set the cookies for it.
+///
+/// `client` is the coarse name the session will be recognised by in its
+/// owner's session list (spec 036 FR-005). It is a parameter rather than
+/// something derived in here because this function has no request: the
+/// handler that does extracts a [`ClientDescription`], and a path that has no
+/// browser behind it passes `ClientDescription::unknown()` deliberately.
 pub(crate) async fn issue_session_cookie(
     state: &AppState,
     cookies: &Cookies,
     user_id: uuid::Uuid,
+    client: ClientDescription,
 ) -> Result<crate::models::UserSession, String> {
     let now = Utc::now().naive_utc();
     let session_id = uuid::Uuid::now_v7();
     let expires_at = now + chrono::Duration::days(session::SESSION_TTL_DAYS);
+    let client_description = client.into_inner();
     let new_session = NewUserSession {
         id: session_id,
         user_id,
@@ -392,12 +408,7 @@ pub(crate) async fn issue_session_cookie(
         revoked_at: None,
         created_at: now,
         last_seen_at: now,
-        // Spec 036 FR-005 wants a coarse description here — browser family and
-        // platform, never an address — and the callers that have the request
-        // headers to derive one are not all of them. Left unset until the
-        // session list (US4) is built, rather than inventing a value nobody
-        // can act on.
-        client_description: None,
+        client_description: client_description.clone(),
     };
 
     let mut conn = state
@@ -466,7 +477,7 @@ pub(crate) async fn issue_session_cookie(
         revoked_at: None,
         created_at: now,
         last_seen_at: now,
-        client_description: None,
+        client_description,
         ended_reason: None,
     })
 }
@@ -493,6 +504,7 @@ pub(crate) async fn authenticate_password_login(
     identifier: &str,
     password: &str,
     two_factor_code: Option<&str>,
+    client: ClientDescription,
 ) -> (StatusCode, Json<AuthSessionResponse>) {
     let identifier = identifier.trim().to_string();
     let email_candidate = identifier.to_lowercase();
@@ -638,7 +650,7 @@ pub(crate) async fn authenticate_password_login(
         }
     }
 
-    let session = match issue_session_cookie(state, cookies, user_id).await {
+    let session = match issue_session_cookie(state, cookies, user_id, client).await {
         Ok(value) => value,
         Err(message) => {
             return auth_session_error(
@@ -788,12 +800,22 @@ mod tests {
         let user_id = insert_test_user(&mut conn);
         drop(conn);
 
-        let first = issue_session_cookie(&state, &Cookies::default(), user_id)
-            .await
-            .expect("the first sign-in should issue a session");
-        let second = issue_session_cookie(&state, &Cookies::default(), user_id)
-            .await
-            .expect("the second sign-in should issue a session");
+        let first = issue_session_cookie(
+            &state,
+            &Cookies::default(),
+            user_id,
+            ClientDescription::unknown(),
+        )
+        .await
+        .expect("the first sign-in should issue a session");
+        let second = issue_session_cookie(
+            &state,
+            &Cookies::default(),
+            user_id,
+            ClientDescription::unknown(),
+        )
+        .await
+        .expect("the second sign-in should issue a session");
 
         assert_ne!(first.id, second.id);
         let live: Vec<uuid::Uuid> = live_sessions(&state, user_id)
@@ -823,9 +845,14 @@ mod tests {
             .collect();
         let oldest = seeded[0];
 
-        let fresh = issue_session_cookie(&state, &Cookies::default(), user_id)
-            .await
-            .expect("a sign-in at the bound must still succeed");
+        let fresh = issue_session_cookie(
+            &state,
+            &Cookies::default(),
+            user_id,
+            ClientDescription::unknown(),
+        )
+        .await
+        .expect("a sign-in at the bound must still succeed");
 
         let live: Vec<uuid::Uuid> = live_sessions(&state, user_id)
             .into_iter()
