@@ -12,14 +12,18 @@ import { graphql, login, uniqueSuffix } from "./fixtures/helpers";
  * direct POST is refused with a body that reveals nothing, and that a
  * pre-existing user is untouched throughout.
  *
- * # What this cannot prove here
+ * # The OAuth leg lives next door now
  *
- * The OAuth leg. FR-006's headline case — a provider identity with an
- * unmatched verified email being refused — needs a configured provider and a
- * real handshake, which this harness has no stub for. It is covered by
- * `auth::instance_access` unit tests at the decision level, and by
- * quickstart.md Scenario A step 5 by hand. **That step is the one that
- * matters**; do not read a green run here as proof the OAuth path is gated.
+ * This header used to end with a warning: FR-006's headline case — a provider
+ * identity with an unmatched verified email being refused — needed a
+ * configured provider and a real handshake, "which this harness has no stub
+ * for", so a green run here was not proof the OAuth path was gated.
+ *
+ * It has one. Spec 036 US6 added `scripts/oauth-stub.mjs` and a seeded
+ * provider row, and `oauth-provider.spec.ts` walks that case on every run —
+ * closing the instance, completing the whole handshake, asserting the refusal,
+ * then re-opening and asserting *the same identity* is admitted. The local
+ * route is still this file's subject; the provider route is that one's.
  */
 
 async function setPolicy(page: Page, policy: string): Promise<void> {

@@ -350,3 +350,50 @@ VALUES (
   now()
 )
 ON CONFLICT (id) DO NOTHING;
+
+-- Spec 036 US6 (T064): a provider pointing at the harness's OAuth stub.
+--
+-- `oauth_providers` already carries `authorization_url`, `token_url` and
+-- `userinfo_url` per row, because an operator wiring up their own provider
+-- sets exactly those. So no column is added here, and — the requirement that
+-- matters (FR-023) — no product code changes: the server talks to the stub
+-- through the same path it uses for a real provider.
+--
+-- The port is the base one. `e2e-parallel.mjs` rewrites it per shard after
+-- cloning, because two shards sharing a provider would share the identity a
+-- scenario chose through `/_control/identity`.
+--
+-- Seed and harness only. This row is never in a release.
+INSERT INTO oauth_providers (
+  id,
+  provider_key,
+  display_name,
+  authorization_url,
+  token_url,
+  userinfo_url,
+  scopes,
+  enabled,
+  created_at,
+  updated_at,
+  oauth_client_id,
+  oauth_client_secret,
+  configured,
+  config_source
+)
+VALUES (
+  '00000000-0000-0000-0000-00000000e0a1',
+  'stub',
+  'Stub Provider',
+  'http://127.0.0.1:31600/authorize',
+  'http://127.0.0.1:31600/token',
+  'http://127.0.0.1:31600/userinfo',
+  ARRAY['openid', 'email', 'profile'],
+  true,
+  now(),
+  now(),
+  'stub-client-id',
+  'stub-client-secret',
+  true,
+  'seed'
+)
+ON CONFLICT (id) DO NOTHING;

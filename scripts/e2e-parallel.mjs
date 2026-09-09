@@ -74,6 +74,15 @@ const MAILPIT_IMAGE = "axllent/mailpit:v1.21";
 // running GitHub Enterprise sets — so delivery is exercised through the
 // production code path rather than a test branch.
 const GITHUB_STUB_PORT_BASE = 31500;
+/**
+ * Spec 036 US6 (T063): this shard's OAuth provider.
+ *
+ * A port per shard for the same reason every other service gets one — two
+ * shards sharing a provider would share the identity a scenario chose through
+ * `/_control/identity`, and one shard's "the provider returned no email" would
+ * become another shard's mystery refusal.
+ */
+const OAUTH_STUB_PORT_BASE = 31600;
 
 const POSTGRES_CONTAINER =
   process.env.THUNDERFORGE_POSTGRES_CONTAINER ?? "thunderforge-postgres";
@@ -141,9 +150,14 @@ const PERF_LANE_SPECS = [
  * and that is well before the lanes are partitioned below.
  */
 function measuredSpecsSelected(args) {
-  const onlyPatterns = args.only?.split(",").map((p) => p.trim()).filter(Boolean);
+  const onlyPatterns = args.only
+    ?.split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
   return allSpecFiles()
-    .filter((file) => !onlyPatterns || onlyPatterns.some((p) => file.includes(p)))
+    .filter(
+      (file) => !onlyPatterns || onlyPatterns.some((p) => file.includes(p)),
+    )
     .filter(isPerfSpec);
 }
 
@@ -205,13 +219,19 @@ function readDurations() {
  * newly added spec is distributed rather than piled onto one shard.
  */
 function partitionByDuration(files, shardCount, durations) {
-  const known = files.map((f) => durations[f]).filter((d) => typeof d === "number");
-  const fallback = known.length > 0 ? known.reduce((a, b) => a + b, 0) / known.length : 1;
+  const known = files
+    .map((f) => durations[f])
+    .filter((d) => typeof d === "number");
+  const fallback =
+    known.length > 0 ? known.reduce((a, b) => a + b, 0) / known.length : 1;
   const weighted = files
     .map((file) => ({ file, cost: durations[file] ?? fallback }))
     .sort((a, b) => b.cost - a.cost);
 
-  const bins = Array.from({ length: shardCount }, () => ({ cost: 0, files: [] }));
+  const bins = Array.from({ length: shardCount }, () => ({
+    cost: 0,
+    files: [],
+  }));
   for (const { file, cost } of weighted) {
     const lightest = bins.reduce((a, b) => (a.cost <= b.cost ? a : b));
     lightest.files.push(file);
@@ -245,7 +265,8 @@ function recordDurations(shardDirs, previous) {
       for (const spec of suite.specs ?? []) {
         for (const test of spec.tests ?? []) {
           for (const result of test.results ?? []) {
-            totals[`e2e/${path}`] = (totals[`e2e/${path}`] ?? 0) + (result.duration ?? 0) / 1000;
+            totals[`e2e/${path}`] =
+              (totals[`e2e/${path}`] ?? 0) + (result.duration ?? 0) / 1000;
           }
         }
       }
@@ -287,7 +308,10 @@ function acquireLock() {
         );
       } catch (error) {
         // ESRCH: the pid is gone, so the lock is stale and ours to take.
-        if (error instanceof Error && !/^another e2e-parallel/.test(error.message)) {
+        if (
+          error instanceof Error &&
+          !/^another e2e-parallel/.test(error.message)
+        ) {
           log("e2e", `Reclaiming a stale lock from pid ${previous}.`);
         } else {
           throw error;
@@ -324,6 +348,7 @@ async function assertPortsFree(total) {
     wanted.push([WEB_PORT_BASE + index, `vite ${index}`]);
     wanted.push([BACKEND_PORT_BASE + index, `backend ${index}`]);
     wanted.push([GITHUB_STUB_PORT_BASE + index, `github stub ${index}`]);
+    wanted.push([OAUTH_STUB_PORT_BASE + index, `oauth stub ${index}`]);
     wanted.push([MAILPIT_SMTP_PORT_BASE + index, `mailpit smtp ${index}`]);
     wanted.push([MAILPIT_API_PORT_BASE + index, `mailpit api ${index}`]);
   }
@@ -377,7 +402,19 @@ function releaseLock() {
 function psql(database, sql) {
   return execFileSync(
     "docker",
-    ["exec", "-i", POSTGRES_CONTAINER, "psql", "-U", DB_USER, "-d", database, "-v", "ON_ERROR_STOP=1", "-q"],
+    [
+      "exec",
+      "-i",
+      POSTGRES_CONTAINER,
+      "psql",
+      "-U",
+      DB_USER,
+      "-d",
+      database,
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-q",
+    ],
     { input: sql, encoding: "utf-8" },
   );
 }
@@ -430,7 +467,10 @@ async function provisionTemplate() {
  */
 async function provisionFirstRunTemplate() {
   log("e2e", `Building the first-run template (${FIRST_RUN_TEMPLATE_DB})...`);
-  psql("postgres", `DROP DATABASE IF EXISTS ${FIRST_RUN_TEMPLATE_DB} WITH (FORCE);`);
+  psql(
+    "postgres",
+    `DROP DATABASE IF EXISTS ${FIRST_RUN_TEMPLATE_DB} WITH (FORCE);`,
+  );
   psql("postgres", `CREATE DATABASE ${FIRST_RUN_TEMPLATE_DB};`);
 
   await runCommand("diesel migration run", {
@@ -450,6 +490,23 @@ function cloneShardDatabase(index, { firstRun = false } = {}) {
   const template = firstRun ? FIRST_RUN_TEMPLATE_DB : TEMPLATE_DB;
   psql("postgres", `DROP DATABASE IF EXISTS ${name} WITH (FORCE);`);
   psql("postgres", `CREATE DATABASE ${name} TEMPLATE ${template};`);
+
+  // Spec 036 US6 (T064). The seed writes the base port because a `.sql` file
+  // cannot know which shard it is being applied to; this is where it finds
+  // out. Pointing every shard at one stub would mean the identity one
+  // scenario chose through `/_control/identity` arrived in another shard's
+  // sign-in, and the failure would read as a provisioning bug.
+  if (!firstRun) {
+    const stub = `http://127.0.0.1:${OAUTH_STUB_PORT_BASE + index}`;
+    psql(
+      name,
+      `UPDATE oauth_providers
+          SET authorization_url = '${stub}/authorize',
+              token_url = '${stub}/token',
+              userinfo_url = '${stub}/userinfo'
+        WHERE provider_key = 'stub';`,
+    );
+  }
   return name;
 }
 
@@ -538,16 +595,23 @@ async function startMailpit(index) {
   execFileSync(
     "docker",
     [
-      "run", "--rm", "-d",
-      "--name", name,
-      "-p", `${smtpPort}:1025`,
-      "-p", `${apiPort}:8025`,
+      "run",
+      "--rm",
+      "-d",
+      "--name",
+      name,
+      "-p",
+      `${smtpPort}:1025`,
+      "-p",
+      `${apiPort}:8025`,
       // The dev stack's settings: Mailpit's SMTP listener is plaintext, which
       // is what the `none` security option exists for, and it accepts any
       // credentials so a spec can prove the username/password path is wired
       // without a real account.
-      "-e", "MP_SMTP_AUTH_ACCEPT_ANY=1",
-      "-e", "MP_SMTP_AUTH_ALLOW_INSECURE=1",
+      "-e",
+      "MP_SMTP_AUTH_ACCEPT_ANY=1",
+      "-e",
+      "MP_SMTP_AUTH_ALLOW_INSECURE=1",
       MAILPIT_IMAGE,
     ],
     { stdio: "ignore" },
@@ -661,9 +725,20 @@ async function startShard(index, { firstRun = false } = {}) {
     ),
   };
 
-  spawnManaged(`node scripts/github-stub.mjs ${GITHUB_STUB_PORT_BASE + index}`, {
+  spawnManaged(
+    `node scripts/github-stub.mjs ${GITHUB_STUB_PORT_BASE + index}`,
+    {
+      cwd: ROOT_DIR,
+      prefix: `gh${index}`,
+    },
+  );
+
+  // Spec 036 US6. Started before the backend for no reason other than
+  // symmetry: the server never calls it until a test drives a sign-in, and
+  // the seeded provider row names its URLs rather than discovering them.
+  spawnManaged(`node scripts/oauth-stub.mjs ${OAUTH_STUB_PORT_BASE + index}`, {
     cwd: ROOT_DIR,
-    prefix: `gh${index}`,
+    prefix: `oa${index}`,
   });
 
   // The first-run lane keeps a copy of the backend's output, because the setup
@@ -684,7 +759,12 @@ async function startShard(index, { firstRun = false } = {}) {
   // (`main.rs`), and readiness rather than liveness because it is the one that
   // says the database is reachable — which for a freshly cloned shard database
   // is the fact actually in question.
-  if (!(await waitForUrl(`http://127.0.0.1:${backendPort}/api/readyz`, `backend ${index}`))) {
+  if (
+    !(await waitForUrl(
+      `http://127.0.0.1:${backendPort}/api/readyz`,
+      `backend ${index}`,
+    ))
+  ) {
     return null;
   }
 
@@ -697,13 +777,24 @@ async function startShard(index, { firstRun = false } = {}) {
       THUNDERFORGE_BACKEND_ORIGIN: `http://127.0.0.1:${backendPort}`,
     },
   });
-  if (!(await waitForUrl(`http://127.0.0.1:${webPort}/`, `frontend ${index}`))) {
+  if (
+    !(await waitForUrl(`http://127.0.0.1:${webPort}/`, `frontend ${index}`))
+  ) {
     return null;
   }
   if (
     !(await waitForUrl(
       `http://127.0.0.1:${GITHUB_STUB_PORT_BASE + index}/_control/issues`,
       `github stub ${index}`,
+      30_000,
+    ))
+  ) {
+    return null;
+  }
+  if (
+    !(await waitForUrl(
+      `http://127.0.0.1:${OAUTH_STUB_PORT_BASE + index}/_control/calls`,
+      `oauth stub ${index}`,
       30_000,
     ))
   ) {
@@ -716,7 +807,15 @@ async function startShard(index, { firstRun = false } = {}) {
   const mailpit = await startMailpit(index);
   if (!mailpit) return null;
 
-  return { index, database, webPort, backendPort, firstRun, backendLog, mailpit };
+  return {
+    index,
+    database,
+    webPort,
+    backendPort,
+    firstRun,
+    backendLog,
+    mailpit,
+  };
 }
 
 /** Runs one Playwright shard against an already-started stack. */
@@ -761,6 +860,7 @@ function runShard(shard, files, label = "parallel") {
       THUNDERFORGE_E2E_DEMO_DIR: demoDir,
       THUNDERFORGE_DB_NAME: shard.database,
       THUNDERFORGE_E2E_GITHUB_STUB: `http://127.0.0.1:${GITHUB_STUB_PORT_BASE + shard.index}`,
+      THUNDERFORGE_E2E_OAUTH_STUB: `http://127.0.0.1:${OAUTH_STUB_PORT_BASE + shard.index}`,
       THUNDERFORGE_E2E_MAILPIT_API: shard.mailpit.api,
       THUNDERFORGE_E2E_MAILPIT_SMTP_PORT: String(shard.mailpit.smtpPort),
       // Global setup applies `e2e_demo.sql` and then signs in as the demo user
@@ -788,7 +888,9 @@ function runShard(shard, files, label = "parallel") {
   });
 
   return new Promise((resolve) => {
-    child.once("close", (code) => resolve({ index: shard.index, code: code ?? 1 }));
+    child.once("close", (code) =>
+      resolve({ index: shard.index, code: code ?? 1 }),
+    );
   });
 }
 
@@ -846,7 +948,10 @@ async function main() {
       "This run includes specs that measure the engine, so it is built release.",
     );
   }
-  await ensureEngineBuild({ profile, noOpt: skipWasmOpt() && !measuredWillRun });
+  await ensureEngineBuild({
+    profile,
+    noOpt: skipWasmOpt() && !measuredWillRun,
+  });
 
   // Once, before any shard starts. N concurrent `cargo run`s would serialise
   // on the target-directory lock anyway, and the first shard would look hung.
@@ -866,13 +971,19 @@ async function main() {
       process.exit(1);
     }
     shards.push(shard);
-    log("e2e", `Shard ${index} up on :${shard.webPort} (db ${shard.database}).`);
+    log(
+      "e2e",
+      `Shard ${index} up on :${shard.webPort} (db ${shard.database}).`,
+    );
   }
 
   // `--only` takes a comma-separated list, so a triage run can name exactly
   // the handful of specs under suspicion rather than a prefix that drags in
   // their neighbours.
-  const onlyPatterns = args.only?.split(",").map((p) => p.trim()).filter(Boolean);
+  const onlyPatterns = args.only
+    ?.split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
   const specs = allSpecFiles().filter(
     (file) => !onlyPatterns || onlyPatterns.some((p) => file.includes(p)),
   );
@@ -889,15 +1000,24 @@ async function main() {
   // distinction here is which database they need, not how they are timed.
   const firstRunSpecs = specs.filter(isFirstRunSpec);
   const rest = specs.filter((file) => !isFirstRunSpec(file));
-  const parallelSpecs = args.all ? rest : rest.filter((file) => !isPerfSpec(file));
+  const parallelSpecs = args.all
+    ? rest
+    : rest.filter((file) => !isPerfSpec(file));
   const serialSpecs = args.all ? [] : rest.filter(isPerfSpec);
 
   // `--only` naming nothing but measured specs is almost always a mistake: the
   // sharded lane gets no files, and the whole run collapses to the serial lane
   // on one shard, which is not what someone asking for shards wanted. Say so,
   // and name the flag that does what they meant.
-  if (parallelSpecs.length === 0 && serialSpecs.length === 0 && firstRunSpecs.length > 0) {
-    log("e2e", `${firstRunSpecs.length} first-run spec file(s); the sharded lane has nothing to do.`);
+  if (
+    parallelSpecs.length === 0 &&
+    serialSpecs.length === 0 &&
+    firstRunSpecs.length > 0
+  ) {
+    log(
+      "e2e",
+      `${firstRunSpecs.length} first-run spec file(s); the sharded lane has nothing to do.`,
+    );
   }
   if (parallelSpecs.length === 0 && serialSpecs.length > 0 && onlyPatterns) {
     log(
@@ -906,12 +1026,18 @@ async function main() {
         " Pass --all to shard them, or expect the serial lane alone.",
     );
   }
-  log("e2e", `${parallelSpecs.length} spec files sharded, ${serialSpecs.length} measured serially.`);
+  log(
+    "e2e",
+    `${parallelSpecs.length} spec files sharded, ${serialSpecs.length} measured serially.`,
+  );
 
   const durations = readDurations();
   const bins = partitionByDuration(parallelSpecs, total, durations);
   for (const [index, bin] of bins.entries()) {
-    log("e2e", `  shard ${index}: ${bin.files.length} files, ~${(bin.cost / 60).toFixed(1)} min estimated.`);
+    log(
+      "e2e",
+      `  shard ${index}: ${bin.files.length} files, ~${(bin.cost / 60).toFixed(1)} min estimated.`,
+    );
   }
 
   const started = Date.now();
@@ -961,7 +1087,10 @@ async function main() {
   const failed = results.filter((result) => result.code !== 0);
   log("e2e", `Finished in ${minutes} minutes.`);
   for (const result of results) {
-    log("e2e", `  shard ${result.index}: ${result.code === 0 ? "passed" : `FAILED (${result.code})`}`);
+    log(
+      "e2e",
+      `  shard ${result.index}: ${result.code === 0 ? "passed" : `FAILED (${result.code})`}`,
+    );
   }
 
   await terminateChildren("SIGTERM");
@@ -971,7 +1100,10 @@ async function main() {
   stopMailpit();
   if (!args.keep) {
     for (const shard of shards) {
-      psql("postgres", `DROP DATABASE IF EXISTS ${shard.database} WITH (FORCE);`);
+      psql(
+        "postgres",
+        `DROP DATABASE IF EXISTS ${shard.database} WITH (FORCE);`,
+      );
     }
   }
 

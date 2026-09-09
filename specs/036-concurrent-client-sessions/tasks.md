@@ -251,12 +251,12 @@ a browser.
 **Independent Test**: the four scenarios against a stub provider, driven
 through the real redirect flow.
 
-- [ ] T062 [US6] Add the stub provider service (authorize, token, userinfo) under `apps/web/e2e/fixtures/` or `scripts/`, per `contracts/e2e-fixtures.md`
-- [ ] T063 [US6] Give each shard a stub-provider port in `scripts/e2e-parallel.mjs`, exactly as backends and vite servers already get one
-- [ ] T064 [US6] Seed an `oauth_providers` row pointing at the stub in `src/server/seeds/e2e_demo.sql` — no new column is needed, the table already carries `authorization_url`, `token_url` and `userinfo_url`
-- [ ] T065 [US6] Add `apps/web/e2e/oauth-provider.spec.ts` covering first-login provisioning (ADR-042), linking behind password confirmation (ADR-006), refusal with no verified email, and refusal by a closed instance (spec 035 FR-006)
-- [ ] T066 [US6] Confirm no product file changed to make T062–T065 work; if any did, the stub is wrong (FR-023)
-- [ ] T067 [US6] Close spec 035's T056 in `specs/035-instance-access/tasks.md` and strike the row from spec 032's deferred-manual-pass table in `specs/032-pack-architecture/tasks.md` (FR-024)
+- [X] T062 [US6] Add the stub provider service (authorize, token, userinfo) in `scripts/oauth-stub.mjs`, per `contracts/e2e-fixtures.md`. It echoes the product's own `state` verbatim rather than inventing one, so every scenario tests the flow instead of testing that the state check fails
+- [X] T063 [US6] Give each shard a stub-provider port in `scripts/e2e-parallel.mjs`, exactly as backends and vite servers already get one — and rewrite the seeded provider's URLs per shard after cloning, since a `.sql` file cannot know which shard it lands in
+- [X] T064 [US6] Seed an `oauth_providers` row pointing at the stub in `src/server/seeds/e2e_demo.sql` — no new column is needed, the table already carries `authorization_url`, `token_url` and `userinfo_url`
+- [X] T065 [US6] Add `apps/web/e2e/oauth-provider.spec.ts` covering first-login provisioning (ADR-042), linking behind password confirmation (ADR-006), refusal with no verified email, and refusal by a closed instance (spec 035 FR-006)
+- [X] T066 [US6] Confirm no product file changed to make T062–T065 work; if any did, the stub is wrong (FR-023) — **confirmed**: the whole of US6 is four files, `scripts/oauth-stub.mjs`, `scripts/e2e-parallel.mjs`, `src/server/seeds/e2e_demo.sql` and `apps/web/e2e/oauth-provider.spec.ts`. Nothing under `src/server/src` or `apps/web/src` was touched
+- [X] T067 [US6] Close spec 035's T056 in `specs/035-instance-access/tasks.md` and strike the row from spec 032's deferred-manual-pass table in `specs/032-pack-architecture/tasks.md` (FR-024)
 
 **Checkpoint**: three ADRs' worth of untested auth is tested
 
