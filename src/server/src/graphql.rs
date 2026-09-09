@@ -244,6 +244,13 @@ pub use mutations_user_data::*;
 pub mod mutations_admin;
 pub use mutations_admin::*;
 
+/// Every operator-scoped GraphQL field refuses a non-administrator, and a
+/// field nobody classified fails the build. The GraphQL counterpart to
+/// `auth::admin_routes_tests` — see that module and the 2026-09-09 audit.
+#[cfg(test)]
+#[path = "graphql/admin_surface_tests.rs"]
+mod admin_surface_tests;
+
 /// Spec 036 FR-010: a subscription stops when the session behind it does.
 /// Separate from `subscriptions` so the rule can be tested without opening a
 /// socket, and so every stream reaches for the same one.

@@ -143,10 +143,26 @@ property.
 non-admin path lands in the guarded router, where it would silently become
 administrator-only.
 
-**Not done:** GraphQL still authorises per resolver by convention. A schema-wide
-assertion — every resolver reaching an operator-scoped table requires admin —
-is the equivalent guarantee and does not exist yet. Worth building; it is the
-same shape as the route test, one level up.
+**Also done:** `graphql::admin_surface_tests` is the schema-wide equivalent.
+Two halves that need each other — every root field must be *classified* (so a
+new one fails until somebody decides what it is), and every field classified
+admin-only is *executed* as an ordinary account and as an anonymous caller and
+must refuse. Execution rather than inspection, because `resolveModerationCase`
+proves inspection is not enough.
+
+Building it found two things immediately:
+
+- **The hand-written admin list was a third of the real surface.** Six fields
+  by hand; twenty in fact — `oauthProviders`, `authSecuritySettings`,
+  `instanceSettings`, `mailOutbox`, `adminBootstrapSettings` and the rest. That
+  gap *is* the difference between "audited" and "checked".
+- **One assertion was vacuous on its first run.** `resolveModerationCase` used
+  an enum value that does not exist, so it failed *validation* and never
+  reached authorisation — passing "must refuse" for entirely the wrong reason.
+  Caught by `the_admin_only_queries_are_well_formed`, which runs the same
+  queries as an administrator and fails if any is malformed. Written while
+  explicitly thinking about vacuity, and still vacuous: reviewing for the trap
+  is not the same as testing for it.
 
 ---
 
@@ -157,5 +173,4 @@ same shape as the route test, one level up.
 | 4 Rust advisories | All inside `aws-sdk-s3`'s pinned `h2 0.3` / `rustls 0.21`. Already at the latest published SDK. Client-role only: the `h2` advisory describes a server-side DoS, the `rustls-webpki` ones are certificate-validation edge cases against a configured endpoint. Recheck when the SDK moves. |
 | 4 npm advisories | Build-time CSS toolchain. Not shipped. |
 | DNS rebinding on outbound URLs | See finding 4. Needs connect-time refusal in the HTTP client. |
-| GraphQL authorisation guarantee | See finding 5. |
 | Timing side channels | Not examined. `recovery.rs` deliberately verifies every unspent code with no early exit, which suggests the concern is understood where it was thought about; nothing systematic was measured. |
