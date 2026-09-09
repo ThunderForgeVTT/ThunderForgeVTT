@@ -102,7 +102,7 @@ confirm each is accepted, acknowledged, and does not navigate the person away.
 - [X] T025 [US1] Create `apps/web/src/components/feedback/FeedbackLauncher.tsx` and `FeedbackDialog.tsx` — the three kinds, fields per kind (FR-003), context assembled from `useLocation()`, `useParams()` and `useAuth()` since there is no `WorldContext` to read
 - [X] T026 [US1] Mount the launcher from `apps/web/src/main.tsx` above the router — FR-001 says "any screen" and `main.tsx` is the only place above every route; this adds the app's first root-level overlay host, and `apps/web/src/components/ui/sonner.tsx`'s `Toaster` (defined but never mounted anywhere today) is mounted here too for FR-004's acknowledgement
 - [X] T027 [P] [US1] Add vitest coverage for `feedbackDraft.ts` in `apps/web/src/services/__tests__/feedbackDraft.test.ts`, including that a cleared storage returns an empty draft rather than throwing
-- [ ] T028 [US1] Add `apps/web/e2e/feedback-submit.spec.ts` covering US1's four acceptance scenarios plus FR-006's "a refusal does not discard what the person wrote"
+- [X] T028 [US1] Add `apps/web/e2e/feedback-submit.spec.ts` covering US1's four acceptance scenarios plus FR-006's "a refusal does not discard what the person wrote"
 
 **Checkpoint**: a person can send feedback from anywhere and it is kept — even with nothing configured (FR-030)
 
@@ -133,7 +133,7 @@ person chose it.
 - [X] T036 [US2] Store attachments server-side in `src/server/src/feedback/mod.rs`: screenshot through the existing `transcode::transcode_to_webp` (inheriting `MAX_UPLOAD_BYTES` and `TooLarge`), logs as `text/plain`, both under `feedback/{submission_id}/{attachment_id}` and **never** through `storage::dedupe::object_holding`
 - [X] T037 [US2] Add the authenticated attachment route in `src/server/src/assets_serve/feedback.rs` and register `/feedback-assets/{attachment_id}` in `src/app/src/main.rs` beside the other asset routes, checking that the caller owns the submission or is an administrator
 - [X] T038 [US2] Add the capture flags to `launchOptions.args` in `apps/web/playwright.config.ts` per `contracts/e2e-harness.md` § 1, with a comment saying what they do and do not prove
-- [ ] T039 [US2] Add `apps/web/e2e/feedback-evidence.spec.ts` covering US2's four acceptance scenarios and **SC-004**: plant a bearer token and a `?token=` URL in the console, then assert absence in three places — the rendered review, the mutation payload, and the destination — because asserting only the last would pass for a plan that redacted after approval
+- [X] T039 [US2] Add `apps/web/e2e/feedback-evidence.spec.ts` covering US2's four acceptance scenarios and **SC-004**: plant a bearer token and a `?token=` URL in the console, then assert absence in three places — the rendered review, the mutation payload, and the destination — because asserting only the last would pass for a plan that redacted after approval
 
 **Checkpoint**: a report carries its evidence, and the preview is provably the truth
 
