@@ -328,7 +328,7 @@ pub(crate) async fn regenerate_recovery_codes(
             return recovery_codes_error(
                 StatusCode::UNAUTHORIZED,
                 "two_factor_invalid",
-                "Invalid 2FA code",
+                crate::auth::two_factor::verification::CREDENTIAL_REFUSED,
             );
         }
         Err(msg) => {

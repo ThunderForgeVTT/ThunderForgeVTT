@@ -310,7 +310,7 @@ pub(crate) async fn two_factor_setup_confirm(
         Ok(false) => confirm_error(
             StatusCode::UNAUTHORIZED,
             "two_factor_invalid",
-            "Invalid 2FA code",
+            crate::auth::two_factor::verification::CREDENTIAL_REFUSED,
         ),
         Err(msg) => confirm_error(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -340,3 +340,7 @@ fn confirm_error(
         }),
     )
 }
+
+#[cfg(test)]
+#[path = "enrolment_tests.rs"]
+mod enrolment_tests;

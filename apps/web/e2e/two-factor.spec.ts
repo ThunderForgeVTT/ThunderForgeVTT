@@ -447,7 +447,7 @@ test.describe("the login challenge", () => {
 
     // Told, in as many words, rather than left on a page that silently did
     // nothing — and still on /login with no session.
-    await expect(page.getByText("Invalid 2FA code")).toBeVisible({
+    await expect(page.getByText("That code was not accepted.")).toBeVisible({
       timeout: 15_000,
     });
     await expect(page).toHaveURL(/\/login/);

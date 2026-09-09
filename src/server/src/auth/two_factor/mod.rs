@@ -70,3 +70,13 @@ pub(crate) mod events;
 /// Tests the join between the rule in `totp.rs` and the path a sign-in takes.
 #[cfg(test)]
 mod replay_tests;
+
+/// Spec 041 FR-009: a code is shown once, and no route hands one back.
+#[cfg(test)]
+#[path = "no_code_readback_tests.rs"]
+mod no_code_readback_tests;
+
+/// Spec 041 FR-018: one message and one status for every credential refusal.
+#[cfg(test)]
+#[path = "refusal_shape_tests.rs"]
+mod refusal_shape_tests;

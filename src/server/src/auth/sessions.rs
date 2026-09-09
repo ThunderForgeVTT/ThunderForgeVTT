@@ -666,7 +666,7 @@ pub(crate) async fn authenticate_password_login(
                 return auth_session_error(
                     StatusCode::UNAUTHORIZED,
                     "two_factor_invalid",
-                    "Invalid 2FA code",
+                    crate::auth::two_factor::verification::CREDENTIAL_REFUSED,
                 );
             }
             Err(message) => {

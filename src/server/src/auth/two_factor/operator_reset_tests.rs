@@ -186,3 +186,119 @@ async fn a_reset_reaches_only_the_account_it_names() {
         .expect("read");
     assert!(still_on, "a bystander's factor is untouched");
 }
+
+/// FR-024 as a property an operator can rely on: doing it twice is doing it
+/// once.
+///
+/// An operator who is not sure whether the reset went through will press it
+/// again — that is not a mistake, it is the only information they have — and a
+/// route that errored, or that half-cleared on the second pass, would turn a
+/// stuck person into a stuck person plus an incident. The account with no
+/// factor is already in the state a reset produces, so a reset of it is a
+/// no-op that still succeeds.
+#[tokio::test]
+async fn resetting_an_account_that_holds_no_factor_succeeds_and_changes_nothing() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().expect("conn");
+    let subject = insert_test_user(&mut conn);
+    let operator = insert_test_user(&mut conn);
+
+    let before: (bool, Option<String>) = users::table
+        .filter(users::id.eq(subject))
+        .select((
+            users::two_factor_enabled,
+            users::two_factor_secret_encrypted,
+        ))
+        .first(&mut conn)
+        .expect("read");
+
+    for _ in 0..2 {
+        clear_second_factor_sync(
+            &mut conn,
+            subject,
+            Some(operator),
+            event_type::RESET_BY_OPERATOR,
+        )
+        .expect("a reset of an unenrolled account must succeed");
+    }
+
+    let after: (bool, Option<String>) = users::table
+        .filter(users::id.eq(subject))
+        .select((
+            users::two_factor_enabled,
+            users::two_factor_secret_encrypted,
+        ))
+        .first(&mut conn)
+        .expect("read");
+
+    assert_eq!(
+        before, after,
+        "resetting an account with nothing to reset must leave it exactly as it was"
+    );
+}
+
+/// FR-025's other half, and the one that would be a privilege escalation if it
+/// were wrong: a reset **issues nothing**.
+///
+/// An operator who could hand out a working second factor — a secret, a set of
+/// recovery codes, a session — could sign in as the account holder, which is
+/// precisely the authority this feature exists to keep out of an operator's
+/// hands. What a reset leaves behind is an account with no factor, which the
+/// person then enrols from their own screen with a secret only they see.
+#[tokio::test]
+async fn a_reset_issues_no_secret_no_codes_and_no_session() {
+    let state = test_app_state();
+    let mut conn = state.db_pool.get().expect("conn");
+    let subject = insert_test_user(&mut conn);
+    let operator = insert_test_user(&mut conn);
+    drop(conn);
+    enrolled(&state, subject);
+
+    let mut conn = state.db_pool.get().expect("conn");
+    let sessions_before: i64 = crate::schema::user_sessions::table
+        .filter(crate::schema::user_sessions::user_id.eq(subject))
+        .count()
+        .get_result(&mut conn)
+        .expect("count");
+
+    clear_second_factor_sync(
+        &mut conn,
+        subject,
+        Some(operator),
+        event_type::RESET_BY_OPERATOR,
+    )
+    .expect("reset");
+
+    let (enabled, secret, pending): (bool, Option<String>, Option<String>) = users::table
+        .filter(users::id.eq(subject))
+        .select((
+            users::two_factor_enabled,
+            users::two_factor_secret_encrypted,
+            users::two_factor_pending_secret_encrypted,
+        ))
+        .first(&mut conn)
+        .expect("read");
+    assert!(!enabled, "the account must hold no factor after a reset");
+    assert_eq!(secret, None, "a reset must not leave a secret behind");
+    assert_eq!(
+        pending, None,
+        "a reset must not start an enrolment on somebody else's behalf",
+    );
+
+    let codes: i64 = user_recovery_codes::table
+        .filter(user_recovery_codes::user_id.eq(subject))
+        .count()
+        .get_result(&mut conn)
+        .expect("count");
+    assert_eq!(codes, 0, "a reset must issue no recovery codes");
+
+    let sessions_after: i64 = crate::schema::user_sessions::table
+        .filter(crate::schema::user_sessions::user_id.eq(subject))
+        .count()
+        .get_result(&mut conn)
+        .expect("count");
+    assert_eq!(
+        sessions_after, sessions_before,
+        "a reset must sign nobody in",
+    );
+}

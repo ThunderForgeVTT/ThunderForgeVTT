@@ -277,7 +277,7 @@ pub(crate) async fn two_factor_disable(
             return refuse(
                 StatusCode::UNAUTHORIZED,
                 "two_factor_invalid",
-                "Invalid 2FA code",
+                crate::auth::two_factor::verification::CREDENTIAL_REFUSED,
             );
         }
         Err(message) => {

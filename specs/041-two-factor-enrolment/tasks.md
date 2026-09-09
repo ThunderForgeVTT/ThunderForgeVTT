@@ -93,9 +93,9 @@ be challenged.
 
 ### Tests for User Story 1
 
-- [ ] T015 [P] [US1] Add server tests in `src/server/src/auth/two_factor/enrolment.rs` asserting `setup/start` writes **no** column on `users` and that an abandoned enrolment leaves a confirmed factor in force (FR-004, FR-013)
-- [ ] T016 [P] [US1] Add a server test in `src/server/src/auth/two_factor/enrolment.rs` asserting a wrong confirmation code leaves the pending row intact and the same ticket retryable (FR-001c)
-- [ ] T017 [P] [US1] Add a server test in `src/server/src/auth/two_factor/enrolment.rs` asserting `setup/start` and `setup/confirm` refuse a request carrying neither a session nor a ticket, and one carrying both (contracts/enrolment.md)
+- [X] T015 [P] [US1] Add server tests in `src/server/src/auth/two_factor/enrolment_tests.rs` asserting `setup/start` writes **no** column on `users` and that an abandoned enrolment leaves a confirmed factor in force (FR-004, FR-013)
+- [X] T016 [P] [US1] Add a server test in `src/server/src/auth/two_factor/enrolment.rs` asserting a wrong confirmation code leaves the pending row intact and the same ticket retryable (FR-001c)
+- [X] T017 [P] [US1] Add a server test in `src/server/src/auth/two_factor/enrolment.rs` asserting `setup/start` and `setup/confirm` refuse a request carrying neither a session nor a ticket, and one carrying both (contracts/enrolment.md)
 
 ### Implementation for User Story 1
 
@@ -126,7 +126,7 @@ an account.
 ### Tests for User Story 2
 
 - [X] T026 [P] [US2] Add server tests in `src/server/src/auth/two_factor/recovery.rs` for single use via the conditional `UPDATE` (zero rows means refuse), for whole-set replacement on regeneration, and for the low-water count (FR-008, FR-010, FR-011)
-- [ ] T027 [P] [US2] Add a server test asserting **no route anywhere returns an issued code** after the body that created it — assert over the registered route table, not by inspection (FR-009)
+- [X] T027 [P] [US2] Add a server test asserting **no route anywhere returns an issued code** after the body that created it — assert over the registered route table, not by inspection (FR-009) — landed as `two_factor/no_code_readback_tests.rs`. The route table names paths but **not methods**, so the companion "nothing here is a GET" test was vacuous and was deleted rather than repaired; a new reader is a new route and fails the enumeration by existing
 - [~] T028 [P] [US2] Add a server test asserting a recovery code does not advance `users.two_factor_last_used_step` (contracts/recovery-codes.md rule 7)
 
 ### Implementation for User Story 2
@@ -157,7 +157,7 @@ removal path FR-014 asks for, plus the step guard.
 
 ### Tests for User Story 4
 
-- [ ] T036 [P] [US4] Add a server test in `src/server/src/auth/two_factor/enrolment.rs` that is the assertion `apps/web/e2e/two-factor.spec.ts`'s `test.fail()` case makes, at the unit level: a started-and-abandoned enrolment leaves the confirmed factor in force (FR-013)
+- [X] T036 [P] [US4] Add a server test in `src/server/src/auth/two_factor/enrolment.rs` that is the assertion `apps/web/e2e/two-factor.spec.ts`'s `test.fail()` case makes, at the unit level: a started-and-abandoned enrolment leaves the confirmed factor in force (FR-013)
 - [X] T037 [P] [US4] Add server tests in `src/server/src/auth/two_factor/verification.rs` for the step guard — an accepted step is refused a second time, a lower step is refused, and two concurrent requests with the same step yield exactly one success — using `matched_step_at`'s explicit clock rather than sleeping (FR-016) — **done 2026-09-09** as `two_factor/replay_tests.rs` — an accepted step is refused a second time inside its own window, and the *previous* step is refused after a later one
 - [X] T038 [P] [US4] Add server tests in `src/server/src/auth/two_factor/enrolment.rs` for `disable`: refused on the password alone, accepted with password plus code, accepted with password plus recovery code, refused when `required(user)` (FR-012, FR-027)
 
@@ -166,7 +166,7 @@ removal path FR-014 asks for, plus the step guard.
 - [X] T039 [US4] Implement the step high-water guard in `src/server/src/auth/two_factor/verification.rs` as the conditional `UPDATE` of data-model.md § 6, applied on every path that accepts a TOTP code, with zero rows updated as the refusal — **done 2026-09-09.** The high-water guard is a conditional UPDATE (`claim_totp_step_sync`), strictly-greater rather than not-equal, applied under every verification through `throttle::guarded`
 - [X] T040 [US4] Implement `POST /authentication/2fa/disable` in `src/server/src/auth/two_factor/enrolment.rs` per `contracts/removal-and-reset.md`, clearing the factor, the codes, the pending row and the step mark in one transaction
 - [X] T041 [US4] Implement the five-attempt challenge budget on `login_two_factor_challenges.failed_attempts` in `src/server/src/auth/two_factor/verification.rs`, and confirm the existing e2e assertion that a wrong code does not burn the challenge still holds (FR-017) — **landed as a per-account bound** (`two_factor/throttle.rs`, `users.two_factor_failed_attempts` + `two_factor_locked_until`) rather than per-challenge. A challenge budget bounds one challenge; an attacker asks for a new one. FR-017 is about the account, so the counter is on the account
-- [ ] T042 [US4] Collapse every refusal on the verification path to one message and one status in `src/server/src/auth/two_factor/verification.rs`, per `contracts/verification.md` § Refusal shapes (FR-018)
+- [X] T042 [US4] Collapse every refusal on the verification path to one message and one status in `src/server/src/auth/two_factor/verification.rs`, per `contracts/verification.md` § Refusal shapes (FR-018)
 - [X] T043 [US4] Add the removal control, behind password plus possession, to `apps/web/src/pages/user/SecuritySettingsPage.tsx`
 - [ ] T044 [US4] Rewrite the `test.fail()` block in `apps/web/e2e/two-factor.spec.ts`: **delete the `test.fail()` line**, keep the assertion unchanged, and add the deliberate-removal cases beside it — which is what its own comment says to do when the server is fixed
 - [ ] T045 [US4] Add an e2e case to `apps/web/e2e/two-factor.spec.ts` for the same-code-twice refusal inside the window (SC-005)
@@ -252,9 +252,9 @@ other is asked to enrol.
 **Independent Test**: an operator resets a locked-out account and the reset
 appears in the record.
 
-- [ ] T068 [P] [US7] Add server tests in `src/server/src/auth/two_factor/policy.rs` for the reset route: administrator only, idempotent on an account with no factor, and it signs nobody in and issues nothing
-- [ ] T069 [US7] Implement `POST /authentication/admin/users/{user_id}/2fa/reset` in `src/server/src/auth/two_factor/policy.rs` per `contracts/removal-and-reset.md`, behind the existing `verify_admin_request` (`src/server/src/auth/admin_setup.rs:394`)
-- [ ] T070 [US7] Implement `src/server/src/auth/two_factor/events.rs` — the `two_factor_events` writer with separate `subject_user_id` and `actor_user_id`, written in the transaction it describes, and carry spec 035's rule forward: the record describes the act, never the person
+- [X] T068 [P] [US7] Add server tests in `src/server/src/auth/two_factor/policy.rs` for the reset route: administrator only, idempotent on an account with no factor, and it signs nobody in and issues nothing
+- [X] T069 [US7] Implement `POST /authentication/admin/users/{user_id}/2fa/reset` — **landed as `two_factor/operator_reset.rs`**, not `policy.rs`, and behind `require_admin_user` as a layer as well as per `contracts/removal-and-reset.md`, behind the existing `verify_admin_request` (`src/server/src/auth/admin_setup.rs:394`)
+- [X] T070 [US7] Implement `src/server/src/auth/two_factor/events.rs` (landed) — the `two_factor_events` writer with separate `subject_user_id` and `actor_user_id`, written in the transaction it describes, and carry spec 035's rule forward: the record describes the act, never the person
 - [ ] T071 [US7] Add the best-effort notification seam in `src/server/src/auth/two_factor/events.rs` — called after commit, unable to fail the request, and a no-op until spec 040 provides mail (FR-001b, FR-015)
 - [ ] T072 [US7] Show the account's own second-factor events on `apps/web/src/pages/user/SecuritySettingsPage.tsx`, which is how a person is told on an instance that cannot send mail
 - [ ] T073 [US7] Name who can help on the challenge screen in `apps/web/src/pages/auth/LoginView.tsx`, from the realm manifest's `support_email`, and say so plainly where no administrator can act (FR-026)

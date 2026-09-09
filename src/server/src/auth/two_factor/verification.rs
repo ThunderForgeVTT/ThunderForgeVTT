@@ -6,6 +6,47 @@
 
 use super::*;
 
+/// FR-018. **One** message for every refusal that is about a credential.
+///
+/// A wrong authenticator code, a correct one whose step is already spent, a
+/// wrong recovery code, one already spent, one belonging to a different
+/// account, an account holding no recovery codes, an account holding no second
+/// factor at all — all of them, this. The reason is that each of the
+/// alternatives is a fact about the account, offered to somebody who has not
+/// yet proved they hold it: "no recovery codes on this account" tells an
+/// attacker which credential to spend their attempts on, and "that code was
+/// right but already used" confirms an intercepted code was genuine.
+///
+/// It is the rule spec 027's FR-011 set for dead share links, and the same
+/// rule `"Invalid credentials"` already follows for an unknown username and a
+/// wrong password.
+///
+/// Shared with every other route that verifies the same credentials — removal,
+/// regeneration, the login path, enrolment confirmation — because one route
+/// wording a refusal differently discloses exactly what the other three are
+/// being careful not to. That was the same fig leaf FR-017's throttle wore
+/// when it guarded one route of four.
+pub(crate) const CREDENTIAL_REFUSED: &str = "That code was not accepted.";
+
+/// The one refusal that is *not* about a credential, and is deliberately
+/// distinguishable.
+///
+/// A challenge that is unknown, expired or already consumed discloses nothing
+/// about the account — it is a fact about a request — and the person has to do
+/// something different about it, which no amount of retyping a code will
+/// achieve. Telling them "that code was not accepted" would send them round a
+/// loop that cannot end. Unknown, expired and consumed share one message
+/// between them, because *which* of the three it was is not their business and
+/// not their problem.
+const CHALLENGE_REFUSED: &str = "That sign-in has expired. Sign in again.";
+
+/// What a refusal says when the server, rather than the caller, is at fault.
+///
+/// Fixed rather than the underlying error: the underlying errors differ by
+/// path ("Failed to get DB connection", "Failed to record the code as spent")
+/// and a caller who can tell two failures apart can use the difference.
+const VERIFICATION_FAILED: &str = "That could not be checked just now. Try again.";
+
 pub(crate) async fn create_login_two_factor_challenge(
     state: &AppState,
     user_id: uuid::Uuid,
@@ -60,7 +101,7 @@ pub(crate) async fn two_factor_verify(
         return verify_error(
             StatusCode::BAD_REQUEST,
             "two_factor_challenge_invalid",
-            "2FA challenge is invalid",
+            CHALLENGE_REFUSED,
         );
     };
 
@@ -68,7 +109,7 @@ pub(crate) async fn two_factor_verify(
         return verify_error(
             StatusCode::BAD_REQUEST,
             "two_factor_challenge_invalid",
-            "2FA challenge is expired or already used",
+            CHALLENGE_REFUSED,
         );
     }
 
@@ -88,9 +129,9 @@ pub(crate) async fn two_factor_verify(
     ) {
         (Some(_), Some(_)) => {
             return verify_error(
-                StatusCode::BAD_REQUEST,
+                StatusCode::UNAUTHORIZED,
                 "two_factor_invalid",
-                "Invalid 2FA code",
+                CREDENTIAL_REFUSED,
             );
         }
         (None, None) => Ok(throttle::SecondFactor::Refused),
@@ -162,12 +203,12 @@ pub(crate) async fn two_factor_verify(
         Ok(false) => verify_error(
             StatusCode::UNAUTHORIZED,
             "two_factor_invalid",
-            "Invalid 2FA code",
+            CREDENTIAL_REFUSED,
         ),
-        Err(msg) => verify_error(
+        Err(_) => verify_error(
             StatusCode::INTERNAL_SERVER_ERROR,
             "two_factor_error",
-            msg.as_str(),
+            VERIFICATION_FAILED,
         ),
     }
 }
