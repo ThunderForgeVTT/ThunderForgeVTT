@@ -139,6 +139,22 @@ pub(crate) fn generate_recovery_code_rows(
 /// The delete is FR-010 in one statement: "every earlier code stops working"
 /// is true because there is nothing left to match, not because a later query
 /// remembered to filter on a flag. Callers run this inside a transaction.
+/// Remove every recovery code an account holds.
+///
+/// Separate from [`replace_recovery_codes_sync`] because removal is not a
+/// replacement with an empty set: the caller that turns a factor off wants the
+/// codes gone, and expressing that as "replace with nothing" would put an
+/// insert of zero rows in the path and invite somebody to optimise it away
+/// along with the delete.
+pub(crate) fn delete_recovery_codes_sync(
+    conn: &mut PgConnection,
+    user_id: uuid::Uuid,
+) -> QueryResult<()> {
+    diesel::delete(user_recovery_codes::table.filter(user_recovery_codes::user_id.eq(user_id)))
+        .execute(conn)?;
+    Ok(())
+}
+
 pub(crate) fn replace_recovery_codes_sync(
     conn: &mut PgConnection,
     user_id: uuid::Uuid,
@@ -322,6 +338,42 @@ pub(crate) async fn regenerate_recovery_codes(
 enum TwoFactorProof {
     Totp(String),
     Recovery(String),
+}
+
+/// Prove possession of the account's second factor, by either accepted means.
+///
+/// Extracted so that turning a factor **off** and issuing fresh recovery codes
+/// ask the same question in the same way. Two implementations of "prove you
+/// still hold it" is one more than this product should have, and they would
+/// drift in the direction of whichever was edited last.
+///
+/// `Err` carries a message the caller maps to a status: the "exactly one"
+/// refusal is the caller's bad request, anything else is the server's fault.
+///
+/// FR-018's rule is enforced here rather than by each caller: a request
+/// carrying **both** a code and a recovery code is asking for two chances
+/// counted as one attempt, and is refused before either is evaluated.
+pub(crate) async fn verify_second_factor_proof(
+    state: &AppState,
+    user_id: uuid::Uuid,
+    code: Option<&str>,
+    recovery_code: Option<&str>,
+) -> Result<bool, String> {
+    let proof = match (
+        code.filter(|v| !v.trim().is_empty()),
+        recovery_code.filter(|v| !v.trim().is_empty()),
+    ) {
+        (Some(_), Some(_)) | (None, None) => {
+            return Err("Provide exactly one of a 2FA code or a recovery code".to_string());
+        }
+        (Some(code), None) => TwoFactorProof::Totp(code.to_string()),
+        (None, Some(code)) => TwoFactorProof::Recovery(code.to_string()),
+    };
+
+    match proof {
+        TwoFactorProof::Totp(ref code) => verify_two_factor_for_user(state, user_id, code).await,
+        TwoFactorProof::Recovery(ref code) => consume_recovery_code(state, user_id, code).await,
+    }
 }
 
 fn recovery_codes_error(

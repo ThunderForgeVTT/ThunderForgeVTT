@@ -484,10 +484,7 @@ pub(crate) async fn issue_session_cookie(
 /// Both properties are asserted in this module's tests rather than trusted:
 /// `hash_password` losing its salt would be a silent, one-character change.
 pub(crate) fn hash_password(value: &str) -> Result<String, String> {
-    Argon2::default()
-        .hash_password(value.as_bytes())
-        .map(|hash| hash.to_string())
-        .map_err(|e| format!("Failed to hash value: {e}"))
+    thunderforge_axum_auth_core::hashing::hash(value)
 }
 
 pub(crate) async fn authenticate_password_login(
@@ -533,11 +530,11 @@ pub(crate) async fn authenticate_password_login(
         return auth_session_error(StatusCode::UNAUTHORIZED, "failure", "Invalid credentials");
     };
 
-    let parsed_hash = PasswordHash::new(&password_hash).expect("Invalid hash in db");
-    if Argon2::default()
-        .verify_password(password.as_bytes(), &parsed_hash)
-        .is_err()
-    {
+    // Was `PasswordHash::new(..).expect("Invalid hash in db")`, which panicked
+    // the request handler on a stored value that would not parse — reachable
+    // from a truncated column or a row restored from a partial backup. A hash
+    // that is not a hash does not verify; it does not take the server down.
+    if !thunderforge_axum_auth_core::hashing::verify(password, &password_hash) {
         return auth_session_error(StatusCode::UNAUTHORIZED, "failure", "Invalid credentials");
     }
 

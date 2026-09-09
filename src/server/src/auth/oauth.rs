@@ -677,11 +677,7 @@ pub(crate) async fn oauth_link_confirm(
                 return Ok(LinkConfirmOutcome::ChallengeInvalid);
             };
 
-            let parsed_hash = PasswordHash::new(&password_hash).expect("Invalid hash in db");
-            if Argon2::default()
-                .verify_password(request.password.as_bytes(), &parsed_hash)
-                .is_err()
-            {
+            if !thunderforge_axum_auth_core::hashing::verify(&request.password, &password_hash) {
                 return Ok(LinkConfirmOutcome::PasswordMismatch);
             }
 

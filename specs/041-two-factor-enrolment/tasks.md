@@ -52,7 +52,14 @@ the four filenames below — the decisions are what matter, not the digits.
 - [ ] T003 [P] Write ADR-083 (recovery codes are credentials, not links) in `docs/adrs/20260907-083-recovery_codes_are_credentials.md`, citing the admin bootstrap code as the precedent followed and the raw-stored share codes as the one rejected
 - [ ] T004 [P] Write ADR-097 (an administrator's second factor is a property of the role) in `docs/adrs/20260907-084-administrator_second_factor_is_a_role_property.md`, recording the computed-not-stored rule, the first-run gate, and the boundary with spec 040's FR-002a
 - [ ] T005 Split `src/server/src/auth/two_factor.rs` (491 lines, against a 1000-line gate) into the module directory `src/server/src/auth/two_factor/` — `mod.rs`, `enrolment.rs`, `verification.rs`, `policy.rs` — as pure movement with no behaviour change, so every task below names a small file. Confirm `./scripts/check-file-length.sh` and `cargo test --workspace` are green before anything else lands
-- [ ] T006 Promote `hash_password` out of `src/server/src/auth/sessions.rs:409` into a shared helper with a matching `verify_password`, and move the five inline `Argon2::default().verify_password(...)` sites (`sessions.rs:460`, `two_factor.rs:37`, `two_factor.rs:143`, `oauth.rs:666`, `admin_bootstrap.rs:145`) onto it — a sixth inline copy is how parameters drift
+  - **Landed as `crates/thunderforge-axum-auth-core/src/hashing.rs`**, not a
+    module inside `src/server` — hashing needs no pool, no request and no
+    cookie jar, which is that crate's stated admission test, and `password.rs`
+    beside it already holds the *policy* half. Four of the five inline
+    verifies now call it. The fifth is `recovery.rs`'s, which is deliberately
+    left inline: it verifies every unspent code with no early exit for a
+    timing reason the shared helper does not express.
+- [X] T006 Promote `hash_password` out of `src/server/src/auth/sessions.rs:409` into a shared helper with a matching `verify_password`, and move the five inline `Argon2::default().verify_password(...)` sites (`sessions.rs:460`, `two_factor.rs:37`, `two_factor.rs:143`, `oauth.rs:666`, `admin_bootstrap.rs:145`) onto it — a sixth inline copy is how parameters drift
 
 ---
 
@@ -152,15 +159,15 @@ removal path FR-014 asks for, plus the step guard.
 
 - [ ] T036 [P] [US4] Add a server test in `src/server/src/auth/two_factor/enrolment.rs` that is the assertion `apps/web/e2e/two-factor.spec.ts`'s `test.fail()` case makes, at the unit level: a started-and-abandoned enrolment leaves the confirmed factor in force (FR-013)
 - [ ] T037 [P] [US4] Add server tests in `src/server/src/auth/two_factor/verification.rs` for the step guard — an accepted step is refused a second time, a lower step is refused, and two concurrent requests with the same step yield exactly one success — using `matched_step_at`'s explicit clock rather than sleeping (FR-016)
-- [ ] T038 [P] [US4] Add server tests in `src/server/src/auth/two_factor/enrolment.rs` for `disable`: refused on the password alone, accepted with password plus code, accepted with password plus recovery code, refused when `required(user)` (FR-012, FR-027)
+- [X] T038 [P] [US4] Add server tests in `src/server/src/auth/two_factor/enrolment.rs` for `disable`: refused on the password alone, accepted with password plus code, accepted with password plus recovery code, refused when `required(user)` (FR-012, FR-027)
 
 ### Implementation for User Story 4
 
 - [ ] T039 [US4] Implement the step high-water guard in `src/server/src/auth/two_factor/verification.rs` as the conditional `UPDATE` of data-model.md § 6, applied on every path that accepts a TOTP code, with zero rows updated as the refusal
-- [ ] T040 [US4] Implement `POST /authentication/2fa/disable` in `src/server/src/auth/two_factor/enrolment.rs` per `contracts/removal-and-reset.md`, clearing the factor, the codes, the pending row and the step mark in one transaction
+- [X] T040 [US4] Implement `POST /authentication/2fa/disable` in `src/server/src/auth/two_factor/enrolment.rs` per `contracts/removal-and-reset.md`, clearing the factor, the codes, the pending row and the step mark in one transaction
 - [ ] T041 [US4] Implement the five-attempt challenge budget on `login_two_factor_challenges.failed_attempts` in `src/server/src/auth/two_factor/verification.rs`, and confirm the existing e2e assertion that a wrong code does not burn the challenge still holds (FR-017)
 - [ ] T042 [US4] Collapse every refusal on the verification path to one message and one status in `src/server/src/auth/two_factor/verification.rs`, per `contracts/verification.md` § Refusal shapes (FR-018)
-- [ ] T043 [US4] Add the removal control, behind password plus possession, to `apps/web/src/pages/user/SecuritySettingsPage.tsx`
+- [X] T043 [US4] Add the removal control, behind password plus possession, to `apps/web/src/pages/user/SecuritySettingsPage.tsx`
 - [ ] T044 [US4] Rewrite the `test.fail()` block in `apps/web/e2e/two-factor.spec.ts`: **delete the `test.fail()` line**, keep the assertion unchanged, and add the deliberate-removal cases beside it — which is what its own comment says to do when the server is fixed
 - [ ] T045 [US4] Add an e2e case to `apps/web/e2e/two-factor.spec.ts` for the same-code-twice refusal inside the window (SC-005)
 

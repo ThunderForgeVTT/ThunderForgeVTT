@@ -1,6 +1,7 @@
 import { SEO } from "@/components/seo/SEO";
 import { Container } from "@/components/ui/container/Container";
 import { TwoFactorEnrolmentPanel } from "@/pages/user/components/TwoFactorEnrolmentPanel";
+import { TwoFactorRemovalPanel } from "@/pages/user/components/TwoFactorRemovalPanel";
 import type { SeoConfig } from "@/types/seo";
 
 export const securitySettingsPageSeo: SeoConfig = {
@@ -38,6 +39,11 @@ export function SecuritySettingsPage() {
             </p>
           </header>
           <TwoFactorEnrolmentPanel />
+          {/* Spec 041 US4. Below enrolment, because the page's subject is
+              having a second factor; removing one is the other end of the
+              same decision and belongs on the same screen, not hidden
+              somewhere a person would have to hunt for it. */}
+          <TwoFactorRemovalPanel />
         </div>
       </Container>
     </>

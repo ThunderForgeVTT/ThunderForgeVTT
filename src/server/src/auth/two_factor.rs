@@ -9,6 +9,11 @@ use super::*;
 /// the remaining stories land.
 #[path = "two_factor/recovery.rs"]
 pub(crate) mod recovery;
+
+/// Spec 041 US4 (FR-012, FR-014): the deliberate way off, which did not exist
+/// — `setup/start`'s side effect had been doing the job instead.
+#[path = "two_factor/disable.rs"]
+pub(crate) mod disable;
 pub(crate) use recovery::*;
 
 /// Spec 041 US4 (FR-019 … FR-022): who must hold a factor, what a sign-in does

@@ -15,7 +15,6 @@ use crate::users::{PublicUser, load_public_user, record_auth_audit_event};
 // Moved to `crate::crypto` so spec 034's repository credentials can use the
 // same implementation rather than a second one. See that module's header.
 use crate::crypto::{decrypt_secret, encrypt_secret, encryption_key_from_config_secret};
-use argon2::password_hash::PasswordHasher;
 use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use axum::extract::{Path, Query, State};
 use axum::http::HeaderMap;
@@ -158,6 +157,12 @@ pub fn router() -> Router<AppState> {
         .route(
             "/authentication/2fa/recovery-codes",
             post(regenerate_recovery_codes),
+        )
+        // Spec 041 US4 (FR-012, FR-014): the deliberate way off. Password and
+        // possession, which is exactly what adding one cost.
+        .route(
+            "/authentication/2fa/disable",
+            post(crate::auth::two_factor::disable::two_factor_disable),
         )
         .route(
             "/authentication/admin/2fa/requirement",

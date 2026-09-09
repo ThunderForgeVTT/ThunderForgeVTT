@@ -142,6 +142,22 @@ pub(crate) struct RecoveryCodesRegenerateRequest {
     pub(crate) recovery_code: Option<String>,
 }
 
+/// Spec 041 US4 (FR-012, FR-014): `POST /authentication/2fa/disable`.
+///
+/// Password **and** possession, which is exactly what adding a factor cost.
+/// The session alone is not enough: it proves the password was held at
+/// sign-in, which may have been days ago on a machine now in somebody else's
+/// hands, and removing the second factor is the one action that makes every
+/// future sign-in cheaper.
+#[derive(Debug, Deserialize)]
+pub(crate) struct TwoFactorDisableRequest {
+    pub(crate) password: String,
+    #[serde(default)]
+    pub(crate) code: Option<String>,
+    #[serde(default)]
+    pub(crate) recovery_code: Option<String>,
+}
+
 /// The only shape that ever carries recovery-code plaintext, and it carries it
 /// exactly once — from the response that issues a set. Nothing reads these
 /// values back out of the server afterwards, because nothing can (FR-009).

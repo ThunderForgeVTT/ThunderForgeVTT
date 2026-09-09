@@ -286,3 +286,48 @@ export async function readTwoFactorStatus(): Promise<TwoFactorStatus | null> {
     enrolmentPending: payload.enrolment_pending ?? false,
   };
 }
+
+/**
+ * Spec 041 US4 (FR-012, FR-014): turn the second factor off, deliberately.
+ *
+ * Password **and** possession, which is exactly what adding one cost. The
+ * session alone is not enough — it proves the password was held at sign-in,
+ * possibly days ago on a machine that has since changed hands, and this is the
+ * one action that makes every future sign-in cheaper.
+ *
+ * Exactly one of `code` or `recoveryCode`. Sending both would be asking for
+ * two chances counted as one attempt, and the server refuses it.
+ *
+ * Returns the server's message on success, or throws with the refusal — which
+ * is one of the few refusals in this product that is allowed to be specific,
+ * because by the time it is reached the caller has already proved both
+ * factors and there is no attacker left to keep in the dark.
+ */
+export async function disableTwoFactor(input: {
+  password: string;
+  code?: string;
+  recoveryCode?: string;
+}): Promise<string> {
+  const response = await fetch(`${API_BASE}/authentication/2fa/disable`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: withCsrf({ "Content-Type": "application/json" }),
+    body: JSON.stringify({
+      password: input.password,
+      code: input.code?.trim() || undefined,
+      recovery_code: input.recoveryCode?.trim() || undefined,
+    }),
+  });
+
+  const body = (await response.json().catch(() => null)) as {
+    status?: string;
+    message?: string;
+  } | null;
+
+  if (!response.ok || body?.status !== "success") {
+    throw new Error(
+      body?.message ?? "The second factor could not be turned off.",
+    );
+  }
+  return body.message ?? "Two-factor authentication is off for this account.";
+}

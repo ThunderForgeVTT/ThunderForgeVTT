@@ -11,6 +11,7 @@
 
 pub mod constant_time;
 pub mod csrf;
+pub mod hashing;
 pub mod password;
 pub mod random;
 pub mod session;

@@ -245,13 +245,7 @@ async fn authorise_enrolment_by_password(
         return Err(invalid());
     };
 
-    let Ok(parsed_hash) = PasswordHash::new(&password_hash) else {
-        return Err(invalid());
-    };
-    if Argon2::default()
-        .verify_password(password.as_bytes(), &parsed_hash)
-        .is_err()
-    {
+    if !thunderforge_axum_auth_core::hashing::verify(password, &password_hash) {
         return Err(invalid());
     }
 
