@@ -200,8 +200,6 @@ function fixedFields(app: GithubApplication): string[] {
 
 let admin: Page;
 let writable: Record<string, string[]> = {};
-let loreSyncBefore: { configured: boolean } | undefined;
-
 test.describe.configure({ mode: "serial" });
 
 test.beforeAll(async ({ browser }) => {
@@ -210,7 +208,6 @@ test.beforeAll(async ({ browser }) => {
   writable = Object.fromEntries(
     applications.map((app) => [app.scope, fixedFields(app)]),
   );
-  loreSyncBefore = await repositoryIntegration(admin);
   // Anything a previous run left behind. These tests assert about absence as
   // much as presence, so starting from a known-empty store matters.
   for (const scope of ["global", "feedback"]) {
@@ -261,6 +258,33 @@ test.describe("Spec 040 US5: GitHub credentials at two scales", () => {
       `this stack fixes ${writable.global.join(", ")} in the environment`,
     );
 
+    // **The premise, made true rather than assumed.**
+    //
+    // This test is about a deployment that *has* a sync application. The
+    // harness deliberately clears `SYNC_GITHUB_APP_*` to `""` so credential
+    // tests do not depend on the developer's own `.env` — which means sync
+    // resolves to nothing here, and adding a global application legitimately
+    // changes its answer to "global". That is the fallback working exactly as
+    // designed, and asserting "unchanged" against it asserts the opposite of
+    // the feature. It failed in the full run of 2026-09-09 for precisely that
+    // reason, having never had its premise checked.
+    if (sync.resolvesTo === null) {
+      test.skip(
+        writable.sync.length > 0,
+        `this stack fixes ${writable.sync.join(", ")} in the environment`,
+      );
+      await writeWholeApplication(admin, "sync", "e2e-sync-app");
+    }
+
+    // Re-read *after* the premise holds. `loreSyncBefore` was captured in
+    // `beforeAll`, which is before this test may have configured sync.
+    const before = await readApplication(admin, "sync");
+    const loreBefore = await repositoryIntegration(admin);
+    expect(
+      before.resolvesTo,
+      "the premise: a deployment with a sync application of its own",
+    ).toBe("sync");
+
     // Configure a global application, which is the change that could break
     // them, and confirm lore sync's own answer is untouched.
     await writeWholeApplication(admin, "global", "e2e-global-app");
@@ -269,9 +293,16 @@ test.describe("Spec 040 US5: GitHub credentials at two scales", () => {
     expect(
       after.resolvesTo,
       "adding a global application changed what lore sync resolves to",
-    ).toBe(sync.resolvesTo);
-    expect(after.complete).toBe(sync.complete);
-    expect(await repositoryIntegration(admin)).toEqual(loreSyncBefore);
+    ).toBe(before.resolvesTo);
+    expect(after.complete).toBe(before.complete);
+    expect(await repositoryIntegration(admin)).toEqual(loreBefore);
+
+    // Put sync back if this test configured it: every other test in this file
+    // reads `global` and `feedback`, and a sync application left behind would
+    // change what they fall back to.
+    if (sync.resolvesTo === null) {
+      await clearWholeApplication(admin, "sync");
+    }
   });
 
   /**

@@ -217,9 +217,7 @@ test.describe("Spec 036 US4: seeing and ending sessions", () => {
       ).toBeTruthy();
       // A fixed vocabulary, assembled server-side: family, optionally
       // " on " platform. Nothing from the header itself.
-      expect(session.clientDescription).toMatch(
-        /^[A-Za-z]+( on [A-Za-z]+)?$/,
-      );
+      expect(session.clientDescription).toMatch(/^[A-Za-z]+( on [A-Za-z]+)?$/);
     }
 
     // Never an address. Spec 035 set the rule that a record describes the act
@@ -482,6 +480,13 @@ test.describe("Spec 036 FR-008: changing the password ends the other sessions", 
 
     await freshPage.locator("#login-password").fill(newPassword);
     await freshPage.getByRole("button", { name: /sign in/i }).click();
+    // Waited for, not assumed. Clicking returns before the session cookie is
+    // set, and asking GraphQL in that window answers 401 with an empty body —
+    // which the helper reports as "Non-JSON response", so the failure reads
+    // like a broken transport rather than the race it is.
+    await freshPage.waitForURL((url) => !url.pathname.startsWith("/login"), {
+      timeout: 20_000,
+    });
     const signedIn = await graphql<{ data: unknown | null }>(
       freshPage,
       MY_SESSIONS_UI,
