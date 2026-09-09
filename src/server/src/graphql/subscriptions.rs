@@ -203,15 +203,14 @@ impl SubscriptionRoot {
             // A stream whose session ends, ends. See `session_lifetime`: the
             // membership check above runs once, which is right for
             // membership and was wrong for revocation.
-            let stream = match (app_state, session_id) {
+            match (app_state, session_id) {
                 (Some(state), Some(session_id)) => {
                     Pin::new(Box::new(until_session_ends(state, session_id, stream)))
                         as Pin<Box<dyn Stream<Item = Result<GraphQLWorldEvent, Error>> + Send>>
                 }
                 _ => Pin::new(Box::new(stream))
                     as Pin<Box<dyn Stream<Item = Result<GraphQLWorldEvent, Error>> + Send>>,
-            };
-            stream
+            }
         } else {
             // Error case: single error item
             let stream = tokio_stream::iter(vec![Err(Error::new(error_msg))]).filter_map(Some);
