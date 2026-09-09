@@ -289,6 +289,22 @@ pub struct FeedbackQuery;
 
 #[Object]
 impl FeedbackQuery {
+    /// What this build is, for a report to name.
+    ///
+    /// Spec 037 T015. The client stamps its own version onto a submission and
+    /// the server stamps this one — two numbers, because a bug reported
+    /// against a client that has since been redeployed is a bug against a
+    /// build nobody can identify afterwards.
+    ///
+    /// Authenticated but not administrator-only: the feedback dialog is open
+    /// to every signed-in person and this is what it puts in the report.
+    /// `option_env!` rather than a runtime lookup, so a build with no git SHA
+    /// says "unknown build" rather than carrying a field that is sometimes
+    /// missing.
+    async fn server_version(&self, ctx: &Context<'_>) -> GraphQLResult<String> {
+        let _ = crate::graphql::authenticated_user(ctx)?;
+        Ok(super::server_version())
+    }
     /// Everything the calling account has submitted, newest first.
     ///
     /// **Only the caller's own** (FR-022). There is no argument here by which

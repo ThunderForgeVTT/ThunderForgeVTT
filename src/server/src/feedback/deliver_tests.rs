@@ -454,3 +454,100 @@ async fn an_issue_a_maintainer_closes_is_reflected_to_the_submitter() {
     assert_eq!(after.issue_state.as_deref(), Some("closed"));
     assert!(after.issue_state_checked_at.is_some());
 }
+
+// -- What each side may read ------------------------------------------------
+
+/// Spec 037 T065 / FR-016: `mySubmissions` answers with the caller's rows and
+/// nobody else's.
+///
+/// The filter is one `WHERE user_id = $1`, which is exactly the kind of clause
+/// that is correct until somebody refactors the query and is then wrong
+/// silently — every test that only ever inserts one account keeps passing.
+/// So this inserts two, and asserts from both directions: mine contains mine,
+/// and mine contains none of theirs.
+#[tokio::test]
+async fn my_submissions_are_mine_and_contain_nobody_elses() {
+    let _guard = TABLE.lock();
+    let state = test_app_state();
+    clear_for_test(&mut state.db_pool.get().expect("a connection"));
+
+    let mine = a_recorded_submission(&state, Kind::Issue).await;
+    let theirs = a_recorded_submission(&state, Kind::FeatureRequest).await;
+    assert_ne!(mine.user_id, theirs.user_id, "the helper reused an account");
+
+    let mut conn = state.db_pool.get().expect("a connection");
+    let for_me = crate::feedback::mine(&mut conn, mine.user_id).expect("read");
+    let for_them = crate::feedback::mine(&mut conn, theirs.user_id).expect("read");
+
+    assert!(for_me.iter().any(|r| r.id == mine.id));
+    assert!(
+        !for_me.iter().any(|r| r.id == theirs.id),
+        "one account's list carried another account's submission"
+    );
+    assert!(for_them.iter().any(|r| r.id == theirs.id));
+    assert!(!for_them.iter().any(|r| r.id == mine.id));
+}
+
+/// Spec 037 T070 / `contracts/attachments.md` § 5: the sweep takes what has
+/// expired and nothing else.
+///
+/// Three properties, and the third is the one worth the test: the **submission
+/// survives**. FR-018 makes this instance the record, so a report whose
+/// evidence expired is still a report. A sweep that deleted the row because it
+/// deleted the bytes would destroy exactly what the requirement protects, and
+/// would look like tidy housekeeping while doing it.
+#[tokio::test]
+async fn the_sweep_takes_expired_evidence_and_leaves_the_report() {
+    let _guard = TABLE.lock();
+    let state = test_app_state();
+    clear_for_test(&mut state.db_pool.get().expect("a connection"));
+
+    let fresh = a_recorded_submission(&state, Kind::Issue).await;
+    let stale = a_recorded_submission(&state, Kind::Issue).await;
+
+    // Age one of them past its window. The window is written onto the row at
+    // submission time, so moving the row is how a test reaches "expired"
+    // without waiting thirty days or reaching into the clock.
+    let mut conn = state.db_pool.get().expect("a connection");
+    diesel::update(
+        crate::schema::feedback_submissions::table
+            .filter(crate::schema::feedback_submissions::id.eq(stale.id)),
+    )
+    .set(
+        crate::schema::feedback_submissions::attachments_expire_at
+            .eq(chrono::Utc::now().naive_utc() - chrono::Duration::days(1)),
+    )
+    .execute(&mut conn)
+    .expect("aged");
+
+    let expired =
+        schedule::expired_now(&mut conn, chrono::Utc::now().naive_utc()).expect("selected");
+
+    assert!(
+        expired.contains(&stale.id),
+        "the expired submission was not selected"
+    );
+    assert!(
+        !expired.contains(&fresh.id),
+        "a submission still inside its retention window was selected for purging"
+    );
+
+    crate::feedback::record_purged(&mut conn, stale.id, chrono::Utc::now().naive_utc())
+        .expect("purged");
+
+    // The row is still here, and says its evidence is gone.
+    let after = crate::feedback::mine(&mut conn, stale.user_id).expect("read");
+    let row = after
+        .iter()
+        .find(|r| r.id == stale.id)
+        .expect("the sweep deleted the report along with its evidence");
+    assert!(row.attachments_purged_at.is_some());
+
+    // And it is not selected twice: a sweep that kept re-finding purged rows
+    // would delete nothing and log forever.
+    let again = schedule::expired_now(&mut conn, chrono::Utc::now().naive_utc()).expect("selected");
+    assert!(
+        !again.contains(&stale.id),
+        "an already-purged submission was selected for purging again"
+    );
+}

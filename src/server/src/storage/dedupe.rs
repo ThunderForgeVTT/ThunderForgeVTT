@@ -42,6 +42,22 @@
 //! storage back. Recorded as a deliberate choice rather than an oversight: a
 //! deployment that cannot accept it wants the world-scoped variant, which is
 //! this query plus a `world_id` predicate and most of the benefit gone.
+//!
+//! # Object deletion exists now, and is confined
+//!
+//! When this module was written nothing in the product deleted an object, and
+//! that was load-bearing: content-addressed storage means one object may be
+//! referenced by several rows, so a delete here could remove bytes another row
+//! still points at.
+//!
+//! `rustfs::delete_object` exists as of spec 037, and it **refuses any key not
+//! under `feedback/`** — inside the function, not at its call sites. Feedback
+//! attachments are the one thing in this product with a promised end date
+//! (ADR-086), and they are deliberately stored *outside* this module's path so
+//! that expiring them is an ordinary delete rather than a refcount problem.
+//!
+//! Nothing that goes through `object_holding` is deletable, and that has not
+//! changed.
 
 use diesel::prelude::*;
 

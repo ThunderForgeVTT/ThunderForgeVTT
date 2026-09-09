@@ -83,6 +83,10 @@ This directory contains architecture decisions for ThunderForgeVTT, captured usi
 | [20260907-073](./20260907-073-concurrent_sessions_and_the_play_field_claim.md) | Accepted | An Account May Be Signed In Many Times, and Be at the Table Once |
 | [20260907-075](./20260907-075-peer_reachability_belongs_to_the_play_field.md) | Accepted | Peer Reachability Belongs to the Play Field |
 | [20260907-081](./20260907-081-a_confirmed_second_factor_is_replaced_never_disarmed.md) | Accepted | A Confirmed Second Factor Is Replaced, Never Disarmed |
+| [20260907-084](./20260907-084-feedback_submission_is_the_record.md) | Accepted | The Submission Is the Record; the Tracker Is a Destination |
+| [20260907-085](./20260907-085-feedback_redaction_before_review.md) | Accepted | Redaction Is a Capture-Time Client Filter; the Server Refuses, Never Rewrites |
+| [20260907-086](./20260907-086-feedback_attachments_are_deletable.md) | Accepted | Feedback Attachments Are Stored Unshared, So They Can Expire |
+| [20260907-087](./20260907-087-feedback_delivery_dmca_determination.md) | Accepted | Feedback Delivery Is Not a Public Repository of User Content |
 | [20260907-088](./20260907-088-one_precedence_rule_for_every_setting.md) | Accepted | One Precedence Rule For Every Setting, And Two Mechanisms Implementing It |
 | [20260907-089](./20260907-089-mail_transport_seam_and_outbox.md) | Accepted | Mail Is a Transport Seam Behind a Durable Outbox |
 | [20260907-090](./20260907-090-credential_scope_before_source.md) | Accepted | Credential Scope Before Source, And An Application Resolves Whole |

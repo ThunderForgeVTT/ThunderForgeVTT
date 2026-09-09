@@ -58,6 +58,18 @@ export default defineConfig({
         // VMs and older drivers are blocklisted by default; without this
         // the flags above are accepted and then quietly ignored.
         "--ignore-gpu-blocklist",
+        // Spec 037 FR-008: `getDisplayMedia`'s picker is browser chrome, not
+        // page content, so Playwright cannot answer it. These auto-approve
+        // capture and choose a source.
+        //
+        // What that proves: the capture path produces an image, the image
+        // reaches the review, removing it removes it from what is sent, and
+        // declining still submits. What it does **not** prove is that a person
+        // saw a picker — the flag is what removed it. The picker itself stays
+        // on the by-hand pass in `quickstart.md`, named there rather than
+        // quietly assumed covered here.
+        "--use-fake-ui-for-media-stream",
+        "--auto-select-desktop-capture-source=Entire screen",
       ],
     },
   },

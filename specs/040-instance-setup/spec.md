@@ -188,6 +188,15 @@ cannot do.
 
 ### User Story 5 - GitHub credentials at two scales (Priority: P2)
 
+> **The scope vocabulary is spec 037's**, and its contract is the fuller
+> statement: `specs/037-in-app-feedback/contracts/github-app-scopes.md`.
+> Spec 037 needed a *second* GitHub application before this spec existed, which
+> is where `AppScope`, per-field sources and the fall-through rules were first
+> written down. This spec owns the **resolution rule** — an application resolves
+> whole, never field by field (FR-021) — and that rule overrode the field-at-a-
+> time resolution 037's delivery originally shipped. Read both; where they
+> disagree, this one is later. (Spec 037 T064.)
+
 An operator either registers one application for everything, or one per
 subsystem, or a mixture — and understands what they have chosen while they are
 choosing it.
