@@ -244,8 +244,8 @@ is the only place this feature deletes anything.
 
 ## Phase 10: Polish & Cross-Cutting Concerns
 
-- [ ] T074 [P] Document the feedback path in `docs/` — what is captured, what is redacted and when, where attachments live, how long they live, and what a maintainer sees
-- [ ] T075 [P] Update `MVP.md` with the feedback path as the way MVP learns what is wrong with it, and note that it is MVP-adjacent rather than part of the play loop
+- [X] T074 [P] Document the feedback path in `docs/` — what is captured, what is redacted and when, where attachments live, how long they live, and what a maintainer sees
+- [X] T075 [P] Update `MVP.md` with the feedback path as the way MVP learns what is wrong with it, and note that it is MVP-adjacent rather than part of the play loop
   - **Inspected 2026-09-09 and it holds.** No `isTest`, `is_test`, `E2E` or
     `cfg!(test)` in `feedback/`, `repo_host.rs` or `repo_host/`; no `_control`
     anywhere in the schema; `feedback/rate_limit.rs` states in its own header

@@ -114,6 +114,34 @@ to accept. The copyright page keeps its published designated agent, because 17
 U.S.C. § 512(c)(2) conditions the safe harbour on it being publicly available —
 the form is first and the designation sits at the foot of the page.
 
+**Feedback is how MVP finds out what is wrong with it.** As of 2026-09-09 a
+person reports a problem from any screen, reviews exactly what will be sent —
+message, context, a redacted log bundle, optionally a screenshot they took
+themselves — and the instance keeps it. Redaction happens in the client before
+the review, from one rule list the server also reads; a payload still carrying
+a secret is **refused** and never quietly rewritten, because a server that
+cleaned up a submission would be delivering something other than what was
+approved.
+
+The instance is the record. Delivery to a tracker is a separate step that can
+fail, be abandoned, or never be configured, and none of that unsends the
+report — which is why the author is shown *received* and never a delivery
+failure. Both sides now have a screen: the author's at Settings → Feedback, the
+operator's undelivered queue under Admin → Legal, and the operator's shows no
+message and no attachment because the server does not send them.
+
+Delivery runs end to end against a stub the server reaches through
+`GITHUB_API_BASE` — the same configuration GitHub Enterprise uses — so there
+is no test branch in the delivery path. What that proves that unit tests could
+not: an attachment is committed **before** the issue referencing it, and an
+ambiguous failure produces exactly one issue because the retry searches for the
+delivery key rather than creating a second. See
+[docs/FEEDBACK.md](docs/FEEDBACK.md).
+
+**Not built**: the by-hand quickstart pass, and the credential-resolution
+screens (US4). Attachments are kept for 30 days and the sweep is implemented,
+but nothing has yet watched one expire.
+
 **There is no password-change path at all.** `password_hash` is only ever
 written at registration, admin bootstrap and OAuth auto-provisioning. Recorded
 because spec 036 FR-008 assumes one, and it is the sort of absence that reads
