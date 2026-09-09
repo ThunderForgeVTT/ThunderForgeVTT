@@ -1,13 +1,16 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
   clickPlay,
+  freshCredentials,
   graphql,
   inviteAndJoinAsPlayer,
   openDockTab,
+  register,
   registerAndCreateWorld,
   uniqueSuffix,
   waitForEngineReady,
 } from "./fixtures/helpers";
+import { openAnotherClient } from "./fixtures/clients";
 
 /**
  * Spec 031's shared initiative tracker, driven through the Play dock's
@@ -494,6 +497,125 @@ test.describe("Spec 031: the shared initiative tracker", () => {
       });
     } finally {
       await playerPage.context().close();
+    }
+  });
+
+  /**
+   * Spec 036 T060, FR-011: **one person, two screens.**
+   *
+   * The test above is two *people* — a Game Master and a player, who see
+   * different things because the server decides they may. This is the case
+   * that could not be written at all until ADR-073: the same account, signed
+   * in twice, with the table on one screen and the tracker on another. Before
+   * the eviction was removed, opening the second window signed the first one
+   * out, so the shape this asserts was unreachable.
+   *
+   * What it adds beyond the player case is that both windows are the **Game
+   * Master's**. A follower that only ever renders read-only would pass the
+   * player test and fail this one, because here the second window must carry
+   * the controls too — and pressing them in *either* window must move both.
+   */
+  test("one Game Master, two windows: both follow the round, and either can drive it", async ({
+    page,
+    browser,
+  }) => {
+    test.setTimeout(300_000);
+
+    // Registered by hand rather than through `registerAndCreateWorld`,
+    // because the second window has to sign in as the same person and that
+    // helper keeps its credentials to itself.
+    const creds = freshCredentials("e2ecombat2win");
+    await register(page, creds);
+    await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
+    await page
+      .locator("#world-name")
+      .fill(`E2E Combat Two Windows ${uniqueSuffix()}`);
+    await page.getByRole("button", { name: /create world/i }).click();
+    await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
+    const worldId = /\/world\/([^/]+)\/staging$/.exec(
+      new URL(page.url()).pathname,
+    )![1];
+
+    const vanguard = await createNpc(page, worldId, "Vanguard");
+    const rival = await createNpc(page, worldId, "Rival");
+
+    await gmOpensCombatPanel(page, worldId);
+    await page.getByTestId("start-combat-button").click();
+    await expect(page.getByTestId("combat-round-counter")).toHaveText(
+      "Round 1",
+      { timeout: 20_000 },
+    );
+    await addCombatantByActor(page, vanguard, 1);
+    await addCombatantByActor(page, rival, 2);
+    await setInitiative(page, vanguard.label, 20);
+    await setInitiative(page, rival.label, 10);
+
+    const second = await openAnotherClient(browser, creds, "context");
+
+    try {
+      await test.step("the second window shows the same encounter, with the same controls", async () => {
+        await playerOpensCombatPanel(second, worldId);
+        await expect(second.getByTestId("combat-round-counter")).toHaveText(
+          "Round 1",
+          { timeout: 30_000 },
+        );
+        await expect(second.getByTestId("combatant-row")).toHaveCount(2, {
+          timeout: 30_000,
+        });
+        // The same account, so the same authority. This is the assertion a
+        // read-only follower would fail.
+        await expect(second.getByTestId("advance-turn-button")).toBeVisible();
+        await expect(second.getByTestId("end-combat-button")).toBeVisible();
+      });
+
+      await test.step("the first window takes a turn and the second follows without a reload", async () => {
+        await page.getByTestId("advance-turn-button").click();
+        await expect(page.getByTestId("combatant-row").nth(0)).toHaveAttribute(
+          "data-active-turn",
+          "true",
+          { timeout: 20_000 },
+        );
+        await expect(
+          second.getByTestId("combatant-row").nth(0),
+        ).toHaveAttribute("data-active-turn", "true", { timeout: 30_000 });
+      });
+
+      await test.step("the second window drives it, and the first follows", async () => {
+        // The direction that matters: two windows of one account are two
+        // clients, not one client and a mirror.
+        await second.getByTestId("advance-turn-button").click();
+        await expect(
+          second.getByTestId("combatant-row").nth(1),
+        ).toHaveAttribute("data-active-turn", "true", { timeout: 30_000 });
+        await expect(page.getByTestId("combatant-row").nth(1)).toHaveAttribute(
+          "data-active-turn",
+          "true",
+          { timeout: 30_000 },
+        );
+
+        // And a full pass from the second window opens a new round on both.
+        await second.getByTestId("advance-turn-button").click();
+        await expect(second.getByTestId("combat-round-counter")).toHaveText(
+          "Round 2",
+          { timeout: 30_000 },
+        );
+        await expect(page.getByTestId("combat-round-counter")).toHaveText(
+          "Round 2",
+          { timeout: 30_000 },
+        );
+      });
+
+      await test.step("ending it in one window ends it in the other", async () => {
+        await second.getByTestId("end-combat-button").click();
+        await expect(second.getByTestId("start-combat-button")).toBeVisible({
+          timeout: 30_000,
+        });
+        await expect(page.getByTestId("combat-round-counter")).toHaveCount(0, {
+          timeout: 30_000,
+        });
+      });
+    } finally {
+      await second.context().close();
     }
   });
 });

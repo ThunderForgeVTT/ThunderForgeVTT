@@ -235,9 +235,9 @@ first time.
 follows the round and active combatant.
 
 - [X] T058 [US5] Add `apps/web/e2e/combat-panel.spec.ts` driving the existing test ids in `apps/web/src/components/.../CombatPanel.tsx` — `combat-panel`, `start-combat-button`, `start-combat-with-selection-button`, `combat-round-counter`, `advance-turn-button`, `end-combat-button`, `combatant-list`
-- [ ] T059 [US5] Cover start, add/update/remove combatant, advance turn and end combat in that spec, against `src/server/src/graphql/mutations_combat.rs`'s behaviour
-- [ ] T060 [US5] Assert a second client of the same account follows the round counter and active combatant without a reload, via the US2 fixture
-- [ ] T061 [P] [US5] Update `MVP.md`'s "the gap worth closing: combat has no e2e" note to say what now covers it
+- [X] T059 [US5] Cover start, add/update/remove combatant, advance turn and end combat in that spec, against `src/server/src/graphql/mutations_combat.rs`'s behaviour — all five were already covered by T058's three tests; `setInitiative` through the row's own field is the update
+- [X] T060 [US5] Assert a second client of the same account follows the round counter and active combatant without a reload, via the US2 fixture — and drives it: both windows are the Game Master's, so a read-only follower would pass the player test and fail this one
+- [X] T061 [P] [US5] Update `MVP.md`'s "the gap worth closing: combat has no e2e" note to say what now covers it — **that note no longer exists**; MVP.md mentions combat nowhere at all. Recorded instead under Phase 9, where the rest of what spec 036 changed already is
 
 **Checkpoint**: turn order is proven in a browser
 
@@ -264,8 +264,8 @@ through the real redirect flow.
 
 ## Phase 12: Polish & Cross-Cutting Concerns
 
-- [ ] T068 [P] Document concurrent sessions and the play-field claim in `docs/` — what a companion is, what it may do, and where the peer line falls
-- [ ] T069 [P] Update `MVP.md` Phase 9 (Multiplayer) and Phase 10 (Permissions) with what this feature changed
+- [X] T068 [P] Document concurrent sessions and the play-field claim in `docs/SESSIONS_AND_COMPANIONS.md` — what a companion is, what it may do, and where the peer line falls
+- [X] T069 [P] Update `MVP.md` Phase 9 (Multiplayer) with what this feature changed. **Phase 10 is untouched deliberately**: spec 036 changed nothing about the permissions model — a companion surface is a surface, not a capability, and every action it takes is authorised exactly as the same action from the play field
 - [ ] T070 Make four guards fail on purpose per quickstart.md § "Making the guards fail on purpose" and record in the commit that each was seen to bite
 - [ ] T071 Run the quickstart scenarios A–G by hand against `make dev` and note anything the suite does not catch
 - [ ] T072 Run `cargo test --workspace -j 4`, `make lint` (lint-host + lint-wasm + file length) and `pnpm --filter @thunderforge/web test`

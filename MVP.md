@@ -334,6 +334,25 @@ clients holds the play field; the others are companion surfaces, and peer
 reachability belongs to the play field alone (ADR-075), so a companion cannot
 become a second peer endpoint for one person.
 
+**Also closed by spec 036**: an account can see and end its own sessions
+(`/settings/security`), each named coarsely by the client that opened it —
+"Firefox on Linux", never an address. Ending one now closes the live streams
+that session holds rather than leaving a revoked client receiving world events
+until its socket dropped. And the product has a **password-change path** for
+the first time: `password_hash` was previously written at registration, admin
+bootstrap and OAuth provisioning and never again, so somebody who believed
+their password had been seen had no remedy. Changing it ends every other
+session for that account.
+
+**Turn structure is now proven in a browser.** The shared initiative tracker
+had fourteen Rust tests and nothing that pressed a button;
+`apps/web/e2e/combat-panel.spec.ts` drives the panel for real — start, roster,
+initiative, advance, wrap into a round, end — with a player following the
+round and the active combatant without reloading, refused when they try to
+advance it, and a Game Master's *own second window* both following the fight
+and able to drive it. That last case could not be written before ADR-073: a
+second window used to sign the first one out.
+
 **Also closed**: GM override of character selection, previously
 recorded here as unaudited, is delivered by spec 017. A GM may un-claim any
 character at any time under their existing Owner-level authority over every
