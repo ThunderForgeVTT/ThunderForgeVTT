@@ -63,6 +63,15 @@ pub(crate) struct TwoFactorSetupStartResponse {
     pub(crate) status: &'static str,
     pub(crate) message: String,
     pub(crate) otpauth_url: Option<String>,
+    /// FR-002's scannable half: the `otpauth_url` above as a grid of
+    /// dark/light modules, for the client to draw as rectangles.
+    ///
+    /// `None` is not an error — `contracts/enrolment.md` rule 6 says a failure
+    /// to build the QR is not a failure to enrol, and the typeable secret is
+    /// beside it either way. `apps/web/src/api/twoFactor.ts` already parses
+    /// this field and `TwoFactorQrCode.tsx` already draws it; they have been
+    /// waiting for the server to send one.
+    pub(crate) qr: Option<crate::qr::QrMatrix>,
 }
 
 #[derive(Debug, Deserialize)]

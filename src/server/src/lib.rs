@@ -65,6 +65,10 @@ pub mod peer_signaling;
 /// Spec 036: which client of an account is at the table.
 pub mod play_field;
 pub mod pubsub;
+/// Spec 041 FR-002: an `otpauth://` URI as a grid of dark/light modules, for
+/// the enrolment screen to draw. A matrix and never markup — see the module
+/// header for why a security screen is the last place for server-sent HTML.
+pub mod qr;
 /// Spec 040: what this instance cannot do given how it is configured, and
 /// what to set. Derived from `settings::registry` on every read — never a
 /// stored flag.

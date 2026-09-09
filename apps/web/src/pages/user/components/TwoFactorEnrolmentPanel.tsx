@@ -53,17 +53,16 @@ import type { TwoFactorStatus } from "@/types/twoFactor";
  * client half of that is `TwoFactorQrCode`, drawn by the shared
  * `TwoFactorEnrolmentSteps` this panel renders (FR-001a: one flow, three
  * entrances — this is the account-settings one, and the sign-in entrance is
- * `LoginView`). The
- * server half does not exist yet: `two_factor_setup_start` returns
- * `{status, message, otpauth_url}` and no `qr` field. Contract rule 6 already
- * says what to do about that — "a failure to build the QR is not a failure to
- * enrol" — so when `qr` is absent this panel shows the `otpauth://` URI as
- * selectable text next to the typeable secret, and enrolment completes
- * normally.
+ * `LoginView`). The server half landed on 2026-09-09 (`src/server/src/qr.rs`);
+ * until then `two_factor_setup_start` returned `{status, message,
+ * otpauth_url}` and this panel had a fallback for it.
  *
- * TODO(spec-041, research.md § R10): remove the fallback prose below once
- * `two_factor_setup_start` returns `qr: { size, modules }`. No other change is
- * needed here.
+ * The fallback stays, and is not dead code. Contract rule 6 — "a failure to
+ * build the QR is not a failure to enrol" — means `qr` is still `null` on any
+ * encode failure, and when it is, the `otpauth://` URI is shown as selectable
+ * text beside the typeable secret and enrolment completes normally. That is
+ * also the path a desktop authenticator or a password manager takes, which is
+ * FR-002's other half rather than a degraded version of its first.
  */
 export function TwoFactorEnrolmentPanel() {
   const { user } = useAuth();

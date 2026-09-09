@@ -49,6 +49,7 @@ pub(crate) async fn two_factor_setup_start(
                     status: error.status,
                     message: error.message.to_string(),
                     otpauth_url: None,
+                    qr: None,
                 }),
             );
         }
@@ -72,6 +73,7 @@ pub(crate) async fn two_factor_setup_start(
                     status: "error",
                     message: msg,
                     otpauth_url: None,
+                    qr: None,
                 }),
             );
         }
@@ -86,6 +88,7 @@ pub(crate) async fn two_factor_setup_start(
                     status: "error",
                     message: msg,
                     otpauth_url: None,
+                    qr: None,
                 }),
             );
         }
@@ -118,6 +121,10 @@ pub(crate) async fn two_factor_setup_start(
         "otpauth://totp/ThunderForge:{}?secret={}&issuer=ThunderForge",
         username, secret_base32
     );
+    // FR-002. A `None` here costs the person a scan and nothing else: the
+    // grouped, typeable secret is on the same screen, which is what a desktop
+    // authenticator, a password manager or somebody with no camera uses.
+    let qr = crate::qr::encode(&otpauth);
 
     (
         StatusCode::OK,
@@ -125,6 +132,7 @@ pub(crate) async fn two_factor_setup_start(
             status: "success",
             message: "2FA secret generated. Confirm with one OTP code to enable.".to_string(),
             otpauth_url: Some(otpauth),
+            qr,
         }),
     )
 }

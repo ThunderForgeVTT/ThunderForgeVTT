@@ -42,6 +42,10 @@ dotenvy = "0.15.7"
 argon2 = "0.6.0"
 async-recursion = "1.1.1"
 axum = { version = "0.8.9", features = ["multipart"] }
+# Spec 041 FR-002. `default-features = false` drops the `image` and `svg`
+# renderers: this crate is used for `to_colors()` and nothing else, because a
+# server-rendered image or SVG string is the delivery this feature rejected.
+qrcode = { version = "0.14.1", default-features = false }
 tower = "0.5.3"
 # `compression-br`/`compression-gzip`: the engine wasm was being served
 # uncompressed. It is ~24.7MB release-built and ~4.15MB after brotli, so this

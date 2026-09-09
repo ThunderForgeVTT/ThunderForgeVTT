@@ -3,10 +3,12 @@
  *
  * These are the *client's* names for what `/api/authentication/2fa/...`
  * returns. They are deliberately a little wider than what the server sends
- * today, in exactly one direction: `qr` and `secret` are optional because
- * `contracts/enrolment.md` says the server will send them and
- * `src/server/src/auth/two_factor.rs` does not send them yet. Nothing in the
- * flow requires either — see `TwoFactorQrMatrix` below.
+ * today, in exactly one direction: `qr` and `secret` are optional. That was
+ * once because the server did not send them; since 2026-09-09 it does
+ * (`src/server/src/qr.rs`), and they stay optional because
+ * `contracts/enrolment.md` rule 6 says a failure to build the QR is not a
+ * failure to enrol. Nothing in the flow requires either — see
+ * `TwoFactorQrMatrix` below.
  */
 
 /**
