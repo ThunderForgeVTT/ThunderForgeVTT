@@ -298,3 +298,10 @@ mod second_sign_in_tests;
 #[cfg(test)]
 #[path = "enrolment_at_login_tests.rs"]
 mod enrolment_at_login_tests;
+
+/// Spec 041 FR-028: an instance is not set up until its first administrator
+/// holds a confirmed second factor — and what that deliberately does not do to
+/// an instance that was already running.
+#[cfg(test)]
+#[path = "setup_second_factor_gate_tests.rs"]
+mod setup_second_factor_gate_tests;
