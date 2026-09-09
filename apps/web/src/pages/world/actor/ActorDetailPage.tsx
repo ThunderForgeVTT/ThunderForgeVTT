@@ -27,6 +27,7 @@ import { ActorLorePanel } from "@/pages/world/actor/ActorLorePanel";
 import { ActorOwnershipBlock } from "@/pages/world/actor/ActorOwnershipBlock";
 import { WorldAppearance } from "@/appearance/WorldAppearance";
 import { PackActorSheet } from "@/pages/world/actor/PackActorSheet";
+import { SystemChecksPanel } from "@/pages/world/actor/SystemChecksPanel";
 import { resolvePanel } from "@/panels/systemPanels";
 import { resolveActorSheet } from "@/pages/world/actor/systemActorSheets";
 import type { WorldActorRecord } from "@/types/actor";
@@ -448,6 +449,11 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
             <PackActorSheet actorId={actorId} />
           );
         })()}
+
+        {/* Spec 036 US3b (FR-036): rolling a check from the sheet. Renders
+            nothing at all for a system that declares none, which is seven of
+            the eight bundled packs — FR-037 is an absence, not a message. */}
+        <SystemChecksPanel worldId={worldId} actorId={actorId} />
 
         <ActorInventoryPanel
           actorId={actorId}

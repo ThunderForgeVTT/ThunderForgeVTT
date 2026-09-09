@@ -199,6 +199,59 @@ Whether the system counts rounds, and what it calls one. Fate counts
 — the product declines to assume that every ruleset has them, and a system
 with no rounds shows no round counter (SC-011).
 
+### `checks`
+
+```json
+"checks": [
+  {
+    "id": "strength",
+    "label": "Strength",
+    "group": "abilities",
+    "formula": "1d20 + MODIFIER",
+    "bindings": { "MODIFIER": { "from": "value", "id": "strengthMod" } }
+  }
+]
+```
+
+What a character can be asked to roll **from a sheet**, and how. A player on a
+second screen presses a button; the sheet sends only this `id`; the server
+resolves the bindings against the actor and rolls the finished formula on the
+one path allowed to produce a result. See ADR-074 and ADR-044.
+
+- `id` — yours, unique within the system. The sheet sends it and nothing else.
+- `label` — what a person reads on the button.
+- `group` — the set it belongs to (`"abilities"`, `"skills"`), when it is in
+  one. Optional; used only to arrange the buttons.
+- `formula` — `thunderforge_dice` syntax, with placeholders in capitals.
+- `bindings` — placeholder → where its number comes from on the actor.
+  `{ "from": "value", "id": "..." }` reads a value the system publishes, and
+  makes no distinction between one the player typed and one your ruleset
+  derived: which half of the sheet a number lives on is your business.
+
+Three rules worth knowing before you write one:
+
+- **A binding looks a number up. It does not compute one.** If your check
+  needs `(score - 10) / 2`, declare the modifier as a derived value and bind
+  to that. The arithmetic belongs in your pack, not in this contract.
+- **A placeholder with no binding is not zero.** An unfilled sheet is the
+  absence of a number, not the number nought, and the roll is refused rather
+  than rolled short.
+- **Declaring none is a complete answer.** A system with no sheet-initiated
+  rolls offers no button, and that is a fact about the ruleset rather than an
+  omission. Seven of the eight bundled packs ship this way today.
+
+`formula` is not validated when the manifest is read — the crate that parses
+manifests compiles for `wasm32` and does not depend on the dice engine. A
+formula that does not parse is refused at roll time, and a test walks every
+bundled pack so a shipped one cannot carry a broken formula.
+
+**`checks` is not your core resolution mechanic.** If your manifest also has a
+`coreCheck`, `actionRoll`, `taskResolution`, `ladderRoll`, `skillRoll` or the
+like, keep it: that key says *how this system resolves things*, and it is read
+by your own crate. `checks` says *what this character's sheet may roll*. They
+answer different questions, and in some systems the answers happen to look
+alike.
+
 ### Anything else
 
 A manifest may carry keys this document does not describe. Genie's

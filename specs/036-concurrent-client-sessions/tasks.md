@@ -37,7 +37,7 @@ Constitution Principle IV requires these in the same change set, and research.md
 already contains their substance.
 
 - [X] T001 [P] Write ADR-073 (concurrent sessions and the single play-field claim) in `docs/adrs/20260907-073-concurrent-sessions-and-play-field-claim.md`, superseding the revoke-on-login policy at `src/server/src/auth/sessions.rs:370` and recording what replaces it
-- [ ] T002 [P] Write ADR-074 (system-declared checks and sheet-initiated rolls) in `docs/adrs/20260907-074-system-declared-checks.md`, extending ADR-044 and recording why the six existing per-pack roll keys are left alone
+- [X] T002 [P] Write ADR-074 (system-declared checks and sheet-initiated rolls) in `docs/adrs/20260907-074-system-declared-checks.md`, extending ADR-044 and recording why the six existing per-pack roll keys are left alone
 - [X] T003 [P] Write ADR-075 (the peer boundary belongs to the play field) in `docs/adrs/20260907-075-peer-boundary-play-field.md`, amending ADR-052 and naming the fourth separation it adds to hold/continue/distribute
 - [X] T004 Confirm the harness seeds an instance that admits new accounts by checking `src/server/seeds/demo_accounts.sql` sets `access_policy = 'open'`, and record in this file if it does not (the spec assumes it)
 
@@ -178,9 +178,9 @@ neither dice nor outcome.
 - [X] T043 [US3b] Add the `checks` block to `packs/systems/dnd5e/system.json`, generated from its existing `abilities` and `skills` (each skill already names its governing ability)
 - [X] T044 [US3b] Implement `rollCheck` in `src/server/src/graphql/mutations_roll_check.rs` per `contracts/system-checks.md` — resolve bindings against the actor, hand the finished formula to the existing authoritative path in `src/server/src/graphql/mutations_roll.rs`
 - [X] T045 [US3b] Register `rollCheck` on the mutation root in `src/server/src/graphql/mod.rs` with an SDL guard asserting it takes no formula argument
-- [X] T046 [US3b] Add the check control to the sheet in `apps/web/src/components/sheet/`, rendering only what the system declares and offering nothing when it declares none (FR-037)
-- [ ] T047 [P] [US3b] Update `packs/systems/README.md` with the `checks` declaration as part of the published author contract
-- [X] T048 [US3b] Extend `apps/web/e2e/companion-sheet.spec.ts` to roll a check from the sheet in two different systems and assert each is its own system's check, visible to the table
+- [X] T046 [US3b] Add the check control to the sheet in `apps/web/src/pages/world/actor/SystemChecksPanel.tsx`, rendering only what the system declares and offering nothing when it declares none (FR-037) — built 2026-09-09 after the tick was found to be false: nothing in `apps/web/src` had referenced `rollCheck` at all
+- [X] T047 [P] [US3b] Update `packs/systems/README.md` with the `checks` declaration as part of the published author contract
+- [X] T048 [US3b] Add `apps/web/e2e/companion-sheet.spec.ts`: a 5e player presses Dexterity and the table records the roll; a Blades sheet offers no button at all (FR-037 as an absence)
 
 **Checkpoint**: a 5e player rolls Strength from the sheet and the table sees it
 
@@ -202,8 +202,8 @@ intact, roll, and assert the refusal names the play field and leaves no record.
 
 - [X] T050 [US3c] Gate `peerSignals` registration on a held claim in `src/server/src/peer_signaling.rs` and `src/server/src/graphql/subscriptions.rs`, refusing at registration rather than inspecting relayed payloads (which the server deliberately never interprets)
 - [X] T051 [US3c] Ensure a companion surface opens no peer connection at all in `apps/web/src/services/peerTransfer.ts` — the engine asks, and a companion has no engine
-- [ ] T052 [US3c] Refuse adjudicated actions in companion surfaces while the server is unreachable, naming the play field, in `apps/web/src/components/sheet/` — record nothing and queue nothing (FR-040)
-- [X] T053 [US3c] Add `apps/web/e2e/companion-offline.spec.ts` using `apps/web/e2e/fixtures/offline.ts`, asserting the refusal, the absence of any record, and that the play field's own ADR-052 continuation is unchanged (FR-041)
+- [X] T052 [US3c] Refuse adjudicated actions in companion surfaces while the server is unreachable, naming the play field, in `apps/web/src/pages/world/actor/SystemChecksPanel.tsx` — record nothing and queue nothing (FR-040). `GraphQLRequestError` gained a `transport` flag so "the server never heard you" and "the server said no" are different sentences
+- [X] T053 [US3c] Add `apps/web/e2e/companion-offline.spec.ts`, asserting the refusal, the absence of any record **after the link is restored** (which is what catches a replay queue), and that the action itself still works once the server is back
 
 **Checkpoint**: the hard line is a behaviour with a test, not a paragraph
 

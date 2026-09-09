@@ -9,6 +9,18 @@ export interface StatusBadgeProps {
   children: ReactNode;
   variant?: StatusBadgeVariant;
   className?: string;
+  /**
+   * Forwarded to the badge element.
+   *
+   * Named explicitly rather than left to a `...props` spread, because the
+   * props this component accepts are deliberately few. Without it, a
+   * `data-testid` written on a `StatusBadge` is dropped **silently** — the
+   * JSX type-checks, the badge renders, and only the test that goes looking
+   * for it fails, several minutes later and in another file. That cost a
+   * debugging pass on 2026-09-09, and `LoreRepositoryCard` had been carrying
+   * a testid nothing could ever find since it was written.
+   */
+  "data-testid"?: string;
 }
 
 const VARIANT_MAP: Record<
@@ -32,6 +44,7 @@ export function StatusBadge({
   children,
   variant = "info",
   className,
+  "data-testid": testId,
 }: StatusBadgeProps) {
   const iconName =
     variant === "success"
@@ -46,6 +59,7 @@ export function StatusBadge({
     <Badge
       variant={VARIANT_MAP[variant]}
       className={cn("gap-1", VARIANT_EXTRA_CLASS[variant], className)}
+      data-testid={testId}
     >
       <FantasyIcon name={iconName} size={14} />
       <span>{children}</span>

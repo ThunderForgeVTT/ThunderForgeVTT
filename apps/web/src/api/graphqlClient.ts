@@ -78,6 +78,19 @@ export class GraphQLRequestError extends Error {
    * code was returned, rather than one that could not be read.
    */
   readonly codes: string[];
+  /**
+   * True when the request never reached the server — offline, DNS, a reset
+   * connection, or a timeout — as opposed to a server that answered and
+   * refused.
+   *
+   * Callers need the distinction and were left to infer it from the *absence*
+   * of a status and of error messages, which is a fragile way to ask a
+   * question this class already knows the answer to. Spec 036 FR-039 turns on
+   * it: a companion surface that has lost the server must say so and send the
+   * person to the play field, and that is a different sentence from "the
+   * server considered your request and said no".
+   */
+  readonly transport: boolean;
 
   constructor(
     message: string,
@@ -86,6 +99,7 @@ export class GraphQLRequestError extends Error {
       status?: number;
       errors?: string[];
       codes?: string[];
+      transport?: boolean;
     } = {},
   ) {
     super(message);
@@ -94,6 +108,7 @@ export class GraphQLRequestError extends Error {
     this.status = details.status;
     this.errors = details.errors ?? [];
     this.codes = details.codes ?? [];
+    this.transport = details.transport ?? false;
   }
 
   /** Whether the server classified this refusal as `code`. */
@@ -209,16 +224,14 @@ async function send(
     if (controller?.signal.aborted) {
       throw new GraphQLRequestError(
         "The request timed out. Please try again.",
-        { operation },
+        { operation, transport: true },
       );
     }
     // A rejected fetch is a transport failure — DNS, offline, CORS, connection
     // reset. The browser's raw TypeError is not useful to a user.
     throw new GraphQLRequestError(
       "Could not reach the server. Check your connection.",
-      {
-        operation,
-      },
+      { operation, transport: true },
     );
   } finally {
     if (timer !== null) {
