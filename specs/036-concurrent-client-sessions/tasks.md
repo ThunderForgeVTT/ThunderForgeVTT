@@ -77,7 +77,7 @@ each, and confirm both stay authenticated and both see each other's changes.
 
 - [X] T013 [US1] Remove the revoke-on-login statement from `create_session` in `src/server/src/auth/sessions.rs` and capture `client_description` from the request instead (coarse; no address — follow spec 035's "record the act, never the person")
 - [X] T014 [US1] Enforce the 10-session bound with LRU eviction in `src/server/src/auth/sessions.rs`, writing `ended_reason = 'bound_exceeded'`
-- [ ] T015 [US1] Confirm every remaining caller of session creation (`auth/oauth.rs`, `auth/two_factor.rs`, `auth/admin_setup.rs`) still behaves correctly with no eviction, and add a test for the two-factor path in `src/server/src/auth/two_factor.rs` (a second sign-in must still challenge — spec.md Edge Cases)
+- [X] T015 [US1] Confirm every remaining caller of session creation (`auth/oauth.rs`, `auth/two_factor.rs`, `auth/admin_setup.rs`) still behaves correctly with no eviction, and add a test for the two-factor path in `src/server/src/auth/two_factor.rs` (a second sign-in must still challenge — spec.md Edge Cases)
 
 **Checkpoint**: two browsers, one account, both alive — the reported defect is gone
 
@@ -96,8 +96,8 @@ action in one is visible in the other, under the sharded harness.
 - [X] T016 [US2] Create `apps/web/e2e/fixtures/clients.ts` exporting `openAnotherClient(browser, creds, kind, from?)` per `contracts/e2e-fixtures.md`, signing in for real rather than copying `storageState`
 - [X] T017 [US2] Add `apps/web/e2e/concurrent-sessions.spec.ts` covering US1's acceptance scenarios through the fixture
 - [X] T018 [US2] Add the eviction regression guard to `apps/web/e2e/concurrent-sessions.spec.ts` — sign in in a second context, then act in the first (FR-020)
-- [ ] T019 [P] [US2] Move specs that register a second account only to obtain a second window onto the fixture; audit `apps/web/e2e/` for them first and list what moved in the commit body
-- [ ] T020 [P] [US2] Leave `inviteAndJoinAsPlayer` in `apps/web/e2e/fixtures/helpers.ts` as it is, and add a comment naming which fixture to use when the two clients are one person (FR-019)
+- [X] T019 [P] [US2] Move specs that register a second account only to obtain a second window onto the fixture; audit `apps/web/e2e/` for them first and list what moved in the commit body — **audited, nothing to move**: every one of the 50 specs calling `inviteAndJoinAsPlayer` uses its second account for a permission difference a same-account window could not produce, and the specs that open a second window of one person (`world-cache-multitab`) already do it with a second tab of one context
+- [X] T020 [P] [US2] Leave `inviteAndJoinAsPlayer` in `apps/web/e2e/fixtures/helpers.ts` as it is, and add a comment naming which fixture to use when the two clients are one person (FR-019)
 - [X] T021 [US2] Verify a two-client spec passes under `node scripts/e2e-parallel.mjs --shards=2` with no serialisation (FR-018)
 
 **Checkpoint**: the suite can express "one person, two windows"
@@ -149,7 +149,7 @@ others survive; end all and assert every client is signed out next request.
 
 - [X] T034 [US4] Implement the session registry reads in `src/server/src/auth/session_registry.rs` (live sessions, last seen, current, holds-play-field)
 - [X] T035 [US4] Implement `mySessions`, `endSession` and `endAllSessions` in `src/server/src/graphql/mutations_sessions.rs` per `contracts/sessions.md`, writing `ended_reason`
-- [ ] T036 [US4] Close the live streams and release any play-field claim held by an ended session, in `src/server/src/graphql/subscriptions.rs` and `src/server/src/play_field.rs` (FR-010)
+- [X] T036 [US4] Close the live streams and release any play-field claim held by an ended session, in `src/server/src/graphql/subscriptions.rs` and `src/server/src/play_field.rs` (FR-010)
 - [ ] T037 [US4] End every other session on password change in `src/server/src/auth/sessions.rs`, with `ended_reason = 'password_changed'` (FR-008)
 - [X] T038 [US4] Add the session list and its controls to the account page in `apps/web/src/pages/user/`
 - [X] T039 [US4] Extend `apps/web/e2e/concurrent-sessions.spec.ts` with US4's five acceptance scenarios

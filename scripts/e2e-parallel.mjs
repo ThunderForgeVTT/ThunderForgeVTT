@@ -46,6 +46,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
+import { createServer } from "node:net";
 import { join, relative } from "node:path";
 
 import {
@@ -300,6 +301,52 @@ function acquireLock() {
     // No lock file at all, which is the ordinary case.
   }
   writeFileSync(LOCK_PATH, String(process.pid));
+}
+
+/**
+ * Fail loudly if anything already holds a port this run needs.
+ *
+ * The lock above stops a *second run* starting while a first is alive. It
+ * does not stop a first run's **children** outliving it: kill the runner and
+ * its backends, vite servers and stubs keep their ports. The next run then
+ * starts, fails to bind, and — because readiness is a `fetch` that the corpse
+ * answers perfectly well — decides the stack came up and runs the whole suite
+ * against the *previous build*. That is worse than a crash: it produced a
+ * green run of code that was never compiled, and a red one for a fix that was
+ * already in.
+ *
+ * So bind rather than fetch. A port that cannot be bound is somebody else's,
+ * whatever answers on it.
+ */
+async function assertPortsFree(total) {
+  const wanted = [];
+  for (let index = 0; index < total; index += 1) {
+    wanted.push([WEB_PORT_BASE + index, `vite ${index}`]);
+    wanted.push([BACKEND_PORT_BASE + index, `backend ${index}`]);
+    wanted.push([GITHUB_STUB_PORT_BASE + index, `github stub ${index}`]);
+    wanted.push([MAILPIT_SMTP_PORT_BASE + index, `mailpit smtp ${index}`]);
+    wanted.push([MAILPIT_API_PORT_BASE + index, `mailpit api ${index}`]);
+  }
+
+  const taken = [];
+  for (const [port, name] of wanted) {
+    const free = await new Promise((resolve) => {
+      const probe = createServer();
+      probe.once("error", () => resolve(false));
+      probe.once("listening", () => probe.close(() => resolve(true)));
+      probe.listen(port, "127.0.0.1");
+    });
+    if (!free) taken.push(`${port} (${name})`);
+  }
+
+  if (taken.length) {
+    throw new Error(
+      `these ports are already in use: ${taken.join(", ")}. ` +
+        "Something from an earlier run is still alive — the runner would " +
+        "otherwise test against it rather than against this build. Find it " +
+        "with `ss -ltnp` and kill it, then run again.",
+    );
+  }
 }
 
 function releaseLock() {
@@ -750,6 +797,7 @@ async function main() {
   }
 
   acquireLock();
+  await assertPortsFree(total);
   log("e2e", `Preparing ${total} shard${total === 1 ? "" : "s"}.`);
   rmSync(SHARD_DIR, { recursive: true, force: true });
   mkdirSync(SHARD_DIR, { recursive: true });

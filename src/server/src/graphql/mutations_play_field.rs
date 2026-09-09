@@ -120,8 +120,16 @@ pub async fn play_field_stream(
 
     let first = GraphQLPlayFieldClaim::of(&claim, &client_id);
     let asking = client_id;
+    // FR-010. Ending the stream drops `guard`, and dropping the guard
+    // releases the claim — so the same wrapper that stops a revoked client
+    // receiving events also stops it holding the play field, which is the
+    // half of T036 that would otherwise need its own mechanism.
+    let session_id = auth_user.session_id;
+    let state = state.clone();
 
-    Box::pin(
+    Box::pin(crate::graphql::session_lifetime::until_session_ends(
+        state,
+        session_id,
         tokio_stream::iter(vec![Ok(Some(first))]).chain(futures_util::stream::unfold(
             (changes, guard, asking),
             |(mut changes, guard, asking)| async move {
@@ -143,7 +151,7 @@ pub async fn play_field_stream(
                 }
             },
         )),
-    )
+    ))
 }
 
 #[cfg(test)]

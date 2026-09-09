@@ -231,6 +231,19 @@ export async function clickPlay(page: Page): Promise<void> {
  * Still real in every way that matters to the callers: a real second account,
  * a real registration, a real session cookie, and a real `joinWorld` mutation
  * with the server enforcing membership exactly as it would have.
+ *
+ * # Which fixture to reach for (spec 036 FR-019)
+ *
+ * This one when the two clients are **two people** — a GM and a player, who
+ * see different things because the server decides they may. That is what it
+ * is for and it stays as it is.
+ *
+ * `openAnotherClient` in `./clients.ts` when the two clients are **one
+ * person** — a table on one screen and a character sheet on another, or a
+ * second window of the same account. Before ADR-073 that was impossible, so
+ * every such test had to register a second account and pretend, which made
+ * "what a second window sees" untestable and quietly inflated the number of
+ * accounts a run creates.
  */
 export async function inviteAndJoinAsPlayer(
   browser: Browser,

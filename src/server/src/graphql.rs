@@ -244,6 +244,12 @@ pub use mutations_user_data::*;
 pub mod mutations_admin;
 pub use mutations_admin::*;
 
+/// Spec 036 FR-010: a subscription stops when the session behind it does.
+/// Separate from `subscriptions` so the rule can be tested without opening a
+/// socket, and so every stream reaches for the same one.
+#[path = "graphql/session_lifetime.rs"]
+pub mod session_lifetime;
+
 #[path = "graphql/subscriptions.rs"]
 pub mod subscriptions;
 pub use subscriptions::*;

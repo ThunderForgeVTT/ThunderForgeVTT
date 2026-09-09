@@ -236,3 +236,9 @@ fn error_response(
 #[cfg(test)]
 #[path = "argon2_upgrade_tests.rs"]
 mod argon2_upgrade_tests;
+
+/// Spec 036 T015: the behaviours that must survive ADR-073's removal of the
+/// login-time eviction — chiefly that a second sign-in is still challenged.
+#[cfg(test)]
+#[path = "second_sign_in_tests.rs"]
+mod second_sign_in_tests;

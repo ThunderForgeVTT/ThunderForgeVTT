@@ -12,6 +12,7 @@ use tokio_stream::wrappers::IntervalStream;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
 use super::*;
+use crate::graphql::session_lifetime::until_session_ends;
 use crate::state::AppState;
 
 #[derive(Default)]
@@ -128,6 +129,11 @@ impl SubscriptionRoot {
 
         // Create a combined stream that works for both cases
         // Return type is Pin<Box<dyn Stream>> for type erasure
+        // FR-010: whose session this stream belongs to, so it can be ended
+        // with that session rather than outliving it. Read here, before the
+        // stream is built, because `ctx` does not survive into it.
+        let session_id = authenticated_user(ctx).ok().map(|user| user.session_id);
+
         if let Some(rx) = rx_opt {
             // Success case: stream this world's channel. The id is no longer
             // needed to *filter* — the receiver is the filter now — but the
@@ -194,8 +200,18 @@ impl SubscriptionRoot {
                         }
                     }
                 });
-            Pin::new(Box::new(stream))
-                as Pin<Box<dyn Stream<Item = Result<GraphQLWorldEvent, Error>> + Send>>
+            // A stream whose session ends, ends. See `session_lifetime`: the
+            // membership check above runs once, which is right for
+            // membership and was wrong for revocation.
+            let stream = match (app_state, session_id) {
+                (Some(state), Some(session_id)) => {
+                    Pin::new(Box::new(until_session_ends(state, session_id, stream)))
+                        as Pin<Box<dyn Stream<Item = Result<GraphQLWorldEvent, Error>> + Send>>
+                }
+                _ => Pin::new(Box::new(stream))
+                    as Pin<Box<dyn Stream<Item = Result<GraphQLWorldEvent, Error>> + Send>>,
+            };
+            stream
         } else {
             // Error case: single error item
             let stream = tokio_stream::iter(vec![Err(Error::new(error_msg))]).filter_map(Some);
@@ -282,6 +298,9 @@ impl SubscriptionRoot {
             subscription_metrics::OPENED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
 
+        // FR-010, same as `world_events_created`.
+        let session_id = authenticated_user(ctx).ok().map(|user| user.session_id);
+
         if let (Some(rx), Some(world_id_uuid)) = (rx_opt, world_uuid) {
             // Success case: emit presence notifications
             // Note: This is a simple implementation that emits on each presence event.
@@ -326,8 +345,16 @@ impl SubscriptionRoot {
                         }
                     }
                 });
-            Pin::new(Box::new(stream))
-                as Pin<Box<dyn Stream<Item = Result<GraphQLPlayersOnlineList, Error>> + Send>>
+            match (app_state, session_id) {
+                (Some(state), Some(session_id)) => {
+                    Pin::new(Box::new(until_session_ends(state, session_id, stream)))
+                        as Pin<
+                            Box<dyn Stream<Item = Result<GraphQLPlayersOnlineList, Error>> + Send>,
+                        >
+                }
+                _ => Pin::new(Box::new(stream))
+                    as Pin<Box<dyn Stream<Item = Result<GraphQLPlayersOnlineList, Error>> + Send>>,
+            }
         } else {
             // Error case: single error item
             let stream = tokio_stream::iter(vec![Err(Error::new(error_msg))]).filter_map(Some);
