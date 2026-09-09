@@ -21,6 +21,10 @@ crate-type = ["rlib"]
 base64 = "0.23.1"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
+# Spec: the outbound-URL guard parses candidates rather than pattern-matching
+# them; a hand-rolled parser is how `http://evil.com@169.254.169.254/` gets
+# through.
+url = "2.5.8"
 
 [dev-dependencies]
 proptest = "1.11.0"

@@ -181,6 +181,31 @@ pub async fn update_oauth_provider(
     provider_id: uuid::Uuid,
     update: OAuthProviderUpdate,
 ) -> Result<OAuthProvider, String> {
+    // SSRF guard. `userinfo_url` is the one URL on this row an administrator
+    // can set through the API, and the server **fetches it**, with the
+    // provider access token attached (`fetch_userinfo`). Unchecked, that is a
+    // request the instance makes to any address an admin names — and the
+    // addresses worth naming are all internal: `169.254.169.254` hands back
+    // cloud instance credentials, loopback reaches admin interfaces bound
+    // there deliberately.
+    //
+    // "Only an admin can set it" is weaker than it sounds. An administrator of
+    // a ThunderForge instance is not necessarily trusted with the machine it
+    // runs on — on anything hosted they are usually different people — and an
+    // admin account is a thing that gets taken over. This turns that from a
+    // ThunderForge problem into an infrastructure one.
+    //
+    // Loopback is permitted only in a debug build, for a developer running a
+    // provider locally. A release binary does not contain the allowance at
+    // all, so no environment variable can switch it on — the same two-locks
+    // reasoning `rate_limit_disabled` uses, and for a comparable reason.
+    if let Some(url) = update.userinfo_url.as_deref().map(str::trim)
+        && !url.is_empty()
+    {
+        thunderforge_axum_oidc::url_guard::check_outbound_url(url, cfg!(debug_assertions))
+            .map_err(|refusal| refusal.message().to_string())?;
+    }
+
     let mut conn = state
         .db_pool
         .get()

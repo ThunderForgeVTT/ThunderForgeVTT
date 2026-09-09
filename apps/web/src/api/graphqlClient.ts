@@ -1,4 +1,5 @@
 import { withCsrf } from "@/api/auth";
+import { reportSessionRefused } from "@/api/sessionExpiry";
 
 /**
  * The single GraphQL transport for `apps/web`.
@@ -173,6 +174,19 @@ function unwrap<TData>(
   operation: string | undefined,
   notOkFallback: string,
 ): TData {
+  // Spec 036 FR-009. A 401 is the server saying this session is no longer
+  // accepted, and it is said the same way whether the session was revoked from
+  // another device, expired, or belongs to an account that has since been
+  // disabled. Announced here, once, for every request in the app — see
+  // `sessionExpiry` for why this is the transport's job and not the router's.
+  //
+  // Note this runs *before* the throws below: the caller's own error handling
+  // still happens, and still says whatever it says beside the thing that
+  // failed. This only adds the fact that the session is gone.
+  if (response.status === 401) {
+    reportSessionRefused();
+  }
+
   if (payload === null) {
     // Non-JSON or empty body — report the status, which is the only real
     // information available, rather than a JSON parse error.

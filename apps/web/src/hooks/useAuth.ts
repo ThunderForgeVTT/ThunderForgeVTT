@@ -24,6 +24,7 @@ import type {
   RegisterPayload,
 } from "@/types/auth";
 import { clearAssetCache } from "@/serviceWorker";
+import { onSessionExpired, resetSessionExpiry } from "@/api/sessionExpiry";
 import { discardWorldCache, onCrossTabSignOut } from "@/services/worldCache";
 
 type AuthContextValue = {
@@ -51,6 +52,12 @@ function applySession(
   setSession: (value: AuthSession | null) => void,
 ) {
   setSession(response.session ?? null);
+  // Re-arm the FR-009 announcement whenever a session is established, so
+  // signing back in after a revocation is a fresh start rather than a client
+  // that has already spent its one notification and will never say it again.
+  if (response.session) {
+    resetSessionExpiry();
+  }
   return response;
 }
 
@@ -93,6 +100,33 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setIsLoading(false);
     });
   }, []);
+
+  /**
+   * Spec 036 FR-009: told to sign in again, rather than left showing state it
+   * can no longer refresh.
+   *
+   * The transport reports any 401 (`api/sessionExpiry`), and this is what acts
+   * on it: drop the session so every guarded route redirects, and discard the
+   * world cache, because a session that is no longer accepted must not leave
+   * decrypted world content readable on this device.
+   *
+   * `discardWorldCache` broadcasts the cross-tab sign-out signal too, so the
+   * other tabs of a revoked session find out without each having to make a
+   * failing request of their own.
+   */
+  useEffect(() => {
+    // The id is read before the session is dropped: `discardWorldCache` needs
+    // it to reclaim the engine's store, and a moment later there is nobody to
+    // ask. Not awaited — the key is gone the instant `discardSessionKeys`
+    // resolves, which is the part that makes the cached bytes inert, and a
+    // signed-out person should not wait on a delete.
+    return onSessionExpired(() => {
+      const userId = session?.user?.id ?? null;
+      setSession(null);
+      setIsLoading(false);
+      void discardWorldCache(userId);
+    });
+  }, [session]);
 
   useEffect(() => {
     let active = true;

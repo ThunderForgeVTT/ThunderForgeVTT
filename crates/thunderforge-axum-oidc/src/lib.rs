@@ -11,4 +11,5 @@
 
 pub mod discovery;
 pub mod id_token;
+pub mod url_guard;
 pub mod userinfo;
