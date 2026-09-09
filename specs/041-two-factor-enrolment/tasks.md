@@ -74,7 +74,7 @@ reads. Nothing here is user-visible on its own.
 - [X] T008 Create the Diesel migration `src/server/migrations/2026-09-07-100001-0000_recovery_codes/up.sql` and `down.sql` creating `user_recovery_codes` with the partial index on `(user_id) WHERE used_at IS NULL`, per data-model.md § 3
 - [ ] T009 Create the Diesel migration `src/server/migrations/2026-09-07-100002-0000_two_factor_events/up.sql` and `down.sql` creating `two_factor_events` with its `event_type` CHECK and `actor_user_id … ON DELETE SET NULL`, and adding `purpose` and `failed_attempts` to `login_two_factor_challenges`, per data-model.md §§ 4, 6. Carry spec 035's comment forward: no identifier column, and none may be added
 - [ ] T010 Regenerate `src/server/src/schema.rs` and add the `TwoFactorEnrolment`, `UserRecoveryCode` and `TwoFactorEvent` `Queryable`/`Insertable` pairs to `src/server/src/models.rs`
-- [ ] T011 [P] Add `matched_step_at` (and the internal step-returning form the existing `verify_totp_code` / `verify_totp_code_at` are re-expressed in terms of) to `crates/thunderforge-axum-auth-core/src/totp.rs`, with a proptest asserting the returned step is the one the code was generated for across the skew window. **Change no parameter**: SHA1, 6 digits, 30s, skew 1, issuer `ThunderForge`
+- [X] T011 [P] Add `matched_step_at` (and the internal step-returning form the existing `verify_totp_code` / `verify_totp_code_at` are re-expressed in terms of) to `crates/thunderforge-axum-auth-core/src/totp.rs`, with a proptest asserting the returned step is the one the code was generated for across the skew window. **Change no parameter**: SHA1, 6 digits, 30s, skew 1, issuer `ThunderForge`
 - [ ] T012 [P] Create `crates/thunderforge-axum-auth-core/src/recovery_codes.rs` — generation over `random_setup_code()`'s alphabet, normalisation (case-fold, strip hyphens and whitespace), and the constant-work match rule — with a proptest that the number of hash comparisons does not depend on whether or where a code matched
 - [X] T013 [P] Create `src/server/src/qr.rs` — `otpauth://` URI to a module matrix (`size` plus one `0`/`1` string per row) and nothing else — adding the pure-Rust QR crate to `src/server/Cargo.toml`, with a unit test asserting a fixed URI produces a fixed matrix. No SVG, no PNG, no markup (research.md § R10)
 - [X] T014 Collapse `required(user)` into one function in `src/server/src/auth/two_factor/policy.rs` per data-model.md § 5 — adding the `is_admin` term, dropping the `two_factor_enabled` term — and route both `is_two_factor_required_for_user` and the inline duplicate at `src/server/src/auth/sessions.rs:477` through it, with unit tests for each of the three terms independently
@@ -127,7 +127,7 @@ an account.
 
 - [X] T026 [P] [US2] Add server tests in `src/server/src/auth/two_factor/recovery.rs` for single use via the conditional `UPDATE` (zero rows means refuse), for whole-set replacement on regeneration, and for the low-water count (FR-008, FR-010, FR-011)
 - [ ] T027 [P] [US2] Add a server test asserting **no route anywhere returns an issued code** after the body that created it — assert over the registered route table, not by inspection (FR-009)
-- [ ] T028 [P] [US2] Add a server test asserting a recovery code does not advance `users.two_factor_last_used_step` (contracts/recovery-codes.md rule 7)
+- [~] T028 [P] [US2] Add a server test asserting a recovery code does not advance `users.two_factor_last_used_step` (contracts/recovery-codes.md rule 7)
 
 ### Implementation for User Story 2
 

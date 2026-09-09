@@ -31,7 +31,6 @@ use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use thunderforge_axum_auth_core::random::random_urlsafe;
 use thunderforge_axum_auth_core::session::{self, CookieSpec, csrf_cookie, session_cookie};
-use thunderforge_axum_auth_core::totp::verify_totp_code;
 use thunderforge_axum_oauth::authorize::{AuthorizeRequest, build_authorize_url};
 use thunderforge_axum_oauth::error::provider_error_from_callback;
 use thunderforge_axum_oauth::pkce::{code_challenge_from_verifier, generate_code_verifier};

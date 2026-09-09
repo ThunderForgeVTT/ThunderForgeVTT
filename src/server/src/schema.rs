@@ -718,6 +718,7 @@ diesel::table! {
         email -> Varchar,
         two_factor_pending_secret_encrypted -> Nullable<Text>,
         two_factor_pending_started_at -> Nullable<Timestamp>,
+        two_factor_last_used_step -> Nullable<Int8>,
     }
 }
 

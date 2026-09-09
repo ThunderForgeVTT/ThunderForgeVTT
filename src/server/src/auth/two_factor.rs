@@ -23,6 +23,12 @@ pub(crate) use recovery::*;
 pub(crate) mod requirement;
 pub(crate) use requirement::*;
 
+/// Spec 041 FR-016: a code is not accepted twice, including within its window.
+/// Tests the join between the rule in `totp.rs` and the path a sign-in takes.
+#[cfg(test)]
+#[path = "two_factor/replay_tests.rs"]
+mod replay_tests;
+
 pub(crate) async fn two_factor_setup_start(
     State(state): State<AppState>,
     Json(request): Json<TwoFactorSetupStartRequest>,
@@ -205,7 +211,12 @@ pub(crate) async fn two_factor_setup_confirm(
     };
 
     let now = Utc::now().naive_utc();
-    match verify_totp_code(&username, &secret, &request.code) {
+    // FR-016 applies here too, and this is the easiest place to forget it: the
+    // code that *confirms* an enrolment is a live TOTP code, and one still
+    // inside its window a moment later. Without spending its step, the code a
+    // person types to finish enrolling could immediately be replayed to sign
+    // in as them.
+    match verify_and_spend_step(&state, user_id, &username, &secret, &request.code).await {
         Ok(true) => {
             // Spec 041 FR-006: confirmation is where the recovery codes are
             // issued. Hashing happens before the transaction opens — ten Argon2
@@ -561,6 +572,69 @@ pub(crate) async fn create_login_two_factor_challenge(
     Ok(challenge_id)
 }
 
+/// Claim a TOTP time step for this account, or refuse it (FR-016).
+///
+/// # Why a conditional UPDATE rather than read-then-write
+///
+/// The same shape recovery codes use: **zero rows affected means refuse.** Two
+/// requests carrying the same code can arrive at once — that is precisely what
+/// a replay looks like — and a read followed by a write would let both see an
+/// unspent step and both proceed. The condition lives in the WHERE clause so
+/// the database decides, once, under its own row lock.
+///
+/// The predicate mirrors [`step_is_unspent`], which is where the rule is
+/// stated and tested in isolation. **Strictly less-than**, not "different":
+/// with a skew of one the *previous* step's code is still cryptographically
+/// valid and carries a lower step number, so a `<>` comparison would admit it.
+fn claim_totp_step_sync(
+    conn: &mut PgConnection,
+    user_id: uuid::Uuid,
+    step: i64,
+) -> Result<bool, diesel::result::Error> {
+    let claimed = diesel::update(
+        users::table.filter(users::id.eq(user_id)).filter(
+            users::two_factor_last_used_step
+                .is_null()
+                .or(users::two_factor_last_used_step.lt(step)),
+        ),
+    )
+    .set(users::two_factor_last_used_step.eq(Some(step)))
+    .execute(conn)?;
+
+    Ok(claimed > 0)
+}
+
+/// Verify a code and spend the step it matched, in one go.
+///
+/// Returns false for a code that does not match *and* for one that matches a
+/// step already spent. The caller cannot tell those apart, which is right: a
+/// replayed code and a wrong code are both "that did not work", and saying
+/// which would tell an attacker their intercepted code was genuine.
+async fn verify_and_spend_step(
+    state: &AppState,
+    user_id: uuid::Uuid,
+    username: &str,
+    secret: &str,
+    code: &str,
+) -> Result<bool, String> {
+    let Some(step) = thunderforge_axum_auth_core::totp::matched_step(username, secret, code)?
+    else {
+        return Ok(false);
+    };
+    // A step is `unix_time / 30`; it outgrew i32 in 1972 and will not reach
+    // i64 in any timeframe this comment survives.
+    let step = i64::try_from(step).map_err(|_| "TOTP step out of range".to_string())?;
+
+    let mut conn = state
+        .db_pool
+        .get()
+        .map_err(|_| "Failed to get DB connection".to_string())?;
+    tokio::task::spawn_blocking(move || claim_totp_step_sync(&mut conn, user_id, step))
+        .await
+        .map_err(|_| "Failed to spawn blocking task".to_string())?
+        .map_err(|_| "Failed to record the code as spent".to_string())
+}
+
 pub(crate) async fn verify_two_factor_for_user(
     state: &AppState,
     user_id: uuid::Uuid,
@@ -590,7 +664,7 @@ pub(crate) async fn verify_two_factor_for_user(
 
     let encryption_key = encryption_key_from_config_secret(&state.config.secret)?;
     let secret = decrypt_secret(&secret_encrypted, &encryption_key)?;
-    verify_totp_code(&username, &secret, code)
+    verify_and_spend_step(state, user_id, &username, &secret, code).await
 }
 
 /// Confirmation's refusals. Same `status`/`message` pair the shared

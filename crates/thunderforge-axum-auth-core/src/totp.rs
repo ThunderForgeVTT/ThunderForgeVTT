@@ -45,12 +45,63 @@ pub fn totp_for(username: &str, secret_base32: &str) -> Result<Totp, String> {
 
 /// Does `code` match the secret right now?
 pub fn verify_totp_code(username: &str, secret_base32: &str, code: &str) -> Result<bool, String> {
-    let totp = totp_for(username, secret_base32)?;
-    // totp-rs 6.0 changed this from `Result<bool, _>` to `Option<u64>`: `Some`
-    // carries the matched time step so a caller can refuse to accept the same
-    // step twice, and there is no longer a fallible-clock error to surface.
-    // We only ask whether the code matched, so the step is dropped here.
-    Ok(totp.check_current(code).is_some())
+    Ok(matched_step(username, secret_base32, code)?.is_some())
+}
+
+/// Which time step `code` matched, or `None` if it matched none.
+///
+/// # Why the step, and not just a yes
+///
+/// Spec 041 FR-016: **a code must not be accepted twice, including within the
+/// window.** A TOTP code is valid for its whole step and, with a skew of one,
+/// for the neighbouring steps too — so the same six digits stay usable for
+/// roughly 30-90 seconds. Anybody who reads them over a shoulder, or off a
+/// screen share, or out of a logged request body, can spend them again inside
+/// that window against a fresh challenge.
+///
+/// The only thing that can stop that is remembering **which step was spent**
+/// and refusing it a second time, which needs the step to leave this function.
+/// `totp-rs` has always returned it — `check`/`check_current` answer
+/// `Option<u64>`, not `bool` — and this crate was throwing it away. Its own
+/// comment said what the value was for while discarding it.
+///
+/// The caller stores the returned step against the account and refuses any
+/// verification whose step is not strictly greater; see
+/// `step_is_unspent` for the comparison, which is where the rule lives.
+pub fn matched_step(
+    username: &str,
+    secret_base32: &str,
+    code: &str,
+) -> Result<Option<u64>, String> {
+    Ok(totp_for(username, secret_base32)?.check_current(code))
+}
+
+/// The same question with an explicit clock, for tests that walk the window.
+pub fn matched_step_at(
+    username: &str,
+    secret_base32: &str,
+    code: &str,
+    unix_time: u64,
+) -> Result<Option<u64>, String> {
+    Ok(totp_for(username, secret_base32)?.check(code, unix_time))
+}
+
+/// May a code that matched `step` be spent, given the last step this account
+/// spent?
+///
+/// **Strictly greater**, not "different". A code from an *earlier* step than
+/// the one already spent is inside the skew window looking backwards, and
+/// accepting it would leave a replay path open in the direction nobody thinks
+/// about: sign in with the current code, then replay the previous step's code,
+/// which is still within skew and has a different step number.
+///
+/// `None` for `last_spent` is an account that has never verified, where every
+/// step is available.
+pub fn step_is_unspent(step: u64, last_spent: Option<u64>) -> bool {
+    match last_spent {
+        None => true,
+        Some(last) => step > last,
+    }
 }
 
 /// Does `code` match the secret at `unix_time`?
@@ -86,6 +137,101 @@ mod tests {
 
     /// 20 bytes, the SHA-1 HMAC block size RFC 4226 recommends.
     const SECRET: &str = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
+
+    /// A fixed instant well clear of any step boundary, so the arithmetic
+    /// below is about the rule and not about rounding.
+    const NOW: u64 = 1_760_000_000;
+
+    /// FR-016, the half that says a step can be identified at all. The step is
+    /// `unix_time / STEP_SECONDS`, and the same code inside the same step
+    /// matches the same number however often it is offered.
+    #[test]
+    fn a_code_reports_the_step_it_matched() {
+        let code = generate_code_at("wizard", SECRET, NOW).expect("a code");
+        let step = matched_step_at("wizard", SECRET, &code, NOW)
+            .expect("verified")
+            .expect("the code matches at the instant it was made for");
+
+        assert_eq!(step, NOW / STEP_SECONDS);
+        assert_eq!(
+            matched_step_at("wizard", SECRET, &code, NOW + 1)
+                .expect("verified")
+                .expect("still inside the same step"),
+            step,
+            "one second later is the same step, so the same number",
+        );
+    }
+
+    #[test]
+    fn a_code_that_matches_nothing_reports_no_step() {
+        assert_eq!(
+            matched_step_at("wizard", SECRET, "000000", NOW).expect("verified"),
+            None,
+        );
+    }
+
+    /// FR-016 itself. A code spent once is refused inside its own window,
+    /// which is the whole point: it stays cryptographically valid for another
+    /// 30-90 seconds, and only the spent-step record can refuse it.
+    #[test]
+    fn the_same_code_is_refused_the_second_time_inside_its_window() {
+        let code = generate_code_at("wizard", SECRET, NOW).expect("a code");
+        let step = matched_step_at("wizard", SECRET, &code, NOW)
+            .expect("verified")
+            .expect("matches");
+
+        assert!(
+            step_is_unspent(step, None),
+            "an account that has never verified may spend any step",
+        );
+
+        // The account now records `step`. The same code, still well within its
+        // skew window, matches again — and must not be spendable again.
+        let again = matched_step_at("wizard", SECRET, &code, NOW + 20)
+            .expect("verified")
+            .expect("still cryptographically valid, which is the problem");
+        assert_eq!(again, step);
+        assert!(
+            !step_is_unspent(again, Some(step)),
+            "a spent code must be refused while it is still valid",
+        );
+    }
+
+    /// The direction nobody thinks about. With a skew of one, the *previous*
+    /// step's code is still accepted — and it carries a different step number,
+    /// so a rule that only refused the exact same step would let it through.
+    /// This is why the comparison is strictly-greater and not not-equal.
+    #[test]
+    fn an_earlier_steps_code_cannot_be_replayed_after_a_later_one() {
+        let previous = generate_code_at("wizard", SECRET, NOW - STEP_SECONDS).expect("a code");
+        let current = generate_code_at("wizard", SECRET, NOW).expect("a code");
+
+        let current_step = matched_step_at("wizard", SECRET, &current, NOW)
+            .expect("verified")
+            .expect("matches");
+        let previous_step = matched_step_at("wizard", SECRET, &previous, NOW)
+            .expect("verified")
+            .expect("the skew window still accepts the previous step");
+
+        assert!(
+            previous_step < current_step,
+            "the previous step is genuinely earlier, not the same number",
+        );
+        assert!(
+            !step_is_unspent(previous_step, Some(current_step)),
+            "after spending the current step, the previous one must be dead — \
+             it is a different number, so `!=` would have admitted it",
+        );
+    }
+
+    #[test]
+    fn a_later_step_is_spendable_after_an_earlier_one() {
+        let step = NOW / STEP_SECONDS;
+        assert!(
+            step_is_unspent(step + 1, Some(step)),
+            "the next code must work, or the factor locks the account out",
+        );
+    }
 
     #[test]
     fn a_secret_that_is_not_base32_fails_instead_of_panicking() {
