@@ -448,17 +448,18 @@ fn candidate(settings: &Settings, scope: AppScope) -> Candidate {
     };
 
     // Parsed now, not at first use (FR-022).
-    let resolved = match GitHubApp::new(client_id, slug, &key_pem) {
-        Ok(app) if problems.is_empty() => Ok((app, sources)),
-        Ok(_) => Err(problems),
-        Err(e) => {
-            problems.push(CredentialProblem::UnreadableKey {
-                key: setting_key(scope, Field::PrivateKey),
-                detail: e.to_string(),
-            });
-            Err(problems)
-        }
-    };
+    let resolved =
+        match GitHubApp::new(client_id, slug, &key_pem).map(crate::repo_host::apply_host_bases) {
+            Ok(app) if problems.is_empty() => Ok((app, sources)),
+            Ok(_) => Err(problems),
+            Err(e) => {
+                problems.push(CredentialProblem::UnreadableKey {
+                    key: setting_key(scope, Field::PrivateKey),
+                    detail: e.to_string(),
+                });
+                Err(problems)
+            }
+        };
 
     Candidate {
         configured,

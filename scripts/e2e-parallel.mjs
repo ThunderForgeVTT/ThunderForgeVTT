@@ -68,6 +68,11 @@ const BACKEND_PORT_BASE = 30100;
 const MAILPIT_SMTP_PORT_BASE = 31025;
 const MAILPIT_API_PORT_BASE = 38025;
 const MAILPIT_IMAGE = "axllent/mailpit:v1.21";
+// Spec 037: a GitHub that is not GitHub, one per shard. The backend reaches it
+// through `GITHUB_API_BASE`, which is the same configuration value an operator
+// running GitHub Enterprise sets — so delivery is exercised through the
+// production code path rather than a test branch.
+const GITHUB_STUB_PORT_BASE = 31500;
 
 const POSTGRES_CONTAINER =
   process.env.THUNDERFORGE_POSTGRES_CONTAINER ?? "thunderforge-postgres";
@@ -556,7 +561,29 @@ async function startShard(index, { firstRun = false } = {}) {
     // never needs 32. Eight leaves the whole harness under 40 connections at
     // four shards, with the rest free for diesel, the seeds and a dev stack.
     DATABASE_POOL_MAX_SIZE: "8",
+    // Feedback delivery talks to this instead of github.com. Both bases are
+    // set: the web base decides the `html_url` a delivered issue is recorded
+    // under, and leaving it pointing at github.com would put a real URL on a
+    // row that describes a stub.
+    GITHUB_API_BASE: `http://127.0.0.1:${GITHUB_STUB_PORT_BASE + index}`,
+    GITHUB_WEB_BASE: `http://127.0.0.1:${GITHUB_STUB_PORT_BASE + index}`,
+    // The feedback subsystem's own application, so delivery resolves
+    // credentials the way spec 040 FR-021 says it must — a whole application,
+    // not a client id borrowed from one place and a key from another. The key
+    // is the committed throwaway fixture the repo-host crate's own tests use;
+    // it is worthless and the README beside it says so.
+    FEEDBACK_GITHUB_APP_CLIENT_ID: "Iv1.e2efeedbackstub",
+    FEEDBACK_GITHUB_APP_SLUG: "thunderforge-feedback-stub",
+    FEEDBACK_GITHUB_APP_PRIVATE_KEY_FILE: join(
+      ROOT_DIR,
+      "crates/thunderforge-repo-host/tests/fixtures/throwaway-test-app-key.pem",
+    ),
   };
+
+  spawnManaged(`node scripts/github-stub.mjs ${GITHUB_STUB_PORT_BASE + index}`, {
+    cwd: ROOT_DIR,
+    prefix: `gh${index}`,
+  });
 
   // The first-run lane keeps a copy of the backend's output, because the setup
   // link the server prints is the only place the bootstrap code exists in
@@ -590,6 +617,15 @@ async function startShard(index, { firstRun = false } = {}) {
     },
   });
   if (!(await waitForUrl(`http://127.0.0.1:${webPort}/`, `frontend ${index}`))) {
+    return null;
+  }
+  if (
+    !(await waitForUrl(
+      `http://127.0.0.1:${GITHUB_STUB_PORT_BASE + index}/_control/issues`,
+      `github stub ${index}`,
+      30_000,
+    ))
+  ) {
     return null;
   }
 
@@ -643,6 +679,7 @@ function runShard(shard, files, label = "parallel") {
       THUNDERFORGE_E2E_EXTERNAL_STACK: "1",
       THUNDERFORGE_E2E_DEMO_DIR: demoDir,
       THUNDERFORGE_DB_NAME: shard.database,
+      THUNDERFORGE_E2E_GITHUB_STUB: `http://127.0.0.1:${GITHUB_STUB_PORT_BASE + shard.index}`,
       THUNDERFORGE_E2E_MAILPIT_API: shard.mailpit.api,
       THUNDERFORGE_E2E_MAILPIT_SMTP_PORT: String(shard.mailpit.smtpPort),
       // Global setup applies `e2e_demo.sql` and then signs in as the demo user

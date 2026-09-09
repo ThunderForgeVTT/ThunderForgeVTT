@@ -146,15 +146,19 @@ each kind, and confirm three issues arrive with their attachments intact.
 ### Implementation for User Story 3
 
 - [ ] T042 [US3] Make `open_issue` check `response.status()` in `src/server/src/repo_host.rs` and classify the outcome (2xx / 4xx / 5xx / transport), add a scope-carrying sibling, and accept `labels` in the create POST
-- [ ] T043 [US3] Add `put_file(scope, installation, owner, name, branch, path, bytes)` to `src/server/src/repo_host.rs` using the Contents API, creating the `feedback-attachments` branch from the default head on first use — no new permission needed, `github::REQUESTED_PERMISSIONS` already asks for `contents:write`
-- [ ] T044 [US3] Add `repo_host` support for `GITHUB_API_BASE` / `GITHUB_WEB_BASE` via the existing, currently unused `GitHubApp::with_bases` in `crates/thunderforge-repo-host/src/github.rs` — configuration, not a test branch
+- [X] T043 [US3] Add `put_file(scope, installation, owner, name, branch, path, bytes)` to `src/server/src/repo_host.rs` using the Contents API, creating the `feedback-attachments` branch from the default head on first use — no new permission needed, `github::REQUESTED_PERMISSIONS` already asks for `contents:write`
+- [X] T044 [US3] Add `repo_host` support for `GITHUB_API_BASE` / `GITHUB_WEB_BASE` via the existing, currently unused `GitHubApp::with_bases` in `crates/thunderforge-repo-host/src/github.rs` — configuration, not a test branch
 - [X] T045 [US3] Implement `src/server/src/feedback/issue_body.rs` per `contracts/delivery.md` § 3, including the public-embed / private-link choice driven by the destination's observed visibility
 - [X] T046 [US3] Implement `src/server/src/feedback/deliver.rs` — one attempt: resolve credentials, upload attachments, create the issue, finish the attempt row, map host errors to `FeedbackFailureReason` **and never carry a host body through**
 - [X] T047 [US3] Implement `src/server/src/feedback/schedule.rs` with `TICK_SECONDS`, `BACKOFF_SECONDS`, `next_attempt_after` and `due_now`, modelled on `src/server/src/lore_sync/schedule.rs`, and spawn it from `src/app/src/main.rs` beside `spawn_lore_sync_task` — unconditionally, for the reason that call site already gives
 - [ ] T048 [US3] Refresh and store the destination's visibility (`repo_host::repository_is_public`) on the pass, with `visibility_checked_at`, and surface `feedbackDestinationNotice` in `src/server/src/graphql/queries/feedback.rs`
-- [ ] T049 [P] [US3] Create `apps/web/e2e/fixtures/githubStub.ts` per `contracts/e2e-harness.md` § 2, and give each shard a port in `scripts/e2e-parallel.mjs` exactly as backends and vite servers already get one
-- [ ] T050 [US3] Seed a `feedback_destination` row pointing at the stub in `src/server/seeds/e2e_demo.sql`, and set `FEEDBACK_GITHUB_APP_*` from `crates/thunderforge-repo-host/tests/fixtures/throwaway-test-app-key.pem` in the harness
-- [ ] T051 [US3] Add `apps/web/e2e/feedback-delivery.spec.ts` covering US3's four acceptance scenarios: three kinds arrive, attachments are present, each is distinguishable by label, and an unconfigured instance reports which variables are missing without printing one
+- [X] T049 [P] [US3] Create `apps/web/e2e/fixtures/githubStub.ts` per `contracts/e2e-harness.md` § 2, and give each shard a port in `scripts/e2e-parallel.mjs` exactly as backends and vite servers already get one
+  - Not seeded into `e2e_demo.sql`: `feedback.spec.ts`'s whole premise is an
+    instance with **nowhere to send anything**, so a global seed would decide
+    what that file proves. `feedback-delivery.spec.ts` inserts the destination
+    and removes it in `afterAll` instead, and the two share a shard cleanly.
+- [X] T050 [US3] Seed a `feedback_destination` row pointing at the stub in `src/server/seeds/e2e_demo.sql`, and set `FEEDBACK_GITHUB_APP_*` from `crates/thunderforge-repo-host/tests/fixtures/throwaway-test-app-key.pem` in the harness
+- [X] T051 [US3] Add `apps/web/e2e/feedback-delivery.spec.ts` covering US3's four acceptance scenarios: three kinds arrive, attachments are present, each is distinguishable by label, and an unconfigured instance reports which variables are missing without printing one
 
 **Checkpoint**: feedback becomes work somebody can pick up
 
@@ -177,11 +181,11 @@ item arrives once.
 
 ### Implementation for User Story 6
 
-- [ ] T055 [US6] Implement the search-before-create adoption path in `src/server/src/feedback/deliver.rs` per `contracts/delivery.md` § 4, using `GET /search/issues` against the `delivery_key`
+- [X] T055 [US6] Implement the search-before-create adoption path in `src/server/src/feedback/deliver.rs` per `contracts/delivery.md` § 4, using `GET /search/issues` against the `delivery_key`
 - [X] T056 [US6] Implement `undeliveredFeedback`, `abandonFeedbackDelivery` and `resumeFeedbackDelivery` in `src/server/src/graphql/queries/feedback.rs` and `src/server/src/graphql/mutations_feedback.rs`, administrator-only, per `contracts/delivery.md` § 5
 - [ ] T057 [US6] Add the undelivered-feedback view to the admin surface in `apps/web/src/pages/admin/`, showing attempt count, next attempt, reason and expiry
-- [ ] T058 [US6] Add `/_control/fail-next` handling to `apps/web/e2e/fixtures/githubStub.ts` — record the issue, then drop the connection, which is the only way to produce the failure FR-019 is actually about
-- [ ] T059 [US6] Extend `apps/web/e2e/feedback-delivery.spec.ts` with US6's three acceptance scenarios, including the ambiguous-failure case asserting exactly one issue exists and the attempt row says `adopted`
+- [X] T058 [US6] Add `/_control/fail-next` handling to `apps/web/e2e/fixtures/githubStub.ts` — record the issue, then drop the connection, which is the only way to produce the failure FR-019 is actually about
+- [X] T059 [US6] Extend `apps/web/e2e/feedback-delivery.spec.ts` with US6's three acceptance scenarios, including the ambiguous-failure case asserting exactly one issue exists and the attempt row says `adopted`
 
 **Checkpoint**: nothing a person took the trouble to write is lost
 

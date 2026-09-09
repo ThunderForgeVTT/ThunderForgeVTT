@@ -164,6 +164,33 @@ pub struct RegisteredApp {
     pub app: GitHubApp,
 }
 
+/// Point an application at whatever host this deployment actually talks to.
+///
+/// `GITHUB_API_BASE` and `GITHUB_WEB_BASE`, defaulted to github.com. This is a
+/// **configuration value, not a test hook**: an operator running GitHub
+/// Enterprise sets the same two variables, and `GitHubApp::with_bases` was
+/// added for exactly that and then never wired to anything. The e2e harness
+/// points them at a stub, which is why delivery can be exercised end to end
+/// without a `#[cfg(test)]` branch anywhere in this file — a test that
+/// exercises a test-only branch proves the branch.
+pub fn apply_host_bases(app: GitHubApp) -> GitHubApp {
+    let read = |name: &str| {
+        std::env::var(name)
+            .ok()
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty())
+    };
+    let api = read("GITHUB_API_BASE");
+    let web = read("GITHUB_WEB_BASE");
+
+    if api.is_none() && web.is_none() {
+        return app;
+    }
+    app.with_bases(
+        web.unwrap_or_else(|| thunderforge_repo_host::github::DEFAULT_WEB_BASE.to_string()),
+        api.unwrap_or_else(|| thunderforge_repo_host::github::DEFAULT_API_BASE.to_string()),
+    )
+}
 /// Read the application registration from the environment.
 ///
 /// Returns **every** problem rather than the first, so an operator fixes their
