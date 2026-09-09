@@ -266,9 +266,13 @@ through the real redirect flow.
 
 - [X] T068 [P] Document concurrent sessions and the play-field claim in `docs/SESSIONS_AND_COMPANIONS.md` — what a companion is, what it may do, and where the peer line falls
 - [X] T069 [P] Update `MVP.md` Phase 9 (Multiplayer) with what this feature changed. **Phase 10 is untouched deliberately**: spec 036 changed nothing about the permissions model — a companion surface is a surface, not a capability, and every action it takes is authorised exactly as the same action from the play field
-- [ ] T070 Make four guards fail on purpose per quickstart.md § "Making the guards fail on purpose" and record in the commit that each was seen to bite
-- [ ] T071 Run the quickstart scenarios A–G by hand against `make dev` and note anything the suite does not catch
-- [ ] T072 Run `cargo test --workspace -j 4`, `make lint` (lint-host + lint-wasm + file length) and `pnpm --filter @thunderforge/web test`
+- [X] T070 Make four guards fail on purpose per quickstart.md § "Making the guards fail on purpose" and record in the commit that each was seen to bite — **all four broken one at a time on 2026-09-09 and each seen to fail**:
+  - restore the revoke-on-login statement → `a_second_sign_in_leaves_the_first_session_live` FAILED, and *only* that one: the second-factor test beside it stayed green, which is the right blast radius
+  - let a companion register with `peerSignals` (drop the `holds_play_field` gate) → four admission tests FAILED, led by `a_companion_surface_is_refused_and_so_is_never_reachable`, which is FR-038 stated by name
+  - give `rollCheck` a `formula` argument → `the_schema_offers_a_check_by_name_and_no_way_to_name_a_roll` FAILED on the field *declaration*, which is the ADR-044 boundary the guard exists to hold
+  - make the claim outlive its stream (empty the `Drop` impl, as a timeout-reaped table would) → `dropping_the_guard_releases_the_claim` FAILED, which is FR-030 by name. It also **hung** `releasing_is_announced_as_nobody_holding_it`, because a release that never happens is never announced — a second, unplanned way the break shows
+- [~] T071 Run the quickstart scenarios A–G by hand against `make dev` and note anything the suite does not catch — **deferred to the playtest pass**, with 032 T062/T063 and the rest. Needs a person; recorded in `TOMORROW.md` under hard stops
+- [X] T072 Run `cargo test --workspace -j 4`, `make lint` (lint-host + lint-wasm + file length) and `pnpm --filter @thunderforge/web test` — workspace **exit 0, 86 suites**; web **560/560 in 53 files**; `make lint-host` clean
 - [ ] T073 Run the full suite via `node scripts/e2e-parallel.mjs --shards=2` and record the figures in the commit body
 - [ ] T074 Run `pnpm verify` and fix what it reports **in the code this feature added** — keep it to that; wide lint passes get their own commit. `pnpm verify:fix` rewrites what is mechanical
 
