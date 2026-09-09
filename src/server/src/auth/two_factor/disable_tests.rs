@@ -148,7 +148,7 @@ async fn removal_takes_the_secret_the_pending_enrolment_and_every_recovery_code(
     );
 
     let mut conn = state.db_pool.get().expect("conn");
-    clear_second_factor_sync(&mut conn, user_id).expect("cleared");
+    clear_second_factor_sync(&mut conn, user_id, Some(user_id)).expect("cleared");
 
     assert_eq!(factor_state(&state, user_id), (false, None, None, 0));
 }
@@ -160,7 +160,7 @@ async fn clearing_an_account_with_no_factor_is_not_an_error() {
     let mut conn = state.db_pool.get().expect("conn");
     let user_id = insert_test_user(&mut conn);
 
-    clear_second_factor_sync(&mut conn, user_id).expect("cleared");
+    clear_second_factor_sync(&mut conn, user_id, Some(user_id)).expect("cleared");
     drop(conn);
     assert_eq!(factor_state(&state, user_id), (false, None, None, 0));
 }
@@ -182,7 +182,7 @@ async fn removal_reaches_only_the_account_that_asked() {
     enrol_with_codes(&state, theirs);
 
     let mut conn = state.db_pool.get().expect("conn");
-    clear_second_factor_sync(&mut conn, mine).expect("cleared");
+    clear_second_factor_sync(&mut conn, mine, Some(mine)).expect("cleared");
     drop(conn);
 
     assert_eq!(factor_state(&state, mine), (false, None, None, 0));

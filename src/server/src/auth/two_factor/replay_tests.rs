@@ -10,7 +10,6 @@
 //! with a comment in `totp.rs` saying exactly what the discarded value was
 //! for. Every unit test either side of that seam passed.
 
-use diesel::prelude::*;
 use uuid::Uuid;
 
 use super::*;

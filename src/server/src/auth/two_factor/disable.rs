@@ -105,9 +105,15 @@ pub(crate) fn refusal_for(
 /// account that can still be "verified" by a credential nothing now protects,
 /// and a pending enrolment left behind would let the next `setup/confirm`
 /// re-arm a factor this request just paid to remove.
+///
+/// The `removed` event is written **inside** that transaction (FR-015): a
+/// removal nobody recorded did not happen, and this is a caller that can
+/// record without risking the action, because it is still holding the
+/// transaction that performs it.
 pub(crate) fn clear_second_factor_sync(
     conn: &mut PgConnection,
     user_id: uuid::Uuid,
+    actor_user_id: Option<uuid::Uuid>,
 ) -> Result<(), diesel::result::Error> {
     conn.transaction::<_, diesel::result::Error, _>(|conn| {
         diesel::update(users::table.filter(users::id.eq(user_id)))
@@ -120,6 +126,12 @@ pub(crate) fn clear_second_factor_sync(
             ))
             .execute(conn)?;
         delete_recovery_codes_sync(conn, user_id)?;
+        super::events::record_sync(
+            conn,
+            user_id,
+            actor_user_id,
+            super::events::event_type::REMOVED,
+        )?;
         Ok(())
     })
 }
@@ -285,8 +297,10 @@ pub(crate) async fn two_factor_disable(
             );
         }
     };
-    let cleared =
-        tokio::task::spawn_blocking(move || clear_second_factor_sync(&mut conn, user_id)).await;
+    let cleared = tokio::task::spawn_blocking(move || {
+        clear_second_factor_sync(&mut conn, user_id, Some(user_id))
+    })
+    .await;
 
     match cleared {
         Ok(Ok(())) => (

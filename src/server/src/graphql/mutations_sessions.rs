@@ -70,6 +70,53 @@ impl SessionQuery {
                 .collect(),
         )
     }
+
+    /// This account's own second-factor history (spec 041 FR-015, FR-025).
+    ///
+    /// Scoped to the caller by `events_for`, which filters on the subject, so
+    /// one account cannot read another's. The acting account's *identity* is
+    /// deliberately absent: "somebody else did this" is what the account
+    /// holder needs and can act on, and which administrator it was is an
+    /// operator's question asked of an operator's surface.
+    ///
+    /// The data model calls this the durable half of FR-015's notification —
+    /// there is no mail subsystem this may depend on (FR-001b), so where
+    /// nothing can be sent, a person still sees what happened here.
+    async fn my_two_factor_events(
+        &self,
+        ctx: &Context<'_>,
+    ) -> GraphQLResult<Vec<GraphQLTwoFactorEvent>> {
+        let state = app_state(ctx)?;
+        let auth_user = authenticated_user(ctx)?;
+        Ok(
+            crate::auth::two_factor::events::events_for(state, auth_user.user_id, 50)
+                .await
+                .map_err(async_graphql::Error::new)?
+                .into_iter()
+                .map(GraphQLTwoFactorEvent::from)
+                .collect(),
+        )
+    }
+}
+
+/// One thing that happened to this account's second factor.
+#[derive(async_graphql::SimpleObject)]
+pub struct GraphQLTwoFactorEvent {
+    pub occurred_at: String,
+    /// One of the values the spec-041 migration's CHECK constraint permits.
+    pub event_type: String,
+    /// True when somebody other than the account holder did this.
+    pub by_someone_else: bool,
+}
+
+impl From<crate::auth::two_factor::events::TwoFactorEvent> for GraphQLTwoFactorEvent {
+    fn from(event: crate::auth::two_factor::events::TwoFactorEvent) -> Self {
+        Self {
+            occurred_at: event.occurred_at.to_string(),
+            event_type: event.event_type,
+            by_someone_else: event.by_someone_else,
+        }
+    }
 }
 
 #[derive(Default)]

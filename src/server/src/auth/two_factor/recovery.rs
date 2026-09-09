@@ -240,6 +240,18 @@ pub(crate) async fn consume_recovery_code(
         .execute(&mut conn)
         .map_err(|_| "Failed to spend recovery code".to_string())?;
 
+        if spent == 1 {
+            // FR-015. The row says a code was used; it never says which, and
+            // there is nowhere in this table's shape to put that even by
+            // accident.
+            let _ = super::events::record_sync(
+                &mut conn,
+                user_id,
+                Some(user_id),
+                super::events::event_type::RECOVERY_CODE_USED,
+            );
+        }
+
         Ok(spent == 1)
     })
     .await

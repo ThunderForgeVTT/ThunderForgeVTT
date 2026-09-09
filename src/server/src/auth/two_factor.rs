@@ -23,6 +23,11 @@ pub(crate) use recovery::*;
 pub(crate) mod requirement;
 pub(crate) use requirement::*;
 
+/// Spec 041 FR-015 / FR-025: what happened to a second factor, and who did
+/// it. The act, never the person — see the module header.
+#[path = "two_factor/events.rs"]
+pub(crate) mod events;
+
 /// Spec 041 FR-016: a code is not accepted twice, including within its window.
 /// Tests the join between the rule in `totp.rs` and the path a sign-in takes.
 #[cfg(test)]
@@ -267,7 +272,26 @@ pub(crate) async fn two_factor_setup_confirm(
                     // enabled without a way back in, and never handed codes for
                     // an enrolment that did not take. Re-confirming replaces
                     // the previous set outright (FR-010).
-                    replace_recovery_codes_sync(conn, user_id, &rows)
+                    replace_recovery_codes_sync(conn, user_id, &rows)?;
+
+                    // FR-015, in the transaction it describes. Two events,
+                    // because they are two facts: a factor was enabled, and a
+                    // set of codes was issued. Re-confirming an existing
+                    // factor writes both again, which is correct — the codes
+                    // it replaced are dead and the account holder should see
+                    // that happen.
+                    events::record_sync(
+                        conn,
+                        user_id,
+                        Some(user_id),
+                        events::event_type::ENROLLED,
+                    )?;
+                    events::record_sync(
+                        conn,
+                        user_id,
+                        Some(user_id),
+                        events::event_type::RECOVERY_CODES_ISSUED,
+                    )
                 })
             })
             .await
@@ -492,12 +516,37 @@ pub(crate) async fn set_admin_user_two_factor_required(
         return resp;
     }
 
+    // FR-025 wants *who* as well as *for whom*, and this is the one requirement
+    // switch where they differ: an administrator is changing somebody else's
+    // account. The instance-wide switch above records nothing here on purpose —
+    // it has no single subject, and spec 035's `instance_access_events` is
+    // where instance-wide policy changes belong.
+    let actor_user_id = resolve_authenticated_user(&state, &cookies)
+        .await
+        .ok()
+        .map(|user| user.user_id);
+
     let mut conn = state.db_pool.get().expect("Failed to get DB connection");
     let required = request.required;
     let result = tokio::task::spawn_blocking(move || {
-        diesel::update(users::table.filter(users::id.eq(user_id)))
-            .set(users::two_factor_admin_required.eq(required))
-            .execute(&mut conn)
+        conn.transaction::<_, diesel::result::Error, _>(|conn| {
+            let updated = diesel::update(users::table.filter(users::id.eq(user_id)))
+                .set(users::two_factor_admin_required.eq(required))
+                .execute(conn)?;
+            if updated > 0 {
+                events::record_sync(
+                    conn,
+                    user_id,
+                    actor_user_id,
+                    if required {
+                        events::event_type::REQUIREMENT_SET
+                    } else {
+                        events::event_type::REQUIREMENT_CLEARED
+                    },
+                )?;
+            }
+            Ok(updated)
+        })
     })
     .await
     .expect("Failed to spawn blocking task");

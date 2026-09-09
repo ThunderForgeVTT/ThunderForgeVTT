@@ -663,6 +663,16 @@ diesel::table! {
 }
 
 diesel::table! {
+    two_factor_events (id) {
+        id -> Uuid,
+        occurred_at -> Timestamp,
+        subject_user_id -> Uuid,
+        actor_user_id -> Nullable<Uuid>,
+        event_type -> Text,
+    }
+}
+
+diesel::table! {
     user_oauth_accounts (id) {
         id -> Uuid,
         user_id -> Uuid,
@@ -1414,6 +1424,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     shapes,
     token_resource_disclosure,
     tokens,
+    two_factor_events,
     user_oauth_accounts,
     user_recovery_codes,
     user_sessions,
