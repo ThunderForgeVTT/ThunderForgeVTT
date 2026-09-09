@@ -150,7 +150,7 @@ others survive; end all and assert every client is signed out next request.
 - [X] T034 [US4] Implement the session registry reads in `src/server/src/auth/session_registry.rs` (live sessions, last seen, current, holds-play-field)
 - [X] T035 [US4] Implement `mySessions`, `endSession` and `endAllSessions` in `src/server/src/graphql/mutations_sessions.rs` per `contracts/sessions.md`, writing `ended_reason`
 - [X] T036 [US4] Close the live streams and release any play-field claim held by an ended session, in `src/server/src/graphql/subscriptions.rs` and `src/server/src/play_field.rs` (FR-010)
-- [ ] T037 [US4] End every other session on password change in `src/server/src/auth/sessions.rs`, with `ended_reason = 'password_changed'` (FR-008)
+- [X] T037 [US4] End every other session on password change in `src/server/src/auth/sessions.rs`, with `ended_reason = 'password_changed'` (FR-008) — landed in `src/server/src/auth/password_change.rs` rather than `sessions.rs`, because there was **no password-change path in the product at all**: the route, the screen and the requirement all had to be built together
 - [X] T038 [US4] Add the session list and its controls to the account page in `apps/web/src/pages/user/`
 - [X] T039 [US4] Extend `apps/web/e2e/concurrent-sessions.spec.ts` with US4's five acceptance scenarios
 

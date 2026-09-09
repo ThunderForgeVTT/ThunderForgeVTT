@@ -349,8 +349,25 @@ async function assertPortsFree(total) {
   }
 }
 
+/**
+ * Release the lock, but **only if it is still ours**.
+ *
+ * The unconditional `rmSync` here cost two false results in one afternoon.
+ * Teardown outlives the moment the process is judged finished, so a run that
+ * has been reported as over is still dropping its shard databases and killing
+ * its servers while the *next* run starts. That next run writes its own pid
+ * into the lock — and then the previous run reaches this function and deletes
+ * it, leaving the new run unprotected. What follows is not a crash: the old
+ * teardown drops `thunderforge_e2e_0` out from under the new run's backend,
+ * and the whole suite fails with a database that "does not exist".
+ *
+ * Reading the pid back before removing it makes the release belong to the run
+ * that took it.
+ */
 function releaseLock() {
   try {
+    const holder = Number(readFileSync(LOCK_PATH, "utf-8").trim());
+    if (holder !== process.pid) return;
     rmSync(LOCK_PATH, { force: true });
   } catch {
     // Nothing to release.

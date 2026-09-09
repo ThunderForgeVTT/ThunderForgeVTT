@@ -1,5 +1,6 @@
 import { SEO } from "@/components/seo/SEO";
 import { Container } from "@/components/ui/container/Container";
+import { PasswordChangePanel } from "@/pages/user/components/PasswordChangePanel";
 import { TwoFactorEnrolmentPanel } from "@/pages/user/components/TwoFactorEnrolmentPanel";
 import { SessionListPanel } from "@/pages/user/components/SessionListPanel";
 import { TwoFactorRemovalPanel } from "@/pages/user/components/TwoFactorRemovalPanel";
@@ -39,6 +40,11 @@ export function SecuritySettingsPage() {
               How this account proves it is yours.
             </p>
           </header>
+          {/* Spec 036 FR-008. First, because it is the thing a person comes
+              to this page for when something has gone wrong, and because
+              until this panel existed there was no way to change a password
+              at all — the requirement had nothing to attach to. */}
+          <PasswordChangePanel />
           <TwoFactorEnrolmentPanel />
           {/* Spec 041 US4. Below enrolment, because the page's subject is
               having a second factor; removing one is the other end of the

@@ -16,7 +16,6 @@
 //! `sessions.rs`'s `the_session_bound_ends_the_least_recently_used`.
 
 use chrono::Utc;
-use diesel::prelude::*;
 use tower_cookies::Cookies;
 use uuid::Uuid;
 

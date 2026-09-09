@@ -172,6 +172,13 @@ pub fn router() -> Router<AppState> {
             "/authentication/admin/users/{user_id}/2fa/required",
             post(set_admin_user_two_factor_required),
         )
+        // Spec 036 FR-008: changing the password ends every other session.
+        // There was no password-change path at all until this route, which is
+        // why the requirement had nothing to attach to.
+        .route(
+            "/authentication/password",
+            post(crate::auth::password_change::change_password),
+        )
         .route("/authentication/logout", post(logout))
 }
 
@@ -232,6 +239,12 @@ fn error_response(
         }),
     )
 }
+
+/// Spec 036 FR-008: changing a password, and what it costs the other
+/// sessions. Its own module because it is the first thing in this product
+/// that writes `password_hash` after registration.
+#[path = "password_change.rs"]
+pub(crate) mod password_change;
 
 #[cfg(test)]
 #[path = "argon2_upgrade_tests.rs"]

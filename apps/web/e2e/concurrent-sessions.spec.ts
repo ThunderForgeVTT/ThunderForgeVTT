@@ -407,3 +407,89 @@ test.describe("Spec 036 US4: the session list a person actually uses", () => {
     await second.context().close();
   });
 });
+
+/**
+ * Spec 036 FR-008. Until this landed there was no password-change path in the
+ * product at all — no endpoint, no screen — so the requirement had nothing to
+ * attach to and `ended_reason = 'password_changed'` was a value in a CHECK
+ * constraint that nothing could ever write.
+ */
+test.describe("Spec 036 FR-008: changing the password ends the other sessions", () => {
+  test("the other clients are signed out, this one is not, and the old password stops working", async ({
+    page,
+    browser,
+  }) => {
+    const creds = freshCredentials("e2epwchange");
+    await register(page, creds);
+    const other = await openAnotherClient(browser, creds, "context");
+    const newPassword = `${creds.password}-rotated`;
+
+    await page.goto("/settings/security");
+    const panel = page.getByTestId("password-change");
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+
+    // The wrong current password must be refused, so a session somebody left
+    // open is not on its own enough to rotate the credential.
+    await page.getByTestId("password-change-current").fill("not my password");
+    await page.getByTestId("password-change-new").fill(newPassword);
+    await page.getByTestId("password-change-confirm").fill(newPassword);
+    await page.getByTestId("password-change-submit").click();
+    await expect(page.getByTestId("password-change-error")).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // The other client is untouched by a refused attempt.
+    const stillThere = await graphql<{ data: unknown | null }>(
+      other,
+      MY_SESSIONS_UI,
+      {},
+    );
+    expect(stillThere.data).not.toBeNull();
+
+    await page.getByTestId("password-change-current").fill(creds.password);
+    await page.getByTestId("password-change-submit").click();
+    await expect(page.getByTestId("password-change-done")).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // FR-008 both ways: the other client is gone, this one is not.
+    await expectSignedOut(
+      other,
+      MY_SESSIONS_UI,
+      "a password change must end every session but the one that made it",
+    );
+    const mine = await graphql<{ data: unknown | null }>(
+      page,
+      MY_SESSIONS_UI,
+      {},
+    );
+    expect(
+      mine.data,
+      "the session that changed the password must survive it",
+    ).not.toBeNull();
+
+    // And the change is real: the new password signs in, the old one does not.
+    const fresh = await browser.newContext();
+    const freshPage = await fresh.newPage();
+    await freshPage.goto("/login");
+    await freshPage.locator("#login-identifier").fill(creds.username);
+    await freshPage.locator("#login-password").fill(creds.password);
+    await freshPage.getByRole("button", { name: /sign in/i }).click();
+    await expect(
+      freshPage.locator("#login-identifier"),
+      "the old password must no longer sign in",
+    ).toBeVisible({ timeout: 15_000 });
+
+    await freshPage.locator("#login-password").fill(newPassword);
+    await freshPage.getByRole("button", { name: /sign in/i }).click();
+    const signedIn = await graphql<{ data: unknown | null }>(
+      freshPage,
+      MY_SESSIONS_UI,
+      {},
+    );
+    expect(signedIn.data, "the new password must sign in").not.toBeNull();
+
+    await fresh.close();
+    await other.context().close();
+  });
+});
