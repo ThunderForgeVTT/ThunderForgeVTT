@@ -55,6 +55,9 @@ const InstanceInvitePage = lazy(pageLoaders.instanceInvite);
 const WorldCollectionsPage = lazy(pageLoaders.worldCollections);
 const WorldSystemSettingsPage = lazy(pageLoaders.worldSystemSettings);
 const StorageSettingsPage = lazy(pageLoaders.storageSettings);
+const FeedbackSettingsPage = lazy(
+  () => import("@/pages/user/FeedbackSettingsPage"),
+);
 const SecuritySettingsPage = lazy(pageLoaders.securitySettings);
 const JoinWorldPage = lazy(pageLoaders.joinWorld);
 const NotFoundPage = lazy(pageLoaders.notFound);
@@ -792,6 +795,20 @@ export default function AppRoutes({
           signed-in person must be able to do for themselves, and before this
           route the only way to do it was to post JSON at the API by hand.
         */}
+        {/* Spec 037 US5: what this account has reported, and what became of
+            it. Its own page rather than a card on the security screen — those
+            answer different questions. */}
+        <Route
+          path="/settings/feedback"
+          element={
+            <RequireAuthenticated>
+              {renderLazyPage(
+                <FeedbackSettingsPage />,
+                "Loading your feedback",
+              )}
+            </RequireAuthenticated>
+          }
+        />
         <Route
           path="/settings/security"
           element={

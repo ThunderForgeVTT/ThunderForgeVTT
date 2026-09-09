@@ -30,6 +30,7 @@ import { DiskUsageChart } from "./components/DiskUsageChart";
 import { GitHubAppsPanel } from "./components/GitHubAppsPanel";
 import { InstanceSettingsPanel } from "./components/InstanceSettingsPanel";
 import { LegalEnquiriesPanel } from "./components/LegalEnquiriesPanel";
+import { UndeliveredFeedbackPanel } from "./components/UndeliveredFeedbackPanel";
 import { MailPanel } from "./components/MailPanel";
 import { ManifestEditor } from "./components/ManifestEditor";
 import { MetricsCard } from "./components/MetricsCard";
@@ -494,6 +495,21 @@ export default function SettingsPage({
                 </div>
                 <Card surface="parchment" className="grid gap-4 p-6">
                   <LegalEnquiriesPanel />
+                </Card>
+
+                {/* Spec 037 FR-021. Here rather than in its own section
+                    because it is the same job: things people sent this
+                    instance that an operator has to do something about. */}
+                <Card surface="stone" className="grid gap-4 p-6">
+                  <div className="grid gap-1">
+                    <h3 className="text-lg font-semibold">
+                      Feedback waiting to be sent on
+                    </h3>
+                    <p className="text-muted-foreground">
+                      Received and kept. Sending it on is separate and can fail.
+                    </p>
+                  </div>
+                  <UndeliveredFeedbackPanel />
                 </Card>
               </section>
             ) : null}

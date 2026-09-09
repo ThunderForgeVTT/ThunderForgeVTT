@@ -151,3 +151,86 @@ export function containsSecret(error: unknown): boolean {
     error.hasCode(FEEDBACK_CONTAINS_SECRET)
   );
 }
+
+/**
+ * Spec 037 US5: what this account has sent, and what became of it.
+ *
+ * # Why `deliveryState` is not a failure report
+ *
+ * FR-018 makes the *instance* the record: a submission that reached this
+ * server has arrived, whatever the destination later does. So a person is
+ * shown `PENDING` while delivery is outstanding and never shown that a
+ * delivery attempt failed — that is the operator's problem, on the operator's
+ * screen, and telling the author would invite them to file it again.
+ */
+export interface MySubmission {
+  id: string;
+  kind: string;
+  message: string;
+  summary: string | null;
+  createdAt: string;
+  deliveryState: FeedbackDeliveryState;
+  issueUrl: string | null;
+  issueState: string | null;
+  issueStateCheckedAt: string | null;
+  attachments: { id: string; kind: string; byteSize: number }[];
+  /** When *this instance's* copies expire. The destination's are unaffected. */
+  attachmentsExpireAt: string;
+}
+
+export async function getMySubmissions(): Promise<MySubmission[]> {
+  const data = await postGraphQL<{ mySubmissions: MySubmission[] }>(
+    `query MySubmissions {
+      mySubmissions {
+        id kind message summary createdAt deliveryState
+        issueUrl issueState issueStateCheckedAt
+        attachments { id kind byteSize }
+        attachmentsExpireAt
+      }
+    }`,
+  );
+  return data.mySubmissions;
+}
+
+/** One undelivered submission, as an operator sees it — no message, ever. */
+export interface UndeliveredFeedback {
+  id: string;
+  kind: string;
+  createdAt: string;
+  deliveryState: FeedbackDeliveryState;
+  attemptCount: number;
+  lastAttemptAt: string | null;
+  lastFailureReason: string | null;
+  nextAttemptAfter: string | null;
+  attachmentsExpireAt: string;
+}
+
+export async function getUndeliveredFeedback(): Promise<UndeliveredFeedback[]> {
+  const data = await postGraphQL<{
+    undeliveredFeedback: UndeliveredFeedback[];
+  }>(
+    `query UndeliveredFeedback {
+      undeliveredFeedback {
+        id kind createdAt deliveryState attemptCount
+        lastAttemptAt lastFailureReason nextAttemptAfter attachmentsExpireAt
+      }
+    }`,
+  );
+  return data.undeliveredFeedback;
+}
+
+export async function abandonFeedbackDelivery(id: string): Promise<boolean> {
+  const data = await postGraphQL<{ abandonFeedbackDelivery: boolean }>(
+    `mutation Abandon($id: UUID!) { abandonFeedbackDelivery(submissionId: $id) }`,
+    { id },
+  );
+  return data.abandonFeedbackDelivery;
+}
+
+export async function resumeFeedbackDelivery(id: string): Promise<boolean> {
+  const data = await postGraphQL<{ resumeFeedbackDelivery: boolean }>(
+    `mutation Resume($id: UUID!) { resumeFeedbackDelivery(submissionId: $id) }`,
+    { id },
+  );
+  return data.resumeFeedbackDelivery;
+}

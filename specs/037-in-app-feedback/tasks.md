@@ -183,7 +183,7 @@ item arrives once.
 
 - [X] T055 [US6] Implement the search-before-create adoption path in `src/server/src/feedback/deliver.rs` per `contracts/delivery.md` § 4, using `GET /search/issues` against the `delivery_key`
 - [X] T056 [US6] Implement `undeliveredFeedback`, `abandonFeedbackDelivery` and `resumeFeedbackDelivery` in `src/server/src/graphql/queries/feedback.rs` and `src/server/src/graphql/mutations_feedback.rs`, administrator-only, per `contracts/delivery.md` § 5
-- [ ] T057 [US6] Add the undelivered-feedback view to the admin surface in `apps/web/src/pages/admin/`, showing attempt count, next attempt, reason and expiry
+- [X] T057 [US6] Add the undelivered-feedback view to the admin surface in `apps/web/src/pages/admin/`, showing attempt count, next attempt, reason and expiry
 - [X] T058 [US6] Add `/_control/fail-next` handling to `apps/web/e2e/fixtures/githubStub.ts` — record the issue, then drop the connection, which is the only way to produce the failure FR-019 is actually about
 - [X] T059 [US6] Extend `apps/web/e2e/feedback-delivery.spec.ts` with US6's three acceptance scenarios, including the ambiguous-failure case asserting exactly one issue exists and the attempt row says `adopted`
 
@@ -221,8 +221,8 @@ confirm the submitter sees the change.
 - [ ] T065 [P] [US5] Add a server test in `src/server/src/graphql/queries/feedback.rs` asserting `mySubmissions` returns only the caller's rows and that there is no argument by which another account's could be reached
 - [X] T066 [US5] Implement `mySubmissions` in `src/server/src/graphql/queries/feedback.rs` per `contracts/feedback.md`
 - [ ] T067 [US5] Add the state refresh to the delivery pass in `src/server/src/feedback/schedule.rs` — bounded per tick, oldest-refreshed-first, `open`/`closed` only, recording `issue_state_checked_at`
-- [ ] T068 [US5] Create `apps/web/src/components/feedback/MySubmissions.tsx` and route it under the account pages, showing what was sent, its state, when that was observed, and when the instance's copies expire
-- [ ] T069 [US5] Add `apps/web/e2e/feedback-status.spec.ts` covering US5's three acceptance scenarios, including that a second account sees none of the first's
+- [X] T068 [US5] Create `apps/web/src/components/feedback/MySubmissions.tsx` and route it under the account pages, showing what was sent, its state, when that was observed, and when the instance's copies expire
+- [X] T069 [US5] Add `apps/web/e2e/feedback-status.spec.ts` covering US5's three acceptance scenarios, including that a second account sees none of the first's
 
 **Checkpoint**: the loop closes, which is what makes somebody send a second one
 
@@ -235,7 +235,7 @@ is the only place this feature deletes anything.
 
 - [ ] T070 [P] Add server tests in `src/server/src/feedback/mod.rs` asserting the sweep deletes only expired feedback objects, sets `attachments_purged_at`, leaves the rows, and leaves every canvas, lore, actor and scene object untouched
 - [X] T071 Implement the retention sweep on the delivery task's tick in `src/server/src/feedback/schedule.rs` — one schedule, not a second one
-- [ ] T072 Show the expiry and the purged state in `apps/web/src/components/feedback/MySubmissions.tsx` and in the pre-submission notice, stating plainly that the destination's copy is unaffected and cannot be recalled by the instance
+- [X] T072 Show the expiry and the purged state in `apps/web/src/components/feedback/MySubmissions.tsx` and in the pre-submission notice, stating plainly that the destination's copy is unaffected and cannot be recalled by the instance
 - [ ] T073 Add the `ATTACHMENTS_EXPIRED` failure path — a submission whose evidence expired before delivery succeeded fails permanently, says so, and does not deliver a report without the thing it was for
 
 **Checkpoint**: the retention that was promised is the retention that happens
@@ -246,7 +246,15 @@ is the only place this feature deletes anything.
 
 - [ ] T074 [P] Document the feedback path in `docs/` — what is captured, what is redacted and when, where attachments live, how long they live, and what a maintainer sees
 - [ ] T075 [P] Update `MVP.md` with the feedback path as the way MVP learns what is wrong with it, and note that it is MVP-adjacent rather than part of the play loop
-- [ ] T076 Confirm no product file changed to make the harness work (`contracts/e2e-harness.md` § "What must NOT appear in product code"); if any did, the stub is wrong
+  - **Inspected 2026-09-09 and it holds.** No `isTest`, `is_test`, `E2E` or
+    `cfg!(test)` in `feedback/`, `repo_host.rs` or `repo_host/`; no `_control`
+    anywhere in the schema; `feedback/rate_limit.rs` states in its own header
+    why it ignores `THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT`. Two product files
+    did change — `repo_host.rs` and `github_apps.rs` — and that is T044, not
+    harness scaffolding: it wires `GitHubApp::with_bases`, which this
+    contract itself names as the seam and which an operator running GitHub
+    Enterprise configures the same way.
+- [X] T076 Confirm no product file changed to make the harness work (`contracts/e2e-harness.md` § "What must NOT appear in product code"); if any did, the stub is wrong
 - [ ] T077 Make the five guards fail on purpose per `quickstart.md` § "Making the guards fail on purpose" and record in the commit that each was seen to bite
 - [ ] T078 Run the quickstart scenarios A–I by hand against `make dev`, including the two only a person can judge — the screenshot picker and the pre-submission notice — and note anything the suite does not catch
 - [ ] T079 Run `cargo test --workspace -j 4`, `make lint` and `pnpm --filter @thunderforge/web test`
