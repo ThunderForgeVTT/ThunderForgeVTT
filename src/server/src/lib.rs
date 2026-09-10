@@ -46,6 +46,9 @@ pub mod interaction;
 pub mod interface_packs;
 /// Spec 040 / ADR-088: the declaration list, and one precedence rule for
 /// every instance setting.
+/// Spec 039 / ADR-076: the prose this server serves, and the identity of its
+/// words. Distinct from `legal_intake`, which is the takedown-notice surface.
+pub mod legal;
 pub mod legal_intake;
 pub mod light_effects;
 pub mod lore_sync;
