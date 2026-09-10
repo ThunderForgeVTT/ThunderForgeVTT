@@ -86,13 +86,20 @@ the DMCA guardrail's business, and research.md § R6 argues it in full.
 | **IV. Real ADRs before divergent implementation** | **ACTION REQUIRED** | Four architecturally significant decisions, all landing in the same change set. **ADR-093** — the attestation record: terms compiled into the server, versioned by content hash, archived at startup. **ADR-094** — adoption provenance and the reach of a takedown: reverses spec 026 FR-012's "no referential link", amends ADR-069, and carries the guardrail determination below. **ADR-095** — account standing and the termination window: standing derived from the existing counting, the window recorded, the sweep on the existing `spawn_*_task` shape. **ADR-096** — the operator acknowledgement: an instance attesting on the same record as a person. |
 | **V. Verify before claiming done** | PASS | Per-target checks are in the task plan: native `cargo test`/`clippy` for the server, `--target wasm32-unknown-unknown` for the engine (to prove it was not disturbed), `tsc`/`vitest` for the web, and an e2e spec per user story. Every claim in this plan about existing code was read out of the file before it was written down. |
 
-**Numbering.** The highest ADR on disk is 072, and four sibling plans were
-drafted the same day. The allocation this feature assumes, by spec number:
-036 → 073–075, 037 → 076–079, **039 → 080–083**, 040 → 084–088, 041 → 089–092.
-Spec 040's and 041's plans as written claim numbers that overlap this block;
-whichever lands last renumbers, and one rule stated here is cheaper than four
-plans each discovering the collision. Stated so a renumber is a find-and-replace
-rather than an archaeology exercise.
+**Numbering — settled 2026-09-09.** This paragraph predicted the collision and
+it happened: 036 landed 073–075, 037 landed 084–087, 040 landed 088–093, 041
+landed 081–083 plus 094. That left **076–080 free**, and spec 039 takes
+**076–079**:
+
+| ADR | Subject |
+|---|---|
+| 076 | The sharing attestation record |
+| 077 | Account standing and the termination window |
+| 078 | The operator acknowledgement |
+| 079 | Adoption provenance and the reach of a takedown (**the gate**) |
+
+The task list said 093–096 and this paragraph said 080–083; both are superseded
+by the table above.
 
 ### DMCA / content-moderation guardrail — engaged, and answered
 
